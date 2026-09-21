@@ -201,7 +201,11 @@ requirement link for behavior. It is not an additional semantic contract.
 | `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key` | `["identifier", "list[identifier]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key_base` | `["variable", "list[variable]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | Schema constraint |
 | `aggregate_class.expr` | `"aggregate_expression"` | `true` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `derive_binding_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
+| `derive_binding_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
+| `derive_binding_class.derivation` | `"derivation"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
 | `aggregate_expression` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1089](../operations/aggregation.md#req-1089) |
 | `aggregate_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1090](../operations/aggregation.md#req-1090) |
 | `aggregate_between_class.lower` | `"variable"` | `false` | Absent | -- | [REQ-1090](../operations/aggregation.md#req-1090) |
@@ -264,6 +268,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.to_date.source` | `"variable"` | `true` | Absent | -- | [REQ-1107](../operations/temporal.md#req-1107) |
 | `expressions.study_day.date` | `"variable"` | `true` | Absent | -- | [REQ-1108](../operations/temporal.md#req-1108) |
 | `expressions.study_day.reference` | `"variable"` | `true` | Absent | -- | [REQ-1108](../operations/temporal.md#req-1108) |
+| `expressions.to_epoch_day.source` | `"variable"` | `true` | Absent | -- | [REQ-1188](../operations/temporal.md#req-1188) |
 | `day_rule` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1109](../operations/temporal.md#req-1109) |
 | `time_rule` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1184](../operations/temporal.md#req-1184) |
 

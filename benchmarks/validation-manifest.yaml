@@ -324,6 +324,10 @@ fixtures:
     rule: R016
     condition: incompatible_input_type
     spec_paths: [columns.ASTDT2.derivation.to_date]
+  negative-epoch-day-non-date:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.EXSTDY.derivation.to_epoch_day]
     validator: temporal_contract
   negative-types-unknown-field:
     rule: R014

@@ -108,6 +108,12 @@ examples:
   adam-adqs-subscale-score:
     status: executable
     runtimes: ['python']
+  adam-adqs-derive-text-score:
+    status: executable
+    runtimes: ['python']
+  adam-adex-derive-date-epoch:
+    status: executable
+    runtimes: ['python']
   adam-adrs-best-response:
     status: executable
     runtimes: ['python']
@@ -559,6 +565,9 @@ examples:
     status: executable
     runtimes: ['python']
   negative-date-conversion:
+    status: executable
+    runtimes: ['python']
+  negative-epoch-day-non-date:
     status: executable
     runtimes: ['python']
   negative-types-unknown-field:

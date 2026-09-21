@@ -962,6 +962,46 @@ def _window_references(
     return diagnostics
 
 
+def _derive_reference_names(derivation: object) -> list[str]:
+    """Collect every variable name a derive binding derivation reads."""
+    names: list[str] = []
+
+    def visit(node: object) -> None:
+        if isinstance(node, str):
+            # A bare-string derivation is one source read.
+            names.append(node)
+        elif isinstance(node, Mapping):
+            if len(node) == 1:
+                operation, payload = next(iter(node.items()))
+                if operation == "source":
+                    variable = payload
+                    if isinstance(payload, Mapping):
+                        variable = payload.get("variable")
+                    if isinstance(variable, str):
+                        names.append(variable)
+                    return
+                if operation == "compute":
+                    expr = (
+                        payload.get("expr") if isinstance(payload, Mapping) else payload
+                    )
+                    if isinstance(expr, str):
+                        try:
+                            parsed = parse_numeric_cached(expr)
+                        except NumericError:
+                            parsed = None
+                        if parsed is not None:
+                            names.extend(numeric_identifiers(parsed))
+                    return
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(derivation)
+    return names
+
+
 def _aggregate_references(
     payload: object,
     operation_path: str,
@@ -1026,6 +1066,101 @@ def _aggregate_references(
     relation = next(iter(sorted(relations)), None)
     group_by = _as_names(payload.get("group_by")) or ()
     between = payload.get("between")
+
+    derive = payload.get("derive")
+    derive_names: tuple[str, ...] = ()
+    if derive is not None:
+        # REQ-1189: a derive step binds per-record variables; the reducer
+        # names them unqualified and the step names the reduced relation.
+        if not isinstance(derive, list) or not derive:
+            return [
+                _diagnostic(
+                    "invalid_derive_step",
+                    f"{operation_path}.derive",
+                    {"reason": "a derive step is a non-empty binding list"},
+                    requirement="REQ-1189",
+                )
+            ]
+        seen: set[str] = set()
+        qualifiers: set[str] = set()
+        binding_names: list[str] = []
+        for index, binding in enumerate(derive):
+            binding_path = f"{operation_path}.derive[{index}]"
+            if not isinstance(binding, Mapping):
+                return [
+                    _diagnostic(
+                        "invalid_derive_step",
+                        binding_path,
+                        {"reason": "a derive binding is a mapping"},
+                        requirement="REQ-1189",
+                    )
+                ]
+            name = binding.get("name")
+            if not isinstance(name, str) or not name or name in seen:
+                return [
+                    _diagnostic(
+                        "invalid_derive_step",
+                        binding_path,
+                        {"reason": "derive binding names are unique identifiers"},
+                        requirement="REQ-1189",
+                    )
+                ]
+            seen.add(name)
+            binding_names.append(name)
+            for ref in _derive_reference_names(binding.get("derivation")):
+                head, dot, _ = ref.partition(".")
+                if dot:
+                    qualifiers.add(head)
+                elif ref not in binding_names[:-1]:
+                    return [
+                        _diagnostic(
+                            "unknown_derive_variable",
+                            binding_path,
+                            {"variable": ref, "binding": name},
+                            requirement="REQ-1189",
+                        )
+                    ]
+        # The filter also names the relation when the bindings do not. A
+        # throwaway parse only reads qualifiers; the real parse below
+        # reports any predicate error.
+        filter_declared = payload.get("filter")
+        if isinstance(filter_declared, str):
+            probe_filter = _parse_predicate_at(
+                filter_declared, f"{operation_path}.filter", []
+            )
+            if probe_filter is not None:
+                for ref in _predicate_identifiers(probe_filter):
+                    head, dot, _ = ref.partition(".")
+                    if dot:
+                        qualifiers.add(head)
+        if len(qualifiers) != 1:
+            return [
+                _diagnostic(
+                    "invalid_derive_step",
+                    f"{operation_path}.derive",
+                    {
+                        "reason": "a derive step names exactly one relation",
+                        "relations": sorted(qualifiers),
+                    },
+                    requirement="REQ-1191",
+                )
+            ]
+        derive_names = tuple(binding_names)
+        relation = next(iter(qualifiers))
+        for name in unqualified:
+            if name not in derive_names:
+                return [
+                    _diagnostic(
+                        "unknown_derive_variable",
+                        expr_path,
+                        {"variable": name, "expr": expr},
+                        requirement="REQ-1189",
+                    )
+                ]
+        # A derived aggregate is a qualified reduction; the bound variables
+        # are not output columns, so they add no scalar references.
+        unqualified = [name for name in unqualified if name not in derive_names]
+
     diagnostics = _aggregate_context(
         relation, group_by, between, expr, operation_path, scope
     )
@@ -1121,7 +1256,9 @@ def _aggregate_references(
             reach="relation" if qualified else "scalar",
         )
 
-    references.extend(relational(name, expr_path) for name in identifiers)
+    references.extend(
+        relational(name, expr_path) for name in identifiers if name not in derive_names
+    )
     references.extend(
         relational(name, f"{operation_path}.group_by[{index}]")
         for index, name in enumerate(group_by)
@@ -1378,6 +1515,18 @@ def _fill_omitted_lookup_keys(
         if len(relations) > 1 or (relations and unqualified):
             return None
         relation = next(iter(sorted(relations)), None)
+        if relation is None and payload.get("derive") is not None:
+            # REQ-1189: a derived aggregate names its relation through the
+            # derive step when the reducer only names bound variables.
+            derived: set[str] = set()
+            derive_declared = payload.get("derive")
+            if isinstance(derive_declared, list):
+                for binding in derive_declared:
+                    if isinstance(binding, Mapping):
+                        for name in _derive_reference_names(binding.get("derivation")):
+                            if "." in name:
+                                derived.add(name.split(".", 1)[0])
+            relation = next(iter(sorted(derived)), None)
         # A grouped-row reduction reads its own driver group and declares
         # no key pairs (REQ-0142).
         return relation if scope.grouped_driver is None and relation else None

@@ -13,12 +13,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from yamaa.expressions import (
     AggregateError,
+    ExpressionDispatcher,
     FailedResolution,
     MappingResolver,
+    NumericError,
     PredicateAst,
     PredicateError,
     PredicateValue,
@@ -29,7 +31,9 @@ from yamaa.expressions import (
     aggregate_star_datasets,
     evaluate_aggregate,
     evaluate_predicate,
+    numeric_identifiers,
     parse_aggregate_cached,
+    parse_numeric_cached,
     parse_predicate_cached,
 )
 from yamaa.expressions.windows import (
@@ -47,6 +51,7 @@ from yamaa.models import (
     RuntimeValue,
     ValueResult,
 )
+from yamaa.models.values import convert_value
 from yamaa.odm import BindingIndex
 from yamaa.planning import (
     ExecutionDiagnostic,
@@ -71,7 +76,7 @@ from yamaa.runtime.joins import (
     partition_records,
 )
 from yamaa.runtime.lifecycle import LifecycleCondition
-from yamaa.specification.models import OrderTerm
+from yamaa.specification.models import Expression, OrderTerm
 
 
 @dataclass(slots=True)
@@ -176,6 +181,78 @@ def _invalid(operation: str, reason: str) -> ConditionResult:
             requirement="REQ-0321",
         )
     )
+
+
+def _derive_qualifiers(derive: object) -> set[str]:
+    """Collect the dataset qualifiers a derive step's derivations name.
+
+    REQ-1191 pins a derived aggregate to one relation. The engine
+    re-derives that relation from the payload the way it re-derives the
+    reducer's relation; the planner validates it strictly.
+    """
+    qualifiers: set[str] = set()
+
+    def add(name: str) -> None:
+        head, dot, _ = name.partition(".")
+        if dot and head:
+            qualifiers.add(head)
+
+    def visit(node: object) -> None:
+        if isinstance(node, str):
+            # A bare-string derivation is one source read.
+            add(node)
+        elif isinstance(node, Mapping):
+            if len(node) == 1:
+                operation, payload = next(iter(node.items()))
+                if operation == "source":
+                    variable = payload
+                    if isinstance(payload, Mapping):
+                        variable = payload.get("variable")
+                    if isinstance(variable, str):
+                        add(variable)
+                    return
+                if operation == "compute":
+                    expr = (
+                        payload.get("expr") if isinstance(payload, Mapping) else payload
+                    )
+                    if isinstance(expr, str):
+                        try:
+                            names = numeric_identifiers(parse_numeric_cached(expr))
+                        except NumericError:
+                            names = ()
+                        for name in names:
+                            add(name)
+                    return
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(derive)
+    return qualifiers
+
+
+def _normalize_derive_derivation(
+    derivation: object,
+) -> tuple[dict[str, object], object | None]:
+    """Split a derive binding's derivation into an expression and handler.
+
+    Returns the one-operation expression mapping and the declared
+    `conversion_failure` handler, or None when the binding is unhandled.
+    """
+    handler: object | None = None
+    if isinstance(derivation, Mapping) and "value" in derivation:
+        # The loader wraps a derivation as a handled expression:
+        # {"value": <expression>, "conversion_failure"?: ...}.
+        handler = derivation.get("conversion_failure")
+        derivation = derivation["value"]
+    if isinstance(derivation, str):
+        # REQ-0290: a bare string reads one variable.
+        return {"source": derivation}, handler
+    if isinstance(derivation, Mapping) and len(derivation) == 1:
+        return dict(derivation), handler
+    raise ValueError("a derive binding derivation must be one expression")
 
 
 class RowResolver:
@@ -516,6 +593,13 @@ class RowResolver:
         relation_name = next(iter(sorted(named)), None)
         group_by = _names(payload.get("group_by"))
 
+        derive = payload.get("derive")
+        if relation_name is None and derive is not None:
+            # REQ-1189: a derived aggregate names its relation through the
+            # derive step when the reducer only names bound variables.
+            derived = _derive_qualifiers(derive)
+            relation_name = next(iter(sorted(derived)), None)
+
         if relation_name is None:
             selected = self._output_rows(identifiers, group_by, predicate)
         elif self._row_phase and relation_name == self._candidate.group_driver:
@@ -539,6 +623,7 @@ class RowResolver:
                 payload.get("between"),
                 key_fields,
                 key_variables,
+                derive,
             )
         if isinstance(selected, ConditionResult):
             return selected
@@ -582,6 +667,7 @@ class RowResolver:
         between: object,
         key_fields: Sequence[str],
         key_variables: Sequence[str],
+        derive: object = None,
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
         """Reduce the partition REQ-0140 selects for the current row."""
         relation = self._context.relations[dataset]
@@ -609,7 +695,102 @@ class RowResolver:
         narrowed = self._between(eligible, relation, between)
         if isinstance(narrowed, ConditionResult):
             return narrowed
+        if derive is not None:
+            enriched = self._derive_records(derive, dataset, narrowed)
+            if isinstance(enriched, ConditionResult):
+                return enriched
+            return enriched, grouped
         return [_record_values(record, identifiers) for record in narrowed], grouped
+
+    def _derive_records(
+        self,
+        derive: object,
+        dataset: str,
+        records: list[IndexedRecord],
+    ) -> list[dict[str, object]] | ConditionResult:
+        """Bind each record's derive variables before reduction.
+
+        REQ-1189 evaluates one binding per record in declaration order;
+        REQ-1190 converts each value to its declared type through R011.
+        """
+        if not isinstance(derive, list) or not derive:
+            return _invalid("aggregate", "a derive that is not a binding list")
+        bindings: list[tuple[str, str, dict[str, object], object | None]] = []
+        for index, binding in enumerate(derive):
+            if not isinstance(binding, Mapping):
+                return _invalid(
+                    "aggregate",
+                    f"a derive binding at index {index} that is not a mapping",
+                )
+            name = binding.get("name")
+            target_type = binding.get("type")
+            derivation = binding.get("derivation")
+            if (
+                not isinstance(name, str)
+                or not name
+                or target_type not in ("str", "int", "float", "date", "datetime")
+                or derivation is None
+            ):
+                return _invalid(
+                    "aggregate",
+                    f"a derive binding at index {index} without a name, type, and derivation",
+                )
+            try:
+                expression, handler = _normalize_derive_derivation(derivation)
+            except ValueError:
+                return _invalid(
+                    "aggregate",
+                    f"a derive binding '{name}' whose derivation is not one expression",
+                )
+            bindings.append((name, target_type, expression, handler))
+        names = [name for name, _, _, _ in bindings]
+        if len(set(names)) != len(names):
+            return _invalid("aggregate", "derive binding names that are not unique")
+
+        dispatcher = ExpressionDispatcher()
+        enriched: list[dict[str, object]] = []
+        for record in records:
+            # The binding sees the record's fields qualified and every
+            # earlier binding by its unqualified name (REQ-1189).
+            scope: dict[str, object] = {
+                f"{dataset}.{field}": value for field, value in record.values.items()
+            }
+            for name, target_type, expression, handler in bindings:
+                operation = next(iter(expression))
+                try:
+                    parsed = Expression.model_validate(
+                        {operation: expression[operation]}
+                    )
+                except ValidationError:
+                    return _invalid(
+                        "aggregate",
+                        f"a derive binding '{name}' whose derivation is not one expression",
+                    )
+                evaluated = dispatcher.evaluate(parsed, MappingResolver(scope))
+                if isinstance(evaluated, ConditionResult):
+                    return evaluated
+                if not isinstance(evaluated, ValueResult):
+                    return _invalid(
+                        "aggregate",
+                        f"a derive binding '{name}' that did not evaluate to a value",
+                    )
+                converted = convert_value(evaluated.value, target_type)  # type: ignore[arg-type]
+                if isinstance(converted, ConditionResult):
+                    if handler is None:
+                        return converted
+                    handled = convert_value(handler, target_type)  # type: ignore[arg-type]
+                    if isinstance(handled, ConditionResult):
+                        return handled
+                    scope[name] = handled.value  # type: ignore[union-attr]
+                elif isinstance(converted, ValueResult):
+                    scope[name] = converted.value
+                else:
+                    return _invalid(
+                        "aggregate",
+                        f"a derive binding '{name}' that did not convert to {target_type}",
+                    )
+            enriched.append(scope)
+        return enriched
 
     def _between(
         self,

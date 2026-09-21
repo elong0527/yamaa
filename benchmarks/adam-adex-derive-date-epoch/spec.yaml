@@ -1,0 +1,41 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDT: date}}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXSTDY]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    derivation: EX.EXSEQ
+
+  - name: EXSTDY
+    type: int
+    label: Study Day of Exposure Start
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID, EXSEQ]
+        derive:
+          - name: EPOCHDAY
+            type: int
+            derivation:
+              to_epoch_day:
+                source: EX.EXSTDT
+        expr: "ONLY(EPOCHDAY)"
+
+rows:
+  - id: exposure
+    filter: "EX.EXSEQ = 1"
+    derivations: {}

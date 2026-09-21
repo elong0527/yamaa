@@ -1190,3 +1190,9 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1182](../operations/temporal.md#req-1182) | `operations/temporal.md` | Schema prose |
 | [REQ-1183](../operations/temporal.md#req-1183) | `operations/temporal.md` | Schema prose |
 | [REQ-1184](../operations/temporal.md#req-1184) | `operations/temporal.md` | Schema prose |
+| [REQ-1187](../operations/temporal.md#req-1187) | `operations/temporal.md` | Schema prose |
+| [REQ-1188](../operations/temporal.md#req-1188) | `operations/temporal.md` | Schema prose |
+| [REQ-1189](../operations/aggregation.md#req-1189) | `operations/aggregation.md` | Schema prose |
+| [REQ-1190](../operations/aggregation.md#req-1190) | `operations/aggregation.md` | Schema prose |
+| [REQ-1191](../operations/aggregation.md#req-1191) | `operations/aggregation.md` | Schema prose |
+| [REQ-1192](../operations/aggregation.md#req-1192) | `operations/aggregation.md` | Schema prose |

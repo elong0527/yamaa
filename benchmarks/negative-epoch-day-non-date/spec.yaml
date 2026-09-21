@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXSTDY]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    derivation: EX.EXSEQ
+
+  - name: EXSTDY
+    type: int
+    derivation:
+      to_epoch_day:
+        source: EX.EXSTDT
+
+rows:
+  - id: exposure
+    filter: "EX.EXSEQ = 1"
+    derivations: {}

@@ -121,6 +121,40 @@ output rows for an unqualified reduction, and current input-group records
 for a grouped row derivation. [Predicates](predicates.md) defines predicate evaluation; filtering
 preserves the order of the retained records under [REQ-0480](aggregation.md#req-0480).
 
+### Derive step
+
+<a id="req-1189"></a>
+
+**REQ-1189.** A qualified aggregate may declare `derive` to bind per-record
+intermediate variables before reduction. Each binding declares a `name`, a
+`type`, and a `derivation`. Bindings evaluate once per record of the
+aggregate's relation, in declaration order; each derivation reads the
+record's fields and the values bound by earlier bindings. The reducer
+expression names each bound variable by its unqualified `name`. A derive
+binding is not an expression function: text becomes a number only through
+the binding's declared `type` ([REQ-1190](aggregation.md#req-1190)), and a
+date becomes an integer only through an operation such as
+`to_epoch_day` in the binding's own derivation. The aggregate and numeric
+computation grammars never parse text or dates themselves.
+
+<a id="req-1190"></a>
+
+**REQ-1190.** Each derive binding's evaluated value converts to its declared
+`type` through [Types and conversion](../values/types.md)'s REQ-0009 and
+REQ-0010. Text that is not convertible to the declared numeric type fails as
+a conversion failure under [Types and conversion](../values/types.md)'s
+REQ-0013, answered by a declared `conversion_failure` handler and fatal
+otherwise. A missing value stays missing without attempting conversion.
+
+<a id="req-1191"></a>
+
+**REQ-1191.** The relation a derived aggregate reduces is the one relation
+its derive bindings and filter name; naming two relations is an error, and a
+reducer expression mixing a bound variable with a qualified identifier is an
+error under [REQ-0468](aggregation.md#req-0468). `derive` is not available on
+the unqualified output-row reduction or the grouped-input reduction: those
+contexts reduce rows the specification already constructed.
+
 ### Row-relative range narrowing
 
 <a id="req-0472"></a>
@@ -373,6 +407,7 @@ structural constraints come from its schema declaration.
 | `aggregate_class.group_by` | Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys. |
 | `aggregate_class.key` | Dataset columns matched against key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)) when the expression reads a qualified dataset relation. |
 | `aggregate_class.key_base` | Current-row variables paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `aggregate_class.derive` | Per-record intermediate variable bindings evaluated before reduction ([REQ-1189](aggregation.md#req-1189)). |
 | `aggregate_class.expr` | Closed reducer expression over the records of one relation. |
 
 <a id="req-1089"></a>
@@ -403,6 +438,17 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `Scope` | [Aggregation](aggregation.md) defines the reducer grammar, the results it pins, and its failures. |
+
+<a id="req-1192"></a>
+
+**REQ-1192.** The `derive_binding_class` interface has the following meanings. Shape, defaults, and
+structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `derive_binding_class.name` | Intermediate variable the aggregate's reducer expression names. |
+| `derive_binding_class.type` | Declared type; the per-record value converts to it under [REQ-1190](aggregation.md#req-1190). |
+| `derive_binding_class.derivation` | Per-record derivation over the relation's fields and earlier bindings. |
 
 <a id="req-1092"></a>
 
