@@ -15,7 +15,6 @@ from yamaa.io import (
     render_artifact,
 )
 from yamaa.models import TypedColumn, TypedTable
-from yamaa.planning import UnsupportedFeature
 from yamaa.runtime import (
     ExecutionFailure,
     ExecutionHooks,
@@ -140,14 +139,14 @@ def test_warning_verification_keeps_the_artifact_and_builds_the_exact_log() -> N
     assert result.warnings[0].offending_keys == (
         {"STUDYID": "PILOT7", "USUBJID": "P7-732"},
     )
-    assert result.violation_log is not None
+    assert result.warning_log is not None
     assert (
-        render_artifact(result.violation_log)
+        render_artifact(result.warning_log)
         == (WARNING_EXAMPLE / "expected/adsl-violations.csv").read_bytes()
     )
 
 
-def test_declared_violation_log_is_header_only_when_no_warning_fires() -> None:
+def test_declared_warning_log_is_header_only_when_no_warning_fires() -> None:
     specification = load_specification(
         WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
     ).specification
@@ -164,23 +163,21 @@ def test_declared_violation_log_is_header_only_when_no_warning_fires() -> None:
 
     assert isinstance(result, ExecutionSuccess)
     assert result.warnings == ()
-    assert result.violation_log is not None
+    assert result.warning_log is not None
     expected = (
         (WARNING_EXAMPLE / "expected/adsl-violations.csv")
         .read_bytes()
         .splitlines(keepends=True)[0]
     )
-    assert render_artifact(result.violation_log) == expected
+    assert render_artifact(result.warning_log) == expected
 
 
-def test_warning_without_violation_log_fails_before_source_ingestion() -> None:
+def test_warning_without_warning_log_fails_before_source_ingestion() -> None:
     specification = load_specification(
         WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
     ).specification
     changed = specification.model_copy(
-        update={
-            "output": specification.output.model_copy(update={"violation_log": None})
-        }
+        update={"output": specification.output.model_copy(update={"warning_log": None})}
     )
     provider_called = False
 
@@ -192,56 +189,143 @@ def test_warning_without_violation_log_fails_before_source_ingestion() -> None:
     result = execute_with_source_provider(changed, provide_sources)
 
     assert isinstance(result, ExecutionFailure)
-    assert result.diagnostics[0].condition == "missing_violation_log"
-    assert result.diagnostics[0].spec_paths == ("output.violation_log",)
+    assert result.diagnostics[0].condition == "missing_warning_log"
+    assert result.diagnostics[0].spec_paths == ("output.warning_log",)
     assert result.diagnostics[0].requirement == "REQ-0391"
     assert not provider_called
 
 
-def test_declared_verification_report_is_unsupported_rather_than_dropped() -> None:
-    specification = load_specification(
-        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
-    ).specification
-    changed = specification.model_copy(
+def _with_verification_log(specification):
+    return specification.model_copy(
         update={
             "output": specification.output.model_copy(
-                update={"verification_report": "adsl-checks.csv"}
+                update={"verification_log": "adsl-checks.csv"}
             )
         }
     )
-    provider_called = False
 
-    def provide_sources(_datasets):
-        nonlocal provider_called
-        provider_called = True
-        return {}
 
-    result = execute_with_source_provider(changed, provide_sources)
+def test_declared_verification_log_records_every_evaluated_check() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    resources = ProjectResources(WARNING_EXAMPLE)
 
-    assert isinstance(result, ExecutionUnsupported)
-    assert result.features == (
-        UnsupportedFeature(
-            operation="verification_report",
-            spec_path="output.verification_report",
-        ),
+    result = execute_with_source_provider(
+        _with_verification_log(specification),
+        lambda datasets: load_source_tables(datasets, resources),
     )
-    assert not provider_called
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.verification_log is not None
+    assert render_artifact(result.verification_log) == (
+        b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
+        b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
+        b"DETAILS\n"
+        b"1.0,adsl.csv,columns.AGE.verifications[0].range,,range,AGE,REQ-0377,"
+        b'warning,violated,range_failed,2,1,"{""column"":""AGE""}"\n'
+    )
+
+
+def test_verification_log_is_header_only_when_no_check_is_declared() -> None:
+    specification = load_specification(
+        DM_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    resources = ProjectResources(DM_EXAMPLE)
+
+    result = execute_with_source_provider(
+        _with_verification_log(specification),
+        lambda datasets: load_source_tables(datasets, resources),
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.verification_log is not None
+    assert render_artifact(result.verification_log) == (
+        b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
+        b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
+        b"DETAILS\n"
+    )
+
+
+def test_records_aware_hook_receives_the_live_ledger() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    resources = ProjectResources(WARNING_EXAMPLE)
+    ledgers: list = []
+
+    def observe(table, column, keys, records=None):
+        ledgers.append(records)
+        return check_column(table, column, keys, records=records)
+
+    result = execute_with_source_provider(
+        _with_verification_log(specification),
+        lambda datasets: load_source_tables(datasets, resources),
+        hooks=ExecutionHooks(column=observe),
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert ledgers, "the hook ran at least once"
+    assert all(ledger is ledgers[0] for ledger in ledgers)
+    assert [record.spec_path for record in ledgers[0]] == [
+        "columns.AGE.verifications[0].range"
+    ]
+    assert result.verification_log is not None
+
+
+def test_failed_run_still_builds_the_verification_log() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    resources = ProjectResources(WARNING_EXAMPLE)
+    columns = tuple(
+        column.model_copy(
+            update={
+                "verifications": tuple(
+                    Expression(
+                        root={
+                            "range": {**verification.root["range"], "severity": "error"}
+                        }
+                    )
+                    for verification in column.verifications or ()
+                )
+            }
+        )
+        for column in specification.columns
+    )
+    fatal = specification.model_copy(update={"columns": columns})
+
+    result = execute_with_source_provider(
+        _with_verification_log(fatal),
+        lambda datasets: load_source_tables(datasets, resources),
+    )
+
+    assert isinstance(result, ExecutionFailure)
+    assert result.diagnostics[0].condition == "range_failed"
+    assert result.verification_log is not None
+    assert render_artifact(result.verification_log) == (
+        b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
+        b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
+        b"DETAILS\n"
+        b"1.0,adsl.csv,columns.AGE.verifications[0].range,,range,AGE,REQ-0377,"
+        b'error,violated,range_failed,2,1,"{""column"":""AGE""}"\n'
+    )
 
 
 @pytest.mark.parametrize(
     ("declared", "collided"),
     [
-        ({"verification_report": "adsl.csv"}, ("output.path",)),
+        ({"verification_log": "adsl.csv"}, ("output.path",)),
         (
             {
-                "violation_log": "adsl-checks.csv",
-                "verification_report": "adsl-checks.csv",
+                "warning_log": "adsl-checks.csv",
+                "verification_log": "adsl-checks.csv",
             },
-            ("output.violation_log",),
+            ("output.warning_log",),
         ),
     ],
 )
-def test_verification_report_path_must_differ_from_every_other_path(
+def test_verification_log_path_must_differ_from_every_other_path(
     declared: dict[str, str], collided: tuple[str, ...]
 ) -> None:
     specification = load_specification(
@@ -262,7 +346,7 @@ def test_verification_report_path_must_differ_from_every_other_path(
     assert len(collisions) == 1
     assert collisions[0].spec_paths == (
         *collided,
-        "output.verification_report",
+        "output.verification_log",
     )
     assert collisions[0].requirement == "REQ-1180"
 

@@ -1,4 +1,4 @@
-"""Build the governed R009 warning-violation sidecar dataset."""
+"""Build the governed R009 warning log sidecar dataset."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from yamaa.models import MISSING, TypedColumn, ValueResult, convert_value
 from yamaa.specification.models import Output
 from yamaa.verification.diagnostics import VerificationFailure
 
-VIOLATION_LOG_VERSION = "1.0"
-VIOLATION_LOG_COLUMNS: tuple[TypedColumn, ...] = (
+WARNING_LOG_VERSION = "1.0"
+WARNING_LOG_COLUMNS: tuple[TypedColumn, ...] = (
     TypedColumn(name="LOG_VERSION", type="str"),
     TypedColumn(name="ARTIFACT", type="str"),
     TypedColumn(name="SEVERITY", type="str"),
@@ -26,7 +26,7 @@ VIOLATION_LOG_COLUMNS: tuple[TypedColumn, ...] = (
     TypedColumn(name="OFFENDING_KEYS", type="str"),
     TypedColumn(name="DETAILS", type="str"),
 )
-VIOLATION_LOG_NAMES = tuple(column.name for column in VIOLATION_LOG_COLUMNS)
+WARNING_LOG_NAMES = tuple(column.name for column in WARNING_LOG_COLUMNS)
 
 
 def _canonical_json(value: JsonValue) -> str:
@@ -61,21 +61,21 @@ def _canonical_json(value: JsonValue) -> str:
     raise TypeError(f"unsupported JSON value {type(value).__name__}")
 
 
-def build_violation_log(
+def build_warning_log(
     violations: Sequence[VerificationFailure], output: Output
 ) -> Artifact | None:
     """Build a fixed-schema sidecar, including a header-only empty log.
 
-    A log is returned whenever ``output.violation_log`` is declared. Warning
+    A log is returned whenever ``output.warning_log`` is declared. Warning
     declarations require that field during preflight, while permitting an
     explicit empty log lets a later successful run replace stale findings.
     """
-    if output.violation_log is None:
+    if output.warning_log is None:
         if violations:
-            raise ValueError("warning violations require output.violation_log")
+            raise ValueError("warning violations require output.warning_log")
         return None
     if any(violation.severity != "warning" for violation in violations):
-        raise ValueError("a violation log contains warning violations only")
+        raise ValueError("a warning log contains warning violations only")
 
     rows: list[list[object]] = []
     seen: set[str] = set()
@@ -84,7 +84,7 @@ def build_violation_log(
             raise ValueError("a logged verification has one stable specification path")
         spec_path = violation.spec_paths[0]
         if spec_path in seen:
-            raise ValueError("a violation log has one row per specification path")
+            raise ValueError("a warning log has one row per specification path")
         seen.add(spec_path)
 
         full_context = dict(violation.log_context or violation.context)
@@ -95,7 +95,7 @@ def build_violation_log(
             raise ValueError("a warning violation has a positive failure_count")
         rows.append(
             [
-                VIOLATION_LOG_VERSION,
+                WARNING_LOG_VERSION,
                 output.path,
                 "warning",
                 violation.condition,
@@ -108,9 +108,9 @@ def build_violation_log(
             ]
         )
 
-    table = frame_from_values(VIOLATION_LOG_COLUMNS, rows)
+    table = frame_from_values(WARNING_LOG_COLUMNS, rows)
     declaration = Output(
-        path=output.violation_log,
-        columns=list(VIOLATION_LOG_NAMES),
+        path=output.warning_log,
+        columns=list(WARNING_LOG_NAMES),
     )
     return build_artifact(table, declaration, ["SPEC_PATH"])

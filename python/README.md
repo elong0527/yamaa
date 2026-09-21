@@ -271,7 +271,8 @@ pilot = yamaa_domain("spec.yaml")
 print(pilot.spec)  # normalized specification
 print(pilot.inputs)  # dataset name -> Polars DataFrame
 print(pilot.output)  # ordered output Polars DataFrame, or None
-print(pilot.violation_log)  # R009 sidecar Polars DataFrame, or None
+print(pilot.warning_log)  # R009 sidecar Polars DataFrame, or None
+print(pilot.verification_log)  # verification log sidecar Polars DataFrame, or None
 print(pilot.issues)  # stable Polars issue table
 
 pilot.save("expected.parquet")

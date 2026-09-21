@@ -4528,7 +4528,7 @@ def validate_spec_names(spec, spec_label):
             )
         # R020 gives each declared path its own profile and requires the
         # three to name three different files.
-        for field in ('violation_log', 'verification_report'):
+        for field in ('warning_log', 'verification_log'):
             sidecar_path = output.get(field)
             if (
                 isinstance(sidecar_path, str)
@@ -4548,16 +4548,16 @@ def validate_spec_names(spec, spec_label):
                     )
                 )
         for left, right, subject in (
-            ('path', 'violation_log', 'primary artifact and violation log'),
+            ('path', 'warning_log', 'primary artifact and warning log'),
             (
                 'path',
-                'verification_report',
-                'primary artifact and verification report',
+                'verification_log',
+                'primary artifact and verification log',
             ),
             (
-                'violation_log',
-                'verification_report',
-                'violation log and verification report',
+                'warning_log',
+                'verification_log',
+                'warning log and verification log',
             ),
         ):
             left_path, right_path = output.get(left), output.get(right)
@@ -5343,13 +5343,13 @@ def validate_spec_contracts(
 
     if warning_paths and (
         not isinstance(output, dict)
-        or not isinstance(output.get('violation_log'), str)
+        or not isinstance(output.get('warning_log'), str)
     ):
         errors.append(
             validation_diagnostic(
-                f"{spec_label}.output.violation_log",
-                'missing_violation_log',
-                'warning verifications require a governed violation log',
+                f"{spec_label}.output.warning_log",
+                'missing_warning_log',
+                'warning verifications require a governed warning log',
                 context={'warnings': warning_paths},
             )
         )
@@ -9369,7 +9369,7 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
 # REQ-1182 admits a container only when it carries every value the
 # language does; REQ-1183 keeps SAS Transport out on that ground.
 ARTIFACT_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
-VIOLATION_LOG_TYPES = {
+WARNING_LOG_TYPES = {
     'LOG_VERSION': 'str',
     'ARTIFACT': 'str',
     'SEVERITY': 'str',
@@ -9379,6 +9379,21 @@ VIOLATION_LOG_TYPES = {
     'VERIFICATION_ID': 'str',
     'FAILURE_COUNT': 'int',
     'OFFENDING_KEYS': 'str',
+    'DETAILS': 'str',
+}
+VERIFICATION_LOG_TYPES = {
+    'REPORT_VERSION': 'str',
+    'ARTIFACT': 'str',
+    'SPEC_PATH': 'str',
+    'VERIFICATION_ID': 'str',
+    'CHECK': 'str',
+    'TARGET': 'str',
+    'REQUIREMENT': 'str',
+    'SEVERITY': 'str',
+    'OUTCOME': 'str',
+    'CONDITION': 'str',
+    'EVALUATED_COUNT': 'int',
+    'FAILURE_COUNT': 'int',
     'DETAILS': 'str',
 }
 
@@ -10574,10 +10589,16 @@ def validate_examples_csv(root: Path, env=None):
                 if isinstance(primary_path, str)
                 else None
             )
-            violation_path = output.get('violation_log')
+            violation_path = output.get('warning_log')
             violation_name = (
                 PurePosixPath(violation_path).name
                 if isinstance(violation_path, str)
+                else None
+            )
+            verification_path = output.get('verification_log')
+            verification_name = (
+                PurePosixPath(verification_path).name
+                if isinstance(verification_path, str)
                 else None
             )
 
@@ -10585,25 +10606,38 @@ def validate_examples_csv(root: Path, env=None):
             if not expected_dir.exists():
                 continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
-                # Each golden CSV must be one of the two artifacts the
-                # specification names. The log has its own fixed R009 schema.
+                # Each golden CSV must be one of the three artifacts the
+                # specification names. The logs have their own fixed schemas:
+                # R009's for the warning log, REQ-1173's for the verification
+                # log.
                 if csv_file.name == primary_name:
                     file_columns = expected_cols
                     file_output = output
                     file_spec = spec
                 elif csv_file.name == violation_name:
-                    file_columns = list(VIOLATION_LOG_TYPES)
+                    file_columns = list(WARNING_LOG_TYPES)
                     file_output = {'path': violation_path}
                     file_spec = {
                         'output': file_output,
                         'columns': [
                             {'name': name, 'type': column_type}
-                            for name, column_type in VIOLATION_LOG_TYPES.items()
+                            for name, column_type in WARNING_LOG_TYPES.items()
+                        ],
+                    }
+                elif csv_file.name == verification_name:
+                    file_columns = list(VERIFICATION_LOG_TYPES)
+                    file_output = {'path': verification_path}
+                    file_spec = {
+                        'output': file_output,
+                        'columns': [
+                            {'name': name, 'type': column_type}
+                            for name, column_type in VERIFICATION_LOG_TYPES.items()
                         ],
                     }
                 else:
                     permitted = [
-                        name for name in (primary_name, violation_name)
+                        name
+                        for name in (primary_name, violation_name, verification_name)
                         if name is not None
                     ]
                     errors.append(

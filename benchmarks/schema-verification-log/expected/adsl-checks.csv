@@ -1,0 +1,5 @@
+REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS
+1.0,adsl.csv,columns.AGE.verifications[0].not_missing,,not_missing,AGE,REQ-0375,error,held,,3,0,{}
+1.0,adsl.csv,columns.AGE.verifications[1].range,,range,AGE,REQ-0377,warning,violated,range_failed,3,1,"{""column"":""AGE""}"
+1.0,adsl.csv,verifications[0].unique,,unique,,REQ-0381,error,held,,3,0,{}
+1.0,adsl.csv,verifications[1].row_count,,row_count,,REQ-0385,error,held,,1,0,{}

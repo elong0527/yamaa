@@ -26,8 +26,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | `output_class.path` | `"path"` | `true` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
 | `output_class.decimals` | `"int"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
 | `output_class.columns` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
-| `output_class.violation_log` | `"path"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
-| `output_class.verification_report` | `"path"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
+| `output_class.warning_log` | `"path"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
+| `output_class.verification_log` | `"path"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
 | `output_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
 | `intermediate_class.id` | `"intermediate_id"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |

@@ -3206,7 +3206,7 @@ class TestSpecNames(unittest.TestCase):
             VALIDATOR.validate_spec_names(spec, "example/spec.yaml"), []
         )
 
-    def test_rejects_a_colliding_or_unknown_violation_log_path(self):
+    def test_rejects_a_colliding_or_unknown_warning_log_path(self):
         base = {
             "domain": "ADSL",
             "input": {"DM": "dm.csv"},
@@ -3218,13 +3218,13 @@ class TestSpecNames(unittest.TestCase):
         colliding["output"] = {
             "path": "adsl.csv",
             "columns": ["USUBJID"],
-            "violation_log": "adsl.csv",
+            "warning_log": "adsl.csv",
         }
         unknown = copy.deepcopy(base)
         unknown["output"] = {
             "path": "adsl.csv",
             "columns": ["USUBJID"],
-            "violation_log": "adsl.txt",
+            "warning_log": "adsl.txt",
         }
 
         collision_errors = VALIDATOR.validate_spec_names(
@@ -3240,7 +3240,7 @@ class TestSpecNames(unittest.TestCase):
         )
         self.assertIn("unknown_artifact_profile", "\n".join(unknown_errors))
 
-    def test_rejects_a_colliding_or_unknown_verification_report_path(self):
+    def test_rejects_a_colliding_or_unknown_verification_log_path(self):
         base = {
             "domain": "ADSL",
             "input": {"DM": "dm.csv"},
@@ -3252,27 +3252,27 @@ class TestSpecNames(unittest.TestCase):
         primary_collision["output"] = {
             "path": "adsl.csv",
             "columns": ["USUBJID"],
-            "verification_report": "adsl.csv",
+            "verification_log": "adsl.csv",
         }
         log_collision = copy.deepcopy(base)
         log_collision["output"] = {
             "path": "adsl.csv",
             "columns": ["USUBJID"],
-            "violation_log": "adsl-checks.csv",
-            "verification_report": "adsl-checks.csv",
+            "warning_log": "adsl-checks.csv",
+            "verification_log": "adsl-checks.csv",
         }
         unknown = copy.deepcopy(base)
         unknown["output"] = {
             "path": "adsl.csv",
             "columns": ["USUBJID"],
-            "verification_report": "adsl-checks.txt",
+            "verification_log": "adsl-checks.txt",
         }
         governed = copy.deepcopy(base)
         governed["output"] = {
             "path": "adsl.csv",
             "columns": ["USUBJID"],
-            "violation_log": "adsl-violations.csv",
-            "verification_report": "adsl-checks.parquet",
+            "warning_log": "adsl-violations.csv",
+            "verification_log": "adsl-checks.parquet",
         }
 
         primary_errors = VALIDATOR.validate_spec_names(
@@ -3490,7 +3490,7 @@ class TestSpecContracts(unittest.TestCase):
             VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
         )
 
-    def test_warning_verification_requires_a_violation_log(self):
+    def test_warning_verification_requires_a_warning_log(self):
         spec = {
             "domain": "ADSL",
             "input": {"DM": "dm.csv"},
@@ -3517,13 +3517,13 @@ class TestSpecContracts(unittest.TestCase):
         missing = VALIDATOR.validate_spec_contracts(
             spec, "example/spec.yaml"
         )
-        spec["output"]["violation_log"] = "adsl-violations.csv"
+        spec["output"]["warning_log"] = "adsl-violations.csv"
         governed = VALIDATOR.validate_spec_contracts(
             spec, "example/spec.yaml"
         )
 
-        self.assertIn("missing_violation_log", "\n".join(missing))
-        self.assertNotIn("missing_violation_log", "\n".join(governed))
+        self.assertIn("missing_warning_log", "\n".join(missing))
+        self.assertNotIn("missing_warning_log", "\n".join(governed))
 
     def test_default_driver_dataset_prefers_base(self):
         self.assertEqual(

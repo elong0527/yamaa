@@ -79,11 +79,11 @@ output_class:
         type: "list[identifier]"
         required: true
         description: See REQ-1047 in rules/storage/publication.md.
-    - violation_log:
+    - warning_log:
         type: path
         required: false
         description: See REQ-1047 in rules/storage/publication.md.
-    - verification_report:
+    - verification_log:
         type: path
         required: false
         description: See REQ-1047 in rules/storage/publication.md.

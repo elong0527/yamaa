@@ -1,20 +1,16 @@
 schema_version: "1.0"
 domain: ADSL
-keys: [STUDYID, USUBJID]
+keys: [USUBJID]
 input:
-  DM: input/dm.parquet
+  DM: input/dm.csv
 
 output:
-  path: adsl.parquet
-  columns: [STUDYID, USUBJID, AGE]
-  warning_log: adsl-violations.parquet
+  path: adsl.csv
+  columns: [USUBJID, AGE]
+  warning_log: adsl-warnings.csv
+  verification_log: adsl-checks.csv
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: DM.STUDYID
-
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
@@ -25,7 +21,14 @@ columns:
     label: Age
     derivation: DM.AGE
     verifications:
+      - not_missing: {}
       - range:
           min: 18
           max: 100
           severity: warning
+
+verifications:
+  - unique:
+      columns: [USUBJID]
+  - row_count:
+      min: 1

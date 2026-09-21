@@ -3281,23 +3281,23 @@ def _warning_verification_paths(specification: Specification) -> tuple[str, ...]
 def _sidecar_declarations(
     specification: Specification,
 ) -> list[ExecutionDiagnostic]:
-    """Validate warning, log, and report relationships before a source is read."""
+    """Validate warning, warning-log, and verification-log declarations."""
     diagnostics: list[ExecutionDiagnostic] = []
     warning_paths = _warning_verification_paths(specification)
     output = specification.output
-    log, report = output.violation_log, output.verification_report
+    log, report = output.warning_log, output.verification_log
     if warning_paths and log is None:
         diagnostics.append(
             _diagnostic(
-                "missing_violation_log",
-                "output.violation_log",
+                "missing_warning_log",
+                "output.warning_log",
                 {"warnings": list(warning_paths)},
                 requirement="REQ-0391",
             )
         )
     for field, path in (
-        ("output.violation_log", log),
-        ("output.verification_report", report),
+        ("output.warning_log", log),
+        ("output.verification_log", report),
     ):
         if path is not None and profile_of(path) is None:
             diagnostics.append(
@@ -3311,15 +3311,15 @@ def _sidecar_declarations(
     # REQ-0756 and REQ-1180: the primary artifact and the two sidecars name
     # three different files.
     for (left_field, left_path), (right_field, right_path), requirement in (
-        (("output.path", output.path), ("output.violation_log", log), "REQ-0756"),
+        (("output.path", output.path), ("output.warning_log", log), "REQ-0756"),
         (
             ("output.path", output.path),
-            ("output.verification_report", report),
+            ("output.verification_log", report),
             "REQ-1180",
         ),
         (
-            ("output.violation_log", log),
-            ("output.verification_report", report),
+            ("output.warning_log", log),
+            ("output.verification_log", report),
             "REQ-1180",
         ),
     ):
@@ -3356,16 +3356,6 @@ def _preflight_findings(
     if specification.parents:
         unsupported.append(
             UnsupportedFeature(operation="inheritance", spec_path="parents")
-        )
-    if specification.output.verification_report is not None:
-        # REQ-1173 requires a declaring run to produce the report. This
-        # component does not build one yet, so the declaration is reported as
-        # unsupported rather than accepted and dropped.
-        unsupported.append(
-            UnsupportedFeature(
-                operation="verification_report",
-                spec_path="output.verification_report",
-            )
         )
     diagnostics.extend(_lookup_declarations(specification))
     diagnostics.extend(_sidecar_declarations(specification))

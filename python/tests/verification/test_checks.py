@@ -14,6 +14,7 @@ from yamaa.verification import (
     DeclarationError,
     VerificationError,
     VerificationFailure,
+    VerificationRecord,
     check_column,
     check_dataset,
     check_keys,
@@ -757,3 +758,99 @@ def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
         )
         is passing
     )
+
+
+def test_column_records_report_held_and_violated_checks_in_order() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", "S-1", 30], ["S", "S-2", 214]],
+    )
+    records: list[VerificationRecord] = []
+
+    failures = check_column(
+        completed,
+        column(
+            "AGE",
+            "int",
+            {"not_missing": {}},
+            {"range": {"min": 18, "max": 100, "severity": "warning"}},
+        ),
+        KEYS,
+        records=records,
+    )
+
+    assert len(failures) == 1
+    assert [record.spec_path for record in records] == [
+        "columns.AGE.verifications[0].not_missing",
+        "columns.AGE.verifications[1].range",
+    ]
+    held, violated = records
+    assert held.failure is None
+    assert held.check == "not_missing"
+    assert held.target == "AGE"
+    assert held.verification_id is None
+    assert held.evaluated_count == 2
+    assert violated.failure is failures[0]
+    assert violated.severity == "warning"
+    assert violated.evaluated_count == 2
+
+
+def test_dataset_records_count_what_each_check_counts() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", "S-1", 30], ["S", "S-2", 40], ["S", "S-3", 50]],
+    )
+    records: list[VerificationRecord] = []
+
+    failures = check_dataset(
+        completed,
+        [
+            Expression(root={"unique": {"columns": ["USUBJID"]}}),
+            Expression(
+                root={
+                    "row_count": {
+                        "id": "one-per-subject",
+                        "group_by": ["USUBJID"],
+                        "min": 1,
+                        "max": 1,
+                    }
+                }
+            ),
+        ],
+        KEYS,
+        records=records,
+    )
+
+    assert failures == ()
+    unique, row_count = records
+    # Three rows, three distinct subject combinations.
+    assert unique.check == "unique"
+    assert unique.target is None
+    assert unique.verification_id is None
+    assert unique.evaluated_count == 3
+    assert unique.failure is None
+    # Three subject groups were evaluated, and each holds exactly one row.
+    assert row_count.check == "row_count"
+    assert row_count.verification_id == "one-per-subject"
+    assert row_count.evaluated_count == 3
+    assert row_count.failure is None
+
+
+def test_dataset_records_carry_the_violated_failure() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str")],
+        [["S", "S-1"], ["S", "S-1"]],
+    )
+    records: list[VerificationRecord] = []
+
+    (failure,) = check_dataset(
+        completed,
+        [Expression(root={"unique": {"columns": ["USUBJID"]}})],
+        KEYS,
+        records=records,
+    )
+
+    (record,) = records
+    assert record.failure is failure
+    assert record.evaluated_count == 1
+    assert record.spec_path == "verifications[0].unique"

@@ -1,0 +1,2 @@
+LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS
+1.0,adsl.csv,warning,range_failed,REQ-0377,columns.AGE.verifications[1].range,,1,"[{""USUBJID"":""S-2""}]","{""column"":""AGE""}"

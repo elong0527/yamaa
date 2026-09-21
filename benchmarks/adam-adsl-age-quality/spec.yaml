@@ -7,7 +7,7 @@ input:
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGE]
-  violation_log: adsl-violations.csv
+  warning_log: adsl-violations.csv
 
 columns:
   - name: STUDYID

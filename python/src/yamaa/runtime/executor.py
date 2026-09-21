@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from functools import cache
+from typing import Literal, Protocol, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -57,7 +59,9 @@ from yamaa.specification.models import Column, DatasetSource, Specification
 from yamaa.verification import (
     DeclarationError,
     VerificationFailure,
-    build_violation_log,
+    VerificationRecord,
+    build_verification_log,
+    build_warning_log,
     check_column,
     check_dataset,
     check_keys,
@@ -70,6 +74,37 @@ SourceProvider: TypeAlias = Callable[
 ColumnCheck: TypeAlias = Callable[
     [TypedTable, Column, Sequence[str]], tuple[VerificationFailure, ...]
 ]
+
+
+class RecordsAwareColumnCheck(Protocol):
+    """A column check that also records every check it evaluates.
+
+    The ``records`` keyword is optional: the executor passes it only to
+    hooks whose signature accepts it, so a hook written against the older
+    three-argument contract keeps working.
+    """
+
+    def __call__(
+        self,
+        table: TypedTable,
+        column: Column,
+        keys: Sequence[str],
+        records: list[VerificationRecord] | None = ...,
+    ) -> tuple[VerificationFailure, ...]: ...
+
+
+class RecordsAwareDatasetCheck(Protocol):
+    """A dataset check that also records every check it evaluates."""
+
+    def __call__(
+        self,
+        table: TypedTable,
+        verifications: Sequence[object],
+        keys: Sequence[str],
+        records: list[VerificationRecord] | None = ...,
+    ) -> tuple[VerificationFailure, ...]: ...
+
+
 KeyCheck: TypeAlias = Callable[
     [TypedTable, Sequence[str]], tuple[VerificationFailure, ...]
 ]
@@ -91,13 +126,14 @@ class _FrozenModel(BaseModel):
 
 
 class ExecutionSuccess(_FrozenModel):
-    """A completed table, primary artifact, and governed warning findings."""
+    """A completed table, primary artifact, and governed verification findings."""
 
     status: Literal["success"] = "success"
     table: TypedTable
     artifact: Artifact
     warnings: tuple[VerificationFailure, ...] = ()
-    violation_log: Artifact | None = None
+    warning_log: Artifact | None = None
+    verification_log: Artifact | None = None
     handler_counts: tuple[HandlerCount, ...]
 
 
@@ -107,6 +143,7 @@ class ExecutionFailure(_FrozenModel):
     status: Literal["failure"] = "failure"
     diagnostics: tuple[ExecutionDiagnostic, ...] = Field(min_length=1)
     handler_counts: tuple[HandlerCount, ...]
+    verification_log: Artifact | None = None
 
 
 class ExecutionUnsupported(_FrozenModel):
@@ -122,12 +159,36 @@ ExecutionResult: TypeAlias = ExecutionSuccess | ExecutionFailure | ExecutionUnsu
 
 @dataclass(frozen=True, slots=True)
 class ExecutionHooks:
-    """The pure verification and output hooks supplied by the output component."""
+    """The pure verification and output hooks supplied by the output component.
 
-    column: ColumnCheck = check_column
+    A column or dataset hook may accept an optional ``records`` keyword: the
+    executor passes its verification ledger to hooks that declare it and
+    calls the older three-argument contract otherwise.
+    """
+
+    column: ColumnCheck | RecordsAwareColumnCheck = check_column
     keys: KeyCheck = check_keys
-    dataset: DatasetCheck = check_dataset  # type: ignore[assignment]
+    dataset: DatasetCheck | RecordsAwareDatasetCheck = check_dataset  # type: ignore[assignment]
     output: OutputBuilder = build_artifact  # type: ignore[assignment]
+
+
+@cache
+def _accepts_records(hook: Callable[..., object]) -> bool:
+    """Whether a verification hook declares the ``records`` keyword."""
+    try:
+        parameters = inspect.signature(hook).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.name == "records"
+        and parameter.kind
+        in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+            inspect.Parameter.VAR_KEYWORD,
+        )
+        for parameter in parameters
+    )
 
 
 class _ExecutionAbort(ValueError):
@@ -647,6 +708,8 @@ def _run_column_checks(
     checked: set[str],
     warnings: list[VerificationFailure],
     hooks: ExecutionHooks,
+    records: list[VerificationRecord] | None,
+    column_takes_records: bool,
 ) -> None:
     if not set(specification.keys) <= completed:
         return
@@ -656,7 +719,13 @@ def _run_column_checks(
             break
         if column.name in checked:
             continue
-        failures = hooks.column(table, column, specification.keys)
+        # The records ledger rides along only with hooks that declare it;
+        # a hook written against the older contract keeps its three
+        # positional arguments.
+        if column_takes_records:
+            failures = hooks.column(table, column, specification.keys, records=records)
+        else:
+            failures = hooks.column(table, column, specification.keys)
         warnings.extend(
             failure for failure in failures if failure.severity == "warning"
         )
@@ -674,6 +743,8 @@ def _derive_columns(
     counter: HandlerCounter,
     hooks: ExecutionHooks,
     warnings: list[VerificationFailure],
+    records: list[VerificationRecord] | None,
+    column_takes_records: bool,
 ) -> TypedTable:
     specification = plan.specification
     column_types = {column.name: column.type for column in specification.columns}
@@ -686,7 +757,16 @@ def _derive_columns(
         completed |= key_set
     checked: set[str] = set()
     constructed_count = len(candidates)
-    _run_column_checks(specification, candidates, completed, checked, warnings, hooks)
+    _run_column_checks(
+        specification,
+        candidates,
+        completed,
+        checked,
+        warnings,
+        hooks,
+        records,
+        column_takes_records,
+    )
 
     for derivation in plan.columns:
         if key_grain and derivation.column in key_set:
@@ -722,7 +802,14 @@ def _derive_columns(
             candidate.values[derivation.column] = value
         completed.add(derivation.column)
         _run_column_checks(
-            specification, candidates, completed, checked, warnings, hooks
+            specification,
+            candidates,
+            completed,
+            checked,
+            warnings,
+            hooks,
+            records,
+            column_takes_records,
         )
 
     declared = {column.name for column in specification.columns}
@@ -741,7 +828,16 @@ def _derive_columns(
             ]
         )
     table = _table_from_candidates(specification, candidates, completed)
-    _run_column_checks(specification, candidates, completed, checked, warnings, hooks)
+    _run_column_checks(
+        specification,
+        candidates,
+        completed,
+        checked,
+        warnings,
+        hooks,
+        records,
+        column_takes_records,
+    )
     return table
 
 
@@ -755,6 +851,10 @@ def execute_specification(
     """Execute one normalized specification without reading golden artifacts."""
     selected_dispatcher = dispatcher or ExpressionDispatcher()
     selected_hooks = hooks or ExecutionHooks()
+    # A hook declares the records ledger by accepting the ``records``
+    # keyword; older hooks keep their original positional contract.
+    column_takes_records = _accepts_records(selected_hooks.column)
+    dataset_takes_records = _accepts_records(selected_hooks.dataset)
     counter = HandlerCounter()
     warnings: list[VerificationFailure] = []
     try:
@@ -773,6 +873,13 @@ def execute_specification(
             features=error.features,
             handler_counts=counter.snapshot(),
         )
+
+    # The record ledger starts once planning succeeds: a run that never
+    # reached execution evaluated nothing, so it reports nothing. A failed
+    # run that did start reports the checks it evaluated (REQ-1177).
+    records: list[VerificationRecord] | None = (
+        [] if specification.output.verification_log is not None else None
+    )
 
     _register_handler_paths(plan, counter)
     try:
@@ -799,16 +906,26 @@ def execute_specification(
             counter,
             selected_hooks,
             warnings,
+            records,
+            column_takes_records,
         )
 
         key_failures = selected_hooks.keys(table, specification.keys)
         if key_failures:
             raise _ExecutionAbort(_verification_diagnostics(key_failures))
-        dataset_failures = selected_hooks.dataset(
-            table,
-            specification.verifications or (),
-            specification.keys,
-        )
+        if dataset_takes_records:
+            dataset_failures = selected_hooks.dataset(
+                table,
+                specification.verifications or (),
+                specification.keys,
+                records=records,
+            )
+        else:
+            dataset_failures = selected_hooks.dataset(
+                table,
+                specification.verifications or (),
+                specification.keys,
+            )
         warnings.extend(
             failure for failure in dataset_failures if failure.severity == "warning"
         )
@@ -820,11 +937,17 @@ def execute_specification(
         artifact = selected_hooks.output(
             table, specification.output, specification.keys
         )
-        violation_log = build_violation_log(warnings, specification.output)
+        warning_log = build_warning_log(warnings, specification.output)
+        verification_log = build_verification_log(records or (), specification.output)
     except _ExecutionAbort as error:
         return ExecutionFailure(
             diagnostics=error.diagnostics,
             handler_counts=counter.snapshot(),
+            verification_log=(
+                build_verification_log(records, specification.output)
+                if records is not None
+                else None
+            ),
         )
     except LifecycleUnsupported as error:
         return ExecutionUnsupported(
@@ -835,18 +958,29 @@ def execute_specification(
         return ExecutionFailure(
             diagnostics=(_declaration_diagnostic(error),),
             handler_counts=counter.snapshot(),
+            verification_log=(
+                build_verification_log(records, specification.output)
+                if records is not None
+                else None
+            ),
         )
     except ArtifactError as error:
         return ExecutionFailure(
             diagnostics=_artifact_diagnostics(error.diagnostics),
             handler_counts=counter.snapshot(),
+            verification_log=(
+                build_verification_log(records, specification.output)
+                if records is not None
+                else None
+            ),
         )
 
     return ExecutionSuccess(
         table=table,
         artifact=artifact,
         warnings=tuple(warnings),
-        violation_log=violation_log,
+        warning_log=warning_log,
+        verification_log=verification_log,
         handler_counts=counter.snapshot(),
     )
 

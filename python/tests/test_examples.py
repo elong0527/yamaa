@@ -226,24 +226,34 @@ def test_positive_example_outputs_match_expected_artifacts(
             name: _reported_frame(frame, specification.output.decimals)
             for name, frame in outputs.items()
         }
-    declared_log = specification.output.violation_log
-    if declared_log is not None:
-        # A violation sidecar is a second artifact the run.py convention
-        # does not name: its stem is rarely a valid variable name, and the
-        # facade below is what exposes it. The primary output still comes
-        # from run.py so the file stays the standard four lines.
-        log_stem = Path(declared_log).stem
-        assert set(outputs) == set(expected) - {log_stem}
-        actual_log = yamaa_domain(
-            entry_spec(example), schema_root=SCHEMA_ROOT
-        ).violation_log
-        assert actual_log is not None
-        committed_log = _read_expected(expected[log_stem], actual_log.schema)
-        assert_frame_equal(actual_log, committed_log, check_exact=True)
+    declared_sidecars = {
+        name: declared
+        for name, declared in (
+            ("warning", specification.output.warning_log),
+            ("verification", specification.output.verification_log),
+        )
+        if declared is not None
+    }
+    if declared_sidecars:
+        # A sidecar is a second artifact the run.py convention does not
+        # name: its stem is rarely a valid variable name, and the facade
+        # below is what exposes it. The primary output still comes from
+        # run.py so the file stays the standard four lines.
+        sidecar_stems = {Path(declared).stem for declared in declared_sidecars.values()}
+        assert set(outputs) == set(expected) - sidecar_stems
+        run = yamaa_domain(entry_spec(example), schema_root=SCHEMA_ROOT)
+        for kind, declared in declared_sidecars.items():
+            actual_sidecar = getattr(run, f"{kind}_log")
+            assert actual_sidecar is not None
+            committed_sidecar = _read_expected(
+                expected[Path(declared).stem], actual_sidecar.schema
+            )
+            assert_frame_equal(actual_sidecar, committed_sidecar, check_exact=True)
     else:
+        sidecar_stems = set()
         assert set(outputs) == set(expected)
     for name, expected_path in expected.items():
-        if declared_log is not None and name == Path(declared_log).stem:
+        if name in sidecar_stems:
             continue
         actual = outputs[name]
         committed = _read_expected(expected_path, actual.schema)

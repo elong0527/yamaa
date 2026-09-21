@@ -369,11 +369,29 @@ def _execute(
         for count in result.handler_counts
     )
 
+    entry_node = next(
+        node for node in workflow.nodes if node.entry_path == workflow.entry_path
+    )
+    output = entry_node.resolved.specification.output
+
     if isinstance(result, ExecutionFailure):
+        # REQ-1181: a failed run publishes no primary artifact and no
+        # warning log, and replaces the verification log alone when the
+        # run declared one and reached execution.
+        failed: list[ArtifactObservation] = []
+        if result.verification_log is not None and output.verification_log is not None:
+            failed.append(
+                _observe_artifact(
+                    Path(output.verification_log).stem,
+                    result.verification_log,
+                    destination / Path(output.verification_log).name,
+                )
+            )
         return _report(
             name,
             "failure",
             diagnostics=tuple(_observe_diagnostic(item) for item in result.diagnostics),
+            artifacts=tuple(failed),
             handler_counts=handler_counts,
         )
     if isinstance(result, ExecutionUnsupported):
@@ -391,25 +409,35 @@ def _execute(
         )
 
     assert isinstance(result, ExecutionSuccess)
-    entry_node = next(
-        node for node in workflow.nodes if node.entry_path == workflow.entry_path
+    declared = (
+        result.verification_log is not None and output.verification_log is not None
     )
-    output = entry_node.resolved.specification.output
-    published = [
+    published = []
+    if declared:
+        # REQ-1181: a run declaring the verification log publishes it first.
+        published.append(
+            _observe_artifact(
+                Path(output.verification_log).stem,
+                result.verification_log,
+                destination / Path(output.verification_log).name,
+            )
+        )
+    if result.warning_log is not None and output.warning_log is not None:
+        # REQ-0757: the warning log is published before the primary artifact.
+        published.append(
+            _observe_artifact(
+                Path(output.warning_log).stem,
+                result.warning_log,
+                destination / Path(output.warning_log).name,
+            )
+        )
+    published.append(
         _observe_artifact(
             Path(output.path).stem,
             result.artifact,
             destination / Path(output.path).name,
         )
-    ]
-    if result.violation_log is not None and output.violation_log is not None:
-        published.append(
-            _observe_artifact(
-                Path(output.violation_log).stem,
-                result.violation_log,
-                destination / Path(output.violation_log).name,
-            )
-        )
+    )
     return _report(
         name,
         "success",
