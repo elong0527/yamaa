@@ -419,3 +419,30 @@ def test_window_operations_evaluate_during_row_construction(
 
     assert isinstance(result, ExecutionSuccess)
     assert [row[3] for row in result.artifact.frame.rows()] == expected
+
+
+def test_row_window_group_by_accepts_a_qualified_source_variable() -> None:
+    # REQ-0297: a window field may name a qualified source variable of the
+    # row's driver. The partition groups by the driver record's value, so
+    # numbering restarts per group exactly as with the bare column.
+    row = Row(
+        id="visits",
+        derivations={
+            "GRP": derive({"source": "SRC.G"}),
+            "SEQ": derive({"source": "SRC.S"}),
+            "VAL": derive({"source": "SRC.X"}),
+            "RN": derive(
+                {"row_number": {"window": {"group_by": ["SRC.G"], "order_by": ["VAL"]}}}
+            ),
+        },
+    )
+    specification = make_spec(
+        [row],
+        [("GRP", "str"), ("SEQ", "int"), ("VAL", "float"), ("RN", "int")],
+        ["GRP", "SEQ", "VAL", "RN"],
+    )
+
+    result = execute_specification(specification, visits_source())
+
+    assert isinstance(result, ExecutionSuccess)
+    assert [row[3] for row in result.artifact.frame.rows()] == [1, 2, 3, 1, 2]

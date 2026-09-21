@@ -9,6 +9,7 @@ intermediate and an inline `lookup:` cannot disagree.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
@@ -29,6 +30,8 @@ from yamaa.models import (
     MISSING,
     ColumnType,
     ConditionResult,
+    DateTimeValue,
+    DateValue,
     EvaluationResult,
     HandlerName,
     RuntimeCondition,
@@ -139,6 +142,9 @@ class IntermediateSelector:
         self._relations = relations
         self._eligible: dict[str, tuple[IndexedRecord, ...] | ConditionResult] = {}
         self._derived: dict[str, tuple[IndexedRecord, ...]] = {}
+        self._match_index: dict[
+            str, dict[tuple[RuntimeValue, ...], tuple[IndexedRecord, ...]]
+        ] = {}
         self._evaluate = evaluate or evaluate_expression
 
     def declares(self, identifier: str) -> bool:
@@ -223,13 +229,67 @@ class IntermediateSelector:
                 condition=eligible.condition,
                 spec_path=f"{plan.path}.derivations.{eligible.name}",
             )
-        return _select_eligible(plan, eligible, current)
+        return _select_eligible(
+            plan, eligible, current, index=self._match_index_for(plan, eligible)
+        )
+
+    def _match_index_for(
+        self,
+        plan: PlannedIntermediate,
+        eligible: Sequence[IndexedRecord],
+    ) -> dict[tuple[RuntimeValue, ...], tuple[IndexedRecord, ...]]:
+        """Return the plan's match-key index, building it once per run.
+
+        REQ-0134 matches on equality of every source/key pair; the index
+        answers that equality with one hash lookup per row instead of one
+        scan of the eligible records per row. Buckets keep eligible order,
+        so narrowing, `keep` selection, and multiple-match reporting see
+        the same record sequence the scan produced.
+        """
+        cached = self._match_index.get(plan.identifier)
+        if cached is None:
+            buckets: dict[tuple[RuntimeValue, ...], list[IndexedRecord]] = {}
+            for record in eligible:
+                key = _match_key(
+                    tuple(record.values[field] for field in plan.match_fields)
+                )
+                if key is None:
+                    continue
+                buckets.setdefault(key, []).append(record)
+            cached = {key: tuple(records) for key, records in buckets.items()}
+            self._match_index[plan.identifier] = cached
+        return cached
+
+
+def _match_key(
+    values: Sequence[RuntimeValue],
+) -> tuple[RuntimeValue, ...] | None:
+    """Return the hash key for one side of a match, or `None` when it cannot match.
+
+    The key preserves `_equal` exactly: missing matches nothing, `bool`
+    never compares (R007 orders only str/int/float/date/datetime, and
+    `values_comparable` refuses every other pairing), and a non-finite
+    float cannot reach the runtime as a value. `int`/`float` share Python
+    equality, so `1` and `1.0` key together exactly as `compare_values`
+    equates them; `DateValue`/`DateTimeValue` hash by the `ordering_key`
+    `compare_values` orders by.
+    """
+    for value in values:
+        if value is MISSING or type(value) is bool:
+            return None
+        if type(value) is float and not math.isfinite(value):
+            return None
+        if not isinstance(value, (str, int, float, DateValue, DateTimeValue)):
+            return None
+    return tuple(values)
 
 
 def _select_eligible(
     plan: PlannedIntermediate,
     eligible: Sequence[IndexedRecord],
     current: Mapping[str, RuntimeValue],
+    *,
+    index: Mapping[tuple[RuntimeValue, ...], Sequence[IndexedRecord]] | None = None,
 ) -> IntermediateOutcome:
     """Match, narrow, and choose one record from the eligible records.
 
@@ -249,14 +309,18 @@ def _select_eligible(
         # A missing range value is incomplete, not unmatched: it yields
         # nothing before any record is read.
         return _absent(plan, values)
-    matched = [
-        record
-        for record in eligible
-        if all(
-            _equal(record.values[field], value)
-            for field, value in zip(plan.match_fields, values, strict=True)
-        )
-    ]
+    if index is not None:
+        key = _match_key(tuple(values))
+        matched = list(index.get(key, ())) if key is not None else []
+    else:
+        matched = [
+            record
+            for record in eligible
+            if all(
+                _equal(record.values[field], value)
+                for field, value in zip(plan.match_fields, values, strict=True)
+            )
+        ]
 
     narrowed = _narrowed(plan, matched, current)
     if isinstance(narrowed, IntermediateOutcome):

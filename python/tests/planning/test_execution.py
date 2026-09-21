@@ -1919,3 +1919,27 @@ def test_an_intermediate_derivation_rejects_a_stored_column_shadow() -> None:
 
     assert diagnostic.requirement == "REQ-1185"
     assert diagnostic.spec_paths == ("intermediates[0].derivations.IDVARVAL",)
+
+
+def test_a_key_an_intermediate_matches_on_is_derived_before_its_reader() -> None:
+    # REQ-0050 makes the intermediate's match values dependencies of the
+    # reading column; the forward_reference check exempts keys (REQ-0074),
+    # so the planner orders the key before its reader instead of failing.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="str", derivation=derivation({"source": "LOOK.X"})),
+            Column(name="J", type="str", derivation=derivation({"source": "SRC.X"})),
+        ]
+    ).model_copy(
+        update={
+            "keys": ["K", "J"],
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="SRC", key_base=["J"], key=["X"])
+            ],
+        }
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [planned.column for planned in plan.columns] == ["K", "J", "V"]
