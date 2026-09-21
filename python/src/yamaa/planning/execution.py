@@ -363,6 +363,7 @@ def _expression_info(
     supported_operations: Collection[str],
     *,
     scope: _Scope = _COLUMN_SCOPE,
+    dataset_fields: Mapping[str, Collection[str]] | None = None,
 ) -> _ExpressionInfo:
     operation = expression.operation
     operation_path = f"{path}.{operation}"
@@ -388,6 +389,7 @@ def _expression_info(
             nested_path,
             supported_operations,
             scope=scope,
+            dataset_fields=dataset_fields,
         )
         references.extend(info.references)
         unsupported.extend(info.unsupported)
@@ -490,7 +492,9 @@ def _expression_info(
             _aggregate_references(payload, operation_path, references, scope)
         )
     elif operation == "lookup" and isinstance(payload, Mapping):
-        _lookup_references(payload, operation_path, references, diagnostics)
+        _lookup_references(
+            payload, operation_path, references, diagnostics, dataset_fields
+        )
     elif operation == "str_template":
         template = payload if isinstance(payload, str) else None
         if isinstance(payload, Mapping):
@@ -653,6 +657,7 @@ def _lookup_references(
     operation_path: str,
     references: list[_Reference],
     diagnostics: list[ExecutionDiagnostic],
+    dataset_fields: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     """Collect the declared key pairs R007 makes this intermediate match on.
 
@@ -771,11 +776,27 @@ def _lookup_references(
     def scoped(identifier: str, path: str) -> bool:
         """Keep the intermediate's clauses on its own dataset (REQ-0120)."""
         if identifier.split(".", 1)[0] != dataset:
+            context: dict[str, JsonValue] = {
+                "identifier": identifier,
+                "dataset": dataset,
+            }
+            fields = (
+                (dataset_fields or {}).get(dataset)
+                if isinstance(dataset, str)
+                else None
+            )
+            suggestion = (
+                _qualification_suggestion(identifier, dataset, fields)
+                if fields is not None and isinstance(dataset, str)
+                else None
+            )
+            if suggestion is not None:
+                context["suggestion"] = suggestion
             diagnostics.append(
                 _diagnostic(
                     "unknown_field",
                     path,
-                    {"identifier": identifier, "dataset": dataset},
+                    context,
                     requirement="REQ-0120",
                 )
             )
@@ -1591,6 +1612,7 @@ def _plan_derivation(
     infer_keys: (
         Callable[[str, str, list[ExecutionDiagnostic]], tuple[str, ...] | None] | None
     ) = None,
+    dataset_fields: Mapping[str, Collection[str]] | None = None,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...], frozenset[str]]:
     value_path = expression_path(path, declaration)
     inferred_paths: frozenset[str] = frozenset()
@@ -1607,6 +1629,7 @@ def _plan_derivation(
         value_path,
         supported_operations,
         scope=scope,
+        dataset_fields=dataset_fields,
     )
     references = list(info.references)
     unsupported.extend(info.unsupported)
@@ -2326,6 +2349,19 @@ def _validate_aggregate_keys(
         )
 
 
+def _qualification_suggestion(
+    identifier: str, dataset: str, fields: Collection[str]
+) -> str | None:
+    """Suggest the qualified spelling for an unqualified or wrongly-qualified
+    lookup field (REQ-0120). Returns None when the bare field name is not a
+    column of the dataset: a genuinely unknown field gets no suggestion."""
+    qualifier = identifier.split(".", 1)[0]
+    bare = identifier.split(".", 1)[-1]
+    if qualifier != dataset and bare in fields:
+        return f"{dataset}.{bare}"
+    return None
+
+
 def _plan_lookups(
     specification: Specification,
     bindings: BindingPlan,
@@ -2337,6 +2373,11 @@ def _plan_lookups(
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
+    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # spelling, so the lookup datasets' columns ride along for suggestions.
+    dataset_fields = {
+        name: _dataset_types(bindings, name) for name in bindings.datasets
+    }
     for index, intermediate in enumerate(specification.intermediates or ()):
         path = f"intermediates[{index}]"
         if intermediate.dataset not in bindings.datasets:
@@ -2399,6 +2440,7 @@ def _plan_lookups(
             supported_operations,
             diagnostics,
             unsupported,
+            dataset_fields=dataset_fields,
         )
         # REQ-1185: a name whose derivation failed validation is already
         # reported at its derivation path; the key below must not repeat the
@@ -2468,14 +2510,20 @@ def _plan_lookups(
                     if identifier.split(".", 1)[0] != intermediate.dataset or (
                         identifier.split(".", 1)[-1] not in fields
                     ):
+                        context: dict[str, JsonValue] = {
+                            "intermediate": intermediate.id,
+                            "identifier": identifier,
+                        }
+                        suggestion = _qualification_suggestion(
+                            identifier, intermediate.dataset, fields
+                        )
+                        if suggestion is not None:
+                            context["suggestion"] = suggestion
                         diagnostics.append(
                             _diagnostic(
                                 "unknown_field",
                                 f"{path}.filter",
-                                {
-                                    "intermediate": intermediate.id,
-                                    "identifier": identifier,
-                                },
+                                context,
                                 requirement="REQ-0120",
                             )
                         )
@@ -2485,11 +2533,20 @@ def _plan_lookups(
         for term_index, term in enumerate(intermediate.order_by or ()):
             qualifier, _, field = term.variable.partition(".")
             if qualifier != intermediate.dataset or field not in fields:
+                context = {
+                    "intermediate": intermediate.id,
+                    "identifier": term.variable,
+                }
+                suggestion = _qualification_suggestion(
+                    term.variable, intermediate.dataset, fields
+                )
+                if suggestion is not None:
+                    context["suggestion"] = suggestion
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
                         f"{path}.order_by[{term_index}]",
-                        {"intermediate": intermediate.id, "identifier": term.variable},
+                        context,
                         requirement="REQ-0120",
                     )
                 )
@@ -2586,6 +2643,7 @@ def _validate_intermediate_derivations(
     supported_operations: Collection[str],
     diagnostics: list[ExecutionDiagnostic],
     unsupported: list[UnsupportedFeature],
+    dataset_fields: Mapping[str, Collection[str]] | None = None,
 ) -> dict[str, HandledExpression]:
     """Validate one intermediate's REQ-1185 derivations.
 
@@ -2620,6 +2678,7 @@ def _validate_intermediate_derivations(
             declaration.value,
             expression_path(derivation_path, declaration),
             supported_operations,
+            dataset_fields=dataset_fields,
         )
         unsupported.extend(info.unsupported)
         diagnostics.extend(info.diagnostics)
@@ -3272,6 +3331,11 @@ def plan_execution(
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
     resolved_joins: list[ResolvedJoin] = []
+    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # spelling, so the lookup datasets' columns ride along for suggestions.
+    dataset_fields = {
+        name: _dataset_types(bindings, name) for name in bindings.datasets
+    }
 
     def infer_lookup_keys(
         dataset: str, path: str, deferred: list[ExecutionDiagnostic]
@@ -3418,6 +3482,7 @@ def plan_execution(
                     unsupported,
                     scope=row_scope,
                     infer_keys=infer_lookup_keys,
+                    dataset_fields=dataset_fields,
                 )
                 annotated = _resolve_implicit_joins(
                     references,
@@ -3644,6 +3709,7 @@ def plan_execution(
             unsupported,
             scope=_Scope(intermediates=frozenset(intermediates)),
             infer_keys=infer_lookup_keys,
+            dataset_fields=dataset_fields,
         )
         annotated = _resolve_implicit_joins(
             references,

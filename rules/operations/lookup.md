@@ -129,7 +129,14 @@ Declaring one without the other fails as `unpaired_fields`.
 
 **REQ-0120.** `filter`, `order_by`, and `columns` name records and fields
 of the lookup's own dataset only, and `dataset` must be declared in
-`input`. Anything else fails as `unknown_field`.
+`input`. In `filter` and `order_by` every field carries the dataset
+qualifier (`DATASET.FIELD`): the qualifier stays mandatory even though no
+other dataset can be named there, because the qualified name states the
+read's relation at the point of use instead of relying on the surrounding
+`dataset:` declaration. An unqualified or differently-qualified name fails
+as `unknown_field`; when the bare field name is a column of the lookup's
+dataset, the diagnostic suggests the qualified spelling. `columns` lists
+bare dataset field names. Anything else fails as `unknown_field`.
 
 <a id="req-0121"></a>
 
