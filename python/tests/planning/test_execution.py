@@ -1546,3 +1546,150 @@ def test_to_date_still_accepts_a_datetime_source_at_planning() -> None:
     )
 
     assert [column.column for column in plan.columns] == ["DTM", "DT"]
+
+
+def _intermediate_spec(
+    derivations: dict[str, dict[str, object]] | None,
+    key: list[str],
+    key_base: list[str] | None = None,
+) -> Specification:
+    columns = [
+        Column(
+            name="STUDYID", type="str", derivation=derivation({"source": "SRC.STUDYID"})
+        ),
+        Column(
+            name="LBSEQ", type="int", derivation=derivation({"source": "SRC.LBSEQ"})
+        ),
+        Column(
+            name="EPFLAG", type="str", derivation=derivation({"source": "SUP_EP.QVAL"})
+        ),
+    ]
+    spec = specification(columns).model_copy(
+        update={
+            "input": {
+                "SRC": DatasetSource(path="input/source.csv"),
+                "SUPP": DatasetSource(path="input/supp.csv"),
+            },
+            "intermediates": [
+                Intermediate(
+                    id="SUP_EP",
+                    dataset="SUPP",
+                    derivations={
+                        name: derivation(expression)
+                        for name, expression in (derivations or {}).items()
+                    }
+                    or None,
+                    key=key,
+                    key_base=key_base,
+                )
+            ],
+        }
+    )
+    return spec
+
+
+def _supp_table() -> object:
+    return frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+            TypedColumn(name="IDVARVAL", type="str"),
+            TypedColumn(name="QVAL", type="str"),
+        ),
+        [["S1", "U1", "  259", "Y"]],
+    )
+
+
+def _src_table() -> object:
+    return frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+            TypedColumn(name="LBSEQ", type="int"),
+        ),
+        [["S1", "U1", 259]],
+    )
+
+
+def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
+    # REQ-1185: the derived name is a legal target-side key field.
+    spec = _intermediate_spec(
+        {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
+        key=["STUDYID", "USUBJID", "IDVARVAL_U"],
+        key_base=["SRC.STUDYID", "SRC.USUBJID", "SRC.STUDYID"],
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": _src_table(), "SUPP": _supp_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert plan.intermediates[0].match_fields == ("STUDYID", "USUBJID", "IDVARVAL_U")
+    assert plan.intermediates[0].derived[0][0] == "IDVARVAL_U"
+
+
+def _derivation_diagnostic(
+    derivations: dict[str, dict[str, object]], condition: str
+) -> object:
+    spec = _intermediate_spec(derivations, key=["STUDYID"])
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _src_table(), "SUPP": _supp_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+    diagnostics = [
+        diagnostic
+        for diagnostic in raised.value.diagnostics
+        if diagnostic.condition == condition
+    ]
+    assert diagnostics, raised.value.diagnostics
+    return diagnostics[0]
+
+
+def test_an_intermediate_derivation_rejects_a_driver_reference() -> None:
+    # REQ-1185: the driver is out of scope for an intermediate derivation.
+    diagnostic = _derivation_diagnostic(
+        {"IDVARVAL_U": {"str_upper": {"source": "SRC.LBSEQ"}}}, "unknown_field"
+    )
+
+    assert diagnostic.requirement == "REQ-1185"
+    assert diagnostic.spec_paths == (
+        "intermediates[0].derivations.IDVARVAL_U.str_upper.source",
+    )
+
+
+def test_an_intermediate_derivation_rejects_another_dataset_reference() -> None:
+    # REQ-1185: a qualified name must name the intermediate's own dataset.
+    diagnostic = _derivation_diagnostic(
+        {"IDVARVAL_U": {"str_upper": {"source": "SRC.IDVARVAL"}}}, "unknown_field"
+    )
+
+    assert diagnostic.requirement == "REQ-1185"
+
+
+def test_an_intermediate_derivation_rejects_a_sibling_derivation() -> None:
+    # REQ-1185: derivations read stored columns only, not each other.
+    diagnostic = _derivation_diagnostic(
+        {
+            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "SECOND_N": {"str_upper": {"source": "FIRST_N"}},
+        },
+        "unknown_field",
+    )
+
+    assert diagnostic.requirement == "REQ-1185"
+    assert diagnostic.spec_paths == (
+        "intermediates[0].derivations.SECOND_N.str_upper.source",
+    )
+
+
+def test_an_intermediate_derivation_rejects_a_stored_column_shadow() -> None:
+    # REQ-1185: the derived name would hide the stored column.
+    diagnostic = _derivation_diagnostic(
+        {"IDVARVAL": {"str_upper": {"source": "IDVARVAL"}}}, "duplicate_derivation"
+    )
+
+    assert diagnostic.requirement == "REQ-1185"
+    assert diagnostic.spec_paths == ("intermediates[0].derivations.IDVARVAL",)
