@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
@@ -2504,6 +2504,35 @@ def _rooted_at_first_declared(
     return (*rotated, rotated[0])
 
 
+def window_pass_columns(
+    derivations: Iterable[PlannedDerivation],
+) -> tuple[set[str], set[str]]:
+    """Split a row template's columns into its windows and what waits on them.
+
+    REQ-0326 evaluates a template's windows in one pass over the rows that
+    template constructs, so everything reading a window result -- directly
+    or through a value computed from one -- belongs after that pass. The
+    returned deferred set contains the window columns themselves.
+    """
+    planned = list(derivations)
+    windows = {
+        derivation.column
+        for derivation in planned
+        if derivation.declaration.value.operation in WINDOW_OPERATIONS
+    }
+    deferred = set(windows)
+    changed = True
+    while changed:
+        changed = False
+        for derivation in planned:
+            if derivation.column not in deferred and any(
+                dependency in deferred for dependency in derivation.dependencies
+            ):
+                deferred.add(derivation.column)
+                changed = True
+    return windows, deferred
+
+
 def _topological_row_order(
     derivations: Mapping[str, PlannedDerivation],
     column_order: Sequence[str],
@@ -3230,46 +3259,26 @@ def plan_execution(
                 )
                 for name, planned in derivations.items()
             }
-            window_columns = {
-                name
-                for name, planned in derivations.items()
-                if planned.declaration.value.operation in WINDOW_OPERATIONS
-            }
-            if window_columns:
-                # REQ-0326 evaluates a template's windows in one pass over
-                # its constructed rows, so a window must not depend on
-                # another window's result, directly or through a value
-                # computed from one: window results have no declared
-                # evaluation order within the pass, and scalars derived
-                # from window results evaluate after it. A window reading
-                # its own column is a cycle and is left to the cycle
-                # detector below.
-                deferred: set[str] = set(window_columns)
-                changed = True
-                while changed:
-                    changed = False
-                    for name, planned in derivations.items():
-                        if name not in deferred and any(
-                            dependency in deferred
-                            for dependency in planned.dependencies
-                        ):
-                            deferred.add(name)
-                            changed = True
-                for name in sorted(window_columns):
-                    blocked = sorted(
-                        dependency
-                        for dependency in derivations[name].dependencies
-                        if dependency in deferred and dependency != name
-                    )
-                    if blocked:
-                        diagnostics.append(
-                            _diagnostic(
-                                "window_on_window_result",
-                                derivations[name].operation_path,
-                                {"column": name, "depends_on": blocked},
-                                requirement="REQ-0326",
-                            )
+            # REQ-0326: window results have no declared evaluation order
+            # within the pass, and a value computed from one is only
+            # available after it, so a window must read neither. A window
+            # reading its own column is a cycle, left to the detector below.
+            window_columns, deferred = window_pass_columns(derivations.values())
+            for name in sorted(window_columns):
+                blocked = sorted(
+                    dependency
+                    for dependency in derivations[name].dependencies
+                    if dependency in deferred and dependency != name
+                )
+                if blocked:
+                    diagnostics.append(
+                        _diagnostic(
+                            "window_on_window_result",
+                            derivations[name].operation_path,
+                            {"column": name, "depends_on": blocked},
+                            requirement="REQ-0326",
                         )
+                    )
             cycle = _find_cycle(
                 [name for name in column_order if name in derivations], graph
             )

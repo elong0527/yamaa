@@ -14,6 +14,7 @@ from yamaa.planning.execution import (
     expression_path,
     plan_execution,
     preflight_execution,
+    window_pass_columns,
 )
 from yamaa.planning.workflow import (
     ProducerLink,
@@ -44,4 +45,5 @@ __all__ = [
     "plan_execution",
     "plan_workflow",
     "preflight_execution",
+    "window_pass_columns",
 ]

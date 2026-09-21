@@ -37,6 +37,7 @@ from yamaa.planning import (
     UnsupportedPlanningError,
     plan_execution,
     preflight_execution,
+    window_pass_columns,
 )
 from yamaa.runtime.intermediates import IntermediateSelector
 from yamaa.runtime.joins import RelationIndex, build_relation_indexes
@@ -472,9 +473,9 @@ def _construct_rows(
     column_types = {column.name: column.type for column in plan.specification.columns}
     constructed: list[CandidateRow] = []
     # REQ-0039 fixes where each row was appended, which is the order a
-    # window falls back to when its own terms tie. Positions are assigned as
-    # rows are appended, so a template's window pass (REQ-0326) sees them
-    # before its grouped filter drops rows.
+    # window falls back to when its own terms tie. A template's window pass
+    # runs before its grouped filter, so the position each row keeps is
+    # assigned on append, once the surviving rows are known.
     position = 0
     for planned in plan.rows:
         relation = context.relations[planned.driver]
@@ -492,25 +493,10 @@ def _construct_rows(
             candidates = group_candidates(planned, relation)
         else:
             candidates = _record_candidates(planned, relation, context.bindings)
-        window_columns = {
-            derivation.column
-            for derivation in planned.derivations
-            if derivation.declaration.value.operation in WINDOW_OPERATIONS
-        }
         # A derivation that transitively reads a window result evaluates
         # after the window pass; planning (REQ-0326) already rejected a
         # window that reads one.
-        deferred_columns = set(window_columns)
-        changed = True
-        while changed:
-            changed = False
-            for derivation in planned.derivations:
-                if derivation.column not in deferred_columns and any(
-                    dependency in deferred_columns
-                    for dependency in derivation.dependencies
-                ):
-                    deferred_columns.add(derivation.column)
-                    changed = True
+        window_columns, deferred_columns = window_pass_columns(planned.derivations)
         immediate = [
             derivation
             for derivation in planned.derivations
@@ -527,7 +513,6 @@ def _construct_rows(
             if derivation.column in deferred_columns
             and derivation.column not in window_columns
         ]
-        staged: list[CandidateRow] = []
         for candidate in candidates:
             for derivation in immediate:
                 candidate.values[derivation.column] = _evaluate_one(
@@ -540,18 +525,17 @@ def _construct_rows(
                     plan.specification.keys,
                     row_phase=True,
                 )
-            staged.append(candidate)
         if window_plans:
             # REQ-0326: a template's windows partition the rows the template
-            # constructs. Positions are fixed first so the REQ-0301
+            # constructs. Provisional positions come first so the REQ-0301
             # tie-break sees construction order, then the partition scope
             # exposes exactly this template's rows to the window resolver --
             # the same shape _key_space uses for windows over keys.
-            for index, candidate in enumerate(staged):
+            for index, candidate in enumerate(candidates):
                 candidate.output_position = position + index
-            with _partition_scope(context, staged):
+            with _partition_scope(context, candidates):
                 for derivation in window_plans:
-                    for candidate in staged:
+                    for candidate in candidates:
                         candidate.values[derivation.column] = _evaluate_one(
                             derivation,
                             column_types,
@@ -561,7 +545,7 @@ def _construct_rows(
                             counter,
                             plan.specification.keys,
                         )
-            for candidate in staged:
+            for candidate in candidates:
                 for derivation in tail:
                     candidate.values[derivation.column] = _evaluate_one(
                         derivation,
@@ -573,7 +557,7 @@ def _construct_rows(
                         plan.specification.keys,
                         row_phase=True,
                     )
-        for candidate in staged:
+        for candidate in candidates:
             if planned.grouped and not _grouped_filter(planned, candidate):
                 continue
             candidate.output_position = position

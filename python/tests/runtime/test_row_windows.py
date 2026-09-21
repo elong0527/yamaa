@@ -8,6 +8,8 @@ unchanged validation guards, at the runtime level.
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
 import pytest
 
@@ -80,6 +82,32 @@ def visits_source():
                     "S": [1, 2, 3, 1, 2],
                 },
                 schema={"G": pl.String, "X": pl.Float64, "S": pl.Int64},
+            ),
+        )
+    }
+
+
+def dated_source():
+    return {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="G", type="str"),
+                TypedColumn(name="D", type="date"),
+                TypedColumn(name="R", type="date"),
+            ),
+            frame=pl.DataFrame(
+                {
+                    "G": ["a", "a", "a", "b", "b"],
+                    "D": [
+                        date(2025, 1, 2),
+                        date(2025, 1, 6),
+                        date(2025, 1, 20),
+                        date(2025, 2, 1),
+                        date(2025, 2, 9),
+                    ],
+                    "R": [date(2025, 1, 10)] * 3 + [date(2025, 2, 5)] * 2,
+                },
+                schema={"G": pl.String, "D": pl.Date, "R": pl.Date},
             ),
         )
     }
@@ -419,3 +447,82 @@ def test_window_operations_evaluate_during_row_construction(
 
     assert isinstance(result, ExecutionSuccess)
     assert [row[3] for row in result.artifact.frame.rows()] == expected
+
+
+def test_grouped_template_window_runs_before_the_grouped_filter() -> None:
+    # REQ-0059 and REQ-0218 run a grouped `filter` only after every
+    # derivation on the candidate completes, so the window pass partitions
+    # the candidate groups the template built, including the ones the
+    # filter is about to discard. Group `a` totals 6 and is discarded;
+    # group `b` still lags it.
+    grouped = Row(
+        id="per_group",
+        group_by=["SRC.G"],
+        filter="TOTAL > 10",
+        derivations={
+            "GRP": derive({"source": "SRC.G"}),
+            "SEQ": derive({"literal": 1}),
+            "TOTAL": derive({"aggregate": {"expr": "sum(SRC.X)"}}),
+            "PREV": derive(
+                lag_window({"order_by": ["GRP"]}, source="TOTAL"),
+            ),
+        },
+    )
+    specification = make_spec(
+        [grouped],
+        [("GRP", "str"), ("SEQ", "int"), ("TOTAL", "float"), ("PREV", "float")],
+        ["GRP", "SEQ", "TOTAL", "PREV"],
+    )
+
+    result = execute_specification(specification, visits_source())
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("b", 1, 30.0, 6.0)]
+
+
+def test_baseline_flag_evaluates_during_row_construction() -> None:
+    # baseline_flag is the one window without `order_by`, so it takes the
+    # parametrized cases' place for the operation they cannot cover.
+    row = Row(
+        id="visits",
+        derivations={
+            "GRP": derive({"source": "SRC.G"}),
+            "ADT": derive({"source": "SRC.D"}),
+            "TRTSDT": derive({"source": "SRC.R"}),
+            "ABLFL": derive(
+                {
+                    "baseline_flag": {
+                        "date": "ADT",
+                        "reference_date": "TRTSDT",
+                        "window": {"group_by": ["GRP"]},
+                    }
+                }
+            ),
+        },
+    )
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["GRP", "ADT"],
+        output=Output(path="out.csv", columns=["GRP", "ADT", "ABLFL"]),
+        columns=[
+            Column(name="GRP", type="str"),
+            Column(name="ADT", type="date"),
+            Column(name="TRTSDT", type="date"),
+            Column(name="ABLFL", type="str"),
+        ],
+        rows=[row],
+    )
+
+    result = execute_specification(specification, dated_source())
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [
+        ("a", date(2025, 1, 2), None),
+        ("a", date(2025, 1, 6), "Y"),
+        ("a", date(2025, 1, 20), None),
+        ("b", date(2025, 2, 1), "Y"),
+        ("b", date(2025, 2, 9), None),
+    ]
