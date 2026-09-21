@@ -241,8 +241,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | `order_term_class.nulls` | `"str"` | `false` | `"last"` | `{"values": ["first", "last"]}` | [REQ-1103](../execution/ordering.md#req-1103) |
 | `case_item_class` | `["case_branch_class", "case_otherwise_class"]` | `false` | Absent | -- | [REQ-1099](../operations/expressions.md#req-1099) |
 | `case_branch_class.when` | `"predicate"` | `true` | Absent | -- | [REQ-1100](../operations/expressions.md#req-1100) |
-| `case_branch_class.then` | `"expression"` | `true` | Absent | -- | [REQ-1100](../operations/expressions.md#req-1100) |
-| `case_otherwise_class.otherwise` | `"expression"` | `true` | Absent | -- | [REQ-1101](../operations/expressions.md#req-1101) |
+| `case_branch_class.then` | `"case_result"` | `true` | Absent | -- | [REQ-1100](../operations/expressions.md#req-1100) |
+| `case_otherwise_class.otherwise` | `"case_result"` | `true` | Absent | -- | [REQ-1101](../operations/expressions.md#req-1101) |
+| `case_result` | `["str", "expression"]` | `false` | Absent | -- | Schema constraint |
 
 ## schema_expression_date.yaml
 

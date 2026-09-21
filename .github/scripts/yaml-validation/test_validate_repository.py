@@ -2328,6 +2328,12 @@ class TestSpecificationInheritance(unittest.TestCase):
             normalized, {'value': {'source': {'variable': 'DM.AGE'}}}
         )
 
+    def test_bare_case_result_normalizes_to_source(self):
+        normalized = VALIDATOR.normalize_single_type_value(
+            'DM.AGE', 'case_result', self.env, False
+        )
+        self.assertEqual(normalized, {'source': {'variable': 'DM.AGE'}})
+
     def test_resolves_shallow_diamond_and_minimal_ordered_spec(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
