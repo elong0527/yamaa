@@ -5,6 +5,11 @@ version: "1.0"
 # registered condition at every declared path. Blocked entries name the open
 # issue that owns the missing diagnostic.
 fixtures:
+  negative-output-transport:
+    rule: R020
+    condition: unknown_artifact_profile
+    spec_paths: ["output.path"]
+    validator: artifact_profile
   negative-review-arithmetic:
     rule: R004
     condition: invalid_predicate

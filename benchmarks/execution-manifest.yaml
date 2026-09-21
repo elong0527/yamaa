@@ -456,6 +456,9 @@ examples:
   negative-output-duplicate:
     status: executable
     runtimes: ['python']
+  negative-output-transport:
+    status: executable
+    runtimes: ['python']
   negative-order-repeated:
     status: executable
     runtimes: ['python']
