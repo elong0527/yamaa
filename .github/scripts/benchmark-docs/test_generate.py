@@ -489,17 +489,51 @@ class DashboardTests(unittest.TestCase):
 
     def test_gallery_index_is_sorted_and_deterministic(self):
         entries = [
-            ("zzz-one", "Zulu title", "Zulu"),
-            ("aaa-two", "Alpha title", "Alpha"),
-            ("mmm-three", "Mike title", "Alpha"),
+            ("adam-zzz-one", "Zulu title", "Zulu"),
+            ("adam-aaa-two", "Alpha title", "Alpha"),
+            ("adam-mmm-three", "Mike title", "Alpha"),
         ]
         first = generate.render_index(entries)
         self.assertEqual(first, generate.render_index(list(reversed(entries))))
         text = first.decode("ascii")
         self.assertLess(text.index("Alpha"), text.index("Zulu"))
-        self.assertLess(text.index("aaa-two.html"), text.index("mmm-three.html"))
-        for name in ("zzz-one", "aaa-two", "mmm-three"):
+        self.assertLess(
+            text.index("adam-aaa-two.html"), text.index("adam-mmm-three.html")
+        )
+        for name in ("adam-zzz-one", "adam-aaa-two", "adam-mmm-three"):
             self.assertIn(f'href="{name}.html"', text)
+
+    def test_gallery_counts_families_from_the_directory_names(self):
+        # The family table is the figure readers quote, so it is counted from
+        # the suite rather than typed into the template, where it would drift.
+        text = generate.render_index(
+            [
+                ("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL"),
+                ("adam-adsl-two", "ADaM ADSL: derive more", "ADaM ADSL"),
+                ("negative-adsl-three", "ADaM ADSL: reject", "ADaM ADSL"),
+            ]
+        ).decode("ascii")
+        self.assertIn("| `adam-*` | 2 | SDTM to ADaM derivations |", text)
+        self.assertIn("| `negative-*` | 1 |", text)
+        # A family with no benchmarks does not get an empty row.
+        self.assertNotIn("`sdtm-*`", text)
+
+    def test_gallery_rejects_a_family_it_cannot_describe(self):
+        with self.assertRaises(ValueError) as caught:
+            generate.render_groups(["mystery-one"])
+        self.assertIn("mystery-*", str(caught.exception))
+
+    def test_overview_links_name_benchmarks_that_exist(self):
+        # The reading path and question index are hand-picked, so a rename
+        # has to fail the build rather than ship a dead link.
+        template = (generate.HERE / "gallery.md").read_text(encoding="utf-8")
+        targets = generate.curated_links(template)
+        self.assertGreater(len(targets), 0)
+        for name in targets:
+            self.assertTrue(
+                (generate.BENCHMARKS / name / "README.md").is_file(),
+                f"gallery.md links to a missing benchmark: {name}",
+            )
 
     def test_gallery_is_a_markdown_page_for_the_documentation_site(self):
         text = generate.render_index(

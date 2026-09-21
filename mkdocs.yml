@@ -73,9 +73,7 @@ nav:
       - Schema introduction: articles/schema-intro.md
       - Schema reference: articles/schema.md
       - Rules: articles/rules.md
-  - Benchmark:
-      - Reading the examples: articles/benchmark.md
-      - Dashboards: benchmark/index.md
+  - Benchmark: benchmark/index.md
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder

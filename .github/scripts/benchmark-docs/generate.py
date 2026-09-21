@@ -48,6 +48,17 @@ OUTCOMES = (
         "Each must fail, and expected/error.yaml pins the error it raises.",
     ),
 )
+# The gallery opens with a table of the directory-name families, in pipeline
+# order, counted from the directories themselves so the figures cannot drift
+# from the suite. A family absent from this map is an error rather than a
+# silent omission: adding one costs a single line here and keeps the table a
+# complete account of what the suite holds.
+GROUP_NOTES = {
+    "schema": "Schema, inheritance, and resolution behaviors",
+    "sdtm": "ODM to SDTM derivations",
+    "adam": "SDTM to ADaM derivations",
+    "negative": "Specifications the design must reject, with the exact error",
+}
 YAML_TOKEN = re.compile(
     r""""(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|\b(?:null|true|false)\b|\b\d+(?:\.\d+)?\b|[A-Za-z_][\w-]*(?=:)"""
 )
@@ -421,6 +432,41 @@ def plural(count, noun):
     return f"{count} {noun}" + ("" if count == 1 else "s")
 
 
+def render_groups(names):
+    """Render the family table that opens the gallery.
+
+    Counts come from the directory names, so the table cannot report a total
+    the suite no longer has. A family the notes do not describe raises rather
+    than disappearing from the table.
+    """
+    counts = {}
+    for name in names:
+        family = name.partition("-")[0]
+        if family not in GROUP_NOTES:
+            raise ValueError(
+                f"benchmark family has no gallery description: {family}-* "
+                f"(add it to GROUP_NOTES in generate.py)"
+            )
+        counts[family] = counts.get(family, 0) + 1
+    rows = "".join(
+        f"| `{family}-*` | {counts[family]} | {escape(GROUP_NOTES[family])} |\n"
+        for family in GROUP_NOTES
+        if family in counts
+    )
+    return "| Family | Count | What it is |\n|---|---|---|\n" + rows.rstrip("\n")
+
+
+def curated_links(template_text):
+    """Return the benchmark names the overview hand-picks in `gallery.md`.
+
+    The overview names a reading path and a question index. Those links
+    outlive the directories they point at unless something checks them, so
+    `main` compares them against the suite and a rename breaks the build
+    instead of shipping a dead link.
+    """
+    return sorted(set(re.findall(r"\]\(([a-z0-9-]+)\.html\)", template_text)))
+
+
 def render_index(entries):
     """Render the gallery page linking every generated dashboard.
 
@@ -434,6 +480,11 @@ def render_index(entries):
     that must produce an artifact, so the two are listed apart rather than
     interleaved by domain. A `negative-` directory name is what marks the
     second group, the same test the repository validator applies.
+
+    The overview above the listing lives in `gallery.md` and reaches the
+    reader on the same page as the benchmarks it describes. Its totals are
+    substituted from the directories rather than typed, and its curated links
+    are checked against the generated set, so neither can quietly go stale.
     """
     outcomes = {key: {} for key, _, _ in OUTCOMES}
     for name, title, category in entries:
@@ -463,10 +514,12 @@ def render_index(entries):
                 f'<ul class="benchmark-grid">\n{items}</ul>'
             )
         blocks.append("\n\n".join(sections))
+    names = [name for name, _, _ in entries]
     template = Template((HERE / "gallery.md").read_text(encoding="utf-8"))
     result = template.substitute(
         total=plural(len(entries), "benchmark"),
-        source_url=REPOSITORY + "/tree/main/benchmark",
+        source_url=REPOSITORY + "/tree/main/benchmarks",
+        groups=render_groups(names),
         summary="".join(jumps),
         sections="\n\n".join(blocks) + "\n",
     )
@@ -789,6 +842,14 @@ def main():
         for path in BENCHMARKS.iterdir()
         if benchmark_has_spec(path) and (path / "README.md").is_file()
     )
+    template_text = (HERE / "gallery.md").read_text(encoding="utf-8")
+    dangling = [
+        target for target in curated_links(template_text) if target not in set(complete)
+    ]
+    if dangling:
+        parser.error(
+            "gallery.md links to benchmarks that do not exist: " + ", ".join(dangling)
+        )
     neighbors = {
         name: (
             complete[index - 1] if index else None,

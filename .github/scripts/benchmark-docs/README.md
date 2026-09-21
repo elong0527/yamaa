@@ -104,6 +104,19 @@ header link is what makes the gallery reachable from a long page without
 scrolling to the end of it, and the brand beside it returns to the
 documentation site.
 
+The gallery opens with the overview of the suite: what it is, the family
+table, who it serves, a three-benchmark reading path, a question-to-benchmark
+index, and how to read the anti-patterns. It sits on the same page as the
+benchmarks it describes, so a reader never has to hold two pages open, and it
+is the whole of the `Benchmark` nav entry. The prose lives in
+`gallery.md`; the family table is substituted by `render_groups` from the
+directory names, so its counts cannot drift from the suite, and a family
+absent from `GROUP_NOTES` in `generate.py` fails generation rather than
+vanishing from the table. The reading path and the question index name
+benchmarks by hand, so `main` compares every `*.html` link in the template
+against the benchmark directories and refuses to generate when one has been
+renamed away.
+
 The gallery lists `Benchmarks` before `Anti-pattern`, each group headed by its
 own count and subdivided by the standard and domain in the benchmark title. A
 `negative-` directory name is what puts a benchmark in the second group, the
