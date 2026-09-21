@@ -139,10 +139,6 @@ intermediate_class:
         required: false
         default: false
         description: See REQ-1048 in rules/operations/lookup.md.
-    - derivations:
-        type: "dict[identifier, derivation]"
-        required: false
-        description: See REQ-1185 in rules/operations/lookup.md.
 
 intermediate_between_class:
     - value:

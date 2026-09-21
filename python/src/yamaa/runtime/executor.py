@@ -780,9 +780,7 @@ def execute_specification(
         context = RelationalContext(
             bindings=BindingIndex(plan.bindings, sources),
             relations=relations,
-            intermediates=IntermediateSelector(
-                plan.intermediates, relations, selected_dispatcher.evaluate
-            ),
+            intermediates=IntermediateSelector(plan.intermediates, relations),
             output_keys=tuple(specification.keys),
         )
         candidates = _construct_rows(

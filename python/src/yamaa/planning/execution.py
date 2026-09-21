@@ -34,7 +34,6 @@ from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
-    Intermediate,
     IntermediateBetween,
     OrderTerm,
     Row,
@@ -115,9 +114,6 @@ class PlannedIntermediate(_FrozenModel):
     missing: Any = None
     strict: bool = False
     missing_declared: bool = False
-    # REQ-1185: derivations are computed per record before matching; the map
-    # is empty when the author declared none.
-    derived: tuple[tuple[str, HandledExpression], ...] = ()
 
     @property
     def dependencies(self) -> tuple[str, ...]:
@@ -2332,8 +2328,6 @@ def _plan_lookups(
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
     resolved: list[ResolvedJoin],
-    supported_operations: Collection[str],
-    unsupported: list[UnsupportedFeature],
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
@@ -2392,23 +2386,9 @@ def _plan_lookups(
             continue
 
         failed = False
-        derived = _validate_intermediate_derivations(
-            intermediate,
-            path,
-            fields,
-            supported_operations,
-            diagnostics,
-            unsupported,
-        )
-        # REQ-1185: a name whose derivation failed validation is already
-        # reported at its derivation path; the key below must not repeat the
-        # failure, but a key naming such a name cannot be satisfied.
-        failed_derivations = set(intermediate.derivations or {}) - set(derived)
         for variable, field in zip(variables, match_fields, strict=True):
             left = _reference_type(variable, bindings, column_types)
             right = fields.get(field)
-            if right is None and field in derived:
-                right = _DERIVED_RESULT_TYPES.get(derived[field].value.operation)
             if left is None or right is None or _comparable_types(left, right):
                 continue
             diagnostics.append(
@@ -2426,13 +2406,6 @@ def _plan_lookups(
             )
             failed = True
         for field in match_fields:
-            if field in derived:
-                continue
-            if field in failed_derivations:
-                # REQ-1185: the derivation's own diagnostic names the
-                # problem; the key just cannot be satisfied.
-                failed = True
-                continue
             if field not in fields:
                 diagnostics.append(
                     _diagnostic(
@@ -2568,85 +2541,8 @@ def _plan_lookups(
             missing=intermediate.missing,
             strict=intermediate.strict,
             missing_declared="missing" in intermediate.model_fields_set,
-            derived=tuple(derived.items()),
         )
     return planned
-
-
-# REQ-1185: the declared result type of each operation an intermediate
-# derivation may use, so a derived target-side key field type-checks
-# against its driver-side key_base partner.
-_DERIVED_RESULT_TYPES: dict[str, ColumnType] = {"str_upper": "str"}
-
-
-def _validate_intermediate_derivations(
-    intermediate: Intermediate,
-    path: str,
-    fields: Mapping[str, ColumnType],
-    supported_operations: Collection[str],
-    diagnostics: list[ExecutionDiagnostic],
-    unsupported: list[UnsupportedFeature],
-) -> dict[str, HandledExpression]:
-    """Validate one intermediate's REQ-1185 derivations.
-
-    A derivation reads only the intermediate's own stored dataset fields: a
-    bare name means the dataset's field, and a qualified name must name the
-    dataset. Anything else - a driver field, another intermediate, another
-    derivation in the same map, or a name the dataset does not store - fails
-    as `unknown_field`. A derived name must not shadow a stored column.
-    Returns the valid declarations in author order.
-    """
-    dataset = intermediate.dataset
-    derived: dict[str, HandledExpression] = {}
-    for name, declaration in (intermediate.derivations or {}).items():
-        derivation_path = f"{path}.derivations.{name}"
-        if name in fields:
-            # REQ-1185: the stored column would be unreachable under the
-            # derived name, so the declaration is rejected, not merged.
-            diagnostics.append(
-                _diagnostic(
-                    "duplicate_derivation",
-                    derivation_path,
-                    {
-                        "intermediate": intermediate.id,
-                        "derivation": name,
-                        "identifier": f"{dataset}.{name}",
-                    },
-                    requirement="REQ-1185",
-                )
-            )
-            continue
-        info = _expression_info(
-            declaration.value,
-            expression_path(derivation_path, declaration),
-            supported_operations,
-        )
-        unsupported.extend(info.unsupported)
-        diagnostics.extend(info.diagnostics)
-        ok = True
-        for reference in info.references:
-            identifier = reference.name
-            if "." in identifier:
-                qualifier, _, field = identifier.partition(".")
-                allowed = qualifier == dataset and field in fields
-            else:
-                # REQ-1185: a bare name reads only the dataset's stored
-                # field; another derivation in the same map is not in scope.
-                allowed = identifier in fields
-            if allowed:
-                continue
-            diagnostics.append(
-                _diagnostic(
-                    "unknown_field",
-                    reference.path,
-                    {"intermediate": intermediate.id, "identifier": identifier},
-                    requirement="REQ-1185",
-                )
-            )
-            ok = False
-        if ok:
-            derived[name] = declaration
-    return derived
 
 
 def _validate_intermediate_between(
@@ -3289,13 +3185,7 @@ def plan_execution(
         )
 
     intermediates = _plan_lookups(
-        specification,
-        bindings,
-        column_types,
-        diagnostics,
-        resolved_joins,
-        supported_operations,
-        unsupported,
+        specification, bindings, column_types, diagnostics, resolved_joins
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}

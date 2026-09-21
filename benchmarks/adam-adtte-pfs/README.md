@@ -26,7 +26,7 @@ records by sequence number.
   progression.
 - `ADT` follows `CNSR`: the event date when the record is an event, else the
   last adequate assessment date. No separate time-to-event primitive is
-  needed — the event-vs-censor choice is already settled by `CNSR`.
+  needed - the event-vs-censor choice is already settled by `CNSR`.
 - `AVAL` is the number of days from `STARTDT` through `ADT`,
   counting the randomization day as day one.
 - `EVNTDESC` is `DISEASE PROGRESSION` for a progression event,

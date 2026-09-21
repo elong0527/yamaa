@@ -132,7 +132,6 @@ class Intermediate(_StrictModel):
     order_by: list[OrderTerm] | None = None
     keep: Literal["first", "last"] | None = None
     columns: list[str] | None = None
-    derivations: dict[str, HandledExpression] | None = None
     missing: JsonValue = None
     strict: bool = False
 

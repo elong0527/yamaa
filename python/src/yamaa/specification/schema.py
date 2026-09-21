@@ -952,22 +952,6 @@ def _normalize_inline_class(
     return normalized
 
 
-_DERIVATION_CALL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\(\s*([^()]*?)\s*\)$")
-
-
-def _derivation_shorthand(value: str) -> dict[str, object]:
-    """Expand a bare derivation string to its dict form.
-
-    A plain name stays the REQ-0319 source shorthand. `operation(argument)`
-    is the one-argument operation call shorthand, so `to_number(IDVARVAL)`
-    reads as `{to_number: {source: IDVARVAL}}`.
-    """
-    match = _DERIVATION_CALL.match(value.strip())
-    if match is None:
-        return {"source": value}
-    return {match.group(1): {"source": match.group(2)}}
-
-
 def _normalize_single(
     value: object,
     type_name: str,
@@ -1009,13 +993,8 @@ def _normalize_single(
             # union members so the registry and the REQ-0266
             # handled-expression expansion apply unchanged. The "str" member
             # exists for validation; normalization never dispatches on it.
-            # `operation(argument)` is the one-argument operation call
-            # shorthand, so `to_number(IDVARVAL)` reads as
-            # `{to_number: {source: IDVARVAL}}`. Parentheses cannot appear in
-            # a variable name (REQ-1057), so no valid source shorthand
-            # changes meaning.
             if isinstance(value, str):
-                value = _derivation_shorthand(value)
+                value = {"source": value}
             return _normalize_type(
                 value,
                 [member for member in _members(alias["type"]) if member != "str"],
