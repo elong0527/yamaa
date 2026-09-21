@@ -65,6 +65,7 @@ GROUP_NOTES = {
     "adam": "Assess SDTM to ADaM derivations",
     "sdtm": "Assess ODM to SDTM derivations",
     "negative": "Assess yamaa error handling",
+    "spec": "Assess yamaa specification features",
 }
 YAML_TOKEN = re.compile(
     r""""(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|\b(?:null|true|false)\b|\b\d+(?:\.\d+)?\b|[A-Za-z_][\w-]*(?=:)"""
