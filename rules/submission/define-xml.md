@@ -309,7 +309,7 @@ declared value could only agree with or contradict the derivation.
 
 **REQ-0987.** The dataset's `def:leaf` names the file the package carries for
 that dataset: the entry's `dataset_json` when it declares one, per
-[REQ-1207](dataset-json.md#req-1207), and otherwise the artifact its
+[REQ-1215](dataset-json.md#req-1215), and otherwise the artifact its
 specification produces. `xlink:href` is that path expressed relative
 to the directory holding the generated document, written with `/` separators,
 and `def:title` is that path's final component. The href must not begin with a

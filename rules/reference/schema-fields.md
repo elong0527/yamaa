@@ -133,7 +133,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `define_version` | `"str"` | `false` | Absent | `{"pattern": "^2\\.1\\.(0\|[1-9][0-9]*)$"}` | [REQ-1069](../submission/define-xml.md#req-1069) |
 | `relative_href` | `"str"` | `false` | Absent | `{"pattern": "^(?!/)(?!.*(^\|/)\\.\\.(/\|$))[^\\\\]+$"}` | [REQ-1070](../submission/define-xml.md#req-1070) |
 | `define_path` | `"str"` | `false` | Absent | `{"pattern": "^[^/\\\\][^\\\\]*\\.[Xx][Mm][Ll]$"}` | [REQ-1071](../submission/define-xml.md#req-1071) |
-| `dataset_json_path` | `"str"` | `false` | Absent | `{"pattern": "^[^/\\\\][^\\\\]*\\.[Jj][Ss][Oo][Nn]$"}` | [REQ-1214](../submission/dataset-json.md#req-1214) |
+| `dataset_json_path` | `"str"` | `false` | Absent | `{"pattern": "^[^/\\\\][^\\\\]*\\.[Jj][Ss][Oo][Nn]$"}` | [REQ-1225](../submission/dataset-json.md#req-1225) |
 | `creation_datetime` | `"str"` | `false` | Absent | `{"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"}` | [REQ-1072](../submission/define-xml.md#req-1072) |
 | `language_tag` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$"}` | [REQ-1073](../submission/define-xml.md#req-1073) |
 | `standard_name` | `"str"` | `false` | Absent | `{"values": ["ADaMIG", "ADaMIG-MD", "BIMO", "CDISC/NCI", "SDTMIG", "SDTMIG-AP", "SDTMIG-MD", "SENDIG", "SENDIG-AR", "SENDIG-DART", "SENDIG-GENETOX"]}` | [REQ-1074](../submission/define-xml.md#req-1074) |

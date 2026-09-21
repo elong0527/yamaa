@@ -131,9 +131,9 @@ pay for decimal text. `csv` is the reviewable container: a human can read it, a
 diff can show what moved in it, and its bytes are fixed exactly, which is what
 makes it usable as a golden contract.
 
-<a id="req-1225"></a>
+<a id="req-1233"></a>
 
-**REQ-1225.** A container that carries submission metadata beside its rows is
+**REQ-1233.** A container that carries submission metadata beside its rows is
 not among them. CDISC Dataset-JSON is written by a study document under
 [Dataset-JSON](../submission/dataset-json.md), not by a specification: the file's `studyOID`,
 `metaDataVersionOID`, `itemGroupOID`, and per-column `itemOID` are

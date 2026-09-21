@@ -305,7 +305,7 @@ define_path:
 dataset_json_path:
     type: str
     pattern: '^[^/\\][^\\]*\.[Jj][Ss][Oo][Nn]$'
-    description: See REQ-1217 in rules/submission/dataset-json.md.
+    description: See REQ-1225 in rules/submission/dataset-json.md.
 
 creation_datetime:
     type: str
