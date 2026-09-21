@@ -126,7 +126,7 @@ Arithmetic errors remain distinct from conversion failures.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-non-finite](../../benchmarks/adam-adsl-non-finite/README.md).
+- [schema-non-finite](../../benchmarks/schema-non-finite/README.md).
 - [negative-integer-overflow](../../benchmarks/negative-integer-overflow/README.md).
 - [negative-conversion-fractional](../../benchmarks/negative-conversion-fractional/README.md).
 - [negative-number-below-limit](../../benchmarks/negative-number-below-limit/README.md).
