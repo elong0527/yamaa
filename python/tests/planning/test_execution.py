@@ -17,6 +17,7 @@ from yamaa.specification.models import (
     Expression,
     HandledExpression,
     Intermediate,
+    OrderTerm,
     Output,
     Row,
     Specification,
@@ -494,6 +495,231 @@ def test_a_named_lookup_pairing_a_key_base_against_an_inferred_key_fails() -> No
     assert diagnostic.spec_paths == ("intermediates[0]",)
     assert diagnostic.context["key_base"] == ["X", "Y"]
     assert diagnostic.context["key"] == ["X"]
+
+
+def test_a_lookup_filter_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key=["X"], filter="V > 0")
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # REQ-0120: the qualifier stays mandatory; the diagnostic suggests it.
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0120"]
+    assert diagnostic.requirement == "REQ-0120"
+    assert diagnostic.spec_paths == ("intermediates[0].filter",)
+    assert diagnostic.context["identifier"] == "V"
+    assert diagnostic.context["suggestion"] == "RIGHT.V"
+
+
+def test_a_lookup_filter_with_a_wrongly_qualified_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key=["X"], filter="SRC.V > 0")
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # REQ-0120: naming another dataset's qualifier is the same failure, with
+    # the same suggestion.
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0120"]
+    assert diagnostic.requirement == "REQ-0120"
+    assert diagnostic.context["identifier"] == "SRC.V"
+    assert diagnostic.context["suggestion"] == "RIGHT.V"
+
+
+def test_a_lookup_filter_with_a_genuinely_unknown_field_suggests_nothing() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK", dataset="RIGHT", key=["X"], filter="RIGHT.NOPE > 0"
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0120"]
+    assert diagnostic.requirement == "REQ-0120"
+    assert "suggestion" not in diagnostic.context
+
+
+def test_a_lookup_order_by_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="RIGHT",
+                    key=["X"],
+                    order_by=[OrderTerm(variable="V")],
+                    keep="first",
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # REQ-0120: order_by carries the same mandatory qualifier.
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0120"]
+    assert diagnostic.requirement == "REQ-0120"
+    assert diagnostic.spec_paths == ("intermediates[0].order_by[0]",)
+    assert diagnostic.context["identifier"] == "V"
+    assert diagnostic.context["suggestion"] == "RIGHT.V"
+
+
+def test_an_inline_lookup_filter_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key_base": "SRC.X",
+                            "key": ["X"],
+                            "value": "V",
+                            "filter": "V > 0",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    # REQ-0120/REQ-0137: the inline filter keeps the mandatory qualifier and
+    # suggests it, exactly like the named form.
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "REQ-0120"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.filter",)
+    assert diagnostic.context["identifier"] == "V"
+    assert diagnostic.context["suggestion"] == "RIGHT.V"
+
+
+def test_an_inline_lookup_filter_with_a_genuinely_unknown_field_suggests_nothing() -> (
+    None
+):
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key_base": "SRC.X",
+                            "key": ["X"],
+                            "value": "V",
+                            "filter": "NOPE > 0",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    # REQ-0120: a field the dataset does not have gets no suggestion.
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "REQ-0120"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.filter",)
+    assert diagnostic.context["identifier"] == "NOPE"
+    assert "suggestion" not in diagnostic.context
+
+
+def test_an_inline_lookup_order_by_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key_base": "SRC.X",
+                            "key": ["X"],
+                            "value": "V",
+                            "order_by": ["V"],
+                            "keep": "first",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    # REQ-0120/REQ-0137: order_by carries the same mandatory qualifier.
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "REQ-0120"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.order_by[0]",)
+    assert diagnostic.context["identifier"] == "V"
+    assert diagnostic.context["suggestion"] == "RIGHT.V"
 
 
 def test_an_inline_lookup_with_a_key_naming_no_identifiers_is_reported() -> None:
