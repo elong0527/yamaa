@@ -19,7 +19,6 @@ This contract owns the requirements below. Related contracts:
 - [Aggregation](../operations/aggregation.md).
 - [Expression evaluation](../operations/expressions.md).
 - [Schema language](../reference/schema-language.md).
-- [Execution lifecycle](../execution/lifecycle.md).
 - [CSV profile](csv.md).
 - [Parquet profile](parquet.md).
 - [Artifact publication](publication.md).
@@ -71,7 +70,7 @@ Two extracts of the same dataset bind the same field to the same type.
 <a id="req-0518"></a>
 
 **REQ-0518.** `dataset_class.types` declares each named field's type in a
-typeless container. Any unnamed field is `str`. This declaration covers the
+typeless container. Any unnamed field is `str`. This declaration describes the
 dataset as this specification reads it. Two specifications may read
 the same delimited file with different declarations, because the file carries
 no types to contradict either declaration. A dataset whose types matter to more
@@ -159,8 +158,8 @@ its declared type. `int` and `float` use [Types and conversion](../values/types.
 including its non-finite normalization. `date` and `datetime` accept exactly
 the lexical forms [Temporal values](../values/temporal.md) fixes. A value that does not parse fails the run. [Types and conversion](../values/types.md)
 separately recognizes YAML 1.2 non-finite forms during declared numeric
-parsing. They remain text when the field's type is `str` and normalize only
-after parsing as numbers.
+parsing. These forms remain text when the field's type is `str` and normalize
+only after parsing as numbers.
 
 <a id="req-0527"></a>
 
@@ -230,9 +229,10 @@ the container cannot honor. The declaration fails validation.
 <a id="req-0751"></a>
 
 **REQ-0751.** A specification that reads an artifact another specification
-produced learns how those bytes are encoded from the producer, through the
-producing specification link [Source ingestion](ingestion.md) defines: the producer's `output.path` states
-the profile by its extension, just as `output.columns` states the fields.
+produced learns the byte encoding from the producer through the
+producing-specification link this contract defines: the producer's
+`output.path` states the profile by its extension, just as `output.columns`
+states the fields.
 The consumer reads the profile from the producing specification, not from
 the name the consumer happens to know the file by. A copy stored under
 another name is still read under the profile its producer wrote it with.
@@ -323,7 +323,7 @@ structural constraints come from its schema declaration.
 <a id="req-0537"></a>
 
 **REQ-0537.** Inferring a field type from its values, or treating text as
-  absence: neither is an implementation option.
+  absence: neither behavior is permitted.
 
 <a id="req-0538"></a>
 
