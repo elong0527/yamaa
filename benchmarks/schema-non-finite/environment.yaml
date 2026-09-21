@@ -1,0 +1,14 @@
+schema_version: "1.0"
+version: "1.0.0"
+
+runtime:
+  language: r
+  artifact:
+    reference: org.example/yamaa/numeric-constants-r:1.0.0
+
+functions:
+  numeric_constant:
+    contract: python/contracts.yaml
+    binding:
+      call: environment::numeric_constant
+    conformance: python/conformance/numeric_constant.yaml

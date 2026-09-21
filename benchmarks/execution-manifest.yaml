@@ -183,9 +183,6 @@ examples:
   adam-adsl-new-therapy:
     status: executable
     runtimes: ['python']
-  adam-adsl-non-finite:
-    status: executable
-    runtimes: ['python']
   adam-adsl-populations:
     status: executable
     runtimes: ['python']
@@ -679,5 +676,8 @@ examples:
     status: executable
     runtimes: ['python']
   schema-lookup:
+    status: executable
+    runtimes: ['python']
+  schema-non-finite:
     status: executable
     runtimes: ['python']

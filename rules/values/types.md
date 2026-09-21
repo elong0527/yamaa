@@ -185,7 +185,7 @@ that are not mutually comparable: fail rather than convert an operand.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-non-finite](../../benchmarks/adam-adsl-non-finite/README.md).
+- [schema-non-finite](../../benchmarks/schema-non-finite/README.md).
 - [negative-ambiguous-type](../../benchmarks/negative-ambiguous-type/README.md).
 - [negative-number-below-limit](../../benchmarks/negative-number-below-limit/README.md).
 - [negative-greatest-mixed](../../benchmarks/negative-greatest-mixed/README.md).
