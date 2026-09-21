@@ -7,6 +7,7 @@ without new expression functions.
 
 from __future__ import annotations
 
+import datetime
 from pathlib import Path
 
 from yamaa.expressions import ExpressionDispatcher, MappingResolver
@@ -231,6 +232,82 @@ def test_derive_binding_reads_earlier_binding(tmp_path) -> None:
     ]
 
 
+_EX_SPEC = """\
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex.csv}
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDT]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derive:
+          - name: H
+            type: date
+            derivation:
+              date_impute:
+                source: EX.EXENDTC
+                month: 12
+                day: last
+                minimum_source_precision: month
+                missing: null
+        expr: "MAX(H)"
+rows:
+  - id: one
+    derivations: {}
+"""
+
+_EX_CSV = """\
+STUDYID,USUBJID,EXENDTC
+S1,001,2024-05
+S1,002,2024-06
+"""
+
+
+def test_derive_binding_enum_args_are_not_variables(tmp_path) -> None:
+    """#732: enum strings in a binding derivation are not variable refs."""
+    input_dir = tmp_path / "input"
+    input_dir.mkdir(exist_ok=True)
+    (input_dir / "ex.csv").write_text(_EX_CSV)
+    spec_file = tmp_path / "spec.yaml"
+    spec_file.write_text(_EX_SPEC)
+    specification = load_specification(spec_file, SCHEMA_ROOT).specification
+    resources = ProjectResources(tmp_path)
+    result = execute_with_source_provider(
+        specification,
+        lambda datasets: load_source_tables(datasets, resources),
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.to_dicts() == [
+        {
+            "STUDYID": "S1",
+            "USUBJID": "001",
+            "TRTEDT": datetime.date(2024, 5, 31),
+        },
+        {
+            "STUDYID": "S1",
+            "USUBJID": "002",
+            "TRTEDT": datetime.date(2024, 6, 30),
+        },
+    ]
+
+
 def test_derive_missing_handler_supplies_fallback(tmp_path) -> None:
     """A binding conversion failure falls back to the declared handler value."""
     result = _run_inline(
@@ -375,6 +452,27 @@ def _plan(derive: list[dict], expr: str = "SUM(QSNUM)"):
     except ExecutionPlanningError as error:
         return error
     return None
+
+
+def test_plan_accepts_enum_strings_inside_binding_derivation() -> None:
+    """#732: enum values in a binding derivation are not variable refs."""
+    derive = [
+        {
+            "name": "H",
+            "type": "date",
+            "derivation": {
+                "date_impute": {
+                    "source": "QS.QSORRES",
+                    "month": 12,
+                    "day": "last",
+                    "minimum_source_precision": "month",
+                    "missing": None,
+                }
+            },
+        },
+    ]
+
+    assert _plan(derive, expr="MAX(H)") is None
 
 
 def test_plan_rejects_duplicate_binding_names() -> None:

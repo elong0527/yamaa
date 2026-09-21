@@ -6603,31 +6603,181 @@ def validate_aggregate_between(
     return errors
 
 
+# REQ-1189: payload argument names that name record fields for each
+# derivation operation, mirroring the schema declarations
+# (yaml/schema_expression_*.yaml). A plain string in any other argument
+# position is a literal, an enum value, or an identifier -- never a
+# variable reference. Window operations additionally read their
+# window_spec (see _DERIVE_WINDOW_OPERATIONS below).
+_DERIVE_VARIABLE_FIELDS = {
+    'baseline_flag': ('date', 'reference_date'),
+    'cut': ('source',),
+    'date_diff': ('start', 'end'),
+    'date_impute': ('source', 'not_before'),
+    'date_precision': ('source',),
+    'datetime_impute': ('source',),
+    'datetime_precision': ('source',),
+    'greatest': ('sources',),
+    'least': ('sources',),
+    'mapping': ('source',),
+    'previous_non_missing': ('source',),
+    'round_half_away_from_zero': ('source',),
+    'row_value': ('source',),
+    'str_extract': ('source',),
+    'str_lower': ('source',),
+    'str_upper': ('source',),
+    'study_day': ('date', 'reference'),
+    'to_date': ('source',),
+    'to_epoch_day': ('source',),
+}
+
+# Window operations name their window_spec's fields in a derive binding
+# derivation, alongside the operation's own variable fields above.
+_DERIVE_WINDOW_OPERATIONS = (
+    'row_number',
+    'rank',
+    'row_value',
+    'previous_non_missing',
+    'baseline_flag',
+)
+
+
 def derive_binding_reference_names(derivation):
-    """Collect the variable references a derive binding derivation names."""
+    """Collect the variable references a derive binding derivation names.
+
+    Only argument positions the schema declares as variable references
+    contribute names; literals, enum values, and identifiers never do.
+    Nested derivations, expressions, and predicates recurse (REQ-1189).
+    """
     names = []
-    if isinstance(derivation, str):
-        # A bare-string derivation is one source read.
-        names.append(derivation)
-    elif isinstance(derivation, dict):
-        if len(derivation) == 1:
-            operation, payload = next(iter(derivation.items()))
-            if operation == 'source':
-                variable = payload
-                if isinstance(payload, dict):
-                    variable = payload.get('variable')
+
+    def add_variable_field(value):
+        # A variable field is a bare variable or a filtered source naming
+        # one variable with an optional record filter.
+        variable = value
+        selector = None
+        if isinstance(value, dict):
+            variable = value.get('variable')
+            selector = value.get('filter')
+        if isinstance(variable, str):
+            names.append(variable)
+        names.extend(predicate_identifier_names(selector))
+
+    def add_window_names(window):
+        if not isinstance(window, dict):
+            return
+        group_by = window.get('group_by')
+        if isinstance(group_by, list):
+            names.extend(entry for entry in group_by if isinstance(entry, str))
+        order_by = window.get('order_by')
+        if isinstance(order_by, list):
+            for term in order_by:
+                variable = term
+                if isinstance(term, dict):
+                    variable = term.get('variable')
                 if isinstance(variable, str):
                     names.append(variable)
-                return names
-            if operation == 'compute':
-                expression = payload.get('expr') if isinstance(payload, dict) else None
-                names.extend(numeric_expression_identifier_names(expression))
-                return names
-        for value in derivation.values():
-            names.extend(derive_binding_reference_names(value))
-    elif isinstance(derivation, list):
-        for item in derivation:
-            names.extend(derive_binding_reference_names(item))
+        names.extend(predicate_identifier_names(window.get('filter')))
+
+    def visit(node):
+        if isinstance(node, str):
+            # A bare-string derivation is one source read.
+            names.append(node)
+        elif isinstance(node, dict):
+            if len(node) == 1:
+                operation, payload = next(iter(node.items()))
+                if operation == 'source':
+                    variable = payload
+                    if isinstance(payload, dict):
+                        variable = payload.get('variable')
+                    if isinstance(variable, str):
+                        names.append(variable)
+                    return
+                if operation == 'compute':
+                    expression = payload.get('expr') if isinstance(payload, dict) else None
+                    names.extend(numeric_expression_identifier_names(expression))
+                    return
+                if operation in ('literal', 'aggregate'):
+                    # A literal is a fixed value; a nested reduction names
+                    # its own relation, checked with the aggregate itself.
+                    return
+                if operation == 'function' and isinstance(payload, dict):
+                    # REQ-0679 writes a named variable as a plain string;
+                    # every other argument leaf is a literal class mapping
+                    # and depends on nothing.
+                    args = payload.get('args')
+                    if isinstance(args, dict):
+                        names.extend(
+                            value for value in args.values() if isinstance(value, str)
+                        )
+                    return
+                if operation == 'str_template':
+                    template = payload
+                    if isinstance(payload, dict):
+                        template = payload.get('template')
+                    if isinstance(template, str):
+                        names.extend(string_template_identifier_names(template))
+                    return
+                if operation == 'case' and isinstance(payload, list):
+                    for item in payload:
+                        if not isinstance(item, dict):
+                            continue
+                        if 'otherwise' in item:
+                            visit(item['otherwise'])
+                        else:
+                            names.extend(
+                                predicate_identifier_names(item.get('when'))
+                            )
+                            visit(item.get('then'))
+                    return
+                if operation == 'lookup' and isinstance(payload, dict):
+                    key_base = payload.get('key_base')
+                    entries = key_base if isinstance(key_base, list) else [key_base]
+                    names.extend(entry for entry in entries if isinstance(entry, str))
+                    names.extend(predicate_identifier_names(payload.get('filter')))
+                    return
+                if operation == 'first_available' and isinstance(payload, dict):
+                    sources = payload.get('sources')
+                    if isinstance(sources, list):
+                        for entry in sources:
+                            add_variable_field(entry)
+                    return
+                if operation == 'str_concat' and isinstance(payload, dict):
+                    sources = payload.get('sources')
+                    if isinstance(sources, list):
+                        for entry in sources:
+                            visit(entry)
+                    return
+                if operation in ('greatest', 'least') and isinstance(payload, dict):
+                    sources = payload.get('sources')
+                    if isinstance(sources, list):
+                        names.extend(entry for entry in sources if isinstance(entry, str))
+                    return
+                if operation in _DERIVE_VARIABLE_FIELDS and isinstance(payload, dict):
+                    for field in _DERIVE_VARIABLE_FIELDS[operation]:
+                        value = payload.get(field)
+                        values = value if isinstance(value, list) else [value]
+                        for entry in values:
+                            add_variable_field(entry)
+                    if operation in _DERIVE_WINDOW_OPERATIONS:
+                        add_window_names(payload.get('window'))
+                    return
+                if operation in ('row_number', 'rank') and isinstance(payload, dict):
+                    # No variable fields of their own; only the window_spec
+                    # names record fields (the rank method is an enum).
+                    add_window_names(payload.get('window'))
+                    return
+            elif set(node) <= {'value', 'missing', 'strict'} and 'value' in node:
+                # A handled expression wraps one derivation; missing and
+                # strict are literals and name nothing.
+                visit(node['value'])
+                return
+            for value in node.values():
+                names.extend(derive_binding_reference_names(value))
+        elif isinstance(node, list):
+            for item in node:
+                names.extend(derive_binding_reference_names(item))
+    visit(derivation)
     return names
 
 

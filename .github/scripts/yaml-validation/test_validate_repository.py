@@ -725,7 +725,7 @@ class TestAggregateDeriveStep(unittest.TestCase):
     def context(self, **changes):
         datasets = {
             'QS': {'QSORRES': 'str', 'QSCAT': 'str'},
-            'EX': {'EXSTDT': 'date', 'EXSEQ': 'int'},
+            'EX': {'EXSTDT': 'date', 'EXSEQ': 'int', 'EXENDTC': 'str'},
         }
         output_types = {'AVAL': 'float'}
         context = {
@@ -839,6 +839,33 @@ class TestAggregateDeriveStep(unittest.TestCase):
         )
         self.assertEqual(errors[0].condition, 'unknown_derive_variable')
         self.assertEqual(errors[0].context['identifier'], 'MISSING')
+
+    def test_accepts_enum_strings_inside_binding_derivation(self):
+        # #732: enum values in a binding derivation are not variable
+        # references, so the unknown-variable scan leaves them alone.
+        errors = self.validate(
+            self.payload(
+                filter=None,
+                derive=[
+                    {
+                        'name': 'H',
+                        'type': 'date',
+                        'derivation': {
+                            'date_impute': {
+                                'source': 'EX.EXENDTC',
+                                'month': 12,
+                                'day': 'last',
+                                'minimum_source_precision': 'month',
+                                'missing': None,
+                            }
+                        },
+                    },
+                ],
+                expr='MAX(H)',
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors, [])
 
     def test_rejects_qualified_reference_alongside_bindings(self):
         errors = self.validate(
