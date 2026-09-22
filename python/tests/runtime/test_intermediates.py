@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from yamaa.expressions import parse_predicate
+from yamaa.expressions import ResolvedValue, parse_predicate
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, DateValue, TypedColumn
+from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
 from yamaa.planning import PlannedIntermediate
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
@@ -10,6 +11,7 @@ from yamaa.runtime.intermediates import (
     types_comparable,
 )
 from yamaa.runtime.joins import RelationIndex
+from yamaa.runtime.rows import CandidateRow, RelationalContext, RowResolver
 from yamaa.specification.models import OrderTerm
 
 
@@ -267,16 +269,17 @@ def test_declared_types_decide_whether_a_range_can_be_compared() -> None:
     assert not types_comparable("str", "int")
 
 
-def supp() -> RelationIndex:
-    # REQ-1185: derivation reads the intermediate's own dataset columns.
-    return relation(
-        "SUPPLB",
-        [
-            ("STUDYID", "str"),
-            ("USUBJID", "str"),
-            ("IDVARVAL", "str"),
-            ("QVAL", "str"),
-        ],
+def supp_table() -> object:
+    return frame_from_values(
+        tuple(
+            TypedColumn(name=name, type=column_type)
+            for name, column_type in [
+                ("STUDYID", "str"),
+                ("USUBJID", "str"),
+                ("IDVARVAL", "str"),
+                ("QVAL", "str"),
+            ]
+        ),
         [
             ["S1", "U1", "   259", "y"],
             ["S1", "U1", "    7", "n"],
@@ -285,15 +288,21 @@ def supp() -> RelationIndex:
     )
 
 
+def supp() -> RelationIndex:
+    return RelationIndex("SUPPLB", supp_table())
+
+
 def derived_plan(**extra: object) -> PlannedIntermediate:
     from yamaa.specification.models import Expression, HandledExpression
 
+    match_variables = extra.pop("match_variables", ("STUDYID", "USUBJID", "QVAL_T"))
+    match_fields = extra.pop("match_fields", ("STUDYID", "USUBJID", "QVAL_U"))
     return PlannedIntermediate(
         identifier="SUP_EP",
         dataset="SUPPLB",
         path="intermediates[0]",
-        match_variables=("STUDYID", "USUBJID", "QVAL_T"),
-        match_fields=("STUDYID", "USUBJID", "QVAL_U"),
+        match_variables=match_variables,
+        match_fields=match_fields,
         derived=(
             (
                 "QVAL_U",
@@ -327,6 +336,84 @@ def test_a_blank_derivation_yields_missing_and_does_not_match() -> None:
 
     assert outcome.condition is None
     assert outcome.record is None
+
+
+def test_a_derived_filter_narrows_donor_records() -> None:
+    plan = derived_plan(
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        filter_predicate=parse_predicate("SUPPLB.QVAL_U = 'Y'"),
+    )
+
+    outcome = IntermediateSelector([plan], {"SUPPLB": supp()}).select(
+        "SUP_EP", {"STUDYID": "S1", "USUBJID": "U1"}
+    )
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    assert outcome.record.values["IDVARVAL"] == "   259"
+
+
+def test_a_correlated_filter_reads_the_derived_donor_value() -> None:
+    plan = derived_plan(
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        filter_predicate=parse_predicate("SUPPLB.QVAL_U = WANTED"),
+    )
+
+    outcome = IntermediateSelector([plan], {"SUPPLB": supp()}).select(
+        "SUP_EP", {"STUDYID": "S1", "USUBJID": "U1", "WANTED": "N"}
+    )
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    assert outcome.record.values["IDVARVAL"] == "    7"
+
+
+def test_a_derived_order_term_ranks_donor_records() -> None:
+    plan = derived_plan(
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        order_terms=((OrderTerm(variable="SUPPLB.QVAL_U"), "QVAL_U"),),
+        keep="first",
+    )
+
+    outcome = IntermediateSelector([plan], {"SUPPLB": supp()}).select(
+        "SUP_EP", {"STUDYID": "S1", "USUBJID": "U1"}
+    )
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    assert outcome.record.values["IDVARVAL"] == "    7"
+
+
+def test_a_derived_readable_column_resolves_from_the_selected_record() -> None:
+    plan = derived_plan(readable_columns=("QVAL_U",))
+    table = supp_table()
+    binding_plan = BindingPlan(
+        domain="OUT",
+        datasets={
+            "SUPPLB": DatasetBinding(
+                dataset="SUPPLB", columns=table.columns, context_columns=()
+            )
+        },
+        output_columns=("STUDYID", "USUBJID", "QVAL_T"),
+    )
+    relation = RelationIndex("SUPPLB", table)
+    selector = IntermediateSelector([plan], {"SUPPLB": relation})
+    context = RelationalContext(
+        bindings=BindingIndex(binding_plan, {"SUPPLB": table}),
+        relations={"SUPPLB": relation},
+        intermediates=selector,
+        output_keys=(),
+    )
+    values = {"STUDYID": "S1", "USUBJID": "U1", "QVAL_T": "Y"}
+    candidate = CandidateRow(source_rows={}, values=values)
+
+    resolved = RowResolver(context, candidate, values).resolve("SUP_EP.QVAL_U")
+
+    assert isinstance(resolved, ResolvedValue)
+    assert resolved.value == "Y"
 
 
 # (Failure-surfacing test removed: no naturally-failing expression in suite

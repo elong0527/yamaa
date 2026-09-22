@@ -2132,8 +2132,10 @@ def _validate_intermediate_reference(
     field = reference.name.split(".", 1)[1]
     dataset = bindings.datasets.get(intermediate.dataset)
     readable = intermediate.readable_columns
+    derived = {name for name, _ in intermediate.derived}
     if dataset is not None and (
-        field not in dataset.field_names or (readable and field not in readable)
+        (field not in dataset.field_names and field not in derived)
+        or (readable and field not in readable)
     ):
         # REQ-0125: the named column must exist in the intermediate's dataset and,
         # when the intermediate declares `columns`, be one of them.
@@ -2726,6 +2728,7 @@ def _plan_lookups(
         # reported at its derivation path; the key below must not repeat the
         # failure, but a key naming such a name cannot be satisfied.
         failed_derivations = set(intermediate.derivations or {}) - set(derived)
+        available_fields = fields.keys() | derived.keys()
         for variable, field in zip(variables, match_fields, strict=True):
             left = _reference_type(variable, bindings, column_types)
             right = fields.get(field)
@@ -2788,13 +2791,20 @@ def _plan_lookups(
             if predicate is not None:
                 for identifier in predicate_identifiers(predicate):
                     qualifier, separator, field = identifier.partition(".")
-                    if not separator or field not in dataset_fields.get(qualifier, ()):
+                    donor_field = (
+                        qualifier == intermediate.dataset and field in available_fields
+                    )
+                    correlated_field = (
+                        qualifier != intermediate.dataset
+                        and field in dataset_fields.get(qualifier, ())
+                    )
+                    if not separator or not (donor_field or correlated_field):
                         context: dict[str, JsonValue] = {
                             "intermediate": intermediate.id,
                             "identifier": identifier,
                         }
                         suggestion = _qualification_suggestion(
-                            identifier, intermediate.dataset, fields
+                            identifier, intermediate.dataset, available_fields
                         )
                         if suggestion is not None:
                             context["suggestion"] = suggestion
@@ -2811,13 +2821,13 @@ def _plan_lookups(
         terms: list[tuple[OrderTerm, str]] = []
         for term_index, term in enumerate(intermediate.order_by or ()):
             qualifier, _, field = term.variable.partition(".")
-            if qualifier != intermediate.dataset or field not in fields:
+            if qualifier != intermediate.dataset or field not in available_fields:
                 context = {
                     "intermediate": intermediate.id,
                     "identifier": term.variable,
                 }
                 suggestion = _qualification_suggestion(
-                    term.variable, intermediate.dataset, fields
+                    term.variable, intermediate.dataset, available_fields
                 )
                 if suggestion is not None:
                     context["suggestion"] = suggestion
@@ -2835,7 +2845,7 @@ def _plan_lookups(
 
         if intermediate.columns is not None:
             for field in intermediate.columns:
-                if field not in fields:
+                if field not in available_fields:
                     diagnostics.append(
                         _diagnostic(
                             "unknown_field",
