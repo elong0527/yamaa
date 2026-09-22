@@ -10,7 +10,7 @@ intermediates:
     dataset: AE
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
-    order_by: [AE.ASTDT]
+    order_by: [AE.ASTDT, AE.AESEQ]
     keep: last
 
 output:
