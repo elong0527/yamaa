@@ -564,6 +564,7 @@ examples:
   negative-implausible-age:
     status: executable
     runtimes: ['python']
+  schema-aggregate-derive-intermediate:
   schema-aggregation:
     status: executable
     runtimes: ['python']

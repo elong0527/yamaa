@@ -188,19 +188,21 @@ def _invalid(operation: str, reason: str) -> ConditionResult:
     )
 
 
-def _derive_qualifiers(derive: object) -> set[str]:
-    """Collect the dataset qualifiers a derive step's derivations name.
+def _derive_variable_names(derive: object) -> set[str]:
+    """Collect the qualified variable names a derive step's derivations name.
 
-    REQ-1191 pins a derived aggregate to one relation. The engine
-    re-derives that relation from the payload the way it re-derives the
-    reducer's relation; the planner validates it strictly.
+    REQ-1189 pins a derived aggregate to one relation. The engine re-derives
+    that relation from the payload the way it re-derives the reducer's
+    relation; the planner validates it strictly. REQ-1240 lets bindings read
+    keep-declared named intermediates, so callers split these names into the
+    driving relation's fields and per-row intermediate reads.
     """
-    qualifiers: set[str] = set()
+    names: set[str] = set()
 
     def add(name: str) -> None:
         head, dot, _ = name.partition(".")
         if dot and head:
-            qualifiers.add(head)
+            names.add(name)
 
     def visit(node: object) -> None:
         if isinstance(node, str):
@@ -222,10 +224,12 @@ def _derive_qualifiers(derive: object) -> set[str]:
                     )
                     if isinstance(expr, str):
                         try:
-                            names = numeric_identifiers(parse_numeric_cached(expr))
+                            identifiers = numeric_identifiers(
+                                parse_numeric_cached(expr)
+                            )
                         except NumericError:
-                            names = ()
-                        for name in names:
+                            identifiers = ()
+                        for name in identifiers:
                             add(name)
                     return
             for value in node.values():
@@ -235,7 +239,7 @@ def _derive_qualifiers(derive: object) -> set[str]:
                 visit(item)
 
     visit(derive)
-    return qualifiers
+    return names
 
 
 def _normalize_derive_derivation(
@@ -611,7 +615,14 @@ class RowResolver:
         if relation_name is None and derive is not None:
             # REQ-1189: a derived aggregate names its relation through the
             # derive step when the reducer only names bound variables.
-            derived = _derive_qualifiers(derive)
+            # REQ-1240: qualifiers naming declared intermediates read the
+            # intermediate's row, never the reduced relation.
+            declares = self._context.intermediates.declares
+            derived = {
+                name.split(".", 1)[0]
+                for name in _derive_variable_names(derive)
+                if not declares(name.split(".", 1)[0])
+            }
             relation_name = next(iter(sorted(derived)), None)
 
         if relation_name is None:
@@ -761,14 +772,35 @@ class RowResolver:
         if len(set(names)) != len(names):
             return _invalid("aggregate", "derive binding names that are not unique")
 
+        # REQ-1240: a binding may read a keep-declared named intermediate.
+        # The read resolves once per output row - the value is the same for
+        # every record the bindings evaluate - through the row's normal
+        # intermediate lookup, which caches the selected record on the
+        # candidate row. A selection failure raises LifecycleCondition like
+        # any other intermediate read.
+        declares = self._context.intermediates.declares
+        intermediate_scope: dict[str, object] = {}
+        for variable in sorted(_derive_variable_names(derive)):
+            head, _, field = variable.partition(".")
+            if not declares(head) or variable in intermediate_scope:
+                continue
+            resolved = self._lookup_read(head, field)
+            if isinstance(resolved, FailedResolution):
+                return ConditionResult(condition=resolved.condition)
+            intermediate_scope[variable] = (
+                resolved.value if isinstance(resolved, ResolvedValue) else MISSING
+            )
+
         dispatcher = self._dispatcher or ExpressionDispatcher()
         enriched: list[dict[str, object]] = []
         for record in records:
-            # The binding sees the record's fields qualified and every
-            # earlier binding by its unqualified name (REQ-1189).
-            scope: dict[str, object] = {
-                f"{dataset}.{field}": value for field, value in record.values.items()
-            }
+            # The binding sees the record's fields qualified, the row's
+            # intermediate reads, and every earlier binding by its
+            # unqualified name (REQ-1189).
+            scope: dict[str, object] = dict(intermediate_scope)
+            scope.update(
+                {f"{dataset}.{field}": value for field, value in record.values.items()}
+            )
             for name, target_type, expression, handler in bindings:
                 operation = next(iter(expression))
                 try:

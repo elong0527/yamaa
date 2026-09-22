@@ -29,6 +29,8 @@ from yamaa.specification.models import (
 from yamaa.specification.models import (
     DatasetSource,
     Expression,
+    Intermediate,
+    OrderTerm,
     Output,
     Row,
     Specification,
@@ -454,6 +456,31 @@ def _plan(derive: list[dict], expr: str = "SUM(QSNUM)"):
     return None
 
 
+def _plan_no_filter(spec: Specification):
+    """Plan an already-built spec (used when the aggregate has no filter)."""
+    sources = {
+        "QS": frame_from_values(
+            (
+                TypedColumn(name="STUDYID", type="str"),
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="QSTESTCD", type="str"),
+                TypedColumn(name="QSCAT", type="str"),
+                TypedColumn(name="QSORRES", type="str"),
+            ),
+            [["S1", "001", "PF01", "SCALE", "1"]],
+        )
+    }
+    try:
+        plan_execution(
+            spec,
+            sources,
+            supported_operations=ExpressionDispatcher().supported_operations,
+        )
+    except ExecutionPlanningError as error:
+        return error
+    return None
+
+
 def test_plan_accepts_enum_strings_inside_binding_derivation() -> None:
     """#732: enum values in a binding derivation are not variable refs."""
     derive = [
@@ -521,3 +548,249 @@ def test_plan_rejects_derive_step_naming_two_relations() -> None:
         diagnostic.condition == "invalid_derive_step"
         for diagnostic in error.diagnostics
     )
+
+
+# ---------------------------------------------------------------------------
+# REQ-1240: derive bindings may read keep-declared named intermediates.
+# ---------------------------------------------------------------------------
+
+_INLINE_QS_TWO_SUBJECTS = """\
+STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES
+S1,001,PF01,SCALE,1
+S1,001,PF02,SCALE,2
+S1,001,PF03,SCALE,3
+S2,002,PF01,SCALE,4
+S2,002,PF02,SCALE,5
+"""
+
+_INLINE_DS = """\
+STUDYID,USUBJID,DSNUM
+S1,001,9
+S1,001,2
+S2,002,10
+"""
+
+_INTERMEDIATE_SPEC = """\
+schema_version: "1.0"
+domain: ADQS
+keys: [STUDYID, USUBJID]
+input:
+  QS: {path: input/qs.csv}
+  DS: {path: input/ds.csv}
+intermediates:
+  - id: CAP
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    order_by: [DS.DSNUM]
+    keep: first
+output:
+  path: adqs.csv
+  columns: [STUDYID, USUBJID, AVAL]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: QS.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: QS.USUBJID
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      aggregate:
+        filter: "QS.QSCAT = 'SCALE'"
+        key: [STUDYID, USUBJID]
+        derive:
+          - name: QSNUM
+            type: float
+            derivation: QS.QSORRES
+          - name: CAPNUM
+            type: float
+            derivation: CAP.DSNUM
+          - name: CAPPED
+            type: float
+            derivation: {least: {sources: [QSNUM, CAPNUM]}}
+        expr: "SUM(CAPPED)"
+rows:
+  - id: subscale
+    dataset: QS
+    filter: "QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'"
+    derivations: {}
+"""
+
+
+def _cap_intermediate(**overrides):
+    fields = {
+        "id": "CAP",
+        "dataset": "DS",
+        "key": ["STUDYID", "USUBJID"],
+        "order_by": [OrderTerm(variable="DS.DSNUM")],
+        "keep": "first",
+    }
+    fields.update(overrides)
+    return Intermediate(**fields)
+
+
+def _plan_with_cap(derive, cap_kwargs=None, expr="SUM(CAPPED)"):
+    """Plan the QS spec with a CAP intermediate over a DS source."""
+    base = _planned_spec(derive, expr)
+    spec = base.model_copy(
+        update={
+            "intermediates": [_cap_intermediate(**(cap_kwargs or {}))],
+            "input": {
+                "QS": DatasetSource(path="input/qs.csv"),
+                "DS": DatasetSource(path="input/ds.csv"),
+            },
+            # Two inputs need an explicit row driver; without one REQ-0150
+            # would join every plain QS read on the output keys.
+            "rows": [row.model_copy(update={"dataset": "QS"}) for row in base.rows],
+        }
+    )
+    sources = {
+        "QS": frame_from_values(
+            (
+                TypedColumn(name="STUDYID", type="str"),
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="QSTESTCD", type="str"),
+                TypedColumn(name="QSCAT", type="str"),
+                TypedColumn(name="QSORRES", type="str"),
+            ),
+            [["S1", "001", "PF01", "SCALE", "1"]],
+        ),
+        "DS": frame_from_values(
+            (
+                TypedColumn(name="STUDYID", type="str"),
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="DSNUM", type="int"),
+            ),
+            [["S1", "001", 2]],
+        ),
+    }
+    try:
+        plan_execution(
+            spec,
+            sources,
+            supported_operations=ExpressionDispatcher().supported_operations,
+        )
+    except ExecutionPlanningError as error:
+        return error
+    return None
+
+
+def _capped_derive():
+    return [
+        {"name": "QSNUM", "type": "float", "derivation": "QS.QSORRES"},
+        {"name": "CAPNUM", "type": "float", "derivation": "CAP.DSNUM"},
+        {
+            "name": "CAPPED",
+            "type": "float",
+            "derivation": {"least": {"sources": ["QSNUM", "CAPNUM"]}},
+        },
+    ]
+
+
+def test_plan_accepts_keep_declared_intermediate_read() -> None:
+    """REQ-1240: a binding may read a keep-declared named intermediate."""
+    error = _plan_with_cap(_capped_derive())
+
+    assert error is None
+
+
+def test_plan_rejects_intermediate_without_keep() -> None:
+    """REQ-1240: a binding may not read an intermediate without `keep`."""
+    error = _plan_with_cap(_capped_derive(), cap_kwargs={"keep": None})
+
+    assert error is not None
+    [diagnostic] = [
+        d for d in error.diagnostics if d.condition == "invalid_derive_step"
+    ]
+    assert diagnostic.requirement == "REQ-1240"
+    assert diagnostic.context["intermediate"] == "CAP"
+
+
+def test_plan_rejects_two_relations_despite_keep_intermediate() -> None:
+    """REQ-1191: a keep-declared intermediate does not excuse two relations."""
+    derive = [
+        {"name": "A", "type": "float", "derivation": "QS.QSORRES"},
+        {"name": "B", "type": "float", "derivation": "XX.YY"},
+        {"name": "CAPNUM", "type": "float", "derivation": "CAP.DSNUM"},
+    ]
+
+    error = _plan_with_cap(derive)
+
+    assert error is not None
+    [diagnostic] = [
+        d for d in error.diagnostics if d.condition == "invalid_derive_step"
+    ]
+    assert diagnostic.requirement == "REQ-1191"
+    assert diagnostic.context["relations"] == ["QS", "XX"]
+
+
+def test_plan_rejects_unknown_qualifier() -> None:
+    """REQ-0103: a binding may not read a qualifier that names nothing."""
+    derive = [{"name": "A", "type": "float", "derivation": "XX.YY"}]
+    spec = _planned_spec(derive, expr="SUM(A)")
+    del spec.columns[2].derivation.value.root["aggregate"]["filter"]
+
+    error = _plan_no_filter(spec)
+
+    assert error is not None
+    assert any(
+        diagnostic.condition == "unknown_field"
+        and diagnostic.requirement == "REQ-0103"
+        and diagnostic.context["identifier"] == "XX.YY"
+        for diagnostic in error.diagnostics
+    )
+
+
+def test_plan_rejects_unknown_relation_field_in_derive() -> None:
+    """REQ-0103: a binding's relation field must exist on the relation."""
+    derive = [{"name": "A", "type": "float", "derivation": "QS.NOSUCHFIELD"}]
+
+    error = _plan_with_cap(derive, expr="SUM(A)")
+
+    assert error is not None
+    [diagnostic] = [d for d in error.diagnostics if d.condition == "unknown_field"]
+    assert diagnostic.requirement == "REQ-0103"
+    assert diagnostic.context["identifier"] == "QS.NOSUCHFIELD"
+
+
+def test_plan_rejects_unknown_intermediate_field_in_derive() -> None:
+    """REQ-0125: a binding's intermediate field must be a readable column."""
+    derive = [{"name": "CAPNUM", "type": "float", "derivation": "CAP.NOSUCH"}]
+
+    error = _plan_with_cap(derive, expr="SUM(CAPNUM)")
+
+    assert error is not None
+    [diagnostic] = [d for d in error.diagnostics if d.condition == "unknown_field"]
+    assert diagnostic.requirement == "REQ-0125"
+    assert diagnostic.context["identifier"] == "CAP.NOSUCH"
+
+
+def test_derive_binding_reads_keep_intermediate_per_row(tmp_path) -> None:
+    """REQ-1240: the intermediate resolves once per output row, not per record.
+
+    CAP keeps the first DS record by DSNUM per subject (2 for S1, 10 for
+    S2); each QS record's score is capped at its row's CAP value before
+    the sum: S1 -> 1+2+2 = 5, S2 -> 4+5 = 9.
+    """
+    input_dir = tmp_path / "input"
+    input_dir.mkdir(exist_ok=True)
+    (input_dir / "qs.csv").write_text(_INLINE_QS_TWO_SUBJECTS)
+    (input_dir / "ds.csv").write_text(_INLINE_DS)
+    spec_file = tmp_path / "spec.yaml"
+    spec_file.write_text(_INTERMEDIATE_SPEC)
+    specification = load_specification(spec_file, SCHEMA_ROOT).specification
+    resources = ProjectResources(tmp_path)
+
+    result = execute_with_source_provider(
+        specification,
+        lambda datasets: load_source_tables(datasets, resources),
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    rows = {row["USUBJID"]: row for row in result.artifact.frame.to_dicts()}
+    assert rows["001"]["AVAL"] == 5.0
+    assert rows["002"]["AVAL"] == 9.0
