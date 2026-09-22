@@ -633,6 +633,9 @@ examples:
   sdtm-ds-sequence:
     status: executable
     runtimes: ['python']
+  sdtm-ec-collected-exposure:
+    status: executable
+    runtimes: ['python']
   sdtm-ex-combination:
     status: executable
     runtimes: ['python']
