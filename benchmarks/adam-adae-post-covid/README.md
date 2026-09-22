@@ -4,18 +4,20 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** mark each Analysis Data Model (ADaM) adverse event record
-with `AFTCOVFL` when it occurs after the subject's first COVID-19
+with `AFTCOVFL` when it starts after the subject's first COVID-19
 event.
 
-**Input:** one record per adverse event (AE) carrying the coded term
-`AEDECOD` and the analysis start date `ASTDT`; the first COVID-19
-event is the earliest record whose coded term is `COVID-19`.
+**Input:** one record per adverse event (AE), carrying the coded term
+`AEDECOD` and the event start date `AESTDTC` (kept in the output as
+`ASTDT`).
 
 **Variables:**
 
 - `AFTCOVFL`: `Y` for an event ordered strictly after the subject's
-  first COVID-19 event; blank otherwise, including the first COVID-19
-  event itself and every record of a subject with no COVID-19 event.
+  first COVID-19 event: a later start date, or the same start date
+  with a higher sequence number. Blank otherwise: the first COVID-19
+  event itself, every record of a subject with no COVID-19 event, and
+  any record with no start date.
 
 **Note:** ordering is within each subject by start date, with the
 sequence number (`AESEQ`) breaking ties on the same date.
