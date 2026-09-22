@@ -154,13 +154,13 @@ its derive bindings and filter name; naming two relations is an error, and a
 reducer expression mixing a bound variable with a qualified identifier is an
 error under [REQ-0468](aggregation.md#req-0468). Qualifiers naming declared
 named intermediates do not count as relations for this rule; a binding may
-read them only under [REQ-1240](aggregation.md#req-1240). `derive` is not
+read them only under [REQ-1242](aggregation.md#req-1240). `derive` is not
 available on the unqualified output-row reduction or the grouped-input
 reduction: those contexts reduce rows the specification already constructed.
 
 <a id="req-1240"></a>
 
-**REQ-1240.** A derive binding may read a named intermediate that declares
+**REQ-1242.** A derive binding may read a named intermediate that declares
 `keep`: with `keep`, the intermediate selects exactly one record per row
 ([REQ-0135](../operations/lookup.md#req-0135)), so the read is a row-scoped
 value, not another reduced relation. The binding still evaluates once per

@@ -286,7 +286,7 @@ class _Scope:
     grouped_driver: str | None = None
     group_variables: tuple[str, ...] = ()
     intermediates: frozenset[str] = frozenset()
-    # REQ-1240: named intermediates that declare `keep` select exactly one
+    # REQ-1242: named intermediates that declare `keep` select exactly one
     # record per row, so a derive step may read them alongside its one
     # driving relation.
     keep_intermediates: frozenset[str] = frozenset()
@@ -1365,7 +1365,7 @@ def _aggregate_references(
                     head, dot, _ = ref.partition(".")
                     if dot:
                         qualifiers.add(head)
-        # REQ-1240: bindings may read keep-declared named intermediates: with
+        # REQ-1242: bindings may read keep-declared named intermediates: with
         # `keep`, the intermediate selects exactly one record per row, so it
         # is a row-scoped value, not another reduced relation. Every other
         # qualifier must be the step's one driving relation.
@@ -1396,7 +1396,7 @@ def _aggregate_references(
                             "reason": "a derive step reads only keep-declared named intermediates",
                             "intermediate": qualifier,
                         },
-                        requirement="REQ-1240",
+                        requirement="REQ-1242",
                     )
                 ]
         derive_names = tuple(binding_names)
@@ -1513,7 +1513,7 @@ def _aggregate_references(
     references.extend(
         relational(name, expr_path) for name in identifiers if name not in derive_names
     )
-    # REQ-1240: a binding reads the driving relation's fields or a
+    # REQ-1242: a binding reads the driving relation's fields or a
     # keep-declared intermediate's readable columns. Routing the qualified
     # binding references through the ordinary checks validates both against
     # the relation and the intermediate's plan (REQ-0103/REQ-0125).
@@ -1760,7 +1760,7 @@ def _fill_omitted_lookup_keys(
         if relation is None and payload.get("derive") is not None:
             # REQ-1189: a derived aggregate names its relation through the
             # derive step when the reducer only names bound variables.
-            # REQ-1240: qualifiers naming declared intermediates read the
+            # REQ-1242: qualifiers naming declared intermediates read the
             # intermediate's row, never the reduced relation.
             derived: set[str] = set()
             derive_declared = payload.get("derive")

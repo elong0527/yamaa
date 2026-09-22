@@ -193,7 +193,7 @@ def _derive_variable_names(derive: object) -> set[str]:
 
     REQ-1189 pins a derived aggregate to one relation. The engine re-derives
     that relation from the payload the way it re-derives the reducer's
-    relation; the planner validates it strictly. REQ-1240 lets bindings read
+    relation; the planner validates it strictly. REQ-1242 lets bindings read
     keep-declared named intermediates, so callers split these names into the
     driving relation's fields and per-row intermediate reads.
     """
@@ -615,7 +615,7 @@ class RowResolver:
         if relation_name is None and derive is not None:
             # REQ-1189: a derived aggregate names its relation through the
             # derive step when the reducer only names bound variables.
-            # REQ-1240: qualifiers naming declared intermediates read the
+            # REQ-1242: qualifiers naming declared intermediates read the
             # intermediate's row, never the reduced relation.
             declares = self._context.intermediates.declares
             derived = {
@@ -772,7 +772,7 @@ class RowResolver:
         if len(set(names)) != len(names):
             return _invalid("aggregate", "derive binding names that are not unique")
 
-        # REQ-1240: a binding may read a keep-declared named intermediate.
+        # REQ-1242: a binding may read a keep-declared named intermediate.
         # The read resolves once per output row - the value is the same for
         # every record the bindings evaluate - through the row's normal
         # intermediate lookup, which caches the selected record on the

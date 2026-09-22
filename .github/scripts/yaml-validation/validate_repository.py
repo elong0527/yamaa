@@ -6949,7 +6949,7 @@ def validate_derive_step(derive, path, context, filter_text=None):
             head, dot, _ = reference.partition('.')
             if dot and head:
                 qualifiers.add(head)
-    # REQ-1240: bindings may read keep-declared named intermediates: with
+    # REQ-1242: bindings may read keep-declared named intermediates: with
     # `keep`, the intermediate selects exactly one record per row, so it
     # is a row-scoped value, not another reduced relation. Every other
     # qualifier must be the step's one driving relation.
@@ -8221,7 +8221,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
                 intermediates[intermediate_id] = datasets.get(dataset_id, {})
 
-    # REQ-1240: a derive binding may read a keep-declared named intermediate.
+    # REQ-1242: a derive binding may read a keep-declared named intermediate.
     # The planned selection only honors `keep` with `order_by` (REQ-0119),
     # so the static single-record-per-row promise mirrors it.
     keep_intermediate_ids = frozenset(

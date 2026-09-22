@@ -551,7 +551,7 @@ def test_plan_rejects_derive_step_naming_two_relations() -> None:
 
 
 # ---------------------------------------------------------------------------
-# REQ-1240: derive bindings may read keep-declared named intermediates.
+# REQ-1242: derive bindings may read keep-declared named intermediates.
 # ---------------------------------------------------------------------------
 
 _INLINE_QS_TWO_SUBJECTS = """\
@@ -692,21 +692,21 @@ def _capped_derive():
 
 
 def test_plan_accepts_keep_declared_intermediate_read() -> None:
-    """REQ-1240: a binding may read a keep-declared named intermediate."""
+    """REQ-1242: a binding may read a keep-declared named intermediate."""
     error = _plan_with_cap(_capped_derive())
 
     assert error is None
 
 
 def test_plan_rejects_intermediate_without_keep() -> None:
-    """REQ-1240: a binding may not read an intermediate without `keep`."""
+    """REQ-1242: a binding may not read an intermediate without `keep`."""
     error = _plan_with_cap(_capped_derive(), cap_kwargs={"keep": None})
 
     assert error is not None
     [diagnostic] = [
         d for d in error.diagnostics if d.condition == "invalid_derive_step"
     ]
-    assert diagnostic.requirement == "REQ-1240"
+    assert diagnostic.requirement == "REQ-1242"
     assert diagnostic.context["intermediate"] == "CAP"
 
 
@@ -770,7 +770,7 @@ def test_plan_rejects_unknown_intermediate_field_in_derive() -> None:
 
 
 def test_derive_binding_reads_keep_intermediate_per_row(tmp_path) -> None:
-    """REQ-1240: the intermediate resolves once per output row, not per record.
+    """REQ-1242: the intermediate resolves once per output row, not per record.
 
     CAP keeps the first DS record by DSNUM per subject (2 for S1, 10 for
     S2); each QS record's score is capped at its row's CAP value before
