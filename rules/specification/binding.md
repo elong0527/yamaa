@@ -8,7 +8,7 @@ status: normative
 
 ## Purpose
 
-Resolve input datasets, current-output columns, and contextual ODM references.
+Resolves input datasets, current-output columns, and contextual ODM references.
 
 ## Scope and dependencies
 
@@ -37,8 +37,8 @@ source variables, and `lookup`.
 
 <a id="req-0077"></a>
 
-**REQ-0077.** A declaration is a path, or a path with the types the fields
-carry. [Source ingestion](../storage/ingestion.md) owns that reading and the shorthand between the two forms.
+**REQ-0077.** A declaration is a path, with or without types for its fields.
+[Source ingestion](../storage/ingestion.md) owns both forms and shorthand.
 
 <a id="req-0078"></a>
 
@@ -83,8 +83,8 @@ variable in the output dataset.
 
 <a id="req-0084"></a>
 
-**REQ-0084.** A qualifier is a dataset identifier or a record lookup identifier;
-both share one namespace; [Lookup and joins](../operations/lookup.md) owns what a record lookup resolves to.
+**REQ-0084.** A qualifier is a dataset or record lookup identifier. Both
+share one namespace. Lookup and joins defines record lookup resolution.
 
 <a id="req-0085"></a>
 
@@ -232,15 +232,15 @@ structured source declares `multiple_matches`, also under [Local handlers](../ex
 
 <a id="req-0102"></a>
 
-**REQ-0102.** A present matched row with a missing `Value` returns missing.
-That row does not invoke the absent-item handler.
+**REQ-0102.** A matched row with missing `Value` returns missing. It does
+not invoke the absent-item handler.
 
 ### Interface behavior
 
 <a id="req-1057"></a>
 
-**REQ-1057.** The `variable` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1057.** The `variable` interface has these meanings. Its schema
+declaration defines shape, defaults, and structural constraints.
 
 | Field | Meaning |
 | --- | --- |
@@ -248,8 +248,8 @@ structural constraints come from its schema declaration.
 
 <a id="req-1058"></a>
 
-**REQ-1058.** The `regex` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1058.** The `regex` interface has these meanings. Its schema
+declaration defines shape, defaults, and structural constraints.
 
 | Field | Meaning |
 | --- | --- |
@@ -312,5 +312,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Resolve input datasets, current-output columns, and contextual ODM references. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Keeping this topic in one contract lets other owners refer to it without
+defining a second policy.
