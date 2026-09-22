@@ -51,6 +51,9 @@ examples:
   adam-adce-worst-toxicity:
     status: executable
     runtimes: ['python']
+  adam-adcm-atc-classes:
+    status: executable
+    runtimes: ['python']
   adam-adcm-on-treatment:
     status: executable
     runtimes: ['python']
