@@ -275,8 +275,11 @@ override those behaviors to match these rules or evaluate the grammar itself.
 
 <a id="req-0189"></a>
 
-**REQ-0189.** An identifier that is unavailable at its predicate site: fail
-  with `unknown_field` under [Execution lifecycle](../execution/lifecycle.md).
+**REQ-0189.** An identifier that is unavailable at its predicate site: fail.
+  An unqualified identifier that names a field of an in-scope dataset fails
+  with `unresolvable_name` and suggests the qualified spelling; any other
+  unavailable identifier fails with `unknown_field`. Both report under
+  [Execution lifecycle](../execution/lifecycle.md).
 
 <a id="req-0190"></a>
 

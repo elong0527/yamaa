@@ -2562,6 +2562,42 @@ def _qualification_suggestion(
     return None
 
 
+def _unresolvable_reference_diagnostic(
+    reference: _Reference,
+    candidate_datasets: Collection[str],
+    dataset_fields: Mapping[str, Collection[str]],
+) -> ExecutionDiagnostic:
+    """Name an unqualified reference no output column resolves.
+
+    REQ-0106: an unqualified name only ever binds to an output column, so a
+    name no output column carries is unresolvable as written. When the bare
+    name is a field of an in-scope dataset the author almost certainly meant
+    the qualified source read, so the diagnostic says so and suggests the
+    qualified spelling; a name no dataset carries stays `unknown_field`.
+    """
+    candidates = sorted(
+        dataset
+        for dataset in candidate_datasets
+        if reference.name in (dataset_fields.get(dataset) or ())
+    )
+    if not candidates:
+        return _diagnostic(
+            "unknown_field",
+            reference.path,
+            {"identifier": reference.name},
+            requirement=reference.requirement,
+        )
+    return _diagnostic(
+        "unresolvable_name",
+        reference.path,
+        {
+            "identifier": reference.name,
+            "suggestion": f"{candidates[0]}.{reference.name}",
+        },
+        requirement=reference.requirement,
+    )
+
+
 def _plan_lookups(
     specification: Specification,
     bindings: BindingPlan,
@@ -3759,12 +3795,12 @@ def plan_execution(
                             )
                         )
                     elif reference.name not in column_types:
+                        # REQ-0106: an unqualified name only ever binds to an
+                        # output column; when the bare name is a driver field
+                        # the author meant the qualified source read.
                         diagnostics.append(
-                            _diagnostic(
-                                "unknown_field",
-                                reference.path,
-                                {"identifier": reference.name},
-                                requirement=reference.requirement,
+                            _unresolvable_reference_diagnostic(
+                                reference, (driver,), dataset_fields
                             )
                         )
                     elif reference.name not in row_names:
@@ -3935,12 +3971,12 @@ def plan_execution(
                     grouped_by_driver=grouped_by_driver,
                 )
             elif reference.name not in column_types:
+                # REQ-0106: an unqualified name only ever binds to an output
+                # column; when the bare name is a field of a row driver the
+                # author meant the qualified source read.
                 diagnostics.append(
-                    _diagnostic(
-                        "unknown_field",
-                        reference.path,
-                        {"identifier": reference.name},
-                        requirement=reference.requirement,
+                    _unresolvable_reference_diagnostic(
+                        reference, drivers, dataset_fields
                     )
                 )
             elif (

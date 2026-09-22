@@ -272,7 +272,9 @@ condition.
 
 <a id="req-0106"></a>
 
-**REQ-0106.** An unresolved unqualified reference: fail.
+**REQ-0106.** An unresolved unqualified reference: fail with `unknown_field`,
+  or with `unresolvable_name` and the suggested qualified spelling when the
+  bare name is a field of an in-scope dataset.
 
 <a id="req-0107"></a>
 
