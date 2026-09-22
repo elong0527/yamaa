@@ -31,9 +31,9 @@ This contract owns the requirements below. Related contracts:
 
 **REQ-0111.** A dataset-qualified scalar source reads that dataset through
 the implicit join: one value per current row, matched on the applicable
-keys ([REQ-0150](lookup.md#req-0150)), answering absence as a missing result. The qualifier for
-this row template's input dataset is not a join. It reads the input record
-that built the row.
+keys ([REQ-0150](lookup.md#req-0150)), answering absence as a missing
+result. The qualifier for this row template's input dataset is not a
+join. That qualifier reads the input record that built the row.
 
 ```yaml
 derivation:
@@ -79,9 +79,8 @@ intermediates:
     keep: last
 ```
 
-The lookup above matches on the applicable output keys; the form below
-states the same match explicitly for a reviewer who should not have to
-infer it:
+The lookup above matches on the applicable output keys. The form below
+states the same match explicitly:
 
 ```yaml
 intermediates:
@@ -626,5 +625,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Match declared keys, narrow records, select a result, and answer absence. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+This topic lives in one contract.
+Other owners refer to it without defining a second policy.
