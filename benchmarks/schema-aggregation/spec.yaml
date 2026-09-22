@@ -1,0 +1,111 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [USUBJID, TRTGRP, NDOSE, NDOSEVAL, TOTDOSE, MEANDOSE, MAXDOSE,
+            DRUGDOSE, PLACDOSE, TOTDOSE_MG, AVGNDOSE]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTGRP
+    type: str
+    label: Treatment Group
+    derivation: DM.TRTGRP
+
+  # Qualified: counts dose records, including the one with a missing dose.
+  - name: NDOSE
+    type: int
+    label: Number of Dose Records
+    derivation:
+      aggregate:
+        expr: "COUNT(EX.*)"
+
+  # Qualified: counts only the records whose dose is present.
+  - name: NDOSEVAL
+    type: int
+    label: Number of Non-missing Doses
+    derivation:
+      aggregate:
+        expr: "COUNT(EX.EXDOSE)"
+
+  # Qualified: the missing dose contributes nothing, never zero.
+  - name: TOTDOSE
+    type: float
+    label: Total Dose
+    derivation:
+      aggregate:
+        expr: "SUM(EX.EXDOSE)"
+
+  # Qualified: defined as SUM over COUNT of the non-missing doses.
+  - name: MEANDOSE
+    type: float
+    label: Mean Dose
+    derivation:
+      aggregate:
+        expr: "MEAN(EX.EXDOSE)"
+
+  - name: MAXDOSE
+    type: float
+    label: Maximum Dose
+    derivation:
+      aggregate:
+        expr: "MAX(EX.EXDOSE)"
+
+  # Qualified with a filter: only the DRUG records are eligible.
+  - name: DRUGDOSE
+    type: float
+    label: Total Drug Dose
+    derivation:
+      aggregate:
+        filter: "EX.EXTRT = 'DRUG'"
+        expr: "SUM(EX.EXDOSE)"
+
+  # Qualified with a filter matching nothing for some subjects: an empty
+  # group reads as missing, not zero.
+  - name: PLACDOSE
+    type: float
+    label: Total Placebo Dose
+    derivation:
+      aggregate:
+        filter: "EX.EXTRT = 'PLACEBO'"
+        expr: "SUM(EX.EXDOSE)"
+
+  # Qualified with a derive step: each record's dose is converted to
+  # milligrams before the reduction. Bindings evaluate in order; the
+  # second reads the value bound by the first.
+  - name: TOTDOSE_MG
+    type: float
+    label: Total Dose in Milligrams
+    derivation:
+      aggregate:
+        derive:
+          - name: DOSE
+            type: float
+            derivation: EX.EXDOSE
+          - name: DOSEMG
+            type: float
+            derivation:
+              compute:
+                expr: "DOSE * 1000"
+        expr: "SUM(DOSEMG)"
+
+  # Unqualified: reduces the built rows within each treatment group and
+  # broadcasts the result to every row in the group. Subject 04 has no
+  # dose records, so its NDOSE is missing and excluded from the mean.
+  - name: AVGNDOSE
+    type: float
+    label: Mean Dose Records per Treatment Group
+    derivation:
+      aggregate:
+        expr: "MEAN(NDOSE)"
+        group_by: [TRTGRP]
