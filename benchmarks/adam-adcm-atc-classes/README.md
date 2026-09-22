@@ -17,10 +17,12 @@ to its class name.
 
 **Variables:**
 
-- `ATC1CD`-`ATC4CD`: the ATC code at each level, read from the
-  medication's FACM rows.
-- `ATC1`-`ATC4`: the ATC class name at each level, looked up
-  from the dictionary by code.
+- `CMSEQ`: the medication record sequence, so each medication's ATC
+  path stays with its own record.
+- `ATC1CD`, `ATC2CD`, `ATC3CD`, `ATC4CD`: the ATC code at each level,
+  read from the medication's FACM rows.
+- `ATC1`, `ATC2`, `ATC3`, `ATC4`: the ATC class name at each level,
+  looked up from the dictionary by code.
 
 **Note:** a medication with no coded name and no FACM rows (the
 herbal tea) keeps all eight ATC columns empty, while a coded
