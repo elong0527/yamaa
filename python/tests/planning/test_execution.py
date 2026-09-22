@@ -1943,3 +1943,130 @@ def test_a_key_an_intermediate_matches_on_is_derived_before_its_reader() -> None
     plan = plan_execution(spec, {"SRC": source_table()})
 
     assert [planned.column for planned in plan.columns] == ["K", "J", "V"]
+
+
+def _death_source_table() -> object:
+    return frame_from_values(
+        (
+            TypedColumn(name="X", type="str"),
+            TypedColumn(name="DTHFL2", type="str"),
+        ),
+        [["one", "Y"], ["two", "N"]],
+    )
+
+
+def _case_flag(when: str) -> HandledExpression:
+    return derivation(
+        {
+            "case": [
+                {"when": when, "then": {"literal": "Y"}},
+                {"otherwise": {"literal": "N"}},
+            ]
+        }
+    )
+
+
+def test_a_column_case_predicate_naming_a_source_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    # REQ-0189 / issue #780: an unqualified predicate identifier that names a
+    # source field is unresolvable as written (REQ-0106), not an unknown field.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="DTHFL", type="str", derivation=_case_flag("DTHFL2 = 'Y'")),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unresolvable_name"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.case[0].when",)
+    assert diagnostic.context == {
+        "identifier": "DTHFL2",
+        "suggestion": "SRC.DTHFL2",
+    }
+
+
+def test_a_column_case_predicate_with_a_genuinely_unknown_name_stays_unknown_field() -> (
+    None
+):
+    # REQ-0189: a name no dataset carries is still unknown_field.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="DTHFL", type="str", derivation=_case_flag("NOPE = 'Y'")),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.case[0].when",)
+    assert diagnostic.context == {"identifier": "NOPE"}
+
+
+def test_a_column_case_predicate_with_a_qualified_source_field_plans() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="DTHFL", type="str", derivation=_case_flag("SRC.DTHFL2 = 'Y'")),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": _death_source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [planned.column for planned in plan.columns] == ["K", "DTHFL"]
+
+
+def test_a_row_case_predicate_naming_a_driver_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    # REQ-0106: the same unresolvable-name diagnostic applies in row
+    # derivations, where the row's driver is the in-scope dataset.
+    spec = specification(
+        [
+            Column(name="K", type="str"),
+            Column(name="DTHFL", type="str"),
+        ],
+        [
+            Row(
+                id="row",
+                derivations={
+                    "K": derivation({"source": "SRC.X"}),
+                    "DTHFL": _case_flag("DTHFL2 = 'Y'"),
+                },
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unresolvable_name"
+    assert diagnostic.spec_paths == ("rows[0].derivations.DTHFL.case[0].when",)
+    assert diagnostic.context == {
+        "identifier": "DTHFL2",
+        "suggestion": "SRC.DTHFL2",
+    }

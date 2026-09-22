@@ -259,6 +259,7 @@ def _raise_predicate_condition(result: ConditionResult, spec_path: str) -> None:
     condition = result.condition
     requirement = {
         "unknown_field": "REQ-0189",
+        "unresolvable_name": "REQ-0189",
         "incompatible_input_type": "REQ-0190",
         "invalid_predicate": "REQ-0191",
     }.get(condition.condition, "REQ-0397")
