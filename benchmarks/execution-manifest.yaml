@@ -531,6 +531,12 @@ examples:
   negative-str-lowercase-number:
     status: executable
     runtimes: ['python']
+  negative-str-sentence-number:
+    status: executable
+    runtimes: ['python']
+  negative-str-title-number:
+    status: executable
+    runtimes: ['python']
   negative-study-day-datetime:
     status: executable
     runtimes: ['python']
@@ -577,6 +583,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-parquet:
+    status: executable
+    runtimes: ['python']
+  schema-sentence-case:
     status: executable
     runtimes: ['python']
   sdtm-ae-coding:

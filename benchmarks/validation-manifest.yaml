@@ -315,6 +315,16 @@ fixtures:
     condition: incompatible_input_type
     spec_paths: [columns.SITE.derivation.str_lower.source]
     validator: expression_contract
+  negative-str-sentence-number:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.SITE.derivation.str_sentence.source]
+    validator: expression_contract
+  negative-str-title-number:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.SITE.derivation.str_title.source]
+    validator: expression_contract
   negative-study-day-datetime:
     rule: R016
     condition: incompatible_input_type

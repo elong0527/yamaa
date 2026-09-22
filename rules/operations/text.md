@@ -501,6 +501,28 @@ structural constraints come from its schema declaration.
 | `expressions.str_lower.missing` | Value returned when source is missing. |
 | `Result` | Converts ASCII A-Z to a-z and preserves every other scalar. |
 
+<a id="req-1240"></a>
+
+**REQ-1240.** The `expressions.str_sentence` interface has the following meanings. Shape, defaults, and
+structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.str_sentence.source` | String variable converted to sentence case under [Text values](../values/text.md). |
+| `expressions.str_sentence.missing` | Value returned when source is missing. |
+| `Result` | Uppercases the first scalar and lowercases every later scalar, ASCII-only: the first scalar gets the REQ-0708 upward substitution and every later scalar gets the downward substitution. Non-ASCII scalars pass through unchanged, so the scalar count is preserved. A host `capitalize` routine must not be used: host Unicode behavior can expand or alter non-ASCII scalars (e.g. U+00DF or U+0130). |
+
+<a id="req-1241"></a>
+
+**REQ-1241.** The `expressions.str_title` interface has the following meanings. Shape, defaults, and
+structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.str_title.source` | String variable converted to title case under [Text values](../values/text.md). |
+| `expressions.str_title.missing` | Value returned when source is missing. |
+| `Result` | Title-cases each maximal run of ASCII letters `[A-Za-z]+`: the first letter of the run is uppercased and the remaining letters of the run are lowercased, both via the REQ-0708 ASCII substitutions. Every other scalar -- including non-ASCII letters -- passes through unchanged, so the scalar count is preserved. Word detection is ASCII-only: no locale, no Unicode word-break rule, and no Unicode-version dependency. |
+
 <a id="req-1116"></a>
 
 **REQ-1116.** The `string_template` interface has the following meanings. Shape, defaults, and

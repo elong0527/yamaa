@@ -47,6 +47,22 @@ expressions:
         - missing:
             type: literal_value
             description: See REQ-1115 in rules/operations/text.md.
+    str_sentence: # See REQ-1240 in rules/operations/text.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1240 in rules/operations/text.md.
+        - missing:
+            type: literal_value
+            description: See REQ-1240 in rules/operations/text.md.
+    str_title: # See REQ-1241 in rules/operations/text.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1241 in rules/operations/text.md.
+        - missing:
+            type: literal_value
+            description: See REQ-1241 in rules/operations/text.md.
 
 string_template:
     type: str

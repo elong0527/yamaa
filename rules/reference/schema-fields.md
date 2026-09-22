@@ -328,6 +328,10 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.str_upper.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1114](../operations/text.md#req-1114) |
 | `expressions.str_lower.source` | `"variable"` | `true` | Absent | -- | [REQ-1115](../operations/text.md#req-1115) |
 | `expressions.str_lower.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1115](../operations/text.md#req-1115) |
+| `expressions.str_sentence.source` | `"variable"` | `true` | Absent | -- | [REQ-1240](../operations/text.md#req-1240) |
+| `expressions.str_sentence.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1240](../operations/text.md#req-1240) |
+| `expressions.str_title.source` | `"variable"` | `true` | Absent | -- | [REQ-1241](../operations/text.md#req-1241) |
+| `expressions.str_title.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1241](../operations/text.md#req-1241) |
 | `string_template` | `"str"` | `false` | Absent | -- | [REQ-1116](../operations/text.md#req-1116) |
 | `str_template_class.template` | `"string_template"` | `true` | Absent | -- | [REQ-1117](../operations/text.md#req-1117) |
 | `str_template_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1117](../operations/text.md#req-1117) |

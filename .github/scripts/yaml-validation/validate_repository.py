@@ -6702,6 +6702,8 @@ _DERIVE_VARIABLE_FIELDS = {
     'str_extract': ('source',),
     'str_lower': ('source',),
     'str_upper': ('source',),
+    'str_sentence': ('source',),
+    'str_title': ('source',),
     'study_day': ('date', 'reference'),
     'to_date': ('source',),
     'to_epoch_day': ('source',),
@@ -7761,7 +7763,7 @@ def validate_expression_static_semantics(expression, path, context):
         )
         return errors
 
-    if keyword in {'str_extract', 'str_upper', 'str_lower'}:
+    if keyword in {'str_extract', 'str_upper', 'str_lower', 'str_sentence', 'str_title'}:
         errors.extend(
             validate_named_input_type(
                 payload,

@@ -350,6 +350,8 @@ _TYPED_SOURCES: dict[str, tuple[ColumnType | None, str]] = {
     "str_extract": ("str", "REQ-0308"),
     "str_upper": ("str", "REQ-0308"),
     "str_lower": ("str", "REQ-0308"),
+    "str_sentence": ("str", "REQ-0308"),
+    "str_title": ("str", "REQ-0308"),
     "cut": (None, "REQ-0306"),
 }
 
@@ -1035,6 +1037,8 @@ _DERIVE_VARIABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "str_extract": ("source",),
     "str_lower": ("source",),
     "str_upper": ("source",),
+    "str_sentence": ("source",),
+    "str_title": ("source",),
     "study_day": ("date", "reference"),
     "to_date": ("source",),
     "to_epoch_day": ("source",),
@@ -2868,7 +2872,12 @@ def _plan_lookups(
 # REQ-1185: the declared result type of each operation an intermediate
 # derivation may use, so a derived target-side key field type-checks
 # against its driver-side key_base partner.
-_DERIVED_RESULT_TYPES: dict[str, ColumnType] = {"str_upper": "str"}
+_DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
+    "str_upper": "str",
+    "str_lower": "str",
+    "str_sentence": "str",
+    "str_title": "str",
+}
 
 
 def _validate_intermediate_derivations(

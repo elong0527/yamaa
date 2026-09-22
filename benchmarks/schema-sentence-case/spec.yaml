@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [STUDYID, USUBJID]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns:
+    - STUDYID
+    - USUBJID
+    - VISIT
+    - AVISIT
+    - AVISIT_TITLE
+  order_by: [VISIT, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: LB.VISIT
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation:
+      str_sentence:
+        source: LB.VISIT
+
+  - name: AVISIT_TITLE
+    type: str
+    label: Analysis Visit Title Case
+    derivation:
+      str_title:
+        source: LB.VISIT
