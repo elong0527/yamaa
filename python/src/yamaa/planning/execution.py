@@ -119,7 +119,7 @@ class PlannedIntermediate(_FrozenModel):
     # REQ-1185: derivations are computed per record before matching; the map
     # is empty when the author declared none.
     derived: tuple[tuple[str, HandledExpression], ...] = ()
-    # REQ-1243: donor columns asserted unique across the source-only
+    # REQ-1245: donor columns asserted unique across the source-only
     # filtered records; empty when the author declared no verification.
     unique_columns: tuple[str, ...] = ()
 
@@ -2874,7 +2874,7 @@ def _plan_lookups(
                             "intermediate": intermediate.id,
                             "identifier": f"{intermediate.dataset}.{field}",
                         },
-                        requirement="REQ-1243",
+                        requirement="REQ-1245",
                     )
                 )
                 failed = True
@@ -2882,7 +2882,7 @@ def _plan_lookups(
                 identifier.split(".", 1)[0] != intermediate.dataset
                 for identifier in predicate_identifiers(predicate)
             ):
-                # REQ-1243: a correlated filter is evaluated per current
+                # REQ-1245: a correlated filter is evaluated per current
                 # row, so no single run-wide donor set exists to check
                 # uniqueness over; the combination fails validation.
                 diagnostics.append(
@@ -2890,7 +2890,7 @@ def _plan_lookups(
                         "correlated_filter_with_unique_verification",
                         f"{path}.verification",
                         {"intermediate": intermediate.id},
-                        requirement="REQ-1243",
+                        requirement="REQ-1245",
                     )
                 )
                 failed = True

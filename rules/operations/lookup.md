@@ -338,9 +338,9 @@ intermediates:
 
 ### Intermediate uniqueness checks
 
-<a id="req-1243"></a>
+<a id="req-1245"></a>
 
-**REQ-1243.** An intermediate may declare `verification:` with a
+**REQ-1245.** An intermediate may declare `verification:` with a
 nonempty `unique:` list of its dataset's columns, asserting the
 combination is unique across the intermediate's filtered donor records:
 
@@ -553,7 +553,7 @@ structural constraints come from its schema declaration.
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Dataset columns the lookup may read; defaults to every dataset column. |
 | `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, named in `key` ([REQ-1185](lookup.md#req-1185)). |
-| `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1243](lookup.md#req-1243)). |
+| `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `intermediate_class.strict` | Fail when the lookup yields nothing. |
 

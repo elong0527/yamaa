@@ -892,7 +892,7 @@ def execute_specification(
             ),
             output_keys=tuple(specification.keys),
         )
-        # REQ-1243: intermediate uniqueness is asserted over the filtered
+        # REQ-1245: intermediate uniqueness is asserted over the filtered
         # donor records before any row is built, so duplicates fail loudly
         # here instead of resolving ambiguously downstream.
         unique_failures = context.intermediates.verify_uniqueness()

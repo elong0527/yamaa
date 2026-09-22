@@ -123,7 +123,7 @@ class IntermediateBetween(_StrictModel):
 
 
 class IntermediateVerification(_StrictModel):
-    """REQ-1243: uniqueness asserted over an intermediate's filtered donor records."""
+    """REQ-1245: uniqueness asserted over an intermediate's filtered donor records."""
 
     unique: list[str] = Field(min_length=1)
 

@@ -2275,7 +2275,7 @@ requirements:
   REQ-1239: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.locf.source.description", "schema_expression_window.yaml:expressions.locf.window.description"]}
   REQ-1240: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_sentence.source.description", "schema_expression_str.yaml:expressions.str_sentence.missing.description"]}
   REQ-1241: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_title.source.description", "schema_expression_str.yaml:expressions.str_title.missing.description"]}
-  REQ-1243: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description"]}
+  REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}

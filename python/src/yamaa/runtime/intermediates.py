@@ -261,7 +261,7 @@ class IntermediateSelector:
         )
 
     def verify_uniqueness(self) -> tuple[VerificationFailure, ...]:
-        """Evaluate every declared intermediate uniqueness check (REQ-1243).
+        """Evaluate every declared intermediate uniqueness check (REQ-1245).
 
         Each check runs over the source-only filtered donor records with
         derivations computed, before any row is built, so a repeated key
@@ -299,7 +299,7 @@ class IntermediateSelector:
                         phase="verification",
                         condition="duplicate_intermediate_records",
                         spec_paths=(f"{plan.path}.verification",),
-                        requirement="REQ-1243",
+                        requirement="REQ-1245",
                         context={
                             "intermediate": plan.identifier,
                             "dataset": plan.dataset,
@@ -578,7 +578,7 @@ def _materialization_failure(
 ) -> VerificationFailure:
     """Report a verified intermediate whose records never materialized.
 
-    REQ-1243 makes the verification load-bearing: a declared intermediate
+    REQ-1245 makes the verification load-bearing: a declared intermediate
     whose filter or derivation failed cannot wait for a selection that may
     never happen, so the original condition surfaces here with the same
     spec path `select` would have reported it at.
@@ -587,7 +587,7 @@ def _materialization_failure(
         phase="verification",
         condition=failed.condition,
         spec_paths=(spec_path,),
-        requirement=failed.requirement or "REQ-1243",
+        requirement=failed.requirement or "REQ-1245",
         context={"intermediate": plan.identifier, **failed.context},
     )
 

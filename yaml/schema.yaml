@@ -146,13 +146,13 @@ intermediate_class:
     - verification:
         type: intermediate_verification_class
         required: false
-        description: See REQ-1243 in rules/operations/lookup.md.
+        description: See REQ-1245 in rules/operations/lookup.md.
 
 intermediate_verification_class:
     - unique:
         type: "list[identifier]"
         required: true
-        description: See REQ-1243 in rules/operations/lookup.md.
+        description: See REQ-1245 in rules/operations/lookup.md.
 
 intermediate_between_class:
     - value:

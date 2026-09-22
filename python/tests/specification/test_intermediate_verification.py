@@ -20,7 +20,7 @@ def test_intermediate_verification_accepts_a_nonempty_unique_list() -> None:
 
 
 def test_intermediate_verification_rejects_an_empty_unique_list() -> None:
-    # REQ-1243: the assertion names at least one column.
+    # REQ-1245: the assertion names at least one column.
     with pytest.raises(ValidationError):
         Intermediate.model_validate(
             {"id": "DS_EOS", "dataset": "DS", "verification": {"unique": []}}
@@ -28,7 +28,7 @@ def test_intermediate_verification_rejects_an_empty_unique_list() -> None:
 
 
 def test_intermediate_verification_forbids_extra_keys() -> None:
-    # REQ-1243: the singular syntax carries no severity; a duplicate can
+    # REQ-1245: the singular syntax carries no severity; a duplicate can
     # never resolve ambiguously, so warning severity is not expressible.
     with pytest.raises(ValidationError):
         Intermediate.model_validate(

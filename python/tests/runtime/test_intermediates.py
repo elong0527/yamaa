@@ -445,7 +445,7 @@ def ds_plan(**extra: object) -> PlannedIntermediate:
 
 
 def test_unique_donor_records_pass_verification() -> None:
-    # REQ-1243: the filter leaves one eligible record per subject.
+    # REQ-1245: the filter leaves one eligible record per subject.
     selector = IntermediateSelector(
         [
             ds_plan(
@@ -462,7 +462,7 @@ def test_unique_donor_records_pass_verification() -> None:
 
 
 def test_duplicate_donor_records_fail_verification() -> None:
-    # REQ-1243: P02 carries two eligible records, so the run fails loudly.
+    # REQ-1245: P02 carries two eligible records, so the run fails loudly.
     selector = IntermediateSelector(
         [ds_plan(unique_columns=("STUDYID", "USUBJID"))], {"DS": ds()}
     )
@@ -471,7 +471,7 @@ def test_duplicate_donor_records_fail_verification() -> None:
 
     assert failure.phase == "verification"
     assert failure.condition == "duplicate_intermediate_records"
-    assert failure.requirement == "REQ-1243"
+    assert failure.requirement == "REQ-1245"
     assert failure.spec_paths == ("intermediates[0].verification",)
     assert failure.context == {
         "intermediate": "DS_EOS",
@@ -489,7 +489,7 @@ def test_an_unverified_intermediate_is_not_checked() -> None:
 
 
 def test_a_failed_filter_on_a_verified_intermediate_fails_verification() -> None:
-    # REQ-1243 is load-bearing: the filter never materialized, so the
+    # REQ-1245 is load-bearing: the filter never materialized, so the
     # verification cannot wait for a selection that may never happen.
     selector = IntermediateSelector(
         [
@@ -505,13 +505,13 @@ def test_a_failed_filter_on_a_verified_intermediate_fails_verification() -> None
 
     assert failure.phase == "verification"
     assert failure.condition == "unknown_field"
-    assert failure.requirement == "REQ-1243"
+    assert failure.requirement == "REQ-1245"
     assert failure.spec_paths == ("intermediates[0].filter",)
     assert failure.context["intermediate"] == "DS_EOS"
 
 
 def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> None:
-    # REQ-1243: the derivation names a field the donor never had, so the
+    # REQ-1245: the derivation names a field the donor never had, so the
     # records never materialized and the original condition surfaces at
     # the derivation's own path.
     from yamaa.specification.models import Expression, HandledExpression
