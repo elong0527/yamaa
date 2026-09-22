@@ -8,7 +8,7 @@ status: normative
 
 ## Purpose
 
-Resolves input datasets, current-output columns, and ODM references.
+Resolves input datasets, current-output columns, and contextual ODM references.
 
 ## Scope and dependencies
 
