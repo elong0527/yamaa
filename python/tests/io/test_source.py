@@ -738,6 +738,38 @@ def test_producer_link_path_failure_precedes_workflow_resolution(
     }
 
 
+def test_missing_input_path_reports_data_roots_checked(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    specs = project / "specs"
+    specs.mkdir(parents=True)
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    resources = ProjectResources(
+        project, data_roots=(first, second), base_directory=specs
+    )
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM",
+            DatasetSource(path="missing.csv", schema="dm.schema.yaml"),
+            resources,
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "validation",
+        "condition": "resource_path_missing",
+        "spec_paths": ("input.DM.path",),
+        "requirement": "REQ-0785",
+        "context": {
+            "dataset": "DM",
+            "path": "missing.csv",
+            "data_roots_checked": 2,
+        },
+    }
+
+
 def test_producer_link_with_inline_types_reports_redundant_type(
     tmp_path: Path,
 ) -> None:

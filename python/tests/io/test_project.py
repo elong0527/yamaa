@@ -653,3 +653,195 @@ def test_a_declared_data_root_keeps_the_spelling_the_study_wrote(
     resources = ProjectResources(approved.project_root, data_roots=approved.data_roots)
 
     assert resources.capture(f"{written}/lbref.csv").content == b"LBTESTCD\nALT\n"
+
+
+# ---------------------------------------------------------------------------
+# REQ-0780/REQ-0781: a relative path anchors first at the writing layer's
+# directory and, only when that walk reaches no entry, at each approved data
+# root in run order. Any other condition is terminal.
+# ---------------------------------------------------------------------------
+
+
+def _two_store_layout(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    """A project with a spec directory and two approved data roots."""
+    project = tmp_path / "project"
+    specs = project / "specs"
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    specs.mkdir(parents=True)
+    first.mkdir()
+    second.mkdir()
+    return project, specs, first, second
+
+
+def test_relative_path_resolves_from_the_spec_directory_first(
+    tmp_path: Path,
+) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (specs / "dm.csv").write_bytes(b"ID\n01\n")
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    snapshot = resources.capture("dm.csv")
+
+    assert snapshot.content == b"ID\n01\n"
+
+
+def test_relative_path_falls_back_to_a_data_root_only_when_missing(
+    tmp_path: Path,
+) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    snapshot = resources.capture("dm.csv")
+
+    assert snapshot.content == b"ID\n02\n"
+
+
+def test_the_first_declared_data_root_wins(tmp_path: Path) -> None:
+    project, specs, first, second = _two_store_layout(tmp_path)
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    (second / "dm.csv").write_bytes(b"ID\n03\n")
+    resources = ProjectResources(
+        project, data_roots=(first, second), base_directory=specs
+    )
+
+    snapshot = resources.capture("dm.csv")
+
+    assert snapshot.content == b"ID\n02\n"
+
+
+def test_missing_under_every_anchor_is_missing(tmp_path: Path) -> None:
+    project, specs, first, second = _two_store_layout(tmp_path)
+    resources = ProjectResources(
+        project, data_roots=(first, second), base_directory=specs
+    )
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("dm.csv")
+
+    assert raised.value.condition == "resource_path_missing"
+    assert raised.value.requirement == "REQ-0785"
+
+
+def test_missing_relative_path_reports_how_many_data_roots_were_checked(
+    tmp_path: Path,
+) -> None:
+    project, specs, first, second = _two_store_layout(tmp_path)
+    resources = ProjectResources(
+        project, data_roots=(first, second), base_directory=specs
+    )
+
+    assert resources.fallback_root_count("dm.csv") == 2
+    assert resources.fallback_root_count(rooted(first, "dm.csv")) == 0
+    assert resources.fallback_root_count("https://example.org/dm.csv") == 0
+
+
+def test_a_directory_at_the_spec_directory_is_terminal(tmp_path: Path) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (specs / "dm.csv").mkdir()
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("dm.csv")
+
+    assert raised.value.condition == "resource_path_not_regular_file"
+
+
+def test_a_file_as_intermediate_component_is_terminal(tmp_path: Path) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (specs / "input").write_text("not a directory")
+    input_dir = first / "input"
+    input_dir.mkdir()
+    (input_dir / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("input/dm.csv")
+
+    assert raised.value.condition == "resource_path_not_regular_file"
+
+
+def test_a_symlink_under_a_fallback_data_root_is_rejected(tmp_path: Path) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    (first / "alias.csv").symlink_to("dm.csv")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("alias.csv")
+
+    assert raised.value.condition == "resource_path_symlink"
+
+
+def test_a_rooted_path_missing_under_its_root_never_consults_data_roots(
+    tmp_path: Path,
+) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture(rooted(project, "dm.csv"))
+
+    assert raised.value.condition == "resource_path_missing"
+
+
+def test_malformed_and_outside_paths_keep_their_single_anchor(tmp_path: Path) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture(r"dm\.csv")
+
+    assert raised.value.condition == "resource_path_not_normalized"
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("../../elsewhere/dm.csv")
+
+    assert raised.value.condition == "resource_path_outside_project"
+
+
+def test_parent_traversal_into_a_data_root_still_reanchors(tmp_path: Path) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    snapshot = resources.capture("../../first/dm.csv")
+
+    assert snapshot.content == b"ID\n02\n"
+
+
+def test_spec_directory_and_fallback_spellings_share_one_snapshot(
+    tmp_path: Path,
+) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (specs / "dm.csv").write_bytes(b"ID\n01\n")
+    (first / "dm.csv").write_bytes(b"ID\n02\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    near = resources.capture("dm.csv")
+    far = resources.capture("../../first/dm.csv")
+
+    assert near.content == b"ID\n01\n"
+    assert far.content == b"ID\n02\n"
+    assert resources.capture_reads == 2
+
+
+def test_no_duplicate_walk_when_the_spec_directory_is_a_data_root(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    store = tmp_path / "store"
+    store.mkdir()
+    (store / "lbref.csv").write_bytes(b"LBTESTCD\nALT\n")
+    resources = ProjectResources(project, data_roots=(store,), base_directory=store)
+
+    snapshot = resources.capture("lbref.csv")
+
+    assert snapshot.content == b"LBTESTCD\nALT\n"
+    assert resources.capture_reads == 1

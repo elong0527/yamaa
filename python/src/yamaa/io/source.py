@@ -88,14 +88,21 @@ class ProducerContract(_FrozenModel):
 
 
 def _path_diagnostic(
-    dataset: str, written_path: str, failure: ResourceFailure
+    dataset: str,
+    written_path: str,
+    failure: ResourceFailure,
+    *,
+    data_roots_checked: int = 0,
 ) -> SourceDiagnostic:
+    context: dict[str, object] = {"dataset": dataset, "path": written_path}
+    if failure.condition == "resource_path_missing" and data_roots_checked:
+        context["data_roots_checked"] = data_roots_checked
     return SourceDiagnostic(
         phase=failure.phase,
         condition=failure.condition,
         spec_paths=(f"input.{dataset}.path",),
         requirement=failure.requirement,
-        context={"dataset": dataset, "path": written_path},
+        context=context,
     )
 
 
@@ -359,7 +366,14 @@ def load_source_tables(
             if profile is None:
                 diagnostics.append(_profile_diagnostic(dataset, source.path))
         except ResourceFailure as failure:
-            diagnostics.append(_path_diagnostic(dataset, source.path, failure))
+            diagnostics.append(
+                _path_diagnostic(
+                    dataset,
+                    source.path,
+                    failure,
+                    data_roots_checked=resources.fallback_root_count(source.path),
+                )
+            )
     if diagnostics:
         raise SourceError(diagnostics)
 
@@ -394,7 +408,14 @@ def load_source_tables(
                 if source.empty_string == "missing":
                     table = _empty_strings_to_missing(table)
         except ResourceFailure as failure:
-            diagnostics.append(_path_diagnostic(dataset, source.path, failure))
+            diagnostics.append(
+                _path_diagnostic(
+                    dataset,
+                    source.path,
+                    failure,
+                    data_roots_checked=resources.fallback_root_count(source.path),
+                )
+            )
             continue
         except CsvProfileFailure as failure:
             diagnostics.append(_csv_diagnostic(dataset, source.path, failure))
