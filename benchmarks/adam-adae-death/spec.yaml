@@ -48,6 +48,11 @@ columns:
     label: Death Date from Fatal Event
     derivation: DEATHEV.ASTDT
 
+  - name: WINAESEQ
+    type: int
+    label: Sequence Number of the Fatal Event Setting the Death Date
+    derivation: DEATHEV.AESEQ
+
   - name: DMDTHDT
     type: date
     label: Death Date from Demographics
@@ -89,11 +94,11 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 8
-      max: 8
+      min: 10
+      max: 10
   - implies:
       id: fatal-event-carries-its-own-cause
-      when: "FATALFL = 'Y' AND ASTDT = EVDTHDT"
+      when: "FATALFL = 'Y' AND AESEQ = WINAESEQ"
       then: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
   - implies:
       id: no-cause-without-a-fatal-event
