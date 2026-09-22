@@ -681,6 +681,9 @@ examples:
   schema-row-templates:
     status: executable
     runtimes: ['python']
+  schema-predicates:
+    status: executable
+    runtimes: ['python']
   adam-advs-locf:
     status: executable
     runtimes: ['python']

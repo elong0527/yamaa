@@ -1,0 +1,80 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: {path: input/dm.csv, types: {AGE: int}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGERISK, SENIOR_M, TRTCLASS]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      literal: YAMAA-01
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The first TRUE branch wins: subject 01 matches both age branches and
+  # takes HIGH. A missing age is UNKNOWN in both comparisons, so subject
+  # 03 falls through to otherwise. The 40-year-old pins the inclusive
+  # BETWEEN endpoint.
+  - name: AGERISK
+    type: str
+    label: Age Risk Category
+    derivation:
+      case:
+        - when: "DM.AGE > 65"
+          then:
+            literal: HIGH
+        - when: "DM.AGE >= 40"
+          then:
+            literal: MEDIUM
+        - otherwise:
+            literal: LOW
+
+  # NOT UNKNOWN is UNKNOWN, not TRUE: subject 03's missing age skips the
+  # first branch and is caught by the explicit IS NULL test, while the
+  # subjects whose predicate is FALSE fall through to otherwise.
+  - name: SENIOR_M
+    type: str
+    label: Senior Male Flag
+    derivation:
+      case:
+        - when: "NOT (DM.AGE >= 65) AND DM.SEX = 'M'"
+          then:
+            literal: Y
+        - when: "DM.AGE IS NULL"
+          then:
+            literal: U
+        - otherwise:
+            literal: N
+
+  # LIKE is case-sensitive: 'drug-low' matches neither LIKE branch, while
+  # 'DRUGX' matches 'DRUG%'. NOT IN over a missing value is UNKNOWN, not
+  # TRUE, so subject 04 skips to the IS NULL branch. The first branch
+  # uses the bare-source shorthand, copying the matched value through.
+  - name: TRTCLASS
+    type: str
+    label: Treatment Class
+    derivation:
+      case:
+        - when: "DM.TRTGRP LIKE 'SCRN%'"
+          then: DM.TRTGRP
+        - when: "DM.TRTGRP LIKE 'DRUG%'"
+          then:
+            literal: DRUG_FAMILY
+        - when: "DM.TRTGRP NOT IN ('DRUG', 'PLACEBO')"
+          then:
+            literal: OTHER
+        - when: "DM.TRTGRP IS NULL"
+          then:
+            literal: MISSING
+        - otherwise:
+            literal: STANDARD
