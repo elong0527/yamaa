@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_predicate
 spec_paths:
   - columns.AESEV.derivation.case[0].when
-requirement: REQ-1241
+requirement: REQ-0188
 context:
   position: 24
   predicate: "str_contains(AE.AETERM, 'SEVERE[')"
