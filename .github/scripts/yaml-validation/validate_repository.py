@@ -514,6 +514,8 @@ def predicate_operand_type(operand, resolver, errors):
 def predicate_types_comparable(left, right):
     if left is None or right is None:
         return True
+    if left is DERIVED_TYPE_UNKNOWN or right is DERIVED_TYPE_UNKNOWN:
+        return True
     if left in {'int', 'float'} and right in {'int', 'float'}:
         return True
     return left == right and left in {'str', 'date', 'datetime'}
@@ -577,7 +579,11 @@ def validate_predicate_types(ast, resolver):
             value_type = operand_type(node['value'])
             pattern_type = operand_type(node['pattern'])
             for actual in (value_type, pattern_type):
-                if actual is not None and actual != 'str':
+                if (
+                    actual is not None
+                    and actual is not DERIVED_TYPE_UNKNOWN
+                    and actual != 'str'
+                ):
                     errors.append(
                         PredicateSemanticIssue(
                             'LIKE requires str operands; '
@@ -5734,6 +5740,64 @@ def validate_spec_functions_against(
     return errors
 
 
+#: Predicate operand type for a derived name the repository validator
+#: cannot type statically. The name is known (no `unknown_field`), and it
+#: compares as an untyped value (no `incompatible_input_type`).
+DERIVED_TYPE_UNKNOWN = object()
+
+
+def _compute_expression_type(derivation, donor_fields, path):
+    """Infer the R010 type of a `compute: {expr: ...}` derivation."""
+    if not isinstance(derivation, dict) or len(derivation) != 1:
+        return None
+    keyword, payload = next(iter(derivation.items()))
+    if keyword != 'compute' or not isinstance(payload, dict):
+        return None
+    text = payload.get('expr')
+    if not isinstance(text, str):
+        return None
+    try:
+        ast = parse_numeric_expression(text)
+    except NumericExpressionError:
+        return None
+
+    def resolve(identifier):
+        _qualifier, separator, field = identifier.partition('.')
+        field_type = donor_fields.get(field if separator else identifier)
+        if field_type is None:
+            return None, (
+                'unknown_field',
+                f"unknown identifier {identifier!r}",
+                {'identifier': identifier},
+            )
+        return field_type, None
+
+    inferred, _ = validate_numeric_expression_ast(ast, path, text, resolve)
+    return inferred if inferred not in (None, '<invalid>') else None
+
+
+def _intermediate_derived_field_types(intermediate, donor_fields, operation_path):
+    """Map an intermediate's derivation names to predicate operand types.
+
+    Derived values augment each donor record before `filter`, `order_by`,
+    and `columns` (REQ-1185), so a dataset-qualified derived name must
+    resolve in the intermediate's filter. Numeric `compute` expressions
+    keep their inferred type; anything else is known-but-untyped.
+    """
+    derivations = intermediate.get('derivations')
+    if not isinstance(derivations, dict):
+        return {}
+    typed = {}
+    for name, derivation in derivations.items():
+        if not isinstance(name, str):
+            continue
+        inferred = _compute_expression_type(
+            derivation, donor_fields, f"{operation_path}.derivations.{name}"
+        )
+        typed[name] = inferred if inferred is not None else DERIVED_TYPE_UNKNOWN
+    return typed
+
+
 def predicate_resolver(unqualified=None, qualified=None):
     unqualified = unqualified or {}
     qualified = qualified or {}
@@ -6038,7 +6102,22 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
                 intermediates[intermediate_id] = datasets.get(dataset_id, {})
             if isinstance(intermediate.get('filter'), str):
-                resolver = predicate_resolver(qualified=datasets)
+                # REQ-1185: derivations augment each donor record before the
+                # filter, so dataset-qualified derived names must resolve.
+                donor_fields = dict(datasets.get(dataset_id, {}))
+                donor_fields.update(
+                    _intermediate_derived_field_types(
+                        intermediate,
+                        donor_fields,
+                        f"{spec_label}.intermediates[{index}]",
+                    )
+                )
+                qualified = (
+                    {**datasets, dataset_id: donor_fields}
+                    if isinstance(dataset_id, str)
+                    else datasets
+                )
+                resolver = predicate_resolver(qualified=qualified)
                 errors.extend(
                     validate_predicate_at(
                         intermediate['filter'],
