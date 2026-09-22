@@ -17,7 +17,8 @@ names (`EXTRT`), and ongoing flags (`EXONGO`) in mixed case.
 - `STUDYID`: the study identifier, carried through.
 - `USUBJID`: the unique subject identifier, carried through.
 - `PARAM`: the parameter name, a literal.
-- `AVAL`: the sequence number of the last non-ongoing exposure record.
+- `AVAL`: the sequence number of the selected record — the non-ongoing
+  exposure with the alphabetically last treatment name.
 - `AVALC`: the uppercased treatment name of that record.
 
 **Mechanism:** the `LASTEX` intermediate derives `ONGO_U` and `TRT_U`
