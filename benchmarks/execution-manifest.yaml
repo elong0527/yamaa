@@ -384,6 +384,9 @@ examples:
   negative-ingest-unit:
     status: executable
     runtimes: ['python']
+  negative-intermediate-derived-read-without-keep:
+    status: executable
+    runtimes: ['python']
   negative-keys-conflict:
     status: executable
     runtimes: ['python']
@@ -685,6 +688,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-inheritance:
+    status: executable
+    runtimes: ['python']
+  schema-intermediate-derived-resolution:
     status: executable
     runtimes: ['python']
   schema-source-binding:
