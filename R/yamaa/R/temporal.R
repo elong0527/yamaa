@@ -16,17 +16,6 @@ days_from_civil <- function(y, m, d) {
   era * 146097 + doe - 719468  # days since 1970-01-01
 }
 
-civil_from_days <- function(z) {
-  z <- z + 719468
-  era <- floor(z / 146097); doe <- z - era * 146097
-  yoe <- floor((doe - floor(doe / 1460) + floor(doe / 36524) - floor(doe / 146096)) / 365)
-  y <- yoe + era * 400
-  doy <- doe - (365 * yoe + floor(yoe / 4) - floor(yoe / 100))
-  mp <- floor((5 * doy + 2) / 153); d <- doy - floor((153 * mp + 2) / 5) + 1
-  m <- mp + 3 - 12 * (mp >= 10); y <- y + (m <= 2)
-  list(y = y, m = m, d = d)
-}
-
 month_length <- function(y, m) {
   if (m == 2) return(if ((y %% 4 == 0 & y %% 100 != 0) | y %% 400 == 0) 29L else 28L)
   c(31L,28L,31L,30L,31L,30L,31L,31L,30L,31L,30L,31L)[m]
@@ -70,12 +59,6 @@ split_date <- function(v) {
   y <- as.integer(substr(v, 1, 4)); mo <- as.integer(substr(v, 6, 7)); d <- as.integer(substr(v, 9, 10))
   list(y = y, mo = mo, d = d)
 }
-split_datetime <- function(v) {
-  c <- split_date(v)
-  c$h <- as.integer(substr(v, 12, 13)); c$mi <- as.integer(substr(v, 15, 16))
-  c$se <- as.integer(substr(v, 18, 19)); c
-}
-
 # ---- operations ---------------------------------------------------------
 # date_diff(start, end, unit, bounds): int vectors, NA-aware (REQ-0594..0598)
 op_date_diff <- function(start, end, unit = "day", bounds = "exclusive") {

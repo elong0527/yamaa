@@ -65,15 +65,6 @@ tv_na <- function(t, n) {
   tv(v, t)
 }
 
-storage_mode <- function(t) switch(t, str = "character", int = "integer",
-  float = "double", date = "character", datetime = "character")
-
-# REQ-0006: non-finite floats become missing at every boundary ----------
-norm_finite <- function(x) {
-  if (x$t == "float") x$v[!is.finite(x$v)] <- NA_real_
-  x
-}
-
 # numeric text parsing (REQ-0015) ---------------------------------------
 parse_number_text <- function(s) {
   vapply(s, function(one) {
@@ -85,20 +76,6 @@ parse_number_text <- function(s) {
     }
     suppressWarnings(as.numeric(one))
   }, double(1), USE.NAMES = FALSE)
-}
-
-is_integral_double <- function(x) !is.na(x) & x == floor(x) & abs(x) < 2^53
-
-# REQ-0016/0021: conversion to int succeeds only for exactly integral values
-to_int_value <- function(x) {
-  if (is.na(x)) return(NA_integer_)
-  if (x != floor(x) || abs(x) >= 2^63) {
-    yamaa_error("conversion_failed", paste0("not convertible to int: ", x))
-  }
-  if (abs(x) > .Machine$integer.max) {
-    yamaa_error("integer_overflow", paste0("int64 outside clean-room 32-bit range: ", x))
-  }
-  as.integer(x)
 }
 
 # R's yaml parses bare Y/N as booleans (YAML 1.1); in string contexts they
@@ -124,6 +101,26 @@ apply_declared_type <- function(tv_in, declared, cf_lit, cf_present, colname) {
     out$v[i] <- if (is.na(one$v)) fb else one$v
   }
   out
+}
+
+# double -> 32-bit R integer; NA stays NA; fractional values fail as
+# conversion_failed; whole values outside the 32-bit range fail as
+# integer_overflow (REQ-0434). Backs str->int / float->int and readers.
+to_int_value <- function(x) {
+  if (is.na(x)) return(NA_integer_)
+  if (x != trunc(x))
+    yamaa_error("conversion_failed", paste0("not an integer value: ", x))
+  if (x < -2147483648 || x > 2147483647)
+    yamaa_error("integer_overflow", paste0("integer overflow: ", x))
+  as.integer(x)
+}
+
+# REQ-0006: non-finite doubles become missing at every boundary
+norm_finite <- function(x) {
+  if (x$t == "float") {
+    v <- x$v; v[!is.finite(v)] <- NA_real_; x$v <- v
+  }
+  x
 }
 
 # convert_tv with on_fail="na": per-element NA instead of raising

@@ -75,9 +75,10 @@ tokenize_words <- function(s) {
   toks
 }
 
-# validate a regex pattern, failing invalid_regex (REQ-0827)
+# validate a regex pattern, failing invalid_regex (REQ-0827); predicate
+# parse sites pass cond="invalid_predicate" (REQ-1244)
 # REQ-0826: the portable grammar rejects `(?P<name>` named groups, inline
-assert_valid_regex <- function(pattern) {
+assert_valid_regex <- function(pattern, cond = "invalid_regex") {
   ok <- tryCatch({ grepl(pattern, "", perl = TRUE); TRUE },
                  error = function(e) FALSE)
   if (ok) {
@@ -86,7 +87,7 @@ assert_valid_regex <- function(pattern) {
     else if (grepl("(?i)", pattern, fixed = TRUE)) ok <- FALSE
     else if (grepl("\\p{", pattern, fixed = TRUE)) ok <- FALSE
   }
-  if (!ok) yamaa_error("invalid_regex", paste0("invalid regex: ", pattern))
+  if (!ok) yamaa_error(cond, paste0("invalid regex: ", pattern))
   invisible(NULL)
 }
 
@@ -116,6 +117,15 @@ op_str_extract <- function(src, pattern, group, missing_h = NA_character_, inval
     idx <- group + 1L
     if (idx > length(caps) || is.na(caps[idx])) missing_h else caps[idx]
   }, character(1), USE.NAMES = FALSE) |> tv("str")
+}
+
+# str_contains(source, pattern, missing): "true"/"false" strings (REQ-1243)
+op_str_contains <- function(src, pattern, missing_h = NA_character_) {
+  assert_valid_regex(pattern)
+  str_word_op(src, "str_contains", function(s) {
+    if (is.na(s)) return(missing_h)
+    if (grepl(pattern, s, perl = TRUE)) "true" else "false"
+  })
 }
 
 # str_concat(sources, separator, missing): missing -> the missing literal;
@@ -218,52 +228,4 @@ op_str_template <- function(parts, args, missing_h = NA_character_,
   tv(out, "str")
 }
 
-# title case (REQ-0611): uppercase each word's first letter, lowercase the rest
-op_title_case <- function(src) {
-  v <- to_canon_text(src)
-  vapply(v, function(s) {
-    if (is.na(s)) return(NA_character_)
-    toks <- tokenize_words(s)
-    out <- vapply(toks, function(tk) {
-      w <- tk$text
-      if (tk$kind != "word" || nchar(w) == 0) return(w)
-      paste0(ascii_upper(substr(w, 1, 1)), ascii_lower(substr(w, 2, nchar(w))))
-    }, character(1))
-    paste(out, collapse = "")
-  }, character(1), USE.NAMES = FALSE) |> tv("str")
-}
-
-# sentence case (REQ-0610): uppercase sentence starters, lowercase the rest
-op_sentence_case <- function(src) {
-  v <- to_canon_text(src)
-  vapply(v, function(s) {
-    if (is.na(s)) return(NA_character_)
-    t <- tokenize_words(s)
-    s2 <- ascii_lower(s)
-    chars <- strsplit(s2, "", fixed = TRUE)[[1]]
-    out <- chars; prev <- ""
-    for (k in seq_along(chars)) {
-      ch <- chars[k]
-      if (is_word_char(ch) && (k == 1 || prev %in% c(".", "!", "?") || is_sep(prev))) {
-        out[k] <- ascii_upper(ch)
-      }
-      prev <- ch
-    }
-    paste(out, collapse = "")
-  }, character(1), USE.NAMES = FALSE) |> tv("str")
-}
-
 is_sep <- function(ch) !is_word_char(ch)
-
-# REQ-0034/0035: truncation and whitespace for fixed-width output ---------
-truncate_text <- function(v, max_len) {
-  vapply(v, function(s) if (is.na(s) || nchar(s) <= max_len) s else substr(s, 1, max_len),
-    character(1), USE.NAMES = FALSE)
-}
-pad_trailing_ws <- function(v, width) {
-  vapply(v, function(s) {
-    if (is.na(s)) return(s)
-    w <- nchar(s)
-    if (w >= width) s else paste0(s, strrep(" ", width - w))
-  }, character(1), USE.NAMES = FALSE)
-}

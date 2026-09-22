@@ -13,7 +13,7 @@ EXPR_KINDS <- c("source", "literal", "first_available", "greatest", "least",
   "to_date", "date_diff", "date_impute", "date_precision", "study_day",
   "to_epoch_day",
   "datetime_impute", "datetime_precision",
-  "str_upper", "str_lower", "str_sentence", "str_title", "str_extract", "str_concat", "str_template",
+  "str_upper", "str_lower", "str_sentence", "str_title", "str_extract", "str_contains", "str_concat", "str_template",
   "round_half_away_from_zero", "value")
 
 eval_expression <- function(expr, ctx) {
@@ -53,6 +53,7 @@ eval_expression <- function(expr, ctx) {
     str_sentence = eval_str_sentence(payload, ctx),
     str_title = eval_str_title(payload, ctx),
     str_extract = eval_str_extract(payload, ctx),
+    str_contains = eval_str_contains(payload, ctx),
     str_concat = eval_str_concat(payload, ctx),
     str_template = eval_str_template(payload, ctx),
     round_half_away_from_zero = eval_round_half(payload, ctx),
@@ -804,7 +805,7 @@ eval_reducer <- function(reducer, node, r) {
   t <- if (reducer == "MEAN") "float" else x$t
   if (t == "int") {
     if (out != floor(out) || abs(out) > .Machine$integer.max)
-      yamaa_error("overflow", "integer aggregate overflow")
+      yamaa_error("integer_overflow", "integer aggregate overflow")
     return(tv(as.integer(out), "int"))
   }
   tv(out, t)
@@ -1289,6 +1290,12 @@ eval_str_extract <- function(payload, ctx) {
     if (is.null(payload$missing)) NA_character_ else payload$missing,
     if (is.null(payload$invalid)) NA_character_ else payload$invalid,
     if (is.null(payload$no_match)) NA_character_ else payload$no_match)
+}
+
+# REQ-1243: column-derivation form; "true"/"false" strings, missing handler
+eval_str_contains <- function(payload, ctx) {
+  op_str_contains(resolve_name(payload$source, ctx), payload$pattern,
+    if (is.null(payload$missing)) NA_character_ else payload$missing)
 }
 
 eval_str_concat <- function(payload, ctx) {

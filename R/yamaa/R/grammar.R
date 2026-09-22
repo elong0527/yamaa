@@ -173,6 +173,24 @@ parse_boolean <- function(p) {
   if (peek(p)$kind == "punct" && peek(p)$text == "(") {
     next_tok(p); node <- parse_disjunction(p); expect(p, "punct", ")"); return(node)
   }
+  # REQ-1244: str_contains(operand, string) is the one admitted call.
+  # Name match is case-insensitive; a bare str_contains without `(` stays
+  # an identifier; any other name( stays an identifier and fails below as
+  # invalid_predicate.
+  t <- peek(p)
+  if (t$kind == "ident" && toupper(t$text) == "STR_CONTAINS" &&
+      peek(p, 1L)$kind == "punct" && peek(p, 1L)$text == "(") {
+    next_tok(p); expect(p, "punct", "(")
+    src <- parse_pred_operand(p)
+    expect(p, "punct", ",")
+    if (peek(p)$kind != "string")
+      yamaa_error("parse_failure",
+        paste0("str_contains pattern must be a string literal in: ", p$text))
+    pat <- next_tok(p)$text
+    expect(p, "punct", ")")
+    assert_valid_regex(pat, "invalid_predicate")
+    return(list(kind = "str_contains", x = src, pat = pat))
+  }
   parse_comparison_or_nulltest(p)
 }
 parse_comparison_or_nulltest <- function(p) {
@@ -439,6 +457,14 @@ eval_pred <- function(node, resolve) {
     if (node$neg) out <- tv_not(out)
     return(out)
   }
+  # REQ-1244: TRUE/FALSE/UNKNOWN (missing source); non-str source fails
+  if (k == "str_contains") {
+    x <- resolve_operand(node$x, resolve)
+    if (x$t != "str") yamaa_error("incompatible_input_type", "str_contains needs a str source")
+    return(vapply(x$v, function(s)
+      if (is.na(s)) NA else grepl(node$pat, s, perl = TRUE),
+      logical(1), USE.NAMES = FALSE))
+  }
   yamaa_error("invalid_argument", paste0("unknown predicate node: ", k))
 }
 
@@ -514,7 +540,7 @@ arith_unary_minus <- function(x) {
     out <- rep(NA_integer_, length(v))
     ok <- !is.na(v) & v != -.Machine$integer.max  # -(-2^31) overflows
     out[ok] <- -v[ok]
-    if (any(!is.na(v) & !ok)) yamaa_error("overflow", "integer negation overflow")
+    if (any(!is.na(v) & !ok)) yamaa_error("integer_overflow", "integer negation overflow")
     return(tv(out, "int"))
   }
   tv(-v, "float")
@@ -539,7 +565,7 @@ arith_binop <- function(op, l, r) {
   if (both_int && op != "/") {
     # int arithmetic: detect overflow, values must stay integral
     bad <- !is.finite(raw) | raw != floor(raw) | abs(raw) > .Machine$integer.max
-    if (any(bad)) yamaa_error("overflow", "integer arithmetic overflow")
+    if (any(bad)) yamaa_error("integer_overflow", "integer arithmetic overflow")
     out[ok] <- raw
     return(tv(as.integer(out), "int"))
   }
