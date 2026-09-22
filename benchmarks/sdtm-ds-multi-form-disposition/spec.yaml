@@ -2,10 +2,7 @@ schema_version: "1.0"
 domain: DS
 keys: [STUDYID, USUBJID, DSSEQ]
 input:
-  CONSENT: input/consent.csv
-  RANDOMIZATION: input/randomization.csv
-  EOT: input/eot.csv
-  EOS: input/eos.csv
+  ODM: input/odm.csv
 
 output:
   path: ds.csv
@@ -25,42 +22,63 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: SUBJKEY
+    type: str
+    label: Subject Key as Collected
+    derivation: ODM.SubjectKey
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation:
+      str_template: "{STUDYID}-{SUBJKEY}"
+
+  - name: EVENT
+    type: str
+    label: Collection Event
+
+  - name: COMPSTAT
+    type: str
+    label: Completion Status as Collected
 
   - name: DSTERM
     type: str
     label: Reported Term for the Disposition Event
+    verifications:
+      - not_missing: {}
 
   - name: DSDECOD
     type: str
     label: Standardized Disposition Term
     verifications:
-      allowed_values:
-        values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED,
-                 ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
+      - not_missing: {}
+      - allowed_values:
+          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED,
+                   ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
 
   - name: DSCAT
     type: str
     label: Category for Disposition Event
     verifications:
-      allowed_values:
-        values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
+      - not_missing: {}
+      - allowed_values:
+          values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
   - name: DSSCAT
     type: str
     label: Subcategory for Disposition Event
     verifications:
-      allowed_values:
-        values: [INFORMED CONSENT, RANDOMIZATION, END OF TREATMENT, END OF STUDY]
+      - not_missing: {}
+      - allowed_values:
+          values: [INFORMED CONSENT, RANDOMIZATION, END OF TREATMENT, END OF STUDY]
 
   - name: DSSTDTC
     type: date
     label: Start Date/Time of Disposition Event
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: DSSEQ
     type: int
@@ -75,10 +93,14 @@ columns:
 
 rows:
   - id: consent
-    dataset: CONSENT
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'CONSENT'"
     derivations:
-      STUDYID: CONSENT.STUDYID
-      USUBJID: CONSENT.USUBJID
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
       DSTERM:
         literal: INFORMED CONSENT OBTAINED
       DSDECOD:
@@ -87,13 +109,20 @@ rows:
         literal: PROTOCOL MILESTONE
       DSSCAT:
         literal: INFORMED CONSENT
-      DSSTDTC: CONSENT.CONSENTDT
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: randomization
-    dataset: RANDOMIZATION
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'RAND'"
     derivations:
-      STUDYID: RANDOMIZATION.STUDYID
-      USUBJID: RANDOMIZATION.USUBJID
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
       DSTERM:
         literal: RANDOMIZED
       DSDECOD:
@@ -102,67 +131,88 @@ rows:
         literal: PROTOCOL MILESTONE
       DSSCAT:
         literal: RANDOMIZATION
-      DSSTDTC: RANDOMIZATION.RANDDT
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: end_of_treatment
-    dataset: EOT
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'EOT'"
     derivations:
-      STUDYID: EOT.STUDYID
-      USUBJID: EOT.USUBJID
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
       DSTERM:
         case:
-          - when: "EOT.EOTSTAT = 'Completed'"
-            then:
-              literal: COMPLETED
-          - otherwise: EOT.EOTREAS
-      DSDECOD:
-        case:
-          - when: "EOT.EOTSTAT = 'Completed'"
+          - when: "COMPSTAT = 'COMPLETED'"
             then:
               literal: COMPLETED
           - otherwise:
-              mapping:
-                source: EOT.EOTREAS
-                dict:
-                  Severe nausea: ADVERSE EVENT
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASON'"
+                expr: "ONLY(ODM.Value)"
+      DSDECOD:
+        case:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - otherwise:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
+                expr: "ONLY(ODM.Value)"
       DSCAT:
         literal: DISPOSITION EVENT
       DSSCAT:
         literal: END OF TREATMENT
-      DSSTDTC: EOT.EOTDT
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: end_of_study
-    dataset: EOS
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'EOS'"
     derivations:
-      STUDYID: EOS.STUDYID
-      USUBJID: EOS.USUBJID
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
       DSTERM:
         case:
-          - when: "EOS.EOSSTAT = 'Completed'"
+          - when: "COMPSTAT = 'COMPLETED'"
             then:
               literal: COMPLETED
-          - when: "EOS.EOSSTAT = 'Screen failure'"
-            then:
-              literal: SCREEN FAILURE
-          - otherwise: EOS.EOSREAS
-      DSDECOD:
-        case:
-          - when: "EOS.EOSSTAT = 'Completed'"
-            then:
-              literal: COMPLETED
-          - when: "EOS.EOSSTAT = 'Screen failure'"
+          - when: "COMPSTAT = 'SCREEN FAILURE'"
             then:
               literal: SCREEN FAILURE
           - otherwise:
-              mapping:
-                source: EOS.EOSREAS
-                dict:
-                  Subject moved: LOST TO FOLLOW-UP
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASON'"
+                expr: "ONLY(ODM.Value)"
+      DSDECOD:
+        case:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - when: "COMPSTAT = 'SCREEN FAILURE'"
+            then:
+              literal: SCREEN FAILURE
+          - otherwise:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
+                expr: "ONLY(ODM.Value)"
       DSCAT:
         literal: DISPOSITION EVENT
       DSSCAT:
         literal: END OF STUDY
-      DSSTDTC: EOS.EOSDT
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
 
 verifications:
   - unique:
