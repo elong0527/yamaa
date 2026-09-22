@@ -5,8 +5,11 @@
 
 test_that("packaged engine matches goldens across the benchmark corpus", {
   bdir <- yamaa_benchmarks_root()
-  skip_if_not(dir.exists(bdir),
-    paste0("benchmarks directory not found: ", bdir))
+  # the benchmarks directory must exist: silently skipping here would let
+  # this flagship parity test pass with zero benchmarks executed, so fail
+  # loudly instead of skipping when the corpus is absent.
+  expect_true(dir.exists(bdir),
+    info = paste0("benchmarks directory not found: ", bdir))
   man <- yaml::yaml.load_file(file.path(bdir, "execution-manifest.yaml"),
     handlers = yamaa_handlers())$examples
   fails <- character(0)
