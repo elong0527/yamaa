@@ -17,8 +17,7 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
 
 - **Input** The project's `data/sdtm/` holds the staged SDTM
   inputs as parquet, one file per domain (e.g. `dm.parquet`, `ae.parquet`).
-- **yamaa** The engine's schema bundle (`yaml/schema.yaml`)
-  lives at the yamaa repo root. Leverage `benchmark/` to learn best practice. 
+- **yamaa** learn yamaa structure from project github README file. 
 
 ## 2. Spec authoring conventions
 
