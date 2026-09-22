@@ -37,8 +37,8 @@ and by the `assert` and `implies` verifications.
 <a id="req-0159"></a>
 
 **REQ-0159.** A predicate evaluates to `TRUE`, `FALSE`, or `UNKNOWN`. A filter
-retains a row or record only for `TRUE`. A verification holds only for
-`TRUE`; otherwise [Verification](../execution/verification.md) defines the consequence.
+retains a row or record only for `TRUE`. A verification holds only for `TRUE`.
+[Verification](../execution/verification.md) defines every other consequence.
 
 ### Grammar
 
@@ -70,12 +70,11 @@ non_quote   := any R019 string scalar other than "'"
 temporal    := "DATE" string | "DATETIME" string
 ```
 
-`grammar/predicate.yaml` is the single grammar source. The block
-renders the file. Its `reserved` list closes the keywords below. Its cases
-state which text each implementation must accept or reject, which identifiers
-accepted text binds, and each accepted parse. Repository validation
-and the R implementation read the file. A copied grammar that differs from the
-file fails validation.
+`grammar/predicate.yaml` is the grammar source. The block renders the file. Its
+`reserved` list closes the keywords below. Its cases state the text each
+implementation must accept or reject, the identifiers in accepted text, and
+each accepted parse. Repository validation and the R implementation read the
+file. A copied grammar that differs fails validation.
 
 <a id="req-0161"></a>
 
@@ -98,9 +97,9 @@ column. An internal column may be omitted from `output.columns`.
 
 <a id="req-0163"></a>
 
-**REQ-0163.** A `number` is [Numeric computation](computation.md)'s number form with an optional leading sign. It
-has runtime type `int` when it has neither a fractional part nor an exponent,
-and `float` otherwise.
+**REQ-0163.** A `number` has [Numeric computation](computation.md)'s number
+form and may have a leading sign. It has runtime type `int` when it has neither
+a fractional part nor an exponent, and `float` otherwise.
 
 <a id="req-0164"></a>
 
@@ -209,8 +208,8 @@ filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
 
 <a id="req-0178"></a>
 
-**REQ-0178.** [Execution lifecycle](../execution/lifecycle.md) defines the names visible at each predicate site. In
-summary:
+**REQ-0178.** [Execution lifecycle](../execution/lifecycle.md) defines the
+names visible at each predicate site:
 
 <a id="req-0179"></a>
 
@@ -261,10 +260,11 @@ predicate as dependency-free.
 <a id="req-0187"></a>
 
 **REQ-0187.** Evaluation is deterministic and side-effect free. A conforming
-implementation must use [Text values](../values/text.md) for string comparison. The implementation must
-not inherit implicit coercion, collation, `LIKE` escape, or missing-value
-behavior from a host SQL engine. The implementation must either configure and
-override those behaviors to match these rules or evaluate the grammar itself.
+implementation must use [Text values](../values/text.md) for string comparison.
+The implementation must not inherit implicit coercion, collation, `LIKE`
+escape, or missing-value behavior from a host SQL engine. The implementation
+must either configure and override those behaviors to match these rules or
+evaluate the grammar itself.
 
 ## Error conditions
 
@@ -310,5 +310,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Evaluate the closed Boolean language using three-valued logic. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Evaluate the closed Boolean language using three-valued logic. This topic lets
+other owners refer to one policy.
