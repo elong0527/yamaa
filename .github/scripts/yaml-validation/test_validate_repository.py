@@ -5220,7 +5220,7 @@ class TestDeclaredValidationErrors(unittest.TestCase):
 class TestIntermediateDerivedFilterValidation(unittest.TestCase):
     """REQ-1185: an intermediate's filter resolves dataset-qualified derived names."""
 
-    def validate(self, filt, extra_derivations=None):
+    def validate(self, filt, extra_derivations=None, column_predicate=None):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             input_dir = root / 'input'
@@ -5257,6 +5257,19 @@ class TestIntermediateDerivedFilterValidation(unittest.TestCase):
                     }
                 ],
             }
+            if column_predicate is not None:
+                spec['columns'] = [
+                    {
+                        'name': 'FLAG',
+                        'type': 'str',
+                        'derivation': {
+                            'case': [
+                                {'when': column_predicate, 'then': {'literal': 'Y'}},
+                                {'otherwise': {'literal': 'N'}},
+                            ]
+                        },
+                    }
+                ]
             spec_path = root / 'spec.yaml'
             return VALIDATOR.validate_spec_predicates(
                 spec, 'spec.yaml', spec_path, None
@@ -5295,6 +5308,28 @@ class TestIntermediateDerivedFilterValidation(unittest.TestCase):
                 self.validate("DS.LABEL = 'first'", derivations)
             ),
             [],
+        )
+
+    def test_downstream_predicate_reads_intermediate_derived_name(self):
+        self.assertEqual(
+            self.conditions(
+                self.validate(
+                    'DS.EOT_FALLBACK IS NOT NULL',
+                    column_predicate='EOT.EOT_FALLBACK > 1.5',
+                )
+            ),
+            [],
+        )
+
+    def test_downstream_predicate_checks_derived_type(self):
+        self.assertEqual(
+            self.conditions(
+                self.validate(
+                    'DS.EOT_FALLBACK IS NOT NULL',
+                    column_predicate="EOT.EOT_FALLBACK = 'x'",
+                )
+            ),
+            ['incompatible_input_type'],
         )
 
 

@@ -560,7 +560,7 @@ structural constraints come from its schema declaration.
 | `intermediate_class.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
-| `intermediate_class.columns` | Dataset columns the lookup may read; defaults to every dataset column. |
+| `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
 | `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, available to `key`, `filter`, `order_by`, `columns`, and `verification.unique` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |

@@ -416,6 +416,21 @@ def test_a_derived_readable_column_resolves_from_the_selected_record() -> None:
     assert resolved.value == "Y"
 
 
+def test_derived_filter_and_unique_columns_use_augmented_records() -> None:
+    plan = derived_plan(
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        filter_predicate=parse_predicate("SUPPLB.QVAL_U = 'Y'"),
+        unique_columns=("STUDYID", "QVAL_U"),
+    )
+
+    (failure,) = IntermediateSelector([plan], {"SUPPLB": supp()}).verify_uniqueness()
+
+    assert failure.condition == "duplicate_intermediate_records"
+    assert failure.context["duplicate_count"] == 1
+    assert failure.offending_keys == ({"STUDYID": "S1", "QVAL_U": "Y"},)
+
+
 # (Failure-surfacing test removed: no naturally-failing expression in suite
 # without to_number; the _DerivationFailure mechanism remains implemented.)
 

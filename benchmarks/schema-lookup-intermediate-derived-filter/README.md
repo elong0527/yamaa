@@ -18,7 +18,8 @@ a representative numeric value.
   the smallest derived rank. The selected float demonstrates shortest
   round-trip rendering.
 
-**Columns:** the chosen donor's decoded term lands in `DSDECOD`, and its
-representative numeric value lands in `DSVALUE`.
+**Columns:** the chosen donor's decoded term lands in `DSDECOD`, its
+representative numeric value lands in `DSVALUE`, and the computed rank is
+read through `EOT.EOT_FALLBACK` into `EOT_FALLBACK`.
 
 **Standard:** ADaM | **Domain:** ADSL
