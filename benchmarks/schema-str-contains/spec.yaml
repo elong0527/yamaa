@@ -1,0 +1,51 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, CRIT1FL, DERMFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+
+  - name: CRIT1FL
+    type: str
+    label: Criterion 1 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
+          then:
+            literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: DERMFL
+    type: str
+    label: Dermatologic Event Flag
+    derivation:
+      case:
+        - when: "str_contains(AE.AEDECOD, 'DERM|ERYTHEMA')"
+          then:
+            literal: Y

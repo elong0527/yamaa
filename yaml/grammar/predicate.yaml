@@ -15,7 +15,7 @@
 # `grammar/README.md` states the file format and the shape notation.
 schema_version: "1.0"
 contract: predicate
-contract_version: "1.0.0"
+contract_version: "1.1.0"
 rule: operations/predicates
 start: predicate
 productions:
@@ -33,7 +33,7 @@ productions:
       "NOT"* boolean
   - name: boolean
     definition: |-
-      comparison | null_test | "(" predicate ")" | "TRUE" | "FALSE"
+      comparison | null_test | call | "(" predicate ")" | "TRUE" | "FALSE"
   - name: comparison
     definition: |-
       operand compare operand
@@ -43,6 +43,9 @@ productions:
   - name: null_test
     definition: |-
       operand "IS" ["NOT"] "NULL"
+  - name: call
+    definition: |-
+      "str_contains" "(" operand "," string ")"
   - name: compare
     definition: |-
       "=" | "<>" | "<" | "<=" | ">" | ">="
@@ -372,6 +375,57 @@ cases:
   - id: a-function-call-is-not-in-the-predicate-grammar
     covers: [rejection]
     text: "ABS(AVAL) > 2"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-is-a-boolean-substring-call
+    covers: [call]
+    text: "str_contains(AEDECOD, 'DERM|ERYTH')"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (str-contains (id AEDECOD) (str 'DERM|ERYTH'))
+  - id: str-contains-composes-with-the-connectives
+    covers: [call, logic]
+    text: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER') OR AE.AESER = 'Y'"
+    parse: accept
+    identifiers: [AE.AEDECOD, AE.AESER]
+    shape: (or (str-contains (id AE.AEDECOD) (str
+      'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')) (= (id AE.AESER) (str 'Y')))
+  - id: str-contains-negates-with-not
+    covers: [call, logic]
+    text: "NOT str_contains(AEDECOD, 'X')"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (not (str-contains (id AEDECOD) (str 'X')))
+  - id: str-contains-accepts-a-literal-source
+    covers: [call, literal]
+    text: "str_contains('hello', 'ELL')"
+    parse: accept
+    identifiers: []
+    shape: (str-contains (str 'hello') (str 'ELL'))
+  - id: str-contains-is-case-insensitive-like-other-keywords
+    covers: [call]
+    text: "STR_CONTAINS(AEDECOD, 'X')"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (str-contains (id AEDECOD) (str 'X'))
+  - id: str-detect-is-not-a-predicate-function
+    covers: [call, rejection]
+    text: "str_detect(AEDECOD, 'X')"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-requires-two-arguments
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD)"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-pattern-must-be-a-string-literal
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD, 1)"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-rejects-an-invalid-pattern
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD, '(')"
     parse: reject
     condition: invalid_predicate
   - id: a-bare-operand-is-not-a-predicate

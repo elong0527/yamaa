@@ -28,6 +28,8 @@ from yamaa.models.values import (
     runtime_type_name,
     values_comparable,
 )
+from yamaa.regex import RegexError, compile_pattern
+from yamaa.regex import search as regex_search
 
 PredicateAst: TypeAlias = dict[str, Any]
 Token: TypeAlias = tuple[str, str, int]
@@ -218,6 +220,13 @@ class _PredicateParser:
         if self.take_keyword("FALSE") is not None:
             return {"kind": "boolean", "value": False}
 
+        if (
+            self.token[0] == "NAME"
+            and self.token[1].upper() == "STR_CONTAINS"
+            and self.tokens[self.index + 1][0] == "LPAREN"
+        ):
+            return self.parse_call()
+
         left = self.parse_operand()
         if self.token[0] == "OP":
             return {
@@ -297,6 +306,38 @@ class _PredicateParser:
             "operand must be followed by a Boolean operator",
             self.token[2],
         )
+
+    def parse_call(self) -> PredicateAst:
+        """Parse the one Boolean function call the grammar admits.
+
+        `str_contains(source, pattern)` is the single function call REQ-0162
+        admits. The bare name stays an identifier: the caller only reaches
+        here when `(` follows the name, so a column named `str_contains`
+        still resolves as a field.
+        """
+        position = self.token[2]
+        self.advance()
+        self.require("LPAREN", "expected '(' after str_contains")
+        source = self.parse_operand()
+        self.require("COMMA", "expected ',' between str_contains source and pattern")
+        pattern_token = self.require(
+            "STRING", "str_contains pattern must be a string literal"
+        )
+        try:
+            compile_pattern(pattern_token[1])
+        except RegexError as error:
+            raise PredicateError(
+                f"invalid regex in str_contains pattern: {error.reason}",
+                pattern_token[2],
+            ) from error
+        self.require("RPAREN", "expected ')' to close str_contains")
+        return {
+            "kind": "call",
+            "function": "str_contains",
+            "source": source,
+            "pattern": pattern_token[1],
+            "position": position,
+        }
 
     def parse_operand(self) -> PredicateAst:
         token = self.token
@@ -649,6 +690,23 @@ def _evaluate(node: Mapping[str, Any], resolver: Resolver) -> PredicateResult:
             )
         if node["negated"]:
             truth = _not(truth)
+        return PredicateValue(value=truth)
+    if kind == "call":
+        # REQ-1241: the one Boolean function call the grammar admits.
+        source = _operand(node["source"], resolver)
+        if isinstance(source, ConditionResult):
+            return source
+        value = source.value
+        if value is MISSING:
+            truth = TruthValue.UNKNOWN
+        elif not isinstance(value, str):
+            return _condition(
+                "incompatible_input_type",
+                {"expected": "str", "actual": runtime_type_name(value)},
+                "REQ-0190",
+            )
+        else:
+            return _truth(regex_search(node["pattern"], value))
         return PredicateValue(value=truth)
     return _condition("invalid_predicate", {"kind": str(kind)}, "REQ-0188")
 
