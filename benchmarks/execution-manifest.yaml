@@ -666,6 +666,9 @@ examples:
   schema-lookup:
     status: executable
     runtimes: ['python']
+  schema-lookup-filters:
+    status: executable
+    runtimes: ['python']
   schema-non-finite:
     status: executable
     runtimes: ['python']
