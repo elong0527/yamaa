@@ -183,7 +183,7 @@ rows:
               literal: null
 
   - id: volunteered
-    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "MHTERM IS NOT NULL"
     derivations:
       MHTERM:
