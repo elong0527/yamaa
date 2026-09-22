@@ -133,10 +133,10 @@ verifications:
       min: 4
       max: 4
   - implies:
-      id: coded-medication-has-atc-assignment
+      id: coded-medication-has-full-atc-path
       when: "CMDECOD IS NOT NULL"
-      then: "ATC1CD IS NOT NULL"
+      then: "ATC1CD IS NOT NULL AND ATC2CD IS NOT NULL AND ATC3CD IS NOT NULL AND ATC4CD IS NOT NULL"
   - implies:
-      id: atc-code-implies-atc-name
+      id: atc-codes-imply-atc-names
       when: "ATC1CD IS NOT NULL"
-      then: "ATC1 IS NOT NULL"
+      then: "ATC1 IS NOT NULL AND ATC2 IS NOT NULL AND ATC3 IS NOT NULL AND ATC4 IS NOT NULL"
