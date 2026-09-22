@@ -3,57 +3,107 @@ domain: EX
 keys: [STUDYID, USUBJID, EXSEQ]
 
 input:
-  EC: {path: input/ec.csv, types: {TABLETS: int, STRENGTH_MG: float, DOSE_MGKG: float, AUC_TARGET: float, ECSTDTC: date, ECENDTC: date}}
-  LB: {path: input/lb.csv, types: {LBORRES: float, LBDTC: date}}
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, FormRepeatKey: int, ItemGroupRepeatKey: int}
   KITLIST: input/kit_list.csv
 
-base: EC
+base: ODM
 
 intermediates:
+  # The kit list comes from the IRT system, not the EDC, so it stays a
+  # lookup input rather than ODM items.
   - id: KITMAP
     dataset: KITLIST
-    key_base: [EC.KIT]
     key: [KIT]
-  - id: BODYWEIGHT
-    dataset: LB
-    key_base: [EC.STUDYID, EC.USUBJID, EC.VISIT]
-    key: [STUDYID, USUBJID, VISIT]
-    filter: "LB.LBTESTCD = 'WEIGHT'"
+  # Body weight is collected on the VS form at the same visit. The lookup
+  # is keyed at the visit level; the weight item filter is what makes the
+  # long-form ODM key unique (the HEIGHT item on the same form is ignored).
+  - id: VISITWT
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    key: [StudyOID, SubjectKey, StudyEventOID]
+    filter: "ODM.ItemOID = 'IT.VS.WEIGHT'"
 
 rows:
-  # One output row per collected administration. A skipped dose
-  # (ECOCCUR = 'N') is filtered before any derivation, so it leaves
-  # no exposure record. The lookup results are bound to row-level
-  # names first: intermediate reads are not available inside case
-  # branches or compute expressions.
+  # One output row per collected EC form. A skipped dose (ECOCCUR = 'N')
+  # is filtered before any derivation, so it leaves no exposure record.
+  # VS forms group separately and are filtered out the same way. The
+  # lookup results are bound to row-level names first: intermediate reads
+  # are not available inside case branches or compute expressions.
   - id: administered
-    dataset: EC
-    filter: "EC.ECOCCUR = 'Y'"
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    filter: "ECOCCUR = 'Y'"
     derivations:
+      ECOCCUR:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR'"
+          expr: "ONLY(ODM.Value)"
+      FORM:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.FORM'"
+          expr: "ONLY(ODM.Value)"
+      ECTRT:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECTRT'"
+          expr: "ONLY(ODM.Value)"
+      TABLETS:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.TABLETS'"
+          expr: "ONLY(ODM.Value)"
+      STRENGTHMG:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.STRENGTHMG'"
+          expr: "ONLY(ODM.Value)"
+      DOSEMKG:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.DOSEMKG'"
+          expr: "ONLY(ODM.Value)"
+      AUCTARGET:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.AUCTARGET'"
+          expr: "ONLY(ODM.Value)"
+      KIT:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.KIT'"
+          expr: "ONLY(ODM.Value)"
+      ECSTDTC:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECSTDTC'"
+          expr: "ONLY(ODM.Value)"
+      ECENDTC:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECENDTC'"
+          expr: "ONLY(ODM.Value)"
+      FRMREP:
+        aggregate:
+          filter: "ODM.FormOID = 'FO.EC'"
+          expr: "MIN(ODM.FormRepeatKey)"
       KIT_TRT: KITMAP.TREATMENT
       KIT_DOSE: KITMAP.DOSE_MG
-      WT_KG: BODYWEIGHT.LBORRES
+      WT_KG: VISITWT.Value
       EXTRT:
         case:
-          - when: "EC.FORM = 'KITDOSE'"
+          - when: "FORM = 'KITDOSE'"
             then: KIT_TRT
-          - otherwise: EC.ECTRT
+          - otherwise: ECTRT
       EXDOSE:
         case:
-          - when: "EC.FORM = 'TABLET'"
+          - when: "FORM = 'TABLET'"
             then:
               compute:
-                expr: "EC.TABLETS * EC.STRENGTH_MG"
-          - when: "EC.FORM = 'INFUSION'"
+                expr: "TABLETS * STRENGTHMG"
+          - when: "FORM = 'INFUSION'"
             then:
               compute:
-                expr: "EC.DOSE_MGKG * WT_KG"
-          - when: "EC.FORM = 'AUCDOSE'"
-            then: EC.AUC_TARGET
+                expr: "DOSEMKG * WT_KG"
+          - when: "FORM = 'AUCDOSE'"
+            then: AUCTARGET
           - otherwise: KIT_DOSE
       EXDOSU:
         case:
-          - when: "EC.FORM = 'AUCDOSE'"
+          - when: "FORM = 'AUCDOSE'"
             then: {literal: AUC}
           - otherwise: {literal: mg}
 
@@ -71,16 +121,60 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: EC.STUDYID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: EC.USUBJID
+    derivation: ODM.SubjectKey
 
-  # Internal working columns: lookup results bound during row
-  # construction. They are not in output.columns, so they stay out
-  # of the artifact (REQ-0206).
+  # Internal working columns: ODM item pivots and lookup results bound
+  # during row construction. They are not in output.columns, so they stay
+  # out of the artifact (REQ-0206).
+  - name: ECOCCUR
+    type: str
+    label: Occurrence as collected
+
+  - name: FORM
+    type: str
+    label: Dose form as collected
+
+  - name: ECTRT
+    type: str
+    label: Treatment as collected
+
+  - name: TABLETS
+    type: float
+    label: Tablets taken as collected
+
+  - name: STRENGTHMG
+    type: float
+    label: Tablet strength in mg as collected
+
+  - name: DOSEMKG
+    type: float
+    label: Dose in mg per kg as collected
+
+  - name: AUCTARGET
+    type: float
+    label: AUC target as collected
+
+  - name: KIT
+    type: str
+    label: Kit number as collected
+
+  - name: ECSTDTC
+    type: str
+    label: Administration start as collected
+
+  - name: ECENDTC
+    type: str
+    label: Administration end as collected
+
+  - name: FRMREP
+    type: int
+    label: EC form repeat within the visit
+
   - name: KIT_TRT
     type: str
     label: Treatment from the kit list
@@ -115,12 +209,12 @@ columns:
   - name: EXSTDTC
     type: date
     label: Start Date/Time of Treatment
-    derivation: EC.ECSTDTC
+    derivation: ECSTDTC
 
   - name: EXENDTC
     type: date
     label: End Date/Time of Treatment
-    derivation: EC.ECENDTC
+    derivation: ECENDTC
 
   - name: EXSEQ
     type: int
@@ -129,7 +223,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [EC.ECSTDTC, EC.ECSEQ]
+          order_by: [EXSTDTC, FRMREP]
 
 verifications:
   - unique:
