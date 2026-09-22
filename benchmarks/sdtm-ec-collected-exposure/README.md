@@ -3,7 +3,7 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ec-collected-exposure.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** build one EC (Exposure as Collected) record per dosing-log
-day, carrying `ECSEQ`, `ECTRT`, `ECOCCUR`, `ECREASND`, `ECDOSE`,
+day, carrying `ECSEQ`, `ECTRT`, `ECMOOD`, `ECOCCUR`, `ECREASND`, `ECDOSE`,
 `ECDOSU`, `ECDOSFRM`, `ECDOSFRQ`, `ECROUTE`, `ECSTDTC`, `ECENDTC`, and
 `ECADJ`.
 
@@ -15,6 +15,8 @@ was missed, and any dose adjustment.
 
 - `ECSEQ` numbers the subject's dosing days in date order. With
   `STUDYID` and `USUBJID` it identifies the record.
+- `ECMOOD` is `PERFORMED` on every record: these are administrations
+  as collected.
 - `ECOCCUR` is `Y` when the subject took the day's dose, `N` when the
   dose was not taken.
 - `ECREASND` is the reason the dose was not taken, for example

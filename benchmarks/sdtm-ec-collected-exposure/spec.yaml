@@ -6,7 +6,7 @@ input:
 
 output:
   path: ec.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ECSEQ, ECTRT, ECOCCUR, ECREASND, ECDOSE, ECDOSU, ECDOSFRM, ECDOSFRQ, ECROUTE, ECSTDTC, ECENDTC, ECADJ]
+  columns: [DOMAIN, STUDYID, USUBJID, ECSEQ, ECTRT, ECMOOD, ECOCCUR, ECREASND, ECDOSE, ECDOSU, ECDOSFRM, ECDOSFRQ, ECROUTE, ECSTDTC, ECENDTC, ECADJ]
   order_by: [STUDYID, USUBJID, ECSEQ]
 
 columns:
@@ -29,6 +29,11 @@ columns:
     type: str
     label: Name of Treatment
     derivation: {literal: Study Drug}
+
+  - name: ECMOOD
+    type: str
+    label: Mood
+    derivation: {literal: PERFORMED}
 
   - name: ECOCCUR
     type: str
