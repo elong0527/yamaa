@@ -1,0 +1,166 @@
+schema_version: "1.0"
+domain: RS
+keys: [STUDYID, USUBJID, AVISIT]
+input:
+  TRVISIT: input/trvisit.csv
+  TR: {path: input/tr.csv, types: {TRSTRESN: float}}
+  TU: input/tu.csv
+base: TRVISIT
+
+output:
+  path: rs.csv
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, RSSEQ, RSTESTCD, RSTEST,
+            RSSTRESC, RSSTAT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: TRVISIT.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: TRVISIT.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: TRVISIT.AVISIT
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation: TRVISIT.AVISITN
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: TRVISIT.ADT
+
+  - name: RSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [TRVISIT.AVISITN]
+
+  - name: RSTESTCD
+    type: str
+    label: Response Test Short Name
+    derivation:
+      literal: TRGRESP
+
+  - name: RSTEST
+    type: str
+    label: Response Test Name
+    derivation:
+      literal: Timepoint Response
+
+  - name: SUMV
+    type: float
+    label: Sum of Target Lesion Diameters at Visit
+    derivation:
+      aggregate:
+        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        expr: "SUM(TR.TRSTRESN)"
+
+  - name: NMEAS
+    type: int
+    label: Number of Measured Target Lesions at Visit
+    derivation:
+      aggregate:
+        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        expr: "COUNT(TR.TRSTRESN)"
+
+  - name: NTARGET
+    type: int
+    label: Number of Target Lesions
+    derivation:
+      aggregate:
+        group_by: [TU.STUDYID, TU.USUBJID]
+        filter: "TU.TUGRPID = 'TARGET'"
+        expr: "COUNT(TU.TULNKID)"
+
+  - name: NTR
+    type: int
+    label: Number of Tumor Measurement Records at Visit
+    derivation:
+      aggregate:
+        expr: "COUNT(TR.TRSEQ)"
+
+  - name: BASE
+    type: float
+    label: Baseline Sum of Target Lesion Diameters
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        filter: "TR.AVISIT = 'BASELINE' AND TR.TRGRPID = 'TARGET'
+          AND TR.TRTESTCD = 'LDIAM'"
+        expr: "SUM(TR.TRSTRESN)"
+
+  - name: PCHG
+    type: float
+    label: Percent Change from Baseline
+    derivation:
+      compute:
+        expr: "100 * (SUMV - BASE) / NULLIF(BASE, 0)"
+
+  - name: RSSTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: "NTR IS NULL OR NTR = 0"
+          then:
+            literal: NOT DONE
+
+  - name: RSSTRESC
+    type: str
+    label: Result or Finding in Standard Format
+    derivation:
+      case:
+        - when: "RSSTAT = 'NOT DONE'"
+          then:
+            literal: null
+        - when: "AVISIT = 'BASELINE'"
+          then:
+            literal: NE
+        - when: "NTARGET IS NULL OR NTARGET = 0"
+          then:
+            literal: NE
+        - when: "NMEAS IS NULL OR NMEAS < NTARGET"
+          then:
+            literal: NE
+        - when: "PCHG <= -30"
+          then:
+            literal: PR
+        - when: "PCHG >= 20"
+          then:
+            literal: PD
+        - otherwise:
+            literal: SD
+    verifications:
+      allowed_values:
+        values: [CR, PR, SD, PD, NE]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT]
+  - row_count:
+      min: 8
+      max: 8
+  - implies:
+      id: missed-assessment-has-no-response
+      when: "RSSTAT = 'NOT DONE'"
+      then: "RSSTRESC IS NULL"
+  - implies:
+      id: partial-response-meets-threshold
+      when: "RSSTRESC = 'PR'"
+      then: "PCHG <= -30"
+  - implies:
+      id: progressive-disease-meets-threshold
+      when: "RSSTRESC = 'PD'"
+      then: "PCHG >= 20"
