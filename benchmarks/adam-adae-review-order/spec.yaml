@@ -13,6 +13,7 @@ output:
       direction: desc
     - variable: ASTDT
       nulls: first
+    - variable: ASEQ
 
 columns:
   - name: STUDYID
@@ -64,5 +65,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 11
+      max: 11
