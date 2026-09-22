@@ -582,7 +582,7 @@ validation with `ambiguous_dictionary`.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-text](../../benchmarks/adam-adsl-text/README.md).
+- [adam-adsl-text](../../benchmarks/schema-text-functions/README.md).
 - [negative-subject-reference](../../benchmarks/negative-subject-reference/README.md).
 - [negative-mapping-case-collision](../../benchmarks/negative-mapping-case-collision/README.md).
 - [negative-matches-bad-pattern](../../benchmarks/negative-matches-bad-pattern/README.md).

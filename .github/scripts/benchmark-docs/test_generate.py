@@ -99,11 +99,11 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
 
     def test_readme_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
-        benchmark = generate.BENCHMARKS / "adam-adae-serious-listing"
+        benchmark = generate.BENCHMARKS / "adam-advs-bmi"
         page = generate.render_benchmark(benchmark).decode("ascii")
         header, _, summary = page.partition('<section id="readme"')
-        self.assertIn('<p class="eyebrow">ADaM.ADAE</p>', header)
-        self.assertIn("<h1>Serious Event Listing</h1>", header)
+        self.assertIn('<p class="eyebrow">ADaM.ADVS</p>', header)
+        self.assertIn("<h1>Derive BMI</h1>", header)
         self.assertNotIn("text-transform: uppercase", page)
         self.assertIn('<div class="prose prose-short"', summary)
         self.assertNotIn("Standard:", summary.partition("</section>")[0])
@@ -112,7 +112,7 @@ class DashboardTests(unittest.TestCase):
             generate.readme_body_line_count(
                 benchmark.joinpath("README.md").read_text()
             ),
-            10,
+            7,
         )
 
     def test_long_summary_keeps_multicolumn_class(self):

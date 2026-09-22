@@ -300,7 +300,7 @@ handled.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-text](../../benchmarks/adam-adsl-text/README.md).
+- [adam-adsl-text](../../benchmarks/schema-text-functions/README.md).
 - [negative-source-self-reference](../../benchmarks/negative-source-self-reference/README.md).
 - [negative-source-undeclared-field](../../benchmarks/negative-source-undeclared-field/README.md).
 

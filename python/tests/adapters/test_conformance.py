@@ -37,7 +37,7 @@ NEGATIVE = "negative-ambiguous-type"
 SCHEMA_PARQUET = "schema-parquet"
 # A specification that calls a project function; with the project root it
 # carries removed, the call is a logical one no implementation answers.
-PORTABLE = "adam-adsl-bmi-function"
+PORTABLE = "adam-adsl-bmi"
 
 # What the engine reports for every handler path sdtm-dm-basic declares.
 # The one `missing` handler answers both the missing and the unlisted input.

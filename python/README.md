@@ -517,9 +517,9 @@ run execute, with `function` registered on the dispatcher every other
 operation already uses.
 
 `python/tests/projects/bmi-python` implements in Python the same logical
-`bmi` contract the committed `adam-adsl-bmi-function` example implements in
+`bmi` contract the committed `adam-adsl-bmi` example implements in
 R. The two roots calculate one contract fingerprint and run byte-identical
-vectors, and `benchmarks/adam-adsl-bmi-function/spec.yaml` is unchanged
+vectors, and `benchmarks/adam-adsl-bmi/spec.yaml` is unchanged
 between them, which is the portability R018 exists for. This runner refuses
 that example's own R project root under REQ-0667 rather than running it.
 

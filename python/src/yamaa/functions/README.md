@@ -12,7 +12,7 @@ from yamaa.io import ProjectResources, load_source_tables
 from yamaa.specification import load_specification
 
 specification = load_specification(
-    "benchmarks/adam-adsl-bmi-function/spec.yaml", "yaml"
+    "benchmarks/adam-adsl-bmi/spec.yaml", "yaml"
 )
 result = execute_with_project_functions(
     specification.specification,
@@ -141,7 +141,7 @@ unrounded result, and rounding for display happens once, later, under
 ## A Python project root
 
 `python/tests/projects/bmi-python` is a complete one, and implements the
-same logical contract the committed `adam-adsl-bmi-function` example
+same logical contract the committed `adam-adsl-bmi` example
 implements in R:
 
 ```text

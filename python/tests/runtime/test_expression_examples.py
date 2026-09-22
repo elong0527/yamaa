@@ -30,7 +30,7 @@ EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 
 # Every committed example whose derivations this component now executes.
 ARTIFACT_EXAMPLES = [
-    "adam-adsl-bmi-compute",
+    "adam-advs-bmi",
     "adam-adsl-site-parse",
     "adam-adsl-demographics",
     "adam-adae-text-cleanup",
@@ -177,12 +177,15 @@ def test_a_first_available_cycle_is_reported_before_any_row_is_built() -> None:
 def test_changing_a_referenced_source_changes_the_artifact(tmp_path: Path) -> None:
     # A derivation that ignored its inputs would still reproduce the committed
     # artifact, so the same specification is run against a changed input.
-    directory = tmp_path / "adam-adsl-bmi-compute"
-    shutil.copytree(EXAMPLES / "adam-adsl-bmi-compute", directory)
-    source = directory / "input" / "adsl.csv"
+    directory = tmp_path / "adam-advs-bmi"
+    shutil.copytree(EXAMPLES / "adam-advs-bmi", directory)
+    source = directory / "input" / "vs.csv"
     original = source.read_text(encoding="utf-8")
     source.write_text(
-        original.replace("CATH,CATH-001,180,81", "CATH,CATH-001,180,162"),
+        original.replace(
+            "01-701,1015,2,WEIGHT,Weight (kg),54,SCREENING",
+            "01-701,1015,2,WEIGHT,Weight (kg),108,SCREENING",
+        ),
         encoding="utf-8",
     )
 
@@ -190,9 +193,13 @@ def test_changing_a_referenced_source_changes_the_artifact(tmp_path: Path) -> No
 
     assert isinstance(result, ExecutionSuccess)
     rows = result.artifact.frame.to_dicts()
-    assert rows[0]["WEIGHTKG"] == 162.0
-    assert rows[0]["BMI"] == 50.0
-    committed = (
-        EXAMPLES / "adam-adsl-bmi-compute" / "expected" / "adsl.csv"
-    ).read_bytes()
+    bmi_row = next(
+        r
+        for r in rows
+        if r["PARAMCD"] == "BMI"
+        and r["USUBJID"] == "1015"
+        and r["AVISIT"] == "SCREENING"
+    )
+    assert bmi_row["AVAL"] == pytest.approx(2 * 24.989587671803417)
+    committed = (EXAMPLES / "adam-advs-bmi" / "expected" / "advs.csv").read_bytes()
     assert render_csv(result.artifact) != committed

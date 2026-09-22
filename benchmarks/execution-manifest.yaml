@@ -33,9 +33,6 @@ examples:
   adam-adae-review-order:
     status: executable
     runtimes: ['python']
-  adam-adae-serious-listing:
-    status: executable
-    runtimes: ['python']
   adam-adae-serious-sequence:
     status: executable
     runtimes: ['python']
@@ -48,9 +45,6 @@ examples:
   adam-adae-text-cleanup:
     status: executable
     runtimes: ['python']
-  adam-adae-treatment-emergent:
-    status: executable
-    runtimes: ['python']
   adam-adae-worst-severity:
     status: executable
     runtimes: ['python']
@@ -60,13 +54,7 @@ examples:
   adam-adcm-on-treatment:
     status: executable
     runtimes: ['python']
-  adam-adeg-bazett-qtc:
-    status: executable
-    runtimes: ['python']
-  adam-adeg-fridericia-qtc:
-    status: executable
-    runtimes: ['python']
-  adam-adeg-rr-interval:
+  adam-adeg-derived-intervals:
     status: executable
     runtimes: ['python']
   adam-adex-cumulative-dose:
@@ -108,12 +96,6 @@ examples:
   adam-adqs-subscale-score:
     status: executable
     runtimes: ['python']
-  adam-adqs-derive-text-score:
-    status: executable
-    runtimes: ['python']
-  adam-adex-derive-date-epoch:
-    status: executable
-    runtimes: ['python']
   adam-adrs-best-response:
     status: executable
     runtimes: ['python']
@@ -141,10 +123,7 @@ examples:
   adam-adsl-analysis-age:
     status: executable
     runtimes: ['python']
-  adam-adsl-bmi-compute:
-    status: executable
-    runtimes: ['python']
-  adam-adsl-bmi-function:
+  adam-adsl-bmi:
     status: executable
     runtimes: ['python']
   adam-adsl-completion-flag:
@@ -181,12 +160,6 @@ examples:
     status: executable
     runtimes: ['python']
   adam-adsl-new-therapy:
-    status: executable
-    runtimes: ['python']
-  adam-adsl-populations:
-    status: executable
-    runtimes: ['python']
-  adam-adsl-text:
     status: executable
     runtimes: ['python']
   adam-adsl-randomization:
@@ -588,6 +561,12 @@ examples:
   schema-birth-date:
     status: executable
     runtimes: ['python']
+  schema-derive-date-epoch:
+    status: executable
+    runtimes: ['python']
+  schema-derive-text-score:
+    status: executable
+    runtimes: ['python']
   schema-numeric-functions:
     status: executable
     runtimes: ['python']
@@ -676,6 +655,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-source-binding:
+    status: executable
+    runtimes: ['python']
+  schema-text-functions:
     status: executable
     runtimes: ['python']
   schema-verification-log:

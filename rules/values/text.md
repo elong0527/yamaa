@@ -97,7 +97,7 @@ It must not substitute a host default.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-text](../../benchmarks/adam-adsl-text/README.md).
+- [adam-adsl-text](../../benchmarks/schema-text-functions/README.md).
 - [negative-source-bad-encoding](../../benchmarks/negative-source-bad-encoding/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
