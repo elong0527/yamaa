@@ -1,0 +1,37 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, PARAMCD, AVISITN]
+input:
+  VS:
+    path: input/vs.csv
+    types: {AVISITN: int, AVALCOL: float}
+base: VS
+output:
+  path: advs.csv
+  columns: [USUBJID, PARAMCD, AVISITN, AVAL]
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.PARAMCD
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+    derivation: VS.AVISITN
+  - name: AVALCOL
+    type: float
+    label: Collected Analysis Value
+    derivation: VS.AVALCOL
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      locf:
+        source: AVALCOL
+        window:
+          group_by: [USUBJID, PARAMCD]
+          order_by: [AVISITN]

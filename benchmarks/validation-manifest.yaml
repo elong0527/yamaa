@@ -345,3 +345,8 @@ fixtures:
     condition: invalid_field_type
     spec_paths: [columns.COUNTRY.derivation.str_upper.source]
     validator: schema
+  negative-locf-no-order:
+    rule: R007
+    condition: window_order_by_required
+    spec_paths: [columns.AVAL.derivation.locf.window]
+    validator: static_semantics

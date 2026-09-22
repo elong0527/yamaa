@@ -687,3 +687,12 @@ examples:
   schema-non-finite:
     status: executable
     runtimes: ['python']
+  adam-advs-locf:
+    status: executable
+    runtimes: ['python']
+  adam-advs-locf-record:
+    status: executable
+    runtimes: ['python']
+  negative-locf-no-order:
+    status: executable
+    runtimes: ['python']

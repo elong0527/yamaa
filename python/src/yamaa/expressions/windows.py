@@ -142,11 +142,25 @@ def previous_non_missing(partition: Partition, source: str) -> WindowResult:
     separate completed source column; the current row is never a candidate,
     so nothing here reads the column being derived.
     """
+    if not partition.eligible[partition.current]:
+        return _missing()
     for index in range(partition.current - 1, -1, -1):
+        if not partition.eligible[index]:
+            continue
         value = _read(partition.rows[index], source)
         if value is not MISSING:
             return ValueResult(value=value)
     return _missing()
+
+
+def locf(partition: Partition, source: str) -> WindowResult:
+    """Keep the current observed value or the closest earlier present value."""
+    if not partition.eligible[partition.current]:
+        return _missing()
+    value = _read(partition.rows[partition.current], source)
+    if value is not MISSING:
+        return ValueResult(value=value)
+    return previous_non_missing(partition, source)
 
 
 def baseline_flag(
@@ -222,6 +236,7 @@ WINDOW_OPERATIONS: tuple[str, ...] = (
     "rank",
     "row_value",
     "previous_non_missing",
+    "locf",
     "baseline_flag",
 )
 
@@ -230,7 +245,7 @@ def window_spec(payload: Mapping[str, object]) -> Mapping[str, object]:
     """Return the window_spec the payload declares; absent means an empty one.
 
     R007 nests partitioning, ordering, and filtering under `window:` so the
-    five window expressions share one definition instead of repeating the
+    window expressions share one definition instead of repeating the
     same three fields. Every reader of those fields goes through here.
     """
     window = payload.get("window")
@@ -265,6 +280,8 @@ def evaluate_window(
         return row_value(partition, str(payload.get("source")), offset)
     if operation == "previous_non_missing":
         return previous_non_missing(partition, str(payload.get("source")))
+    if operation == "locf":
+        return locf(partition, str(payload.get("source")))
     if operation == "baseline_flag":
         return baseline_flag(
             partition,

@@ -52,7 +52,7 @@ Aggregate filter scope is defined by [REQ-0471](aggregation.md#req-0471), permit
 <a id="req-0303"></a>
 
 **REQ-0303.** The tie-break settles positions, not equality. `row_number`,
-`row_value`, `previous_non_missing`, and right-side selection read the
+`row_value`, `previous_non_missing`, `locf`, and right-side selection read the
 positions themselves, so a tie changes which row they reach. `rank` compares
 only the declared terms. Records equal on all declared terms receive a
 single number rather than the distinct numbers their positions would give.
@@ -65,13 +65,13 @@ that breaks it, whichever method it uses.
 
 <a id="req-0311"></a>
 
-**REQ-0311.** `row_value` requires an integer `offset`; it and
-`previous_non_missing` accept any `source` type and perform no coercion.
+**REQ-0311.** `row_value` requires an integer `offset`; it,
+`previous_non_missing`, and `locf` accept any `source` type and perform no coercion.
 
 <a id="req-0316"></a>
 
 **REQ-0316.** `row_number` and `rank` return integers; `baseline_flag` returns a string.
-`row_value` and `previous_non_missing` retain the selected
+`row_value`, `previous_non_missing`, and `locf` retain the selected
 value type and preserve a selected temporal value's collected precision.
 Scalar selection follows [REQ-0315](expressions.md#req-0315); temporal operation results follow [REQ-0590](temporal.md#req-0590).
 
@@ -132,6 +132,33 @@ structural constraints come from its schema declaration.
 | `expressions.previous_non_missing.window` | Partition and ordering for the window. |
 | `Result` | Returns the source from the closest strictly earlier non-missing row. The current row is never a candidate. Missing source values are skipped, so one result can cross any number of consecutive gaps. A row with no earlier non-missing source in its partition yields missing. |
 
+<a id="req-1239"></a>
+
+**REQ-1239.** The `expressions.locf` interface has the following meanings.
+Shape and structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.locf.source` | Completed observed variable to carry forward. |
+| `expressions.locf.window` | Partition, ordering and optional row selection. |
+| `Result` | Return the current source when present; otherwise return the closest strictly earlier non-missing source in the ordered partition. No earlier source yields missing. |
+
+`locf` preserves row count and the selected value's type and temporal
+precision. Zero and a present empty string are values, not gaps. A
+`window.filter` excludes both donor and recipient rows: excluded recipients
+receive missing. The source is a separate completed column; reading the
+column being derived remains a dependency cycle. Consecutive gaps each
+select an original observed value, never an already-filled output value.
+
+```yaml
+derivation:
+  locf:
+    source: AVALCOL
+    window:
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      order_by: [AVISITN, ASEQ]
+```
+
 <a id="req-1127"></a>
 
 **REQ-1127.** The `expressions.baseline_flag` interface has the following meanings. Shape, defaults, and
@@ -176,7 +203,7 @@ own value is `source`, and a window must not be a second spelling of it.
 
 <a id="req-0340"></a>
 
-**REQ-0340.** `row_number`, `rank`, `row_value`, and `previous_non_missing`
+**REQ-0340.** `row_number`, `rank`, `row_value`, `previous_non_missing`, and `locf`
 require `window.order_by`: without a declared order the window has no
 positions to number or to move along. Omitting it is a validation error.
 
@@ -191,6 +218,8 @@ ignored.
 
 Representative specifications, input data, and expected outcomes:
 
+- [adam-advs-locf](../../benchmarks/adam-advs-locf/README.md).
+- [negative-locf-no-order](../../benchmarks/negative-locf-no-order/README.md).
 - [negative-row-no-prior](../../benchmarks/negative-row-no-prior/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records

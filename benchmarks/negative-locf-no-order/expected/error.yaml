@@ -1,0 +1,7 @@
+phase: validation
+condition: window_order_by_required
+spec_paths:
+  - columns.AVAL.derivation.locf.window
+requirement: REQ-0340
+context:
+  operation: locf

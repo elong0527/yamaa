@@ -147,8 +147,9 @@ column reading another row in its own window partition depends on the whole
 named column. A column that reaches its own value through another row
 is a cycle rather than an iteration. `previous_non_missing` crosses any
 number of missing rows by searching a separate completed source column.
-Conventional carry-forward coalesces the current source with that search
-result. Searching the column being derived remains a cycle rather than an
+`locf` returns the current source when present and otherwise performs that
+search. The equivalent composition coalesces the current source with
+`previous_non_missing`. Searching the column being derived remains a cycle rather than an
 instruction to iterate.
 
 ### Derivation lifecycle

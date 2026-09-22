@@ -261,3 +261,47 @@ def test_a_method_outside_the_two_r007_names_is_refused() -> None:
     )
 
     assert condition.condition.condition == "value_not_permitted"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [MISSING, 5, MISSING, MISSING, 6],
+        [MISSING, 0, MISSING, MISSING, 6],
+        [MISSING, "", MISSING, MISSING, "new"],
+        [
+            MISSING,
+            DateValue(year=2025, month=1, day=1, collected_precision="month"),
+            MISSING,
+            MISSING,
+            DateValue.parse("2025-03-02"),
+        ],
+    ],
+)
+def test_locf_keeps_current_values_and_carries_across_gaps(values):
+    rows = visits(*values)
+    result = [
+        _value(evaluate_window("locf", {"source": "AVAL"}, partition(rows, index)))
+        for index in range(len(rows))
+    ]
+    assert result == [MISSING, values[1], values[1], values[1], values[4]]
+
+
+def test_locf_retains_collected_temporal_precision():
+    date = DateValue(year=2025, month=1, day=1, collected_precision="month")
+    result = _value(
+        evaluate_window("locf", {"source": "AVAL"}, partition(visits(date, MISSING), 1))
+    )
+    assert result.collected_precision == "month"
+
+
+def test_previous_non_missing_skips_excluded_donors():
+    rows = visits(4, 5, MISSING)
+    assert (
+        _value(
+            previous_non_missing(
+                partition(rows, 2, eligible=[True, False, True]), "AVAL"
+            )
+        )
+        == 4
+    )

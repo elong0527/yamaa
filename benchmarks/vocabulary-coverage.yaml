@@ -24,6 +24,7 @@ coverage:
   literal: [negative-literal-structure]
   mapping: [negative-mapping-case-collision]
   lookup: [negative-mapping-unmapped-key]
+  locf: [negative-locf-no-order]
   previous_non_missing: [negative-previous-fixed]
   rank: [negative-rank-bad-method]
   round_half_away_from_zero: [negative-round-half-away-from-zero-non-numeric-source]
