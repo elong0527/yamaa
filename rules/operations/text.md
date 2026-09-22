@@ -79,14 +79,14 @@ text        := one or more R019 scalar values other than "{" and "}"
 <a id="req-0450"></a>
 
 **REQ-0450.** `grammar/string-template.yaml` is the grammar's only source.
-The grammar block above renders that file. The file cases record the
-literal text and placeholders each implementation must produce, and the
-templates each implementation must reject.
+The grammar block above renders `grammar/string-template.yaml`. The file's
+cases specify literal text and placeholders each implementation must produce
+and templates each implementation must reject.
 
 <a id="req-0451"></a>
 
 **REQ-0451.** Repository validation and the R implementation read
-`grammar/string-template.yaml`. Any drift in the grammar causes a failure.
+`grammar/string-template.yaml`. Grammar drift fails.
 
 <a id="req-0452"></a>
 
@@ -110,8 +110,10 @@ rather than an expression to evaluate.
 
 <a id="req-0455"></a>
 
-**REQ-0455.** Each placeholder is a variable reference under [Name binding](../specification/binding.md). Qualified
-and unqualified names have the meanings [Name binding](../specification/binding.md) gives a field typed as `variable`.
+**REQ-0455.** A placeholder is a variable reference under
+[Name binding](../specification/binding.md). A qualified or unqualified
+placeholder name follows the `variable` field rules in
+[Name binding](../specification/binding.md).
 
 <a id="req-0456"></a>
 
@@ -616,14 +618,12 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Apply casing, inline mapping, templates, and portable regular expressions. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+This contract covers casing, mapping, templates, and regular expressions.
 
 ### Current implementation limits
 
-The contract no longer requires linear time matching. The Python consumer
-uses `re`, which backtracks, so a pathological pattern can take long. The
-match it reports is still the match this contract defines.
+Linear-time matching is not required. Python's backtracking `re` can make
+pathological patterns slow. `re` matches still follow this contract.
 
 Outside a character class, the Python consumer normalizes `\S` to the exact
 negation of the ECMA-262 whitespace set. Inside a character class, `[\S]`
