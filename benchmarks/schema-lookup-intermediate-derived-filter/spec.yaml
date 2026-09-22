@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDY: int, DSVALUE: float}}
+base: DM
+
+intermediates:
+  - id: EOT
+    dataset: DS
+    derivations:
+      EOT_FALLBACK:
+        compute:
+          expr: "DSSTDY + DSSEQ / 1000"
+    filter: "DS.EOT_FALLBACK IS NOT NULL"
+    order_by: [DS.EOT_FALLBACK]
+    keep: first
+    columns: [DSDECOD, DSVALUE, EOT_FALLBACK]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DSDECOD, DSVALUE, EOT_FALLBACK]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+  - name: DSDECOD
+    type: str
+    label: Selected Disposition Term
+    derivation: EOT.DSDECOD
+  - name: DSVALUE
+    type: float
+    label: Selected Numeric Value
+    derivation: EOT.DSVALUE
+  - name: EOT_FALLBACK
+    type: float
+    label: Selected Derived Rank
+    derivation: EOT.EOT_FALLBACK

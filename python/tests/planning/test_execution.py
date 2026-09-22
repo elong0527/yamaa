@@ -1779,6 +1779,8 @@ def _intermediate_spec(
     derivations: dict[str, dict[str, object]] | None,
     key: list[str],
     key_base: list[str] | None = None,
+    read_field: str = "QVAL",
+    **intermediate_fields: object,
 ) -> Specification:
     columns = [
         Column(
@@ -1788,7 +1790,9 @@ def _intermediate_spec(
             name="LBSEQ", type="int", derivation=derivation({"source": "SRC.LBSEQ"})
         ),
         Column(
-            name="EPFLAG", type="str", derivation=derivation({"source": "SUP_EP.QVAL"})
+            name="EPFLAG",
+            type="str",
+            derivation=derivation({"source": f"SUP_EP.{read_field}"}),
         ),
     ]
     spec = specification(columns).model_copy(
@@ -1808,6 +1812,7 @@ def _intermediate_spec(
                     or None,
                     key=key,
                     key_base=key_base,
+                    **intermediate_fields,
                 )
             ],
         }
@@ -1854,6 +1859,30 @@ def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
 
     assert plan.intermediates[0].match_fields == ("STUDYID", "USUBJID", "IDVARVAL_U")
     assert plan.intermediates[0].derived[0][0] == "IDVARVAL_U"
+
+
+def test_intermediate_clauses_may_read_a_derived_name() -> None:
+    spec = _intermediate_spec(
+        {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
+        key=["STUDYID", "USUBJID"],
+        key_base=["SRC.STUDYID", "SRC.USUBJID"],
+        read_field="IDVARVAL_U",
+        filter="SUPP.IDVARVAL_U IS NOT NULL",
+        order_by=[OrderTerm(variable="SUPP.IDVARVAL_U")],
+        keep="first",
+        columns=["IDVARVAL_U"],
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": _src_table(), "SUPP": _supp_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    intermediate = plan.intermediates[0]
+    assert intermediate.filter_predicate is not None
+    assert intermediate.order_terms[0][1] == "IDVARVAL_U"
+    assert intermediate.readable_columns == ("IDVARVAL_U",)
 
 
 def _derivation_diagnostic(

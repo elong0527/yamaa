@@ -2257,7 +2257,7 @@ requirements:
   REQ-1182: {"file": "operations/temporal.md", "sources": ["yamaa:issue-461:datetime-imputation", "schema_expression_date.yaml:expressions.datetime_impute.source.description", "schema_expression_date.yaml:expressions.datetime_impute.time.description", "schema_expression_date.yaml:expressions.datetime_impute.missing.description", "schema_expression_date.yaml:expressions.datetime_impute.invalid.description"]}
   REQ-1183: {"file": "operations/temporal.md", "sources": ["yamaa:issue-461:datetime-precision", "schema_expression_date.yaml:expressions.datetime_precision.source.description", "schema_expression_date.yaml:expressions.datetime_precision.missing.description", "schema_expression_date.yaml:expressions.datetime_precision.invalid.description"]}
   REQ-1184: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:time_rule.description"]}
-  REQ-1185: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.derivations.description"]}
+  REQ-1185: {"file": "operations/lookup.md", "sources": ["yamaa:issue-767:derived-intermediate-fields", "schema.yaml:intermediate_class.derivations.description"]}
   REQ-1187: {"file": "operations/temporal.md", "sources": ["yamaa:issue-705:to-epoch-day"]}
   REQ-1188: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:expressions.to_epoch_day.source.description"]}
   REQ-1189: {"file": "operations/aggregation.md", "sources": ["yamaa:issue-704:derive-step", "yamaa:issue-705:derive-step", "schema_expression_aggregate.yaml:aggregate_class.derive.description"]}
@@ -2753,6 +2753,7 @@ provenance_addenda:
   - {"source": "schema_define.yaml:define_dataset_class.dataset_json.description", "text": "See REQ-1066 in rules/submission/define-xml.md.", "owner": "submission/define-xml", "group": "define_dataset_class", "target": "REQ-1066"}
   - {"source": "schema_define.yaml:dataset_json_path.description", "text": "See REQ-1225 in rules/submission/dataset-json.md.", "owner": "submission/dataset-json", "group": "dataset_json_path", "target": "REQ-1225"}
   - {"source": "schema.yaml:intermediate_class.derivations.description", "text": "See REQ-1185 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1185"}
+  - {"source": "yamaa:issue-767:derived-intermediate-fields", "text": "Issue #767: per-record derivations augment an intermediate's donor records before filter, matching, order_by selection, and columns projection, so those clauses resolve derived names.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1185"}
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.dict_yaml.description", "text": "See REQ-1110 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
   - {"source": "schema_expression_window.yaml:expressions.locf.source.description", "text": "Completed observed variable to carry forward.", "owner": "operations/windows", "group": "expressions.locf", "target": "REQ-1239"}
   - {"source": "schema_expression_window.yaml:expressions.locf.window.description", "text": "Partition, ordering and optional row selection.", "owner": "operations/windows", "group": "expressions.locf", "target": "REQ-1239"}

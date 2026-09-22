@@ -5217,6 +5217,122 @@ class TestDeclaredValidationErrors(unittest.TestCase):
         self.assertEqual(self.check("aggregate_over_scalar_source", []), [])
 
 
+class TestIntermediateDerivedFilterValidation(unittest.TestCase):
+    """REQ-1185: an intermediate's filter resolves dataset-qualified derived names."""
+
+    def validate(self, filt, extra_derivations=None, column_predicate=None):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / 'input'
+            input_dir.mkdir()
+            (input_dir / 'dm.csv').write_text(
+                'STUDYID,USUBJID\nYAMAA-01,P01\n', encoding='utf-8'
+            )
+            (input_dir / 'ds.csv').write_text(
+                'STUDYID,USUBJID,DSSEQ,DSSTDY\nYAMAA-01,P01,1,10\n',
+                encoding='utf-8',
+            )
+            derivations = {
+                'EOT_FALLBACK': {'compute': {'expr': 'DSSTDY + DSSEQ / 1000'}},
+            }
+            derivations.update(extra_derivations or {})
+            spec = {
+                'schema_version': '1.0',
+                'domain': 'ADSL',
+                'keys': ['STUDYID', 'USUBJID'],
+                'input': {
+                    'DM': 'input/dm.csv',
+                    'DS': {
+                        'path': 'input/ds.csv',
+                        'types': {'DSSEQ': 'int', 'DSSTDY': 'int'},
+                    },
+                },
+                'base': 'DM',
+                'intermediates': [
+                    {
+                        'id': 'EOT',
+                        'dataset': 'DS',
+                        'derivations': derivations,
+                        'filter': filt,
+                    }
+                ],
+            }
+            if column_predicate is not None:
+                spec['columns'] = [
+                    {
+                        'name': 'FLAG',
+                        'type': 'str',
+                        'derivation': {
+                            'case': [
+                                {'when': column_predicate, 'then': {'literal': 'Y'}},
+                                {'otherwise': {'literal': 'N'}},
+                            ]
+                        },
+                    }
+                ]
+            spec_path = root / 'spec.yaml'
+            return VALIDATOR.validate_spec_predicates(
+                spec, 'spec.yaml', spec_path, None
+            )
+
+    def conditions(self, errors):
+        return [getattr(error, 'condition', '?') for error in errors]
+
+    def test_derived_name_resolves_in_filter(self):
+        self.assertEqual(
+            self.conditions(self.validate('DS.EOT_FALLBACK IS NOT NULL')), []
+        )
+
+    def test_unknown_derived_name_still_fails(self):
+        errors = self.validate('DS.NOPE IS NOT NULL')
+        self.assertEqual(self.conditions(errors), ['unknown_field'])
+
+    def test_derived_name_keeps_its_inferred_type(self):
+        errors = self.validate("DS.EOT_FALLBACK = 'x'")
+        self.assertEqual(self.conditions(errors), ['incompatible_input_type'])
+        self.assertEqual(
+            self.conditions(self.validate('DS.EOT_FALLBACK > 1.5')), []
+        )
+
+    def test_untypable_derivation_is_known_but_unchecked(self):
+        derivations = {
+            'LABEL': {
+                'case': [
+                    {'when': "DSSEQ = 1", 'then': {'literal': 'first'}},
+                    {'otherwise': {'literal': 'other'}},
+                ]
+            }
+        }
+        self.assertEqual(
+            self.conditions(
+                self.validate("DS.LABEL = 'first'", derivations)
+            ),
+            [],
+        )
+
+    def test_downstream_predicate_reads_intermediate_derived_name(self):
+        self.assertEqual(
+            self.conditions(
+                self.validate(
+                    'DS.EOT_FALLBACK IS NOT NULL',
+                    column_predicate='EOT.EOT_FALLBACK > 1.5',
+                )
+            ),
+            [],
+        )
+
+    def test_downstream_predicate_checks_derived_type(self):
+        self.assertEqual(
+            self.conditions(
+                self.validate(
+                    'DS.EOT_FALLBACK IS NOT NULL',
+                    column_predicate="EOT.EOT_FALLBACK = 'x'",
+                )
+            ),
+            ['incompatible_input_type'],
+        )
+
+
 class TestDatasetPathExamples(unittest.TestCase):
     """The committed path fixtures fail for the conditions they declare."""
 
