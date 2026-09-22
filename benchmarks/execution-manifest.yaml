@@ -642,6 +642,9 @@ examples:
   sdtm-fa-fever:
     status: executable
     runtimes: ['python']
+  sdtm-fa-reactogenicity-diary:
+    status: executable
+    runtimes: ['python']
   sdtm-lb-compartments:
     status: executable
     runtimes: ['python']
