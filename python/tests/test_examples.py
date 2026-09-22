@@ -275,3 +275,20 @@ def test_every_positive_example_carries_a_runner() -> None:
     ]
 
     assert missing == []
+
+
+def test_every_positive_example_carries_an_r_runner() -> None:
+    """A positive benchmark that executes commits the R snippet that runs it.
+
+    `benchmarks/agents.md` makes `run.R` the R twin of `run.py`: the same
+    three-line snippet against the `yamaa` R package. Every positive
+    benchmark carries both, so a missing R runner is a benchmark whose R
+    entry stopped being declared rather than one nobody wrote a runner for.
+    """
+    missing = [
+        example.name
+        for example in positive_examples()
+        if not (example / "run.R").is_file()
+    ]
+
+    assert missing == []

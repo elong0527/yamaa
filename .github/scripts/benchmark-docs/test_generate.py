@@ -74,7 +74,8 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(content.cells, expected_cells)
         spec_lines = (BENCHMARK / "spec.yaml").read_text().splitlines()
         run_lines = (BENCHMARK / "run.py").read_text().splitlines()
-        self.assertEqual(content.code, spec_lines + run_lines)
+        run_r_lines = (BENCHMARK / "run.R").read_text().splitlines()
+        self.assertEqual(content.code, spec_lines + run_r_lines + run_lines)
         self.assertEqual(
             content.sections,
             [
@@ -306,12 +307,18 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn('id="code"', page)
         self.assertIn('data-filename="run.py"', page)
+        self.assertIn('data-filename="run.R"', page)
         self.assertIn("import yamaa", page)
+        self.assertIn("library(yamaa)", page)
         self.assertIn(
             '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/run.py">Edit</a>',
             page,
         )
-        self.assertNotIn('id="code-select"', page)
+        self.assertIn(
+            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/run.R">Edit</a>',
+            page,
+        )
+        self.assertIn('id="code-select"', page)
         codeless = generate.BENCHMARKS / "negative-ambiguous-type"
         plain = generate.render_benchmark(codeless).decode("ascii")
         self.assertNotIn('id="code"', plain)
@@ -347,6 +354,7 @@ class DashboardTests(unittest.TestCase):
                 "spec_compound.yaml",
                 "spec_study.yaml",
                 "spec_resolved.yaml",
+                "run.R",
                 "run.py",
             ],
         )

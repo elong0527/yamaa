@@ -30,6 +30,7 @@ tracker, one work item per root cause.
                                                     # environment.yaml, the shared contracts and
                                                     # vectors, and the runtime it resolves in
         run.py                                      # run the entry spec
+        run.R                                       # the R runner for the entry spec
 
 Every positive benchmark carries `run.py`, the three-line snippet that runs
 its entry specification:
@@ -37,6 +38,15 @@ its entry specification:
     import yamaa
 
     <domain> = yamaa.yamaa_domain("<entry spec>").output
+    <domain>
+
+Every positive benchmark also carries `run.R`, the same snippet in R. It
+targets the `yamaa` R package (issue #200) and mirrors `run.py` line for
+line:
+
+    library(yamaa)
+
+    <domain> <- yamaa_domain("<entry spec>")$output
     <domain>
 
 A benchmark whose entry calls a project function names the root that
@@ -49,10 +59,17 @@ cannot:
     <domain> = run_with_project_functions("<entry spec>", project_root="python").output
     <domain>
 
+The R twin names the R root instead:
+
+    library(yamaa)
+
+    <domain> <- run_with_project_functions("<entry spec>", project_root = "r")$output
+    <domain>
+
 The variable is the domain in lowercase (for example `adsl`), and the entry
 spec is `spec.yaml`, or the file no other file parents for multi-level
-benchmarks. Negative benchmarks carry no `run.py`: the entry is expected to
-fail, so there is no artifact to bind.
+benchmarks. Negative benchmarks carry no `run.py` and no `run.R`: the entry
+is expected to fail, so there is no artifact to bind.
 
 A positive benchmark without a runner is a benchmark that stopped executing,
 not one nobody wrote a runner for, and
