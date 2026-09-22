@@ -2,41 +2,55 @@ schema_version: "1.0"
 domain: RS
 keys: [STUDYID, USUBJID, AVISIT]
 input:
-  TRVISIT: input/trvisit.csv
-  TR: {path: input/tr.csv, types: {TRSTRESN: float}}
-  TU: input/tu.csv
-base: TRVISIT
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, ItemGroupRepeatKey: int}
 
 output:
   path: rs.csv
   columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, RSSEQ, RSTESTCD, RSTEST,
             RSSTRESC, RSSTAT]
 
+rows:
+  - id: visit
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "AVISITN IS NOT NULL"
+    derivations:
+      AVISIT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.AVISIT'"
+          expr: "ONLY(ODM.Value)"
+      AVISITN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.AVISITN'"
+          expr: "ONLY(ODM.Value)"
+      ADT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.ADT'"
+          expr: "ONLY(ODM.Value)"
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: TRVISIT.STUDYID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: TRVISIT.USUBJID
+    derivation: ODM.SubjectKey
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: TRVISIT.AVISIT
 
   - name: AVISITN
     type: int
     label: Analysis Visit (N)
-    derivation: TRVISIT.AVISITN
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: TRVISIT.ADT
 
   - name: RSSEQ
     type: int
@@ -45,7 +59,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [TRVISIT.AVISITN]
+          order_by: [AVISITN]
 
   - name: RSTESTCD
     type: str
@@ -64,42 +78,62 @@ columns:
     label: Sum of Target Lesion Diameters at Visit
     derivation:
       aggregate:
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-        expr: "SUM(TR.TRSTRESN)"
+        filter: "ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        key: [SubjectKey, StudyEventOID]
+        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        derive:
+          - name: D
+            type: float
+            derivation: ODM.Value
+        expr: "SUM(D)"
 
   - name: NMEAS
     type: int
     label: Number of Measured Target Lesions at Visit
     derivation:
       aggregate:
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-        expr: "COUNT(TR.TRSTRESN)"
+        filter: "ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        key: [SubjectKey, StudyEventOID]
+        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        derive:
+          - name: D
+            type: float
+            derivation: ODM.Value
+        expr: "COUNT(D)"
 
   - name: NTARGET
     type: int
     label: Number of Target Lesions
     derivation:
       aggregate:
-        group_by: [TU.STUDYID, TU.USUBJID]
-        filter: "TU.TUGRPID = 'TARGET'"
-        expr: "COUNT(TU.TULNKID)"
+        filter: "ODM.ItemGroupOID = 'IG.TUTARGET' AND ODM.ItemOID = 'IT.TU.TULNKID'"
+        key: [SubjectKey]
+        key_base: [ODM.SubjectKey]
+        expr: "COUNT(ODM.Value)"
 
   - name: NTR
     type: int
     label: Number of Tumor Measurement Records at Visit
     derivation:
       aggregate:
-        expr: "COUNT(TR.TRSEQ)"
+        filter: "ODM.ItemGroupOID IN ('IG.TRTARGET', 'IG.TRNT') AND ODM.ItemOID = 'IT.TR.TRLNKID'"
+        key: [SubjectKey, StudyEventOID]
+        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        expr: "COUNT(ODM.Value)"
 
   - name: BASE
     type: float
     label: Baseline Sum of Target Lesion Diameters
     derivation:
       aggregate:
-        key: [STUDYID, USUBJID]
-        filter: "TR.AVISIT = 'BASELINE' AND TR.TRGRPID = 'TARGET'
-          AND TR.TRTESTCD = 'LDIAM'"
-        expr: "SUM(TR.TRSTRESN)"
+        filter: "ODM.StudyEventOID = 'BASELINE' AND ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        key: [SubjectKey]
+        key_base: [ODM.SubjectKey]
+        derive:
+          - name: D
+            type: float
+            derivation: ODM.Value
+        expr: "SUM(D)"
 
   - name: PCHG
     type: float

@@ -9,10 +9,16 @@ assessment holding the visit order (`AVISITN`), the assessment date
 (`RSTESTCD`/`RSTEST`), the response (`RSSTRESC`), and the completion
 status (`RSSTAT`).
 
-**Input:** scheduled tumor assessments with visit order and date,
-tumor measurement records with lesion group, test code, numeric
-result, and completion status, plus the lesion inventory chosen at
-study entry with lesion group and lesion identifier.
+**Input:** a single ODM extract (`input/odm.csv`) in long-form item
+data: scheduled tumor assessments as `IG.VISIT` (`IT.VISIT.AVISIT`,
+`IT.VISIT.AVISITN`, `IT.VISIT.ADT`), tumor measurements as repeated
+item groups -- `IG.TRTARGET` for target lesions and `IG.TRNT` for
+non-target lesions -- each carrying the lesion link (`IT.TR.TRLNKID`),
+the longest diameter (`IT.TR.LDIAM`), and the completion status
+(`IT.TR.TRSTAT`), plus the lesion inventory chosen at study entry
+(`IG.TUTARGET` / `IG.TUNT` carrying `IT.TU.TULNKID`). Target versus
+non-target is carried by the item-group section, so the same diameter
+item serves both; no demographics are needed.
 
 **Variables:**
 
