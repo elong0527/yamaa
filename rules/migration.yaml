@@ -2276,6 +2276,7 @@ requirements:
   REQ-1240: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_sentence.source.description", "schema_expression_str.yaml:expressions.str_sentence.missing.description"]}
   REQ-1241: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_title.source.description", "schema_expression_str.yaml:expressions.str_title.missing.description"]}
   REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description"]}
+  REQ-1246: {"file": "operations/lookup.md", "sources": ["yamaa:issue-767:intermediate-derived-name-resolution"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2765,5 +2766,6 @@ provenance_addenda:
   - {"source": "schema_expression_str.yaml:expressions.str_contains.missing.description", "text": "See REQ-1243 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_contains", "target": "REQ-1243"}
   - {"source": "yamaa:issue-778:str-contains-predicate-call", "text": "Issue #778: str_contains(source, pattern) is the one function call the predicate grammar admits; Python-only, the R engine does not parse predicate function calls.", "owner": "operations/predicates", "group": "predicate-call", "target": "REQ-1244"}
   - {"source": "yamaa:issue-777:intermediate-unique-verification", "text": "Issue #777: an intermediate may declare verification.unique asserting its filtered donor records carry each key combination once; duplicates fail the run, correlated filters are rejected, and keep stays positional.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
+  - {"source": "yamaa:issue-767:intermediate-derived-name-resolution", "text": "Issue #767: an intermediate's derived names resolve in its filter/order_by (qualified), its columns (bare), and ID.name reads from keep-declared intermediates; a filter naming a derived value runs after the derivations.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1246"}
   - {"source": "schema.yaml:intermediate_class.verification.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_verification_class.unique.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_verification_class", "target": "REQ-1245"}

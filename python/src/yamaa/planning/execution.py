@@ -119,6 +119,10 @@ class PlannedIntermediate(_FrozenModel):
     # REQ-1185: derivations are computed per record before matching; the map
     # is empty when the author declared none.
     derived: tuple[tuple[str, HandledExpression], ...] = ()
+    # #767: a source-only filter naming derived values is applied after the
+    # per-record derivations are computed; a correlated filter needs no
+    # reordering because selection already evaluates augmented records.
+    filter_reads_derived: bool = False
     # REQ-1245: donor columns asserted unique across the source-only
     # filtered records; empty when the author declared no verification.
     unique_columns: tuple[str, ...] = ()
@@ -2128,12 +2132,20 @@ def _validate_intermediate_reference(
     bindings: BindingPlan,
     diagnostics: list[ExecutionDiagnostic],
 ) -> None:
-    """Check that an intermediate id qualifies a column its dataset has."""
+    """Check that an intermediate id qualifies a column its dataset has.
+
+    #767: a derived name reads like a stored column, but only from a
+    keep-declared intermediate: the single selected record is what makes
+    the computed value a row-scoped read (REQ-1242).
+    """
     field = reference.name.split(".", 1)[1]
     dataset = bindings.datasets.get(intermediate.dataset)
     readable = intermediate.readable_columns
+    derived_names = {name for name, _ in intermediate.derived}
     if dataset is not None and (
-        field not in dataset.field_names or (readable and field not in readable)
+        (field not in dataset.field_names and field not in derived_names)
+        or (readable and field not in readable)
+        or (field in derived_names and intermediate.keep is None)
     ):
         # REQ-0125: the named column must exist in the intermediate's dataset and,
         # when the intermediate declares `columns`, be one of them.
@@ -2730,7 +2742,7 @@ def _plan_lookups(
             left = _reference_type(variable, bindings, column_types)
             right = fields.get(field)
             if right is None and field in derived:
-                right = _DERIVED_RESULT_TYPES.get(derived[field].value.operation)
+                right = DERIVED_RESULT_TYPES.get(derived[field].value.operation)
             if left is None or right is None or _comparable_types(left, right):
                 continue
             diagnostics.append(
@@ -2781,6 +2793,9 @@ def _plan_lookups(
                 failed = True
 
         predicate = None
+        # #767: a source-only filter naming derived values runs after the
+        # per-record derivations are computed (see filter_reads_derived).
+        filter_reads_derived = False
         if intermediate.filter is not None:
             predicate = _parse_predicate_at(
                 intermediate.filter, f"{path}.filter", diagnostics
@@ -2788,6 +2803,15 @@ def _plan_lookups(
             if predicate is not None:
                 for identifier in predicate_identifiers(predicate):
                     qualifier, separator, field = identifier.partition(".")
+                    if (
+                        separator
+                        and qualifier == intermediate.dataset
+                        and field in derived
+                    ):
+                        # #767: a derived name resolves like a stored column
+                        # of the intermediate's dataset.
+                        filter_reads_derived = True
+                        continue
                     if not separator or field not in dataset_fields.get(qualifier, ()):
                         context: dict[str, JsonValue] = {
                             "intermediate": intermediate.id,
@@ -2811,7 +2835,12 @@ def _plan_lookups(
         terms: list[tuple[OrderTerm, str]] = []
         for term_index, term in enumerate(intermediate.order_by or ()):
             qualifier, _, field = term.variable.partition(".")
-            if qualifier != intermediate.dataset or field not in fields:
+            if qualifier != intermediate.dataset or (
+                field not in fields and field not in derived
+            ):
+                # #767: a derived name orders like a stored column; the
+                # runtime orders the augmented records, so no runtime
+                # change is needed.
                 context = {
                     "intermediate": intermediate.id,
                     "identifier": term.variable,
@@ -2835,7 +2864,9 @@ def _plan_lookups(
 
         if intermediate.columns is not None:
             for field in intermediate.columns:
-                if field not in fields:
+                # #767: a derived name is a readable column like a stored one;
+                # declaring it here opts it into `ID.name` reads.
+                if field not in fields and field not in derived:
                     diagnostics.append(
                         _diagnostic(
                             "unknown_field",
@@ -2912,6 +2943,19 @@ def _plan_lookups(
         if failed:
             continue
 
+        if (
+            filter_reads_derived
+            and predicate is not None
+            and any(
+                identifier.split(".", 1)[0] != intermediate.dataset
+                for identifier in predicate_identifiers(predicate)
+            )
+        ):
+            # A correlated filter is deferred to selection, which already
+            # evaluates the augmented records; only a source-only filter
+            # needs derivations computed before filtering.
+            filter_reads_derived = False
+
         resolved.append(
             ResolvedJoin(
                 spec_path=path,
@@ -2940,15 +2984,17 @@ def _plan_lookups(
             strict=intermediate.strict,
             missing_declared="missing" in intermediate.model_fields_set,
             derived=tuple(derived.items()),
+            filter_reads_derived=filter_reads_derived,
             unique_columns=unique_columns,
         )
     return planned
 
 
-# REQ-1185: the declared result type of each operation an intermediate
-# derivation may use, so a derived target-side key field type-checks
-# against its driver-side key_base partner.
-_DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
+# REQ-1185/REQ-1246: the declared result type of each operation an
+# intermediate derivation may use, so a derived target-side key field
+# type-checks against its driver-side key_base partner and the repository
+# validator can resolve derived names in intermediate scopes.
+DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
     "str_upper": "str",
     "str_lower": "str",
     "str_sentence": "str",

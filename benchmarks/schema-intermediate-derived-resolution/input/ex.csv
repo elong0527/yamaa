@@ -1,0 +1,7 @@
+STUDYID,USUBJID,EXSEQ,EXTRT,EXONGO
+YAMAA-01,S1,1,drug a,y
+YAMAA-01,S1,2,drug b,N
+YAMAA-01,S1,3,drug c,n
+YAMAA-01,S2,1,drug a,Y
+YAMAA-01,S2,2,drug b,n
+YAMAA-01,S2,3,drug c,N

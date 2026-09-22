@@ -336,6 +336,20 @@ intermediates:
     filter: "SUPPLB.QNAM = 'ENDPOINT'"
 ```
 
+<a id="req-1246"></a>
+
+**REQ-1246.** A derived name resolves everywhere the intermediate's own
+donor records are in scope: the intermediate's `filter:` and `order_by:`
+name it qualified as `DATASET.name`, its `columns:` names it bare, and an
+`ID.name` read names it from a keep-declared intermediate only, where the
+single selected record makes the computed value a row-scoped read
+(REQ-1242). A bare derived name in `filter:` or `order_by:` still fails as
+`unknown_field`; the qualified spelling is required. When the
+intermediate's own filter names a derived value, the derivations run over
+the whole dataset before the filter selects; a derivation that fails on any
+record then fails the run, even on records the filter would drop. The R
+engine does not implement this requirement yet; it is Python-only for now.
+
 ### Intermediate uniqueness checks
 
 <a id="req-1245"></a>

@@ -201,24 +201,65 @@ class IntermediateSelector:
 
         REQ-1185 computes each derivation once per record and caches the
         augmented records, so matching and selection below read the derived
-        values as if they were stored.
+        values as if they were stored. #767: when the source-only filter
+        itself names derived values, the derivations run over the whole
+        dataset first and the filter selects among the augmented records.
         """
         if not plan.derived:
             return self._filtered(plan)
         cached = self._derived.get(plan.identifier)
         if cached is None:
-            eligible = self._filtered(plan)
-            if isinstance(eligible, ConditionResult):
-                return eligible
-            augmented: list[IndexedRecord] = []
-            for record in eligible:
-                outcome = self._augment(plan, record)
-                if isinstance(outcome, _DerivationFailure):
-                    return outcome
-                augmented.append(outcome)
-            cached = tuple(augmented)
+            if plan.filter_reads_derived:
+                result = self._augmented_then_filtered(plan)
+                if isinstance(result, _DerivationFailure):
+                    return result
+                if isinstance(result, ConditionResult):
+                    return result
+                cached = tuple(result)
+            else:
+                eligible = self._filtered(plan)
+                if isinstance(eligible, ConditionResult):
+                    return eligible
+                augmented: list[IndexedRecord] = []
+                for record in eligible:
+                    outcome = self._augment(plan, record)
+                    if isinstance(outcome, _DerivationFailure):
+                        return outcome
+                    augmented.append(outcome)
+                cached = tuple(augmented)
             self._derived[plan.identifier] = cached
         return cached
+
+    def _augmented_then_filtered(
+        self, plan: PlannedIntermediate
+    ) -> list[IndexedRecord] | ConditionResult | _DerivationFailure:
+        """Filter the whole dataset's augmented records (#767).
+
+        The source-only filter names derived values, so every record is
+        augmented before the predicate selects. A derivation that fails on
+        any record fails the run, even on records the filter would drop:
+        the filter cannot name a value that was never computed.
+        """
+        relation = self._relations[plan.dataset]
+        augmented: list[IndexedRecord] = []
+        for record in relation.records:
+            outcome = self._augment(plan, record)
+            if isinstance(outcome, _DerivationFailure):
+                return outcome
+            augmented.append(outcome)
+        assert plan.filter_predicate is not None
+        kept: list[IndexedRecord] = []
+        for record in augmented:
+            result = evaluate_predicate(
+                plan.filter_predicate,
+                _DerivedRecordResolver(plan.dataset, record.values),
+            )
+            if isinstance(result, ConditionResult):
+                return result
+            assert isinstance(result, PredicateValue)
+            if result.value is TruthValue.TRUE:
+                kept.append(record)
+        return kept
 
     def _augment(
         self, plan: PlannedIntermediate, record: IndexedRecord

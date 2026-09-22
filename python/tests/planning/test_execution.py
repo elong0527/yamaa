@@ -296,6 +296,135 @@ def test_a_lookup_defaults_to_missing_on_absence() -> None:
     assert plan.intermediates[0].missing is None
 
 
+def named_intermediate(**extra: object) -> Intermediate:
+    return Intermediate(
+        id="LOOK",
+        dataset="SRC",
+        key=["X"],
+        key_base=["A"],
+        derivations={"X_C": derivation({"source": "X"})},
+        **extra,  # type: ignore[arg-type]
+    )
+
+
+def test_an_intermediate_derived_name_resolves_in_filter_order_by_and_columns() -> None:
+    # REQ-1246: a derived name resolves in the intermediate's own filter
+    # (qualified), order_by (qualified), and columns (bare).
+    spec = specification(
+        [Column(name="A", type="str", derivation=derivation({"source": "SRC.X"}))],
+        [Row(id="row", dataset="SRC", derivations={})],
+    ).model_copy(
+        update={
+            "intermediates": [
+                named_intermediate(
+                    filter="SRC.X_C = 'ONE'",
+                    order_by=[OrderTerm(variable="SRC.X_C")],
+                    keep="first",
+                    columns=["X", "X_C"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert dict(plan.intermediates[0].derived)["X_C"] is not None
+    assert plan.intermediates[0].filter_reads_derived is True
+
+
+def test_a_derived_name_in_a_correlated_filter_needs_no_reordering() -> None:
+    # REQ-1246: a correlated filter already evaluates the augmented records
+    # at selection, so the planner does not flag it for augment-first.
+    spec = specification(
+        [Column(name="A", type="str", derivation=derivation({"source": "SRC.X"}))],
+        [Row(id="row", dataset="SRC", derivations={})],
+    ).model_copy(
+        update={
+            "input": {
+                "SRC": DatasetSource(path="input/source.csv"),
+                "OTHER": DatasetSource(path="input/other.csv"),
+            },
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="OTHER",
+                    key=["X"],
+                    key_base=["A"],
+                    derivations={"X_C": derivation({"source": "X"})},
+                    filter="OTHER.X_C = 'ONE' AND OTHER.X = SRC.X",
+                    order_by=[OrderTerm(variable="OTHER.X_C")],
+                    keep="first",
+                )
+            ],
+        }
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table(), "OTHER": source_table()})
+
+    assert plan.intermediates[0].filter_reads_derived is False
+
+
+def test_a_bare_derived_name_in_an_intermediate_filter_is_rejected() -> None:
+    # REQ-1246: the qualified spelling is required in filter and order_by.
+    spec = specification(
+        [Column(name="A", type="str", derivation=derivation({"source": "SRC.X"}))],
+        [Row(id="row", dataset="SRC", derivations={})],
+    ).model_copy(update={"intermediates": [named_intermediate(filter="X_C = 'ONE'")]})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.spec_paths == ("intermediates[0].filter",)
+
+
+def test_a_derived_read_without_keep_is_rejected() -> None:
+    # REQ-1246: an ID.name read of a derived name needs a keep-declared
+    # intermediate, where the single selected record makes the computed
+    # value a row-scoped read.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X_C"})),
+        ],
+        [Row(id="row", dataset="SRC", derivations={})],
+    ).model_copy(update={"intermediates": [named_intermediate()]})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "REQ-0125"
+    assert diagnostic.spec_paths == ("columns.B.derivation.source",)
+
+
+def test_a_derived_read_with_keep_is_accepted() -> None:
+    # REQ-1246: with keep, the intermediate selects one record per row, so
+    # the derived name reads like a stored column.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X_C"})),
+        ],
+        [Row(id="row", dataset="SRC", derivations={})],
+    ).model_copy(
+        update={
+            "intermediates": [
+                named_intermediate(
+                    order_by=[OrderTerm(variable="SRC.X_C")],
+                    keep="first",
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert plan.intermediates[0].keep == "first"
+
+
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
     spec = specification(
         [

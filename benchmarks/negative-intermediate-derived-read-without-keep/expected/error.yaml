@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.AVALC.derivation.source
+requirement: REQ-0125
+context:
+  identifier: LASTEX.TRT_U

@@ -383,7 +383,13 @@ class RowResolver:
     def _lookup_read(self, identifier: str, field_name: str) -> Resolution:
         plan = self._context.intermediates.plans[identifier]
         relation = self._context.relations[plan.dataset]
-        if not relation.has(field_name):
+        # #767: a derived name reads from the selected (augmented) record,
+        # but only from a keep-declared intermediate, where the single
+        # selected record makes the computed value a row-scoped read.
+        derived_names = {name for name, _ in plan.derived}
+        if not relation.has(field_name) and not (
+            field_name in derived_names and plan.keep is not None
+        ):
             return _failed(
                 _condition(
                     "unknown_field",

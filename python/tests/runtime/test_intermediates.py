@@ -541,3 +541,61 @@ def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> 
     assert failure.requirement == "REQ-0103"
     assert failure.spec_paths == ("intermediates[0].derivations.QVAL_U",)
     assert failure.context["intermediate"] == "SUP_EP"
+
+
+def derived_trt_plan(**extra: object) -> PlannedIntermediate:
+    from yamaa.specification.models import Expression, HandledExpression
+
+    return PlannedIntermediate(
+        identifier="LASTEX",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        derived=(
+            (
+                "TRT_U",
+                HandledExpression(
+                    value=Expression(root={"str_upper": {"source": "EXTRT"}})
+                ),
+            ),
+        ),
+        **extra,
+    )
+
+
+def test_a_source_only_filter_naming_a_derived_value_filters_augmented_records() -> (
+    None
+):
+    # REQ-1246: the derivations run over the whole dataset before the
+    # source-only filter selects, so the filter reads computed values.
+    plan = derived_trt_plan(
+        filter_predicate=parse_predicate("EX.TRT_U = 'PLACEBO'"),
+        filter_reads_derived=True,
+        order_terms=((OrderTerm(variable="EX.EXSEQ"), "EXSEQ"),),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("LASTEX", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    assert outcome.record.values["EXSEQ"] == 2
+    assert outcome.record.values["TRT_U"] == "PLACEBO"
+
+
+def test_ordering_by_a_derived_name_reads_the_computed_values() -> None:
+    # REQ-1246: order_by names the derived value like a stored column; the
+    # augmented records carry it into selection.
+    plan = derived_trt_plan(
+        order_terms=((OrderTerm(variable="EX.TRT_U", direction="desc"), "TRT_U"),),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("LASTEX", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # Descending: VITAMIN D3 outranks RESCUE and PLACEBO, so the first
+    # record wins.
+    assert outcome.record.values["EXSEQ"] == 1

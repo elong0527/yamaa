@@ -1,0 +1,48 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+intermediates:
+  - id: LASTEX
+    dataset: EX
+    derivations:
+      ONGO_U: {str_upper: {source: EXONGO}}
+      TRT_U: {str_upper: {source: EXTRT}}
+    key: [STUDYID, USUBJID]
+    key_base: [EX.STUDYID, EX.USUBJID]
+    filter: "EX.ONGO_U = 'N'"
+    order_by:
+      - variable: EX.TRT_U
+        direction: desc
+    keep: first
+    columns: [EXSEQ, EXTRT, ONGO_U, TRT_U]
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, PARAM, AVAL, AVALC]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: {literal: Last Non-Ongoing Exposure}
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation: LASTEX.EXSEQ
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: LASTEX.TRT_U
+rows:
+  - id: subjects
+    dataset: EX
+    filter: "EX.EXSEQ = 1"
+    derivations: {}

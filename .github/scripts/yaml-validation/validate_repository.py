@@ -491,6 +491,16 @@ except ImportError as error:
         "(run: uv sync --project python --locked)"
     ) from error
 
+# REQ-1246: derived names share the engine's declared result types, so the
+# repository validator resolves them in intermediate scopes the same way.
+try:
+    from yamaa.planning.execution import DERIVED_RESULT_TYPES
+except ImportError as error:
+    raise SystemExit(
+        "validate_repository.py requires the yamaa package "
+        "(run: uv sync --project python --locked)"
+    ) from error
+
 
 def predicate_operand_type(operand, resolver, errors):
     if operand['kind'] == 'literal':
@@ -5608,6 +5618,73 @@ def project_environment_paths(spec_path):
     return found
 
 
+def _intermediate_derived_field_types(intermediate, stored_fields):
+    """Map each derived name to its declared result type (REQ-1246).
+
+    A name that would shadow a stored field is skipped: the planner rejects
+    that declaration as `duplicate_derivation`, so the stored field stays the
+    readable one. A name whose result type the engine does not declare maps
+    to None; predicate checks treat that leniently, exactly like the planner.
+    """
+    derived = {}
+    derivations = intermediate.get('derivations')
+    if not isinstance(derivations, dict):
+        return derived
+    for name, derivation in derivations.items():
+        if not isinstance(name, str):
+            continue
+        if name in stored_fields or name in derived:
+            continue
+        derived[name] = _derived_name_result_type(derivation, stored_fields)
+    return derived
+
+
+def _derived_name_result_type(derivation, stored_fields):
+    """Infer a derived name's type from its declaration, or None."""
+    if not isinstance(derivation, dict) or len(derivation) != 1:
+        return None
+    operation, payload = next(iter(derivation.items()))
+    declared = DERIVED_RESULT_TYPES.get(operation)
+    if declared is not None:
+        return declared
+    if operation == 'source' and isinstance(payload, str):
+        # A source read keeps its field's type; REQ-1185 limits the read to
+        # the intermediate's own dataset, so the bare field name suffices.
+        return stored_fields.get(payload.rsplit('.', 1)[-1])
+    return None
+
+
+def _readable_intermediate_fields(intermediate, stored_fields):
+    """Stored fields plus derived names for an ID.name read (REQ-1246).
+
+    Only a keep-declared intermediate exposes its derived names through
+    ID.name: the single selected record is what makes the computed value a
+    row-scoped read.
+    """
+    if intermediate.get('keep') is None:
+        return dict(stored_fields)
+    return {
+        **stored_fields,
+        **_intermediate_derived_field_types(intermediate, stored_fields),
+    }
+
+
+def _without_untyped_derived_diagnostics(diagnostics, derived_identifiers):
+    """Drop unknown_field hits for derived names (REQ-1246).
+
+    The name resolves; only its result type is undeclared, which the planner
+    treats leniently in predicate checks.
+    """
+    return [
+        diagnostic
+        for diagnostic in diagnostics
+        if not (
+            diagnostic.condition == 'unknown_field'
+            and diagnostic.context.get('identifier') in derived_identifiers
+        )
+    ]
+
+
 def validate_spec_functions_against(
     spec,
     spec_label,
@@ -5684,7 +5761,9 @@ def validate_spec_functions_against(
             intermediate_id = intermediate.get('id')
             dataset_id = intermediate.get('dataset')
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+                intermediates[intermediate_id] = _readable_intermediate_fields(
+                    intermediate, datasets.get(dataset_id, {})
+                )
 
     def resolve_variable(name):
         if not isinstance(name, str):
@@ -6029,6 +6108,9 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
     output_types = specification_column_types(spec)
     intermediates = {}
     intermediate_entries = spec.get('intermediates')
+    # REQ-1246: derived names a keep-declared intermediate exposes through
+    # ID.name, as qualified identifiers, for lenient predicate re-checks.
+    keep_derived_identifiers = set()
     if isinstance(intermediate_entries, list):
         for index, intermediate in enumerate(intermediate_entries):
             if not isinstance(intermediate, dict):
@@ -6036,14 +6118,43 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             intermediate_id = intermediate.get('id')
             dataset_id = intermediate.get('dataset')
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+                stored_fields = datasets.get(dataset_id, {})
+                intermediates[intermediate_id] = _readable_intermediate_fields(
+                    intermediate, stored_fields
+                )
+                if intermediate.get('keep') is not None:
+                    keep_derived_identifiers.update(
+                        f"{intermediate_id}.{name}"
+                        for name in _intermediate_derived_field_types(
+                            intermediate, stored_fields
+                        )
+                    )
             if isinstance(intermediate.get('filter'), str):
-                resolver = predicate_resolver(qualified=datasets)
+                # REQ-1246: the filter reads the intermediate's augmented
+                # records, so its own derived names resolve beside the stored
+                # fields, without requiring keep.
+                stored_fields = (
+                    datasets.get(dataset_id, {})
+                    if isinstance(dataset_id, str)
+                    else {}
+                )
+                derived_fields = _intermediate_derived_field_types(
+                    intermediate, stored_fields
+                )
+                scoped = dict(datasets)
+                if isinstance(dataset_id, str):
+                    scoped[dataset_id] = {**stored_fields, **derived_fields}
+                derived_identifiers = {
+                    f"{dataset_id}.{name}" for name in derived_fields
+                }
                 errors.extend(
-                    validate_predicate_at(
-                        intermediate['filter'],
-                        f"{spec_label}.intermediates[{index}].filter",
-                        resolver,
+                    _without_untyped_derived_diagnostics(
+                        validate_predicate_at(
+                            intermediate['filter'],
+                            f"{spec_label}.intermediates[{index}].filter",
+                            predicate_resolver(qualified=scoped),
+                        ),
+                        derived_identifiers,
                     )
                 )
 
@@ -6058,11 +6169,14 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             name = column.get('name', index)
             if 'derivation' in column:
                 errors.extend(
-                    validate_derivation_predicates(
-                        column['derivation'],
-                        f"{spec_label}.columns.{name}.derivation",
-                        column_resolver,
-                        datasets,
+                    _without_untyped_derived_diagnostics(
+                        validate_derivation_predicates(
+                            column['derivation'],
+                            f"{spec_label}.columns.{name}.derivation",
+                            column_resolver,
+                            datasets,
+                        ),
+                        keep_derived_identifiers,
                     )
                 )
 
@@ -6138,11 +6252,14 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             for field in fields:
                 if isinstance(payload.get(field), str):
                     errors.extend(
-                        validate_predicate_at(
-                            payload[field],
-                            f"{spec_label}.verifications[{index}]."
-                            f"{keyword}.{field}",
-                            output_resolver,
+                        _without_untyped_derived_diagnostics(
+                            validate_predicate_at(
+                                payload[field],
+                                f"{spec_label}.verifications[{index}]."
+                                f"{keyword}.{field}",
+                                output_resolver,
+                            ),
+                            keep_derived_identifiers,
                         )
                     )
 
@@ -6278,7 +6395,25 @@ def validate_spec_numeric_expressions(
             intermediate_id = intermediate.get('id')
             dataset_id = intermediate.get('dataset')
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+                stored_fields = datasets.get(dataset_id, {})
+                if intermediate.get('keep') is None:
+                    intermediates[intermediate_id] = dict(stored_fields)
+                else:
+                    # REQ-1246: the numeric checks need a provable type, so a
+                    # derived name with no declared result type stays
+                    # unresolvable here instead of risking a false pass.
+                    intermediates[intermediate_id] = {
+                        **stored_fields,
+                        **{
+                            name: field_type
+                            for name, field_type in (
+                                _intermediate_derived_field_types(
+                                    intermediate, stored_fields
+                                ).items()
+                            )
+                            if field_type is not None
+                        },
+                    }
 
     column_resolver = numeric_identifier_resolver(
         unqualified=output_types, qualified=intermediates
@@ -7329,8 +7464,14 @@ def unresolved_variable_diagnostic(name, path, resolver):
     if resolver(name) is not None:
         return None
     if '.' in name:
-        qualifier, _ = name.split('.', 1)
+        qualifier, field = name.split('.', 1)
         relations = getattr(resolver, 'qualified', {})
+        relation = relations.get(qualifier)
+        # REQ-1246: a derived name with no declared result type still
+        # resolves; only its type is unknown, which the planner treats
+        # leniently, so its presence here counts as resolved.
+        if isinstance(relation, dict) and field in relation:
+            return None
         # If a declared relation could not be inspected (for example because
         # R021 already rejected its path), do not invent a second failure.
         if qualifier in relations and not relations[qualifier]:
@@ -8219,7 +8360,9 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
             intermediate_id = intermediate.get('id')
             dataset_id = intermediate.get('dataset')
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+                intermediates[intermediate_id] = _readable_intermediate_fields(
+                    intermediate, datasets.get(dataset_id, {})
+                )
 
     # REQ-1242: a derive binding may read a keep-declared named intermediate.
     # The planned selection only honors `keep` with `order_by` (REQ-0119),
