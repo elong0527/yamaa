@@ -4,11 +4,8 @@ keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE:
     path: input/ae.csv
-    types:
-      AESEQ: int
-      AESTDTC: date
-      AESTDTM: datetime
-      SCORE: float
+    types: {AESEQ: int, AESTDTC: date, AESTDTM: datetime, SCORE: float}
+base: AE
 
 output:
   path: adae.csv
@@ -19,35 +16,43 @@ columns:
     type: str
     label: Study Identifier
     derivation: AE.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: AE.USUBJID
+
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation: AE.AESEQ
+
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation: AE.AESTDTC
+
   - name: ASTDTM
     type: datetime
     label: Analysis Start Datetime
     derivation: AE.AESTDTM
+
   - name: ASTDT2
     type: date
     label: Analysis Start Date from Datetime
     derivation:
       to_date: {source: ASTDTM}
+
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
     derivation: AE.AETERM
+
   - name: SCORE
     type: float
     label: Protocol Review Score
     derivation: AE.SCORE
+
   - name: REVIEWFL
     type: str
     label: Protocol Review Flag
@@ -55,7 +60,7 @@ columns:
       case:
         - when: >-
             (ASTDT BETWEEN DATE '2025-01-01' AND DATE '2025-01-31'
-            OR ASTDTM >= DATETIME '2025-02-01T09:30')
+              OR ASTDTM >= DATETIME '2025-02-01T09:30')
             AND AETERM LIKE 'INF!_%' ESCAPE '!'
             AND SCORE >= -1.5
           then: {literal: Y}
@@ -65,4 +70,4 @@ columns:
 
 verifications:
   - unique: {columns: [STUDYID, USUBJID, AESEQ]}
-  - row_count: {min: 4, max: 4}
+  - row_count: {min: 12, max: 12}

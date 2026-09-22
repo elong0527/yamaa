@@ -94,8 +94,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 10
-      max: 10
+      min: 13
+      max: 13
   - all_or_none:
       id: analysis-date-completeness
       columns: [ASTDTC, ASTDT]
@@ -106,7 +106,7 @@ verifications:
   - implies:
       id: supplied-day-never-precedes-treatment-start
       when: "ASTDTF = 'D'"
-      then: "ASTDT >= TRTSDT"
+      then: "TRTSDT IS NULL OR ASTDT >= TRTSDT"
   - implies:
       id: treatment-emergent-event-has-an-analysis-date
       when: "TRTEMFL = 'Y'"

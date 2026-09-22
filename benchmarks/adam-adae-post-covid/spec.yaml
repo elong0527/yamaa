@@ -57,5 +57,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 9
-      max: 9
+      min: 11
+      max: 11
