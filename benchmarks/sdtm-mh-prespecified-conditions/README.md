@@ -7,9 +7,11 @@
 recording for each asked condition whether the subject had it,
 and carrying volunteered free-text conditions alongside.
 
-**Input:** a checklist form with one column per asked condition
-(`Y`, `N`, or blank), and a free-text form with one row per
-volunteered condition.
+**Input:** `input/odm.csv` (ODM item data): one row per answered
+item. The checklist form contributes one item per asked condition
+(`IT.MH.DIABETES`, `IT.MH.HYPERTENSION`, `IT.MH.ASTHMA`) with
+`Y`, `N`, or a blank `Value`; the free-text form contributes one
+`IT.MH.MHTERM` item per volunteered condition.
 
 **Variables:**
 

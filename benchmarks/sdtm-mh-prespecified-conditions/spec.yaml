@@ -1,14 +1,14 @@
 schema_version: "1.0"
 domain: MH
 keys: [STUDYID, USUBJID, MHSEQ]
+
 input:
-  CHECKLIST: input/mh_checklist.csv
-  FREETEXT: input/mh_freetext.csv
+  ODM: input/odm.csv
 
 output:
   path: mh.csv
   columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT]
-  order_by: [STUDYID, USUBJID, MHSEQ]
+  order_by: [USUBJID, MHSEQ]
 
 columns:
   - name: DOMAIN
@@ -20,10 +20,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
 
   - name: MHTERM
     type: str
@@ -34,6 +36,10 @@ columns:
   - name: MHCAT
     type: str
     label: Category for Medical History
+
+  - name: ANSWER
+    type: str
+    label: Raw answer to the pre-specified checklist question
 
   - name: MHPRESP
     type: str
@@ -84,109 +90,110 @@ columns:
 
 rows:
   - id: diabetes
-    dataset: CHECKLIST
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
     derivations:
-      STUDYID:
-        source: CHECKLIST.STUDYID
-      USUBJID:
-        source: CHECKLIST.USUBJID
       MHTERM:
         literal: DIABETES MELLITUS
       MHCAT:
         literal: DISEASE-SPECIFIC HISTORY
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.DIABETES'"
+          expr: "ONLY(ODM.Value)"
       MHPRESP:
         literal: Y
       MHOCCUR:
         case:
-          - when: "CHECKLIST.DIABETES = 'Y'"
+          - when: "ANSWER = 'Y'"
             then:
               literal: Y
-          - when: "CHECKLIST.DIABETES = 'N'"
+          - when: "ANSWER = 'N'"
             then:
               literal: N
           - otherwise:
               literal: null
       MHSTAT:
         case:
-          - when: "CHECKLIST.DIABETES IS NULL"
+          - when: "ANSWER IS NULL"
             then:
               literal: NOT DONE
           - otherwise:
               literal: null
 
   - id: hypertension
-    dataset: CHECKLIST
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
     derivations:
-      STUDYID:
-        source: CHECKLIST.STUDYID
-      USUBJID:
-        source: CHECKLIST.USUBJID
       MHTERM:
         literal: HYPERTENSION
       MHCAT:
         literal: DISEASE-SPECIFIC HISTORY
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.HYPERTENSION'"
+          expr: "ONLY(ODM.Value)"
       MHPRESP:
         literal: Y
       MHOCCUR:
         case:
-          - when: "CHECKLIST.HYPERTENSION = 'Y'"
+          - when: "ANSWER = 'Y'"
             then:
               literal: Y
-          - when: "CHECKLIST.HYPERTENSION = 'N'"
+          - when: "ANSWER = 'N'"
             then:
               literal: N
           - otherwise:
               literal: null
       MHSTAT:
         case:
-          - when: "CHECKLIST.HYPERTENSION IS NULL"
+          - when: "ANSWER IS NULL"
             then:
               literal: NOT DONE
           - otherwise:
               literal: null
 
   - id: asthma
-    dataset: CHECKLIST
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
     derivations:
-      STUDYID:
-        source: CHECKLIST.STUDYID
-      USUBJID:
-        source: CHECKLIST.USUBJID
       MHTERM:
         literal: ASTHMA
       MHCAT:
         literal: DISEASE-SPECIFIC HISTORY
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.ASTHMA'"
+          expr: "ONLY(ODM.Value)"
       MHPRESP:
         literal: Y
       MHOCCUR:
         case:
-          - when: "CHECKLIST.ASTHMA = 'Y'"
+          - when: "ANSWER = 'Y'"
             then:
               literal: Y
-          - when: "CHECKLIST.ASTHMA = 'N'"
+          - when: "ANSWER = 'N'"
             then:
               literal: N
           - otherwise:
               literal: null
       MHSTAT:
         case:
-          - when: "CHECKLIST.ASTHMA IS NULL"
+          - when: "ANSWER IS NULL"
             then:
               literal: NOT DONE
           - otherwise:
               literal: null
 
   - id: volunteered
-    dataset: FREETEXT
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    filter: "MHTERM IS NOT NULL"
     derivations:
-      STUDYID:
-        source: FREETEXT.STUDYID
-      USUBJID:
-        source: FREETEXT.USUBJID
       MHTERM:
-        source: FREETEXT.MHTERM
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.MHTERM'"
+          expr: "ONLY(ODM.Value)"
       MHCAT:
         literal: GENERAL HISTORY
+      ANSWER:
+        literal: null
       MHPRESP:
         literal: null
       MHOCCUR:
