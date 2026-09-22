@@ -22,8 +22,12 @@ date, plus demographics with death date.
   event, or, when no event was reported fatal, the death date
   recorded in demographics; empty when neither exists.
 
-**Note:** cause and event date come from a single fatal event, so a
-death recorded only in demographics gives a date with no cause: a death
-never collected as an event has no event term to name.
+**Note:** cause and event date come from a single fatal event: when more
+than one event is reported fatal, the latest one's start date and coded
+term are used. Fatal events sharing a start date resolve by sequence
+number: the event with the highest `AESEQ` (the latest recorded fatal
+event) supplies the date and term. A death recorded only in demographics
+gives a date with no cause: a death never collected as an event has no
+event term to name.
 
 **Standard:** ADaM | **Domain:** ADAE
