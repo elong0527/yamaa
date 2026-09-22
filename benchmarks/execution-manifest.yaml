@@ -627,6 +627,9 @@ examples:
   sdtm-dm-dates:
     status: executable
     runtimes: ['python']
+  sdtm-ds-multi-form-disposition:
+    status: executable
+    runtimes: ['python']
   sdtm-ds-reasons:
     status: executable
     runtimes: ['python']
