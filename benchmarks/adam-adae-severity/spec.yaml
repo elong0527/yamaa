@@ -33,5 +33,5 @@ columns:
 
   - name: AESEV
     type: str
-    label: Severity
+    label: Severity/Intensity
     derivation: SUPP.AESEV
