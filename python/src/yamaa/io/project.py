@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import stat
@@ -33,6 +34,14 @@ PROJECT_CONFIGURATION_NAME = "yamaa-project.yaml"
 
 class _PathChanged(OSError):
     """A resource component changed during a descriptor-anchored walk."""
+
+
+class _NoEntry(Exception):
+    """An anchor walk reached an entry that does not exist.
+
+    Only this failure advances a relative path to its next anchor; every
+    other resource condition is terminal (REQ-0781).
+    """
 
 
 @dataclass(frozen=True)
@@ -447,39 +456,76 @@ class ProjectResources:
     def _entry_identity(status: os.stat_result) -> tuple[int, int, int]:
         return (status.st_dev, status.st_ino, stat.S_IFMT(status.st_mode))
 
-    def _anchor(self, written_path: str) -> _Anchor:
-        """Choose the approved root a written path resolves from (REQ-0781)."""
+    def _anchors(self, written_path: str) -> list[_Anchor]:
+        """Order the anchors a written path resolves from (REQ-0780/REQ-0781).
+
+        A relative path anchors first from the writing layer's directory and
+        then, when that walk reaches no entry, from each approved data root
+        in run order, the first success winning. A rooted path keeps its
+        single anchor.
+        """
         condition = classify_project_path(written_path)
         if condition is not None:
             raise ResourceFailure(condition, written_path)
 
         segments = rooted_project_segments(written_path)
         if segments is not None:
-            matched: _ApprovedRoot | None = None
-            depth = -1
-            for root in self._roots:
-                for spelling in root.spellings:
-                    size = len(spelling)
-                    if size > depth and segments[:size] == spelling:
-                        matched, depth = root, size
-            if matched is None:
-                raise ResourceFailure("resource_path_not_relative", written_path)
-            remainder = segments[depth:]
-            if not remainder:
-                raise ResourceFailure("resource_path_not_regular_file", written_path)
-            return _Anchor(matched, (*matched.canonical, *remainder), remainder)
+            return [self._rooted_anchor(written_path, segments)]
 
         if self._base_components is None or self._base_root_index is None:
             raise ResourceFailure("resource_path_outside_project", written_path)
 
-        root = self._roots[self._base_root_index]
+        anchors = [
+            self._relative_anchor(
+                written_path, self._base_root_index, self._base_components
+            )
+        ]
+        seen = {anchors[0].key}
+        # Index 0 of _roots is always the project root; the rest are the
+        # approved data roots in run order. A written path the data root
+        # cannot textually reach simply does not participate; the writing
+        # layer's anchor above still decides terminal conditions.
+        for index in range(1, len(self._roots)):
+            try:
+                anchor = self._relative_anchor(written_path, index, ())
+            except ResourceFailure:
+                continue
+            if anchor.key not in seen:
+                seen.add(anchor.key)
+                anchors.append(anchor)
+        return anchors
+
+    def _rooted_anchor(self, written_path: str, segments: tuple[str, ...]) -> _Anchor:
+        """Choose the approved root a rooted written path resolves from."""
+        matched: _ApprovedRoot | None = None
+        depth = -1
+        for root in self._roots:
+            for spelling in root.spellings:
+                size = len(spelling)
+                if size > depth and segments[:size] == spelling:
+                    matched, depth = root, size
+        if matched is None:
+            raise ResourceFailure("resource_path_not_relative", written_path)
+        remainder = segments[depth:]
+        if not remainder:
+            raise ResourceFailure("resource_path_not_regular_file", written_path)
+        return _Anchor(matched, (*matched.canonical, *remainder), remainder)
+
+    def _relative_anchor(
+        self,
+        written_path: str,
+        root_index: int,
+        base_components: Iterable[str],
+    ) -> _Anchor:
+        """Resolve a relative path from one approved root's spelling."""
+        root = self._roots[root_index]
         # Resolve textually against the anchor's canonical segments, so a
         # ".." that climbs above the anchor keeps resolving from the real
         # parent directories instead of failing outright (REQ-0778). The
         # root marker itself is never popped: climbing above the filesystem
         # root still fails as resource_path_outside_project.
         absolute = list(root.canonical)
-        relative = list(self._base_components)
+        relative = list(base_components)
         for segment in written_path.split("/"):
             if segment == ".":
                 continue
@@ -515,6 +561,19 @@ class ProjectResources:
             raise ResourceFailure("resource_path_not_regular_file", written_path)
         return _Anchor(matched, (*matched.canonical, *remainder), remainder)
 
+    def fallback_root_count(self, written_path: str) -> int:
+        """Count the data roots a relative path falls back to (REQ-0780).
+
+        Returns 0 for rooted or malformed paths, which keep a single anchor
+        and never consult data roots. Host paths are never exposed; only
+        the count is reported.
+        """
+        if classify_project_path(written_path) is not None:
+            return 0
+        if rooted_project_segments(written_path) is not None:
+            return 0
+        return len(self._roots) - 1
+
     def _open_component(
         self,
         parent_descriptor: int,
@@ -530,6 +589,8 @@ class ProjectResources:
                 follow_symlinks=False,
             )
         except OSError as error:
+            if error.errno in (errno.ENOENT, errno.ENOTDIR):
+                raise _NoEntry from error
             raise ResourceFailure("resource_path_missing", written_path) from error
 
         if stat.S_ISLNK(initial_status.st_mode):
@@ -571,7 +632,17 @@ class ProjectResources:
         return descriptor, opened_status
 
     def _open_resource(self, written_path: str) -> _OpenedResource:
-        anchor = self._anchor(written_path)
+        last_missing: _NoEntry | None = None
+        for anchor in self._anchors(written_path):
+            try:
+                return self._open_from_anchor(anchor, written_path)
+            except _NoEntry as error:
+                # Only a genuine missing entry advances to the next anchor;
+                # every other condition raised above is terminal (REQ-0781).
+                last_missing = error
+        raise ResourceFailure("resource_path_missing", written_path) from last_missing
+
+    def _open_from_anchor(self, anchor: _Anchor, written_path: str) -> _OpenedResource:
         walk = anchor.rooted_segments
 
         directories = [os.dup(anchor.root.descriptor)]
@@ -703,7 +774,7 @@ class ProjectResources:
 
     def validate_location(self, written_path: str) -> None:
         """Validate the written form and approved-root location of a path."""
-        self._anchor(written_path)
+        self._anchors(written_path)
 
     def verify(self, snapshot: ResourceSnapshot) -> None:
         """Verify accepted path bytes before parsing the retained snapshot."""

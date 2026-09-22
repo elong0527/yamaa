@@ -158,7 +158,9 @@ repository-authored value.
 **REQ-0780.** A relative `project_path` resolves relative to the directory of
 the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require. In a resolved
 specification it is relative to the entry file, because [Specification composition](../specification/composition.md) has already
-rebased it. A rooted `project_path` resolves against the approved root it
+rebased it. When that resolution reaches no entry, the run retries the written
+segments against each approved data root in run order, the first success
+winning. A rooted `project_path` resolves against the approved root it
 names and is unaffected by rebasing, which leaves it exactly as written,
 because this contract reads that written form.
 
@@ -166,7 +168,13 @@ because this contract reads that written form.
 
 **REQ-0781.** Every resolution has an **anchor**. A relative path is anchored
 at the approved root the writing layer's directory sits under -- the approved
-project root when the layer is inside it. A traversal that climbs above that
+project root when the layer is inside it. Only a resolution that reaches no
+entry advances to the next anchor, the approved data roots in run order; any
+other condition -- a symlink, a non-regular file, a location inside no
+approved root, a rejected written form -- is terminal. The writing layer's
+directory therefore wins when the entry exists under both it and a data root,
+and the first declared data root wins among data roots. A traversal that
+climbs above that
 root is re-anchored at the approved root whose canonical leading segments the
 resolved location repeats, the longest match winning when one approved root
 lies inside another, exactly as for a rooted path. A traversal that resolves

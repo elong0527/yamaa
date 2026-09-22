@@ -287,13 +287,18 @@ def _schema_snapshot(
         resources.verify(snapshot)
         return snapshot
     except ResourceFailure as error:
+        context: dict[str, object] = {"dataset": dataset, "path": source.schema_path}
+        if error.condition == "resource_path_missing":
+            checked = resources.fallback_root_count(source.schema_path)
+            if checked:
+                context["data_roots_checked"] = checked
         raise SpecificationError(
             [
                 _diagnostic(
                     error.condition,
                     f"input.{dataset}.schema",
                     "REQ-0534",
-                    {"dataset": dataset, "path": source.schema_path},
+                    context,
                 )
             ]
         ) from error
