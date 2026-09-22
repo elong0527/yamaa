@@ -1,0 +1,146 @@
+schema_version: "1.0"
+domain: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+
+input:
+  EC: {path: input/ec.csv, types: {TABLETS: int, STRENGTH_MG: float, DOSE_MGKG: float, AUC_TARGET: float, ECSTDTC: date, ECENDTC: date}}
+  LB: {path: input/lb.csv, types: {LBORRES: float, LBDTC: date}}
+  KITLIST: input/kit_list.csv
+
+base: EC
+
+intermediates:
+  - id: KITMAP
+    dataset: KITLIST
+    key_base: [EC.KIT]
+    key: [KIT]
+  - id: BODYWEIGHT
+    dataset: LB
+    key_base: [EC.STUDYID, EC.USUBJID, EC.VISIT]
+    key: [STUDYID, USUBJID, VISIT]
+    filter: "LB.LBTESTCD = 'WEIGHT'"
+
+rows:
+  # One output row per collected administration. A skipped dose
+  # (ECOCCUR = 'N') is filtered before any derivation, so it leaves
+  # no exposure record. The lookup results are bound to row-level
+  # names first: intermediate reads are not available inside case
+  # branches or compute expressions.
+  - id: administered
+    dataset: EC
+    filter: "EC.ECOCCUR = 'Y'"
+    derivations:
+      KIT_TRT: KITMAP.TREATMENT
+      KIT_DOSE: KITMAP.DOSE_MG
+      WT_KG: BODYWEIGHT.LBORRES
+      EXTRT:
+        case:
+          - when: "EC.FORM = 'KITDOSE'"
+            then: KIT_TRT
+          - otherwise: EC.ECTRT
+      EXDOSE:
+        case:
+          - when: "EC.FORM = 'TABLET'"
+            then:
+              compute:
+                expr: "EC.TABLETS * EC.STRENGTH_MG"
+          - when: "EC.FORM = 'INFUSION'"
+            then:
+              compute:
+                expr: "EC.DOSE_MGKG * WT_KG"
+          - when: "EC.FORM = 'AUCDOSE'"
+            then: EC.AUC_TARGET
+          - otherwise: KIT_DOSE
+      EXDOSU:
+        case:
+          - when: "EC.FORM = 'AUCDOSE'"
+            then: {literal: AUC}
+          - otherwise: {literal: mg}
+
+output:
+  path: ex.csv
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC]
+  order_by: [STUDYID, USUBJID, EXSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: EX}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EC.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EC.USUBJID
+
+  # Internal working columns: lookup results bound during row
+  # construction. They are not in output.columns, so they stay out
+  # of the artifact (REQ-0206).
+  - name: KIT_TRT
+    type: str
+    label: Treatment from the kit list
+
+  - name: KIT_DOSE
+    type: float
+    label: Dose from the kit list
+
+  - name: WT_KG
+    type: float
+    label: Visit body weight in kg
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+    verifications:
+      - not_missing: {}
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+    verifications:
+      - not_missing: {}
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+    verifications:
+      allowed_values:
+        values: [mg, AUC]
+
+  - name: EXSTDTC
+    type: date
+    label: Start Date/Time of Treatment
+    derivation: EC.ECSTDTC
+
+  - name: EXENDTC
+    type: date
+    label: End Date/Time of Treatment
+    derivation: EC.ECENDTC
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EC.ECSTDTC, EC.ECSEQ]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, EXSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: every-administration-has-dose-and-unit
+      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+  - implies:
+      id: placebo-kit-carries-zero-dose
+      when: "EXTRT = 'PLACEBO'"
+      then: "EXDOSE = 0"

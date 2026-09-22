@@ -639,6 +639,9 @@ examples:
   sdtm-ex-intervals:
     status: executable
     runtimes: ['python']
+  sdtm-ex-from-ec:
+    status: executable
+    runtimes: ['python']
   sdtm-fa-fever:
     status: executable
     runtimes: ['python']
