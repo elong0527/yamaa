@@ -591,11 +591,10 @@ examples:
   schema-parquet:
     status: executable
     runtimes: ['python']
-<<<<<<< HEAD
   schema-sentence-case:
-=======
+    status: executable
+    runtimes: ['python']
   schema-str-contains:
->>>>>>> 738e4de8 (Add str_contains predicate and string expression (Python only))
     status: executable
     runtimes: ['python']
   sdtm-ae-coding:
