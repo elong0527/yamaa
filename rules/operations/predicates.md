@@ -92,7 +92,7 @@ qualified field may use one of those spellings after its qualifier.
 **REQ-0162.** An operand is only a name or literal. Arithmetic, `CASE`,
 aggregates, windows, subqueries, host-language calls, and `!=` are not in
 the grammar. The one function call admitted is the Boolean substring call
-REQ-1241 documents. A value computed before comparison is first bound to a
+REQ-1244 documents. A value computed before comparison is first bound to a
 named column. An internal column may be omitted from `output.columns`.
 
 ### Literals
@@ -275,57 +275,19 @@ evaluate the grammar itself.
 **REQ-0188.** Text that does not parse as one Boolean predicate, including a
   prohibited operator or construct: fail with `invalid_predicate`.
 
-<a id="req-1241"></a>
+<a id="req-1244"></a>
 
-**REQ-1241.** `str_contains(source, pattern)` is the one function call the
+**REQ-1244.** `str_contains(source, pattern)` is the one function call the
   predicate grammar admits. `source` is any operand; `pattern` is a string
   literal holding a portable regex. The call is `TRUE` when the regex finds
   a match anywhere in the source, `FALSE` when it does not, and `UNKNOWN`
   when the source is missing (including under `NOT`). A non-`str` source
   fails with `incompatible_input_type`; a pattern the portable regex
-  contract rejects fails with `invalid_predicate` at parse time. Only the
-  exact name `str_contains` parses as a call; any other `name(...)` is
-  `invalid_predicate`, and a bare `str_contains` without `(` stays an
-  identifier.
-
-<a id="req-1241"></a>
-
-**REQ-1241.** `str_contains(source, pattern)` is the one function call the
-  predicate grammar admits. `source` is any operand; `pattern` is a string
-  literal holding a portable regex. The call is `TRUE` when the regex finds
-  a match anywhere in the source, `FALSE` when it does not, and `UNKNOWN`
-  when the source is missing (including under `NOT`). A non-`str` source
-  fails with `incompatible_input_type`; a pattern the portable regex
-  contract rejects fails with `invalid_predicate` at parse time. Only the
-  exact name `str_contains` parses as a call; any other `name(...)` is
-  `invalid_predicate`, and a bare `str_contains` without `(` stays an
-  identifier.
-
-<a id="req-1241"></a>
-
-**REQ-1241.** `str_contains(source, pattern)` is the one function call the
-  predicate grammar admits. `source` is any operand; `pattern` is a string
-  literal holding a portable regex. The call is `TRUE` when the regex finds
-  a match anywhere in the source, `FALSE` when it does not, and `UNKNOWN`
-  when the source is missing (including under `NOT`). A non-`str` source
-  fails with `incompatible_input_type`; a pattern the portable regex
-  contract rejects fails with `invalid_predicate` at parse time. Only the
-  exact name `str_contains` parses as a call; any other `name(...)` is
-  `invalid_predicate`, and a bare `str_contains` without `(` stays an
-  identifier.
-
-<a id="req-1241"></a>
-
-**REQ-1241.** `str_contains(source, pattern)` is the one function call the
-  predicate grammar admits. `source` is any operand; `pattern` is a string
-  literal holding a portable regex. The call is `TRUE` when the regex finds
-  a match anywhere in the source, `FALSE` when it does not, and `UNKNOWN`
-  when the source is missing (including under `NOT`). A non-`str` source
-  fails with `incompatible_input_type`; a pattern the portable regex
-  contract rejects fails with `invalid_predicate` at parse time. Only the
-  exact name `str_contains` parses as a call; any other `name(...)` is
-  `invalid_predicate`, and a bare `str_contains` without `(` stays an
-  identifier.
+  contract rejects fails with `invalid_predicate` at parse time. Function-name
+  matching is case-insensitive, so `STR_CONTAINS(...)` is the same call, but
+  `str_contains` is the sole Boolean function the grammar permits: any other
+  `name(...)` is `invalid_predicate`, and a bare `str_contains` without `(`
+  stays an identifier.
 
 <a id="req-0189"></a>
 

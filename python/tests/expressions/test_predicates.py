@@ -98,6 +98,52 @@ def test_parser_matches_the_shared_r004_contract(case: dict[str, object]) -> Non
             parse_predicate(text)
 
 
+# Python-only `call` acceptance vectors (issue #778). The shared
+# yaml/grammar/predicate.yaml keeps the `call` production but not its
+# acceptance vectors, because the R predicate parser has no function-call
+# support and the R engine is divergent here by design. These assert the same
+# parse shapes and identifier collections the shared vectors recorded before
+# they moved here, so Python coverage of the production is not weakened.
+@pytest.mark.parametrize(
+    ("text", "identifiers", "shape"),
+    [
+        (
+            "str_contains(AEDECOD, 'DERM|ERYTH')",
+            ["AEDECOD"],
+            "(str-contains (id AEDECOD) (str 'DERM|ERYTH'))",
+        ),
+        (
+            "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER') OR AE.AESER = 'Y'",
+            ["AE.AEDECOD", "AE.AESER"],
+            "(or (str-contains (id AE.AEDECOD) (str 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')) (= (id AE.AESER) (str 'Y')))",
+        ),
+        (
+            "NOT str_contains(AEDECOD, 'X')",
+            ["AEDECOD"],
+            "(not (str-contains (id AEDECOD) (str 'X')))",
+        ),
+        (
+            "str_contains('hello', 'ELL')",
+            [],
+            "(str-contains (str 'hello') (str 'ELL'))",
+        ),
+        (
+            "STR_CONTAINS(AEDECOD, 'X')",
+            ["AEDECOD"],
+            "(str-contains (id AEDECOD) (str 'X'))",
+        ),
+    ],
+)
+def test_str_contains_call_vectors_match_the_call_production(
+    text: str, identifiers: list[str], shape: str
+) -> None:
+    from yamaa.expressions import predicate_identifiers
+
+    ast = parse_predicate(text)
+    assert _ast_shape(ast) == shape
+    assert list(predicate_identifiers(ast)) == identifiers
+
+
 def _evaluate(
     text: str, values: dict[str, object] | None = None
 ) -> PredicateValue | ConditionResult:

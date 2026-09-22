@@ -460,9 +460,9 @@ structural constraints come from its schema declaration.
 | `expressions.str_extract.no_match` | Value returned when pattern does not match source. |
 | `Result` | Extracts one regular-expression match group from a string. |
 
-<a id="req-1240"></a>
+<a id="req-1243"></a>
 
-**REQ-1240.** The `expressions.str_contains` interface has the following meanings. Shape, defaults, and
+**REQ-1243.** The `expressions.str_contains` interface has the following meanings. Shape, defaults, and
 structural constraints come from its schema declaration.
 
 | Field | Meaning |

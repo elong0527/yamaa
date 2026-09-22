@@ -13,6 +13,14 @@
 # other two, so each contract keeps its own `number`.
 #
 # `grammar/README.md` states the file format and the shape notation.
+#
+# Python-only divergence (issue #778): the `call` production is implemented by
+# the Python engine only. The R predicate parser has no function-call support
+# and rejects every `name(...)` text with `invalid_predicate`, so the R engine
+# is divergent here by design. The `call` acceptance vectors therefore live in
+# the Python test suite (python/tests/expressions/test_predicates.py), not in
+# `cases` below; the shared rejection vectors stay here because both parsers
+# agree on them.
 schema_version: "1.0"
 contract: predicate
 contract_version: "1.1.0"
@@ -377,37 +385,6 @@ cases:
     text: "ABS(AVAL) > 2"
     parse: reject
     condition: invalid_predicate
-  - id: str-contains-is-a-boolean-substring-call
-    covers: [call]
-    text: "str_contains(AEDECOD, 'DERM|ERYTH')"
-    parse: accept
-    identifiers: [AEDECOD]
-    shape: (str-contains (id AEDECOD) (str 'DERM|ERYTH'))
-  - id: str-contains-composes-with-the-connectives
-    covers: [call, logic]
-    text: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER') OR AE.AESER = 'Y'"
-    parse: accept
-    identifiers: [AE.AEDECOD, AE.AESER]
-    shape: (or (str-contains (id AE.AEDECOD) (str
-      'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')) (= (id AE.AESER) (str 'Y')))
-  - id: str-contains-negates-with-not
-    covers: [call, logic]
-    text: "NOT str_contains(AEDECOD, 'X')"
-    parse: accept
-    identifiers: [AEDECOD]
-    shape: (not (str-contains (id AEDECOD) (str 'X')))
-  - id: str-contains-accepts-a-literal-source
-    covers: [call, literal]
-    text: "str_contains('hello', 'ELL')"
-    parse: accept
-    identifiers: []
-    shape: (str-contains (str 'hello') (str 'ELL'))
-  - id: str-contains-is-case-insensitive-like-other-keywords
-    covers: [call]
-    text: "STR_CONTAINS(AEDECOD, 'X')"
-    parse: accept
-    identifiers: [AEDECOD]
-    shape: (str-contains (id AEDECOD) (str 'X'))
   - id: str-detect-is-not-a-predicate-function
     covers: [call, rejection]
     text: "str_detect(AEDECOD, 'X')"
