@@ -678,6 +678,9 @@ examples:
   schema-window-functions:
     status: executable
     runtimes: ['python']
+  schema-row-templates:
+    status: executable
+    runtimes: ['python']
   adam-advs-locf:
     status: executable
     runtimes: ['python']
