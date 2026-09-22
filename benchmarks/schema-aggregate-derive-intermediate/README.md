@@ -1,14 +1,14 @@
 # Aggregate Derive Reads an Intermediate
 
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-aggregate-derive-intermediate.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** demonstrate the aggregate `derive` step for #789: a
 binding reads a named intermediate that declares `keep`, so one
 row-scoped value is visible to every record the aggregate reduces.
 
-> **Engine coverage:** the Python engine implements this behavior
-> (REQ-1240). The R engine does not implement it yet.
+> **Engine coverage:** the Python engine implements this behavior.
+> The R engine does not implement it yet.
 
 **Input:** exposure records with sequence numbers (`EXSEQ`) and
 doses (`EXDOSE`), plus per-subject dose caps (`CAPDOSE`).
