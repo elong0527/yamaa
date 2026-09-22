@@ -15,7 +15,9 @@ volunteered condition.
 
 - `MHTERM` is the asked condition, or the volunteered term as
   reported.
-- `MHCAT` is `MEDICAL HISTORY` for every record.
+- `MHCAT` separates the checklist (disease-specific history:
+  `DISEASE-SPECIFIC HISTORY`) from the volunteered free-text
+  records (general history: `GENERAL HISTORY`).
 - `MHPRESP` is `Y` for checklist records, and blank for
   volunteered ones, since they were not pre-specified.
 - `MHOCCUR` is the checklist answer: `Y` or `N`. It stays blank

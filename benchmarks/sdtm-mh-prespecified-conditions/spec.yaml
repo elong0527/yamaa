@@ -34,8 +34,6 @@ columns:
   - name: MHCAT
     type: str
     label: Category for Medical History
-    derivation:
-      literal: MEDICAL HISTORY
 
   - name: MHPRESP
     type: str
@@ -94,6 +92,8 @@ rows:
         source: CHECKLIST.USUBJID
       MHTERM:
         literal: DIABETES MELLITUS
+      MHCAT:
+        literal: DISEASE-SPECIFIC HISTORY
       MHPRESP:
         literal: Y
       MHOCCUR:
@@ -123,6 +123,8 @@ rows:
         source: CHECKLIST.USUBJID
       MHTERM:
         literal: HYPERTENSION
+      MHCAT:
+        literal: DISEASE-SPECIFIC HISTORY
       MHPRESP:
         literal: Y
       MHOCCUR:
@@ -152,6 +154,8 @@ rows:
         source: CHECKLIST.USUBJID
       MHTERM:
         literal: ASTHMA
+      MHCAT:
+        literal: DISEASE-SPECIFIC HISTORY
       MHPRESP:
         literal: Y
       MHOCCUR:
@@ -181,6 +185,8 @@ rows:
         source: FREETEXT.USUBJID
       MHTERM:
         source: FREETEXT.MHTERM
+      MHCAT:
+        literal: GENERAL HISTORY
       MHPRESP:
         literal: null
       MHOCCUR:
