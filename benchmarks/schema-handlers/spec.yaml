@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, VSSEQ]
+input:
+  VS: {path: input/vs.csv, types: {VSSTRESN: str}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+base: VS
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, PARAM, AVAL, LASTDOSE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS.VSSEQ
+
+  # A collected code with no dictionary entry, and a record with no
+  # collected code at all, both take the stated fallback label.
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      mapping:
+        source: VS.VSTESTCD
+        dict:
+          SYSBP: Systolic Blood Pressure
+          DIABP: Diastolic Blood Pressure
+          PULSE: Pulse Rate
+        missing: Other measure
+
+  # The collected result is entered as text. "ND" and the fractional
+  # "98.6" cannot be read as whole numbers, so the stated fallback
+  # leaves them blank; a record with no collected result is blank
+  # because there is nothing to read.
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation:
+      value:
+        source: VS.VSSTRESN
+      missing:
+
+  # A dosing record with no dose never qualifies; among the dosed
+  # records the later start date wins. A subject with no dosing
+  # record keeps the dose blank.
+  - name: LASTDOSE
+    type: float
+    label: Latest Dose
+    derivation:
+      source:
+        variable: EX.EXDOSE
+        filter: "EX.EXDOSE IS NOT NULL"
+        multiple_matches:
+          order_by: [EX.EXSTDTC]
+          keep: last

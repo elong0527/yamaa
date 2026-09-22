@@ -666,6 +666,9 @@ examples:
   schema-column-composition:
     status: executable
     runtimes: ['python']
+  schema-handlers:
+    status: executable
+    runtimes: ['python']
   schema-inheritance:
     status: executable
     runtimes: ['python']

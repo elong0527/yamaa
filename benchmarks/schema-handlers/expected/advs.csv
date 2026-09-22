@@ -1,0 +1,9 @@
+STUDYID,USUBJID,VSSEQ,PARAM,AVAL,LASTDOSE
+YAMAA-01,P7-101,1,Systolic Blood Pressure,120,20
+YAMAA-01,P7-101,2,Diastolic Blood Pressure,80,20
+YAMAA-01,P7-101,3,Pulse Rate,72,20
+YAMAA-01,P7-102,1,Systolic Blood Pressure,,10
+YAMAA-01,P7-102,2,Diastolic Blood Pressure,78,10
+YAMAA-01,P7-102,3,Other measure,,10
+YAMAA-01,P7-102,4,Other measure,,10
+YAMAA-01,P7-103,1,Pulse Rate,68,
