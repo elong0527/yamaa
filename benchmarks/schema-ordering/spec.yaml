@@ -1,0 +1,46 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESTDY: int}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESTDY]
+  # The input is deliberately shuffled. Missing study days come first,
+  # then the present days ascend; the sequence number breaks ties
+  # descending. Rows equal on both terms keep their construction order.
+  order_by:
+    - variable: AESTDY
+      direction: asc
+      nulls: first
+    - variable: AESEQ
+      direction: desc
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      literal: YAMAA-01
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Adverse Event Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+
+  - name: AESTDY
+    type: int
+    label: Analysis Start Relative Day
+    derivation: AE.AESTDY

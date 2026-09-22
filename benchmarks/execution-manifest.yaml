@@ -576,6 +576,9 @@ examples:
   schema-odm-form-items:
     status: executable
     runtimes: ['python']
+  schema-ordering:
+    status: executable
+    runtimes: ['python']
   schema-parquet:
     status: executable
     runtimes: ['python']
