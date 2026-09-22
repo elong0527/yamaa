@@ -663,6 +663,9 @@ examples:
   schema-text-functions:
     status: executable
     runtimes: ['python']
+  schema-text-mapping:
+    status: executable
+    runtimes: ['python']
   schema-verification-log:
     status: executable
     runtimes: ['python']
