@@ -59,19 +59,19 @@ first term did not.
 <a id="req-0225"></a>
 
 **REQ-0225.** Rows equal on every declared term keep their construction order.
-This contract applies the same tie-break to window ordering. The order is therefore
-total for every input. No tie is an error. No comparison is undefined. No
-specification declares a term merely to make the result deterministic. A
-specification wanting a tie broken declares the term that breaks it.
+Window ordering uses the same tie-break. Thus, the order is total for every
+input. No tie is an error. No comparison is undefined. No specification
+declares a term merely to make the result deterministic. A specification
+wanting a tie broken declares the term that breaks it.
 
 <a id="req-0226"></a>
 
-**REQ-0226.** Ordering is presentation. It runs once, after the derivation
-lifecycle, key validation, and every [Verification](verification.md) verification, so it cannot
-change whether a run passes or warns. It changes nothing about evaluation
-either. [Execution lifecycle](lifecycle.md)'s dependency order, a window's partitions, and the neighbours
-`row_value` reads are all fixed before this order is applied. Each keeps
-construction order for its own tie-break.
+**REQ-0226.** Ordering is a presentation step. Ordering runs once after the
+lifecycle, key validation, and every [Verification](verification.md)
+verification. Ordering never changes whether a run passes or warns. Evaluation
+is unchanged. [Lifecycle](lifecycle.md)'s dependency order, a window's
+partitions, and the neighbours `row_value` reads are fixed before
+ordering. Each uses construction order for its own tie-break.
 
 ### Ordering
 
@@ -175,5 +175,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Apply ordering terms, missing placement, stable ties, and final artifact order. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Apply ordering terms, missing placement, stable ties, and artifact order.
+One contract lets others refer to this topic without defining a second policy.

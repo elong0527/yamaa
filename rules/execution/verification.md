@@ -8,8 +8,8 @@ status: normative
 
 ## Purpose
 
-Apply assertions, severity, and grouped counts to completed values, and
-record what ran in the warning log and the verification log.
+Apply assertions, severity, and grouped counts to completed values.
+Record what ran in the warning and verification logs.
 
 ## Scope and dependencies
 
@@ -61,10 +61,10 @@ needs that shape and the shape cannot be written as a producer and a consumer.
 
 <a id="req-0369"></a>
 
-**REQ-0369.** A supplemental qualifier record pointing at its parent domain
-record, like every other cross-dataset link, is asserted by the derivation
-that produces the link rather than by a verification over the finished
-artifact. A `lookup`'s `strict: true` rejects a value matching no record, and a
+**REQ-0369.** A supplemental qualifier record points to its parent domain
+record. The derivation that produces the cross-dataset link asserts the link.
+A verification over the finished artifact does not assert the link.
+A `lookup`'s `strict: true` rejects a value matching no record, and a
 `lookup` result carried by a `not_missing` column does the same.
 `sdtm-suppmh-linkage` links `IDVARVAL` to its medical-history
 record that way.
@@ -85,8 +85,8 @@ specification that must assert the claim derives at the parent's keys.
 
 <a id="req-0372"></a>
 
-**REQ-0372.** Column verifications infer the column on which they are declared.
-They run after that column's derivation and conversion.
+**REQ-0372.** Column verifications infer their declared column. A column
+verification runs after its declared column's derivation and conversion.
 Dataset verifications run after all column work, output-key validation, and
 column verifications finish.
 
@@ -277,10 +277,11 @@ version 1.0 specification written before severity existed.
 
 **REQ-0390.** A violated `warning` does not fail execution, remove or change a
 row, or make the primary artifact ineligible for publication. The executor
-continues through later column checks, key validation, and dataset checks and
-collects warning violations in that order. An `error` still stops at the same
-[Execution lifecycle](lifecycle.md) stage as before. Warning findings collected before a later error do not
-turn the failed run into a successful one. No accepted artifact is produced.
+continues through later column checks, key validation, and dataset checks. The
+executor collects warning violations in that order. An `error` still stops at
+the same [Execution lifecycle](lifecycle.md) stage as before.
+Warning findings before a later error do not make the failed run
+successful. No accepted artifact is produced.
 
 <a id="req-0391"></a>
 
@@ -336,9 +337,9 @@ not a warning that can be logged inside itself.
 
 <a id="req-0396"></a>
 
-**REQ-0396.** The log is built only for a successful execution, after all
-verifications and before publication. A failure while building or serializing
-it fails the run and leaves the primary artifact ineligible for publication.
+**REQ-0396.** The warning log is built only for a successful execution, after
+all verifications and before publication. A warning-log build or serialization
+failure fails the run and prevents primary-artifact publication.
 [Artifact publication](../storage/publication.md) defines how a runner publishes the completed pair.
 
 ### The verification log
@@ -510,7 +511,6 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Apply assertions, severity, and grouped counts to completed values, and
-record what ran in the warning log and the verification log. Keeping this
-topic in one contract lets
-other owners refer to it without defining a second policy.
+Apply assertions, severity, and grouped counts to completed values.
+Record what ran in the warning and verification logs.
+One contract avoids a second policy.

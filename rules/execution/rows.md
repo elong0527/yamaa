@@ -52,12 +52,12 @@ declares more than one, every row template must state `dataset`.
 
 <a id="req-0038"></a>
 
-**REQ-0038.** Groups are ordered by the position of their first input record.
-Within a group, input order is kept. For each group, evaluate every row
-derivation once and complete stages 1 through 3 of the [Execution lifecycle](lifecycle.md). Then
-evaluate the row template's `filter`, when present, over the candidate's
-completed unqualified columns. Append the candidate only when the `filter`
-is `TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter`
+**REQ-0038.** Groups follow the position of their first input record. Input
+order is kept within each group. For each group, evaluate every row derivation
+once and complete stages 1 to 3 of the [Execution lifecycle](lifecycle.md).
+Then evaluate the row template's `filter`, when present, over the candidate's
+completed unqualified columns. Append the candidate only when the `filter` is
+`TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter`
 filters after a group reduction. An ungrouped `filter` filters input records.
 
 <a id="req-0039"></a>
@@ -192,5 +192,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Construct output rows from declared input records or groups. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Construct output rows from declared input records or groups. One contract lets
+other owners refer to this topic without defining a second policy.

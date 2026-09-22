@@ -8,7 +8,7 @@ status: normative
 
 ## Purpose
 
-Reduce eligible records in one of the three permitted key scopes.
+Reduce eligible records within one of three permitted key scopes.
 
 ## Scope and dependencies
 
@@ -50,8 +50,9 @@ gives `function` the return type declared by its logical contract.
 
 <a id="req-0465"></a>
 
-**REQ-0465.** An `aggregate_expression` evaluates records from one relation and
-returns one value per group. The expression never changes row count. [Lookup and joins](lookup.md) joins
+**REQ-0465.** An `aggregate_expression` reduces records from one relation and
+returns one value per group. The expression never changes the row count.
+[Lookup and joins](lookup.md) joins
 a right-side reduction to constructed rows. An output-row reduction broadcasts
 under [REQ-0467](aggregation.md#req-0467). A grouped row template asks the expression for one value while [Execution lifecycle](../execution/lifecycle.md)
 decides whether that candidate row is appended.
@@ -60,9 +61,9 @@ decides whether that candidate row is appended.
 
 <a id="req-0466"></a>
 
-**REQ-0466.** An identifier is `NAME` or `DATASET.NAME`. [Name binding](../specification/binding.md) resolves each
-identifier in the same phase. A reducer expression and a predicate agree on
-each name.
+**REQ-0466.** An identifier is `NAME` or `DATASET.NAME`. Name binding
+[resolves each identifier](../specification/binding.md) in the same phase. A
+reducer expression and predicate resolve each name the same way.
 
 <a id="req-0467"></a>
 
@@ -227,9 +228,8 @@ are case-sensitive.
 
 **REQ-0478.** Any other reducer name, any window function or `OVER`, any
 subquery, any `CASE`, any comparison or Boolean operator, any string literal,
-and any host-language call are validation errors. Closing the vocabulary makes
-portability checkable. Widening the vocabulary requires amending this table:
-the whole cost of a new reduction.
+and any host-language call are validation errors. A closed vocabulary makes
+portability checkable. Any new reduction must amend this table.
 
 <a id="req-0479"></a>
 
@@ -334,8 +334,8 @@ record whose operand is missing contributes a missing value rather than a zero.
 
 <a id="req-0492"></a>
 
-**REQ-0492.** A reduction then ignores missing values. The table pins the rest.
-The three target runtimes disagree:
+**REQ-0492.** A reduction then ignores missing values. The table defines the
+other results. The three target runtimes disagree:
 
 | Condition | Result |
 |---|---|
@@ -571,5 +571,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Reduce eligible records in one of the three permitted key scopes. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Reduce eligible records within one of three permitted key scopes. One contract
+avoids a second policy.
