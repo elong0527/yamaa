@@ -22,7 +22,7 @@ cover.
 - `LBSTRESN` would be the reported result times the conversion table
   factor, missing when the table has no factor for the reported unit.
 - `LBSTRESC` would be the standardized numeric result written as text,
-  so it always agrees with `LBSTRESC`'s numeric sibling.
+  so it always agrees with `LBSTRESN`.
 - `LBSTRESU` would be the standard unit for the test: `mmol/L` for
   glucose, `g/dL` for hemoglobin.
 - `LBORRES`, `LBORRESU`, `LBORNRLO`, and `LBORNRHI` keep the reported
