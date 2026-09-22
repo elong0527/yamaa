@@ -1,0 +1,200 @@
+schema_version: "1.0"
+domain: MH
+keys: [STUDYID, USUBJID, MHSEQ]
+input:
+  CHECKLIST: input/mh_checklist.csv
+  FREETEXT: input/mh_freetext.csv
+
+output:
+  path: mh.csv
+  columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT]
+  order_by: [STUDYID, USUBJID, MHSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: MH
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: MHTERM
+    type: str
+    label: Reported Term for the Medical History
+    verifications:
+      - not_missing: {}
+
+  - name: MHCAT
+    type: str
+    label: Category for Medical History
+    derivation:
+      literal: MEDICAL HISTORY
+
+  - name: MHPRESP
+    type: str
+    label: Pre-Specified Medical History Indicator
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  - name: MHOCCUR
+    type: str
+    label: Medical History Occurrence
+    verifications:
+      - allowed_values:
+          values: [Y, N]
+
+  - name: MHSTAT
+    type: str
+    label: Completion Status
+    verifications:
+      - allowed_values:
+          values: [NOT DONE]
+
+  - name: SORTORD
+    type: int
+    label: Record order within a subject
+    derivation:
+      case:
+        - when: "MHTERM = 'DIABETES MELLITUS'"
+          then:
+            literal: 1
+        - when: "MHTERM = 'HYPERTENSION'"
+          then:
+            literal: 2
+        - when: "MHTERM = 'ASTHMA'"
+          then:
+            literal: 3
+        - otherwise:
+            literal: 4
+
+  - name: MHSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [SORTORD]
+
+rows:
+  - id: diabetes
+    dataset: CHECKLIST
+    derivations:
+      STUDYID:
+        source: CHECKLIST.STUDYID
+      USUBJID:
+        source: CHECKLIST.USUBJID
+      MHTERM:
+        literal: DIABETES MELLITUS
+      MHPRESP:
+        literal: Y
+      MHOCCUR:
+        case:
+          - when: "CHECKLIST.DIABETES = 'Y'"
+            then:
+              literal: Y
+          - when: "CHECKLIST.DIABETES = 'N'"
+            then:
+              literal: N
+          - otherwise:
+              literal: null
+      MHSTAT:
+        case:
+          - when: "CHECKLIST.DIABETES IS NULL"
+            then:
+              literal: NOT DONE
+          - otherwise:
+              literal: null
+
+  - id: hypertension
+    dataset: CHECKLIST
+    derivations:
+      STUDYID:
+        source: CHECKLIST.STUDYID
+      USUBJID:
+        source: CHECKLIST.USUBJID
+      MHTERM:
+        literal: HYPERTENSION
+      MHPRESP:
+        literal: Y
+      MHOCCUR:
+        case:
+          - when: "CHECKLIST.HYPERTENSION = 'Y'"
+            then:
+              literal: Y
+          - when: "CHECKLIST.HYPERTENSION = 'N'"
+            then:
+              literal: N
+          - otherwise:
+              literal: null
+      MHSTAT:
+        case:
+          - when: "CHECKLIST.HYPERTENSION IS NULL"
+            then:
+              literal: NOT DONE
+          - otherwise:
+              literal: null
+
+  - id: asthma
+    dataset: CHECKLIST
+    derivations:
+      STUDYID:
+        source: CHECKLIST.STUDYID
+      USUBJID:
+        source: CHECKLIST.USUBJID
+      MHTERM:
+        literal: ASTHMA
+      MHPRESP:
+        literal: Y
+      MHOCCUR:
+        case:
+          - when: "CHECKLIST.ASTHMA = 'Y'"
+            then:
+              literal: Y
+          - when: "CHECKLIST.ASTHMA = 'N'"
+            then:
+              literal: N
+          - otherwise:
+              literal: null
+      MHSTAT:
+        case:
+          - when: "CHECKLIST.ASTHMA IS NULL"
+            then:
+              literal: NOT DONE
+          - otherwise:
+              literal: null
+
+  - id: volunteered
+    dataset: FREETEXT
+    derivations:
+      STUDYID:
+        source: FREETEXT.STUDYID
+      USUBJID:
+        source: FREETEXT.USUBJID
+      MHTERM:
+        source: FREETEXT.MHTERM
+      MHPRESP:
+        literal: null
+      MHOCCUR:
+        literal: null
+      MHSTAT:
+        literal: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, MHSEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: unanswered-prespecified-has-status
+      when: "MHPRESP = 'Y' AND MHOCCUR IS NULL"
+      then: "MHSTAT = 'NOT DONE'"
