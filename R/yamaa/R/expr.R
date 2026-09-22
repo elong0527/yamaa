@@ -549,12 +549,19 @@ eval_mapping <- function(payload, ctx) {
   # dictionary entry; `strict: true` makes either an `unmapped_value` error
   if (any(hit)) {
     sk <- if (case_sensitive) sv[hit] else ascii_upper(sv[hit])
-    # match: dict keys are strings; numeric keys?
-    dk <- keys
+    # REQ-1110: a null dict value is not a usable dictionary entry.
+    # unlist() drops nulls from type inference but match() still sees the
+    # key, so match only against keys with non-null values; sources hitting
+    # a null-valued key fall through to the missing/strict policy below
+    # instead of being silently recycled by coerce_mapping_value.
+    usable <- which(!vapply(dict, is.null, logical(1)))
+    dk <- keys[usable]
     m <- match(sk, if (case_sensitive) dk else ascii_upper(dk))
     found <- !is.na(m)
-    vv <- mapply(function(mm) dict[[mm]], m[found], USE.NAMES = FALSE)
-    out$v[which(hit)[found]] <- coerce_mapping_value(vv, rt)
+    if (any(found)) {
+      vv <- lapply(usable[m[found]], function(mm) dict[[mm]])
+      out$v[which(hit)[found]] <- coerce_mapping_value(vv, rt)
+    }
     unmapped_idx <- which(hit)[!found]
     if (length(unmapped_idx) > 0) {
       if (strict)
@@ -804,11 +811,14 @@ eval_reducer <- function(reducer, node, r) {
   # argument's type (str for date strings); MEAN is float
   t <- if (reducer == "MEAN") "float" else x$t
   if (t == "int") {
-    if (out != floor(out) || abs(out) > .Machine$integer.max)
+    # -2^31 is a legitimate int32 result (REQ-0434)
+    if (out != floor(out) || out < -2147483648 || out > .Machine$integer.max)
       yamaa_error("integer_overflow", "integer aggregate overflow")
     return(tv(as.integer(out), "int"))
   }
-  tv(out, t)
+  # REQ-0006: non-finite float results are missing (Python folds SUM/MEAN
+  # through _arithmetic, which normalizes after every + and /)
+  norm_finite(tv(out, t))
 }
 
 # MIN/MAX over strings/dates in Unicode scalar-value order (REQ-0026).

@@ -190,34 +190,34 @@ run_one_benchmark <- function(nm, wt, man_entry) {
   }
   cmp <- compare_artifact(out_path, exp_primary)
   if (!isTRUE(cmp)) return(list(status = "FAIL", detail = cmp))
-  vlog <- spec$output$violation_log
+  vlog <- spec$output$warning_log
   if (!is.null(vlog) && nzchar(vlog)) {
     got_vlog <- file.path(dirname(out_path), vlog)
     exp_vlog <- file.path(exp_dir, vlog)
     if (!file.exists(got_vlog))
       return(list(status = "FAIL",
-        detail = paste0("violation log not produced: ", vlog)))
+        detail = paste0("warning log not produced: ", vlog)))
     if (!file.exists(exp_vlog))
       return(list(status = "FAIL",
-        detail = paste0("no expected violation log: ", vlog)))
+        detail = paste0("no expected warning log: ", vlog)))
     cmp2 <- compare_artifact(got_vlog, exp_vlog)
     if (!isTRUE(cmp2))
-      return(list(status = "FAIL", detail = paste0("violation log: ", cmp2)))
+      return(list(status = "FAIL", detail = paste0("warning log: ", cmp2)))
   }
-  vrep <- spec$output$verification_report
+  vrep <- spec$output$verification_log
   if (!is.null(vrep) && nzchar(vrep)) {
     got_vrep <- file.path(dirname(out_path), vrep)
     exp_vrep <- file.path(exp_dir, vrep)
     if (!file.exists(got_vrep))
       return(list(status = "FAIL",
-        detail = paste0("verification report not produced: ", vrep)))
+        detail = paste0("verification log not produced: ", vrep)))
     if (!file.exists(exp_vrep))
       return(list(status = "FAIL",
-        detail = paste0("no expected verification report: ", vrep)))
+        detail = paste0("no expected verification log: ", vrep)))
     cmp2b <- compare_artifact(got_vrep, exp_vrep)
     if (!isTRUE(cmp2b))
       return(list(status = "FAIL",
-        detail = paste0("verification report: ", cmp2b)))
+        detail = paste0("verification log: ", cmp2b)))
   }
   exp_resolved <- file.path(exp_dir, "spec_resolved.yaml")
   if (file.exists(exp_resolved)) {

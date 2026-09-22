@@ -538,12 +538,14 @@ arith_unary_minus <- function(x) {
   v <- x$v
   if (x$t == "int") {
     out <- rep(NA_integer_, length(v))
-    ok <- !is.na(v) & v != -.Machine$integer.max  # -(-2^31) overflows
+    # -(-2^31) overflows int32; -2147483648 written as a double literal --
+    # -.Machine$integer.max - 1L would overflow integer arithmetic
+    ok <- !is.na(v) & v > -2147483648
     out[ok] <- -v[ok]
     if (any(!is.na(v) & !ok)) yamaa_error("integer_overflow", "integer negation overflow")
     return(tv(out, "int"))
   }
-  tv(-v, "float")
+  norm_finite(tv(-v, "float"))  # REQ-0006: non-finite float results are missing
 }
 
 # REQ-0017: numeric promotion; int+int stays int, else float.
@@ -563,14 +565,17 @@ arith_binop <- function(op, l, r) {
   if (op == "/" && any(rv[ok] == 0))
     yamaa_error("division_by_zero", "division by zero")
   if (both_int && op != "/") {
-    # int arithmetic: detect overflow, values must stay integral
-    bad <- !is.finite(raw) | raw != floor(raw) | abs(raw) > .Machine$integer.max
+    # int arithmetic: detect overflow, values must stay integral.
+    # -2^31 is a legitimate int32 result (REQ-0434); the double literal is
+    # exact, unlike -.Machine$integer.max - 1L which overflows integers.
+    bad <- !is.finite(raw) | raw != floor(raw) |
+      raw < -2147483648 | raw > .Machine$integer.max
     if (any(bad)) yamaa_error("integer_overflow", "integer arithmetic overflow")
     out[ok] <- raw
     return(tv(as.integer(out), "int"))
   }
   out[ok] <- raw
-  tv(out, "float")
+  norm_finite(tv(out, "float"))  # REQ-0006: non-finite float results are missing
 }
 
 # numeric functions over already-evaluated argument tvs ----------------------
@@ -587,10 +592,10 @@ eval_num_fn <- function(fn, ev) {
     CEIL = { x <- need_num(ev[[1]]); tv(ceiling(as.numeric(x$v)), "float") },
     FLOOR = { x <- need_num(ev[[1]]); tv(floor(as.numeric(x$v)), "float") },
     TRUNC = { x <- need_num(ev[[1]]); tv(trunc(as.numeric(x$v)), "float") },
-    SQRT = { x <- num1(); if (any(x < 0, na.rm = TRUE)) yamaa_error("sqrt_of_negative", "SQRT of negative"); tv(sqrt(x), "float") },
-    EXP = { tv(exp(num1()), "float") },
+    SQRT = { x <- num1(); if (any(x < 0, na.rm = TRUE)) yamaa_error("sqrt_of_negative", "SQRT of negative"); norm_finite(tv(sqrt(x), "float")) },
+    EXP = { norm_finite(tv(exp(num1()), "float")) },
     LN = { x <- num1(); if (any(x <= 0, na.rm = TRUE)) yamaa_error("ln_of_nonpositive", "LN of non-positive"); tv(log(x), "float") },
-    POWER = { tv(num1() ^ as.numeric(need_num(ev[[2]])$v), "float") },
+    POWER = { norm_finite(tv(num1() ^ as.numeric(need_num(ev[[2]])$v), "float")) },
     MOD = { a <- num1(); b <- as.numeric(need_num(ev[[2]])$v);
             if (any(b == 0, na.rm = TRUE)) yamaa_error("division_by_zero", "MOD by zero");
             tv(a - b * trunc(a / b), "float") },  # sign of x per REQ-0415
