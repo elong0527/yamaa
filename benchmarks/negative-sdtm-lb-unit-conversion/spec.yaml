@@ -119,12 +119,7 @@ columns:
     type: str
     label: Standard Units
     derivation:
-      mapping:
-        source: LBTESTCD
-        dict:
-          GLUC: mmol/L
-          HGB: g/dL
-        strict: true
+      literal: g/dL
 
   - name: LBSTNRLO
     type: float

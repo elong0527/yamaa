@@ -8,5 +8,5 @@ context:
   failure_count: 1
   keys:
     - STUDYID: YAMAA-01
-      USUBJID: YAMAA-01-003
+      USUBJID: YAMAA-01-001
       LBSEQ: 1
