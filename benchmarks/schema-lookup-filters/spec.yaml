@@ -1,0 +1,59 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [USUBJID, VISIT]
+input:
+  PLAN: {path: input/plan.csv, types: {VISITN: int}}
+  LB: {path: input/lb.csv, types: {VISITN: int, LBSTRESN: float, LBDY: int}}
+base: PLAN
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, VISIT, VISITN, AVAL, LBDY]
+
+# Last-observation-carried-forward: for each planned visit, the donor is
+# the latest lab record for the subject whose result is present and
+# whose visit number does not exceed the driver's. The filter correlates
+# with the driver row through PLAN.VISITN; donor fields stay qualified
+# with the lookup dataset. A planned visit earlier than every lab
+# record finds no donor and reads missing.
+intermediates:
+  - id: DONOR
+    dataset: LB
+    key: [USUBJID]
+    filter: "LB.LBSTRESN IS NOT NULL AND LB.VISITN <= PLAN.VISITN"
+    order_by:
+      - variable: LB.VISITN
+        direction: asc
+    keep: last
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      literal: YAMAA-01
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PLAN.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: PLAN.VISIT
+
+  - name: VISITN
+    type: int
+    label: Visit Number
+    derivation: PLAN.VISITN
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: DONOR.LBSTRESN
+
+  - name: LBDY
+    type: int
+    label: Analysis Relative Day
+    derivation: DONOR.LBDY
