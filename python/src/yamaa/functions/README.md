@@ -11,9 +11,7 @@ from yamaa.functions import execute_with_project_functions
 from yamaa.io import ProjectResources, load_source_tables
 from yamaa.specification import load_specification
 
-specification = load_specification(
-    "benchmarks/adam-adsl-bmi/spec.yaml", "yaml"
-)
+specification = load_specification("benchmarks/adam-adsl-bmi/spec.yaml", "yaml")
 result = execute_with_project_functions(
     specification.specification,
     lambda datasets: load_source_tables(datasets, ProjectResources(example_directory)),
