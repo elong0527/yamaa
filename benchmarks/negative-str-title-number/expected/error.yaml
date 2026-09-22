@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.SITE.derivation.str_title.source
+requirement: REQ-0308
+context:
+  source: SITENUM
+  expected: str
+  actual: int

@@ -10,6 +10,8 @@ from yamaa.expressions import (
     TemplateError,
     TemplatePart,
     ascii_lower,
+    ascii_sentence,
+    ascii_title,
     ascii_upper,
     evaluate_expression,
     parse_template,
@@ -247,6 +249,20 @@ def test_a_group_outside_the_pattern_fails_validation(group: int) -> None:
         ("str_lower", "\u0130", "\u0130"),
         ("str_upper", "\u00e9", "\u00e9"),
         ("str_lower", "\u00c9", "\u00c9"),
+        # REQ-1240: first scalar up, the rest down (ASCII-only).
+        ("str_sentence", "WEEK 8", "Week 8"),
+        ("str_sentence", "WeEk 8", "Week 8"),
+        ("str_sentence", "", ""),
+        ("str_sentence", "8-WEEK", "8-week"),
+        ("str_sentence", "a", "A"),
+        ("str_sentence", "\u00dfTRA\u00dfe", "\u00dftra\u00dfe"),
+        # REQ-1241: first ASCII letter of each [A-Za-z]+ run up, rest down.
+        ("str_title", "END OF TREATMENT", "End Of Treatment"),
+        ("str_title", "WEEK 8", "Week 8"),
+        ("str_title", "follow-up", "Follow-Up"),
+        ("str_title", "", ""),
+        ("str_title", "8-WEEK", "8-Week"),
+        ("str_title", "\u00e9COLE", "\u00e9Cole"),
     ],
 )
 def test_casing_is_the_ascii_substitution_and_nothing_else(
@@ -267,9 +283,37 @@ def test_casing_is_the_ascii_substitution_and_nothing_else(
 def test_ascii_casing_leaves_every_non_ascii_scalar_alone(value: str) -> None:
     assert ascii_upper(value) == value
     assert ascii_lower(value) == value
+    assert ascii_sentence(value) == value
+    assert ascii_title(value) == value
     # A host routine changes each of these, which is why REQ-0708 forbids
     # inheriting one: it would fold, expand, or retitle the scalar.
     assert value.upper() != value or value.lower() != value
+
+
+@pytest.mark.parametrize(
+    ("value", "expected", "host"),
+    [
+        # A host capitalize expands the sharp s into two scalars.
+        ("\u00df", "\u00df", "Ss"),
+        # A host capitalize retitles the dotless i.
+        ("\u0131ABC", "\u0131abc", "Iabc"),
+        # Non-ASCII scalars pass through; the ASCII tail still folds.
+        ("\u0130ABC", "\u0130abc", "\u0130abc"),
+        ("\u212aELVIN", "\u212aelvin", "\u212aelvin"),
+    ],
+)
+def test_sentence_case_never_inherits_host_unicode_behavior(
+    value: str, expected: str, host: str
+) -> None:
+    assert ascii_sentence(value) == expected
+    assert len(ascii_sentence(value)) == len(value)
+    assert value.capitalize() == host
+
+
+def test_title_case_words_are_ascii_letter_runs() -> None:
+    # Non-ASCII scalars are word boundaries and pass through unchanged.
+    assert ascii_title("\u00e9cole \u00c9COLE") == "\u00e9Cole \u00c9Cole"
+    assert len(ascii_title("\u00e9cole")) == len("\u00e9cole")
 
 
 def test_ascii_casing_moves_only_the_ascii_letters_of_a_mixed_value() -> None:
@@ -281,7 +325,10 @@ def test_ascii_casing_moves_only_the_ascii_letters_of_a_mixed_value() -> None:
     assert len(ascii_upper(mixed)) == len(mixed)
 
 
-@pytest.mark.parametrize("operation", ["str_upper", "str_lower", "str_extract"])
+@pytest.mark.parametrize(
+    "operation",
+    ["str_upper", "str_lower", "str_sentence", "str_title", "str_extract"],
+)
 def test_a_missing_input_uses_the_declared_handler(operation: str) -> None:
     payload: dict[str, object] = {"source": "VALUE", "missing": "UNKNOWN"}
     if operation == "str_extract":
@@ -294,7 +341,9 @@ def test_a_missing_input_uses_the_declared_handler(operation: str) -> None:
     assert result == ValueResult(value="UNKNOWN", handled_by="missing")
 
 
-@pytest.mark.parametrize("operation", ["str_upper", "str_lower", "str_template"])
+@pytest.mark.parametrize(
+    "operation", ["str_upper", "str_lower", "str_sentence", "str_title", "str_template"]
+)
 def test_an_undeclared_missing_handler_is_fatal(operation: str) -> None:
     payload: object = {"source": "VALUE"}
     if operation == "str_template":

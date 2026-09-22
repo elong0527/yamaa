@@ -27,7 +27,7 @@ from yamaa.expressions.core import (
     expression_condition,
     handler_value,
 )
-from yamaa.expressions.text import ascii_lower, ascii_upper
+from yamaa.expressions.text import ascii_lower, ascii_sentence, ascii_title, ascii_upper
 from yamaa.models import (
     MISSING,
     ConditionResult,
@@ -352,4 +352,6 @@ def string_handlers(dispatcher: NestedDispatcher) -> dict[str, ExpressionHandler
         "str_template": _template,
         "str_upper": _cased("str_upper", ascii_upper),
         "str_lower": _cased("str_lower", ascii_lower),
+        "str_sentence": _cased("str_sentence", ascii_sentence),
+        "str_title": _cased("str_title", ascii_title),
     }

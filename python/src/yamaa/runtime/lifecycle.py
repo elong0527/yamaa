@@ -43,6 +43,8 @@ DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "str_template": ("missing",),
     "str_upper": ("missing",),
     "str_lower": ("missing",),
+    "str_sentence": ("missing",),
+    "str_title": ("missing",),
 }
 
 

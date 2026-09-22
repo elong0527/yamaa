@@ -73,7 +73,7 @@ from yamaa.expressions.strings import (
     parse_template_cached,
     template_identifiers,
 )
-from yamaa.expressions.text import ascii_lower, ascii_upper
+from yamaa.expressions.text import ascii_lower, ascii_sentence, ascii_title, ascii_upper
 from yamaa.expressions.windows import (
     WINDOW_OPERATIONS,
     Partition,
@@ -117,6 +117,8 @@ __all__ = [
     "aggregate_identifiers",
     "aggregate_star_datasets",
     "ascii_lower",
+    "ascii_sentence",
+    "ascii_title",
     "ascii_upper",
     "build_expression_handlers",
     "collected_datetime_precision",
