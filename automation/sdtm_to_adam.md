@@ -2,10 +2,12 @@
 
 Canonical recipe for deriving ADaM datasets from SDTM with the yamaa engine.
 
-- create one spec per data (e.g. adsl.yaml) 
-- establish dependency to avoid duplicate logic (e.g. rest of ADaM data should depends on adsl.yaml)
-- create `run.py` to run the pipeline within 30 line of code using yamaa Python engine.
-- verify equivalence of all data with a tolerence at 1e-10.
+- create one spec per dataset (e.g. adsl.yaml)
+- establish dependency to avoid duplicate logic (e.g. the rest of the ADaM specs should depend on adsl.yaml)
+- create `run.py` to run the pipeline within 30 lines of code using the yamaa Python engine.
+- verify equivalence of all data with a tolerance at 1e-10.
+- Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
+- Comparison lives in a separate `compare.py` (not in `run.py`), which reports matched/total columns and cells per dataset and exits nonzero on any mismatch.
   
 The original pilot source code may be read to understand intent, but
 the yamaa spec must be built as a robust and succinct yamaa spec.
