@@ -273,10 +273,17 @@ parse_binop <- function(p, sub, ops) {
   }
   left
 }
+# fold a sign into a numeric literal: -2147483648 is legitimate int32 (REQ-0434)
+fold_unary_lit <- function(op, x) {
+  # a parenthesized literal already carrying a sign stays a negation: -(-2147483648) overflows int32
+  if (x$kind == "lit" && x$vtype %in% c("int", "float") && !grepl("^[+-]", x$v))
+    return(list(kind = "lit", vtype = x$vtype, v = paste0(op, x$v)))
+  list(kind = "unary", op = op, x = x)
+}
 parse_c_factor <- function(p) {
   if (peek(p)$kind == "op" && peek(p)$text %in% c("+", "-")) {
     op <- next_tok(p)$text
-    return(list(kind = "unary", op = op, x = parse_c_primary(p)))
+    return(fold_unary_lit(op, parse_c_primary(p)))
   }
   parse_c_primary(p)
 }
@@ -340,7 +347,7 @@ parse_a_binop <- function(p, sub, ops) {
 parse_a_factor <- function(p) {
   if (peek(p)$kind == "op" && peek(p)$text %in% c("+", "-")) {
     op <- next_tok(p)$text
-    return(list(kind = "unary", op = op, x = parse_a_primary(p)))
+    return(fold_unary_lit(op, parse_a_primary(p)))
   }
   parse_a_primary(p)
 }
@@ -476,8 +483,8 @@ resolve_operand <- function(node, resolve) {
     n <- resolve$n
     if (node$vtype == "null") return(tv_na("str", n))  # type-neutral missing
     if (node$vtype == "str") return(tv(rep(node$v, n), "str"))
-    if (node$vtype == "int") return(tv(rep(as.integer(node$v), n), "int"))
-    if (node$vtype == "float") return(tv(rep(as.numeric(node$v), n), "float"))
+    if (node$vtype == "int") return(tv(rep(to_int_value(as.numeric(node$v)), n), "int"))
+    if (node$vtype == "float") return(norm_finite(tv(rep(as.numeric(node$v), n), "float")))
     if (node$vtype == "date") return(tv(rep(parse_temporal_one(node$v, "date")$canon, n), "date"))
     if (node$vtype == "datetime") return(tv(rep(parse_temporal_one(node$v, "datetime")$canon, n), "datetime"))
   }
@@ -511,8 +518,8 @@ eval_compute <- function(node, resolve) {
   if (k == "lit") {
     n <- resolve$n
     if (node$vtype == "null") return(tv_na("float", n))  # missing numeric
-    if (node$vtype == "int") return(tv(rep(as.integer(node$v), n), "int"))
-    return(tv(rep(as.numeric(node$v), n), "float"))
+    if (node$vtype == "int") return(tv(rep(to_int_value(as.numeric(node$v)), n), "int"))
+    return(norm_finite(tv(rep(as.numeric(node$v), n), "float")))
   }
   if (k == "id") return(resolve$resolve(id_to_string(node)))
   if (k == "unary") {
@@ -537,7 +544,7 @@ arith_unary_minus <- function(x) {
     yamaa_error("incompatible_input_type", "unary minus needs a numeric")
   v <- x$v
   if (x$t == "int") {
-    out <- rep(NA_integer_, length(v))
+    out <- rep(NA_real_, length(v))
     # -(-2^31) overflows int32; -2147483648 written as a double literal --
     # -.Machine$integer.max - 1L would overflow integer arithmetic
     ok <- !is.na(v) & v > -2147483648
@@ -572,7 +579,7 @@ arith_binop <- function(op, l, r) {
       raw < -2147483648 | raw > .Machine$integer.max
     if (any(bad)) yamaa_error("integer_overflow", "integer arithmetic overflow")
     out[ok] <- raw
-    return(tv(as.integer(out), "int"))
+    return(tv(out, "int"))
   }
   out[ok] <- raw
   norm_finite(tv(out, "float"))  # REQ-0006: non-finite float results are missing
@@ -588,29 +595,32 @@ eval_num_fn <- function(fn, ev) {
   n <- max(vapply(ev, tv_len, integer(1)))
   num1 <- function() as.numeric(need_num(ev[[1]])$v)
   switch(fn,
-    ABS = { x <- need_num(ev[[1]]); tv(abs(x$v), x$t) },
-    CEIL = { x <- need_num(ev[[1]]); tv(ceiling(as.numeric(x$v)), "float") },
-    FLOOR = { x <- need_num(ev[[1]]); tv(floor(as.numeric(x$v)), "float") },
-    TRUNC = { x <- need_num(ev[[1]]); tv(trunc(as.numeric(x$v)), "float") },
+    ABS = { x <- need_num(ev[[1]]); v <- abs(as.numeric(x$v))
+            if (x$t == "int" && any(v > 2147483647, na.rm = TRUE))
+              yamaa_error("integer_overflow", "ABS overflows int32")
+            norm_finite(tv(v, x$t)) },
+    CEIL = { x <- need_num(ev[[1]]); norm_finite(tv(ceiling(as.numeric(x$v)), "float")) },
+    FLOOR = { x <- need_num(ev[[1]]); norm_finite(tv(floor(as.numeric(x$v)), "float")) },
+    TRUNC = { x <- need_num(ev[[1]]); norm_finite(tv(trunc(as.numeric(x$v)), "float")) },
     SQRT = { x <- num1(); if (any(x < 0, na.rm = TRUE)) yamaa_error("sqrt_of_negative", "SQRT of negative"); norm_finite(tv(sqrt(x), "float")) },
     EXP = { norm_finite(tv(exp(num1()), "float")) },
-    LN = { x <- num1(); if (any(x <= 0, na.rm = TRUE)) yamaa_error("ln_of_nonpositive", "LN of non-positive"); tv(log(x), "float") },
+    LN = { x <- num1(); if (any(x <= 0, na.rm = TRUE)) yamaa_error("ln_of_nonpositive", "LN of non-positive"); norm_finite(tv(log(x), "float")) },
     POWER = { norm_finite(tv(num1() ^ as.numeric(need_num(ev[[2]])$v), "float")) },
     MOD = { a <- num1(); b <- as.numeric(need_num(ev[[2]])$v);
             if (any(b == 0, na.rm = TRUE)) yamaa_error("division_by_zero", "MOD by zero");
-            tv(a - b * trunc(a / b), "float") },  # sign of x per REQ-0415
+            norm_finite(tv(a - b * trunc(a / b), "float")) },  # sign of x per REQ-0415
     GREATEST = , LEAST = {
       xs <- lapply(ev, function(x) as.numeric(need_num(x)$v))
       # REQ-0415: largest/smallest non-NULL argument; NULL only if all are
       m <- do.call(if (fn == "GREATEST") pmax else pmin, c(xs, list(na.rm = TRUE)))
       all_na <- Reduce(`&`, lapply(xs, is.na))
       m[all_na] <- NA_real_
-      tv(m, "float")
+      norm_finite(tv(m, "float"))
     },
     NULLIF = {
       a <- num1(); b <- as.numeric(need_num(ev[[2]])$v)
       out <- a; out[!is.na(a) & !is.na(b) & a == b] <- NA_real_
-      tv(out, "float")
+      norm_finite(tv(out, "float"))
     },
     COALESCE = {
       # first non-missing; mixed int/float -> float
@@ -620,7 +630,7 @@ eval_num_fn <- function(fn, ev) {
       for (x in xs) {
         xv <- as.numeric(x$v); acc[is.na(acc)] <- xv[is.na(acc)]
       }
-      if (t == "int") tv(as.integer(acc), "int") else tv(acc, "float")
+      if (t == "int") tv(acc, "int") else norm_finite(tv(acc, "float"))
     },
     yamaa_error("invalid_argument", paste0("unknown function: ", fn)))
 }
@@ -636,5 +646,5 @@ round_half_away <- function(x, digits) {
   out[is.na(f)] <- NA_real_
   # a value that rounds to zero returns positive zero
   out[out == 0] <- 0
-  tv(out, "float")
+  norm_finite(tv(out, "float"))
 }

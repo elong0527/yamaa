@@ -48,7 +48,7 @@ title_case_one <- function(s) {
 to_canon_text <- function(src) {
   switch(src$t,
     str = src$v,
-    int = ifelse(is.na(src$v), NA_character_, as.character(src$v)),
+    int = ifelse(is.na(src$v), NA_character_, sprintf("%.0f", src$v)),
     float = float_text(src$v),
     date = src$v, datetime = src$v)
 }

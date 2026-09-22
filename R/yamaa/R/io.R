@@ -168,10 +168,10 @@ apply_column_type <- function(v, type, path, col) {
     paste0("column ", col, ": not ", type, " text: ", s))
   out <- switch(type,
     int = vapply(v, function(s) {
-      if (is.na(s)) return(NA_integer_)
+      if (is.na(s)) return(NA_real_)
       tryCatch(to_int_value(parse_number_text(s)),
         error = function(e) bad(s))
-    }, integer(1), USE.NAMES = FALSE),
+    }, double(1), USE.NAMES = FALSE),
     float = vapply(v, function(s) {
       if (is.na(s)) return(NA_real_)
       r <- tryCatch(parse_number_text(s), error = function(e) bad(s))
@@ -251,9 +251,9 @@ parquet_read_column <- function(chunk, t, field, path, empty_string) {
   if (t == "int") {
     v <- as.vector(chunk)
     return(vapply(v, function(x) {
-      if (is.na(x)) return(NA_integer_)
+      if (is.na(x)) return(NA_real_)
       to_int_value(suppressWarnings(as.numeric(x)))
-    }, integer(1), USE.NAMES = FALSE))
+    }, double(1), USE.NAMES = FALSE))
   }
   if (t == "float") {
     v <- as.vector(chunk)
@@ -317,7 +317,7 @@ render_csv_frame <- function(df, coltypes, decimals) {
     t <- coltypes[[h]]; v <- df[[h]]
     out[[h]] <- switch(t,
       str = v,
-      int = ifelse(is.na(v), NA_character_, as.character(v)),
+      int = ifelse(is.na(v), NA_character_, sprintf("%.0f", v)),
       float = if (is.null(decimals)) float_text(v) else vapply(v,
         function(x) if (is.na(x)) NA_character_ else format_decimals(x, decimals),
         character(1), USE.NAMES = FALSE),

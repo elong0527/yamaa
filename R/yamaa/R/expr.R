@@ -184,7 +184,7 @@ canon_key_text <- function(t, v) {
   if (length(v) == 0) return("\x1eNA\x1e")
   v <- v[1]
   if (is.na(v)) return("\x1eNA\x1e")
-  switch(t, str = v, int = as.character(v), float = float_text(v),
+  switch(t, str = v, int = sprintf("%.0f", v), float = float_text(v),
     date = v, datetime = v)
 }
 
@@ -352,12 +352,10 @@ literal_to_tv <- function(payload, target, n) {
   if (is.integer(payload) || (is.numeric(payload) && length(payload) == 1)) {
     v <- payload; if (!is.finite(v)) return(tv(rep(NA_real_, n), "float"))
     if (!is.null(target) && target == "float") return(tv(rep(as.numeric(v), n), "float"))
-    if (!is.null(target) && target == "int") {
-      if (v != floor(v)) yamaa_error("conversion_failed", "literal not integral")
-      return(tv(rep(as.integer(v), n), "int"))
-    }
+    if (!is.null(target) && target == "int")
+      return(tv(rep(to_int_value(v), n), "int"))
     if (is.finite(v) && v == floor(v) && abs(v) < 2^53)  # integral->int, else float
-      return(tv(rep(as.integer(v), n), "int"))
+      return(tv(rep(to_int_value(v), n), "int"))
     return(tv(rep(as.numeric(v), n), "float"))
   }
   if (is.character(payload) && length(payload) == 1) {
@@ -421,7 +419,7 @@ eval_greatest_least <- function(kind, payload, ctx) {
     # REQ-1096/1097: largest/smallest non-missing source; missing when none
     r[all_na] <- NA_real_
     t <- if (all(ts == "int")) "int" else "float"
-    if (t == "int") return(tv(as.integer(r), "int"))
+    if (t == "int") return(tv(r, "int"))
     return(tv(r, "float"))
   }
   xs <- lapply(vals, function(x) x$v)
@@ -549,18 +547,19 @@ eval_mapping <- function(payload, ctx) {
   # dictionary entry; `strict: true` makes either an `unmapped_value` error
   if (any(hit)) {
     sk <- if (case_sensitive) sv[hit] else ascii_upper(sv[hit])
-    # REQ-1110: a null dict value is not a usable dictionary entry.
-    # unlist() drops nulls from type inference but match() still sees the
-    # key, so match only against keys with non-null values; sources hitting
-    # a null-valued key fall through to the missing/strict policy below
-    # instead of being silently recycled by coerce_mapping_value.
-    usable <- which(!vapply(dict, is.null, logical(1)))
-    dk <- keys[usable]
-    m <- match(sk, if (case_sensitive) dk else ascii_upper(dk))
+    # REQ-1110: match against every key, null-valued or not. A source hitting
+    # a null-valued key is mapped to typed missing (the NA already in out$v)
+    # -- it is NOT unmapped and never consults the missing:/strict: policy.
+    m <- match(sk, if (case_sensitive) keys else ascii_upper(keys))
     found <- !is.na(m)
     if (any(found)) {
-      vv <- lapply(usable[m[found]], function(mm) dict[[mm]])
-      out$v[which(hit)[found]] <- coerce_mapping_value(vv, rt)
+      # assign non-null matches individually; null matches keep their typed NA
+      null_hit <- vapply(m[found], function(mm) is.null(dict[[mm]]), logical(1))
+      do_assign <- which(found)[!null_hit]
+      if (length(do_assign) > 0) {
+        vv <- lapply(m[do_assign], function(mm) dict[[mm]])
+        out$v[which(hit)[do_assign]] <- coerce_mapping_value(vv, rt)
+      }
     }
     unmapped_idx <- which(hit)[!found]
     if (length(unmapped_idx) > 0) {
@@ -609,7 +608,7 @@ mapping_value_type <- function(vals) {
 }
 
 coerce_mapping_value <- function(vv, rt) {
-  if (rt == "int") return(as.integer(unlist(vv)))
+  if (rt == "int") return(vapply(unlist(vv), to_int_value, double(1)))
   if (rt == "float") return(as.numeric(unlist(vv)))
   as.character(unlist(vv))
 }
@@ -734,8 +733,8 @@ eval_agg_node <- function(node, r) {
   if (k == "lit") {
     n <- r$n
     if (node$vtype == "null") return(tv(NA_real_, 1))
-    if (node$vtype == "int") return(tv(as.integer(node$v), "int"))
-    return(tv(as.numeric(node$v), "float"))
+    if (node$vtype == "int") return(tv(to_int_value(as.numeric(node$v)), "int"))
+    return(norm_finite(tv(as.numeric(node$v), "float")))
   }
   if (k == "id") {
     v <- r$resolve(id_to_string(node))
@@ -770,14 +769,14 @@ eval_reducer <- function(reducer, node, r) {
     # COUNT(D.*): counts records; NA if no records
     if (reducer != "COUNT") yamaa_error("invalid_expression", "star only for COUNT")
     if (r$n == 0) return(tv_na("int", 1))
-    return(tv(as.integer(r$n), "int"))
+    return(tv(as.numeric(r$n), "int"))
   }
   x <- eval_agg_node(node$arg, r)
   vals <- x$v
   if (reducer == "COUNT") {
     # COUNT(field): non-missing values; NA if no records
     if (r$n == 0) return(tv_na("int", 1))
-    return(tv(sum(!is.na(vals)), "int"))
+    return(tv(as.numeric(sum(!is.na(vals))), "int"))
   }
   v <- vals[!is.na(vals)]
   if (reducer == "ONLY") {
@@ -814,7 +813,7 @@ eval_reducer <- function(reducer, node, r) {
     # -2^31 is a legitimate int32 result (REQ-0434)
     if (out != floor(out) || out < -2147483648 || out > .Machine$integer.max)
       yamaa_error("integer_overflow", "integer aggregate overflow")
-    return(tv(as.integer(out), "int"))
+    return(tv(out, "int"))
   }
   # REQ-0006: non-finite float results are missing (Python folds SUM/MEAN
   # through _arithmetic, which normalizes after every + and /)

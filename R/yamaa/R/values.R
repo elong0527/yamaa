@@ -2,7 +2,10 @@
 # distinct Y/y dict keys). Other booleans (true/false) stay logical.
 yaml_handlers <- list(
   "bool#yes" = function(x) if (x %in% c("Y", "y")) x else TRUE,
-  "bool#no" = function(x) if (x %in% c("N", "n")) x else FALSE)
+  "bool#no" = function(x) if (x %in% c("N", "n")) x else FALSE,
+  # R's NA_integer_ IS the -2^31 bit pattern, so keep ints as exact doubles
+  # (-2147483648 survives; int32 range is enforced downstream by to_int_value)
+  "int" = function(x) suppressWarnings(as.numeric(x)))
 
 yaml_load_file <- function(path) yaml::yaml.load_file(path, handlers = yaml_handlers)
 
@@ -11,7 +14,8 @@ yaml_load_file <- function(path) yaml::yaml.load_file(path, handlers = yaml_hand
 # A "typed vector" (tv) is list(v = <R vector>, t = <type>), type one of
 # "str" | "int" | "float" | "date" | "datetime".
 #   str      -> character
-#   int      -> integer (32-bit R integer; values outside that range fail loudly)
+#   int      -> double holding exact int32 values (R's NA_integer_ IS the -2^31
+#               bit pattern, so -2147483648 cannot live in an R integer vector)
 #   float    -> double
 #   date/datetime -> character holding canonical fixed-width text, so
 #                   chronological order == string order (REQ-0003).
@@ -56,7 +60,7 @@ tv_len <- function(x) length(x$v)
 tv_na <- function(t, n) {
   v <- switch(t,
     str = rep(NA_character_, n),
-    int = rep(NA_integer_, n),
+    int = rep(NA_real_, n),
     float = rep(NA_real_, n),
     date = rep(NA_character_, n),
     datetime = rep(NA_character_, n),
@@ -103,16 +107,16 @@ apply_declared_type <- function(tv_in, declared, cf_lit, cf_present, colname) {
   out
 }
 
-# double -> 32-bit R integer; NA stays NA; fractional values fail as
-# conversion_failed; whole values outside the 32-bit range fail as
-# integer_overflow (REQ-0434). Backs str->int / float->int and readers.
+# int32-validated exact double (int tvs store doubles: NA_integer_ IS the -2^31
+# bit pattern); NA stays NA; fractional fails as conversion_failed,
+# out-of-range as integer_overflow (REQ-0434). Backs literals/readers.
 to_int_value <- function(x) {
-  if (is.na(x)) return(NA_integer_)
+  if (is.na(x)) return(NA_real_)
   if (x != trunc(x))
     yamaa_error("conversion_failed", paste0("not an integer value: ", x))
   if (x < -2147483648 || x > 2147483647)
     yamaa_error("integer_overflow", paste0("integer overflow: ", x))
-  as.integer(x)
+  x
 }
 
 # REQ-0006: non-finite doubles become missing at every boundary
@@ -136,14 +140,14 @@ convert_tv <- function(x, dest, on_fail = "raise") {
   if (x$t == "null") return(tv_na(dest, tv_len(x)))
   v <- x$v
   out <- switch(paste0(x$t, "->", dest),
-    "str->int" = vapply(parse_number_text(v), to_int_value, integer(1)),
+    "str->int" = vapply(parse_number_text(v), to_int_value, double(1)),
     "str->float" = parse_number_text(v),
     "str->date" = parse_temporal_text(v, "date"),
     "str->datetime" = parse_temporal_text(v, "datetime"),
-    "int->str" = ifelse(is.na(v), NA_character_, as.character(v)),
+    "int->str" = ifelse(is.na(v), NA_character_, sprintf("%.0f", v)),
     "int->float" = as.numeric(v),
     "float->str" = float_text(v),
-    "float->int" = vapply(v, to_int_value, integer(1)),
+    "float->int" = vapply(v, to_int_value, double(1)),
     "date->str" = v,
     "datetime->str" = v,
     "bool->str" = ifelse(is.na(v), NA_character_, ifelse(v, "Y", "N")),

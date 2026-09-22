@@ -66,7 +66,7 @@ op_date_diff <- function(start, end, unit = "day", bounds = "exclusive") {
   if (unit != "day" && bounds != "exclusive")
     yamaa_error("value_not_permitted", paste0("bounds not allowed with unit: ", unit))
   n <- length(start)
-  out <- rep(NA_integer_, n)
+  out <- rep(NA_real_, n)
   ok <- !is.na(start) & !is.na(end)
   if (!any(ok)) return(out)
   s <- split_date(start[ok]); e <- split_date(end[ok])
@@ -79,10 +79,10 @@ op_date_diff <- function(start, end, unit = "day", bounds = "exclusive") {
     yamaa_error("value_not_permitted", paste0("unknown date_diff unit: ", unit)))
   if (unit == "week") {
     # whole seven-day blocks, remainder discarded: truncation toward zero
-    res <- as.integer(trunc((de - ds) / 7))
+    res <- as.numeric(trunc((de - ds) / 7))
   }
   if (unit == "day") {
-    res <- as.integer(switch(bounds,
+    res <- as.numeric(switch(bounds,
       exclusive = de - ds,
       inclusive = de - ds + 1L,
       between = de - ds - 1L,
@@ -127,12 +127,12 @@ count_anniv <- function(y1, m1, d1, y2, m2, d2, step) {
 
 # study_day(date, reference): int, never zero (REQ-1108)
 op_study_day <- function(date, reference) {
-  n <- length(date); out <- rep(NA_integer_, n)
+  n <- length(date); out <- rep(NA_real_, n)
   ok <- !is.na(date) & !is.na(reference)
   if (!any(ok)) return(out)
   s <- split_date(date[ok]); r <- split_date(reference[ok])
   dd <- days_from_civil(s$y, s$mo, s$d) - days_from_civil(r$y, r$mo, r$d)
-  out[ok] <- as.integer(ifelse(dd >= 0, dd + 1L, dd))
+  out[ok] <- as.numeric(ifelse(dd >= 0, dd + 1L, dd))
   out
 }
 
@@ -156,11 +156,11 @@ op_to_epoch_day <- function(src) {
     yamaa_error("incompatible_input_type",
       paste0("to_epoch_day needs a date source, got ", t))
   v <- src$v
-  out <- rep(NA_integer_, length(v))
+  out <- rep(NA_real_, length(v))
   ok <- !is.na(v)
   if (any(ok)) {
     s <- split_date(v[ok])
-    out[ok] <- as.integer(days_from_civil(s$y, s$mo, s$d))
+    out[ok] <- as.numeric(days_from_civil(s$y, s$mo, s$d))
   }
   tv(out, "int")
 }
