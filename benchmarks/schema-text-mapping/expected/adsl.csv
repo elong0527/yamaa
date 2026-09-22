@@ -1,0 +1,5 @@
+STUDYID,USUBJID,SEXC,RACEC,TRTGRPC,SITENUM
+YAMAA-01,01,Male,White,Drug,0123
+YAMAA-01,02,Female,Asian,Drug,0456
+YAMAA-01,03,Unknown,Black or African American,Placebo,NONE
+YAMAA-01,04,Unknown,White,Unknown,MISSING

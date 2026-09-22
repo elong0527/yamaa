@@ -1,0 +1,77 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: input/dm.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SEXC, RACEC, TRTGRPC, SITENUM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      literal: YAMAA-01
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # Inline dictionary, exact matching: 'M' and 'F' translate, the
+  # unmapped code 'U' and the missing value both read as the declared
+  # missing value.
+  - name: SEXC
+    type: str
+    label: Sex Decoded
+    derivation:
+      mapping:
+        source: DM.SEX
+        dict:
+          M: Male
+          F: Female
+        missing: Unknown
+
+  # External dictionary loaded from a YAML project resource: the same
+  # lookup contract, with the dictionary living outside the spec.
+  - name: RACEC
+    type: str
+    label: Race Decoded
+    derivation:
+      mapping:
+        source: DM.RACE
+        dict_yaml: input/race_dict.yaml
+        missing: Unknown
+
+  # Case-insensitive read: the source and the dictionary keys are folded
+  # before comparison, so 'drug' and 'Placebo' match their uppercase
+  # keys. The missing treatment group reads as the missing value.
+  - name: TRTGRPC
+    type: str
+    label: Planned Treatment Decoded
+    derivation:
+      mapping:
+        source: DM.TRTGRP
+        dict:
+          DRUG: Drug
+          PLACEBO: Placebo
+        case_sensitive: false
+        missing: Unknown
+
+  # Regular-expression search keeping the second capture group: the
+  # site-prefixed identifiers yield their numeric part, the identifier
+  # with no match yields the declared no-match value, and the missing
+  # identifier yields the declared missing value.
+  - name: SITENUM
+    type: str
+    label: Site Number Extracted
+    derivation:
+      str_extract:
+        source: DM.SUBJID
+        pattern: "^([A-Z]+)-(\\d+)$"
+        group: 2
+        missing: MISSING
+        no_match: NONE
