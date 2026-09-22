@@ -1,0 +1,9 @@
+STUDYID,USUBJID,VISIT,PARAMCD,PARAM,AVAL,DTYPE
+YAMAA-01,01,1,ALT,Alanine Aminotransferase,40,
+YAMAA-01,01,2,ALT,Alanine Aminotransferase,50,
+YAMAA-01,02,1,ALT,Alanine Aminotransferase,60,
+YAMAA-01,03,1,ALT,Alanine Aminotransferase,30,
+YAMAA-01,01,1,AST,Aspartate Aminotransferase,30,
+YAMAA-01,01,2,AST,Aspartate Aminotransferase,45,
+YAMAA-01,02,1,AST,Aspartate Aminotransferase,55,
+YAMAA-01,02,1,TOTAL,Total of Components,115,CALCULATION
