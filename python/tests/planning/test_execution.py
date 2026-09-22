@@ -17,6 +17,7 @@ from yamaa.specification.models import (
     Expression,
     HandledExpression,
     Intermediate,
+    IntermediateVerification,
     OrderTerm,
     Output,
     Row,
@@ -2070,3 +2071,106 @@ def test_a_row_case_predicate_naming_a_driver_field_suggests_the_qualified_spell
         "identifier": "DTHFL2",
         "suggestion": "SRC.DTHFL2",
     }
+
+
+def _verification_source_table() -> object:
+    return frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+        ),
+        [["S1", "P01"]],
+    )
+
+
+def _verification_ds_table() -> object:
+    return frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+            TypedColumn(name="DSCAT", type="str"),
+            TypedColumn(name="DSDECOD", type="str"),
+        ),
+        [["S1", "P01", "DISPOSITION EVENT", "COMPLETED"]],
+    )
+
+
+def _verification_spec(**intermediate_fields: object) -> Specification:
+    columns = [
+        Column(
+            name="STUDYID",
+            type="str",
+            derivation=derivation({"source": "SRC.STUDYID"}),
+        ),
+        Column(
+            name="USUBJID",
+            type="str",
+            derivation=derivation({"source": "SRC.USUBJID"}),
+        ),
+    ]
+    return specification(columns).model_copy(
+        update={
+            "input": {
+                "SRC": DatasetSource(path="input/source.csv"),
+                "DS": DatasetSource(path="input/ds.csv"),
+            },
+            "intermediates": [
+                Intermediate(
+                    id="DS_EOS",
+                    dataset="DS",
+                    key=["STUDYID", "USUBJID"],
+                    key_base=["SRC.STUDYID", "SRC.USUBJID"],
+                    **intermediate_fields,
+                )
+            ],
+        }
+    )
+
+
+def _plan_verification_spec(**intermediate_fields: object) -> object:
+    return plan_execution(
+        _verification_spec(**intermediate_fields),
+        {"SRC": _verification_source_table(), "DS": _verification_ds_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+
+def test_intermediate_verification_unique_columns_reach_the_plan() -> None:
+    # REQ-1243: the declared uniqueness columns ride into the plan.
+    plan = _plan_verification_spec(
+        filter="DS.DSCAT = 'DISPOSITION EVENT'",
+        verification=IntermediateVerification(unique=["STUDYID", "USUBJID"]),
+    )
+
+    assert plan.intermediates[0].unique_columns == ("STUDYID", "USUBJID")
+
+
+def test_intermediate_verification_rejects_an_unknown_column() -> None:
+    # REQ-1243: a unique column must name a stored field.
+    with pytest.raises(ExecutionPlanningError) as raised:
+        _plan_verification_spec(
+            verification=IntermediateVerification(unique=["STUDYID", "NOPE"]),
+        )
+
+    (diagnostic,) = [
+        diagnostic
+        for diagnostic in raised.value.diagnostics
+        if diagnostic.condition == "unknown_field"
+    ]
+    assert diagnostic.requirement == "REQ-1243"
+    assert diagnostic.spec_paths == ("intermediates[0].verification.unique[1]",)
+    assert diagnostic.context["identifier"] == "DS.NOPE"
+
+
+def test_intermediate_verification_rejects_a_correlated_filter() -> None:
+    # REQ-1243: a correlated filter admits no single run-wide donor set.
+    with pytest.raises(ExecutionPlanningError) as raised:
+        _plan_verification_spec(
+            filter="DS.DSCAT = 'DISPOSITION EVENT' AND DS.USUBJID = SRC.USUBJID",
+            verification=IntermediateVerification(unique=["STUDYID", "USUBJID"]),
+        )
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "correlated_filter_with_unique_verification"
+    assert diagnostic.requirement == "REQ-1243"
+    assert diagnostic.spec_paths == ("intermediates[0].verification",)

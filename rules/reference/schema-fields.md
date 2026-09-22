@@ -41,6 +41,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.strict` | `"bool"` | `false` | `false` | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
+| `intermediate_class.verification` | `"intermediate_verification_class"` | `false` | Absent | -- | [REQ-1243](../operations/lookup.md#req-1243) |
+| `intermediate_verification_class.unique` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1243](../operations/lookup.md#req-1243) |
 | `intermediate_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `intermediate_between_class.lower` | `"identifier"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `intermediate_between_class.upper` | `"identifier"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |

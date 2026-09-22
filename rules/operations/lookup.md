@@ -336,6 +336,39 @@ intermediates:
     filter: "SUPPLB.QNAM = 'ENDPOINT'"
 ```
 
+### Intermediate uniqueness checks
+
+<a id="req-1243"></a>
+
+**REQ-1243.** An intermediate may declare `verification:` with a
+nonempty `unique:` list of its dataset's columns, asserting the
+combination is unique across the intermediate's filtered donor records:
+
+```yaml
+- id: DS_EOS
+  dataset: DS
+  filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
+  verification:
+    unique: [STUDYID, USUBJID]
+```
+
+The check runs over the source-only filtered donor records with
+`derivations:` computed, before any row is built, so a lookup whose
+key is verified unique needs neither `keep` nor `order_by`:
+[REQ-0127](lookup.md#req-0127) already rejects multiple surviving
+matches without a selection rule. A repeated combination fails the run
+as `duplicate_intermediate_records` at the `intermediates[i].verification`
+path; there is no warning severity, so a duplicate can never resolve
+ambiguously. Each `unique` column must name a stored field or a derived
+name, or fail as `unknown_field`. A `filter` or `derivations:` entry that
+fails to materialize fails the run here as well: the verification is
+load-bearing, so its failure cannot wait for a selection that may never
+happen. A `filter` that references the current
+driver row is evaluated per row and admits no single run-wide donor set,
+so it cannot combine with `verification:` and fails validation.
+`keep` stays a positional selection requiring `order_by`; an unordered
+`keep: first` is not an exactly-one assertion.
+
 ### Aggregates over a qualified relation
 
 <a id="req-0140"></a>
@@ -520,6 +553,7 @@ structural constraints come from its schema declaration.
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Dataset columns the lookup may read; defaults to every dataset column. |
 | `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, named in `key` ([REQ-1185](lookup.md#req-1185)). |
+| `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1243](lookup.md#req-1243)). |
 | `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `intermediate_class.strict` | Fail when the lookup yields nothing. |
 

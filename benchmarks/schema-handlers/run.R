@@ -1,4 +1,4 @@
 library(yamaa)
 
-advs <- yamaa_domain("spec.yaml")$output
-advs
+adsl <- yamaa_domain("spec.yaml")$output
+adsl

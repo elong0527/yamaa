@@ -14,6 +14,7 @@ conditions:
   dependency_cycle: {rules: [R001], phases: [validation]}
   division_by_zero: {rules: [R010], phases: [derivation]}
   duplicate_identifier: {rules: [R002, R003], phases: [validation]}
+  duplicate_intermediate_records: {rules: [R003], phases: [verification]}
   duplicate_key: {rules: [R005], phases: [output]}
   duplicate_order_term: {rules: [R005], phases: [validation]}
   field_parse_failed: {rules: [R014], phases: [ingest]}
