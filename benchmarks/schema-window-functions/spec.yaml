@@ -1,0 +1,162 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, VISITN]
+input:
+  VS: {path: input/vs.csv, types: {VISITN: int, VSSTRESN: float}}
+base: VS
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, VISITN, VISIT, VSDTC, TRTSDT, VSSTRESN, VSEVAL,
+            VSSEQ, SEVRANKC, SEVRANKD, PREVRES, NEXTRES, LASTRES, CARRYRES, BLFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: VISITN
+    type: int
+    label: Visit Number
+    derivation: VS.VISITN
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: VS.VISIT
+
+  - name: VSDTC
+    type: date
+    label: Visit Date
+    derivation: VS.VSDTC
+
+  - name: TRTSDT
+    type: date
+    label: Treatment Start Date
+    derivation: VS.TRTSDT
+
+  - name: VSSTRESN
+    type: float
+    label: Result in Numeric Format
+    derivation: VS.VSSTRESN
+
+  - name: VSEVAL
+    type: str
+    label: Evaluable Visit Flag
+    derivation: VS.VSEVAL
+
+  # Numbers only the evaluable visits from 1 within each subject. The
+  # filtered-out visits receive missing.
+  - name: VSSEQ
+    type: int
+    label: Evaluable Visit Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [USUBJID]
+          order_by: [VISITN]
+          filter: "VSEVAL = 'Y'"
+
+  # Competition rank of the visit results, highest first, ties sharing a
+  # number with the next distinct value skipping positions. The two tied
+  # visits of subject 01 share rank 1 and the next value takes rank 3; the
+  # missing result of subject 02 sorts last.
+  - name: SEVRANKC
+    type: int
+    label: Competition Rank of Result
+    derivation:
+      rank:
+        method: competition
+        window:
+          group_by: [USUBJID]
+          order_by:
+            - variable: VSSTRESN
+              direction: desc
+              nulls: last
+
+  # Dense rank of the same ordering: no number is skipped after a tie.
+  - name: SEVRANKD
+    type: int
+    label: Dense Rank of Result
+    derivation:
+      rank:
+        method: dense
+        window:
+          group_by: [USUBJID]
+          order_by:
+            - variable: VSSTRESN
+              direction: desc
+              nulls: last
+
+  # The result from the previous visit. A missing value is not skipped: a
+  # present row with a missing value reads the same as an absent row.
+  - name: PREVRES
+    type: float
+    label: Previous Visit Result
+    derivation:
+      row_value:
+        source: VSSTRESN
+        offset: -1
+        window:
+          group_by: [USUBJID]
+          order_by: [VISITN]
+
+  # The result from the next visit; the last visit of each subject reads
+  # missing.
+  - name: NEXTRES
+    type: float
+    label: Next Visit Result
+    derivation:
+      row_value:
+        source: VSSTRESN
+        offset: 1
+        window:
+          group_by: [USUBJID]
+          order_by: [VISITN]
+
+  # The closest strictly earlier non-missing result; the current row is
+  # never a candidate. Crosses any number of consecutive gaps: subject 02
+  # visit 4 reads the visit 1 result across two missing visits.
+  - name: LASTRES
+    type: float
+    label: Last Non-missing Result
+    derivation:
+      previous_non_missing:
+        source: VSSTRESN
+        window:
+          group_by: [USUBJID]
+          order_by: [VISITN]
+
+  # Returns the current result when present, otherwise the closest
+  # strictly earlier non-missing result. Differs from the previous
+  # non-missing column only where the current row has a value: the first
+  # visit keeps its own result instead of reading missing.
+  - name: CARRYRES
+    type: float
+    label: Carried-forward Result
+    derivation:
+      locf:
+        source: VSSTRESN
+        window:
+          group_by: [USUBJID]
+          order_by: [VISITN]
+
+  # Marks the unique latest visit dated on or before treatment start. The
+  # baseline visit can carry a missing result (subject 02 visit 2), and a
+  # subject with no visit on or before treatment start (subject 04) has no
+  # baseline at all.
+  - name: BLFL
+    type: str
+    label: Baseline Visit Flag
+    derivation:
+      baseline_flag:
+        date: VSDTC
+        reference_date: TRTSDT
+        window:
+          group_by: [USUBJID]
