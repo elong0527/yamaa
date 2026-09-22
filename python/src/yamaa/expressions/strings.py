@@ -45,6 +45,9 @@ from yamaa.regex import (
     capture_group_count,
     regex_extract,
 )
+from yamaa.regex import (
+    search as regex_search,
+)
 
 TemplatePart: TypeAlias = dict[str, Any]
 
@@ -263,6 +266,35 @@ def _str_extract(payload: object, resolver: Resolver) -> EvaluationResult:
     return ValueResult(value=extracted)
 
 
+def _str_contains(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return _invalid_payload("str_contains", "a mapping")
+    variable = payload.get("source")
+    pattern = payload.get("pattern")
+    if not isinstance(pattern, str):
+        return _invalid_payload("str_contains", "a pattern")
+
+    try:
+        capture_group_count(pattern)
+    except RegexError as error:
+        return expression_condition(
+            "validation",
+            error.condition,
+            {"pattern": error.pattern, "reason": error.reason},
+            requirement=error.requirement,
+            field="pattern",
+        )
+
+    resolved = _resolve_string(variable, resolver, "str_contains")
+    if not isinstance(resolved, ValueResult):
+        return resolved
+    if resolved.value is MISSING:
+        return _missing_input(payload, str(variable))
+    subject = resolved.value
+    assert isinstance(subject, str)
+    return ValueResult(value=regex_search(pattern, subject))
+
+
 def _template(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(payload, str):
         payload = {"template": payload}
@@ -348,6 +380,7 @@ def string_handlers(dispatcher: NestedDispatcher) -> dict[str, ExpressionHandler
     """Return the R007 string operations this component registers."""
     return {
         "str_extract": _str_extract,
+        "str_contains": _str_contains,
         "str_concat": _concat(dispatcher),
         "str_template": _template,
         "str_upper": _cased("str_upper", ascii_upper),

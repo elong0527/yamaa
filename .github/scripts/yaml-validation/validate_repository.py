@@ -9715,8 +9715,8 @@ GRAMMAR_CASE_KEYS = {
 # invents a category outside them hides what it is evidence for.
 GRAMMAR_COVERS = {
     'predicate': {
-        'between', 'comparison', 'escape', 'grouping', 'identifier', 'in',
-        'keyword-case', 'like', 'literal', 'logic', 'null-test',
+        'between', 'call', 'comparison', 'escape', 'grouping', 'identifier',
+        'in', 'keyword-case', 'like', 'literal', 'logic', 'null-test',
         'precedence', 'rejection', 'reserved', 'temporal',
     },
     'numeric': {
@@ -9820,6 +9820,12 @@ def predicate_shape(node):
         if node['escape'] is not None:
             rendered += f" (escape {quote_grammar_scalar(node['escape'])})"
         return rendered + ')'
+    if kind == 'call':
+        return (
+            f"(str-contains {predicate_operand_shape(node['source'])} "
+            f"(str {quote_grammar_scalar(node['pattern'])})"
+            f")"
+        )
     raise AssertionError(f"unknown predicate AST node {kind!r}")
 
 

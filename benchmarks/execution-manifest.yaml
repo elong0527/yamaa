@@ -528,6 +528,9 @@ examples:
   negative-str-uncaptured-group:
     status: executable
     runtimes: ['python']
+  negative-str-contains-invalid-regex:
+    status: executable
+    runtimes: ['python']
   negative-str-lowercase-number:
     status: executable
     runtimes: ['python']
@@ -592,6 +595,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-sentence-case:
+    status: executable
+    runtimes: ['python']
+  schema-str-contains:
     status: executable
     runtimes: ['python']
   sdtm-ae-coding:

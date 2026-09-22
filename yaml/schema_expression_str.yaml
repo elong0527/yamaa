@@ -20,6 +20,18 @@ expressions:
         - no_match:
             type: literal_value
             description: See REQ-1111 in rules/operations/text.md.
+    str_contains: # See REQ-1243 in rules/operations/text.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1243 in rules/operations/text.md.
+        - pattern:
+            type: regex
+            required: true
+            description: See REQ-1243 in rules/operations/text.md.
+        - missing:
+            type: literal_value
+            description: See REQ-1243 in rules/operations/text.md.
     str_concat: # See REQ-1112 in rules/operations/text.md.
         - sources:
             type: "list[expression]"

@@ -13,9 +13,17 @@
 # other two, so each contract keeps its own `number`.
 #
 # `grammar/README.md` states the file format and the shape notation.
+#
+# Python-only divergence (issue #778): the `call` production is implemented by
+# the Python engine only. The R predicate parser has no function-call support
+# and rejects every `name(...)` text with `invalid_predicate`, so the R engine
+# is divergent here by design. The `call` acceptance vectors therefore live in
+# the Python test suite (python/tests/expressions/test_predicates.py), not in
+# `cases` below; the shared rejection vectors stay here because both parsers
+# agree on them.
 schema_version: "1.0"
 contract: predicate
-contract_version: "1.0.0"
+contract_version: "1.1.0"
 rule: operations/predicates
 start: predicate
 productions:
@@ -33,7 +41,7 @@ productions:
       "NOT"* boolean
   - name: boolean
     definition: |-
-      comparison | null_test | "(" predicate ")" | "TRUE" | "FALSE"
+      comparison | null_test | call | "(" predicate ")" | "TRUE" | "FALSE"
   - name: comparison
     definition: |-
       operand compare operand
@@ -43,6 +51,9 @@ productions:
   - name: null_test
     definition: |-
       operand "IS" ["NOT"] "NULL"
+  - name: call
+    definition: |-
+      "str_contains" "(" operand "," string ")"
   - name: compare
     definition: |-
       "=" | "<>" | "<" | "<=" | ">" | ">="
@@ -372,6 +383,26 @@ cases:
   - id: a-function-call-is-not-in-the-predicate-grammar
     covers: [rejection]
     text: "ABS(AVAL) > 2"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-detect-is-not-a-predicate-function
+    covers: [call, rejection]
+    text: "str_detect(AEDECOD, 'X')"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-requires-two-arguments
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD)"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-pattern-must-be-a-string-literal
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD, 1)"
+    parse: reject
+    condition: invalid_predicate
+  - id: str-contains-rejects-an-invalid-pattern
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD, '(')"
     parse: reject
     condition: invalid_predicate
   - id: a-bare-operand-is-not-a-predicate

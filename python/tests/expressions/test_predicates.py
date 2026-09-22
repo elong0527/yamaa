@@ -71,6 +71,12 @@ def _ast_shape(node: PredicateAst) -> str:
         if node["escape"] is not None:
             rendered += f" (escape {_quote_shape(node['escape'])})"
         return rendered + ")"
+    if kind == "call":
+        return (
+            f"(str-contains {_operand_shape(node['source'])} "
+            f"(str {_quote_shape(node['pattern'])})"
+            f")"
+        )
     raise AssertionError(f"unknown AST node {kind!r}")
 
 
@@ -90,6 +96,52 @@ def test_parser_matches_the_shared_r004_contract(case: dict[str, object]) -> Non
     else:
         with pytest.raises(PredicateError):
             parse_predicate(text)
+
+
+# Python-only `call` acceptance vectors (issue #778). The shared
+# yaml/grammar/predicate.yaml keeps the `call` production but not its
+# acceptance vectors, because the R predicate parser has no function-call
+# support and the R engine is divergent here by design. These assert the same
+# parse shapes and identifier collections the shared vectors recorded before
+# they moved here, so Python coverage of the production is not weakened.
+@pytest.mark.parametrize(
+    ("text", "identifiers", "shape"),
+    [
+        (
+            "str_contains(AEDECOD, 'DERM|ERYTH')",
+            ["AEDECOD"],
+            "(str-contains (id AEDECOD) (str 'DERM|ERYTH'))",
+        ),
+        (
+            "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER') OR AE.AESER = 'Y'",
+            ["AE.AEDECOD", "AE.AESER"],
+            "(or (str-contains (id AE.AEDECOD) (str 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')) (= (id AE.AESER) (str 'Y')))",
+        ),
+        (
+            "NOT str_contains(AEDECOD, 'X')",
+            ["AEDECOD"],
+            "(not (str-contains (id AEDECOD) (str 'X')))",
+        ),
+        (
+            "str_contains('hello', 'ELL')",
+            [],
+            "(str-contains (str 'hello') (str 'ELL'))",
+        ),
+        (
+            "STR_CONTAINS(AEDECOD, 'X')",
+            ["AEDECOD"],
+            "(str-contains (id AEDECOD) (str 'X'))",
+        ),
+    ],
+)
+def test_str_contains_call_vectors_match_the_call_production(
+    text: str, identifiers: list[str], shape: str
+) -> None:
+    from yamaa.expressions import predicate_identifiers
+
+    ast = parse_predicate(text)
+    assert _ast_shape(ast) == shape
+    assert list(predicate_identifiers(ast)) == identifiers
 
 
 def _evaluate(
@@ -193,3 +245,84 @@ def test_unknown_identifier_is_a_structured_condition() -> None:
     assert result.condition.phase == "validation"
     assert result.condition.condition == "unknown_field"
     assert result.condition.context == {"identifier": "UNKNOWN"}
+
+
+@pytest.mark.parametrize(
+    ("text", "values", "expected"),
+    [
+        (
+            "str_contains(AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')",
+            {"AEDECOD": "APPLICATION SITE DERMATITIS"},
+            TruthValue.TRUE,
+        ),
+        (
+            "str_contains(AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')",
+            {"AEDECOD": "HEADACHE"},
+            TruthValue.FALSE,
+        ),
+        (
+            "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER') OR AE.AESER = 'Y'",
+            {"AE.AEDECOD": "HEADACHE", "AE.AESER": "Y"},
+            TruthValue.TRUE,
+        ),
+        (
+            "NOT str_contains(AEDECOD, 'DERM')",
+            {"AEDECOD": "HEADACHE"},
+            TruthValue.TRUE,
+        ),
+        (
+            "str_contains(AEDECOD, 'DERM')",
+            {"AEDECOD": None},
+            TruthValue.UNKNOWN,
+        ),
+        (
+            "NOT str_contains(AEDECOD, 'DERM')",
+            {"AEDECOD": None},
+            TruthValue.UNKNOWN,
+        ),
+        (
+            "str_contains('APPLICATION SITE DERMATITIS', 'DERM')",
+            {},
+            TruthValue.TRUE,
+        ),
+        (
+            "STR_CONTAINS(AEDECOD, 'DERM')",
+            {"AEDECOD": "DERMATITIS"},
+            TruthValue.TRUE,
+        ),
+    ],
+)
+def test_str_contains_call(
+    text: str, values: dict[str, object], expected: TruthValue
+) -> None:
+    result = _evaluate(text, values)
+    assert isinstance(result, PredicateValue)
+    assert result.value is expected
+
+
+def test_str_contains_call_reports_its_source_identifier() -> None:
+    from yamaa.expressions import predicate_identifiers
+
+    ast = parse_predicate("str_contains(AE.AEDECOD, 'DERM') OR AE.AESER = 'Y'")
+    assert predicate_identifiers(ast) == ("AE.AEDECOD", "AE.AESER")
+
+
+def test_str_contains_call_rejects_a_non_string_source() -> None:
+    result = _evaluate("str_contains(AVAL, 'DERM')", {"AVAL": 3})
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "incompatible_input_type"
+
+
+def test_str_contains_call_rejects_an_invalid_pattern() -> None:
+    with pytest.raises(PredicateError):
+        parse_predicate("str_contains(AEDECOD, '(')")
+
+
+def test_str_detect_is_not_a_predicate_function() -> None:
+    with pytest.raises(PredicateError):
+        parse_predicate("str_detect(AEDECOD, 'DERM')")
+
+
+def test_bare_str_contains_without_parens_stays_an_identifier() -> None:
+    with pytest.raises(PredicateError):
+        parse_predicate("str_contains")

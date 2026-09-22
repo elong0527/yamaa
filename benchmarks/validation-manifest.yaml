@@ -310,6 +310,11 @@ fixtures:
     condition: regex_group_out_of_range
     spec_paths: ["columns.SITEID.derivation.str_extract.group"]
     validator: regex
+  negative-str-contains-invalid-regex:
+    rule: R004
+    condition: invalid_predicate
+    spec_paths: ["columns.AESEV.derivation.case[0].when"]
+    validator: predicate
   negative-str-lowercase-number:
     rule: R007
     condition: incompatible_input_type

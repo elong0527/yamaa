@@ -32,6 +32,7 @@ coverage:
   row_value: [negative-row-no-prior]
   source: [negative-source-undeclared-field]
   str_concat: [negative-usubjid-length]
+  str_contains: [negative-str-contains-invalid-regex]
   str_extract: [negative-str-uncaptured-group]
   str_lower: [negative-str-lowercase-number]
   str_sentence: [negative-str-sentence-number]

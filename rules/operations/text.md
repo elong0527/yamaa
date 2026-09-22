@@ -460,6 +460,18 @@ structural constraints come from its schema declaration.
 | `expressions.str_extract.no_match` | Value returned when pattern does not match source. |
 | `Result` | Extracts one regular-expression match group from a string. |
 
+<a id="req-1243"></a>
+
+**REQ-1243.** The `expressions.str_contains` interface has the following meanings. Shape, defaults, and
+structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.str_contains.source` | String variable to search. |
+| `expressions.str_contains.pattern` | Regular expression searched in source under [Text operations](text.md). |
+| `expressions.str_contains.missing` | Value returned when source is missing. |
+| `Result` | Returns true when the pattern matches anywhere in the source, false when it matches nowhere. In a `when:` predicate, a missing source yields unknown under [Predicates](predicates.md) three-valued logic; as a column derivation the `missing` handler applies. |
+
 <a id="req-1112"></a>
 
 **REQ-1112.** The `expressions.str_concat` interface has the following meanings. Shape, defaults, and

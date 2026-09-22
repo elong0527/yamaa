@@ -2265,6 +2265,8 @@ requirements:
   REQ-1191: {"file": "operations/aggregation.md", "sources": ["yamaa:issue-704:derive-single-relation", "yamaa:issue-705:derive-single-relation"]}
   REQ-1192: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:derive_binding_class.name.description", "schema_expression_aggregate.yaml:derive_binding_class.type.description", "schema_expression_aggregate.yaml:derive_binding_class.derivation.description"]}
   REQ-1242: {"file": "operations/aggregation.md", "sources": ["yamaa:issue-789:derive-intermediate-read"]}
+  REQ-1243: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_contains.source.description", "schema_expression_str.yaml:expressions.str_contains.pattern.description", "schema_expression_str.yaml:expressions.str_contains.missing.description"]}
+  REQ-1244: {"file": "operations/predicates.md", "sources": ["yamaa:issue-778:str-contains-predicate-call"]}
   REQ-1234: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:profile-admission"]}
   REQ-1235: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-value-model"]}
   REQ-1236: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-one-container"]}
@@ -2757,3 +2759,7 @@ provenance_addenda:
   - {"source": "schema_expression_str.yaml:expressions.str_sentence.missing.description", "text": "Value returned when source is missing.", "owner": "operations/text", "group": "expressions.str_sentence", "target": "REQ-1240"}
   - {"source": "schema_expression_str.yaml:expressions.str_title.source.description", "text": "String variable converted to title case under R019.", "owner": "operations/text", "group": "expressions.str_title", "target": "REQ-1241"}
   - {"source": "schema_expression_str.yaml:expressions.str_title.missing.description", "text": "Value returned when source is missing.", "owner": "operations/text", "group": "expressions.str_title", "target": "REQ-1241"}
+  - {"source": "schema_expression_str.yaml:expressions.str_contains.source.description", "text": "See REQ-1243 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_contains", "target": "REQ-1243"}
+  - {"source": "schema_expression_str.yaml:expressions.str_contains.pattern.description", "text": "See REQ-1243 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_contains", "target": "REQ-1243"}
+  - {"source": "schema_expression_str.yaml:expressions.str_contains.missing.description", "text": "See REQ-1243 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_contains", "target": "REQ-1243"}
+  - {"source": "yamaa:issue-778:str-contains-predicate-call", "text": "Issue #778: str_contains(source, pattern) is the one function call the predicate grammar admits; Python-only, the R engine does not parse predicate function calls.", "owner": "operations/predicates", "group": "predicate-call", "target": "REQ-1244"}

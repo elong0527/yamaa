@@ -321,6 +321,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.str_extract.group` | `"int"` | `false` | `0` | -- | [REQ-1111](../operations/text.md#req-1111) |
 | `expressions.str_extract.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1111](../operations/text.md#req-1111) |
 | `expressions.str_extract.no_match` | `"literal_value"` | `false` | Absent | -- | [REQ-1111](../operations/text.md#req-1111) |
+| `expressions.str_contains.source` | `"variable"` | `true` | Absent | -- | [REQ-1243](../operations/text.md#req-1243) |
+| `expressions.str_contains.pattern` | `"regex"` | `true` | Absent | -- | [REQ-1243](../operations/text.md#req-1243) |
+| `expressions.str_contains.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1243](../operations/text.md#req-1243) |
 | `expressions.str_concat.sources` | `"list[expression]"` | `true` | Absent | -- | [REQ-1112](../operations/text.md#req-1112) |
 | `expressions.str_concat.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1112](../operations/text.md#req-1112) |
 | `expressions.str_template` | `["string_template", "str_template_class"]` | `false` | Absent | -- | [REQ-1113](../operations/text.md#req-1113) |

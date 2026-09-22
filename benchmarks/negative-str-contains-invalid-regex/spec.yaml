@@ -1,0 +1,31 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEV]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEV
+    type: str
+    label: Severity/Intensity
+    derivation:
+      case:
+        - when: "str_contains(AE.AETERM, 'SEVERE[')"
+          then:
+            literal: SEVERE
+        - otherwise:
+            literal: MILD

@@ -1198,6 +1198,8 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1191](../operations/aggregation.md#req-1191) | `operations/aggregation.md` | Schema prose |
 | [REQ-1192](../operations/aggregation.md#req-1192) | `operations/aggregation.md` | Schema prose |
 | [REQ-1242](../operations/aggregation.md#req-1242) | `operations/aggregation.md` | Schema prose |
+| [REQ-1243](../operations/text.md#req-1243) | `operations/text.md` | Schema prose |
+| [REQ-1244](../operations/predicates.md#req-1244) | `operations/predicates.md` | Schema prose |
 | [REQ-1234](../storage/publication.md#req-1234) | `storage/publication.md` | Schema prose |
 | [REQ-1235](../storage/publication.md#req-1235) | `storage/publication.md` | Schema prose |
 | [REQ-1236](../storage/publication.md#req-1236) | `storage/publication.md` | Schema prose |
