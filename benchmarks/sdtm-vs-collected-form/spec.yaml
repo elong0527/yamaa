@@ -1,0 +1,276 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_FORM:
+    path: input/vs_form.csv
+    types: {SYSBP: float, DIABP: float, PULSE: float, RESP: float, TEMP: float, WEIGHT: float}
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
+    VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_FORM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_FORM.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: VS_FORM.VISIT
+
+  - name: VSDTC
+    type: date
+    label: Date/Time of Measurements
+    derivation: VS_FORM.VSDTC
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+
+  - name: VSTEST
+    type: str
+    label: Vital Signs Test Name
+
+  - name: TESTORD
+    type: int
+    label: Test Order Within Visit
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: VSSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: VSSTRESN
+
+  - name: VSSTRESU
+    type: str
+    label: Standard Units
+
+  - name: VSPOS
+    type: str
+    label: Position of Subject
+    derivation:
+      case:
+        - when: "(VSTESTCD = 'SYSBP' OR VSTESTCD = 'DIABP' OR VSTESTCD = 'PULSE') AND VSORRES IS NOT NULL"
+          then:
+            source: VS_FORM.POSITION
+
+  - name: VSMETHOD
+    type: str
+    label: Method of Test or Examination
+    derivation:
+      case:
+        - when: "VSTESTCD = 'TEMP' AND VSORRES IS NOT NULL"
+          then:
+            source: VS_FORM.TEMPMETHOD
+
+  - name: VSSTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: "(VSTESTCD = 'SYSBP' OR VSTESTCD = 'DIABP') AND VS_FORM.BPNOTDONE = 'Y'"
+          then:
+            literal: NOT DONE
+
+  - name: VSREASND
+    type: str
+    label: Reason Not Done
+    derivation:
+      case:
+        - when: "(VSTESTCD = 'SYSBP' OR VSTESTCD = 'DIABP') AND VS_FORM.BPNOTDONE = 'Y'"
+          then:
+            source: VS_FORM.BPREASND
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VSDTC, TESTORD]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: sysbp
+    derivations:
+      VSTESTCD:
+        literal: SYSBP
+      VSTEST:
+        literal: Systolic Blood Pressure
+      TESTORD:
+        literal: 1
+      VSORRES:
+        source: VS_FORM.SYSBP
+      VSORRESU:
+        case:
+          - when: "VS_FORM.SYSBP IS NOT NULL"
+            then:
+              source: VS_FORM.SYSBPU
+      VSSTRESN:
+        source: VS_FORM.SYSBP
+      VSSTRESU:
+        case:
+          - when: "VS_FORM.SYSBP IS NOT NULL"
+            then:
+              source: VS_FORM.SYSBPU
+
+  - id: diabp
+    derivations:
+      VSTESTCD:
+        literal: DIABP
+      VSTEST:
+        literal: Diastolic Blood Pressure
+      TESTORD:
+        literal: 2
+      VSORRES:
+        source: VS_FORM.DIABP
+      VSORRESU:
+        case:
+          - when: "VS_FORM.DIABP IS NOT NULL"
+            then:
+              source: VS_FORM.DIABPU
+      VSSTRESN:
+        source: VS_FORM.DIABP
+      VSSTRESU:
+        case:
+          - when: "VS_FORM.DIABP IS NOT NULL"
+            then:
+              source: VS_FORM.DIABPU
+
+  - id: pulse
+    derivations:
+      VSTESTCD:
+        literal: PULSE
+      VSTEST:
+        literal: Pulse Rate
+      TESTORD:
+        literal: 3
+      VSORRES:
+        source: VS_FORM.PULSE
+      VSORRESU:
+        case:
+          - when: "VS_FORM.PULSE IS NOT NULL"
+            then:
+              source: VS_FORM.PULSEU
+      VSSTRESN:
+        source: VS_FORM.PULSE
+      VSSTRESU:
+        case:
+          - when: "VS_FORM.PULSE IS NOT NULL"
+            then:
+              source: VS_FORM.PULSEU
+
+  - id: resp
+    derivations:
+      VSTESTCD:
+        literal: RESP
+      VSTEST:
+        literal: Respiratory Rate
+      TESTORD:
+        literal: 4
+      VSORRES:
+        source: VS_FORM.RESP
+      VSORRESU:
+        case:
+          - when: "VS_FORM.RESP IS NOT NULL"
+            then:
+              source: VS_FORM.RESPU
+      VSSTRESN:
+        source: VS_FORM.RESP
+      VSSTRESU:
+        case:
+          - when: "VS_FORM.RESP IS NOT NULL"
+            then:
+              source: VS_FORM.RESPU
+
+  - id: temp
+    derivations:
+      VSTESTCD:
+        literal: TEMP
+      VSTEST:
+        literal: Temperature
+      TESTORD:
+        literal: 5
+      VSORRES:
+        source: VS_FORM.TEMP
+      VSORRESU:
+        case:
+          - when: "VS_FORM.TEMP IS NOT NULL"
+            then:
+              source: VS_FORM.TEMPU
+      VSSTRESN:
+        source: VS_FORM.TEMP
+      VSSTRESU:
+        case:
+          - when: "VS_FORM.TEMP IS NOT NULL"
+            then:
+              source: VS_FORM.TEMPU
+
+  - id: weight
+    derivations:
+      VSTESTCD:
+        literal: WEIGHT
+      VSTEST:
+        literal: Weight
+      TESTORD:
+        literal: 6
+      VSORRES:
+        source: VS_FORM.WEIGHT
+      VSORRESU:
+        case:
+          - when: "VS_FORM.WEIGHT IS NOT NULL"
+            then:
+              source: VS_FORM.WEIGHTU
+      VSSTRESN:
+        source: VS_FORM.WEIGHT
+      VSSTRESU:
+        case:
+          - when: "VS_FORM.WEIGHT IS NOT NULL"
+            then:
+              source: VS_FORM.WEIGHTU
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 24
+      max: 24
+  - all_or_none:
+      id: standardized-result-completeness
+      columns: [VSSTRESN, VSSTRESC, VSSTRESU]
+  - implies:
+      id: not-done-record-has-no-result
+      when: "VSSTAT = 'NOT DONE'"
+      then: "VSORRES IS NULL AND VSSTRESN IS NULL"
+  - implies:
+      id: collected-result-is-not-flagged
+      when: "VSORRES IS NOT NULL"
+      then: "VSSTAT IS NULL"

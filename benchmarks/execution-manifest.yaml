@@ -675,6 +675,9 @@ examples:
   sdtm-vs-units:
     status: executable
     runtimes: ['python']
+  sdtm-vs-collected-form:
+    status: executable
+    runtimes: ['python']
   sdtm-vs-study-day:
     status: executable
     runtimes: ['python']
