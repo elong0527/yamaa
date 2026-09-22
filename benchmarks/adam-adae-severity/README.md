@@ -1,4 +1,4 @@
-# Severity Carryforward
+# Carry Each Event's Severity
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-severity.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -13,11 +13,13 @@ supplemental records carrying the severity recorded for each event.
 
 - `AEDECOD` is the dictionary-derived term collected for the event;
   always present from the collected record.
-- `AESEV` is the severity recorded for that same event; empty when
-  the event has no supplemental record.
+- `AESEV` is the severity/intensity recorded for that event; empty
+  when the event has no supplemental record, or the record carries no
+  severity.
 
-**Note:** severity is matched on the subject identifiers together with
-the event sequence number, so two events for one subject keep their
-own severities apart.
+**Note:** severity is matched on the study and subject identifiers
+together with the event sequence number, so two events for one subject
+keep their own severities apart. A supplemental record for an event
+that was never collected is ignored: it creates no row.
 
 **Standard:** ADaM | **Domain:** ADAE
