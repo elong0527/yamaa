@@ -675,6 +675,9 @@ examples:
   schema-non-finite:
     status: executable
     runtimes: ['python']
+  schema-window-functions:
+    status: executable
+    runtimes: ['python']
   adam-advs-locf:
     status: executable
     runtimes: ['python']
