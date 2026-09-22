@@ -119,6 +119,9 @@ class PlannedIntermediate(_FrozenModel):
     # REQ-1185: derivations are computed per record before matching; the map
     # is empty when the author declared none.
     derived: tuple[tuple[str, HandledExpression], ...] = ()
+    # REQ-1245: donor columns asserted unique across the source-only
+    # filtered records; empty when the author declared no verification.
+    unique_columns: tuple[str, ...] = ()
 
     @property
     def filter_variables(self) -> tuple[str, ...]:
@@ -2857,6 +2860,41 @@ def _plan_lookups(
             )
             failed = True
 
+        unique_columns: tuple[str, ...] = ()
+        if intermediate.verification is not None:
+            unique_columns = tuple(intermediate.verification.unique)
+            for unique_index, field in enumerate(unique_columns):
+                if field in derived or field in fields:
+                    continue
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        f"{path}.verification.unique[{unique_index}]",
+                        {
+                            "intermediate": intermediate.id,
+                            "identifier": f"{intermediate.dataset}.{field}",
+                        },
+                        requirement="REQ-1245",
+                    )
+                )
+                failed = True
+            if predicate is not None and any(
+                identifier.split(".", 1)[0] != intermediate.dataset
+                for identifier in predicate_identifiers(predicate)
+            ):
+                # REQ-1245: a correlated filter is evaluated per current
+                # row, so no single run-wide donor set exists to check
+                # uniqueness over; the combination fails validation.
+                diagnostics.append(
+                    _diagnostic(
+                        "correlated_filter_with_unique_verification",
+                        f"{path}.verification",
+                        {"intermediate": intermediate.id},
+                        requirement="REQ-1245",
+                    )
+                )
+                failed = True
+
         between = intermediate.between
         if between is not None:
             failed = (
@@ -2902,6 +2940,7 @@ def _plan_lookups(
             strict=intermediate.strict,
             missing_declared="missing" in intermediate.model_fields_set,
             derived=tuple(derived.items()),
+            unique_columns=unique_columns,
         )
     return planned
 

@@ -56,6 +56,7 @@ from yamaa.runtime.joins import (
     select_record,
 )
 from yamaa.specification.models import Expression, OrderTerm
+from yamaa.verification.diagnostics import VerificationFailure
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +259,63 @@ class IntermediateSelector:
         return _select_eligible(
             plan, eligible, current, index=self._match_index_for(plan, eligible)
         )
+
+    def verify_uniqueness(self) -> tuple[VerificationFailure, ...]:
+        """Evaluate every declared intermediate uniqueness check (REQ-1245).
+
+        Each check runs over the source-only filtered donor records with
+        derivations computed, before any row is built, so a repeated key
+        combination fails the run loudly instead of resolving ambiguously.
+        A filter or derivation that failed to materialize fails the run
+        here too: the verification is load-bearing for a declared
+        intermediate, so its failure cannot wait for a selection that may
+        never happen.
+        """
+        failures: list[VerificationFailure] = []
+        for plan in self.plans.values():
+            if not plan.unique_columns:
+                continue
+            records = self._records(plan)
+            if isinstance(records, ConditionResult):
+                failures.append(
+                    _materialization_failure(
+                        plan, records.condition, f"{plan.path}.filter"
+                    )
+                )
+                continue
+            if isinstance(records, _DerivationFailure):
+                failures.append(
+                    _materialization_failure(
+                        plan,
+                        records.condition.condition,
+                        f"{plan.path}.derivations.{records.name}",
+                    )
+                )
+                continue
+            duplicates = _duplicate_groups(records, plan.unique_columns)
+            if duplicates:
+                failures.append(
+                    VerificationFailure(
+                        phase="verification",
+                        condition="duplicate_intermediate_records",
+                        spec_paths=(f"{plan.path}.verification",),
+                        requirement="REQ-1245",
+                        context={
+                            "intermediate": plan.identifier,
+                            "dataset": plan.dataset,
+                            "columns": list(plan.unique_columns),
+                            "duplicate_count": len(duplicates),
+                        },
+                        offending_keys=tuple(
+                            {
+                                field: json_value(record.values[field])
+                                for field in plan.unique_columns
+                            }
+                            for record in duplicates
+                        ),
+                    )
+                )
+        return tuple(failures)
 
     def _match_index_for(
         self,
@@ -492,6 +550,61 @@ def _equal(left: RuntimeValue, right: RuntimeValue) -> bool:
         return compare_values(left, right) == 0
     except TypeError:
         return False
+
+
+def _uniqueness_key(values: Sequence[RuntimeValue]) -> tuple[object, ...]:
+    """Return the grouping key for one record's uniqueness columns.
+
+    Mirrors the output `unique` check's comparable form: missing reads as
+    `None`, and dates group by their text form. `int`/`float` share Python
+    equality, so `1` and `1.0` group together exactly as matching equates
+    them.
+    """
+    key: list[object] = []
+    for value in values:
+        if value is MISSING:
+            key.append(None)
+        elif isinstance(value, (DateValue, DateTimeValue)):
+            key.append(value.to_text())
+        else:
+            key.append(value)
+    return tuple(key)
+
+
+def _materialization_failure(
+    plan: PlannedIntermediate,
+    failed: RuntimeCondition,
+    spec_path: str,
+) -> VerificationFailure:
+    """Report a verified intermediate whose records never materialized.
+
+    REQ-1245 makes the verification load-bearing: a declared intermediate
+    whose filter or derivation failed cannot wait for a selection that may
+    never happen, so the original condition surfaces here with the same
+    spec path `select` would have reported it at.
+    """
+    return VerificationFailure(
+        phase="verification",
+        condition=failed.condition,
+        spec_paths=(spec_path,),
+        requirement=failed.requirement or "REQ-1245",
+        context={"intermediate": plan.identifier, **failed.context},
+    )
+
+
+def _duplicate_groups(
+    records: Sequence[IndexedRecord], columns: Sequence[str]
+) -> list[IndexedRecord]:
+    """Return one representative record per repeated key combination."""
+    seen: dict[tuple[object, ...], IndexedRecord] = {}
+    duplicates: dict[tuple[object, ...], IndexedRecord] = {}
+    for record in records:
+        key = _uniqueness_key(tuple(record.values[field] for field in columns))
+        if key in seen:
+            duplicates.setdefault(key, seen[key])
+        else:
+            seen[key] = record
+    return list(duplicates.values())
 
 
 def absent_value(absent: JsonValue) -> RuntimeValue:

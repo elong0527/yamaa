@@ -414,3 +414,130 @@ def test_the_match_index_agrees_with_the_scan_under_between() -> None:
         indexed = sel.select("R1", current)
         scanned = _select_eligible(plan, records, current)
         assert _outcome_summary(indexed) == _outcome_summary(scanned), current
+
+
+def ds() -> RelationIndex:
+    return relation(
+        "DS",
+        [
+            ("STUDYID", "str"),
+            ("USUBJID", "str"),
+            ("DSCAT", "str"),
+            ("DSDECOD", "str"),
+        ],
+        [
+            ["S1", "P01", "DISPOSITION EVENT", "COMPLETED"],
+            ["S1", "P02", "DISPOSITION EVENT", "COMPLETED"],
+            ["S1", "P02", "DISPOSITION EVENT", "SCREEN FAILURE"],
+        ],
+    )
+
+
+def ds_plan(**extra: object) -> PlannedIntermediate:
+    return PlannedIntermediate(
+        identifier="DS_EOS",
+        dataset="DS",
+        path="intermediates[0]",
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        **extra,
+    )
+
+
+def test_unique_donor_records_pass_verification() -> None:
+    # REQ-1245: the filter leaves one eligible record per subject.
+    selector = IntermediateSelector(
+        [
+            ds_plan(
+                filter_predicate=parse_predicate(
+                    "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
+                ),
+                unique_columns=("STUDYID", "USUBJID"),
+            )
+        ],
+        {"DS": ds()},
+    )
+
+    assert selector.verify_uniqueness() == ()
+
+
+def test_duplicate_donor_records_fail_verification() -> None:
+    # REQ-1245: P02 carries two eligible records, so the run fails loudly.
+    selector = IntermediateSelector(
+        [ds_plan(unique_columns=("STUDYID", "USUBJID"))], {"DS": ds()}
+    )
+
+    (failure,) = selector.verify_uniqueness()
+
+    assert failure.phase == "verification"
+    assert failure.condition == "duplicate_intermediate_records"
+    assert failure.requirement == "REQ-1245"
+    assert failure.spec_paths == ("intermediates[0].verification",)
+    assert failure.context == {
+        "intermediate": "DS_EOS",
+        "dataset": "DS",
+        "columns": ["STUDYID", "USUBJID"],
+        "duplicate_count": 1,
+    }
+    assert failure.severity == "error"
+
+
+def test_an_unverified_intermediate_is_not_checked() -> None:
+    selector = IntermediateSelector([ds_plan()], {"DS": ds()})
+
+    assert selector.verify_uniqueness() == ()
+
+
+def test_a_failed_filter_on_a_verified_intermediate_fails_verification() -> None:
+    # REQ-1245 is load-bearing: the filter never materialized, so the
+    # verification cannot wait for a selection that may never happen.
+    selector = IntermediateSelector(
+        [
+            ds_plan(
+                filter_predicate=parse_predicate("DS.NOPE = 'X'"),
+                unique_columns=("STUDYID", "USUBJID"),
+            )
+        ],
+        {"DS": ds()},
+    )
+
+    (failure,) = selector.verify_uniqueness()
+
+    assert failure.phase == "verification"
+    assert failure.condition == "unknown_field"
+    assert failure.requirement == "REQ-1245"
+    assert failure.spec_paths == ("intermediates[0].filter",)
+    assert failure.context["intermediate"] == "DS_EOS"
+
+
+def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> None:
+    # REQ-1245: the derivation names a field the donor never had, so the
+    # records never materialized and the original condition surfaces at
+    # the derivation's own path.
+    from yamaa.specification.models import Expression, HandledExpression
+
+    plan = PlannedIntermediate(
+        identifier="SUP_EP",
+        dataset="SUPPLB",
+        path="intermediates[0]",
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        derived=(
+            (
+                "QVAL_U",
+                HandledExpression(
+                    value=Expression(root={"str_upper": {"source": "NOPE"}})
+                ),
+            ),
+        ),
+        unique_columns=("STUDYID", "USUBJID"),
+    )
+    selector = IntermediateSelector([plan], {"SUPPLB": supp()})
+
+    (failure,) = selector.verify_uniqueness()
+
+    assert failure.phase == "verification"
+    assert failure.condition == "unknown_field"
+    assert failure.requirement == "REQ-0103"
+    assert failure.spec_paths == ("intermediates[0].derivations.QVAL_U",)
+    assert failure.context["intermediate"] == "SUP_EP"

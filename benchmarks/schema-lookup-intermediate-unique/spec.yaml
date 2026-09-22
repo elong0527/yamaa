@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  DS: input/ds.csv
+base: DM
+
+intermediates:
+  # Each subject's end-of-study record. Only disposition events that are
+  # not screen failures are eligible, and the subject key is asserted
+  # unique across the eligible records, so no ordering or keep is needed.
+  - id: DS_EOS
+    dataset: DS
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
+    verification:
+      unique: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, EOSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+  - name: EOSDT
+    type: str
+    label: End of Study Date
+    derivation: DS_EOS.DSSTDTC

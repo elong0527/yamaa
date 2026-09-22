@@ -1,0 +1,10 @@
+phase: verification
+condition: duplicate_intermediate_records
+spec_paths:
+  - intermediates[0].verification
+requirement: REQ-1245
+context:
+  intermediate: DS_EOS
+  dataset: DS
+  columns: [STUDYID, USUBJID]
+  duplicate_count: 1

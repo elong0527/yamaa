@@ -122,6 +122,12 @@ class IntermediateBetween(_StrictModel):
     upper: str
 
 
+class IntermediateVerification(_StrictModel):
+    """REQ-1245: uniqueness asserted over an intermediate's filtered donor records."""
+
+    unique: list[str] = Field(min_length=1)
+
+
 class Intermediate(_StrictModel):
     id: str
     dataset: str
@@ -133,6 +139,7 @@ class Intermediate(_StrictModel):
     keep: Literal["first", "last"] | None = None
     columns: list[str] | None = None
     derivations: dict[str, HandledExpression] | None = None
+    verification: IntermediateVerification | None = None
     missing: JsonValue = None
     strict: bool = False
 

@@ -465,6 +465,9 @@ examples:
   negative-lookup-unordered:
     status: executable
     runtimes: ['python']
+  negative-lookup-duplicate-intermediate:
+    status: executable
+    runtimes: ['python']
   negative-lookup-mismatched:
     status: executable
     runtimes: ['python']
@@ -694,6 +697,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-lookup:
+    status: executable
+    runtimes: ['python']
+  schema-lookup-intermediate-unique:
     status: executable
     runtimes: ['python']
   schema-lookup-filters:
