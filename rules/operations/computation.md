@@ -21,7 +21,6 @@ This contract owns the requirements below. Related contracts:
 - [Execution lifecycle](../execution/lifecycle.md).
 - [Expression evaluation](expressions.md).
 - [Lookup and joins](lookup.md).
-- [Execution lifecycle](../execution/lifecycle.md).
 - [Source ingestion](../storage/ingestion.md).
 - [Types and conversion](../values/types.md).
 
@@ -119,7 +118,7 @@ number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
 
 `grammar/numeric.yaml` is this grammar's single source. The block above
-renders that file. The file vocabulary closes the function table below.
+renders the grammar file. The file vocabulary closes the function table below.
 The file cases record the text every implementation must accept or reject,
 the identifiers an accepted text binds, and the resulting parse.
 Repository validation and the R implementation both read that file, so no
@@ -379,5 +378,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Evaluate written arithmetic formulas without reassociation or presentation rounding. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+This topic lives in one contract.
+Other owners refer to it without defining a second policy.

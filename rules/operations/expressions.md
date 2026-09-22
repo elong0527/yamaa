@@ -72,7 +72,7 @@ nests because its purpose is to select or compose expressions:
 
 **REQ-0291.** `derivation` and `handled_expression_class.value` also contain
 `expression`, but they hold a derivation's own top-level expression rather
-than nest one inside an operation, so this policy does not restrict them.
+than nest one inside an operation; this policy does not restrict those fields.
 
 <a id="req-0292"></a>
 
@@ -258,5 +258,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Register and dispatch expressions, restrict nesting, and define scalar selection. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+This topic lives in one contract.
+Other owners refer to it without defining a second policy.
