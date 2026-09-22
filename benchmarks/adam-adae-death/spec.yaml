@@ -10,6 +10,8 @@ intermediates:
     dataset: AE
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
+    order_by: [AE.ASTDT]
+    keep: last
 
 output:
   path: adae.csv
@@ -87,11 +89,11 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 5
-      max: 5
+      min: 8
+      max: 8
   - implies:
       id: fatal-event-carries-its-own-cause
-      when: "FATALFL = 'Y'"
+      when: "FATALFL = 'Y' AND ASTDT = EVDTHDT"
       then: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
   - implies:
       id: no-cause-without-a-fatal-event
