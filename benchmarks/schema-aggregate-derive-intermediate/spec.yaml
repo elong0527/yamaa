@@ -1,0 +1,46 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
+  DS: {path: input/ds.csv, types: {CAPDOSE: float}}
+intermediates:
+  - id: DOSECAP
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    order_by: [DS.CAPDOSE]
+    keep: first
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, CUMDOSE]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+  - name: CUMDOSE
+    type: float
+    label: Cumulative Capped Dose
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derive:
+          - name: DOSE
+            type: float
+            derivation: EX.EXDOSE
+          - name: CAP
+            type: float
+            derivation: DOSECAP.CAPDOSE
+          - name: CAPPED
+            type: float
+            derivation: {least: {sources: [DOSE, CAP]}}
+        expr: "SUM(CAPPED)"
+rows:
+  - id: exposure
+    dataset: EX
+    filter: "EX.EXSEQ = 1"
+    derivations: {}

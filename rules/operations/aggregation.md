@@ -152,9 +152,22 @@ otherwise. A missing value stays missing without attempting conversion.
 **REQ-1191.** The relation a derived aggregate reduces is the one relation
 its derive bindings and filter name; naming two relations is an error, and a
 reducer expression mixing a bound variable with a qualified identifier is an
-error under [REQ-0468](aggregation.md#req-0468). `derive` is not available on
-the unqualified output-row reduction or the grouped-input reduction: those
-contexts reduce rows the specification already constructed.
+error under [REQ-0468](aggregation.md#req-0468). Qualifiers naming declared
+named intermediates do not count as relations for this rule; a binding may
+read them only under [REQ-1242](aggregation.md#req-1242). `derive` is not
+available on the unqualified output-row reduction or the grouped-input
+reduction: those contexts reduce rows the specification already constructed.
+
+<a id="req-1242"></a>
+
+**REQ-1242.** A derive binding may read a named intermediate that declares
+`keep`: with `keep`, the intermediate selects exactly one record per row
+([REQ-0135](../operations/lookup.md#req-0135)), so the read is a row-scoped
+value, not another reduced relation. The binding still evaluates once per
+record of the aggregate's one relation, and each record sees the same
+intermediate value for its row. A binding that reads a named intermediate
+without `keep` is an error. The R engine does not implement this requirement
+yet; it is Python-only for now.
 
 ### Row-relative range narrowing
 

@@ -728,19 +728,26 @@ class TestAggregateDeriveStep(unittest.TestCase):
             'EX': {'EXSTDT': 'date', 'EXSEQ': 'int', 'EXENDTC': 'str'},
         }
         output_types = {'AVAL': 'float'}
+        aggregate = {
+            'kind': 'column',
+            'input': datasets,
+            'output_types': output_types,
+            'keys': ['STUDYID', 'USUBJID'],
+        }
+        for key in ('intermediate_ids', 'keep_intermediate_ids'):
+            if key in changes:
+                aggregate[key] = changes.pop(key)
         context = {
             'kind': 'column',
             'input': datasets,
             'output_types': output_types,
             'keys': ['STUDYID', 'USUBJID'],
             'env': self.schema_env,
-            'aggregate': {
-                'kind': 'column',
-                'input': datasets,
-                'output_types': output_types,
-                'keys': ['STUDYID', 'USUBJID'],
-            },
+            'aggregate': aggregate,
         }
+        for key in ('intermediate_ids', 'keep_intermediate_ids'):
+            if key in aggregate:
+                context[key] = aggregate[key]
         context.update(changes)
         return context
 
@@ -983,7 +990,16 @@ class TestAggregateDeriveStep(unittest.TestCase):
 
     def test_rejects_filter_naming_other_relation(self):
         errors = self.validate(
-            self.payload(filter='EX.EXSEQ = 1'),
+            self.payload(
+                filter="EX.EXSEQ > 0",
+                derive=[
+                    {
+                        'name': 'A',
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                ],
+            ),
             self.context(),
         )
         self.assertEqual(errors[0].condition, 'invalid_derive_step')
@@ -991,6 +1007,84 @@ class TestAggregateDeriveStep(unittest.TestCase):
             errors[0].context['reason'],
             'a derive step names exactly one relation',
         )
+
+    def test_accepts_keep_declared_intermediate_read(self):
+        errors = self.validate(
+            self.payload(
+                filter="EX.EXSEQ > 0",
+                derive=[
+                    {
+                        'name': 'CUM',
+                        'type': 'float',
+                        'derivation': {
+                            'sum': ['EX.EXSEQ', 'CAP.CAPDOSE'],
+                        },
+                    },
+                ],
+                expr='SUM(CUM)',
+            ),
+            self.context(
+                intermediate_ids={'CAP'},
+                keep_intermediate_ids={'CAP'},
+            ),
+        )
+        self.assertEqual(errors, [])
+
+    def test_rejects_intermediate_read_without_keep(self):
+        errors = self.validate(
+            self.payload(
+                filter="EX.EXSEQ > 0",
+                derive=[
+                    {
+                        'name': 'CUM',
+                        'type': 'float',
+                        'derivation': {
+                            'sum': ['EX.EXSEQ', 'CAP.CAPDOSE'],
+                        },
+                    },
+                ],
+            ),
+            self.context(intermediate_ids={'CAP'}),
+        )
+        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+        self.assertEqual(
+            errors[0].context['reason'],
+            'a derive step reads only keep-declared named intermediates',
+        )
+        self.assertEqual(errors[0].context['intermediate'], 'CAP')
+
+    def test_rejects_two_dataset_relations_with_keep_intermediate(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'name': 'A',
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                    {
+                        'name': 'CAPDOSE',
+                        'type': 'float',
+                        'derivation': 'CAP.CAPDOSE',
+                    },
+                    {
+                        'name': 'B',
+                        'type': 'int',
+                        'derivation': 'EX.EXSEQ',
+                    },
+                ],
+            ),
+            self.context(
+                intermediate_ids={'CAP'},
+                keep_intermediate_ids={'CAP'},
+            ),
+        )
+        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+        self.assertEqual(
+            errors[0].context['reason'],
+            'a derive step names exactly one relation',
+        )
+        self.assertEqual(errors[0].context['relations'], ['EX', 'QS'])
 
 
 class TestStringTemplateLanguage(unittest.TestCase):

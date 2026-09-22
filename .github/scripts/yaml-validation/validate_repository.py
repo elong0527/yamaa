@@ -6949,13 +6949,30 @@ def validate_derive_step(derive, path, context, filter_text=None):
             head, dot, _ = reference.partition('.')
             if dot and head:
                 qualifiers.add(head)
-    relation = next(iter(qualifiers)) if len(qualifiers) == 1 else None
+    # REQ-1242: bindings may read keep-declared named intermediates: with
+    # `keep`, the intermediate selects exactly one record per row, so it
+    # is a row-scoped value, not another reduced relation. Every other
+    # qualifier must be the step's one driving relation.
+    intermediate_ids = context.get('intermediate_ids', frozenset())
+    keep_intermediate_ids = context.get('keep_intermediate_ids', frozenset())
+    relation_qualifiers = {
+        qualifier for qualifier in qualifiers if qualifier not in intermediate_ids
+    }
+    relation = next(iter(relation_qualifiers)) if len(relation_qualifiers) == 1 else None
     if relation is None:
         invalid(
             'a derive step names exactly one relation',
             f'{path}.derive',
-            {'relations': sorted(qualifiers)},
+            {'relations': sorted(relation_qualifiers)},
         )
+        return bindings, relation, errors
+    for qualifier in sorted(qualifiers - relation_qualifiers):
+        if qualifier not in keep_intermediate_ids:
+            invalid(
+                'a derive step reads only keep-declared named intermediates',
+                f'{path}.derive',
+                {'intermediate': qualifier},
+            )
     return bindings, relation, errors
 
 
@@ -8204,6 +8221,18 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
                 intermediates[intermediate_id] = datasets.get(dataset_id, {})
 
+    # REQ-1242: a derive binding may read a keep-declared named intermediate.
+    # The planned selection only honors `keep` with `order_by` (REQ-0119),
+    # so the static single-record-per-row promise mirrors it.
+    keep_intermediate_ids = frozenset(
+        intermediate.get('id')
+        for intermediate in intermediate_entries or ()
+        if isinstance(intermediate, dict)
+        and isinstance(intermediate.get('id'), str)
+        and intermediate.get('keep') is not None
+        and intermediate.get('order_by') is not None
+    )
+
     keys = spec.get('keys') if isinstance(spec.get('keys'), list) else []
     column_context = {
         'resolver': predicate_resolver(
@@ -8216,6 +8245,8 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
             'input': datasets,
             'output_types': output_types,
             'keys': keys,
+            'intermediate_ids': frozenset(intermediates),
+            'keep_intermediate_ids': keep_intermediate_ids,
             'resolver': predicate_resolver(
                 unqualified=output_types, qualified={**datasets, **intermediates}
             ),
@@ -8278,6 +8309,8 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                     'keys': keys,
                     'driver': driver,
                     'row_group_by': row.get('group_by'),
+                    'intermediate_ids': frozenset(intermediates),
+                    'keep_intermediate_ids': keep_intermediate_ids,
                     'resolver': predicate_resolver(
                         unqualified=row_output,
                         qualified={

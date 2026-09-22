@@ -286,6 +286,10 @@ class _Scope:
     grouped_driver: str | None = None
     group_variables: tuple[str, ...] = ()
     intermediates: frozenset[str] = frozenset()
+    # REQ-1242: named intermediates that declare `keep` select exactly one
+    # record per row, so a derive step may read them alongside its one
+    # driving relation.
+    keep_intermediates: frozenset[str] = frozenset()
 
 
 _COLUMN_SCOPE = _Scope()
@@ -1295,6 +1299,7 @@ def _aggregate_references(
 
     derive = payload.get("derive")
     derive_names: tuple[str, ...] = ()
+    derive_refs: list[tuple[str, str]] = []
     if derive is not None:
         # REQ-1189: a derive step binds per-record variables; the reducer
         # names them unqualified and the step names the reduced relation.
@@ -1337,6 +1342,7 @@ def _aggregate_references(
                 head, dot, _ = ref.partition(".")
                 if dot:
                     qualifiers.add(head)
+                    derive_refs.append((ref, binding_path))
                 elif ref not in binding_names[:-1]:
                     return [
                         _diagnostic(
@@ -1359,20 +1365,42 @@ def _aggregate_references(
                     head, dot, _ = ref.partition(".")
                     if dot:
                         qualifiers.add(head)
-        if len(qualifiers) != 1:
+        # REQ-1242: bindings may read keep-declared named intermediates: with
+        # `keep`, the intermediate selects exactly one record per row, so it
+        # is a row-scoped value, not another reduced relation. Every other
+        # qualifier must be the step's one driving relation.
+        relation_qualifiers = {
+            qualifier
+            for qualifier in qualifiers
+            if qualifier not in scope.intermediates
+        }
+        if len(relation_qualifiers) != 1:
             return [
                 _diagnostic(
                     "invalid_derive_step",
                     f"{operation_path}.derive",
                     {
                         "reason": "a derive step names exactly one relation",
-                        "relations": sorted(qualifiers),
+                        "relations": sorted(relation_qualifiers),
                     },
                     requirement="REQ-1191",
                 )
             ]
+        for qualifier in sorted(qualifiers - relation_qualifiers):
+            if qualifier not in scope.keep_intermediates:
+                return [
+                    _diagnostic(
+                        "invalid_derive_step",
+                        f"{operation_path}.derive",
+                        {
+                            "reason": "a derive step reads only keep-declared named intermediates",
+                            "intermediate": qualifier,
+                        },
+                        requirement="REQ-1242",
+                    )
+                ]
         derive_names = tuple(binding_names)
-        relation = next(iter(qualifiers))
+        relation = next(iter(relation_qualifiers))
         for name in unqualified:
             if name not in derive_names:
                 return [
@@ -1485,6 +1513,11 @@ def _aggregate_references(
     references.extend(
         relational(name, expr_path) for name in identifiers if name not in derive_names
     )
+    # REQ-1242: a binding reads the driving relation's fields or a
+    # keep-declared intermediate's readable columns. Routing the qualified
+    # binding references through the ordinary checks validates both against
+    # the relation and the intermediate's plan (REQ-0103/REQ-0125).
+    references.extend(relational(name, path) for name, path in derive_refs)
     references.extend(
         relational(name, f"{operation_path}.group_by[{index}]")
         for index, name in enumerate(group_by)
@@ -1727,6 +1760,8 @@ def _fill_omitted_lookup_keys(
         if relation is None and payload.get("derive") is not None:
             # REQ-1189: a derived aggregate names its relation through the
             # derive step when the reducer only names bound variables.
+            # REQ-1242: qualifiers naming declared intermediates read the
+            # intermediate's row, never the reduced relation.
             derived: set[str] = set()
             derive_declared = payload.get("derive")
             if isinstance(derive_declared, list):
@@ -1734,7 +1769,9 @@ def _fill_omitted_lookup_keys(
                     if isinstance(binding, Mapping):
                         for name in _derive_reference_names(binding.get("derivation")):
                             if "." in name:
-                                derived.add(name.split(".", 1)[0])
+                                head = name.split(".", 1)[0]
+                                if head not in scope.intermediates:
+                                    derived.add(head)
             relation = next(iter(sorted(derived)), None)
         # A grouped-row reduction reads its own driver group and declares
         # no key pairs (REQ-0142).
@@ -3180,6 +3217,19 @@ def _intermediate_ids(specification: Specification) -> frozenset[str]:
     )
 
 
+def _keep_intermediate_ids(specification: Specification) -> frozenset[str]:
+    """Return the ids of intermediates that declare `keep`.
+
+    The planned selection only honors `keep` when `order_by` is present
+    (REQ-0119), so the static single-record-per-row promise mirrors it.
+    """
+    return frozenset(
+        intermediate.id
+        for intermediate in specification.intermediates or ()
+        if intermediate.keep is not None and intermediate.order_by is not None
+    )
+
+
 def _row_scope(
     specification: Specification,
     row: Row,
@@ -3187,13 +3237,19 @@ def _row_scope(
 ) -> _Scope:
     """Return where this template's row derivations sit."""
     intermediates = _intermediate_ids(specification)
+    keep_intermediates = _keep_intermediate_ids(specification)
     if row.group_by is None or driver is None:
-        return _Scope(column_phase=False, intermediates=intermediates)
+        return _Scope(
+            column_phase=False,
+            intermediates=intermediates,
+            keep_intermediates=keep_intermediates,
+        )
     return _Scope(
         column_phase=False,
         grouped_driver=driver,
         group_variables=tuple(row.group_by),
         intermediates=intermediates,
+        keep_intermediates=keep_intermediates,
     )
 
 
@@ -3487,7 +3543,10 @@ def _preflight_findings(
                 ).unsupported
             )
 
-    column_scope = _Scope(intermediates=_intermediate_ids(specification))
+    column_scope = _Scope(
+        intermediates=_intermediate_ids(specification),
+        keep_intermediates=_keep_intermediate_ids(specification),
+    )
     for column in specification.columns:
         declaration = column.derivation
         if declaration is None:
@@ -3941,7 +4000,14 @@ def plan_execution(
             supported_operations,
             diagnostics,
             unsupported,
-            scope=_Scope(intermediates=frozenset(intermediates)),
+            scope=_Scope(
+                intermediates=frozenset(intermediates),
+                keep_intermediates=frozenset(
+                    identifier
+                    for identifier, plan in intermediates.items()
+                    if plan.keep is not None
+                ),
+            ),
             infer_keys=infer_lookup_keys,
             dataset_fields=dataset_fields,
         )
