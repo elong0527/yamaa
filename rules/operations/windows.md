@@ -36,10 +36,10 @@ section: a group of rows.
 
 <a id="req-0294"></a>
 
-**REQ-0294.** A window whose `window` declares `filter` still preserves row
-count: an excluded row receives missing rather than being dropped. A window
-that reads another row of its partition returns missing when that row does
-not exist, the same result as for a neighbouring row with a missing value.
+**REQ-0294.** A window whose `window` declares `filter` preserves row count.
+An excluded row receives missing rather than being dropped. A window that
+reads a nonexistent partition row returns missing, as does a window that
+reads a neighboring row with a missing value.
 
 <a id="req-0296"></a>
 
@@ -228,5 +228,4 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Partition completed output rows and compute ranks, neighbors, and baseline selections. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+One contract defines partitions, ranks, neighbors, and baseline selection.

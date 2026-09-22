@@ -251,9 +251,9 @@ lookup outside the verified artifact are invalid.
 
 **REQ-0685.** After applying environment defaults and missing short-circuiting,
 the runner maps the logical arguments and invokes the callable once for one
-logical row. It supplies no undeclared data or execution context. The binding
-returns one scalar of the declared exact type. Batch or vector execution is
-allowed only when every observable value and failure matches
+logical row. The runner supplies no undeclared data or execution context.
+The binding returns one scalar of the declared exact type. Batch or vector
+execution is allowed only when every observable value and failure matches
 independent calls in logical row order.
 
 <a id="req-0686"></a>
@@ -505,5 +505,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Resolve immutable runtimes and validate function inputs, results, and activation conformance. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+This topic lives in one contract.
+Other owners refer to it without defining a second policy.

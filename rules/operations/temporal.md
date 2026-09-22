@@ -35,23 +35,22 @@ below; [Temporal values](../values/temporal.md) defines the values themselves.
 
 <a id="req-0578"></a>
 
-**REQ-0578.** A study collects dates that are truncated to a year or to a year
-and month, and neither is a `date`. Such a value is carried as `str` and
-completed before it becomes one.
+**REQ-0578.** A study collects dates truncated to a year or year and month.
+Neither is a `date`. Such a value is a `str` until completion.
 
 <a id="req-0579"></a>
 
-**REQ-0579.** `date_impute` performs that completion as a declared rule rather
-than string surgery. The result is a `date` like any other and carries the
-collected precision of the source text, so the value records which components
-were supplied rather than leaving that fact to the specification.
+**REQ-0579.** `date_impute` completes the value by a declared rule, not string
+surgery. The `date` result carries the source text's collected precision. The
+value therefore records supplied components rather than leaving that fact to
+the specification.
 
 <a id="req-0580"></a>
 
 **REQ-0580.** One precision ladder orders `year`, `month`, then `day`.
 A policy names a ladder level: `minimum_source_precision` takes `year`
 or `month`. `date_precision` returns the ladder code: `Y`, `M`, or `D`.
-The levels correspond in order. The spellings are not two vocabularies.
+The levels correspond in order. The spellings name the same ladder.
 
 <a id="req-0581"></a>
 
@@ -115,9 +114,9 @@ which is where a claim about data a study recorded belongs.
 
 <a id="req-0587"></a>
 
-**REQ-0587.** The parameters apply in a fixed order: a missing or
-invalid source answers first, then a source below the minimum precision, then
-completion from `month` and `day`, then the bound.
+**REQ-0587.** The parameters apply in this order: a missing or invalid source,
+then a source below the minimum precision, then completion from `month` and
+`day`, then the bound.
 
 <a id="req-0588"></a>
 
@@ -142,8 +141,8 @@ both datetime operations rather than silently combining date and time policies.
 
 <a id="req-0590"></a>
 
-**REQ-0590.** [Expression evaluation](expressions.md) registers these operations, orders them, and nests them like
-any other. Their input and result types are:
+**REQ-0590.** [Expression evaluation](expressions.md) registers, orders, and
+nests these operations. Their input and result types are:
 
 | Operation | Inputs | Result |
 |---|---|---|
@@ -206,9 +205,9 @@ value is not accepted as an identity spelling.
 <a id="req-0594"></a>
 
 **REQ-0594.** `date_diff` with `unit: day` is the calendar-date difference
-`end` minus `start` in days. With `unit: week` it is the number of whole
-seven-day blocks that difference holds: the quotient of the day count and
-seven, with any remainder discarded.
+`end` minus `start` in days. With `unit: week`, the result is the number of
+whole seven-day blocks in that difference: the day count divided by seven,
+with any remainder discarded.
 
 <a id="req-0595"></a>
 
@@ -437,5 +436,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Compute calendar differences, study days, date completion, and precision. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Compute calendar differences, study days, date completion, and precision. This
+topic lets other owners refer to one policy.
