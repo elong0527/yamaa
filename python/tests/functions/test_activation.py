@@ -34,7 +34,7 @@ from yamaa.specification import load_specification
 # The three vectors that invoke the binding; the other three supply a
 # missing value to a non-accepting parameter and are short-circuited.
 INVOKED_VECTORS = [(70.0, 175.0, 100), (80.0, 200.0, 100), (0.0, 175.0, 100)]
-# The study rows of `adam-adsl-bmi-function` that reach the binding. The
+# The study rows of `adam-adsl-bmi` that reach the binding. The
 # fourth subject has no height, so REQ-0681 answers it without a call.
 STUDY_ROWS = [(81.0, 180.0, 100), (64.0, 160.0, 100), (45.0, 150.0, 100)]
 
@@ -113,7 +113,7 @@ def test_a_missing_non_accepting_argument_never_reaches_the_binding(
 
     assert isinstance(result, ExecutionSuccess), result
     assert not any(None in call for call in _calls(activated))
-    assert result.table.frame.to_dicts()[3]["BMI"] is None
+    assert result.table.frame.to_dicts()[3]["BMI_FN"] is None
 
 
 def test_a_failing_vector_stops_the_run_before_any_study_data(
@@ -432,7 +432,7 @@ def test_a_host_exception_during_a_study_row_is_fatal(project, repository) -> No
     assert diagnostic.phase == "derivation"
     assert diagnostic.context["host_error"] == "ZeroDivisionError"
     assert diagnostic.context["function"] == "bmi"
-    assert diagnostic.spec_paths == ("columns.BMI.derivation.function",)
+    assert diagnostic.spec_paths == ("columns.BMI_FN.derivation.function",)
 
 
 @pytest.mark.parametrize(
@@ -502,7 +502,7 @@ def test_a_declared_nullable_binding_may_return_missing(project, repository) -> 
     result = _execute(project, repository)
 
     assert isinstance(result, ExecutionSuccess), result
-    assert result.table.frame.to_dicts()[0]["BMI"] is None
+    assert result.table.frame.to_dicts()[0]["BMI_FN"] is None
 
 
 def test_an_accepting_parameter_receives_the_host_missing_scalar(
@@ -537,7 +537,7 @@ def test_an_accepting_parameter_receives_the_host_missing_scalar(
     result = _execute(project, repository)
 
     assert isinstance(result, ExecutionSuccess), result
-    assert result.table.frame.to_dicts()[3]["BMI"] == -1.0
+    assert result.table.frame.to_dicts()[3]["BMI_FN"] == -1.0
 
 
 def test_the_activation_cache_is_not_consulted_when_a_caller_declines_it(

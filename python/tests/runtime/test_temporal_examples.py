@@ -33,7 +33,7 @@ EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 ARTIFACT_EXAMPLES = [
     "adam-adae-partial-dates",
     "adam-advs-windows",
-    "adam-adae-treatment-emergent",
+    "adam-adae-onset-emergence",
     "adam-adlb-bds",
     "adam-advs-carryforward",
     "adam-adae-worst-severity",

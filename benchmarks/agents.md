@@ -77,7 +77,7 @@ one fingerprint and run byte-identical vectors, and nothing in `spec.yaml`
 changes between them.
 
 A runner selects the root for the language it speaks -- `select_project_root`
-states the rule, and `run.py` names it outright. `adam-adsl-bmi-function`
+states the rule, and `run.py` names it outright. `adam-adsl-bmi`
 carries both roots, and
 `test_the_committed_r_project_root_is_refused_by_this_runner` is the runner
 refusing the R one.

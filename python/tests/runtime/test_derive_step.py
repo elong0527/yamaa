@@ -53,7 +53,7 @@ def _run_benchmark(name: str):
 
 def test_derive_converts_text_to_number_for_aggregation() -> None:
     """#704: text scores convert to float via the binding type, then sum."""
-    result = _run_benchmark("adam-adqs-derive-text-score")
+    result = _run_benchmark("schema-derive-text-score")
 
     assert isinstance(result, ExecutionSuccess)
     rows = result.artifact.frame.to_dicts()
@@ -64,7 +64,7 @@ def test_derive_converts_text_to_number_for_aggregation() -> None:
 
 def test_derive_converts_date_to_epoch_day() -> None:
     """#705: dates convert to integer epoch days via to_epoch_day."""
-    result = _run_benchmark("adam-adex-derive-date-epoch")
+    result = _run_benchmark("schema-derive-date-epoch")
 
     assert isinstance(result, ExecutionSuccess)
     rows = result.artifact.frame.to_dicts()

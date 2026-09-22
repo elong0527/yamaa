@@ -1,0 +1,60 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI, BMI_FN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: HEIGHTCM
+    type: float
+    label: Height (cm)
+    derivation: SOURCE.HEIGHTCM
+
+  - name: WEIGHTKG
+    type: float
+    label: Weight (kg)
+    derivation: SOURCE.WEIGHTKG
+
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+  - name: BMI_FN
+    type: float
+    label: Body Mass Index via Project Routine (kg/m2)
+    derivation:
+      function:
+        name: bmi
+        contract_version: "1.0.0"
+        args:
+          weight_kg: WEIGHTKG
+          height_cm: HEIGHTCM
+          cm_per_m: 100
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: bmi-missing-only-without-usable-height
+      when: "BMI IS NULL"
+      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0"

@@ -99,7 +99,7 @@ class Repository:
     @property
     def bmi_example(self) -> Path:
         """The committed example, whose project root implements `bmi` in R."""
-        return self.examples / "adam-adsl-bmi-function"
+        return self.examples / "adam-adsl-bmi"
 
     @property
     def bmi_project(self) -> Path:

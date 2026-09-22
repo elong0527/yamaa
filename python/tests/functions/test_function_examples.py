@@ -1,6 +1,6 @@
 """Execute the committed R018 examples against a real Python project root.
 
-`adam-adsl-bmi-function` is the same logical specification in both projects:
+`adam-adsl-bmi` is the same logical specification in both projects:
 the committed root implements `bmi` in R, and `python/tests/projects/
 bmi-python` implements the same contract here. Nothing in `spec.yaml`
 changes between them, which is the portability R018 exists for. Reading
@@ -44,7 +44,7 @@ def _run(repository, example, project_root):
 
 
 def test_the_bmi_example_reproduces_its_committed_artifact(repository) -> None:
-    result = _run(repository, "adam-adsl-bmi-function", repository.bmi_project)
+    result = _run(repository, "adam-adsl-bmi", repository.bmi_project)
 
     assert isinstance(result, ExecutionSuccess), result
     committed = (repository.bmi_example / "expected" / "adsl.csv").read_bytes()
@@ -70,7 +70,7 @@ def test_the_pinned_code_decides_the_values_and_not_the_declaration(
     project.write_vectors(repository.vectors)
     project.write_environment()
 
-    result = _run(repository, "adam-adsl-bmi-function", project.path)
+    result = _run(repository, "adam-adsl-bmi", project.path)
 
     assert isinstance(result, ExecutionSuccess), result
     produced = render_csv(result.artifact).decode("utf-8").splitlines()
@@ -79,8 +79,8 @@ def test_the_pinned_code_decides_the_values_and_not_the_declaration(
         .read_text("utf-8")
         .splitlines()
     )
-    assert produced[1] == "CATH,CATH-001,180,81,0"
-    assert committed[1] == "CATH,CATH-001,180,81,25"
+    assert produced[1] == "CATH,CATH-001,180,81,25,0"
+    assert committed[1] == "CATH,CATH-001,180,81,25,25"
     assert produced[2:] == committed[2:]
 
 
@@ -125,7 +125,7 @@ def test_a_rejected_run_reads_no_study_data(repository) -> None:
 def test_the_committed_r_project_root_is_refused_by_this_runner(repository) -> None:
     # REQ-0667: the same example, with the project root that implements it in
     # R. A Python runner does not run it and does not pretend to.
-    result = _run(repository, "adam-adsl-bmi-function", repository.bmi_example)
+    result = _run(repository, "adam-adsl-bmi", repository.bmi_example)
 
     assert isinstance(result, ExecutionFailure), result
     assert result.diagnostics[0].condition == "runner_language_mismatch"
@@ -137,7 +137,7 @@ def test_the_specification_stays_portable_with_no_project_selected(
     # REQ-0662: a portable specification may declare a logical call before a
     # project implements it, so executing without a selected root reports
     # an unimplemented operation rather than inventing a result.
-    specification = _specification(repository, "adam-adsl-bmi-function")
+    specification = _specification(repository, "adam-adsl-bmi")
 
     result = execute_with_source_provider(
         specification,
@@ -151,8 +151,8 @@ def test_the_specification_stays_portable_with_no_project_selected(
 
 
 def test_repeated_execution_produces_an_identical_artifact(repository) -> None:
-    first = _run(repository, "adam-adsl-bmi-function", repository.bmi_project)
-    second = _run(repository, "adam-adsl-bmi-function", repository.bmi_project)
+    first = _run(repository, "adam-adsl-bmi", repository.bmi_project)
+    second = _run(repository, "adam-adsl-bmi", repository.bmi_project)
 
     assert isinstance(first, ExecutionSuccess)
     assert isinstance(second, ExecutionSuccess)
@@ -162,7 +162,7 @@ def test_repeated_execution_produces_an_identical_artifact(repository) -> None:
 @pytest.mark.parametrize(
     ("example", "condition"),
     [
-        ("adam-adsl-bmi-function", "runner_language_mismatch"),
+        ("adam-adsl-bmi", "runner_language_mismatch"),
         ("negative-function-contract", "function_contract_mismatch"),
     ],
 )

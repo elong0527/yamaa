@@ -3,8 +3,9 @@
 ## 1. A spec.yaml is one Dataset-sheet row plus a slice of the Variable sheet
 
 Here is the same specification written twice. It is
-[`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi-compute), which reads a subject-level source and
-adds one derived variable.
+[`adam-adsl-bmi`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi), which reads a subject-level source and
+adds two derived variables: `BMI` as an inline expression, and `BMI_FN`
+via a routine the project supplies.
 
 **As you would write it today.** A Dataset sheet row:
 
@@ -34,7 +35,7 @@ base: SOURCE                   # Dataset sheet -> Structure, but as the driver o
 
 output:
   path: adsl.csv             # <- no cell for this; the file, and its format
-  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]   # what ships, in which order
+  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI, BMI_FN]   # what ships, in which order
 
 columns:                       # this section (below) is the Variable sheet
   # rows 1-4 each read one source variable:
@@ -209,7 +210,7 @@ What changed:
 
 ### Example 2: a Comment sentence becomes `compute`
 
-*Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi-compute)*
+*Source: [`adam-adsl-bmi`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi)*
 
 | Variable | Type | Origin | Comment |
 |---|---|---|---|
@@ -243,36 +244,36 @@ What changed:
 
 ### Example 3: Predecessor and the declared-key lookup
 
-*Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-treatment-emergent)*
+*Source: [`adam-adae-onset-emergence`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-onset-emergence)*
 
 Excel:
 
 | Variable | Origin | Comment |
 |---|---|---|
-| TRTSDT | Predecessor: ADSL.TRTSDT | merge by STUDYID USUBJID |
-| TRTEMFL | Derived | Y if TRTSDT <= ASTDT <= TRTEDT (both boundaries inclusive), else blank |
+| TRTSDTM | Predecessor: ADSL.TRTSDTM | merge by STUDYID USUBJID |
+| TRTEMFL | Derived | Y if ASTDTM >= TRTSDTM, else blank |
 
 ```yaml
 keys: [STUDYID, USUBJID, AESEQ]
 
-  - name: TRTSDT
-    type: date
+  - name: TRTSDTM
+    type: datetime
     derivation:
-      source: ADSL.TRTSDT          # <- no merge statement anywhere
+      source: ADSL.TRTSDTM          # <- no merge statement anywhere
 
   - name: TRTEMFL
     type: str
     derivation:
       case:
-        - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL
-                 AND ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
+        - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL
+                 AND ASTDTM >= TRTSDTM"
           then:
             literal: Y
 ```
 
 What changed:
 
-- `source: ADSL.TRTSDT` reads across datasets through the Lookup and joins
+- `source: ADSL.TRTSDTM` reads across datasets through the Lookup and joins
   contract's declared-key join: the join keys are the *applicable keys* -- the output `keys` that also
   exist on the right side. So "merge by STUDYID USUBJID" is not written: it is
   a consequence of `keys`. Multiple matches fail by default; relaxing it
