@@ -8,6 +8,7 @@ Canonical recipe for deriving ADaM datasets from SDTM with the yamaa engine.
 - verify equivalence of all data with a tolerance at 1e-10.
 - Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
 - Comparison lives in a separate `compare.py` (not in `run.py`), which reports matched/total columns and cells per dataset and exits nonzero on any mismatch.
+- Always verify the derivation against the latest yamaa repo before declaring equivalence.
   
 The original pilot source code may be read to understand intent, but
 the yamaa spec must be built as a robust and succinct yamaa spec.
