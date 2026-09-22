@@ -12,7 +12,7 @@ base: LB_RAW
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -89,6 +89,20 @@ columns:
         value: FACTOR
         missing: null
 
+  - name: LO_RESN
+    type: float
+    label: Numeric Reference Lower Limit as Reported
+    derivation:
+      value:
+        source: LB_RAW.LBORNRLO
+
+  - name: HI_RESN
+    type: float
+    label: Numeric Reference Upper Limit as Reported
+    derivation:
+      value:
+        source: LB_RAW.LBORNRHI
+
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
@@ -112,6 +126,20 @@ columns:
           HGB: g/dL
         strict: true
 
+  - name: LBSTNRLO
+    type: float
+    label: Reference Range Lower Limit in Standard Units
+    derivation:
+      compute:
+        expr: "LO_RESN * FACTOR"
+
+  - name: LBSTNRHI
+    type: float
+    label: Reference Range Upper Limit in Standard Units
+    derivation:
+      compute:
+        expr: "HI_RESN * FACTOR"
+
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
@@ -122,4 +150,4 @@ verifications:
       columns: [STUDYID, USUBJID, LBSEQ]
   - all_or_none:
       id: standardized-result-completeness
-      columns: [LBSTRESN, LBSTRESC, LBSTRESU]
+      columns: [LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI]
