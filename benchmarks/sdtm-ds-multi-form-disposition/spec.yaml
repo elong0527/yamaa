@@ -1,0 +1,176 @@
+schema_version: "1.0"
+domain: DS
+keys: [STUDYID, USUBJID, DSSEQ]
+input:
+  CONSENT: input/consent.csv
+  RANDOMIZATION: input/randomization.csv
+  EOT: input/eot.csv
+  EOS: input/eos.csv
+
+output:
+  path: ds.csv
+  columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC]
+  order_by: [STUDYID, USUBJID, DSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DS
+    verifications:
+      allowed_values:
+        values: [DS]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: DSTERM
+    type: str
+    label: Reported Term for the Disposition Event
+
+  - name: DSDECOD
+    type: str
+    label: Standardized Disposition Term
+    verifications:
+      allowed_values:
+        values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED,
+                 ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
+
+  - name: DSCAT
+    type: str
+    label: Category for Disposition Event
+    verifications:
+      allowed_values:
+        values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
+
+  - name: DSSCAT
+    type: str
+    label: Subcategory for Disposition Event
+    verifications:
+      allowed_values:
+        values: [INFORMED CONSENT, RANDOMIZATION, END OF TREATMENT, END OF STUDY]
+
+  - name: DSSTDTC
+    type: date
+    label: Start Date/Time of Disposition Event
+    verifications:
+      not_missing: {}
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [DSSTDTC, DSTERM]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: consent
+    dataset: CONSENT
+    derivations:
+      STUDYID: CONSENT.STUDYID
+      USUBJID: CONSENT.USUBJID
+      DSTERM:
+        literal: INFORMED CONSENT OBTAINED
+      DSDECOD:
+        literal: INFORMED CONSENT OBTAINED
+      DSCAT:
+        literal: PROTOCOL MILESTONE
+      DSSCAT:
+        literal: INFORMED CONSENT
+      DSSTDTC: CONSENT.CONSENTDT
+
+  - id: randomization
+    dataset: RANDOMIZATION
+    derivations:
+      STUDYID: RANDOMIZATION.STUDYID
+      USUBJID: RANDOMIZATION.USUBJID
+      DSTERM:
+        literal: RANDOMIZED
+      DSDECOD:
+        literal: RANDOMIZED
+      DSCAT:
+        literal: PROTOCOL MILESTONE
+      DSSCAT:
+        literal: RANDOMIZATION
+      DSSTDTC: RANDOMIZATION.RANDDT
+
+  - id: end_of_treatment
+    dataset: EOT
+    derivations:
+      STUDYID: EOT.STUDYID
+      USUBJID: EOT.USUBJID
+      DSTERM:
+        case:
+          - when: "EOT.EOTSTAT = 'Completed'"
+            then:
+              literal: COMPLETED
+          - otherwise: EOT.EOTREAS
+      DSDECOD:
+        case:
+          - when: "EOT.EOTSTAT = 'Completed'"
+            then:
+              literal: COMPLETED
+          - otherwise:
+              mapping:
+                source: EOT.EOTREAS
+                dict:
+                  Severe nausea: ADVERSE EVENT
+      DSCAT:
+        literal: DISPOSITION EVENT
+      DSSCAT:
+        literal: END OF TREATMENT
+      DSSTDTC: EOT.EOTDT
+
+  - id: end_of_study
+    dataset: EOS
+    derivations:
+      STUDYID: EOS.STUDYID
+      USUBJID: EOS.USUBJID
+      DSTERM:
+        case:
+          - when: "EOS.EOSSTAT = 'Completed'"
+            then:
+              literal: COMPLETED
+          - when: "EOS.EOSSTAT = 'Screen failure'"
+            then:
+              literal: SCREEN FAILURE
+          - otherwise: EOS.EOSREAS
+      DSDECOD:
+        case:
+          - when: "EOS.EOSSTAT = 'Completed'"
+            then:
+              literal: COMPLETED
+          - when: "EOS.EOSSTAT = 'Screen failure'"
+            then:
+              literal: SCREEN FAILURE
+          - otherwise:
+              mapping:
+                source: EOS.EOSREAS
+                dict:
+                  Subject moved: LOST TO FOLLOW-UP
+      DSCAT:
+        literal: DISPOSITION EVENT
+      DSSCAT:
+        literal: END OF STUDY
+      DSSTDTC: EOS.EOSDT
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, DSSEQ]
+  - row_count:
+      min: 10
+      max: 10
+  - implies:
+      id: milestone-term-equals-decode
+      when: "DSCAT = 'PROTOCOL MILESTONE'"
+      then: "DSTERM = DSDECOD"
