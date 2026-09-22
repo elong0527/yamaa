@@ -26,11 +26,13 @@ study entry with lesion group and lesion identifier.
   every record.
 - `RSSTRESC` is the response at the assessment: `NE` (not evaluable)
   at baseline, when fewer target lesions were measured than were
-  chosen, or when the subject has non-target disease only; `PR`
-  (partial response) when the target sum shrank at least 30% from
-  baseline; `PD` (progressive disease) when it grew at least 20% from
-  baseline; `SD` (stable disease) otherwise. It stays blank when the
-  assessment was not done.
+  chosen, when the subject has non-target disease only, or when no
+  percent change can be computed (for example a zero or missing
+  baseline sum); `CR` (complete response) when every target lesion
+  has disappeared; `PR` (partial response) when the target sum shrank
+  at least 30% from baseline; `PD` (progressive disease) when it grew
+  at least 20% from baseline; `SD` (stable disease) otherwise. It
+  stays blank when the assessment was not done.
 - `RSSTAT` is `NOT DONE` for a scheduled assessment with no tumor
   measurement records at all; blank otherwise.
 

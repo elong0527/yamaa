@@ -134,6 +134,12 @@ columns:
         - when: "NMEAS IS NULL OR NMEAS < NTARGET"
           then:
             literal: NE
+        - when: "PCHG IS NULL"
+          then:
+            literal: NE
+        - when: "SUMV = 0"
+          then:
+            literal: CR
         - when: "PCHG <= -30"
           then:
             literal: PR
