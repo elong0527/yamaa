@@ -25,14 +25,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: DOR
+    derivation: {literal: DOR}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Duration of Response
+    derivation: {literal: Duration of Response}
 
   - name: STARTDT
     type: date

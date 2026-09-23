@@ -40,14 +40,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: SDIAM
+    derivation: {literal: SDIAM}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Sum of Target Lesion Diameters (mm)
+    derivation: {literal: Sum of Target Lesion Diameters (mm)}
 
   # The subject's target-lesion longest diameters at this visit (TR matches
   # on study, subject and visit). A missing result is skipped; a visit with

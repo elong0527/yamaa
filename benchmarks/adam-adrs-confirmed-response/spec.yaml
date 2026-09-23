@@ -22,8 +22,7 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: CONFRESP
+    derivation: {literal: CONFRESP}
 
   - name: RSSEQ
     type: int

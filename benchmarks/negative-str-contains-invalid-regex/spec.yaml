@@ -25,7 +25,5 @@ columns:
     derivation:
       case:
         - when: "str_contains(AE.AETERM, 'SEVERE[')"
-          then:
-            literal: SEVERE
-        - otherwise:
-            literal: MILD
+          then: {literal: SEVERE}
+        - otherwise: {literal: MILD}

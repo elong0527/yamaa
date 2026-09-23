@@ -33,8 +33,7 @@ columns:
   - name: RELTYPE
     type: str
     label: Relationship Type
-    derivation:
-      literal: null
+    derivation: {literal: null}
 
   - name: RELID
     type: str
@@ -49,10 +48,8 @@ rows:
         source: AE.STUDYID
       USUBJID:
         source: AE.USUBJID
-      RDOMAIN:
-        literal: AE
-      IDVAR:
-        literal: AESEQ
+      RDOMAIN: {literal: AE}
+      IDVAR: {literal: AESEQ}
       IDVARVAL:
         source: AE.AESEQ
       RELID:
@@ -66,10 +63,8 @@ rows:
         source: AE.STUDYID
       USUBJID:
         source: AE.USUBJID
-      RDOMAIN:
-        literal: AE
-      IDVAR:
-        literal: AESEQ
+      RDOMAIN: {literal: AE}
+      IDVAR: {literal: AESEQ}
       IDVARVAL:
         source: AE.AESEQ
       RELID:
@@ -83,10 +78,8 @@ rows:
         source: CM.STUDYID
       USUBJID:
         source: CM.USUBJID
-      RDOMAIN:
-        literal: CM
-      IDVAR:
-        literal: CMSEQ
+      RDOMAIN: {literal: CM}
+      IDVAR: {literal: CMSEQ}
       IDVARVAL:
         source: CM.CMSEQ
       RELID:
@@ -100,10 +93,8 @@ rows:
         source: CM.STUDYID
       USUBJID:
         source: CM.USUBJID
-      RDOMAIN:
-        literal: CM
-      IDVAR:
-        literal: CMSEQ
+      RDOMAIN: {literal: CM}
+      IDVAR: {literal: CMSEQ}
       IDVARVAL:
         source: CM.CMSEQ
       RELID:

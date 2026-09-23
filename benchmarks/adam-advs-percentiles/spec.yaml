@@ -46,11 +46,9 @@ columns:
     derivation:
       case:
         - when: "ADVS_RAW.PARAMCD = 'BMI'"
-          then:
-            literal: BMIPCTL
+          then: {literal: BMIPCTL}
         - when: "ADVS_RAW.PARAMCD = 'WEIGHT'"
-          then:
-            literal: WGTPCTL
+          then: {literal: WGTPCTL}
     verifications:
       allowed_values:
         values: [BMIPCTL, WGTPCTL]
@@ -61,11 +59,9 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'BMIPCTL'"
-          then:
-            literal: BMI-for-Age Percentile
+          then: {literal: BMI-for-Age Percentile}
         - when: "PARAMCD = 'WGTPCTL'"
-          then:
-            literal: Weight-for-Age Percentile
+          then: {literal: Weight-for-Age Percentile}
 
   - name: ZNUM
     type: float
@@ -80,8 +76,7 @@ columns:
     derivation:
       case:
         - when: "ZNUM IS NULL"
-          then:
-            literal: null
+          then: {literal: null}
         - otherwise:
             function:
               name: normal_cdf

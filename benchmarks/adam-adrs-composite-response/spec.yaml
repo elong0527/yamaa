@@ -25,14 +25,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: RESP75
+    derivation: {literal: RESP75}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: EASI-75 Response
+    derivation: {literal: EASI-75 Response}
 
   - name: AVISIT
     type: str

@@ -29,8 +29,7 @@ columns:
   - name: RDOMAIN
     type: str
     label: Related Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: USUBJID
     type: str
@@ -39,8 +38,7 @@ columns:
   - name: IDVAR
     type: str
     label: Identifying Variable
-    derivation:
-      literal: USUBJID
+    derivation: {literal: USUBJID}
 
   - name: IDVARVAL
     type: str
@@ -118,14 +116,12 @@ columns:
   - name: QORIG
     type: str
     label: Origin
-    derivation:
-      literal: CRF
+    derivation: {literal: CRF}
 
   - name: QEVAL
     type: str
     label: Evaluator
-    derivation:
-      literal: null
+    derivation: {literal: null}
 
 rows:
   # One candidate per distinct collected value of each subject's items, so a
