@@ -28,9 +28,7 @@ intermediates:
 rows:
   # One output row per collected EC form. A skipped dose (ECOCCUR = 'N')
   # is filtered before any derivation, so it leaves no exposure record.
-  # VS forms group separately and are filtered out the same way. The
-  # lookup results are bound to row-level names first: intermediate reads
-  # are not available inside case branches or compute expressions.
+  # VS forms group separately and are filtered out the same way.
   - id: administered
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
@@ -76,36 +74,6 @@ rows:
         aggregate:
           filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECENDTC'"
           expr: "ONLY(ODM.Value)"
-      FRMREP:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC'"
-          expr: "MIN(ODM.FormRepeatKey)"
-      KIT_TRT: KITMAP.TREATMENT
-      KIT_DOSE: KITMAP.DOSE_MG
-      WT_KG: VISITWT.Value
-      EXTRT:
-        case:
-          - when: "FORM = 'KITDOSE'"
-            then: KIT_TRT
-          - otherwise: ECTRT
-      EXDOSE:
-        case:
-          - when: "FORM = 'TABLET'"
-            then:
-              compute:
-                expr: "TABLETS * STRENGTHMG"
-          - when: "FORM = 'INFUSION'"
-            then:
-              compute:
-                expr: "DOSEMKG * WT_KG"
-          - when: "FORM = 'AUCDOSE'"
-            then: AUCTARGET
-          - otherwise: KIT_DOSE
-      EXDOSU:
-        case:
-          - when: "FORM = 'AUCDOSE'"
-            then: {literal: AUC}
-          - otherwise: {literal: mg}
 
 output:
   path: ex.csv
@@ -128,9 +96,7 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
-  # Internal working columns: ODM item pivots and lookup results bound
-  # during row construction. They are not in output.columns, so they stay
-  # out of the artifact (REQ-0206).
+  # Internal working columns are omitted from the output artifact.
   - name: ECOCCUR
     type: str
     label: Occurrence as collected
@@ -174,34 +140,61 @@ columns:
   - name: FRMREP
     type: int
     label: EC form repeat within the visit
+    derivation: ODM.FormRepeatKey
 
   - name: KIT_TRT
     type: str
     label: Treatment from the kit list
+    derivation: KITMAP.TREATMENT
 
   - name: KIT_DOSE
     type: float
     label: Dose from the kit list
+    derivation: KITMAP.DOSE_MG
 
   - name: WT_KG
     type: float
     label: Visit body weight in kg
+    derivation: VISITWT.Value
 
   - name: EXTRT
     type: str
     label: Name of Treatment
+    derivation:
+      case:
+        - when: "FORM = 'KITDOSE'"
+          then: KIT_TRT
+        - otherwise: ECTRT
     verifications:
       - not_missing: {}
 
   - name: EXDOSE
     type: float
     label: Dose
+    derivation:
+      case:
+        - when: "FORM = 'TABLET'"
+          then:
+            compute:
+              expr: "TABLETS * STRENGTHMG"
+        - when: "FORM = 'INFUSION'"
+          then:
+            compute:
+              expr: "DOSEMKG * WT_KG"
+        - when: "FORM = 'AUCDOSE'"
+          then: AUCTARGET
+        - otherwise: KIT_DOSE
     verifications:
       - not_missing: {}
 
   - name: EXDOSU
     type: str
     label: Dose Units
+    derivation:
+      case:
+        - when: "FORM = 'AUCDOSE'"
+          then: {literal: AUC}
+        - otherwise: {literal: mg}
     verifications:
       allowed_values:
         values: [mg, AUC]
