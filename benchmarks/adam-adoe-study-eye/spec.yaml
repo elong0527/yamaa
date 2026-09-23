@@ -48,7 +48,7 @@ columns:
   # empty for a subject ADSL does not list. It is not in the output.
   - name: STUDYEYE
     type: str
-    label: Study Eye Laterality
+    label: Assigned Study Eye
     derivation: ADSL.STUDYEYE
     verifications:
       allowed_values:
@@ -79,8 +79,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, OESEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 10
+      max: 10
   - implies:
       id: study-eye-record-carries-the-study-laterality
       when: "AFEYE = 'Study Eye'"

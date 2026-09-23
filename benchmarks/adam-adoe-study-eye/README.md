@@ -3,8 +3,8 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adoe-study-eye.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** one ophthalmic row per collected ophthalmic examination
-(OE) measurement, adding `AFEYE`.
+**Goal:** one row per collected ophthalmic examination (OE)
+measurement, adding `AFEYE`.
 
 **Input:** ophthalmic measurements carrying sequence number
 (`OESEQ`), test code (`PARAMCD`), laterality (`OELAT`), and
