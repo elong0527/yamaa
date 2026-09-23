@@ -328,6 +328,8 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         return normalized
     value = normalized.value
     if value is MISSING:
+        if "missing" in payload:
+            return handler_value(payload, "missing")
         if strict:
             return expression_condition(
                 "mapping",
@@ -336,8 +338,6 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
                 "missing",
                 requirement="REQ-0334",
             )
-        if "missing" in payload:
-            return handler_value(payload, "missing")
         return ValueResult(value=MISSING)
     if not isinstance(value, str):
         return expression_condition(
@@ -353,16 +353,18 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
 
     if matched is not None:
         return normalize_runtime_value(dictionary[matched])
+    if "unmapped" in payload:
+        return handler_value(payload, "unmapped")
+    if "missing" in payload:
+        return handler_value(payload, "missing")
     if strict:
         return expression_condition(
             "mapping",
             "unmapped_value",
             {"source": variable, "value": value},
-            "missing",
+            "unmapped",
             requirement="REQ-0334",
         )
-    if "missing" in payload:
-        return handler_value(payload, "missing")
     return ValueResult(value=MISSING)
 
 

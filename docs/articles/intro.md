@@ -81,7 +81,7 @@ derivation:
 
 **Omit both knobs and the value is missing at runtime.** "Not collected" and
 "collected but unrecognised" are two conditions answered by the one
-`missing` knob; add `strict: true` to make either one fail instead.
+`missing` knob; add `strict: true` to make an unhandled condition fail instead.
 
 ## Where to go next
 

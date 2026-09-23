@@ -203,7 +203,7 @@ What changed:
 - Excel packs "if not collected -> U" and "if unrecognised -> U" into one
   sentence. yamaa answers both with the one `missing` handler. Two
   conditions stay two conditions, one knob answers both; `strict: true`
-  makes either one fail instead.
+  makes either unhandled one fail instead.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.
