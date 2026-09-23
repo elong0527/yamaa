@@ -2688,6 +2688,41 @@ def _plan_lookups(
         path = f"intermediates[{index}]"
         if intermediate.dataset not in bindings.datasets:
             continue
+        if (
+            not any(
+                getattr(intermediate, field)
+                for field in (
+                    "key",
+                    "key_base",
+                    "between",
+                    "filter",
+                    "order_by",
+                    "keep",
+                    "columns",
+                    "derivations",
+                    "verification",
+                )
+            )
+            and intermediate.missing is None
+            and not intermediate.strict
+        ):
+            # REQ-1248: a named intermediate must narrow, derive, or reshape
+            # its dataset; a bare id+dataset only renames the qualifier, so
+            # the author should read the input dataset directly instead.
+            # Value-based (not declaration-based): the schema materializes
+            # defaults such as strict:false, which change no behavior.
+            diagnostics.append(
+                _diagnostic(
+                    "rename_only_intermediate",
+                    path,
+                    {
+                        "intermediate": intermediate.id,
+                        "dataset": intermediate.dataset,
+                    },
+                    requirement="REQ-1248",
+                )
+            )
+            continue
         fields = _dataset_types(bindings, intermediate.dataset)
         key_inferred = False
         source_defaulted = False

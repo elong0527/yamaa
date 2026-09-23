@@ -12,9 +12,6 @@ input:
 
 base: PLAN
 intermediates:
-  - id: SUBJECT
-    dataset: ADSL
-
   - id: COLLECTED
     dataset: VS
     key_base: [STUDYID, USUBJID, PARAMCD, ADT]
@@ -80,7 +77,7 @@ columns:
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation: SUBJECT.TRTSDT
+    derivation: ADSL.TRTSDT
 
   - name: HGTDT
     type: date

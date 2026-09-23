@@ -8,6 +8,7 @@ base: DM
 intermediates:
   - id: DOSING
     dataset: EX
+    columns: [EXTRT, EXDOSE]
 
 output:
   path: adsl.csv

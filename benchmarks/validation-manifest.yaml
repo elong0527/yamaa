@@ -245,6 +245,11 @@ fixtures:
     condition: no_applicable_keys
     spec_paths: ["intermediates[0]"]
     validator: spec_contract
+  negative-lookup-rename-intermediate:
+    rule: R003
+    condition: rename_only_intermediate
+    spec_paths: ["intermediates[0]"]
+    validator: spec_contract
   negative-previous-fixed:
     rule: R006
     condition: invalid_field_type
