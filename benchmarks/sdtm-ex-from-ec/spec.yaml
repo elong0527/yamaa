@@ -80,11 +80,9 @@ intermediates:
     filter: "ODM.ItemOID = 'IT.EC.ECENDTC'"
 
 rows:
-  # One occurrence item anchors each administered EC form; skipped doses
-  # and VS items do not construct exposure rows.
   - id: administered
     dataset: ODM
-    filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR' AND ODM.Value = 'Y'"
+    filter: "ODM.ItemOID = 'IT.EC.ECOCCUR' AND ODM.Value = 'Y'"
     derivations: {}
 
 output:
