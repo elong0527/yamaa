@@ -35,10 +35,14 @@ columns:
     type: str
     label: Parameter
 
+  # The item's numeric response, empty on the score row. It is not in the
+  # output.
   - name: ITEMRESN
     type: float
     label: Numeric Item Response
 
+  # Sum and count of the answered items at the subject's visit, repeated on
+  # every row of it. The score row's empty ITEMRESN adds nothing to either.
   - name: ITEMSUM
     type: float
     label: Sum of Item Responses
@@ -55,6 +59,9 @@ columns:
         expr: "COUNT(ITEMRESN)"
         group_by: [STUDYID, USUBJID, VISIT]
 
+  # The score is the mean answered response times 25 (a 0 to 100 scale),
+  # empty with fewer than three items answered. An item row keeps its
+  # response.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -65,35 +72,30 @@ columns:
             compute:
               expr: "100 * (ITEMSUM / ITEMANS) / 4"
         - when: "PARAMCD = 'PFSCORE'"
-          then:
-            literal: null
-        - otherwise:
-            source: ITEMRESN
+          then: {literal: null}
+        - otherwise: {source: ITEMRESN}
     verifications:
       range:
         min: 0
         max: 100
 
 rows:
+  # Every physical functioning item record, answered or not.
   - id: item
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"
     derivations:
-      PARAMCD:
-        source: QS.QSTESTCD
-      PARAM:
-        source: QS.QSTEST
-      ITEMRESN:
-        source: QS.QSSTRESN
+      PARAMCD: QS.QSTESTCD
+      PARAM: QS.QSTEST
+      ITEMRESN: QS.QSSTRESN
 
+  # One score row per subject and visit, built from the visit's PF01 record
+  # whether or not it was answered; a visit with no PF01 record gets none.
   - id: subscale
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
     derivations:
-      PARAMCD:
-        literal: PFSCORE
-      PARAM:
-        literal: Physical Functioning Subscale Score
-      ITEMRESN:
-        literal: null
+      PARAMCD: {literal: PFSCORE}
+      PARAM: {literal: Physical Functioning Subscale Score}
+      ITEMRESN: {literal: null}
 
 verifications:
   - unique:
@@ -108,4 +110,4 @@ verifications:
   - implies:
       id: an-item-response-stays-within-the-answer-range
       when: "PARAMCD IN ('PF01', 'PF02', 'PF03', 'PF04')"
-      then: "AVAL IS NULL OR (AVAL >= 0 AND AVAL <= 4)"
+      then: "AVAL IS NULL OR AVAL BETWEEN 0 AND 4"
