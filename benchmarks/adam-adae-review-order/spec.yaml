@@ -7,13 +7,16 @@ input:
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT, ASEV]
+  # Worst severity first; an unreported severity has no rank and sorts
+  # last. Within a severity, undated events come first, then the earliest
+  # onset, then collection order.
   order_by:
     - USUBJID
     - variable: SEVORD
       direction: desc
     - variable: ASTDT
       nulls: first
-    - variable: ASEQ
+    - ASEQ
 
 columns:
   - name: STUDYID
@@ -49,6 +52,7 @@ columns:
       allowed_values:
         values: [MILD, MODERATE, SEVERE]
 
+  # Rank for the review order above.
   - name: SEVORD
     type: int
     label: Severity Review Order
