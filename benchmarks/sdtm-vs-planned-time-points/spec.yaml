@@ -2,19 +2,79 @@ schema_version: "1.0"
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  VS_RAW: {path: input/vs_raw.csv, types: {VSSEQ: int, VSORRES: float}}
-  TPT: {path: input/tpt.csv, types: {VSTPTNUM: int}}
-  EX: input/ex.csv
+  ODM: input/odm.csv
   DM: input/dm.csv
-base: VS_RAW
+base: ODM
 intermediates:
-  - id: TPTPLAN
-    dataset: TPT
-    key: VSTPT
+  - id: DOSE
+    dataset: ODM
+    filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
+    key: [StudyOID, SubjectKey]
+    key_base: [STUDYID, USUBJID]
 
 output:
   path: vs.csv
   columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
+rows:
+  - id: pulse
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+    filter: "VSORRES IS NOT NULL"
+    derivations:
+      VSTESTCD:
+        literal: PULSE
+      VSORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.PULSE'"
+          expr: "ONLY(ODM.Value)"
+      VSORRESU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.PULSEU'"
+          expr: "ONLY(ODM.Value)"
+      VSDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+          expr: "ONLY(ODM.Value)"
+  - id: sysbp
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+    filter: "VSORRES IS NOT NULL"
+    derivations:
+      VSTESTCD:
+        literal: SYSBP
+      VSORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
+          expr: "ONLY(ODM.Value)"
+      VSORRESU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.SYSBPU'"
+          expr: "ONLY(ODM.Value)"
+      VSDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+          expr: "ONLY(ODM.Value)"
+  - id: diabp
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+    filter: "VSORRES IS NOT NULL"
+    derivations:
+      VSTESTCD:
+        literal: DIABP
+      VSORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.DIABP'"
+          expr: "ONLY(ODM.Value)"
+      VSORRESU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.DIABPU'"
+          expr: "ONLY(ODM.Value)"
+      VSDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+          expr: "ONLY(ODM.Value)"
 
 columns:
   - name: DOMAIN
@@ -26,61 +86,102 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: VS_RAW.STUDYID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: VS_RAW.USUBJID
-
-  - name: VSSEQ
-    type: int
-    label: Sequence Number
-    derivation: VS_RAW.VSSEQ
-    verifications:
-      not_missing: {}
+    derivation: ODM.SubjectKey
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation: VS_RAW.VISIT
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.D1: DAY 1
 
   - name: VSTPT
     type: str
     label: Planned Time Point Name
-    derivation: VS_RAW.VSTPT
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.VS_PREDOSE: PRE-DOSE
+          FO.VS_30MIN: 30 MIN POST-DOSE
+          FO.VS_1H: 1 H POST-DOSE
+          FO.VS_4H: 4 H POST-DOSE
 
   - name: VSTPTNUM
     type: int
     label: Planned Time Point Number
-    derivation: TPTPLAN.VSTPTNUM
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.VS_PREDOSE: 1
+          FO.VS_30MIN: 2
+          FO.VS_1H: 3
+          FO.VS_4H: 4
     verifications:
       not_missing: {}
 
   - name: VSELTM
     type: str
     label: Planned Elapsed Time
-    derivation: TPTPLAN.VSELTM
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.VS_PREDOSE: -PT15M
+          FO.VS_30MIN: PT30M
+          FO.VS_1H: PT1H
+          FO.VS_4H: PT4H
     verifications:
       not_missing: {}
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
-    derivation: VS_RAW.VSTESTCD
     verifications:
       allowed_values:
         values: [PULSE, SYSBP, DIABP]
 
+  - name: ORD_TEST
+    type: int
+    label: Test order within a time point
+    derivation:
+      case:
+        - when: "VSTESTCD = 'PULSE'"
+          then:
+            literal: 1
+        - when: "VSTESTCD = 'SYSBP'"
+          then:
+            literal: 2
+        - when: "VSTESTCD = 'DIABP'"
+          then:
+            literal: 3
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VSTPTNUM, ORD_TEST]
+    verifications:
+      not_missing: {}
+
   - name: VSORRES
     type: str
     label: Result or Finding in Original Units
-    derivation: VS_RAW.VSORRES
 
   - name: VSORRESU
     type: str
     label: Original Units
-    derivation: VS_RAW.VSORRESU
     verifications:
       allowed_values:
         values: [beats/min, mmHg]
@@ -88,24 +189,23 @@ columns:
   - name: VSSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
-    derivation: VS_RAW.VSORRES
+    derivation: VSORRES
 
   - name: VSSTRESU
     type: str
     label: Standard Units
-    derivation: VS_RAW.VSORRESU
+    derivation: VSORRESU
 
   - name: VSDTC
     type: datetime
     label: Date/Time of Measurements
-    derivation: VS_RAW.VSDTC
     verifications:
       not_missing: {}
 
   - name: EXSTDTC
     type: datetime
     label: Date/Time of First Dose
-    derivation: EX.EXSTDTC
+    derivation: DOSE.Value
 
   - name: RFSTDTC
     type: date
