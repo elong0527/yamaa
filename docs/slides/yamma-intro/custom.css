@@ -1,7 +1,7 @@
-/* Custom reveal.js rules (mirrors the pycsr rinpharma2025 template).
-   Kept as plain CSS because the `scss:rules` layer is not applied by
-   the Quarto version used to render this deck. */
-
+/* Single style file for the yamma-intro deck.
+   Plain CSS on purpose: this Quarto version silently drops theme files that
+   use the scss:defaults / scss:rules layer markers, so all deck styling is
+   spelled out here as CSS and loaded via the `css:` key. */
 #title-slide .title {
   font-size: 2.75rem;
 }

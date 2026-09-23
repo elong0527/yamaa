@@ -6,7 +6,7 @@ date: "2026-09-25"
 embed-resources: true
 format:
   revealjs:
-    theme: [default, custom.scss]
+    theme: default
     css: custom.css
     mainfont: "Lato, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Liberation Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji"
     monofont: "JetBrains Mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace"
