@@ -1,0 +1,147 @@
+schema_version: "1.0"
+domain: SE
+keys: [STUDYID, USUBJID, ETCD]
+input:
+  PLAN: input/se_plan.csv
+  TA: {path: input/ta.csv, types: {TAETORD: int}}
+  TE: input/te.csv
+  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFXSTDTC: date, RFXENDTC: date}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float, EXSTDTC: date, EXENDTC: date}}
+base: PLAN
+
+intermediates:
+  - id: SUBJ
+    dataset: DM
+
+  - id: TAEL
+    dataset: TA
+    key: [STUDYID, ARMCD, ETCD]
+
+  - id: TEEL
+    dataset: TE
+    key: [STUDYID, ETCD]
+
+  - id: FIRSTDOSE
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXSTDTC]
+    keep: first
+
+  - id: LASTDOSE
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXENDTC]
+    keep: last
+
+output:
+  path: se.csv
+  columns: [STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
+  order_by: [STUDYID, USUBJID, SESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PLAN.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: SE}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PLAN.USUBJID
+
+  - name: ARMCD
+    type: str
+    label: Planned Arm Code
+    derivation: SUBJ.ARMCD
+
+  - name: ETCD
+    type: str
+    label: Element Code
+    derivation: PLAN.ETCD
+
+  - name: SESEQ
+    type: int
+    label: Sequence Number
+    derivation: TAEL.TAETORD
+
+  - name: ELEMENT
+    type: str
+    label: Description of Element
+    derivation: TEEL.ELEMENT
+
+  - name: TAETORD
+    type: int
+    label: Planned Order of Element within Arm
+    derivation: TAEL.TAETORD
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation: TAEL.EPOCH
+
+  - name: SESTDTC
+    type: date
+    label: Start Date/Time of Element
+    derivation:
+      case:
+        - when: "EPOCH = 'SCREENING'"
+          then:
+            source: SUBJ.RFICDTC
+        - when: "EPOCH = 'TREATMENT'"
+          then:
+            source: FIRSTDOSE.EXSTDTC
+        - otherwise:
+            source: LASTDOSE.EXENDTC
+
+  - name: SEENDTC
+    type: date
+    label: End Date/Time of Element
+    derivation:
+      case:
+        - when: "EPOCH = 'SCREENING'"
+          then:
+            source: FIRSTDOSE.EXSTDTC
+        - when: "EPOCH = 'TREATMENT'"
+          then:
+            source: LASTDOSE.EXENDTC
+        - otherwise:
+            source: SUBJ.RFXENDTC
+
+  - name: SESTDY
+    type: int
+    label: Study Day of Start of Element
+    derivation:
+      study_day:
+        date: SESTDTC
+        reference: SUBJ.RFSTDTC
+
+  - name: SEENDY
+    type: int
+    label: Study Day of End of Element
+    derivation:
+      study_day:
+        date: SEENDTC
+        reference: SUBJ.RFSTDTC
+
+  - name: SEUPDES
+    type: str
+    label: Description of Unplanned Element
+    derivation: {literal: null}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ETCD]
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: elements-have-ordered-bounds
+      expr: "SESTDTC IS NOT NULL AND SEENDTC IS NOT NULL AND SESTDTC <= SEENDTC"
+  - assert:
+      id: every-element-carries-its-plan
+      expr: "ETCD IS NOT NULL AND ELEMENT IS NOT NULL AND TAETORD IS NOT NULL"

@@ -1,0 +1,5 @@
+STUDYID,DOMAIN,ETCD,ELEMENT,TESTRL,TEENRL,TEDUR
+YAMAA-01,TE,SCRN,Screening,Signed informed consent,First dose of study treatment,P14D
+YAMAA-01,TE,TRTA,Treatment A,First dose of Treatment A,Last dose of Treatment A,P28D
+YAMAA-01,TE,TRTB,Treatment B,First dose of Treatment B,Last dose of Treatment B,P28D
+YAMAA-01,TE,FUP,Follow-up,Day after last dose of study treatment,End of study participation,P14D
