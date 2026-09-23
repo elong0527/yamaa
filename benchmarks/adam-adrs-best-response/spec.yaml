@@ -85,8 +85,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
-      min: 6
-      max: 6
+      min: 8
+      max: 8
   - all_or_none:
       id: best-response-value-rank-and-date-agree
       columns: [AVALC, AVAL, ADT]
