@@ -12,11 +12,12 @@ standardized outcome (`DSDECOD`) and collection date (`DSDTC`).
 
 **Variables:**
 
-- `COMPFL`: `Y` when at least one disposition record carries
+- `COMPFL`: `Y` when the subject has a disposition record with
   standardized outcome `COMPLETED`; `N` otherwise. A subject
   whose records carry only other outcomes, such as
   `ADVERSE EVENT`, and a subject with no disposition record
-  at all, are both `N`.
+  at all, are both `N`. A subject with two `COMPLETED` records
+  stops the run rather than being flagged.
 
 **Note:** the flag answers whether a completion record exists,
 not whether its collection date was filled in or how a later

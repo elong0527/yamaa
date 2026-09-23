@@ -5,6 +5,8 @@ input:
   ADSL_RAW: input/adsl_raw.csv
   DS: input/ds.csv
 base: ADSL_RAW
+# The subject's COMPLETED disposition record, if any. A subject with two
+# COMPLETED records stops the run: nothing here chooses between them.
 intermediates:
   - id: COMPLT
     dataset: DS
@@ -35,16 +37,16 @@ columns:
     label: Completion Disposition Term
     derivation: COMPLT.DSDECOD
 
+  # COMPREC is the matched record's outcome, always COMPLETED, so it is empty
+  # only when the subject has no completion record; such a subject is N.
   - name: COMPFL
     type: str
     label: Completion Flag
     derivation:
       case:
         - when: "COMPREC IS NOT NULL"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
     verifications:
       allowed_values:
         values: [Y, N]
