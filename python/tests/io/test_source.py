@@ -423,8 +423,24 @@ def test_adae_fixture_treats_bare_and_quoted_empty_as_missing() -> None:
         "BAD-ID",
         "AE-104",
         None,
+        "AE-999",
+        "AE-000",
+        "AE-1000",
+        "ae-007",
+        "AE-007",
     ]
-    assert loaded.table.frame["AESEQ"].to_list() == ["1", "2", "3", "1", "2"]
+    assert loaded.table.frame["AESEQ"].to_list() == [
+        "1",
+        "2",
+        "3",
+        "1",
+        "2",
+        "3",
+        "1",
+        "2",
+        "3",
+        "4",
+    ]
 
 
 def test_multiple_declarations_share_snapshot_but_keep_types(tmp_path: Path) -> None:

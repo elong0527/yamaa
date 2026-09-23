@@ -5276,16 +5276,38 @@ def validate_spec_contracts(
             if keyword == 'row_count':
                 minimum = payload.get('min')
                 maximum = payload.get('max')
-                if minimum is None and maximum is None:
+                min_fraction = payload.get('min_fraction')
+                max_fraction = payload.get('max_fraction')
+                for field, bound in (
+                    ('min_fraction', min_fraction),
+                    ('max_fraction', max_fraction),
+                ):
+                    if bound is not None and (
+                        type(bound) not in (int, float) or not 0 <= bound <= 1
+                    ):
+                        errors.append(
+                            f"ERROR: {path}.{field}: must be between 0 and 1"
+                        )
+                if all(bound is None for bound in (
+                    minimum, maximum, min_fraction, max_fraction
+                )):
                     errors.append(
                         f"ERROR: {path}: requires at least one bound"
                     )
-                elif (
+                if (
                     type(minimum) is int
                     and type(maximum) is int
                     and minimum > maximum
                 ):
                     errors.append(f"ERROR: {path}: min must not exceed max")
+                if (
+                    type(min_fraction) in (int, float)
+                    and type(max_fraction) in (int, float)
+                    and min_fraction > max_fraction
+                ):
+                    errors.append(
+                        f"ERROR: {path}: min_fraction must not exceed max_fraction"
+                    )
                 if 'group_by' in payload:
                     group_by = payload.get('group_by')
                     if not isinstance(payload.get('id'), str):
@@ -6253,7 +6275,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             fields = (
                 ('when', 'then') if keyword == 'implies'
                 else ('expr',) if keyword == 'assert'
-                else ('filter',) if keyword == 'row_count'
+                else ('filter', 'when') if keyword == 'row_count'
                 else ()
             )
             for field in fields:

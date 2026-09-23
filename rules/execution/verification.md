@@ -176,8 +176,25 @@ not by regular-expression matching.
 <a id="req-0385"></a>
 
 **REQ-0385.** `row_count` requires the output count to meet inclusive `min`
-  and `max` bounds. At least one bound is required. `filter` and `group_by`
-  narrow what it counts, as the next section defines.
+  and `max` bounds, and its proportion to meet inclusive `min_fraction` and
+  `max_fraction` bounds. At least one bound is required. Fraction bounds must
+  be between 0 and 1. The denominator is the number of unfiltered rows in
+  the group, or the whole artifact without `group_by`. An empty artifact has
+  proportion zero. `filter` and `group_by` determine the numerator and groups
+  as the next section defines. `when` selects groups to check but does not
+  change the denominator.
+
+For example, this warns when more than 5% of completed output rows have a
+missing `VAL`:
+
+```yaml
+verifications:
+  - row_count:
+      id: too_many_missing
+      filter: "VAL IS NULL"
+      max_fraction: 0.05
+      severity: warning
+```
 
 ### Counting a group
 
@@ -441,14 +458,15 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
-| `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies both bounds to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. A grouped count requires id, which an ungrouped count does not. |
+| `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies each bound to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. Fraction bounds divide this count by all rows in the group. A grouped count requires id, which an ungrouped count does not. |
 | `dataset_verifications.row_count.when` | A predicate over one completed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt. |
 
 ## Error conditions
 
 <a id="req-0397"></a>
 
-**REQ-0397.** An unknown verification keyword or field: schema failure.
+**REQ-0397.** An unknown verification keyword or field: schema failure. A
+fraction bound outside 0 through 1 also fails.
 
 <a id="req-0398"></a>
 
@@ -457,7 +475,7 @@ structural constraints come from its schema declaration.
 <a id="req-0399"></a>
 
 **REQ-0399.** `range` or `row_count` with no bound, or with `min > max`:
-  fail.
+  fail. A `row_count` with `min_fraction > max_fraction` also fails.
 
 <a id="req-0400"></a>
 
