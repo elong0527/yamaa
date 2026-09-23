@@ -48,10 +48,10 @@ columns:
     verifications:
       not_missing: {}
   - name: AESTDTC
-    type: str
+    type: date
     label: Start Date/Time of Adverse Event
   - name: AEENDTC
-    type: str
+    type: date
     label: End Date/Time of Adverse Event
   - name: AESEV
     type: str
