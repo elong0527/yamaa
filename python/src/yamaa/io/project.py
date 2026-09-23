@@ -79,12 +79,26 @@ class ResourceSnapshot(BaseModel):
     content: bytes
 
 
+@dataclass(frozen=True)
+class _Base:
+    """The directory a view resolves relative paths from (REQ-0781).
+
+    ``root_index`` and ``components`` place it under an approved root; both
+    are None for a writing layer stored outside every approved root, which
+    keeps only its canonical ``spelling``.
+    """
+
+    root_index: int | None
+    components: tuple[str, ...] | None
+    spelling: tuple[str, ...]
+
+
 @dataclass
 class _SnapshotStore:
     """Run-wide snapshots shared by resource views with different bases."""
 
     by_identity: dict[tuple[int, int], ResourceSnapshot]
-    paths: dict[int, list[tuple[tuple[str, ...], str]]]
+    paths: dict[int, list[tuple[tuple[str, ...], str, _Base]]]
     path_snapshots: dict[tuple[str, ...], ResourceSnapshot]
     capture_reads: int = 0
 
@@ -147,6 +161,11 @@ def classify_project_path(written_path: str) -> str | None:
 def _directory_spelling(candidate: str | Path) -> tuple[str, ...] | None:
     """Return the rooted segments a runner used to name a directory."""
     return rooted_project_segments(PurePath(candidate).as_posix())
+
+
+def _segments_path(segments: tuple[str, ...]) -> Path:
+    """Spell rooted segments, marker first, as a host path."""
+    return Path(segments[0] + "/" + "/".join(segments[1:]))
 
 
 class ProjectConfigurationError(ValueError):
@@ -345,7 +364,7 @@ class ProjectResources:
         self._root_paths = tuple(approved_paths)
         self._root_finalizer = weakref.finalize(self, self._close_all, descriptors)
         self._project_root = root
-        self._base_root_index, self._base_components = self._relative_base(base)
+        self._base = self._relative_base(base)
         self._store = _SnapshotStore({}, {}, {})
 
     @property
@@ -378,11 +397,14 @@ class ProjectResources:
             [root.descriptor for root in cloned_roots],
         )
         clone._project_root = self._project_root
-        clone._base_root_index, clone._base_components = clone._relative_base(base)
+        clone._base = clone._relative_base(base)
         clone._store = self._store
         return clone
 
-    def _relative_base(self, base: Path) -> tuple[int | None, tuple[str, ...] | None]:
+    def _relative_base(self, base: Path) -> _Base:
+        spelling = _directory_spelling(base)
+        if spelling is None:  # A resolved path is always rooted.
+            raise ValueError("resource base must be a rooted local directory")
         candidates: list[tuple[int, int, tuple[str, ...]]] = []
         for index, root in enumerate(self._root_paths):
             try:
@@ -391,9 +413,9 @@ class ProjectResources:
                 continue
             candidates.append((len(root.parts), index, components))
         if not candidates:
-            return None, None
+            return _Base(None, None, spelling)
         _, index, components = max(candidates)
-        return index, components
+        return _Base(index, components, spelling)
 
     @staticmethod
     def _close_all(descriptors: list[int]) -> None:
@@ -456,13 +478,13 @@ class ProjectResources:
     def _entry_identity(status: os.stat_result) -> tuple[int, int, int]:
         return (status.st_dev, status.st_ino, stat.S_IFMT(status.st_mode))
 
-    def _anchors(self, written_path: str) -> list[_Anchor]:
+    def _anchors(self, written_path: str, base: _Base | None = None) -> list[_Anchor]:
         """Order the anchors a written path resolves from (REQ-0780/REQ-0781).
 
         A relative path anchors first from the writing layer's directory and
-        then, when that walk reaches no entry, from each approved data root
-        in run order, the first success winning. A rooted path keeps its
-        single anchor.
+        then, when that walk reaches no entry, from the approved project root
+        and each approved data root in run order, the first success winning.
+        A rooted path keeps its single anchor.
         """
         condition = classify_project_path(written_path)
         if condition is not None:
@@ -472,20 +494,28 @@ class ProjectResources:
         if segments is not None:
             return [self._rooted_anchor(written_path, segments)]
 
-        if self._base_components is None or self._base_root_index is None:
-            raise ResourceFailure("resource_path_outside_project", written_path)
-
-        anchors = [
-            self._relative_anchor(
-                written_path, self._base_root_index, self._base_components
+        base = base or self._base
+        anchors: list[_Anchor] = []
+        if base.root_index is not None and base.components is not None:
+            # A writing directory inside an approved root decides terminal
+            # conditions, so a traversal escaping every root still fails.
+            anchors.append(
+                self._relative_anchor(written_path, base.root_index, base.components)
             )
-        ]
-        seen = {anchors[0].key}
+        else:
+            # A layer stored outside every approved root names a readable
+            # location only when its path climbs into one (REQ-0772);
+            # otherwise the run reads nothing there and starts at the
+            # project root.
+            try:
+                anchors.append(self._textual_anchor(written_path, base.spelling, ()))
+            except ResourceFailure:
+                pass
+        seen = {anchor.key for anchor in anchors}
         # Index 0 of _roots is always the project root; the rest are the
-        # approved data roots in run order. A written path the data root
-        # cannot textually reach simply does not participate; the writing
-        # layer's anchor above still decides terminal conditions.
-        for index in range(1, len(self._roots)):
+        # approved data roots in run order (REQ-1246). A written path an
+        # anchor cannot textually reach simply does not participate.
+        for index in range(len(self._roots)):
             try:
                 anchor = self._relative_anchor(written_path, index, ())
             except ResourceFailure:
@@ -493,6 +523,8 @@ class ProjectResources:
             if anchor.key not in seen:
                 seen.add(anchor.key)
                 anchors.append(anchor)
+        if not anchors:
+            raise ResourceFailure("resource_path_outside_project", written_path)
         return anchors
 
     def _rooted_anchor(self, written_path: str, segments: tuple[str, ...]) -> _Anchor:
@@ -518,13 +550,23 @@ class ProjectResources:
         base_components: Iterable[str],
     ) -> _Anchor:
         """Resolve a relative path from one approved root's spelling."""
-        root = self._roots[root_index]
+        return self._textual_anchor(
+            written_path, self._roots[root_index].canonical, base_components
+        )
+
+    def _textual_anchor(
+        self,
+        written_path: str,
+        start: tuple[str, ...],
+        base_components: Iterable[str],
+    ) -> _Anchor:
+        """Resolve a relative path textually from ``start`` and re-anchor it."""
         # Resolve textually against the anchor's canonical segments, so a
         # ".." that climbs above the anchor keeps resolving from the real
         # parent directories instead of failing outright (REQ-0778). The
         # root marker itself is never popped: climbing above the filesystem
         # root still fails as resource_path_outside_project.
-        absolute = list(root.canonical)
+        absolute = list(start)
         relative = list(base_components)
         for segment in written_path.split("/"):
             if segment == ".":
@@ -631,9 +673,11 @@ class ProjectResources:
             raise _PathChanged
         return descriptor, opened_status
 
-    def _open_resource(self, written_path: str) -> _OpenedResource:
+    def _open_resource(
+        self, written_path: str, base: _Base | None = None
+    ) -> _OpenedResource:
         last_missing: _NoEntry | None = None
-        for anchor in self._anchors(written_path):
+        for anchor in self._anchors(written_path, base):
             try:
                 return self._open_from_anchor(anchor, written_path)
             except _NoEntry as error:
@@ -733,7 +777,9 @@ class ProjectResources:
             accepted = self._store.by_identity.get(identity)
             if accepted is not None:
                 self._store.path_snapshots[opened.key] = accepted
-                self._store.paths[id(accepted)].append((opened.key, written_path))
+                self._store.paths[id(accepted)].append(
+                    (opened.key, written_path, self._base)
+                )
                 return accepted
 
             with os.fdopen(descriptor, "rb") as handle:
@@ -761,7 +807,9 @@ class ProjectResources:
         self._store.capture_reads += 1
         self._store.by_identity[identity] = snapshot
         self._store.path_snapshots[opened.key] = snapshot
-        self._store.paths[id(snapshot)] = [(opened.key, written_path)]
+        # The base is kept with the spelling, so verify re-resolves the path
+        # from the directory it was written from, whichever view verifies it.
+        self._store.paths[id(snapshot)] = [(opened.key, written_path, self._base)]
         return snapshot
 
     def validate(self, written_path: str) -> None:
@@ -776,15 +824,32 @@ class ProjectResources:
         """Validate the written form and approved-root location of a path."""
         self._anchors(written_path)
 
+    def locate(self, written_path: str) -> Path:
+        """Return the canonical file an existing written path reaches."""
+        try:
+            opened = self._open_resource(written_path)
+        except _PathChanged as error:
+            raise ResourceFailure("resource_path_missing", written_path) from error
+        os.close(opened.descriptor)
+        return _segments_path(opened.key)
+
+    def location(self, written_path: str) -> Path:
+        """Return the location a path names for a file not yet written.
+
+        REQ-1247: an artifact the run itself produces has no entry to retry,
+        so its path denotes the location of its first anchor.
+        """
+        return _segments_path(self._anchors(written_path)[0].key)
+
     def verify(self, snapshot: ResourceSnapshot) -> None:
         """Verify accepted path bytes before parsing the retained snapshot."""
         paths = self._store.paths.get(id(snapshot))
         if not paths:
             raise ValueError("snapshot was not captured by this project")
-        for expected_key, written_path in paths:
+        for expected_key, written_path, base in paths:
             descriptor = -1
             try:
-                opened = self._open_resource(written_path)
+                opened = self._open_resource(written_path, base)
                 descriptor = opened.descriptor
                 if opened.key != expected_key:
                     raise _PathChanged

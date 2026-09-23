@@ -72,6 +72,18 @@ class SourceOrigin(_FrozenModel):
     spec_path: str
 
 
+class LayerPath(_FrozenModel):
+    """A relative input path as the layer that wrote it spelled it.
+
+    Rebasing states the same location from the entry file, but REQ-0780
+    retries a path that reaches no entry in its layer's own spelling, which
+    the rebased form no longer shows.
+    """
+
+    directory: Path
+    written: str
+
+
 class ResolvedSpecification(_FrozenModel):
     """One complete R017 result together with its diagnostic provenance."""
 
@@ -80,6 +92,8 @@ class ResolvedSpecification(_FrozenModel):
     entry_path: Path
     layers: tuple[Path, ...]
     provenance: dict[str, SourceOrigin]
+    # Keyed by logical path, such as ``input.DM.path`` (REQ-0616).
+    layer_paths: dict[str, LayerPath] = {}
 
 
 def _diagnostic(
@@ -157,6 +171,47 @@ def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -
             value = output.get(name)
             if isinstance(value, str):
                 output[name] = _rebase_path(value, layer, entry)
+
+
+def _layer_input_paths(
+    document: dict[str, object], layer: Path
+) -> dict[tuple[Path, str], str]:
+    """Record the relative input paths one layer writes, before rebasing."""
+    written: dict[tuple[Path, str], str] = {}
+    datasets = document.get("input")
+    if isinstance(datasets, dict):
+        for dataset, source in datasets.items():
+            if not isinstance(source, dict):
+                continue
+            for name in ("path", "schema"):
+                value = source.get(name)
+                if isinstance(value, str) and not _rooted_project_path(value):
+                    written[(layer, f"input.{dataset}.{name}")] = value
+    return written
+
+
+def _resolved_layer_paths(
+    document: dict[str, object],
+    provenance: Mapping[str, SourceOrigin],
+    written: Mapping[tuple[Path, str], str],
+) -> dict[str, LayerPath]:
+    """Pair each surviving input path with the layer that supplied it."""
+    paths: dict[str, LayerPath] = {}
+    datasets = document.get("input")
+    if not isinstance(datasets, dict):
+        return paths
+    for dataset, source in datasets.items():
+        if not isinstance(source, dict):
+            continue
+        for name in ("path", "schema"):
+            logical = f"input.{dataset}.{name}"
+            origin = provenance.get(logical)
+            spelling = written.get((origin.file, logical)) if origin else None
+            if origin is not None and spelling is not None:
+                paths[logical] = LayerPath(
+                    directory=origin.file.parent, written=spelling
+                )
+    return paths
 
 
 def _validate_partial_member(
@@ -1249,6 +1304,7 @@ def resolve_specification(
     entry_path = Path(entry).resolve()
     contributions: list[tuple[Path, dict[str, object]]] = []
     completed: set[Path] = set()
+    written_paths: dict[tuple[Path, str], str] = {}
     active: list[Path] = []
     entry_version: object | None = None
 
@@ -1346,6 +1402,7 @@ def resolve_specification(
             visit(candidate)
         active.pop()
         completed.add(canonical)
+        written_paths.update(_layer_input_paths(normalized, canonical))
         _rebase_layer_paths(normalized, canonical, entry_path)
         contributions.append((canonical, normalized))
 
@@ -1387,4 +1444,5 @@ def resolve_specification(
         entry_path=entry_path,
         layers=tuple(path for path, _ in contributions),
         provenance=provenance,
+        layer_paths=_resolved_layer_paths(resolved, provenance, written_paths),
     )

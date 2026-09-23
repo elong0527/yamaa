@@ -705,6 +705,9 @@ examples:
   schema-inheritance:
     status: executable
     runtimes: ['python']
+  schema-inheritance-project-root:
+    status: executable
+    runtimes: ['python']
   schema-inherited-output:
     status: executable
     runtimes: ['python']

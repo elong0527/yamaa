@@ -446,18 +446,24 @@ def test_rejects_file_as_intermediate_component(tmp_path: Path) -> None:
     assert raised.value.condition == "resource_path_not_regular_file"
 
 
-def test_rejects_resolution_outside_narrower_project(tmp_path: Path) -> None:
+def test_layer_outside_narrower_project_never_reads_beside_itself(
+    tmp_path: Path,
+) -> None:
     project = tmp_path / "project"
     layer = tmp_path / "layer"
     project.mkdir()
     layer.mkdir()
-    (layer / "dm.csv").write_text("ID\n1\n")
+    (layer / "dm.csv").write_text("ID\nlayer\n")
     resources = ProjectResources(project, base_directory=layer)
 
+    # REQ-0781: the layer's own directory is under no approved root, so it is
+    # not an anchor, and the path starts at the approved project root.
     with pytest.raises(ResourceFailure) as raised:
         resources.validate("dm.csv")
+    assert raised.value.condition == "resource_path_missing"
 
-    assert raised.value.condition == "resource_path_outside_project"
+    (project / "dm.csv").write_text("ID\nproject\n")
+    assert resources.capture("dm.csv").content == b"ID\nproject\n"
 
 
 def test_failure_text_never_exposes_host_paths(tmp_path: Path) -> None:
@@ -845,3 +851,82 @@ def test_no_duplicate_walk_when_the_spec_directory_is_a_data_root(
 
     assert snapshot.content == b"LBTESTCD\nALT\n"
     assert resources.capture_reads == 1
+
+
+# ---------------------------------------------------------------------------
+# REQ-1246: the approved project root is the anchor after the writing layer's
+# directory and before every data root. REQ-1247: an artifact the run
+# produces names the location of its first anchor.
+# ---------------------------------------------------------------------------
+
+
+def test_relative_path_falls_back_to_the_project_root_before_data_roots(
+    tmp_path: Path,
+) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (project / "dm.csv").write_bytes(b"ID\nproject\n")
+    (first / "dm.csv").write_bytes(b"ID\nfirst\n")
+    resources = ProjectResources(project, data_roots=(first,), base_directory=specs)
+
+    assert resources.capture("dm.csv").content == b"ID\nproject\n"
+    assert resources.locate("dm.csv") == (project / "dm.csv").resolve()
+
+
+def test_the_spec_directory_still_wins_over_the_project_root(tmp_path: Path) -> None:
+    project, specs, _, _ = _two_store_layout(tmp_path)
+    (specs / "dm.csv").write_bytes(b"ID\nspecs\n")
+    (project / "dm.csv").write_bytes(b"ID\nproject\n")
+    resources = ProjectResources(project, base_directory=specs)
+
+    assert resources.capture("dm.csv").content == b"ID\nspecs\n"
+
+
+def test_an_outside_layer_climbing_into_the_project_keeps_its_own_anchor(
+    tmp_path: Path,
+) -> None:
+    study = tmp_path / "study"
+    common = tmp_path / "common"
+    (study / "input").mkdir(parents=True)
+    common.mkdir()
+    (study / "input/dm.csv").write_bytes(b"ID\nstudy\n")
+    resources = ProjectResources(study, base_directory=common)
+
+    # REQ-0772: the spelling that climbs into the project is read where it
+    # lands; the plain spelling starts at the project root. Both reach one
+    # physical file and share its snapshot.
+    climbed = resources.capture("../study/input/dm.csv")
+    plain = resources.capture("input/dm.csv")
+
+    assert climbed.content == b"ID\nstudy\n"
+    assert plain is climbed
+    assert resources.capture_reads == 1
+
+
+def test_verify_rereads_a_spelling_from_the_directory_it_was_written_from(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    common = project / "common"
+    common.mkdir(parents=True)
+    (project / "dm.csv").write_bytes(b"ID\n01\n")
+    entry = ProjectResources(project)
+    layer = entry.with_base_directory(common)
+
+    snapshot = layer.capture("../dm.csv")
+
+    # From the entry's directory "../dm.csv" would leave the project, so a
+    # verifier that re-resolved it there would report a changed file.
+    entry.verify(snapshot)
+    assert entry.capture("dm.csv") is snapshot
+
+
+def test_a_produced_artifact_names_its_first_anchor(tmp_path: Path) -> None:
+    project, specs, first, _ = _two_store_layout(tmp_path)
+    (first / "out").mkdir()
+    (first / "out/adsl.csv").write_bytes(b"ID\n01\n")
+    inside = ProjectResources(project, data_roots=(first,), base_directory=specs)
+    outside = ProjectResources(project, base_directory=first)
+
+    # No existing file moves the location of a file the run has yet to write.
+    assert inside.location("out/adsl.csv") == (specs / "out/adsl.csv").resolve()
+    assert outside.location("out/adsl.csv") == (project / "out/adsl.csv").resolve()

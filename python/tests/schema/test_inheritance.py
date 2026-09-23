@@ -8,6 +8,7 @@ from polars.testing import assert_frame_equal
 
 from yamaa import yamaa_domain
 from yamaa.schema import resolve_specification
+from yamaa.schema.inheritance import LayerPath
 from yamaa.specification import SpecificationError, load_specification
 from yamaa.specification.schema import load_schema_bundle
 
@@ -409,11 +410,12 @@ output: {path: out.csv, columns: [ID]}
 
     run = yamaa_domain(study / "spec.yaml", schema_root=SCHEMA_ROOT)
 
+    # REQ-0781: the organization's directory is under no approved root, so
+    # its data.csv is never an anchor. The path starts at the study's
+    # project root instead, where nothing is stored.
     assert run.output is None
     assert run.inputs == {}
-    assert run.issues.row(0, named=True)["condition"] == (
-        "resource_path_outside_project"
-    )
+    assert run.issues.row(0, named=True)["condition"] == "resource_path_missing"
 
 
 def test_entry_inherits_output_from_a_shared_layer(tmp_path: Path) -> None:
@@ -577,3 +579,133 @@ def test_a_column_reading_an_intermediate_depends_on_its_key_base() -> None:
     # REQ-0050: the intermediate's match values are dependencies of every
     # column that reads it, so R017 orders MATCHKEY before V.
     assert _column_dependencies(column, [], intermediates, bundle) == {"MATCHKEY"}
+
+
+_SHARED_INPUT = """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+input:
+  SRC: {path: input/src.csv, types: {N: int}}
+base: SRC
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SRC.ID}
+  - name: N
+    type: int
+    label: Count
+    derivation: {source: SRC.N}
+"""
+
+_STUDY_ENTRY = """schema_version: "1.0"
+parents: ../common/base.yaml
+output: {path: out.csv, columns: [ID, N]}
+"""
+
+
+def test_each_study_reads_its_own_data_through_a_shared_input(tmp_path: Path) -> None:
+    (tmp_path / "common").mkdir()
+    (tmp_path / "common/base.yaml").write_text(_SHARED_INPUT, encoding="ascii")
+    for study, rows in (("alpha", "A1,1\n"), ("beta", "B1,2\nB2,3\n")):
+        (tmp_path / study / "input").mkdir(parents=True)
+        (tmp_path / study / "yamaa-project.yaml").write_text(
+            'version: "1.0"\n', encoding="ascii"
+        )
+        (tmp_path / study / "input/src.csv").write_text(
+            "ID,N\n" + rows, encoding="ascii"
+        )
+        (tmp_path / study / "spec.yaml").write_text(_STUDY_ENTRY, encoding="ascii")
+
+    alpha = yamaa_domain(tmp_path / "alpha/spec.yaml", schema_root=SCHEMA_ROOT)
+    beta = yamaa_domain(tmp_path / "beta/spec.yaml", schema_root=SCHEMA_ROOT)
+
+    # REQ-1246: common/ is outside each study's project root, so the shared
+    # input/src.csv starts at that study's own project root.
+    assert alpha.issues.is_empty() and beta.issues.is_empty()
+    assert alpha.output is not None and beta.output is not None
+    assert alpha.output.to_dicts() == [{"ID": "A1", "N": 1}]
+    assert beta.output.to_dicts() == [{"ID": "B1", "N": 2}, {"ID": "B2", "N": 3}]
+
+
+def test_a_shared_input_absent_beside_its_layer_reads_the_project_root(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
+    (tmp_path / "common").mkdir()
+    (tmp_path / "study").mkdir()
+    (tmp_path / "input").mkdir()
+    (tmp_path / "common/base.yaml").write_text(_SHARED_INPUT, encoding="ascii")
+    (tmp_path / "input/src.csv").write_text("ID,N\nP1,7\n", encoding="ascii")
+    (tmp_path / "study/spec.yaml").write_text(_STUDY_ENTRY, encoding="ascii")
+
+    resolved = resolve_specification(
+        tmp_path / "study/spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+    run = yamaa_domain(tmp_path / "study/spec.yaml", schema_root=SCHEMA_ROOT)
+
+    # REQ-0636 still states the path from the shared layer's directory, and
+    # REQ-0616 keeps the layer's own spelling for the retry of REQ-0780.
+    assert resolved.document["input"]["SRC"]["path"] == "../common/input/src.csv"
+    assert resolved.layer_paths["input.SRC.path"] == LayerPath(
+        directory=(tmp_path / "common").resolve(), written="input/src.csv"
+    )
+    assert run.issues.is_empty()
+    assert run.output is not None
+    assert run.output.to_dicts() == [{"ID": "P1", "N": 7}]
+
+
+def test_a_shared_producer_link_resolves_under_the_study_project_root(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "common").mkdir()
+    study = tmp_path / "study"
+    (study / "input").mkdir(parents=True)
+    (study / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
+    (study / "input/src.csv").write_text("ID\nS1\nS2\n", encoding="ascii")
+    (tmp_path / "common/base.yaml").write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+input:
+  PARENT: {path: out/parent.csv, schema: parent.yaml}
+base: PARENT
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: PARENT.ID}
+""",
+        encoding="ascii",
+    )
+    (study / "parent.yaml").write_text(
+        """schema_version: "1.0"
+domain: PARENT
+keys: [ID]
+input: {SRC: input/src.csv}
+base: SRC
+output: {path: out/parent.csv, columns: [ID]}
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SRC.ID}
+""",
+        encoding="ascii",
+    )
+    (study / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: ../common/base.yaml
+output: {path: out.csv, columns: [ID]}
+""",
+        encoding="ascii",
+    )
+
+    run = yamaa_domain(study / "spec.yaml", schema_root=SCHEMA_ROOT)
+
+    # REQ-1246 finds the study's parent.yaml under its project root, and
+    # REQ-1247 places the produced out/parent.csv where that producer
+    # publishes it, so the shared link needs nothing restated per study.
+    assert run.issues.is_empty()
+    assert run.output is not None
+    assert run.output.to_dicts() == [{"ID": "S1"}, {"ID": "S2"}]
