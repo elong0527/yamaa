@@ -29,6 +29,9 @@ columns:
     label: End Date
     derivation: DM.ENDT
 
+  # Both durations run from STDT to ENDT: negative when ENDT is earlier,
+  # empty when either date is missing.
+  # Whole weeks: the day count divided by 7, any remainder dropped.
   - name: DURW
     type: int
     label: Duration in Whole Weeks
@@ -38,6 +41,8 @@ columns:
         end: ENDT
         unit: week
 
+  # Whole months: anniversaries of STDT on or before ENDT, each keeping the
+  # start day or the month's last day when the month is shorter.
   - name: DURM
     type: int
     label: Duration in Whole Months
