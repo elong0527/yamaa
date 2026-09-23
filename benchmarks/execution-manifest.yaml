@@ -252,9 +252,6 @@ examples:
   negative-cyclic-parent:
     status: executable
     runtimes: ['python']
-  negative-inherited-output:
-    status: executable
-    runtimes: ['python']
   negative-property-clear:
     status: executable
     runtimes: ['python']
@@ -262,9 +259,6 @@ examples:
     status: executable
     runtimes: ['python']
   negative-redefined-date:
-    status: executable
-    runtimes: ['python']
-  negative-relative-to-without-path:
     status: executable
     runtimes: ['python']
   negative-remote-parent:
@@ -696,7 +690,7 @@ examples:
   schema-inheritance:
     status: executable
     runtimes: ['python']
-  schema-inheritance-entry-paths:
+  schema-inherited-output:
     status: executable
     runtimes: ['python']
   schema-source-binding:

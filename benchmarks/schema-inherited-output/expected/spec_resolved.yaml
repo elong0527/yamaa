@@ -6,15 +6,13 @@ keys:
 input:
   DM:
     path: input/dm.csv
-    types:
-      AGE: int
-base: DM
 output:
   path: adsl.csv
   columns:
     - STUDYID
     - USUBJID
     - AGE
+    - AGEU
 columns:
   - name: STUDYID
     type: str
@@ -37,5 +35,12 @@ columns:
       value:
         source:
           variable: DM.AGE
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation:
+      value:
+        source:
+          variable: DM.AGEU
 metadata:
   scope: study

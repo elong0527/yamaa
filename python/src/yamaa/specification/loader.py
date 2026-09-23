@@ -58,12 +58,6 @@ def load_specification(
 
     assert isinstance(document, dict)
     normalized = normalize_specification(document, bundle)
-    # REQ-1248: relative_to is consumed by composition. A file with no parents
-    # is its own entry, so the paths beside it already mean the same thing.
-    if isinstance(normalized, dict) and isinstance(normalized.get("input"), dict):
-        for source in normalized["input"].values():
-            if isinstance(source, dict):
-                source.pop("relative_to", None)
     try:
         specification = Specification.model_validate(normalized, strict=True)
     except ValidationError as error:

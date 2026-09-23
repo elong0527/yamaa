@@ -1696,13 +1696,13 @@ requirements:
   REQ-0620: {"file": "specification/composition.md", "sources": ["R017-7"]}
   REQ-0621: {"file": "specification/composition.md", "sources": ["R017-8"]}
   REQ-0622: {"file": "specification/composition.md", "sources": ["R017-9"]}
-  REQ-0623: {"file": "specification/composition.md", "sources": ["R017-10"]}
+  REQ-0623: {"file": "specification/composition.md", "sources": ["R017-10", "yamaa:issue-845:entry-inherits-output"]}
   REQ-0624: {"file": "specification/composition.md", "sources": ["R017-11"]}
   REQ-0625: {"file": "specification/composition.md", "sources": ["R017-12"]}
   REQ-0626: {"file": "specification/composition.md", "sources": ["R017-13"]}
   REQ-0627: {"file": "specification/composition.md", "sources": ["R017-14"]}
   REQ-0628: {"file": "specification/composition.md", "sources": ["R017-15"]}
-  REQ-0629: {"file": "specification/composition.md", "sources": ["R017-16"]}
+  REQ-0629: {"file": "specification/composition.md", "sources": ["R017-16", "yamaa:issue-845:inherited-output-paths"]}
   REQ-0630: {"file": "specification/composition.md", "sources": ["R017-17"]}
   REQ-0631: {"file": "specification/composition.md", "sources": ["R017-18"]}
   REQ-0632: {"file": "specification/composition.md", "sources": ["R017-19"]}
@@ -1730,7 +1730,7 @@ requirements:
   REQ-0654: {"file": "specification/composition.md", "sources": ["R017-41"]}
   REQ-0655: {"file": "specification/composition.md", "sources": ["R017-42"]}
   REQ-0656: {"file": "specification/composition.md", "sources": ["R017-43"]}
-  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44"]}
+  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44", "yamaa:issue-845:resolved-output-required"]}
   REQ-0658: {"file": "specification/composition.md", "sources": ["R017-45"]}
   REQ-0659: {"file": "specification/composition.md", "sources": ["R017-46"]}
   REQ-0660: {"file": "specification/composition.md", "sources": ["R017-47"]}
@@ -2276,10 +2276,6 @@ requirements:
   REQ-1240: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_sentence.source.description", "schema_expression_str.yaml:expressions.str_sentence.missing.description"]}
   REQ-1241: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_title.source.description", "schema_expression_str.yaml:expressions.str_title.missing.description"]}
   REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description"]}
-  REQ-1246: {"file": "specification/composition.md", "sources": ["schema.yaml:dataset_class.relative_to.description", "yamaa:issue-846:relative-to-entry"]}
-  REQ-1247: {"file": "specification/composition.md", "sources": ["yamaa:issue-846:relative-to-same-layer"]}
-  REQ-1248: {"file": "specification/composition.md", "sources": ["yamaa:issue-846:relative-to-materialized"]}
-  REQ-1249: {"file": "specification/composition.md", "sources": ["yamaa:issue-846:relative-to-without-path"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2772,8 +2768,6 @@ provenance_addenda:
   - {"source": "yamaa:issue-777:intermediate-unique-verification", "text": "Issue #777: an intermediate may declare verification.unique asserting its filtered donor records carry each key combination once; duplicates fail the run, correlated filters are rejected, and keep stays positional.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_class.verification.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_verification_class.unique.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_verification_class", "target": "REQ-1245"}
-  - {"source": "schema.yaml:dataset_class.relative_to.description", "text": "See REQ-1246 in rules/specification/composition.md.", "owner": "specification/composition", "group": "dataset_class", "target": "REQ-1246"}
-  - {"source": "yamaa:issue-846:relative-to-entry", "text": "Issue #846: a dataset declaration may write relative_to: entry so the relative path and schema beside it are relative to the entry file instead of the writing layer, letting a shared layer declare a dataset once while each study keeps its data beside its own entry.", "owner": "specification/composition", "group": "relative_to", "target": "REQ-1246"}
-  - {"source": "yamaa:issue-846:relative-to-same-layer", "text": "Issue #846: relative_to applies only to the paths written beside it in the same layer; it is never inherited, so a later layer that writes a path without it writes from its own directory, and a null there fails as invalid_clear.", "owner": "specification/composition", "group": "relative_to", "target": "REQ-1247"}
-  - {"source": "yamaa:issue-846:relative-to-materialized", "text": "Issue #846: an entry-relative path is materialized as written, a rooted path ignores relative_to, resource resolution still decides the path, relative_to adds no approved root, and composition consumes it.", "owner": "specification/composition", "group": "relative_to", "target": "REQ-1248"}
-  - {"source": "yamaa:issue-846:relative-to-without-path", "text": "Issue #846: a dataset declaration that writes relative_to but no path and no schema in the same layer fails with relative_to_without_path.", "owner": "specification/composition", "group": "relative_to", "target": "REQ-1249"}
+  - {"source": "yamaa:issue-845:entry-inherits-output", "text": "Issue #845: an entry file may omit output and inherit it whole like any other replaced root field, so a shared layer can own the artifact membership and order.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0623"}
+  - {"source": "yamaa:issue-845:inherited-output-paths", "text": "Issue #845: an inherited output publishes where the layer that wrote it names; path, warning_log, and verification_log keep that layer's provenance.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0629"}
+  - {"source": "yamaa:issue-845:resolved-output-required", "text": "Issue #845: missing_entry_output is retired; a resolved specification no layer gave an output fails as missing_required_field at output.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0657"}

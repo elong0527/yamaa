@@ -1,7 +1,0 @@
-phase: validation
-condition: missing_entry_output
-spec_paths:
-  - parents
-requirement: REQ-0657
-context:
-  inherited_columns: [USUBJID]

@@ -65,6 +65,21 @@ def test_committed_column_composition_example_matches_resolved_artifact() -> Non
     )
 
 
+def test_committed_inherited_output_example_matches_resolved_artifact() -> None:
+    example = EXAMPLES / "schema-inherited-output"
+    resolved = resolve_specification(
+        example / "spec_study.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+    expected = yaml.safe_load(
+        (example / "expected/spec_resolved.yaml").read_text(encoding="ascii")
+    )
+
+    assert resolved.document == expected
+    assert "output" not in yaml.safe_load(
+        (example / "spec_study.yaml").read_text(encoding="ascii")
+    )
+
+
 def test_committed_column_composition_example_executes_to_its_artifact() -> None:
     example = EXAMPLES / "schema-column-composition"
 
@@ -401,170 +416,113 @@ output: {path: out.csv, columns: [ID]}
     )
 
 
-def test_committed_entry_path_example_resolves_and_executes() -> None:
-    example = EXAMPLES / "schema-inheritance-entry-paths"
-    resolved = resolve_specification(
-        example / "spec_study.yaml", load_schema_bundle(SCHEMA_ROOT)
+def test_entry_inherits_output_from_a_shared_layer(tmp_path: Path) -> None:
+    common = tmp_path / "common"
+    study = tmp_path / "study"
+    common.mkdir()
+    (study / "input").mkdir(parents=True)
+    (tmp_path / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
+    (study / "input/src.csv").write_text("ID\nS1\n", encoding="ascii")
+    (common / "base.yaml").write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+output:
+  path: out.csv
+  columns: [ID]
+  warning_log: warnings.csv
+columns:
+  - name: ID
+    type: str
+    derivation: SRC.ID
+""",
+        encoding="ascii",
     )
-    expected = yaml.safe_load(
-        (example / "expected/spec_resolved.yaml").read_text(encoding="ascii")
+    (study / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: [../common/base.yaml]
+input:
+  SRC: input/src.csv
+base: SRC
+""",
+        encoding="ascii",
     )
 
-    assert resolved.document == expected
-    assert (
-        resolved.provenance["input.DM.path"].file
-        == (example / "common/spec_common.yaml").resolve()
+    resolved = resolve_specification(
+        study / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
     )
-    run = yamaa_domain(example / "spec_study.yaml", schema_root=SCHEMA_ROOT)
+    run = yamaa_domain(study / "spec.yaml", schema_root=SCHEMA_ROOT)
+
+    # Issue #845: the entry declares no output and inherits it whole
+    # (REQ-0623), publishing where the shared layer names (REQ-0629).
+    assert resolved.document["output"] == {
+        "path": "../common/out.csv",
+        "columns": ["ID"],
+        "warning_log": "../common/warnings.csv",
+    }
     assert run.issues.is_empty()
     assert run.output is not None
-    committed = pl.read_csv(example / "expected/adsl.csv", schema=run.output.schema)
-    assert_frame_equal(run.output, committed, check_exact=True)
+    assert run.output.to_dicts() == [{"ID": "S1"}]
 
 
-_SHARED_LAYER = """schema_version: "1.0"
+def test_entry_output_replaces_inherited_output_whole(tmp_path: Path) -> None:
+    (tmp_path / "input.csv").write_text("ID,CODE\n01,A\n", encoding="ascii")
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
 domain: OUT
 keys: [ID]
-input:
-  SRC:
-    path: input/src.csv
-    relative_to: entry
-    types: {N: int}
+input: {SRC: input.csv}
 base: SRC
+output:
+  path: shared.csv
+  columns: [ID, CODE]
+  warning_log: shared-warnings.csv
 columns:
   - name: ID
     type: str
-    label: Identifier
-    derivation: {source: SRC.ID}
-  - name: N
-    type: int
-    label: Count
-    derivation: {source: SRC.N}
-"""
-
-_STUDY_ENTRY = """schema_version: "1.0"
-parents: ../common/base.yaml
-output: {path: out.csv, columns: [ID, N]}
-"""
-
-
-def test_entry_relative_input_reads_each_entry_own_data(tmp_path: Path) -> None:
-    (tmp_path / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
-    (tmp_path / "common").mkdir()
-    (tmp_path / "common/base.yaml").write_text(_SHARED_LAYER, encoding="ascii")
-    for study, rows in (("alpha", "A1,1\n"), ("beta", "B1,2\nB2,3\n")):
-        (tmp_path / study / "input").mkdir(parents=True)
-        (tmp_path / study / "input/src.csv").write_text(
-            "ID,N\n" + rows, encoding="ascii"
-        )
-        (tmp_path / study / "spec.yaml").write_text(_STUDY_ENTRY, encoding="ascii")
-
-    alpha = yamaa_domain(tmp_path / "alpha/spec.yaml", schema_root=SCHEMA_ROOT)
-    beta = yamaa_domain(tmp_path / "beta/spec.yaml", schema_root=SCHEMA_ROOT)
-
-    # REQ-1246: one shared declaration, and each study reads the file beside
-    # its own entry rather than common/input/src.csv.
-    assert alpha.issues.is_empty() and beta.issues.is_empty()
-    assert alpha.output is not None and beta.output is not None
-    assert alpha.output.to_dicts() == [{"ID": "A1", "N": 1}]
-    assert beta.output.to_dicts() == [{"ID": "B1", "N": 2}, {"ID": "B2", "N": 3}]
-
-
-def test_relative_to_applies_only_to_paths_its_own_layer_writes(
-    tmp_path: Path,
-) -> None:
-    for name in ("common", "area", "study"):
-        (tmp_path / name).mkdir()
-    (tmp_path / "common/base.yaml").write_text(_SHARED_LAYER, encoding="ascii")
-    (tmp_path / "area/area.yaml").write_text(
-        """schema_version: "1.0"
-parents: ../common/base.yaml
-input:
-  SRC: area.csv
-""",
-        encoding="ascii",
-    )
-    (tmp_path / "study/spec.yaml").write_text(
-        _STUDY_ENTRY.replace("../common/base.yaml", "../area/area.yaml"),
-        encoding="ascii",
-    )
-
-    resolved = resolve_specification(
-        tmp_path / "study/spec.yaml", load_schema_bundle(SCHEMA_ROOT)
-    )
-
-    # REQ-1247: the middle layer wrote its path without relative_to, so the
-    # path is relative to that layer even though an earlier layer chose
-    # entry; the inherited types still merge, and relative_to is consumed.
-    assert resolved.document["input"] == {
-        "SRC": {"path": "../area/area.csv", "types": {"N": "int"}}
-    }
-    assert (
-        resolved.provenance["input.SRC.path"].file
-        == (tmp_path / "area/area.yaml").resolve()
-    )
-
-
-def test_entry_relative_schema_and_rooted_path_are_kept_as_written(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / "common").mkdir()
-    (tmp_path / "study").mkdir()
-    rooted = (tmp_path / "data/src.csv").as_posix()
-    (tmp_path / "common/base.yaml").write_text(
-        f"""schema_version: "1.0"
-input:
-  PRODUCED:
-    path: output/produced.csv
-    schema: produced.yaml
-    relative_to: entry
-  STORED:
-    path: {rooted}
-    relative_to: entry
-""",
-        encoding="ascii",
-    )
-    (tmp_path / "study/spec.yaml").write_text(
-        """schema_version: "1.0"
-parents: ../common/base.yaml
-domain: OUT
-keys: [ID]
-base: PRODUCED
-columns:
-  - name: ID
+    derivation: SRC.ID
+  - name: CODE
     type: str
-    label: Identifier
-    derivation: {source: PRODUCED.ID}
-  - name: RAW
-    type: str
-    label: Stored Identifier
-    derivation: {source: STORED.ID}
-output: {path: out.csv, columns: [ID, RAW]}
+    derivation: SRC.CODE
 """,
         encoding="ascii",
     )
-
-    resolved = resolve_specification(
-        tmp_path / "study/spec.yaml", load_schema_bundle(SCHEMA_ROOT)
-    )
-
-    # REQ-1248: both paths of an entry-relative declaration stay as written,
-    # and a rooted path names its location outright either way.
-    assert resolved.document["input"] == {
-        "PRODUCED": {"path": "output/produced.csv", "schema": "produced.yaml"},
-        "STORED": {"path": rooted},
-    }
-
-
-def test_relative_to_cannot_be_cleared(tmp_path: Path) -> None:
-    (tmp_path / "common").mkdir()
-    (tmp_path / "common/base.yaml").write_text(_SHARED_LAYER, encoding="ascii")
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: common/base.yaml
-input:
-  SRC: {relative_to: null}
+parents: parent.yaml
 output: {path: out.csv, columns: [ID]}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+
+    # REQ-0629: no inherited output field survives an entry's own output.
+    assert resolved.document["output"] == {"path": "out.csv", "columns": ["ID"]}
+    assert [column.name for column in resolved.specification.columns] == ["ID"]
+
+
+def test_output_no_layer_declares_fails_as_missing_required_field(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+columns:
+  - name: ID
+    type: str
+    derivation: SRC.ID
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+input: {SRC: input.csv}
+base: SRC
 """,
         encoding="ascii",
     )
@@ -574,30 +532,11 @@ output: {path: out.csv, columns: [ID]}
     except SpecificationError as error:
         diagnostic = error.diagnostics[0]
     else:
-        raise AssertionError("a cleared relative_to unexpectedly resolved")
+        raise AssertionError("a chain with no output unexpectedly resolved")
 
-    # REQ-1247: relative_to is never inherited, so null has nothing to clear.
-    assert diagnostic.condition == "invalid_clear"
-    assert diagnostic.spec_paths == ("input.SRC.relative_to",)
-
-
-def test_entry_without_parents_accepts_relative_to(tmp_path: Path) -> None:
-    (tmp_path / "input").mkdir()
-    (tmp_path / "input/src.csv").write_text("ID,N\n01,4\n", encoding="ascii")
-    (tmp_path / "spec.yaml").write_text(
-        _SHARED_LAYER + "output: {path: out.csv, columns: [ID, N]}\n",
-        encoding="ascii",
-    )
-
-    loaded = load_specification(tmp_path / "spec.yaml", SCHEMA_ROOT)
-    run = yamaa_domain(tmp_path / "spec.yaml", schema_root=SCHEMA_ROOT)
-
-    # REQ-1248: a file with no parents is its own entry, so relative_to
-    # changes nothing and is consumed on both loading paths.
-    assert loaded.specification.input["SRC"].path == "input/src.csv"
-    assert run.issues.is_empty()
-    assert run.output is not None
-    assert run.output.to_dicts() == [{"ID": "01", "N": 4}]
+    # REQ-0657: the requiredness is structural and applies after resolution.
+    assert diagnostic.condition == "missing_required_field"
+    assert diagnostic.spec_paths == ("output",)
 
 
 def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
@@ -607,8 +546,6 @@ def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
         "negative-property-clear",
         "negative-version-mismatch",
         "negative-remote-parent",
-        "negative-inherited-output",
-        "negative-relative-to-without-path",
     )
     for name in names:
         try:

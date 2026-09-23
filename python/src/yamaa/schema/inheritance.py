@@ -140,51 +140,23 @@ def _rebase_path(value: str, layer: Path, entry: Path) -> str:
         return str(target)
 
 
-def _rebase_layer_paths(
-    document: dict[str, object], layer: Path, entry: Path
-) -> list[ValidationDiagnostic]:
-    diagnostics: list[ValidationDiagnostic] = []
+def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -> None:
     datasets = document.get("input")
     if isinstance(datasets, dict):
-        for dataset, source in datasets.items():
+        for source in datasets.values():
             if not isinstance(source, dict):
                 continue
-            written = [
-                name for name in ("path", "schema") if isinstance(source.get(name), str)
-            ]
-            if "relative_to" in source:
-                # REQ-1247: relative_to belongs to the paths its own layer
-                # writes beside it, so composition consumes it here instead
-                # of merging it into what a later layer writes.
-                anchor = source.pop("relative_to")
-                field_path = _join(_join("input", dataset), "relative_to")
-                if anchor is None:
-                    diagnostics.append(
-                        _diagnostic(
-                            "invalid_clear",
-                            field_path,
-                            "REQ-0660",
-                            {"field": "relative_to"},
-                        )
-                    )
-                elif not written:
-                    diagnostics.append(
-                        _diagnostic(
-                            "relative_to_without_path",
-                            field_path,
-                            "REQ-1249",
-                            {"dataset": str(dataset)},
-                        )
-                    )
-                if anchor == "entry":
-                    # REQ-1248: already relative to the entry file.
-                    continue
-            for name in written:
-                source[name] = _rebase_path(source[name], layer, entry)
+            for name in ("path", "schema"):
+                value = source.get(name)
+                if isinstance(value, str):
+                    source[name] = _rebase_path(value, layer, entry)
     output = document.get("output")
-    if isinstance(output, dict) and isinstance(output.get("path"), str):
-        output["path"] = _rebase_path(output["path"], layer, entry)
-    return diagnostics
+    if isinstance(output, dict):
+        # REQ-0629: an inherited output publishes where its layer names.
+        for name in ("path", "warning_log", "verification_log"):
+            value = output.get(name)
+            if isinstance(value, str):
+                output[name] = _rebase_path(value, layer, entry)
 
 
 def _validate_partial_member(
@@ -1374,9 +1346,7 @@ def resolve_specification(
             visit(candidate)
         active.pop()
         completed.add(canonical)
-        diagnostics = _rebase_layer_paths(normalized, canonical, entry_path)
-        if diagnostics:
-            raise SpecificationError(diagnostics)
+        _rebase_layer_paths(normalized, canonical, entry_path)
         contributions.append((canonical, normalized))
 
     raw_entry = (
@@ -1385,24 +1355,6 @@ def resolve_specification(
     visit(entry_path, raw_entry)
     if not isinstance(raw_entry, dict):
         raise TypeError("validated entry is a mapping")
-    if "output" not in raw_entry:
-        inherited_columns: list[str] = []
-        for _, layer in contributions[:-1]:
-            output = layer.get("output")
-            if isinstance(output, dict) and isinstance(output.get("columns"), list):
-                inherited_columns = [
-                    item for item in output["columns"] if isinstance(item, str)
-                ]
-        raise SpecificationError(
-            [
-                _diagnostic(
-                    "missing_entry_output",
-                    "parents",
-                    "REQ-0657",
-                    {"inherited_columns": inherited_columns},
-                )
-            ]
-        )
 
     resolved, provenance, diagnostics = _merge_layers(contributions, schema_bundle)
     if diagnostics:

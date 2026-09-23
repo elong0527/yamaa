@@ -357,9 +357,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R017', 'inheritance_cycle'): {'reason'},
     ('R017', 'invalid_clear'): {'field'},
     ('R017', 'invalid_parent_path'): {'reason'},
-    ('R017', 'missing_entry_output'): {'inherited_columns'},
     ('R017', 'redundant_field_type'): {'dataset', 'field', 'type'},
-    ('R017', 'relative_to_without_path'): {'dataset'},
     ('R017', 'schema_version_mismatch'): {
         'entry_version', 'parent_version',
     },
@@ -2208,7 +2206,7 @@ def validate_partial_inheritance_member(
     return normalized, errors
 
 
-def validate_inheritance_layer(layer, label, env, require_output=False):
+def validate_inheritance_layer(layer, label, env):
     """Validate one R017 layer without imposing final requiredness."""
     if not isinstance(layer, dict) or not layer:
         return layer, [
@@ -2224,15 +2222,6 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
             f"ERROR: {label}.schema_version: schema_version_mismatch: every "
             "inheritance layer must declare schema_version"
         )
-    if require_output and 'output' not in layer:
-        errors.append(
-            validation_diagnostic(
-                f"{label}.parents",
-                'missing_entry_output',
-                'an inherited entry file must declare its complete output',
-            )
-        )
-
     for name in layer:
         if name not in fields:
             errors.append(
@@ -2396,53 +2385,28 @@ def _rebase_local_path(value, layer_path, entry_path):
     return Path(relative).as_posix()
 
 
-def rebase_layer_paths(layer, layer_path, entry_path, label):
-    """Rebase current path-valued dataset fields to the entry file."""
+def rebase_layer_paths(layer, layer_path, entry_path):
+    """Rebase current path-valued dataset and output fields to the entry file."""
     rebased = copy.deepcopy(layer)
-    errors = []
     datasets = rebased.get('input')
-    if not isinstance(datasets, dict):
-        return rebased, errors
-    for dataset, source in datasets.items():
-        if not isinstance(source, dict):
-            continue
-        written = [
-            field for field in ('path', 'schema')
-            if isinstance(source.get(field), str)
-        ]
-        if 'relative_to' in source:
-            # REQ-1247: relative_to belongs to the paths its own layer writes
-            # beside it, so composition consumes it instead of merging it.
-            anchor = source.pop('relative_to')
-            path = f"{label}.input.{dataset}.relative_to"
-            if anchor is None:
-                errors.append(
-                    validation_diagnostic(
-                        path,
-                        'invalid_clear',
-                        'relative_to is never inherited, so there is '
-                        'nothing to clear',
-                        context={'field': 'relative_to'},
-                    )
-                )
-            elif not written:
-                errors.append(
-                    validation_diagnostic(
-                        path,
-                        'relative_to_without_path',
-                        'relative_to applies only to a path or schema '
-                        'written beside it in the same layer',
-                        context={'dataset': dataset},
-                    )
-                )
-            if anchor == 'entry':
-                # REQ-1248: already relative to the entry file.
+    if isinstance(datasets, dict):
+        for source in datasets.values():
+            if not isinstance(source, dict):
                 continue
-        for field in written:
-            source[field] = _rebase_local_path(
-                source[field], layer_path, entry_path
-            )
-    return rebased, errors
+            for field in ('path', 'schema'):
+                if isinstance(source.get(field), str):
+                    source[field] = _rebase_local_path(
+                        source[field], layer_path, entry_path
+                    )
+    output = rebased.get('output')
+    if isinstance(output, dict):
+        # REQ-0629: an inherited output publishes where its layer names.
+        for field in ('path', 'warning_log', 'verification_log'):
+            if isinstance(output.get(field), str):
+                output[field] = _rebase_local_path(
+                    output[field], layer_path, entry_path
+                )
+    return rebased
 
 
 def _clear_provenance(provenance, prefix):
@@ -2766,10 +2730,7 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
             raw_layer = supplied
 
         normalized, layer_errors = validate_inheritance_layer(
-            raw_layer,
-            layer_label,
-            env,
-            require_output=canonical == entry_path,
+            raw_layer, layer_label, env
         )
         errors.extend(layer_errors)
         if layer_errors or not isinstance(normalized, dict):
@@ -2809,11 +2770,13 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
         ):
             return
         completed.add(canonical)
-        rebased, anchor_errors = rebase_layer_paths(
-            normalized, canonical, entry_path, layer_label
+        contributions.append(
+            (
+                canonical,
+                layer_label,
+                rebase_layer_paths(normalized, canonical, entry_path),
+            )
         )
-        errors.extend(anchor_errors)
-        contributions.append((canonical, layer_label, rebased))
 
     visit(entry_path, spec_label, supplied=entry_spec)
     if errors:

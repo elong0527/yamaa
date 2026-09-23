@@ -65,7 +65,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_class.types` | `"dict[identifier, column_type]"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.schema` | `"project_path"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.empty_string` | `"str"` | `false` | `"missing"` | `{"values": ["missing", "present"]}` | [REQ-1158](../storage/ingestion.md#req-1158) |
-| `dataset_class.relative_to` | `"str"` | `false` | Absent | `{"values": ["layer", "entry"]}` | [REQ-1246](../specification/composition.md#req-1246) |
 | `intermediate_id` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}` | [REQ-1050](../operations/lookup.md#req-1050) |
 | `row_id` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1044](../specification/structure.md#req-1044) |
 | `regex` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1058](../specification/binding.md#req-1058) |

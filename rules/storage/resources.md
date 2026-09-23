@@ -156,9 +156,7 @@ repository-authored value.
 <a id="req-0780"></a>
 
 **REQ-0780.** A relative `project_path` resolves relative to the directory of
-the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require, or relative to
-the entry file's directory when that layer writes it `relative_to: entry` under
-[REQ-1246](../specification/composition.md#req-1246). In a resolved
+the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require. In a resolved
 specification it is relative to the entry file, because [Specification composition](../specification/composition.md) has already
 rebased it. When that resolution reaches no entry, the run retries the written
 segments against each approved data root in run order, the first success
@@ -169,13 +167,12 @@ because this contract reads that written form.
 <a id="req-0781"></a>
 
 **REQ-0781.** Every resolution has an **anchor**. A relative path is anchored
-at the approved root the directory it is relative to sits under -- the writing
-layer's directory, or the entry file's for a path written `relative_to: entry`
--- which is the approved project root when that directory is inside it. Only a resolution that reaches no
+at the approved root the writing layer's directory sits under -- the approved
+project root when the layer is inside it. Only a resolution that reaches no
 entry advances to the next anchor, the approved data roots in run order; any
 other condition -- a symlink, a non-regular file, a location inside no
-approved root, a rejected written form -- is terminal. The directory a path is
-relative to therefore wins when the entry exists under both it and a data root,
+approved root, a rejected written form -- is terminal. The writing layer's
+directory therefore wins when the entry exists under both it and a data root,
 and the first declared data root wins among data roots. A traversal that
 climbs above that
 root is re-anchored at the approved root whose canonical leading segments the

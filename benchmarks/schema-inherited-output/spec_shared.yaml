@@ -1,25 +1,31 @@
 schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
-input:
-  DM:
-    path: input/dm.csv
-    relative_to: entry
-    types:
-      AGE: int
-base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, AGEU]
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: AGE
     type: int
     label: Age
     derivation: DM.AGE
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation: DM.AGEU
+
 metadata:
-  scope: common
+  scope: shared
