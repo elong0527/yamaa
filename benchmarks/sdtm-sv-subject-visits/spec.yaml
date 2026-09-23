@@ -17,7 +17,7 @@ base: ODM
 
 output:
   path: sv.csv
-  columns: [STUDYID, DOMAIN, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY,
+  columns: [DOMAIN, STUDYID, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY,
             SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES]
   order_by: [STUDYID, USUBJID, SVSEQ]
 
@@ -67,15 +67,15 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: ODM.StudyOID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: {literal: SV}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
