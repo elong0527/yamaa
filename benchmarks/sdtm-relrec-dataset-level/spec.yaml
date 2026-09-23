@@ -96,7 +96,7 @@ rows:
       RELTYPE:
         literal: null
       RELID:
-        literal: "2"
+        source: AE.AELNKID
 
   - id: cm_link
     dataset: CM
@@ -115,14 +115,14 @@ rows:
       RELTYPE:
         literal: null
       RELID:
-        literal: "2"
+        source: CM.CMLNKID
 
 verifications:
   - unique:
       columns: [STUDYID, RDOMAIN, IDVAR, RELID]
   - row_count:
-      min: 4
-      max: 4
+      min: 6
+      max: 6
   - implies:
       id: dataset-row-carries-no-record-pointer
       when: "IDVARVAL IS NULL"

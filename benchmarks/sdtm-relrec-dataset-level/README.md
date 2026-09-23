@@ -8,9 +8,9 @@ relationships alongside record-level rows, carrying `IDVAR`,
 `IDVARVAL`, and `RELID`.
 
 **Input:** collected tumor identification (TU) and tumor results
-(TR) records each carrying a link identifier, plus an adverse
-event (AE) and a concomitant medication (CM) sharing one link
-identifier.
+(TR) records each carrying a link identifier, plus two adverse
+event (AE) / concomitant medication (CM) pairs sharing one link
+identifier each (`REL-1`, `REL-2`).
 
 **Variables:**
 
@@ -29,7 +29,10 @@ identifier.
   leave it blank.
 - `RELID` names the relationship the row takes part in; rows
   sharing a value are related to one another, and every row
-  carries one.
+  carries one. The dataset-level rows share `1`; each
+  record-level row carries its pair's link identifier, so
+  unrelated pairs (`REL-1`, `REL-2`) land in distinct
+  relationships instead of folding into one.
 
 **Note:** rows sharing a `RELID` are related to one another
 whether they point at whole datasets or single records; a
