@@ -609,6 +609,9 @@ examples:
   sdtm-ae-coding:
     status: executable
     runtimes: ['python']
+  sdtm-ae-odm-repeated:
+    status: executable
+    runtimes: ['python']
   sdtm-ae-partial-dates:
     status: executable
     runtimes: ['python']
