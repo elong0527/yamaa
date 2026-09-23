@@ -3,34 +3,32 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-mh-prespecified-conditions.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** map a pre-specified medical history checklist into MH,
-recording for each asked condition whether the subject had it,
-and carrying volunteered free-text conditions alongside.
+**Goal:** map a pre-specified medical history checklist into MH and carry
+any number of volunteered free-text conditions alongside it.
 
-**Input:** `input/odm.csv` (ODM item data): one row per answered
-item. The checklist form contributes one item per asked condition
-(`IT.MH.DIABETES`, `IT.MH.HYPERTENSION`, `IT.MH.ASTHMA`) with
-`Y`, `N`, or a blank `Value`; the free-text form contributes one
-`IT.MH.MHTERM` item per volunteered condition.
+**Input:** the ODM extract has one item record for each asked checklist
+condition, including an unanswered condition with a blank value. A small
+item-definition table gives each checklist item its reported term and form
+order. Each volunteered condition has its own repeated free-text record.
+Repeat numbers can be reused at another visit.
 
 **Variables:**
 
-- `MHTERM` is the asked condition, or the volunteered term as
-  reported.
-- `MHCAT` separates the checklist (disease-specific history:
-  `DISEASE-SPECIFIC HISTORY`) from the volunteered free-text
-  records (general history: `GENERAL HISTORY`).
-- `MHPRESP` is `Y` for checklist records, and blank for
-  volunteered ones, since they were not pre-specified.
-- `MHOCCUR` is the checklist answer: `Y` or `N`. It stays blank
-  for volunteered conditions and for unanswered questions.
-- `MHSTAT` is `NOT DONE` for an unanswered checklist question,
-  and blank otherwise.
-- `MHSEQ` numbers the records within each subject: checklist
-  records first in form order, then volunteered ones.
+- `MHTERM` is the checklist condition from the item-definition table, or the
+  volunteered text exactly as reported.
+- `MHCAT` distinguishes disease-specific checklist history from general
+  volunteered history.
+- `MHPRESP` is `Y` for checklist records and blank for volunteered records.
+- `MHOCCUR` is `Y` or `N` for an answered checklist condition and blank
+  otherwise.
+- `MHSTAT` is `NOT DONE` for an unanswered checklist condition and blank
+  otherwise.
+- `MHSEQ` orders checklist conditions as shown on the form, then volunteered
+  conditions by visit and form repeat.
 
-**Note:** a blank checklist answer still yields a record. The
-question was asked but not answered, so `MHOCCUR` stays blank
-while `MHSTAT` records `NOT DONE`.
+**Note:** an unanswered checklist item still has an ODM record. A question
+entirely absent from the extract is not assumed to have been asked. Two
+volunteered conditions at one visit, and another condition whose repeat
+number is reused at a later visit, remain three distinct MH records.
 
 **Standard:** SDTM | **Domain:** MH
