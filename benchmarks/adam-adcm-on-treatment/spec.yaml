@@ -51,7 +51,7 @@ columns:
     derivation: ADSL.TRTEDT
   - name: ONTRTFL
     type: str
-    label: On-Treatment Flag
+    label: On Treatment Record Flag
     derivation:
       case:
         - when: >
@@ -68,8 +68,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
-      min: 8
-      max: 8
+      min: 12
+      max: 12
   - implies:
       id: on-treatment-medication-has-treatment-start
       when: "ONTRTFL = 'Y'"
