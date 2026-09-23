@@ -4,6 +4,7 @@ keys: [STUDYID, USUBJID, VSSEQ]
 input:
   ODM: input/odm.csv
   DM: input/dm.csv
+  VS_MAPPING: input/vs_mapping.csv
 base: ODM
 intermediates:
   - id: DOSE
@@ -18,63 +19,26 @@ output:
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 rows:
-  - id: pulse
+  - id: vs_reading
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
-    filter: "VSORRES IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemOID]
+    filter: "VSTESTCD IS NOT NULL"
     derivations:
       VSTESTCD:
-        literal: PULSE
+        lookup:
+          dataset: VS_MAPPING
+          key_base: ODM.ItemOID
+          key: ItemOID
+          value: VSTESTCD
       VSORRES:
         aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.PULSE'"
           expr: "ONLY(ODM.Value)"
       VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.PULSEU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-  - id: sysbp
-    dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
-    filter: "VSORRES IS NOT NULL"
-    derivations:
-      VSTESTCD:
-        literal: SYSBP
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.SYSBPU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-  - id: diabp
-    dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
-    filter: "VSORRES IS NOT NULL"
-    derivations:
-      VSTESTCD:
-        literal: DIABP
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.DIABP'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.DIABPU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
+        lookup:
+          dataset: VS_MAPPING
+          key_base: ODM.ItemOID
+          key: ItemOID
+          value: UNIT
 
 columns:
   - name: DOMAIN
@@ -199,6 +163,12 @@ columns:
   - name: VSDTC
     type: datetime
     label: Date/Time of Measurements
+    derivation:
+      aggregate:
+        filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+        key: [StudyOID, SubjectKey, StudyEventOID, FormOID]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+        expr: "ONLY(ODM.Value)"
     verifications:
       not_missing: {}
 
