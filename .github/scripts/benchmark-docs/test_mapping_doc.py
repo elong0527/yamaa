@@ -91,10 +91,10 @@ class SdtmMappingTests(unittest.TestCase):
 
     def test_mapping_rule_states_missing_and_unlisted_answers_separately(self):
         spec = load_spec("schema-text-mapping-unmapped")
-        sheets = dict(
-            (tab_id, (headers, rows))
+        sheets = {
+            tab_id: (headers, rows)
             for tab_id, _, headers, rows in mapping_doc.mapping_sheets(spec)
-        )
+        }
         _, rows = sheets["mapping"]
         rule = {row[1]: row[6] for row in rows}
         arrow = mapping_doc.ARROW
