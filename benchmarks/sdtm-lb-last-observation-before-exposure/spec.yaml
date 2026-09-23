@@ -1,0 +1,109 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB_RAW:
+    path: input/lb_raw.csv
+    types: {LBSEQ: int}
+  DM:
+    path: input/dm.csv
+    types: {RFSTDTC: date}
+base: LB_RAW
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT, LBLOBXFL]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB_RAW.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB_RAW.LBSEQ
+    verifications:
+      not_missing: {}
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation: LB_RAW.LBTESTCD
+
+  - name: LBSPEC
+    type: str
+    label: Specimen Material Type
+    derivation: LB_RAW.LBSPEC
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: LB_RAW.LBORRES
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+    derivation: LB_RAW.LBDTC
+
+  - name: LBSTAT
+    type: str
+    label: Completion Status
+    derivation: LB_RAW.LBSTAT
+
+  - name: RFSTDTC
+    type: date
+    label: Subject Reference Start Date/Time
+    derivation: DM.RFSTDTC
+
+  # Rank each record against the other results for the same subject,
+  # test, and specimen. Only records with a result, collected on or
+  # before the reference start date (or with no reference start at
+  # all), are ranked; the latest collection date wins, with the
+  # sequence number breaking ties.
+  - name: LOBXRNK
+    type: int
+    label: Last Observation Before Exposure Rank
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID, LBTESTCD, LBSPEC]
+          order_by:
+            - {variable: LBDTC, direction: desc}
+            - {variable: LBSEQ, direction: desc}
+          filter: "LBORRES IS NOT NULL AND (RFSTDTC IS NULL OR LBDTC <= RFSTDTC)"
+
+  - name: LBLOBXFL
+    type: str
+    label: Last Observation Before Exposure Flag
+    derivation:
+      case:
+        - when: "LOBXRNK = 1"
+          then: {literal: Y}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, LBSEQ]
+  - row_count:
+      min: 14
+      max: 14
+  - implies:
+      id: flagged-record-has-a-result
+      when: "LBLOBXFL = 'Y'"
+      then: "LBORRES IS NOT NULL"
+  - implies:
+      id: flagged-record-is-done
+      when: "LBLOBXFL = 'Y'"
+      then: "LBSTAT IS NULL"
