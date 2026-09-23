@@ -6,6 +6,9 @@ input:
   TU: input/tu.csv
 base: ADSL
 intermediates:
+  # The subject's screening tumor identification records showing target
+  # disease, matched on STUDYID and USUBJID. Only whether one exists is
+  # read; keep: first picks one when there are several.
   - id: TU_TARGET
     dataset: TU
     filter: >-
@@ -41,21 +44,14 @@ columns:
     derivation:
       literal: Measurable Disease at Baseline
 
-  - name: TUSTRESC
-    type: str
-    label: Character Result/Finding in Std Format
-    derivation: TU_TARGET.TUSTRESC
-
   - name: AVALC
     type: str
     label: Analysis Value (C)
     derivation:
       case:
-        - when: "TUSTRESC IS NOT NULL"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+        - when: "TU_TARGET.TUSTRESC IS NOT NULL"
+          then: {literal: Y}
+        - otherwise: {literal: N}
     verifications:
       - not_missing: {}
       - allowed_values:
