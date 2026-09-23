@@ -33,11 +33,6 @@ KNOWN_SPEC_PATH_GAPS: dict[
     str, tuple[tuple[str, ...] | None, tuple[str, ...] | None]
 ] = {}
 
-#: Positive benchmarks intentionally shipped without an R runner
-#: (Python-only by the maintainer's pick). Kept explicit so the r-runner
-#: invariant stays enforced for every other positive benchmark.
-NO_R_RUNNER: frozenset[str] = frozenset({"sdtm-vs-collected-form"})
-
 
 def positive_runners() -> tuple[Path, ...]:
     return tuple(
@@ -293,7 +288,7 @@ def test_every_positive_example_carries_an_r_runner() -> None:
     missing = [
         example.name
         for example in positive_examples()
-        if example.name not in NO_R_RUNNER and not (example / "run.R").is_file()
+        if not (example / "run.R").is_file()
     ]
 
     assert missing == []
