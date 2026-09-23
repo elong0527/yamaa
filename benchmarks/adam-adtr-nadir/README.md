@@ -21,7 +21,7 @@ entry-selected count (`NTARGET`), and completeness flag
 - `ADT`: date of the assessment, carried from the input; blank when
   the date is unknown.
 - `AVAL`: sum of the measured target-lesion diameters in
-  millimeter, carried from the input; blank when the assessment
+  millimeters, carried from the input; blank when the assessment
   measured no target lesion.
 - `NMEAS`: number of target lesions the assessment measured,
   carried from the input; blank when the assessment has no lesion
@@ -33,12 +33,11 @@ entry-selected count (`NTARGET`), and completeness flag
   otherwise.
 - `NADIR`: lowest `AVAL` among complete assessments (`ANL01FL` is
   `Y`) for the same subject dated on or before the current `ADT`,
-  including the current assessment itself; the date cutoff is
-  inclusive. Blank when the current `ADT` is blank, or when no
-  complete assessment falls in the window.
+  including the current assessment itself. Blank when the current
+  `ADT` is blank, or when no complete assessment falls in the window.
 
 **Note:** an incomplete current assessment keeps the nadir set by an
-earlier complete one, while an assessment with a blank date has no
-cutoff and therefore a blank nadir.
+earlier complete one, while a complete assessment with a blank date
+never counts toward any nadir, its own included.
 
 **Standard:** ADaM | **Domain:** ADTR
