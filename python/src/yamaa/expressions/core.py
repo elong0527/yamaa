@@ -355,8 +355,6 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         return normalize_runtime_value(dictionary[matched])
     if "unmapped" in payload:
         return handler_value(payload, "unmapped")
-    if "missing" in payload:
-        return handler_value(payload, "missing")
     if strict:
         return expression_condition(
             "mapping",
@@ -365,6 +363,10 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
             "unmapped",
             requirement="REQ-0334",
         )
+    # Without `unmapped`, the non-strict default lets `missing` answer both
+    # events, as it did before the two were separated.
+    if "missing" in payload:
+        return handler_value(payload, "missing")
     return ValueResult(value=MISSING)
 
 

@@ -216,9 +216,11 @@ def test_mapping_distinguishes_absent_source_from_unmapped_value() -> None:
         },
         resolver,
     )
-    assert isinstance(strict_missing_only, ValueResult)
-    assert strict_missing_only.value == "Not collected"
-    assert strict_missing_only.handled_by == "missing"
+    # Under strict, `missing` answers only the absent source: an unmapped
+    # value still needs its own `unmapped` handler.
+    assert isinstance(strict_missing_only, ConditionResult)
+    assert strict_missing_only.condition.condition == "unmapped_value"
+    assert strict_missing_only.condition.applicable_handler == "unmapped"
 
     strict_unmapped_bare = evaluate_expression(
         {

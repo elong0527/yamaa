@@ -89,6 +89,40 @@ class SdtmMappingTests(unittest.TestCase):
         ageu = {row[0]: row for row in rows}["AGEU"]
         self.assertIn("Defaulted to YEARS", ageu[10])
 
+    def test_mapping_rule_states_missing_and_unlisted_answers_separately(self):
+        spec = load_spec("schema-text-mapping-unmapped")
+        sheets = dict(
+            (tab_id, (headers, rows))
+            for tab_id, _, headers, rows in mapping_doc.mapping_sheets(spec)
+        )
+        _, rows = sheets["mapping"]
+        rule = {row[1]: row[6] for row in rows}
+        arrow = mapping_doc.ARROW
+        self.assertIn(
+            '; missing values stay missing; unlisted values ' + arrow
+            + ' "Outside codelist".',
+            rule["SEXC"],
+        )
+        self.assertIn(
+            '; missing or unlisted values ' + arrow + ' "Unknown".',
+            rule["SEXC_SINGLE"],
+        )
+
+    def test_strict_mapping_rule_names_the_event_that_errors(self):
+        rule = mapping_doc.describe_mapping(
+            {
+                "source": "RS.OVRLRESP",
+                "dict": {"CR": "COMPLETE RESPONSE"},
+                "missing": "NOT DONE",
+                "strict": True,
+            }
+        )
+        self.assertIn(
+            '; missing values ' + mapping_doc.ARROW
+            + ' "NOT DONE"; unlisted values are errors.',
+            rule,
+        )
+
 
 class AdamMappingTests(unittest.TestCase):
     def test_headers_follow_the_adam_variable_sheet(self):
