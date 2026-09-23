@@ -98,6 +98,39 @@ def benchmark_has_spec(benchmark):
     return bool(benchmark_spec_files(benchmark))
 
 
+def linked_specs(spec):
+    """Return the files a spec names as parents or as input producers."""
+    if not isinstance(spec, dict):
+        return []
+    parents = spec.get("parents", [])
+    if isinstance(parents, str):
+        parents = [parents]
+    linked = [parent for parent in parents if isinstance(parent, str) and parent]
+    inputs = spec.get("input", {})
+    if isinstance(inputs, dict):
+        linked.extend(
+            source["schema"]
+            for source in inputs.values()
+            if isinstance(source, dict)
+            and isinstance(source.get("schema"), str)
+            and source["schema"]
+        )
+    return linked
+
+
+def sibling_producers(benchmark, spec):
+    """Return the spec files beside the entry that it reads through `schema`."""
+    inputs = spec.get("input", {}) if isinstance(spec, dict) else {}
+    producers = []
+    for source in inputs.values() if isinstance(inputs, dict) else ():
+        if not isinstance(source, dict) or not isinstance(source.get("schema"), str):
+            continue
+        candidate = benchmark / source["schema"]
+        if candidate in benchmark_spec_files(benchmark):
+            producers.append(candidate)
+    return producers
+
+
 def benchmark_entry(benchmark):
     files = benchmark_spec_files(benchmark)
     if (benchmark / "spec.yaml").is_file():
@@ -108,17 +141,8 @@ def benchmark_entry(benchmark):
             specs[path.resolve()] = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, yaml.YAMLError):
             continue
-    parented = set()
-    for spec in specs.values():
-        if not isinstance(spec, dict):
-            continue
-        parents = spec.get("parents", [])
-        if isinstance(parents, str):
-            parents = [parents]
-        for parent in parents:
-            if isinstance(parent, str) and parent:
-                parented.add(Path(parent).name)
-    entries = [path for path in files if path.name not in parented]
+    named = {Path(link).name for spec in specs.values() for link in linked_specs(spec)}
+    entries = [path for path in files if path.name not in named]
     entry = entries[0] if entries else (files[0] if files else None)
     chain = []
     if entry is not None:
@@ -128,15 +152,9 @@ def benchmark_entry(benchmark):
             if path in seen:
                 return
             seen.add(path)
-            spec = specs.get(path)
-            parents = spec.get("parents", []) if isinstance(spec, dict) else []
-            if isinstance(parents, str):
-                parents = [parents]
-            for parent in parents:
-                if not isinstance(parent, str) or not parent:
-                    continue
-                candidate = path.parent / parent
-                if candidate.is_file():
+            for link in linked_specs(specs.get(path)):
+                candidate = path.parent / link
+                if candidate.is_file() and candidate.resolve() in specs:
                     visit(candidate.resolve())
             if path != (entry.resolve() if entry else None):
                 chain.append(path)
@@ -422,10 +440,16 @@ def describe_benchmark(benchmark):
     if entry_path is None:
         raise ValueError(f"benchmark has no spec file: {benchmark.name}")
     spec_path = entry_path
-    title, _ = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
+    readme_text = readme_path.read_text(encoding="utf-8")
+    title, _ = render_readme(readme_text, source_url)
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
     spec = spec if isinstance(spec, dict) else {}
     category, _ = benchmark_category(benchmark.name, title, spec)
+    taxonomy = readme_taxonomy(readme_text)
+    if taxonomy and category != "Specification" and sibling_producers(benchmark, spec):
+        # An example that builds several domains files under the one its
+        # README names, not under whichever domain its entry happens to build.
+        category = taxonomy[1]
     return title, category
 
 
@@ -627,22 +651,30 @@ def render_benchmark(benchmark, previous=None, next=None):
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
     spec = yaml.safe_load(spec_text)
     spec = spec if isinstance(spec, dict) else {}
-    columns = [item for item in spec.get("columns", []) if isinstance(item, dict)]
-    labels = {
-        item["name"]: item["label"]
-        for item in columns
-        if "name" in item and "label" in item
-    }
+    # A producer kept beside the entry publishes an expected artifact of its
+    # own, so its columns label that artifact the way the entry's label theirs.
+    column_specs = [spec]
+    for producer in sibling_producers(benchmark, spec):
+        document = yaml.safe_load(producer.read_text(encoding="utf-8"))
+        column_specs.append(document if isinstance(document, dict) else {})
+    labels = {}
     derived = set()
-    for item in columns:
-        name = item.get("name")
-        expression = item.get("derivation", {})
-        expression = expression if isinstance(expression, dict) else {}
-        source = expression.get("source")
-        if isinstance(source, dict):
-            source = source.get("variable")
-        if name and source != f"{spec.get('base')}.{name}":
-            derived.add(name)
+    for owner in reversed(column_specs):
+        columns = [item for item in owner.get("columns", []) if isinstance(item, dict)]
+        labels.update(
+            (item["name"], item["label"])
+            for item in columns
+            if "name" in item and "label" in item
+        )
+        for item in columns:
+            name = item.get("name")
+            expression = item.get("derivation", {})
+            expression = expression if isinstance(expression, dict) else {}
+            source = expression.get("source")
+            if isinstance(source, dict):
+                source = source.get("variable")
+            if name and source != f"{owner.get('base')}.{name}":
+                derived.add(name)
     inputs = fixture_files(benchmark / "input")
     error_path = benchmark / "expected" / "error.yaml"
     is_failure = error_path.is_file()

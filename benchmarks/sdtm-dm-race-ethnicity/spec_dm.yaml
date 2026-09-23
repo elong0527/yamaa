@@ -1,0 +1,114 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, RACE, ETHNIC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: SUBJID
+    type: str
+    label: Subject Identifier for the Study
+    derivation: USUBJID
+
+  - name: RACEMIN
+    type: str
+    label: Alphabetically First Reported Race
+    derivation:
+      aggregate:
+        key: [StudyOID, SubjectKey]
+        key_base: [STUDYID, USUBJID]
+        filter: "ODM.ItemOID = 'IT.DM.RACE'"
+        expr: "MIN(ODM.Value)"
+
+  - name: RACESINGLE
+    type: str
+    label: Reported Race When One Race Was Reported
+    derivation:
+      aggregate:
+        key: [StudyOID, SubjectKey]
+        key_base: [STUDYID, USUBJID]
+        filter: "ODM.ItemOID = 'IT.DM.RACE'"
+        expr: "MAX(ODM.Value)"
+
+  - name: ETHNICRAW
+    type: str
+    label: Collected Ethnicity
+    derivation:
+      aggregate:
+        key: [StudyOID, SubjectKey]
+        key_base: [STUDYID, USUBJID]
+        filter: "ODM.ItemOID = 'IT.DM.ETHNIC'"
+        expr: "ONLY(ODM.Value)"
+
+  - name: RACE
+    type: str
+    label: Race
+    derivation:
+      case:
+        - when: "RACEMIN < RACESINGLE"
+          then:
+            literal: MULTIPLE
+        - otherwise:
+            mapping:
+              source: RACESINGLE
+              dict:
+                "American Indian or Alaska Native": AMERICAN INDIAN OR ALASKA NATIVE
+                "Asian": ASIAN
+                "Black or African American": BLACK OR AFRICAN AMERICAN
+                "Native Hawaiian or Other Pacific Islander": NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER
+                "White": WHITE
+                "Other, specify: Fijian": OTHER
+                "Not reported": NOT REPORTED
+                "Subject refused": UNKNOWN
+              missing: null
+    verifications:
+      allowed_values:
+        values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
+          BLACK OR AFRICAN AMERICAN,
+          NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE,
+          OTHER, NOT REPORTED, UNKNOWN]
+
+  - name: ETHNIC
+    type: str
+    label: Ethnicity
+    derivation:
+      mapping:
+        source: ETHNICRAW
+        dict:
+          "Hispanic or Latino": HISPANIC OR LATINO
+          "Not Hispanic or Latino": NOT HISPANIC OR LATINO
+          "Not reported": NOT REPORTED
+          "Unknown": UNKNOWN
+        missing: null
+    verifications:
+      allowed_values:
+        values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO,
+          NOT REPORTED, UNKNOWN]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 9
+      max: 9

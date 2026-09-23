@@ -1,0 +1,152 @@
+schema_version: "1.0"
+domain: SUPPDM
+keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+
+input:
+  ODM: input/odm.csv
+  # DM is built by spec_dm.yaml in the same run, so the subjects that get
+  # supplemental race records are exactly the ones DM calls MULTIPLE.
+  DM:
+    path: dm.csv
+    schema: spec_dm.yaml
+
+intermediates:
+  - id: DMREC
+    dataset: DM
+
+output:
+  path: suppdm.csv
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
+  order_by: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: RDOMAIN
+    type: str
+    label: Related Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: IDVAR
+    type: str
+    label: Identifying Variable
+    derivation:
+      literal: USUBJID
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
+    derivation: USUBJID
+    verifications:
+      not_missing: {}
+
+  - name: ITEMOID
+    type: str
+    label: Collected Item
+
+  - name: DMRACE
+    type: str
+    label: Race in Demographics
+
+  - name: QVALRAW
+    type: str
+    label: Collected Race
+
+  - name: RACENUM
+    type: int
+    label: Race Number Within Subject
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [QVALRAW]
+
+  # str_template reads text only, so the number takes its text form first.
+  - name: RACENUMC
+    type: str
+    label: Race Number Within Subject as Text
+    derivation: RACENUM
+
+  - name: QNAM
+    type: str
+    label: Qualifier Variable Name
+    derivation:
+      str_template: "RACE{RACENUMC}"
+    verifications:
+      matches:
+        pattern: "^RACE[1-9][0-9]*$"
+
+  - name: QLABEL
+    type: str
+    label: Qualifier Label
+    derivation:
+      str_template: "Race {RACENUMC}"
+
+  - name: QVAL
+    type: str
+    label: Data Value
+    derivation:
+      mapping:
+        source: QVALRAW
+        dict:
+          "American Indian or Alaska Native": AMERICAN INDIAN OR ALASKA NATIVE
+          "Asian": ASIAN
+          "Black or African American": BLACK OR AFRICAN AMERICAN
+          "Native Hawaiian or Other Pacific Islander": NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER
+          "White": WHITE
+          "Other, specify: Fijian": OTHER
+          "Not reported": NOT REPORTED
+          "Subject refused": UNKNOWN
+        missing: null
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
+            BLACK OR AFRICAN AMERICAN,
+            NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE,
+            OTHER, NOT REPORTED, UNKNOWN]
+
+  - name: QORIG
+    type: str
+    label: Origin
+    derivation:
+      literal: CRF
+
+  - name: QEVAL
+    type: str
+    label: Evaluator
+    derivation:
+      literal: null
+
+rows:
+  # One candidate per distinct collected value of each subject's items, so a
+  # race marked twice still yields one record. Only race values of subjects
+  # DM calls MULTIPLE are kept, however many races they reported.
+  - id: reported_race
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemOID, ODM.Value]
+    filter: "ITEMOID = 'IT.DM.RACE' AND DMRACE = 'MULTIPLE'"
+    derivations:
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      ITEMOID: ODM.ItemOID
+      QVALRAW: ODM.Value
+      DMRACE: DMREC.RACE
+
+verifications:
+  - unique:
+      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+  - row_count:
+      min: 9
+      max: 9
+  - implies:
+      id: race-value-has-parent-identifier
+      when: "QVAL IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"
