@@ -753,3 +753,6 @@ examples:
   negative-locf-no-order:
     status: executable
     runtimes: ['python']
+  negative-sdtm-lb-unit-conversion:
+    status: executable
+    runtimes: ['python']
