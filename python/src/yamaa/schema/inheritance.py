@@ -140,19 +140,51 @@ def _rebase_path(value: str, layer: Path, entry: Path) -> str:
         return str(target)
 
 
-def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -> None:
+def _rebase_layer_paths(
+    document: dict[str, object], layer: Path, entry: Path
+) -> list[ValidationDiagnostic]:
+    diagnostics: list[ValidationDiagnostic] = []
     datasets = document.get("input")
     if isinstance(datasets, dict):
-        for source in datasets.values():
+        for dataset, source in datasets.items():
             if not isinstance(source, dict):
                 continue
-            for name in ("path", "schema"):
-                value = source.get(name)
-                if isinstance(value, str):
-                    source[name] = _rebase_path(value, layer, entry)
+            written = [
+                name for name in ("path", "schema") if isinstance(source.get(name), str)
+            ]
+            if "relative_to" in source:
+                # REQ-1247: relative_to belongs to the paths its own layer
+                # writes beside it, so composition consumes it here instead
+                # of merging it into what a later layer writes.
+                anchor = source.pop("relative_to")
+                field_path = _join(_join("input", dataset), "relative_to")
+                if anchor is None:
+                    diagnostics.append(
+                        _diagnostic(
+                            "invalid_clear",
+                            field_path,
+                            "REQ-0660",
+                            {"field": "relative_to"},
+                        )
+                    )
+                elif not written:
+                    diagnostics.append(
+                        _diagnostic(
+                            "relative_to_without_path",
+                            field_path,
+                            "REQ-1249",
+                            {"dataset": str(dataset)},
+                        )
+                    )
+                if anchor == "entry":
+                    # REQ-1248: already relative to the entry file.
+                    continue
+            for name in written:
+                source[name] = _rebase_path(source[name], layer, entry)
     output = document.get("output")
     if isinstance(output, dict) and isinstance(output.get("path"), str):
         output["path"] = _rebase_path(output["path"], layer, entry)
+    return diagnostics
 
 
 def _validate_partial_member(
@@ -1342,7 +1374,9 @@ def resolve_specification(
             visit(candidate)
         active.pop()
         completed.add(canonical)
-        _rebase_layer_paths(normalized, canonical, entry_path)
+        diagnostics = _rebase_layer_paths(normalized, canonical, entry_path)
+        if diagnostics:
+            raise SpecificationError(diagnostics)
         contributions.append((canonical, normalized))
 
     raw_entry = (

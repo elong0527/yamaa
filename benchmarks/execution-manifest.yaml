@@ -264,6 +264,9 @@ examples:
   negative-redefined-date:
     status: executable
     runtimes: ['python']
+  negative-relative-to-without-path:
+    status: executable
+    runtimes: ['python']
   negative-remote-parent:
     status: executable
     runtimes: ['python']
@@ -688,6 +691,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-inheritance:
+    status: executable
+    runtimes: ['python']
+  schema-inheritance-entry-paths:
     status: executable
     runtimes: ['python']
   schema-source-binding:

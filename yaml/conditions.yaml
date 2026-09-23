@@ -63,6 +63,7 @@ conditions:
   range_failed: {rules: [R009], phases: [verification]}
   redundant_field_type: {rules: [R014, R017], phases: [validation]}
   regex_group_out_of_range: {rules: [R022], phases: [validation]}
+  relative_to_without_path: {rules: [R017], phases: [validation]}
   resource_path_missing: {rules: [R021], phases: [validation]}
   resource_path_not_regular_file: {rules: [R021], phases: [validation]}
   resource_path_not_relative: {rules: [R021], phases: [validation]}

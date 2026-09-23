@@ -2810,6 +2810,97 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertIsNone(resolved)
         self.assertIn('inheritance_cycle', '\n'.join(errors))
 
+    def test_relative_to_entry_keeps_paths_beside_it_as_written(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'common').mkdir()
+            (root / 'area').mkdir()
+            (root / 'common' / 'base.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'input:\n'
+                '  DM:\n'
+                '    path: input/dm.csv\n'
+                '    schema: dm.yaml\n'
+                '    relative_to: entry\n'
+                '  LB:\n'
+                '    path: input/lb.csv\n'
+                '    relative_to: entry\n'
+                '    types: {N: int}\n'
+            )
+            # REQ-1247: this layer writes LB's path without relative_to, so
+            # it is relative to this layer whatever the shared layer chose.
+            (root / 'area' / 'area.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'parents: ../common/base.yaml\n'
+                'input:\n'
+                '  LB: lb.csv\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: area/area.yaml\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - {name: ID, type: str, label: Id, derivation: DM.ID}\n'
+                '  - {name: N, type: int, label: Count, derivation: LB.N}\n'
+                'output: {path: out.csv, columns: [ID, N]}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            resolved['input'],
+            {
+                'DM': {'path': 'input/dm.csv', 'schema': 'dm.yaml'},
+                'LB': {'path': 'area/lb.csv', 'types': {'N': 'int'}},
+            },
+        )
+
+    def test_rejects_relative_to_without_a_path_beside_it(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'parent.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'input: {DM: input/dm.csv}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'input:\n'
+                '  DM: {relative_to: entry}\n'
+                'output: {path: out.csv, columns: []}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('relative_to_without_path', '\n'.join(errors))
+        self.assertIn('input.DM.relative_to', '\n'.join(errors))
+
+    def test_rejects_clearing_relative_to(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'parent.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'input:\n'
+                '  DM: {path: input/dm.csv, relative_to: entry}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'input:\n'
+                '  DM: {relative_to: null}\n'
+                'output: {path: out.csv, columns: []}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('invalid_clear', '\n'.join(errors))
+
     def test_rejects_layer_version_mismatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

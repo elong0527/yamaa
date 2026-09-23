@@ -241,8 +241,9 @@ keyed declarations are pruned after composition.
 
 **REQ-0635.** Every contributed value whose schema type is `path` is first
 interpreted relative to the layer that writes that value, as its owning rule
-requires. Composition must not silently reinterpret an inherited relative path
-from the entry file's directory.
+requires, unless that layer writes it relative to the entry file under
+[REQ-1246](composition.md#req-1246). Composition must not silently reinterpret
+an inherited relative path from the entry file's directory.
 
 <a id="req-0636"></a>
 
@@ -258,6 +259,40 @@ resolves it against the approved root it names and reads that written form.
 
 **REQ-0637.** Rebasing states where a file is, not whether a run may read it. A
 rebased `project_path` is accepted or rejected by [Resource resolution](../storage/resources.md) in its rebased form.
+
+<a id="req-1246"></a>
+
+**REQ-1246.** A dataset declaration may write `relative_to` to say which
+directory the relative `path` and `schema` written beside it are relative to.
+`layer`, or no `relative_to` at all, is the directory of the layer that writes
+them, as [REQ-0635](composition.md#req-0635) states. `entry` is the directory
+of the entry file. A layer shared by several studies can then declare a
+dataset once -- its identifier, field types, and empty-string convention --
+while each study keeps the stored file beside its own entry file.
+
+<a id="req-1247"></a>
+
+**REQ-1247.** `relative_to` applies only to the paths written beside it in the
+same layer. It is not a member field that [REQ-0630](composition.md#req-0630)
+merges. A later layer that writes `path` or `schema` without `relative_to`
+writes it relative to its own directory, whatever an earlier layer chose. A
+`relative_to` never changes the meaning of a path another layer wrote. So
+reading one layer is enough to tell what file each path in it denotes. Because
+`relative_to` is never inherited, a YAML null there has nothing to clear and
+fails under [REQ-0632](composition.md#req-0632).
+
+<a id="req-1248"></a>
+
+**REQ-1248.** A path written `relative_to: entry` is materialized exactly as
+written, because it is already relative to the entry file and
+[REQ-0636](composition.md#req-0636) has nothing to rebase. A rooted path
+ignores `relative_to`, because it names its location outright.
+[REQ-0637](composition.md#req-0637) still holds: `relative_to` states where a
+file is, not whether a run may read it, and
+[Resource resolution](../storage/resources.md) accepts or rejects the path
+exactly as though the entry file had written it. `relative_to` never adds an
+approved root. Composition consumes it, and it is absent from the resolved
+specification.
 
 ### Minimal resolved specification
 
@@ -331,7 +366,7 @@ membership and column order under [Artifact publication](../storage/publication.
 
 **REQ-0645.** The resolved specification:
 
-contains no `parents` or null clearing markers;
+contains no `parents`, `relative_to`, or null clearing markers;
 
 <a id="req-0646"></a>
 
@@ -415,6 +450,14 @@ identifier within one layer fails with `duplicate_identifier`.
 invalid null clearing marker fails with `invalid_clear` and reports the field
 and contributing file.
 
+<a id="req-1249"></a>
+
+**REQ-1249.** A dataset declaration that writes `relative_to` but no `path`
+and no `schema` in the same layer fails with `relative_to_without_path` and
+reports the dataset and contributing file. Under
+[REQ-1247](composition.md#req-1247) it would apply to no path, and silently
+ignoring it would hide a misplaced declaration.
+
 <a id="req-0661"></a>
 
 **REQ-0661.** An unknown reference, cycle, incomplete
@@ -426,9 +469,11 @@ constraint, with contributing provenance included in the diagnostic.
 Representative specifications, input data, and expected outcomes:
 
 - [schema-inheritance](../../benchmarks/schema-inheritance/README.md).
+- [schema-inheritance-entry-paths](../../benchmarks/schema-inheritance-entry-paths/README.md).
 - [negative-cyclic-parent](../../benchmarks/negative-cyclic-parent/README.md).
 - [negative-inherited-output](../../benchmarks/negative-inherited-output/README.md).
 - [negative-property-clear](../../benchmarks/negative-property-clear/README.md).
+- [negative-relative-to-without-path](../../benchmarks/negative-relative-to-without-path/README.md).
 - [negative-version-mismatch](../../benchmarks/negative-version-mismatch/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records

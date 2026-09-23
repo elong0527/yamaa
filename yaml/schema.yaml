@@ -252,6 +252,11 @@ dataset_class:
         default: missing
         values: [missing, present]
         description: See REQ-1158 in rules/storage/ingestion.md.
+    - relative_to:
+        type: str
+        required: false
+        values: [layer, entry]
+        description: See REQ-1246 in rules/specification/composition.md.
 
 intermediate_id:
     type: str

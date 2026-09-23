@@ -1,0 +1,8 @@
+schema_version: "1.0"
+parents: layers/parent.yaml
+input:
+  DM:
+    relative_to: entry
+output:
+  path: adsl.csv
+  columns: [USUBJID]

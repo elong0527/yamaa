@@ -62,6 +62,11 @@ fixtures:
     condition: redundant_field_type
     spec_paths: [input.DM.types.RANDDT]
     validator: inheritance
+  negative-relative-to-without-path:
+    rule: R017
+    condition: relative_to_without_path
+    spec_paths: [input.DM.relative_to]
+    validator: inheritance
   negative-remote-parent:
     rule: R017
     condition: invalid_parent_path

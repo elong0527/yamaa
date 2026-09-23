@@ -1,0 +1,7 @@
+phase: validation
+condition: relative_to_without_path
+spec_paths:
+  - input.DM.relative_to
+requirement: REQ-1249
+context:
+  dataset: DM

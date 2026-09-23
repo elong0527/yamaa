@@ -1,0 +1,41 @@
+schema_version: "1.0"
+domain: ADSL
+keys:
+  - STUDYID
+  - USUBJID
+input:
+  DM:
+    path: input/dm.csv
+    types:
+      AGE: int
+base: DM
+output:
+  path: adsl.csv
+  columns:
+    - STUDYID
+    - USUBJID
+    - AGE
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      value:
+        source:
+          variable: DM.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      value:
+        source:
+          variable: DM.USUBJID
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      value:
+        source:
+          variable: DM.AGE
+metadata:
+  scope: study
