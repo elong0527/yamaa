@@ -3,24 +3,24 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-log-zero.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** carry each collected viral-load result into `AVAL` and
+**Goal:** carry each collected laboratory result into `AVAL` and
 add its natural logarithm as `AVALLN`, with one record for each
 subject and parameter.
 
 **Input:** laboratory records carrying test code (`LBTESTCD`) and
-numeric result (`LBSTRESN`), including a viral-load test whose
-result was reported as zero because the assay detected nothing.
+numeric result (`LBSTRESN`), where a viral load the assay did not
+detect is reported as zero.
 
 **Variables:**
 
 - `AVAL` would be the analysis value, mapped from the collected
   numeric result (`LBSTRESN`).
 - `AVALLN` would be the natural logarithm of `AVAL`, which the
-  analysis models rather than the untransformed result.
-
-Zero has no logarithm, and a result below the limit of detection
-needs a stated substitution before it can be transformed. The run
-fails and no artifact is accepted.
+  analysis models rather than the untransformed result, and blank
+  when `AVAL` is blank. Zero has no logarithm, and a result below the
+  limit of detection needs a stated substitution before it can be
+  transformed, so the run fails while the values are computed and no
+  artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
