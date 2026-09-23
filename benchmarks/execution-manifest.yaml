@@ -678,6 +678,9 @@ examples:
   sdtm-suppmh-qualifiers:
     status: executable
     runtimes: ['python']
+  sdtm-vs-replicates:
+    status: executable
+    runtimes: ['python']
   sdtm-vs-units:
     status: executable
     runtimes: ['python']

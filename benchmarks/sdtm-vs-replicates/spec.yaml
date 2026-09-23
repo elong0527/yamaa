@@ -1,0 +1,132 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW:
+    path: input/vs_raw.csv
+    types:
+      VSORRES: float
+      VSREPNUM: int
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: VS_RAW.VISIT
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: VS_RAW.VSTESTCD
+    verifications:
+      allowed_values:
+        values: [SYSBP, DIABP]
+
+  - name: VSTEST
+    type: str
+    label: Vital Signs Test Name
+    derivation: VS_RAW.VSTEST
+
+  - name: ORD
+    type: int
+    label: Readings sort before the mean record
+
+  - name: VSREPNUM
+    type: int
+    label: Replicate Number
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: VSSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: VSSTRESN
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+    verifications:
+      allowed_values:
+        values: [mmHg]
+
+  - name: VSDRVFL
+    type: str
+    label: Derived Record Flag
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VISIT, VSTESTCD, ORD, VSREPNUM]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: readings
+    derivations:
+      ORD: {literal: 1}
+      VSREPNUM: {source: VS_RAW.VSREPNUM}
+      VSSTRESN: {source: VS_RAW.VSORRES}
+      VSORRES: {source: VS_RAW.VSORRES}
+      VSORRESU: {source: VS_RAW.VSORRESU}
+      VSDRVFL: {literal: null}
+
+  - id: means
+    group_by: [VS_RAW.STUDYID, VS_RAW.USUBJID, VS_RAW.VISIT, VS_RAW.VSTESTCD, VS_RAW.VSTEST]
+    derivations:
+      ORD: {literal: 2}
+      VSREPNUM: {literal: null}
+      VSSTRESN:
+        aggregate:
+          expr: "MEAN(VS_RAW.VSORRES)"
+      VSORRES: {source: VSSTRESN}
+      VSORRESU: {literal: mmHg}
+      VSDRVFL: {literal: Y}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 31
+      max: 31
+  - implies:
+      id: derived-mean-carries-no-replicate-number
+      when: "VSDRVFL = 'Y'"
+      then: "VSREPNUM IS NULL AND VSSTRESN IS NOT NULL"
+  - implies:
+      id: reading-carries-its-replicate-number
+      when: "VSDRVFL IS NULL"
+      then: "VSREPNUM IS NOT NULL"
