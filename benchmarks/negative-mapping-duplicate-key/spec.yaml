@@ -36,6 +36,8 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # The upper limit for the parameter and sex. Nothing orders the table
+  # rows, so a test and sex listed on two rows stops the run.
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit
