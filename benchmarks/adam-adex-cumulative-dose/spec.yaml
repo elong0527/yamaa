@@ -64,5 +64,5 @@ columns:
 
 verifications:
   - row_count:
-      min: 3
-      max: 3
+      min: 6
+      max: 6
