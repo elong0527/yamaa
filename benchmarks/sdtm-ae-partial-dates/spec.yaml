@@ -1,0 +1,160 @@
+schema_version: "1.0"
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW: input/ae_raw.csv
+  DM: input/dm.csv
+base: AE_RAW
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: AE
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM
+
+  - name: RFSTDTC
+    type: date
+    label: Subject Reference Start Date/Time
+    derivation: DM.RFSTDTC
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation:
+      case:
+        - when: "AE_RAW.AEST_DY IS NOT NULL"
+          then:
+            str_template:
+              template: "{AE_RAW.AEST_YR}-{AE_RAW.AEST_MO}-{AE_RAW.AEST_DY}"
+        - when: "AE_RAW.AEST_MO IS NOT NULL"
+          then:
+            str_template:
+              template: "{AE_RAW.AEST_YR}-{AE_RAW.AEST_MO}"
+        - when: "AE_RAW.AEST_YR IS NOT NULL"
+          then: AE_RAW.AEST_YR
+
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation:
+      case:
+        - when: "AE_RAW.AEEN_DY IS NOT NULL"
+          then:
+            str_template:
+              template: "{AE_RAW.AEEN_YR}-{AE_RAW.AEEN_MO}-{AE_RAW.AEEN_DY}"
+        - when: "AE_RAW.AEEN_MO IS NOT NULL"
+          then:
+            str_template:
+              template: "{AE_RAW.AEEN_YR}-{AE_RAW.AEEN_MO}"
+        - when: "AE_RAW.AEEN_YR IS NOT NULL"
+          then: AE_RAW.AEEN_YR
+
+  - name: AESTPR
+    type: str
+    label: Collected Precision of Adverse Event Start
+    derivation:
+      date_precision:
+        source: AESTDTC
+        missing: null
+        invalid: null
+
+  - name: AEENPR
+    type: str
+    label: Collected Precision of Adverse Event End
+    derivation:
+      date_precision:
+        source: AEENDTC
+        missing: null
+        invalid: null
+
+  - name: AESTDT
+    type: date
+    label: Start Date of Adverse Event (Complete Dates Only)
+    derivation:
+      case:
+        - when: "AESTPR = 'D'"
+          then:
+            to_date:
+              source: AESTDTC
+
+  - name: AEENDT
+    type: date
+    label: End Date of Adverse Event (Complete Dates Only)
+    derivation:
+      case:
+        - when: "AEENPR = 'D'"
+          then:
+            to_date:
+              source: AEENDTC
+
+  - name: AESTDY
+    type: int
+    label: Study Day of Start of Adverse Event
+    derivation:
+      study_day:
+        date: AESTDT
+        reference: RFSTDTC
+
+  - name: AEENDY
+    type: int
+    label: Study Day of End of Adverse Event
+    derivation:
+      study_day:
+        date: AEENDT
+        reference: RFSTDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - implies:
+      id: partial-start-keeps-no-study-day
+      when: "AESTDTC IS NOT NULL AND AESTPR <> 'D'"
+      then: "AESTDY IS NULL"
+  - implies:
+      id: partial-end-keeps-no-study-day
+      when: "AEENDTC IS NOT NULL AND AEENPR <> 'D'"
+      then: "AEENDY IS NULL"
+  - implies:
+      id: complete-start-with-reference-has-study-day
+      when: "AESTPR = 'D' AND RFSTDTC IS NOT NULL"
+      then: "AESTDY IS NOT NULL"
+  - implies:
+      id: complete-end-with-reference-has-study-day
+      when: "AEENPR = 'D' AND RFSTDTC IS NOT NULL"
+      then: "AEENDY IS NOT NULL"
+  - implies:
+      id: study-day-has-no-day-zero
+      when: "AESTDY IS NOT NULL"
+      then: "AESTDY <> 0"
+  - implies:
+      id: end-study-day-has-no-day-zero
+      when: "AEENDY IS NOT NULL"
+      then: "AEENDY <> 0"
