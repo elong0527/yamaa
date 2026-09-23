@@ -85,12 +85,24 @@ columns:
     type: str
     label: Blood Pressure Not-Done Reason Collected on the Form
 
+  - name: HAS_POSITION
+    type: int
+    label: Test Uses Collected Body Position
+
+  - name: HAS_METHOD
+    type: int
+    label: Test Uses Collected Method
+
+  - name: HAS_NOTDONE
+    type: int
+    label: Test Uses Blood Pressure Not-Done Flag
+
   - name: VSPOS
     type: str
     label: Position of Subject
     derivation:
       case:
-        - when: "(VSTESTCD = 'SYSBP' OR VSTESTCD = 'DIABP' OR VSTESTCD = 'PULSE') AND VSORRES IS NOT NULL"
+        - when: "HAS_POSITION = 1 AND VSORRES IS NOT NULL"
           then:
             source: POSITION
 
@@ -99,7 +111,7 @@ columns:
     label: Method of Test or Examination
     derivation:
       case:
-        - when: "VSTESTCD = 'TEMP' AND VSORRES IS NOT NULL"
+        - when: "HAS_METHOD = 1 AND VSORRES IS NOT NULL"
           then:
             source: TEMPMETHOD
 
@@ -108,7 +120,7 @@ columns:
     label: Completion Status
     derivation:
       case:
-        - when: "(VSTESTCD = 'SYSBP' OR VSTESTCD = 'DIABP') AND BPNOTDONE = 'Y'"
+        - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
           then:
             literal: NOT DONE
 
@@ -117,7 +129,7 @@ columns:
     label: Reason Not Done
     derivation:
       case:
-        - when: "(VSTESTCD = 'SYSBP' OR VSTESTCD = 'DIABP') AND BPNOTDONE = 'Y'"
+        - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
           then:
             source: BPREASND
 
@@ -132,262 +144,36 @@ columns:
     verifications:
       not_missing: {}
 
+
 rows:
-  - id: sysbp
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+  - id: vs
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    catalog:
+      path: input/vs_tests.csv
+      id_column: ID
+      types: {TESTORD: int, HAS_POSITION: int, HAS_METHOD: int, HAS_NOTDONE: int}
+      unique_columns: [VSTESTCD, TESTORD, RESULT_ITEM]
     derivations:
-      VSTESTCD:
-        literal: SYSBP
-      VSTEST:
-        literal: Systolic Blood Pressure
-      TESTORD:
-        literal: 1
+      VSTESTCD: {literal: "${VSTESTCD}"}
+      VSTEST: {literal: "${VSTEST}"}
+      TESTORD: {literal: "${TESTORD}"}
+      HAS_POSITION: {literal: "${HAS_POSITION}"}
+      HAS_METHOD: {literal: "${HAS_METHOD}"}
+      HAS_NOTDONE: {literal: "${HAS_NOTDONE}"}
       VSORRES:
         aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
+          filter: "ODM.ItemOID = ${RESULT_ITEM}"
           expr: "ONLY(ODM.Value)"
       VSORRESU:
         aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.SYSBPU'"
+          filter: "ODM.ItemOID = ${UNIT_ITEM}"
           expr: "ONLY(ODM.Value)"
       VSSTRESN:
         value:
           source: VSORRES
         missing:
-      VSSTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.SYSBPU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      POSITION:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-          expr: "ONLY(ODM.Value)"
-      TEMPMETHOD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-          expr: "ONLY(ODM.Value)"
-      BPNOTDONE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-          expr: "ONLY(ODM.Value)"
-      BPREASND:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-          expr: "ONLY(ODM.Value)"
-
-  - id: diabp
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    derivations:
-      VSTESTCD:
-        literal: DIABP
-      VSTEST:
-        literal: Diastolic Blood Pressure
-      TESTORD:
-        literal: 2
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.DIABP'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.DIABPU'"
-          expr: "ONLY(ODM.Value)"
-      VSSTRESN:
-        value:
-          source: VSORRES
-        missing:
-      VSSTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.DIABPU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      POSITION:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-          expr: "ONLY(ODM.Value)"
-      TEMPMETHOD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-          expr: "ONLY(ODM.Value)"
-      BPNOTDONE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-          expr: "ONLY(ODM.Value)"
-      BPREASND:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-          expr: "ONLY(ODM.Value)"
-
-  - id: pulse
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    derivations:
-      VSTESTCD:
-        literal: PULSE
-      VSTEST:
-        literal: Pulse Rate
-      TESTORD:
-        literal: 3
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.PULSE'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.PULSEU'"
-          expr: "ONLY(ODM.Value)"
-      VSSTRESN:
-        value:
-          source: VSORRES
-        missing:
-      VSSTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.PULSEU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      POSITION:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-          expr: "ONLY(ODM.Value)"
-      TEMPMETHOD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-          expr: "ONLY(ODM.Value)"
-      BPNOTDONE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-          expr: "ONLY(ODM.Value)"
-      BPREASND:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-          expr: "ONLY(ODM.Value)"
-
-  - id: resp
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    derivations:
-      VSTESTCD:
-        literal: RESP
-      VSTEST:
-        literal: Respiratory Rate
-      TESTORD:
-        literal: 4
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.RESP'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.RESPU'"
-          expr: "ONLY(ODM.Value)"
-      VSSTRESN:
-        value:
-          source: VSORRES
-        missing:
-      VSSTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.RESPU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      POSITION:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-          expr: "ONLY(ODM.Value)"
-      TEMPMETHOD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-          expr: "ONLY(ODM.Value)"
-      BPNOTDONE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-          expr: "ONLY(ODM.Value)"
-      BPREASND:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-          expr: "ONLY(ODM.Value)"
-
-  - id: temp
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    derivations:
-      VSTESTCD:
-        literal: TEMP
-      VSTEST:
-        literal: Temperature
-      TESTORD:
-        literal: 5
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMP'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPU'"
-          expr: "ONLY(ODM.Value)"
-      VSSTRESN:
-        value:
-          source: VSORRES
-        missing:
-      VSSTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPU'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      POSITION:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-          expr: "ONLY(ODM.Value)"
-      TEMPMETHOD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-          expr: "ONLY(ODM.Value)"
-      BPNOTDONE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-          expr: "ONLY(ODM.Value)"
-      BPREASND:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-          expr: "ONLY(ODM.Value)"
-
-  - id: weight
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    derivations:
-      VSTESTCD:
-        literal: WEIGHT
-      VSTEST:
-        literal: Weight
-      TESTORD:
-        literal: 6
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.WEIGHT'"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.WEIGHTU'"
-          expr: "ONLY(ODM.Value)"
-      VSSTRESN:
-        value:
-          source: VSORRES
-        missing:
-      VSSTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.WEIGHTU'"
-          expr: "ONLY(ODM.Value)"
+      VSSTRESU: VSORRESU
       VSDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.VSDTC'"

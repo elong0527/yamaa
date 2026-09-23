@@ -8605,6 +8605,18 @@ def prepare_spec_document(spec, spec_label, spec_path, env):
     else:
         resolved, errors, provenance = copy.deepcopy(spec), [], {}
     if isinstance(resolved, dict):
+        from yamaa.schema.row_catalog import expand_row_catalogs
+        from yamaa.specification.diagnostics import SpecificationError
+
+        try:
+            resolved = expand_row_catalogs(resolved, spec_path)
+        except SpecificationError as error:
+            errors.extend(
+                f"ERROR: {spec_label}.{diagnostic.spec_paths[0]}: "
+                f"{diagnostic.condition}"
+                for diagnostic in error.diagnostics
+            )
+            return resolved, errors, provenance
         # REQ-0319: the engine desugars a bare-string derivation to
         # {source: string} before anything else runs. The repository
         # validator works on the same normalized shape so its paths and

@@ -219,10 +219,37 @@ row_class:
         type: "dict[identifier, derivation]"
         required: true
         description: See REQ-1056 in rules/execution/rows.md.
+    - catalog:
+        type: row_catalog_class
+        required: false
+        description: See REQ-1248 in rules/execution/rows.md.
     - submission:
         type: "dict[identifier, submission_column_class]"
         required: false
         description: See REQ-1056 in rules/execution/rows.md.
+
+row_catalog_class:
+    - path:
+        type: project_path
+        required: true
+        description: See REQ-1248 in rules/execution/rows.md.
+    - id_column:
+        type: identifier
+        required: true
+        description: See REQ-1248 in rules/execution/rows.md.
+    - types:
+        type: "dict[identifier, row_catalog_type]"
+        required: false
+        description: See REQ-1248 in rules/execution/rows.md.
+    - unique_columns:
+        type: "list[identifier]"
+        required: false
+        description: See REQ-1248 in rules/execution/rows.md.
+
+row_catalog_type:
+    type: str
+    values: [str, int, float]
+    description: See REQ-1248 in rules/execution/rows.md.
 
 variable:
     type: str
