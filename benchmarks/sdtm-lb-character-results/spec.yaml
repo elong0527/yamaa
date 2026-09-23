@@ -88,12 +88,19 @@ columns:
     type: str
     label: Original Units
 
+  - name: LBORRES_U
+    type: str
+    label: Collected Result Uppercased
+    derivation:
+      str_upper:
+        source: LBORRES
+
   - name: LBSTRESC
     type: str
     label: Character Result/Finding in Standard Units
     derivation:
       case:
-        - when: "LBORRES IN ('NEGATIVE','Neg','neg','NEG','TRACE','Trace','tr','TR','1+','+1','1 plus','1 PLUS','2+','+2')"
+        - when: "LBORRES_U IN ('NEGATIVE','NEG','TRACE','TR','1+','+1','1 PLUS','2+','+2')"
           then:
             mapping:
               source: LBORRES
@@ -158,7 +165,7 @@ rows:
 
 verifications:
   - row_count:
-      min: 14
-      max: 14
+      min: 16
+      max: 16
   - unique:
       columns: [STUDYID, USUBJID, LBSEQ]
