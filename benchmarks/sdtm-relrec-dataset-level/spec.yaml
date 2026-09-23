@@ -118,8 +118,11 @@ rows:
         source: CM.CMLNKID
 
 verifications:
+  # Asserted grain: one row per domain per relationship. IDVARVAL is null on
+  # dataset-level rows, so keys cannot name it (REQ-0240 missing_key); the
+  # uniqueness check mirrors the declared keys.
   - unique:
-      columns: [STUDYID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+      columns: [STUDYID, RDOMAIN, IDVAR, RELID]
   - row_count:
       min: 6
       max: 6
