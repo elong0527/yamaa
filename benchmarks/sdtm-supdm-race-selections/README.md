@@ -17,8 +17,8 @@ input with `sdtm-dm-race-ethnicity`.
   `USUBJID` and the subject identifier, linking the record to its DM row.
 - **QNAM**: the qualifier name, `RACE1` for the alphabetically first reported
   race and `RACE2` for the second; only subjects with several distinct
-  reported races appear. The input carries no report order, so the numbering follows
-  alphabetical order.
+  reported races appear. The input carries no report order, so numbering
+  follows alphabetical order.
 - **QLABEL**: the qualifier label, `Race 1` or `Race 2`.
 - **QVAL**: the reported race in controlled terms, as in **RACE** of the
   companion example.
