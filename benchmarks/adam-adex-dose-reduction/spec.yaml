@@ -47,7 +47,7 @@ columns:
 
   - name: DOSREDFL
     type: str
-    label: Dose Reduction Flag
+    label: Dose Reduced Flag
     derivation:
       case:
         - when: "EXDOSE > 0 AND PREVDOSE > 0 AND EXDOSE < PREVDOSE"
