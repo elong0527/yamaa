@@ -29,6 +29,9 @@ columns:
     label: Date of Randomization
     derivation: DM.RANDDT
 
+  # Whole years from birth to randomization, counted as birthdays reached;
+  # randomization before birth gives minus the whole years back. Empty if
+  # either date is missing. exclusive is the only bounds a year count takes.
   - name: AAGE
     type: int
     label: Analysis Age
