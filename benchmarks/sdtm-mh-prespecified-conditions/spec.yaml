@@ -33,8 +33,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: MH
+    derivation: {literal: MH}
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -114,28 +113,21 @@ rows:
           key: ItemOID
           value: MHTERM
           strict: true
-      MHCAT:
-        literal: DISEASE-SPECIFIC HISTORY
+      MHCAT: {literal: DISEASE-SPECIFIC HISTORY}
       ANSWER: ODM.Value
-      MHPRESP:
-        literal: Y
+      MHPRESP: {literal: Y}
       MHOCCUR:
         case:
           - when: ANSWER = 'Y'
-            then:
-              literal: Y
+            then: {literal: Y}
           - when: ANSWER = 'N'
-            then:
-              literal: N
-          - otherwise:
-              literal: null
+            then: {literal: N}
+          - otherwise: {literal: null}
       MHSTAT:
         case:
           - when: ANSWER IS NULL
-            then:
-              literal: NOT DONE
-          - otherwise:
-              literal: null
+            then: {literal: NOT DONE}
+          - otherwise: {literal: null}
       SORTORD:
         lookup:
           dataset: MH_ITEMS
@@ -158,18 +150,12 @@ rows:
       IS NOT NULL
     derivations:
       MHTERM: ODM.Value
-      MHCAT:
-        literal: GENERAL HISTORY
-      ANSWER:
-        literal: null
-      MHPRESP:
-        literal: null
-      MHOCCUR:
-        literal: null
-      MHSTAT:
-        literal: null
-      SORTORD:
-        literal: 4
+      MHCAT: {literal: GENERAL HISTORY}
+      ANSWER: {literal: null}
+      MHPRESP: {literal: null}
+      MHOCCUR: {literal: null}
+      MHSTAT: {literal: null}
+      SORTORD: {literal: 4}
       EVENTORD:
         mapping:
           source: ODM.StudyEventOID

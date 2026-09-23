@@ -105,8 +105,7 @@ columns:
     derivation:
       case:
         - when: "AWRANK = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

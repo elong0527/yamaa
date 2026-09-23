@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: STUDYID
     type: str
@@ -80,8 +79,7 @@ columns:
     derivation:
       case:
         - when: "AGE IS NOT NULL"
-          then:
-            literal: YEARS
+          then: {literal: YEARS}
         - otherwise: {literal: null}
 
 verifications:

@@ -268,8 +268,7 @@ keys: [STUDYID, USUBJID, AESEQ]
       case:
         - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL
                  AND ASTDTM >= TRTSDTM"
-          then:
-            literal: Y
+          then: {literal: Y}
 ```
 
 What changed:

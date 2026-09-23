@@ -20,8 +20,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
     submission:
       core: Req
       role: Identifier
@@ -124,8 +123,7 @@ columns:
   - name: AGEU
     type: str
     label: Age Units
-    derivation:
-      literal: YEARS
+    derivation: {literal: YEARS}
     submission:
       core: Exp
       role: Variable Qualifier

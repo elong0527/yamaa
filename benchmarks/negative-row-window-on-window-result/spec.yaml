@@ -48,8 +48,7 @@ rows:
     filter: "LB.LBTESTCD = 'ALB' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       USUBJID: LB.USUBJID
-      PARAMCD:
-        literal: "_ALB"
+      PARAMCD: {literal: "_ALB"}
       AVISITN: LB.VISITNUM
       AVAL: LB.LBSTRESN
       PREV_AVAL:

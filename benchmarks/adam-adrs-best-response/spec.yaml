@@ -33,14 +33,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: BOR
+    derivation: {literal: BOR}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Best Overall Response by Investigator
+    derivation: {literal: Best Overall Response by Investigator}
 
   - name: RANDDT
     type: date

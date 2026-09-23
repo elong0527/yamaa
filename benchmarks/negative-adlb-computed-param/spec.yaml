@@ -73,32 +73,25 @@ rows:
   - id: alt
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ALT
-      PARAM:
-        literal: Alanine Aminotransferase
+      PARAMCD: {literal: ALT}
+      PARAM: {literal: Alanine Aminotransferase}
       LBRESN:
         source: LB.LBSTRESN
 
   - id: ast
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
-      PARAMCD:
-        literal: AST
-      PARAM:
-        literal: Aspartate Aminotransferase
+      PARAMCD: {literal: AST}
+      PARAM: {literal: Aspartate Aminotransferase}
       LBRESN:
         source: LB.LBSTRESN
 
   - id: ast_alt_ratio
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ASTALT
-      PARAM:
-        literal: Aspartate to Alanine Aminotransferase Ratio
-      LBRESN:
-        literal: null
+      PARAMCD: {literal: ASTALT}
+      PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
+      LBRESN: {literal: null}
 
 verifications:
   - unique:

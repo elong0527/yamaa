@@ -14,8 +14,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DS
+    derivation: {literal: DS}
     verifications:
       allowed_values:
         values: [DS]
@@ -47,8 +46,7 @@ columns:
   - name: DSCAT
     type: str
     label: Category for Disposition Event
-    derivation:
-      literal: DISPOSITION EVENT
+    derivation: {literal: DISPOSITION EVENT}
     verifications:
       allowed_values:
         values: [DISPOSITION EVENT]
@@ -85,8 +83,7 @@ columns:
     derivation:
       case:
         - when: "COMPSTAT = 'COMPLETED'"
-          then:
-            literal: COMPLETED
+          then: {literal: COMPLETED}
         - otherwise:
             source:
               filter: ODM.ItemOID = 'IT.DS.REASON'
@@ -100,8 +97,7 @@ columns:
     derivation:
       case:
         - when: "COMPSTAT = 'COMPLETED'"
-          then:
-            literal: COMPLETED
+          then: {literal: COMPLETED}
         - otherwise:
             source:
               filter: ODM.ItemOID = 'IT.DS.REASONCD'

@@ -18,8 +18,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str
@@ -108,8 +107,7 @@ columns:
   - name: LBSTRESU
     type: str
     label: Standard Units
-    derivation:
-      literal: g/dL
+    derivation: {literal: g/dL}
 
   - name: LBSTNRLO
     type: float

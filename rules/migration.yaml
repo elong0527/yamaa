@@ -2280,6 +2280,7 @@ requirements:
   REQ-1247: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:produced-artifact-anchor"]}
   REQ-1248: {"file": "operations/lookup.md", "sources": ["yamaa:issue-371:rename-only-intermediate"]}
   REQ-1249: {"file": "execution/rows.md", "sources": ["yamaa:pr-818:fixed-row-catalog", "schema.yaml:row_class.catalog.description", "schema.yaml:row_catalog_class.path.description", "schema.yaml:row_catalog_class.id_column.description", "schema.yaml:row_catalog_class.types.description", "schema.yaml:row_catalog_class.unique_columns.description", "schema.yaml:row_catalog_type.description"]}
+  REQ-1250: {"file": "operations/expressions.md", "sources": ["yamaa:issue-879:literal-canonical-form"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2785,3 +2786,4 @@ provenance_addenda:
   - {"source": "yamaa:issue-846:project-root-anchor", "text": "Issue #846: a relative input path absent beside the layer that writes it is retried, in that layer's own spelling, against the approved project root before the data roots, so a shared layer declares a dataset once while each study keeps its data under its own project root; no specification field chooses the anchor.", "owner": "storage/resources", "group": "resolution", "target": "REQ-1246"}
   - {"source": "yamaa:issue-846:produced-artifact-anchor", "text": "Issue #846: a relative path naming an artifact the run produces denotes its first anchor's location, which the producer must publish to.", "owner": "storage/resources", "group": "resolution", "target": "REQ-1247"}
   - {"source": "yamaa:issue-371:rename-only-intermediate", "text": "Issue #371 review: a named intermediate must narrow, derive, or reshape its dataset; an intermediate declaring only id and dataset merely renames the dataset qualifier and fails as rename_only_intermediate.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1248"}
+  - {"source": "yamaa:issue-879:literal-canonical-form", "text": "Issue #879: the canonical spelling of a literal expression is the single-line flow mapping {literal: X} in every position; the block form parses identically but is non-canonical and repository validation reports it.", "owner": "operations/expressions", "group": "literal-canonical-form", "target": "REQ-1250"}
