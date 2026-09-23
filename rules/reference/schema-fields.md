@@ -461,6 +461,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_verifications.row_count.when` | `"predicate"` | `false` | Absent | -- | [REQ-1154](../execution/verification.md#req-1154) |
 | `dataset_verifications.row_count.min` | `"int"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.max` | `"int"` | `false` | Absent | -- | Schema constraint |
+| `dataset_verifications.row_count.min_fraction` | `"float"` | `false` | Absent | -- | Schema constraint |
+| `dataset_verifications.row_count.max_fraction` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
 | `verification_id` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `verification_severity` | `"str"` | `false` | Absent | `{"values": ["error", "warning"]}` | Schema constraint |
