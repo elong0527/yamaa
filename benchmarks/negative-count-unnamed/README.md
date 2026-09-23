@@ -3,27 +3,21 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-count-unnamed.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** carry the analysis date (`ADT`), the numeric result
-(`AVAL`), and the baseline flag (`ABLFL`, `Y` on the baseline
-result and blank otherwise) for each subject and parameter, and
-check that each subject and parameter has exactly one flagged
-baseline result. The count check carries no name, so a report of
-a wrong count could not say which study decision the data broke.
-The run is rejected before any data is read and no artifact is
-accepted.
+**Goal:** carry the analysis date (`ADT`), the numeric result (`AVAL`),
+and the baseline flag (`ABLFL`) for each laboratory result, and check that
+each subject and parameter has exactly one flagged baseline result.
 
 **Input:** collected laboratory results carrying analysis date
 (`ADT`), numeric result (`AVAL`), and baseline flag (`ABLFL`).
 
 **Variables:**
 
-- `ADT` would be the analysis date, carried over from the
-  collected records.
-- `AVAL` would be the numeric result, carried over from the
-  collected records.
-- `ABLFL` would be `Y` on the baseline result and blank
-  otherwise; the check counts rows where `ABLFL` equals `Y`
-  within each subject and parameter and expects exactly one.
+- `ABLFL` would be `Y` on the baseline result and blank otherwise.
+
+**Note:** the check counts the results flagged `Y` within each subject and
+parameter and expects exactly one, but it carries no name, so a report of a
+wrong count could not say which study decision the data broke. The run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
