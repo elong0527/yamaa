@@ -21,12 +21,15 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # Each period's first start and last end date, read from that period's
+  # exposure records only. MIN and MAX skip a missing date, so a subject
+  # with no dated record in the period gets an empty date.
   - name: TR01SDT
     type: date
     label: Date of First Exposure in Period 01
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 1 AND EX.EXSTDTC IS NOT NULL"
+        filter: "EX.APERIOD = 1"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: TR01EDT
@@ -34,7 +37,7 @@ columns:
     label: Date of Last Exposure in Period 01
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 1 AND EX.EXENDTC IS NOT NULL"
+        filter: "EX.APERIOD = 1"
         expr: "MAX(EX.EXENDTC)"
 
   - name: TR02SDT
@@ -42,7 +45,7 @@ columns:
     label: Date of First Exposure in Period 02
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 2 AND EX.EXSTDTC IS NOT NULL"
+        filter: "EX.APERIOD = 2"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: TR02EDT
@@ -50,9 +53,11 @@ columns:
     label: Date of Last Exposure in Period 02
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 2 AND EX.EXENDTC IS NOT NULL"
+        filter: "EX.APERIOD = 2"
         expr: "MAX(EX.EXENDTC)"
 
+  # Each period's treatment is that of its first administration: earliest
+  # start date, then lower EXSEQ; a record with no start date sorts last.
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
@@ -81,6 +86,8 @@ columns:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]
 
+  # Days strictly between the end of period 1 and the start of period 2, so
+  # back-to-back periods give 0; empty when either date is.
   - name: WASHDUR
     type: int
     label: Washout Duration (Days)

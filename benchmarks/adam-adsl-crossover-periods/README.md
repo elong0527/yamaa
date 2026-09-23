@@ -9,8 +9,9 @@ period and the washout between them, with one record per
 subject.
 
 **Input:** demographics listing each subject, plus exposure
-records carrying `APERIOD`, `EXTRT`, `EXSTDTC`, `EXENDTC`, and
-`EXSEQ`.
+records carrying the analysis period (`APERIOD`), the treatment
+given (`EXTRT`), start and end dates (`EXSTDTC`, `EXENDTC`), and
+a sequence number (`EXSEQ`).
 
 **Variables:**
 
