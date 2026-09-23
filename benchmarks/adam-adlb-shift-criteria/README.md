@@ -8,7 +8,7 @@
 against its normal range, how that mark moved since baseline, and
 whether the record met one high-result criterion.
 
-**Input:** input records carrying the analysis value `AVAL`, the
+**Input:** laboratory records carrying the analysis value `AVAL`, the
 normal range limits `ANRLO` and `ANRHI`, and the baseline flag
 `ABLFL` (`Y` on the record taken as the baseline for the subject
 and parameter).

@@ -13,8 +13,8 @@ each test.
 **Variables:**
 
 - `R2ANRLO`: the result as a multiple of the lower limit of the
-  normal range; blank when the lower limit was not collected or
-  was recorded as zero.
+  normal range; blank when the result or the lower limit was not
+  collected, or the lower limit was recorded as zero.
 
 **Note:** every number is reported to four places, so a result
 that needs fewer still shows them and a ratio that needs more is

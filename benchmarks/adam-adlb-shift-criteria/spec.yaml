@@ -56,22 +56,21 @@ columns:
     label: Analysis Normal Range Upper Limit
     derivation: ADLB_RAW.ANRHI
 
+  # Empty when the value or either limit is missing. The first branch is
+  # needed: a comparison that cannot be made falls through, and could end
+  # at NORMAL.
   - name: ANRIND
     type: str
     label: Analysis Reference Range Indicator
     derivation:
       case:
         - when: "AVAL IS NULL OR ANRLO IS NULL OR ANRHI IS NULL"
-          then:
-            literal: null
+          then: {literal: null}
         - when: "AVAL < ANRLO"
-          then:
-            literal: LOW
+          then: {literal: LOW}
         - when: "AVAL > ANRHI"
-          then:
-            literal: HIGH
-        - otherwise:
-            literal: NORMAL
+          then: {literal: HIGH}
+        - otherwise: {literal: NORMAL}
     verifications:
       allowed_values:
         values: [LOW, NORMAL, HIGH]
@@ -84,6 +83,9 @@ columns:
       allowed_values:
         values: [Y]
 
+  # The flagged baseline record's value and mark, repeated on every record of
+  # the subject and parameter. With no flagged record both are empty; ONLY()
+  # stops the run if more than one record is flagged.
   - name: BASE
     type: float
     label: Baseline Value
@@ -105,6 +107,7 @@ columns:
       allowed_values:
         values: [LOW, NORMAL, HIGH]
 
+  # Baseline mark first; empty when either mark is missing.
   - name: SHIFT1
     type: str
     label: Shift 1
@@ -113,6 +116,7 @@ columns:
         template: "{BNRIND} to {ANRIND}"
         missing: null
 
+  # NULLIF leaves the ratio empty when the baseline value is zero.
   - name: R2BASE
     type: float
     label: Ratio to Baseline
@@ -120,6 +124,8 @@ columns:
       compute:
         expr: "AVAL / NULLIF(BASE, 0)"
 
+  # Three times the upper limit of normal (ULN). A condition cannot hold
+  # arithmetic, so the limit is its own column; it is not in the output.
   - name: CRITLIM
     type: float
     label: Criterion Limit
@@ -133,22 +139,20 @@ columns:
     derivation:
       case:
         - when: "AVAL IS NOT NULL AND CRITLIM IS NOT NULL"
-          then:
-            literal: Result greater than 3 x ULN
+          then: {literal: Result greater than 3 x ULN}
 
+  # Y above the limit and N at or below it. The first branch keeps a record
+  # with no value or no limit empty rather than N.
   - name: CRIT1FL
     type: str
     label: Criterion 1 Evaluation Result Flag
     derivation:
       case:
         - when: "AVAL IS NULL OR CRITLIM IS NULL"
-          then:
-            literal: null
+          then: {literal: null}
         - when: "AVAL > CRITLIM"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
     verifications:
       allowed_values:
         values: [Y, N]

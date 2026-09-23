@@ -6,6 +6,8 @@ input:
 
 output:
   path: adlb.csv
+  # Every float column is written with exactly four decimals, rounded once
+  # as the file is written, an exact half going away from zero.
   decimals: 4
   columns: [STUDYID, USUBJID, PARAMCD, AVAL, ANRLO, R2ANRLO]
   order_by: [USUBJID]
@@ -36,6 +38,9 @@ columns:
     label: Analysis Normal Range Lower Limit
     derivation: LB.ANRLO
 
+  # NULLIF turns a zero lower limit into missing, so the ratio is empty
+  # instead of dividing by zero; a missing result or limit also leaves it
+  # empty.
   - name: R2ANRLO
     type: float
     label: Ratio to Lower Limit of Normal
