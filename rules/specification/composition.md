@@ -43,8 +43,11 @@ defined below.
 
 **REQ-0616.** The resolver retains source provenance for every contributed value
 while it works, down to the leaf a layer wrote, because a composed column
-carries values from more than one layer. Provenance is diagnostic state and is
-not a field of the resolved specification.
+carries values from more than one layer. Provenance is not a field of the
+resolved specification. It is diagnostic state, and for a relative
+`project_path` it also records the layer that wrote the path and that layer's
+own spelling, which [Resource resolution](../storage/resources.md) retries under
+[REQ-0780](../storage/resources.md#req-0780).
 
 ### Parent references
 
@@ -260,8 +263,11 @@ resolves it against the approved root it names and reads that written form.
 
 <a id="req-0637"></a>
 
-**REQ-0637.** Rebasing states where a file is, not whether a run may read it. A
-rebased `project_path` is accepted or rejected by [Resource resolution](../storage/resources.md) in its rebased form.
+**REQ-0637.** Rebasing states where a file is, not whether a run may read it.
+[Resource resolution](../storage/resources.md) accepts or rejects a rebased `project_path` at the location its
+rebased form names. When nothing is stored there, it retries the spelling the
+layer wrote against the approved project root and data roots under
+[REQ-0780](../storage/resources.md#req-0780).
 
 ### Minimal resolved specification
 
