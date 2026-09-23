@@ -1,4 +1,4 @@
-# Subject elements from the trial design
+# Subject elements from an ODM extract
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-se-subject-elements.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
@@ -6,19 +6,18 @@
 the subject entered, carrying `SESEQ`, `ETCD`, `ELEMENT`, `TAETORD`,
 `EPOCH`, `SESTDTC`, `SEENDTC`, `SESTDY`, `SEENDY`, and `SEUPDES`.
 
-**Input:** the planned element sequence per arm from the trial arms table,
-element definitions and timing rules from the trial elements table, one
-demography record per subject with arm and reference dates, daily dosing
-records, and the planned subject-by-element list joining them.
+**Input:** a long-format Operational Data Model (ODM) extract — one row per
+subject per study event per collected item — carrying each element's
+trial-design attributes (description, planned order, epoch) together with
+the subject-level reference dates and first and last dosing dates.
 
 **Variables:**
 
-- `SESEQ` numbers the subject's elements in planned order, from the trial
-  arms table.
-- `ETCD` is the element code from the trial elements table.
-- `ELEMENT` is the element description from the trial elements table.
+- `SESEQ` numbers the subject's elements in planned order.
+- `ETCD` is the element code, taken from the subject's study event.
+- `ELEMENT` is the element description, e.g. Screening.
 - `TAETORD` is the planned order of the element within the subject's arm.
-- `EPOCH` is the epoch the element belongs to, from the trial arms table.
+- `EPOCH` is the epoch the element belongs to, e.g. TREATMENT.
 - `SESTDTC` is the date the subject actually started the element: informed
   consent for screening, first dosing date for treatment, last dosing date
   for follow-up.
@@ -35,9 +34,12 @@ records, and the planned subject-by-element list joining them.
 **Note:** elements are recorded back to back: an element ends on the day the
 next one starts. The treatment element ends on the actual last dosing date,
 so a subject who stopped dosing early has a shorter treatment element and an
-earlier follow-up start than the plan described.
+earlier follow-up start than the plan described. The extract repeats each
+subject's trial-design attributes and reference dates on every study event,
+so each SE record derives from its own event context without reading across
+events.
 
-Provenance: the trial design, subjects, dates, and dosing records are
-invented fixtures.
+Provenance: the trial design, subjects, dates, and dosing dates are invented
+fixtures.
 
 **Standard:** SDTM | **Domain:** SE

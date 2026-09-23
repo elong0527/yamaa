@@ -1,7 +1,0 @@
-STUDYID,DOMAIN,ARMCD,ARM,TAETORD,ETCD,ELEMENT,TABRANCH,TATRANS,EPOCH
-YAMAA-01,TA,A,Treatment A,1,SCRN,Screening,,,SCREENING
-YAMAA-01,TA,A,Treatment A,2,TRTA,Treatment A,Randomized,Randomized to Treatment A,TREATMENT
-YAMAA-01,TA,A,Treatment A,3,FUP,Follow-up,,,FOLLOW-UP
-YAMAA-01,TA,B,Treatment B,1,SCRN,Screening,,,SCREENING
-YAMAA-01,TA,B,Treatment B,2,TRTB,Treatment B,Randomized,Randomized to Treatment B,TREATMENT
-YAMAA-01,TA,B,Treatment B,3,FUP,Follow-up,,,FOLLOW-UP

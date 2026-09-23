@@ -2,36 +2,13 @@ schema_version: "1.0"
 domain: SE
 keys: [STUDYID, USUBJID, ETCD]
 input:
-  PLAN: input/se_plan.csv
-  TA: {path: input/ta.csv, types: {TAETORD: int}}
-  TE: input/te.csv
-  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFXSTDTC: date, RFXENDTC: date}}
-  EX: {path: input/ex.csv, types: {EXDOSE: float, EXSTDTC: date, EXENDTC: date}}
-base: PLAN
+  ODM: input/odm.csv
 
-intermediates:
-  - id: SUBJ
-    dataset: DM
-
-  - id: TAEL
-    dataset: TA
-    key: [STUDYID, ARMCD, ETCD]
-
-  - id: TEEL
-    dataset: TE
-    key: [STUDYID, ETCD]
-
-  - id: FIRSTDOSE
-    dataset: EX
-    key: [STUDYID, USUBJID]
-    order_by: [EX.EXSTDTC]
-    keep: first
-
-  - id: LASTDOSE
-    dataset: EX
-    key: [STUDYID, USUBJID]
-    order_by: [EX.EXENDTC]
-    keep: last
+# One base row per ODM context, i.e. one per subject per study event. The
+# subject's study events ARE the elements they entered: the fixture carries
+# each element's trial-design attributes (IT.TE.*/IT.TA.*) and the
+# subject-level reference items (IT.DM.*/IT.EX.*) on every event, so each SE
+# record derives from its own ODM context.
 
 output:
   path: se.csv
@@ -42,7 +19,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: PLAN.STUDYID
+    derivation: ODM.StudyOID
 
   - name: DOMAIN
     type: str
@@ -52,37 +29,84 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: PLAN.USUBJID
-
-  - name: ARMCD
-    type: str
-    label: Planned Arm Code
-    derivation: SUBJ.ARMCD
+    derivation: ODM.SubjectKey
 
   - name: ETCD
     type: str
     label: Element Code
-    derivation: PLAN.ETCD
+    derivation: ODM.StudyEventOID
 
   - name: SESEQ
     type: int
     label: Sequence Number
-    derivation: TAEL.TAETORD
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TA.TAETORD'
+        variable: ODM.Value
 
   - name: ELEMENT
     type: str
     label: Description of Element
-    derivation: TEEL.ELEMENT
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TE.ELEMENT'
+        variable: ODM.Value
 
   - name: TAETORD
     type: int
     label: Planned Order of Element within Arm
-    derivation: TAEL.TAETORD
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TA.TAETORD'
+        variable: ODM.Value
 
   - name: EPOCH
     type: str
     label: Epoch
-    derivation: TAEL.EPOCH
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TA.EPOCH'
+        variable: ODM.Value
+
+  - name: RFICDTC
+    type: date
+    label: Informed Consent Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.RFICDTC'
+        variable: ODM.Value
+
+  - name: RFSTDTC
+    type: date
+    label: Reference Start Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.RFSTDTC'
+        variable: ODM.Value
+
+  - name: RFXENDTC
+    type: date
+    label: End of Study Participation Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.RFXENDTC'
+        variable: ODM.Value
+
+  - name: FIRSTDTC
+    type: date
+    label: First Dosing Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.EX.FIRSTDTC'
+        variable: ODM.Value
+
+  - name: LASTDTC
+    type: date
+    label: Last Dosing Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.EX.LASTDTC'
+        variable: ODM.Value
 
   - name: SESTDTC
     type: date
@@ -90,13 +114,10 @@ columns:
     derivation:
       case:
         - when: "EPOCH = 'SCREENING'"
-          then:
-            source: SUBJ.RFICDTC
+          then: {source: RFICDTC}
         - when: "EPOCH = 'TREATMENT'"
-          then:
-            source: FIRSTDOSE.EXSTDTC
-        - otherwise:
-            source: LASTDOSE.EXENDTC
+          then: {source: FIRSTDTC}
+        - otherwise: {source: LASTDTC}
 
   - name: SEENDTC
     type: date
@@ -104,13 +125,10 @@ columns:
     derivation:
       case:
         - when: "EPOCH = 'SCREENING'"
-          then:
-            source: FIRSTDOSE.EXSTDTC
+          then: {source: FIRSTDTC}
         - when: "EPOCH = 'TREATMENT'"
-          then:
-            source: LASTDOSE.EXENDTC
-        - otherwise:
-            source: SUBJ.RFXENDTC
+          then: {source: LASTDTC}
+        - otherwise: {source: RFXENDTC}
 
   - name: SESTDY
     type: int
@@ -118,7 +136,7 @@ columns:
     derivation:
       study_day:
         date: SESTDTC
-        reference: SUBJ.RFSTDTC
+        reference: RFSTDTC
 
   - name: SEENDY
     type: int
@@ -126,7 +144,7 @@ columns:
     derivation:
       study_day:
         date: SEENDTC
-        reference: SUBJ.RFSTDTC
+        reference: RFSTDTC
 
   - name: SEUPDES
     type: str
