@@ -1,4 +1,4 @@
-# Shift and Criteria
+# Classify a Result, Its Shift from Baseline, and One Criterion
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-shift-criteria.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -16,12 +16,15 @@ and parameter).
 **Variables:**
 
 - `ANRIND` is the record's own mark: `LOW` below `ANRLO`, `HIGH`
-  above `ANRHI`, and `NORMAL` between them; empty when `AVAL`,
-  `ANRLO`, or `ANRHI` is missing.
+  above `ANRHI`, and `NORMAL` between them, limits included, so a
+  result exactly at a limit reads `NORMAL`; empty when `AVAL`,
+  `ANRLO`, or `ANRHI` is missing, since one missing limit makes the
+  mark unclassifiable.
 - `BASE` repeats the baseline record's `AVAL` on every record of the
   subject and parameter; empty when no record carries the flag.
 - `BNRIND` repeats the baseline record's `ANRIND` the same way;
-  empty with no flagged baseline.
+  empty with no flagged baseline, or when the baseline record
+  itself could not be marked.
 - `SHIFT1` joins the baseline mark and the record's own mark, baseline
   first, so a result that stayed normal reads `NORMAL to NORMAL` and
   one that moved out of range reads `NORMAL to HIGH`; empty when
@@ -36,6 +39,8 @@ and parameter).
   missing, since the comparison cannot be made.
 - `CRIT1FL` says whether the record met it, `Y` or `N`; empty where it
   could not be assessed, which differs from assessed and not met.
+  A result exactly at three times the limit does not meet it - the
+  comparison is strictly greater than.
 
 **Note:** the shift joins the baseline mark with the record's own
 mark and the ratio rests on the flagged baseline value, while the

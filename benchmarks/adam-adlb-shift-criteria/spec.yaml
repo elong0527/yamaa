@@ -161,8 +161,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ASEQ]
   - row_count:
-      min: 10
-      max: 10
+      min: 15
+      max: 15
   - all_or_none:
       id: criterion-text-accompanies-its-flag
       columns: [CRIT1, CRIT1FL]
