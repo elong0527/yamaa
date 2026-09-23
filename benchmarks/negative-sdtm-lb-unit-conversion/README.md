@@ -1,49 +1,36 @@
-# Reject a Laboratory Record with an Unconverted Unit
+# Reject a Laboratory Result Without a Unit Conversion
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-sdtm-lb-unit-conversion.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** standardize a reported hemoglobin result to `g/dL` while
-keeping the reported result, reported unit, and reported reference
-range untouched.
+**Goal:** convert hemoglobin results and reference limits to `g/dL`,
+and reject a result whose reported unit has no conversion factor.
 
-**Input:** one hemoglobin record reported in `mmol/L`, carrying the
-test code (`LBTESTCD`), the reported result (`LBORRES`), the reported
-unit (`LBORRESU`), and the reported reference limits (`LBORNRLO`,
-`LBORNRHI`); plus a conversion table that covers hemoglobin in `g/dL`
-only. A reported unit the table does not cover yields a missing
-factor.
+**Input:** hemoglobin results with test code (`LBTESTCD`), reported
+units, and reference limits, plus a conversion table keyed by test
+code and reported unit.
 
 **Variables:**
 
-- `LBSTRESN` would be the reported result times the conversion table
-  factor, missing when the reported unit is not in the table.
-- `LBSTRESC` would be the standardized numeric result written as text,
-  so it always agrees with `LBSTRESN`.
-- `LBSTRESU` would be the standard unit, `g/dL`.
-- `LBSTNRLO` and `LBSTNRHI` would be the reported reference limits
-  times the same factor, missing with them.
-- `LBORRES`, `LBORRESU`, `LBORNRLO`, and `LBORNRHI` keep the reported
-  result, unit, and limits exactly as collected, but this run is
-  rejected so no dataset is accepted.
-- `LBDTC` carries the laboratory collection date from the input.
+- `LBORRES` and `LBORRESU` keep the reported result and unit.
+- `LBORNRLO` and `LBORNRHI` keep the reported reference limits.
+- `LBSTRESN` is the reported result multiplied by the matching factor;
+  it is missing when no factor matches.
+- `LBSTRESC` is the standardized numeric result written as text, or
+  missing with `LBSTRESN`.
+- `LBSTRESU` is the standard unit, `g/dL`.
+- `LBSTNRLO` and `LBSTNRHI` are the reported limits multiplied by the
+  same factor, or missing when no factor matches.
 
-The record's reported unit (`mmol/L`) is absent from the conversion
-table, so no factor is found: the standardized result and the
-converted limits are missing while the reported values are kept. The
-completeness check requires the standardized numeric result, its text
-form, its standard unit, and the converted reference limits to be
-present together on every record, so the run is rejected and no
-artifact is accepted. Passing the reported values through as if they
-were standardized would silently misstate the unit. (A unit the table
-does cover would carry its factor and pass the check.)
+When a reported unit is absent from the conversion table, the standard
+unit remains known but its result and reference limits are missing.
+Those standardized values must be present together, so the run is
+rejected and no dataset is accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
-Add the missing unit to the conversion table -- the test-and-unit row
-with its factor -- and rerun; the completeness check then passes.
-Do not default the factor to one for uncovered units, and do not drop
-the completeness check -- either would turn a data problem the study
-must resolve into a quietly wrong dataset.
+Confirm the appropriate conversion for the uncovered hemoglobin unit,
+add its test-and-unit row with the correct factor, and rerun. Do not
+assume a factor of one for an uncovered unit.

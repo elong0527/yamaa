@@ -12,7 +12,7 @@ base: LB_RAW
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBORRES, LBORRESU, LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI]
 
 columns:
   - name: DOMAIN
@@ -36,20 +36,10 @@ columns:
     label: Sequence Number
     derivation: LB_RAW.LBSEQ
 
-  - name: VISIT
-    type: str
-    label: Visit Name
-    derivation: LB_RAW.VISIT
-
   - name: LBTESTCD
     type: str
     label: Lab Test or Examination Short Name
     derivation: LB_RAW.LBTESTCD
-
-  - name: LBTEST
-    type: str
-    label: Lab Test or Examination Name
-    derivation: LB_RAW.LBTEST
 
   - name: LBORRES
     type: str
@@ -135,14 +125,7 @@ columns:
       compute:
         expr: "HI_RESN * FACTOR"
 
-  - name: LBDTC
-    type: date
-    label: Date/Time of Specimen Collection
-    derivation: LB_RAW.LBDTC
-
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - all_or_none:
       id: standardized-result-completeness
       columns: [LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI]

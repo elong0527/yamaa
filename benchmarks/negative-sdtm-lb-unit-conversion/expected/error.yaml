@@ -1,7 +1,7 @@
 phase: verification
 condition: all_or_none_failed
 spec_paths:
-  - verifications[1].all_or_none
+  - verifications[0].all_or_none
 requirement: REQ-0382
 context:
   verification_id: standardized-result-completeness
@@ -9,4 +9,4 @@ context:
   keys:
     - STUDYID: YAMAA-01
       USUBJID: YAMAA-01-001
-      LBSEQ: 1
+      LBSEQ: 2
