@@ -17,6 +17,7 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: LB.USUBJID
 
   - name: PARAMCD
     type: str
@@ -25,58 +26,43 @@ columns:
   - name: AVISITN
     type: int
     label: Analysis Visit Number
+    derivation: LB.VISITNUM
 
   - name: AVAL
     type: float
     label: Analysis Value
+    derivation: LB.LBSTRESN
 
   - name: PREV_AVAL
     type: float
     label: Previous Analysis Value
+    derivation:
+      row_value:
+        source: AVAL
+        offset: -1
+        window:
+          group_by: [USUBJID, PARAMCD]
+          order_by: [AVISITN]
 
   - name: CHG
     type: float
     label: Change from Previous Value
+    derivation:
+      compute:
+        expr: "AVAL - PREV_AVAL"
 
 rows:
-  # One _ALB row per albumin record with a numeric result. PREV_AVAL reads
-  # the row just before in visit order among this template's rows for the
-  # same subject; the first visit has none, so CHG is empty there too.
-  - id: change_alb
+  # One row per albumin or bilirubin record with a numeric result. The
+  # test code becomes the change parameter (_ALB, _BILI). PREV_AVAL
+  # reads the row just before in visit order for the same subject and
+  # parameter, so an _ALB row never reads a _BILI value; the first
+  # visit for a subject and parameter has no previous value, and CHG
+  # is empty there too.
+  - id: change_params
     dataset: LB
-    filter: "LB.LBTESTCD = 'ALB' AND LB.LBSTRESN IS NOT NULL"
+    filter: "LB.LBTESTCD IN ('ALB', 'BILI') AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      USUBJID: LB.USUBJID
-      PARAMCD: {literal: "_ALB"}
-      AVISITN: LB.VISITNUM
-      AVAL: LB.LBSTRESN
-      PREV_AVAL:
-        row_value:
-          source: AVAL
-          offset: -1
-          window:
-            group_by: [USUBJID, PARAMCD]
-            order_by: [AVISITN]
-      CHG:
-        compute:
-          expr: "AVAL - PREV_AVAL"
-
-  # The same for bilirubin, lagged among the _BILI rows only.
-  - id: change_bili
-    dataset: LB
-    filter: "LB.LBTESTCD = 'BILI' AND LB.LBSTRESN IS NOT NULL"
-    derivations:
-      USUBJID: LB.USUBJID
-      PARAMCD: {literal: "_BILI"}
-      AVISITN: LB.VISITNUM
-      AVAL: LB.LBSTRESN
-      PREV_AVAL:
-        row_value:
-          source: AVAL
-          offset: -1
-          window:
-            group_by: [USUBJID, PARAMCD]
-            order_by: [AVISITN]
-      CHG:
-        compute:
-          expr: "AVAL - PREV_AVAL"
+      PARAMCD:
+        mapping:
+          source: LB.LBTESTCD
+          dict: {ALB: "_ALB", BILI: "_BILI"}
