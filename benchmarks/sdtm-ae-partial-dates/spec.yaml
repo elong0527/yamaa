@@ -2,13 +2,14 @@ schema_version: "1.0"
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE_RAW: input/ae_raw.csv
+  ODM: input/odm.csv
   DM: input/dm.csv
-base: AE_RAW
+base: ODM
 
 output:
   path: ae.csv
   columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY]
+  order_by: [USUBJID, AESEQ]
 
 columns:
   - name: DOMAIN
@@ -20,22 +21,73 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: AE_RAW.STUDYID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: AE_RAW.USUBJID
+    derivation: ODM.SubjectKey
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation: AE_RAW.AESEQ
+    derivation: ODM.FormRepeatKey
 
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
-    derivation: AE_RAW.AETERM
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AETERM'
+        variable: ODM.Value
+
+  - name: AEST_YR
+    type: str
+    label: Collected Start Year
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AESTYR'
+        variable: ODM.Value
+
+  - name: AEST_MO
+    type: str
+    label: Collected Start Month
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AESTMO'
+        variable: ODM.Value
+
+  - name: AEST_DY
+    type: str
+    label: Collected Start Day
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AESTDY'
+        variable: ODM.Value
+
+  - name: AEEN_YR
+    type: str
+    label: Collected End Year
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AEENYR'
+        variable: ODM.Value
+
+  - name: AEEN_MO
+    type: str
+    label: Collected End Month
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AEENMO'
+        variable: ODM.Value
+
+  - name: AEEN_DY
+    type: str
+    label: Collected End Day
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.AE.AEENDY'
+        variable: ODM.Value
 
   - name: RFSTDTC
     type: date
@@ -47,32 +99,32 @@ columns:
     label: Start Date/Time of Adverse Event
     derivation:
       case:
-        - when: "AE_RAW.AEST_DY IS NOT NULL"
+        - when: "AEST_DY IS NOT NULL"
           then:
             str_template:
-              template: "{AE_RAW.AEST_YR}-{AE_RAW.AEST_MO}-{AE_RAW.AEST_DY}"
-        - when: "AE_RAW.AEST_MO IS NOT NULL"
+              template: "{AEST_YR}-{AEST_MO}-{AEST_DY}"
+        - when: "AEST_MO IS NOT NULL"
           then:
             str_template:
-              template: "{AE_RAW.AEST_YR}-{AE_RAW.AEST_MO}"
-        - when: "AE_RAW.AEST_YR IS NOT NULL"
-          then: AE_RAW.AEST_YR
+              template: "{AEST_YR}-{AEST_MO}"
+        - when: "AEST_YR IS NOT NULL"
+          then: AEST_YR
 
   - name: AEENDTC
     type: str
     label: End Date/Time of Adverse Event
     derivation:
       case:
-        - when: "AE_RAW.AEEN_DY IS NOT NULL"
+        - when: "AEEN_DY IS NOT NULL"
           then:
             str_template:
-              template: "{AE_RAW.AEEN_YR}-{AE_RAW.AEEN_MO}-{AE_RAW.AEEN_DY}"
-        - when: "AE_RAW.AEEN_MO IS NOT NULL"
+              template: "{AEEN_YR}-{AEEN_MO}-{AEEN_DY}"
+        - when: "AEEN_MO IS NOT NULL"
           then:
             str_template:
-              template: "{AE_RAW.AEEN_YR}-{AE_RAW.AEEN_MO}"
-        - when: "AE_RAW.AEEN_YR IS NOT NULL"
-          then: AE_RAW.AEEN_YR
+              template: "{AEEN_YR}-{AEEN_MO}"
+        - when: "AEEN_YR IS NOT NULL"
+          then: AEEN_YR
 
   - name: AESTPR
     type: str
