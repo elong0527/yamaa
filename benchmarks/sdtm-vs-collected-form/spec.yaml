@@ -59,6 +59,10 @@ columns:
   - name: VSSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
+    derivation:
+      value:
+        source: VSORRES
+      missing:
 
   - name: VSSTRESC
     type: str
@@ -68,6 +72,7 @@ columns:
   - name: VSSTRESU
     type: str
     label: Standard Units
+    derivation: VSORRESU
 
   - name: POSITION
     type: str
@@ -169,11 +174,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = ${UNIT_ITEM}"
           expr: "ONLY(ODM.Value)"
-      VSSTRESN:
-        value:
-          source: VSORRES
-        missing:
-      VSSTRESU: VSORRESU
       VSDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
