@@ -1,0 +1,206 @@
+schema_version: "1.0"
+domain: RS
+keys: [STUDYID, USUBJID, AVISIT]
+input:
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, ItemGroupRepeatKey: int}
+
+output:
+  path: rs.csv
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, RSSEQ, RSTESTCD, RSTEST,
+            RSSTRESC, RSSTAT]
+
+rows:
+  - id: visit
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "AVISITN IS NOT NULL"
+    derivations:
+      AVISIT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.AVISIT'"
+          expr: "ONLY(ODM.Value)"
+      AVISITN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.AVISITN'"
+          expr: "ONLY(ODM.Value)"
+      ADT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.ADT'"
+          expr: "ONLY(ODM.Value)"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+
+  - name: RSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [AVISITN]
+
+  - name: RSTESTCD
+    type: str
+    label: Response Test Short Name
+    derivation:
+      literal: TRGRESP
+
+  - name: RSTEST
+    type: str
+    label: Response Test Name
+    derivation:
+      literal: Timepoint Response
+
+  - name: SUMV
+    type: float
+    label: Sum of Target Lesion Diameters at Visit
+    derivation:
+      aggregate:
+        filter: "ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        key: [SubjectKey, StudyEventOID]
+        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        derive:
+          - name: D
+            type: float
+            derivation: ODM.Value
+        expr: "SUM(D)"
+
+  - name: NMEAS
+    type: int
+    label: Number of Measured Target Lesions at Visit
+    derivation:
+      aggregate:
+        filter: "ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        key: [SubjectKey, StudyEventOID]
+        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        derive:
+          - name: D
+            type: float
+            derivation: ODM.Value
+        expr: "COUNT(D)"
+
+  - name: NTARGET
+    type: int
+    label: Number of Target Lesions
+    derivation:
+      aggregate:
+        filter: "ODM.ItemGroupOID = 'IG.TUTARGET' AND ODM.ItemOID = 'IT.TU.TULNKID'"
+        key: [SubjectKey]
+        key_base: [ODM.SubjectKey]
+        expr: "COUNT(ODM.Value)"
+
+  - name: NTR
+    type: int
+    label: Number of Tumor Measurement Records at Visit
+    derivation:
+      aggregate:
+        filter: "ODM.ItemGroupOID IN ('IG.TRTARGET', 'IG.TRNT') AND ODM.ItemOID = 'IT.TR.TRLNKID'"
+        key: [SubjectKey, StudyEventOID]
+        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        expr: "COUNT(ODM.Value)"
+
+  - name: BASE
+    type: float
+    label: Baseline Sum of Target Lesion Diameters
+    derivation:
+      aggregate:
+        filter: "ODM.StudyEventOID = 'BASELINE' AND ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        key: [SubjectKey]
+        key_base: [ODM.SubjectKey]
+        derive:
+          - name: D
+            type: float
+            derivation: ODM.Value
+        expr: "SUM(D)"
+
+  - name: PCHG
+    type: float
+    label: Percent Change from Baseline
+    derivation:
+      compute:
+        expr: "100 * (SUMV - BASE) / NULLIF(BASE, 0)"
+
+  - name: RSSTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: "NTR IS NULL OR NTR = 0"
+          then:
+            literal: NOT DONE
+
+  - name: RSSTRESC
+    type: str
+    label: Result or Finding in Standard Format
+    derivation:
+      case:
+        - when: "RSSTAT = 'NOT DONE'"
+          then:
+            literal: null
+        - when: "AVISIT = 'BASELINE'"
+          then:
+            literal: NE
+        - when: "NTARGET IS NULL OR NTARGET = 0"
+          then:
+            literal: NE
+        - when: "NMEAS IS NULL OR NMEAS < NTARGET"
+          then:
+            literal: NE
+        - when: "PCHG IS NULL"
+          then:
+            literal: NE
+        - when: "SUMV = 0"
+          then:
+            literal: CR
+        - when: "PCHG <= -30"
+          then:
+            literal: PR
+        - when: "PCHG >= 20"
+          then:
+            literal: PD
+        - otherwise:
+            literal: SD
+    verifications:
+      allowed_values:
+        values: [CR, PR, SD, PD, NE]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT]
+  - row_count:
+      min: 8
+      max: 8
+  - implies:
+      id: missed-assessment-has-no-response
+      when: "RSSTAT = 'NOT DONE'"
+      then: "RSSTRESC IS NULL"
+  - implies:
+      id: partial-response-meets-threshold
+      when: "RSSTRESC = 'PR'"
+      then: "PCHG <= -30"
+  - implies:
+      id: progressive-disease-meets-threshold
+      when: "RSSTRESC = 'PD'"
+      then: "PCHG >= 20"
