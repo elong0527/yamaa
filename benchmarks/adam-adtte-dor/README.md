@@ -8,11 +8,13 @@
 `STARTDT`, `ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `CNSDTDSC`,
 `SRCDOM`, `SRCVAR` and `SRCSEQ`.
 
-**Input:** combine a subject-level table holding `RESPDT` and
-`NACTDT` with response assessments holding `ADT` and `AVALC`
-plus record sequence number `ASEQ`, and a disposition table
-holding `DSDECOD`, `DSSTDTC` and `DSSEQ`. Only subjects whose
-`RESPDT` is not blank contribute a record.
+**Input:** combine a subject-level table holding the response
+date (`RESPDT`) and the start date of a new anti-cancer therapy
+(`NACTDT`) with response assessments holding the assessment date
+(`ADT`), the response (`AVALC`) and the record sequence number
+(`ASEQ`), and a disposition table holding the disposition term
+(`DSDECOD`), its date (`DSSTDTC`) and sequence number (`DSSEQ`).
+Only subjects whose `RESPDT` is not blank contribute a record.
 
 **Variables:**
 
@@ -28,8 +30,8 @@ holding `DSDECOD`, `DSSTDTC` and `DSSEQ`. Only subjects whose
   `NACTDT`; an event on the `NACTDT` day still counts. The
   last valid tumour assessment date is the latest input `ADT`
   carrying an `AVALC` value other than not evaluable (`NE`).
-- `AVAL` is the inclusive day count from `STARTDT` through
-  `ADT`, counting both endpoints; it is at least `1`.
+- `AVAL` is the number of days from `STARTDT` through `ADT`,
+  counting both endpoints; it is at least `1`.
 - `CNSR` is `0` when a counted event exists and `1` when the
   record is censored.
 - `EVNTDESC` names the outcome: `CENSORED` when no event
