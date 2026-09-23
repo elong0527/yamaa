@@ -9,7 +9,8 @@ whether it ended before, or was still going at, the screening visit.
 
 **Input:** one record per condition reported on the form, each numbered by
 its record sequence (`MHSEQ`), with the collected start year and month,
-the collected end date, and the ongoing tick box.
+the collected end date, the ongoing tick box, and the screening visit
+date recorded on the same form.
 
 **Variables:**
 
@@ -20,7 +21,8 @@ the collected end date, and the ongoing tick box.
 - `MHENDTC` is the date the condition ended, when an end was recorded.
 - `MHENRTPT` says how the condition's end relates to the screening visit:
   `ONGOING` when the tick box said it was still active, `BEFORE` when the
-  end date came before that visit; empty otherwise.
+  recorded end date comes before the screening visit date recorded on the
+  form; empty otherwise.
 - `MHENTPT` names the visit the end reference is measured against,
   `SCREENING`; empty when there is no end reference.
 

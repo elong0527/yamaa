@@ -64,6 +64,11 @@ columns:
     label: Collected ongoing tick (intermediate, not in output)
     derivation: MH_FORM.MHONGO
 
+  - name: SCRFDTC
+    type: str
+    label: Screening visit date (intermediate, not in output)
+    derivation: MH_FORM.SCRFDTC
+
   - name: MHENRTPT
     type: str
     label: End Reference Relative to the Screening Visit
@@ -72,7 +77,7 @@ columns:
         - when: "MHONGO = 'Y'"
           then:
             literal: ONGOING
-        - when: "MHENDTC IS NOT NULL"
+        - when: "MHENDTC IS NOT NULL AND SCRFDTC IS NOT NULL AND MHENDTC < SCRFDTC"
           then:
             literal: BEFORE
     verifications:
