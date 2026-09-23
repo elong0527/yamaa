@@ -408,6 +408,113 @@ def test_ungrouped_row_count_fails_a_minimum_on_an_empty_artifact() -> None:
     assert failures[0].context["keys"] == [{}]
 
 
+def test_row_count_fraction_bounds_filtered_missing_values() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("VAL", "str")],
+        [
+            ["S", f"S-{index}", value]
+            for index, value in enumerate(["a", None, None, None])
+        ],
+    )
+
+    (failure,) = check_dataset(
+        completed,
+        [
+            Expression(
+                root={
+                    "row_count": {
+                        "id": "too_many_missing",
+                        "filter": "VAL IS NULL",
+                        "max_fraction": 0.25,
+                        "severity": "warning",
+                    }
+                }
+            )
+        ],
+        KEYS,
+    )
+
+    assert failure.condition == "row_count_failed"
+    assert failure.severity == "warning"
+    assert failure.context["count"] == 3
+    assert failure.context["denominator"] == 4
+    assert (
+        check_dataset(
+            completed,
+            [
+                Expression(
+                    root={
+                        "row_count": {
+                            "filter": "VAL IS NULL",
+                            "max_fraction": 0.75,
+                        }
+                    }
+                )
+            ],
+            KEYS,
+        )
+        == ()
+    )
+
+
+def test_row_count_fraction_uses_each_full_group_and_when_gates_groups() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("VAL", "str"), ("CHECK", "str")],
+        [
+            ["S", "A", None, "Y"],
+            ["S", "A", "ok", "N"],
+            ["S", "B", None, "N"],
+            ["S", "B", None, "N"],
+        ],
+    )
+    (failure,) = check_dataset(
+        completed,
+        [
+            Expression(
+                root={
+                    "row_count": {
+                        "id": "missing-by-subject",
+                        "group_by": ["USUBJID"],
+                        "filter": "VAL IS NULL",
+                        "when": "CHECK = 'Y'",
+                        "max_fraction": 0.25,
+                    }
+                }
+            )
+        ],
+        KEYS,
+    )
+    assert failure.context["keys"] == [{"USUBJID": "A"}]
+    assert failure.context["count"] == 1
+    assert failure.context["denominator"] == 2
+
+
+def test_row_count_fraction_on_empty_artifact_is_zero() -> None:
+    empty = table([("STUDYID", "str"), ("USUBJID", "str")], [])
+    assert (
+        check_dataset(
+            empty, [Expression(root={"row_count": {"max_fraction": 0}})], KEYS
+        )
+        == ()
+    )
+    (failure,) = check_dataset(
+        empty, [Expression(root={"row_count": {"min_fraction": 0.1}})], KEYS
+    )
+    assert failure.context["denominator"] == 0
+
+
+@pytest.mark.parametrize("bound", [-0.1, 1.1, True, "0.5"])
+def test_row_count_rejects_invalid_fraction(bound: object) -> None:
+    completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "A"]])
+    with pytest.raises(DeclarationError) as caught:
+        check_dataset(
+            completed,
+            [Expression(root={"row_count": {"max_fraction": bound}})],
+            KEYS,
+        )
+    assert caught.value.requirement == "REQ-0397"
+
+
 def test_header_only_artifact_passes_key_validation_and_column_checks() -> None:
     empty = table([("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")], [])
 

@@ -50,6 +50,8 @@ dataset_verifications:
             description: See REQ-1154 in rules/execution/verification.md.
         - min: {type: int, required: false}
         - max: {type: int, required: false}
+        - min_fraction: {type: float, required: false}
+        - max_fraction: {type: float, required: false}
         - severity: {type: verification_severity, required: false, default: error}
 
 verification_id:

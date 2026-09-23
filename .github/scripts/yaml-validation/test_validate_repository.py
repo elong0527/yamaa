@@ -3696,6 +3696,37 @@ class TestSpecContracts(unittest.TestCase):
             VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
         )
 
+    def test_row_count_fraction_bounds(self):
+        spec = {
+            "domain": "DM",
+            "input": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}},
+                {"name": "VAL", "derivation": {"literal": "x"}},
+            ],
+            "verifications": [{"row_count": {
+                "id": "missing-rate",
+                "filter": "VAL IS NULL",
+                "max_fraction": 0.05,
+            }}],
+        }
+        self.assertEqual(
+            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+        )
+
+        spec["verifications"][0]["row_count"]["max_fraction"] = 1.1
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        self.assertIn("max_fraction: must be between 0 and 1", "\n".join(errors))
+
+        spec["verifications"][0]["row_count"].update(
+            {"min_fraction": 0.75, "max_fraction": 0.25}
+        )
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        self.assertIn("min_fraction must not exceed max_fraction", "\n".join(errors))
+
     def test_rejects_grouped_row_count_without_id_or_known_columns(self):
         spec = {
             "domain": "ADLB",
