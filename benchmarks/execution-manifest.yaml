@@ -618,6 +618,9 @@ examples:
   sdtm-dm-basic:
     status: executable
     runtimes: ['python']
+  sdtm-cm-odm-repeated:
+    status: executable
+    runtimes: ['python']
   sdtm-dm-age:
     status: executable
     runtimes: ['python']
