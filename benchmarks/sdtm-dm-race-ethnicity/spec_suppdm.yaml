@@ -4,6 +4,15 @@ keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 input:
   ODM: input/odm.csv
+  # DM is built by spec_dm.yaml in the same run, so the subjects that get
+  # supplemental race records are exactly the ones DM calls MULTIPLE.
+  DM:
+    path: dm.csv
+    schema: spec_dm.yaml
+
+intermediates:
+  - id: DMREC
+    dataset: DM
 
 output:
   path: suppdm.csv
@@ -38,32 +47,47 @@ columns:
     verifications:
       not_missing: {}
 
-  - name: RACEMIN
+  - name: ITEMOID
     type: str
-    label: Alphabetically First Reported Race
+    label: Collected Item
 
-  - name: RACESINGLE
+  - name: DMRACE
     type: str
-    label: Reported Race When One Race Was Reported
-
-  - name: RACECOUNT
-    type: int
-    label: Number of Distinct Reported Races
-
-  - name: QNAM
-    type: str
-    label: Qualifier Variable Name
-    verifications:
-      allowed_values:
-        values: [RACE1, RACE2]
-
-  - name: QLABEL
-    type: str
-    label: Qualifier Label
+    label: Race in Demographics
 
   - name: QVALRAW
     type: str
     label: Collected Race
+
+  - name: RACENUM
+    type: int
+    label: Race Number Within Subject
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [QVALRAW]
+
+  # str_template reads text only, so the number takes its text form first.
+  - name: RACENUMC
+    type: str
+    label: Race Number Within Subject as Text
+    derivation: RACENUM
+
+  - name: QNAM
+    type: str
+    label: Qualifier Variable Name
+    derivation:
+      str_template: "RACE{RACENUMC}"
+    verifications:
+      matches:
+        pattern: "^RACE[1-9][0-9]*$"
+
+  - name: QLABEL
+    type: str
+    label: Qualifier Label
+    derivation:
+      str_template: "Race {RACENUMC}"
 
   - name: QVAL
     type: str
@@ -102,81 +126,26 @@ columns:
       literal: null
 
 rows:
-  - id: first_reported_race
-    group_by: [ODM.StudyOID, ODM.SubjectKey]
-    filter: "RACEMIN < RACESINGLE"
+  # One candidate per distinct collected value of each subject's items, so a
+  # race marked twice still yields one record. Only race values of subjects
+  # DM calls MULTIPLE are kept, however many races they reported.
+  - id: reported_race
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemOID, ODM.Value]
+    filter: "ITEMOID = 'IT.DM.RACE' AND DMRACE = 'MULTIPLE'"
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
-      RACEMIN:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "MIN(ODM.Value)"
-      RACESINGLE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "MAX(ODM.Value)"
-      # The language has no COUNT(DISTINCT ...): count distinct races from the
-      # MIN/MAX distinctness signal instead, so duplicated identical rows do
-      # not inflate the count.
-      RACECOUNT:
-        case:
-          - when: "RACEMIN = RACESINGLE"
-            then:
-              literal: 1
-          - otherwise:
-              literal: 2
-      QVALRAW:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "MIN(ODM.Value)"
-      QNAM:
-        literal: RACE1
-      QLABEL:
-        literal: Race 1
-
-  - id: second_reported_race
-    group_by: [ODM.StudyOID, ODM.SubjectKey]
-    filter: "RACEMIN < RACESINGLE"
-    derivations:
-      STUDYID: ODM.StudyOID
-      USUBJID: ODM.SubjectKey
-      RACEMIN:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "MIN(ODM.Value)"
-      RACESINGLE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "MAX(ODM.Value)"
-      # The language has no COUNT(DISTINCT ...): count distinct races from the
-      # MIN/MAX distinctness signal instead, so duplicated identical rows do
-      # not inflate the count.
-      RACECOUNT:
-        case:
-          - when: "RACEMIN = RACESINGLE"
-            then:
-              literal: 1
-          - otherwise:
-              literal: 2
-      QVALRAW:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "MAX(ODM.Value)"
-      QNAM:
-        literal: RACE2
-      QLABEL:
-        literal: Race 2
+      ITEMOID: ODM.ItemOID
+      QVALRAW: ODM.Value
+      DMRACE: DMREC.RACE
 
 verifications:
   - unique:
       columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
-      min: 4
-      max: 4
-  - assert:
-      id: race-count-within-scope
-      expr: "RACECOUNT <= 2"
+      min: 9
+      max: 9
   - implies:
       id: race-value-has-parent-identifier
       when: "QVAL IS NOT NULL"

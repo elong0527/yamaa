@@ -693,9 +693,6 @@ examples:
   sdtm-se-subject-elements:
     status: executable
     runtimes: ['python']
-  sdtm-supdm-race-selections:
-    status: executable
-    runtimes: ['python']
   sdtm-suppmh-linkage:
     status: executable
     runtimes: ['python']
