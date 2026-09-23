@@ -13,6 +13,8 @@ input:
 intermediates:
   - id: DMREC
     dataset: DM
+    key: [STUDYID, USUBJID]
+    key_base: [ODM.StudyOID, ODM.SubjectKey]
 
 output:
   path: suppdm.csv

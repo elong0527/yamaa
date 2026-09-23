@@ -33,6 +33,7 @@ from yamaa.expressions.strings import (
     parse_template_cached,
     template_identifiers,
 )
+from yamaa.io.project import ProjectResources
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError, ValidationDiagnostic
 from yamaa.specification.models import Specification
@@ -171,6 +172,14 @@ def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -
             value = output.get(name)
             if isinstance(value, str):
                 output[name] = _rebase_path(value, layer, entry)
+    rows = document.get("rows")
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            catalog = row.get("catalog")
+            if isinstance(catalog, dict) and isinstance(catalog.get("path"), str):
+                catalog["path"] = _rebase_path(catalog["path"], layer, entry)
 
 
 def _layer_input_paths(
@@ -1295,6 +1304,7 @@ def resolve_specification(
     schema_bundle: SchemaBundle,
     *,
     entry_document: object | None = None,
+    resources: ProjectResources | None = None,
 ) -> ResolvedSpecification:
     """Resolve one local R017 graph into a complete specification.
 
@@ -1416,6 +1426,9 @@ def resolve_specification(
     resolved, provenance, diagnostics = _merge_layers(contributions, schema_bundle)
     if diagnostics:
         raise SpecificationError(diagnostics)
+    from yamaa.schema.row_catalog import expand_row_catalogs
+
+    resolved = expand_row_catalogs(resolved, entry_path, resources)
     if "parents" in raw_entry:
         resolved = _prune(resolved, schema_bundle)
         resolved, diagnostics = _order_columns(resolved, schema_bundle)
