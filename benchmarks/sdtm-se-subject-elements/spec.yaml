@@ -2,13 +2,17 @@ schema_version: "1.0"
 domain: SE
 keys: [STUDYID, USUBJID, ETCD]
 input:
+  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFXENDTC: date}}
   ODM: input/odm.csv
+base: ODM
 
-# One base row per ODM context, i.e. one per subject per study event. The
-# subject's study events ARE the elements they entered: the fixture carries
-# each element's trial-design attributes (IT.TE.*/IT.TA.*) and the
-# subject-level reference items (IT.DM.*/IT.EX.*) on every event, so each SE
-# record derives from its own ODM context.
+# One output row per key combination (REQ-0042): the ODM driver supplies one
+# row per subject per study event, and the subject's study events ARE the
+# elements they entered. The ODM extract carries each element's trial-design
+# attributes (IT.TE.*/IT.TA.*) and the dosing dates (IT.EX.*) on every event,
+# so each SE record derives from its own ODM context. DM is a subject-level
+# table; its columns join implicitly on the keys DM shares with the output
+# (REQ-0150: STUDYID, USUBJID).
 
 output:
   path: se.csv
@@ -71,26 +75,17 @@ columns:
   - name: RFICDTC
     type: date
     label: Informed Consent Date
-    derivation:
-      source:
-        filter: ODM.ItemOID = 'IT.DM.RFICDTC'
-        variable: ODM.Value
+    derivation: DM.RFICDTC
 
   - name: RFSTDTC
     type: date
     label: Reference Start Date
-    derivation:
-      source:
-        filter: ODM.ItemOID = 'IT.DM.RFSTDTC'
-        variable: ODM.Value
+    derivation: DM.RFSTDTC
 
   - name: RFXENDTC
     type: date
     label: End of Study Participation Date
-    derivation:
-      source:
-        filter: ODM.ItemOID = 'IT.DM.RFXENDTC'
-        variable: ODM.Value
+    derivation: DM.RFXENDTC
 
   - name: FIRSTDTC
     type: date
