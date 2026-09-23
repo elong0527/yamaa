@@ -4,3 +4,8 @@ CATH-01,CATH-01-001,2,,0,HEADACHE,headache,possibly related,POSSIBLY RELATED
 CATH-01,CATH-01-001,3,BAD-ID,-1,Nausea,nausea,not reported,NOT REPORTED
 CATH-01,CATH-01-002,1,AE-104,104,Fatigue,fatigue,not related,NOT RELATED
 CATH-01,CATH-01-002,2,,0,Dizziness,dizziness,not related,NOT RELATED
+CATH-01,CATH-01-002,3,AE-999,999,hEADACHE,headache,related,RELATED
+CATH-01,CATH-01-003,1,AE-000,0,Vomiting,vomiting,not related,NOT RELATED
+CATH-01,CATH-01-003,2,AE-1000,-1,Abdominal Pain,abdominal pain,possibly related,POSSIBLY RELATED
+CATH-01,CATH-01-003,3,ae-007,-1,Rash,rash,not reported,NOT REPORTED
+CATH-01,CATH-01-003,4,AE-007,7,Pruritus,pruritus,not related,NOT RELATED
