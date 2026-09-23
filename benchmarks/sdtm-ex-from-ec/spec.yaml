@@ -24,56 +24,68 @@ intermediates:
     key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     key: [StudyOID, SubjectKey, StudyEventOID]
     filter: "ODM.ItemOID = 'IT.VS.WEIGHT'"
+  # The occurrence item is unique at the form level, so it can anchor rows.
+  - id: EC_OCCUR
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR'"
+    verification:
+      unique: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+  # Each item lookup matches the collected EC form selected below.
+  - id: EC_FORM
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.FORM'"
+  - id: EC_ECTRT
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.ECTRT'"
+  - id: EC_TABLETS
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.TABLETS'"
+  - id: EC_STRENGTHMG
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.STRENGTHMG'"
+  - id: EC_DOSEMKG
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.DOSEMKG'"
+  - id: EC_AUCTARGET
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.AUCTARGET'"
+  - id: EC_KIT
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.KIT'"
+  - id: EC_ECSTDTC
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.ECSTDTC'"
+  - id: EC_ECENDTC
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.ECENDTC'"
 
 rows:
-  # One output row per collected EC form. A skipped dose (ECOCCUR = 'N')
-  # is filtered before any derivation, so it leaves no exposure record.
-  # VS forms group separately and are filtered out the same way.
+  # One occurrence item anchors each administered EC form; skipped doses
+  # and VS items do not construct exposure rows.
   - id: administered
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
-    filter: "ECOCCUR = 'Y'"
-    derivations:
-      ECOCCUR:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR'"
-          expr: "ONLY(ODM.Value)"
-      FORM:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.FORM'"
-          expr: "ONLY(ODM.Value)"
-      ECTRT:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECTRT'"
-          expr: "ONLY(ODM.Value)"
-      TABLETS:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.TABLETS'"
-          expr: "ONLY(ODM.Value)"
-      STRENGTHMG:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.STRENGTHMG'"
-          expr: "ONLY(ODM.Value)"
-      DOSEMKG:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.DOSEMKG'"
-          expr: "ONLY(ODM.Value)"
-      AUCTARGET:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.AUCTARGET'"
-          expr: "ONLY(ODM.Value)"
-      KIT:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.KIT'"
-          expr: "ONLY(ODM.Value)"
-      ECSTDTC:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECSTDTC'"
-          expr: "ONLY(ODM.Value)"
-      ECENDTC:
-        aggregate:
-          filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECENDTC'"
-          expr: "ONLY(ODM.Value)"
+    filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR' AND ODM.Value = 'Y'"
+    derivations: {}
 
 output:
   path: ex.csv
@@ -97,45 +109,50 @@ columns:
     derivation: ODM.SubjectKey
 
   # Internal working columns are omitted from the output artifact.
-  - name: ECOCCUR
-    type: str
-    label: Occurrence as collected
-
   - name: FORM
     type: str
     label: Dose form as collected
+    derivation: EC_FORM.Value
 
   - name: ECTRT
     type: str
     label: Treatment as collected
+    derivation: EC_ECTRT.Value
 
   - name: TABLETS
     type: float
     label: Tablets taken as collected
+    derivation: EC_TABLETS.Value
 
   - name: STRENGTHMG
     type: float
     label: Tablet strength in mg as collected
+    derivation: EC_STRENGTHMG.Value
 
   - name: DOSEMKG
     type: float
     label: Dose in mg per kg as collected
+    derivation: EC_DOSEMKG.Value
 
   - name: AUCTARGET
     type: float
     label: AUC target as collected
+    derivation: EC_AUCTARGET.Value
 
   - name: KIT
     type: str
     label: Kit number as collected
+    derivation: EC_KIT.Value
 
   - name: ECSTDTC
     type: str
     label: Administration start as collected
+    derivation: EC_ECSTDTC.Value
 
   - name: ECENDTC
     type: str
     label: Administration end as collected
+    derivation: EC_ECENDTC.Value
 
   - name: FRMREP
     type: int
