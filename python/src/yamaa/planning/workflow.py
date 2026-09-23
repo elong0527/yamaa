@@ -276,20 +276,48 @@ def _producer_contract(
     return ProducerContract(fields=tuple(fields))
 
 
+def _layer_view(
+    resources: ProjectResources,
+    resolved: ResolvedSpecification,
+    logical: str,
+    spelling: str,
+) -> tuple[ProjectResources, str]:
+    """Resolve a path from the layer that wrote it, as it wrote it (REQ-0780)."""
+    origin = resolved.layer_paths.get(logical)
+    if origin is None:
+        return resources, spelling
+    return resources.with_base_directory(origin.directory), origin.written
+
+
+def _layer_origins(
+    resolved: ResolvedSpecification, datasets: Mapping[str, DatasetSource]
+) -> dict[str, tuple[Path, str]]:
+    """Return where each dataset's path was written and how it was spelled."""
+    origins: dict[str, tuple[Path, str]] = {}
+    for dataset in datasets:
+        origin = resolved.layer_paths.get(f"input.{dataset}.path")
+        if origin is not None:
+            origins[dataset] = (origin.directory, origin.written)
+    return origins
+
+
 def _schema_snapshot(
     resources: ProjectResources,
+    written: str,
     source: DatasetSource,
     dataset: str,
-) -> ResourceSnapshot:
+) -> tuple[ResourceSnapshot, Path]:
     assert source.schema_path is not None
     try:
-        snapshot = resources.capture(source.schema_path)
+        snapshot = resources.capture(written)
         resources.verify(snapshot)
-        return snapshot
+        # REQ-1246: the producing specification may be found under the
+        # project root, so its location is the file the walk reached.
+        return snapshot, resources.locate(written)
     except ResourceFailure as error:
         context: dict[str, object] = {"dataset": dataset, "path": source.schema_path}
         if error.condition == "resource_path_missing":
-            checked = resources.fallback_root_count(source.schema_path)
+            checked = resources.fallback_root_count(written)
             if checked:
                 context["data_roots_checked"] = checked
         raise SpecificationError(
@@ -370,12 +398,33 @@ def plan_workflow(
                     )
                 raise SpecificationError(diagnostics)
 
-            snapshot = _schema_snapshot(node_resources, source, dataset)
-            producer_path = _physical_path(canonical, source.schema_path)
+            schema_view, schema_written = _layer_view(
+                node_resources, resolved, f"input.{dataset}.schema", source.schema_path
+            )
+            snapshot, producer_path = _schema_snapshot(
+                schema_view, schema_written, source, dataset
+            )
             producer_document = read_yaml_bytes(snapshot.content, producer_path)
             producer_node = visit(producer_path, producer_document)
             contract = _producer_contract(producer_node.resolved, dataset)
-            consumer_artifact = _physical_path(canonical, source.path)
+            path_view, path_written = _layer_view(
+                node_resources, resolved, f"input.{dataset}.path", source.path
+            )
+            try:
+                # REQ-1247: the artifact does not exist yet, so its path names
+                # the location of its first anchor.
+                consumer_artifact = path_view.location(path_written)
+            except ResourceFailure as error:
+                raise SpecificationError(
+                    [
+                        _diagnostic(
+                            error.condition,
+                            f"input.{dataset}.path",
+                            "REQ-0534",
+                            {"dataset": dataset, "path": source.path},
+                        )
+                    ]
+                ) from error
             producer_artifact = _physical_path(
                 producer_path,
                 producer_node.resolved.specification.output.path,
@@ -466,12 +515,14 @@ def execute_workflow(
             selected_snapshots: Mapping[str, ResourceSnapshot] = snapshots,
             captured: dict[str, LoadedDataset] = node_sources,
             node_path: Path = node.entry_path,
+            resolved: ResolvedSpecification = node.resolved,
         ) -> Mapping[str, LoadedDataset]:
             loaded = load_source_tables(
                 datasets,
                 resources.with_base_directory(base_directory),
                 producer_contracts=selected_contracts,
                 producer_snapshots=selected_snapshots,
+                origins=_layer_origins(resolved, datasets),
             )
             captured.update(loaded)
             if event is not None:

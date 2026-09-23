@@ -87,9 +87,11 @@ did not write, while a study run by its own authors approves its own data.
 [Specification composition](../specification/composition.md) reaches contributes declarations that are read against the same approved
 roots. A layer stored outside the project root contributes a `project_path`
 that [Specification composition](../specification/composition.md) rebases to the entry file, and the rebased form must satisfy this
-contract; a relative path from such a layer reaches a readable source only
-when the rebased form resolves inside an approved root, while a rooted path
-it writes is decided against the approved roots like any other.
+contract. A relative path from such a layer is read from the layer's
+directory only when that location resolves inside an approved root; otherwise
+the approved project root is its first anchor under
+[REQ-0781](resources.md#req-0781). A rooted path it writes is decided against
+the approved roots like any other.
 
 ### The written form
 
@@ -158,24 +160,32 @@ repository-authored value.
 **REQ-0780.** A relative `project_path` resolves relative to the directory of
 the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require. In a resolved
 specification it is relative to the entry file, because [Specification composition](../specification/composition.md) has already
-rebased it. When that resolution reaches no entry, the run retries the written
-segments against each approved data root in run order, the first success
-winning. A rooted `project_path` resolves against the approved root it
+rebased it, and the rebased form names that same location. When that
+resolution reaches no entry, the run retries the path exactly as its layer
+wrote it: first against the approved project root, then against each approved
+data root in run order, the first success winning. The retry needs the layer's
+own spelling, which the rebased form no longer shows, so it is taken from the
+provenance [Specification composition](../specification/composition.md) keeps. A rooted `project_path` resolves against the approved root it
 names and is unaffected by rebasing, which leaves it exactly as written,
 because this contract reads that written form.
 
 <a id="req-0781"></a>
 
 **REQ-0781.** Every resolution has an **anchor**. A relative path is anchored
-at the approved root the writing layer's directory sits under -- the approved
-project root when the layer is inside it. Only a resolution that reaches no
-entry advances to the next anchor, the approved data roots in run order; any
-other condition -- a symlink, a non-regular file, a location inside no
-approved root, a rejected written form -- is terminal. The writing layer's
-directory therefore wins when the entry exists under both it and a data root,
-and the first declared data root wins among data roots. A traversal that
-climbs above that
-root is re-anchored at the approved root whose canonical leading segments the
+first at the approved root that the location it names from the writing
+layer's directory sits under -- the approved project root when the layer is
+inside it. If that location is inside no approved root and the writing layer's
+directory is outside every approved root too, it is not an anchor, because the
+run reads nothing there, and the path begins at the next anchor. Only a
+resolution that reaches no entry advances to the next anchor: the approved
+project root, then the approved data roots in run order. A later anchor that
+the written path climbs out of is skipped. Any other condition -- a symlink, a
+non-regular file, a traversal from a writing directory inside an approved root
+that leaves every approved root, a rejected written form -- is terminal. The
+writing layer's directory therefore wins when the entry exists under both it
+and another anchor, the project root wins over every data root, and the first
+declared data root wins among data roots. A traversal that climbs above an
+anchor's root is re-anchored at the approved root whose canonical leading segments the
 resolved location repeats, the longest match winning when one approved root
 lies inside another, exactly as for a rooted path. A traversal that resolves
 inside no approved root fails as `resource_path_outside_project`: it reaches
@@ -186,6 +196,29 @@ filesystem is consulted, the longest match winning when one approved root lies
 inside another. A rooted path that repeats no approved root's leading segments
 names no location this run approved and fails as `resource_path_not_relative`:
 it is relative to nothing the runner allowed.
+
+<a id="req-1246"></a>
+
+**REQ-1246.** The approved project root is the anchor after the writing
+layer's directory, so a layer shared by several studies can declare an input
+dataset once -- its identifier, field types, and empty-string convention --
+while each study keeps the stored file under its own project root. A study
+whose project configuration sits in its own directory makes that directory its
+project root. A shared layer's `input/dm.csv` that is absent beside the shared
+layer then reads that study's `input/dm.csv`. No specification field chooses
+an anchor, and every anchor is an approved root fixed under
+[REQ-0770](resources.md#req-0770), so the retry never reaches a location the
+run did not approve.
+
+<a id="req-1247"></a>
+
+**REQ-1247.** A relative `path` that names an artifact the run itself
+produces, through the `schema` link of [Source ingestion](ingestion.md),
+denotes the location of its first anchor. That file does not exist until its
+producer publishes it, so there is no missing entry to retry, and the
+producer's `output.path` must publish to that location. The producing
+specification that `schema` names already exists, and it resolves like any
+other relative path.
 
 <a id="req-0782"></a>
 
@@ -327,6 +360,7 @@ Representative specifications, input data, and expected outcomes:
 - [negative-path-directory](../../benchmarks/negative-path-directory/README.md).
 - [negative-path-missing](../../benchmarks/negative-path-missing/README.md).
 - [negative-path-parent-escape](../../benchmarks/negative-path-parent-escape/README.md).
+- [schema-inheritance-project-root](../../benchmarks/schema-inheritance-project-root/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

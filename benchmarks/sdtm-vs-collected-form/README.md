@@ -13,8 +13,7 @@ the visit name in `VISIT` and the measurement date in `VSDTC`.
 collected form item, with the collected entry in the value field.
 Each visit contributes one vitals form group: the visit date, body
 position, temperature method, each measurement with its unit, and the
-blood pressure not-done flag with its reason, each as its own item,
-item.
+blood pressure not-done flag with its reason, each as its own item.
 
 **Variables:**
 

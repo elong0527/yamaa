@@ -1,0 +1,248 @@
+schema_version: "1.0"
+domain: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+
+input:
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, FormRepeatKey: int, ItemGroupRepeatKey: int}
+  KITLIST: input/kit_list.csv
+
+base: ODM
+
+intermediates:
+  # The kit list comes from the IRT system, not the EDC, so it stays a
+  # lookup input rather than ODM items.
+  - id: KITMAP
+    dataset: KITLIST
+    key: [KIT]
+  # Body weight is collected on the VS form at the same visit. The lookup
+  # is keyed at the visit level; the weight item filter is what makes the
+  # long-form ODM key unique (the HEIGHT item on the same form is ignored).
+  - id: VISITWT
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    key: [StudyOID, SubjectKey, StudyEventOID]
+    filter: "ODM.ItemOID = 'IT.VS.WEIGHT'"
+  # The occurrence item is unique at the form level, so it can anchor rows.
+  - id: EC_OCCUR
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR'"
+    verification:
+      unique: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+  # Each item lookup matches the collected EC form selected below.
+  - id: EC_FORM
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.FORM'"
+  - id: EC_ECTRT
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.ECTRT'"
+  - id: EC_TABLETS
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.TABLETS'"
+  - id: EC_STRENGTHMG
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.STRENGTHMG'"
+  - id: EC_DOSEMKG
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.DOSEMKG'"
+  - id: EC_AUCTARGET
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.AUCTARGET'"
+  - id: EC_KIT
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.KIT'"
+  - id: EC_ECSTDTC
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.ECSTDTC'"
+  - id: EC_ECENDTC
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+    filter: "ODM.ItemOID = 'IT.EC.ECENDTC'"
+
+rows:
+  - id: administered
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.EC.ECOCCUR' AND ODM.Value = 'Y'"
+    derivations: {}
+
+output:
+  path: ex.csv
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC]
+  order_by: [STUDYID, USUBJID, EXSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: EX}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  # Internal working columns are omitted from the output artifact.
+  - name: FORM
+    type: str
+    label: Dose form as collected
+    derivation: EC_FORM.Value
+
+  - name: ECTRT
+    type: str
+    label: Treatment as collected
+    derivation: EC_ECTRT.Value
+
+  - name: TABLETS
+    type: float
+    label: Tablets taken as collected
+    derivation: EC_TABLETS.Value
+
+  - name: STRENGTHMG
+    type: float
+    label: Tablet strength in mg as collected
+    derivation: EC_STRENGTHMG.Value
+
+  - name: DOSEMKG
+    type: float
+    label: Dose in mg per kg as collected
+    derivation: EC_DOSEMKG.Value
+
+  - name: AUCTARGET
+    type: float
+    label: AUC target as collected
+    derivation: EC_AUCTARGET.Value
+
+  - name: KIT
+    type: str
+    label: Kit number as collected
+    derivation: EC_KIT.Value
+
+  - name: ECSTDTC
+    type: str
+    label: Administration start as collected
+    derivation: EC_ECSTDTC.Value
+
+  - name: ECENDTC
+    type: str
+    label: Administration end as collected
+    derivation: EC_ECENDTC.Value
+
+  - name: FRMREP
+    type: int
+    label: EC form repeat within the visit
+    derivation: ODM.FormRepeatKey
+
+  - name: KIT_TRT
+    type: str
+    label: Treatment from the kit list
+    derivation: KITMAP.TREATMENT
+
+  - name: KIT_DOSE
+    type: float
+    label: Dose from the kit list
+    derivation: KITMAP.DOSE_MG
+
+  - name: WT_KG
+    type: float
+    label: Visit body weight in kg
+    derivation: VISITWT.Value
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+    derivation:
+      case:
+        - when: "FORM = 'KITDOSE'"
+          then: KIT_TRT
+        - otherwise: ECTRT
+    verifications:
+      - not_missing: {}
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+    derivation:
+      case:
+        - when: "FORM = 'TABLET'"
+          then:
+            compute:
+              expr: "TABLETS * STRENGTHMG"
+        - when: "FORM = 'INFUSION'"
+          then:
+            compute:
+              expr: "DOSEMKG * WT_KG"
+        - when: "FORM = 'AUCDOSE'"
+          then: AUCTARGET
+        - otherwise: KIT_DOSE
+    verifications:
+      - not_missing: {}
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+    derivation:
+      case:
+        - when: "FORM = 'AUCDOSE'"
+          then: {literal: AUC}
+        - otherwise: {literal: mg}
+    verifications:
+      allowed_values:
+        values: [mg, AUC]
+
+  - name: EXSTDTC
+    type: date
+    label: Start Date/Time of Treatment
+    derivation: ECSTDTC
+
+  - name: EXENDTC
+    type: date
+    label: End Date/Time of Treatment
+    derivation: ECENDTC
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EXSTDTC, FRMREP]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, EXSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: every-administration-has-dose-and-unit
+      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+  - implies:
+      id: placebo-kit-carries-zero-dose
+      when: "EXTRT = 'PLACEBO'"
+      then: "EXDOSE = 0"

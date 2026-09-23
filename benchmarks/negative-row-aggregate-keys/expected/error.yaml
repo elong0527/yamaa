@@ -1,0 +1,9 @@
+phase: validation
+condition: invalid_aggregate_context
+spec_paths:
+  - rows[0].derivations.RACECOUNT.aggregate.key
+  - rows[0].derivations.RACECOUNT.aggregate.key_base
+requirement: REQ-0142
+context:
+  expr: "COUNT(ODM.*)"
+  reason: a grouped row aggregate reads its own group and declares no key pairs

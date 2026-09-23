@@ -291,6 +291,9 @@ examples:
   negative-row-aggregate:
     status: executable
     runtimes: ['python']
+  negative-row-aggregate-keys:
+    status: executable
+    runtimes: ['python']
   negative-formula-flag:
     status: executable
     runtimes: ['python']
@@ -645,6 +648,9 @@ examples:
   sdtm-ex-intervals:
     status: executable
     runtimes: ['python']
+  sdtm-ex-from-ec:
+    status: executable
+    runtimes: ['python']
   sdtm-fa-fever:
     status: executable
     runtimes: ['python']
@@ -673,6 +679,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-relrec-links:
+    status: executable
+    runtimes: ['python']
+  sdtm-mh-ongoing-conditions:
     status: executable
     runtimes: ['python']
   sdtm-rs-timepoint-response:
@@ -706,6 +715,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-inheritance:
+    status: executable
+    runtimes: ['python']
+  schema-inheritance-project-root:
     status: executable
     runtimes: ['python']
   schema-inherited-output:

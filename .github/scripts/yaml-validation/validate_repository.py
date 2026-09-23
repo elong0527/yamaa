@@ -3236,7 +3236,9 @@ def _iter_inline_class_reference_paths(data, fields, env, path, scope=None):
             )
 
 
-def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
+def validate_retired_odm_item_references(
+    spec, spec_label, spec_path, env, sources=None
+):
     """Reject an ODM contextual item reference.
 
     A long-form ODM relation carries `ItemOID` and `Value`, and REQ-0096
@@ -3248,7 +3250,9 @@ def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
     """
     long_form = {
         dataset: fields
-        for dataset, fields in dataset_type_catalog(spec, spec_path, env).items()
+        for dataset, fields in dataset_type_catalog(
+            spec, spec_path, env, sources
+        ).items()
         if 'ItemOID' in fields and 'Value' in fields
     }
     if not long_form:
@@ -4947,21 +4951,112 @@ def resolve_project_path(written, base_dir, project_root, data_roots=()):
             return None, 'resource_path_not_regular_file'
         return walk_below_anchor(written, anchor, remainder, anchor)
 
-    try:
-        depth = len(Path(base_dir).resolve().relative_to(root).parts)
-    except (OSError, ValueError):
+    approved = [root]
+    for candidate in data_roots:
+        try:
+            resolved = Path(candidate).resolve(strict=True)
+        except OSError:
+            continue
+        if resolved.is_dir() and resolved not in approved:
+            approved.append(resolved)
+
+    # REQ-0781: the writing layer's directory is the first anchor. From a
+    # directory inside an approved root, a traversal that leaves every root is
+    # terminal; a layer stored outside every root is an anchor only where its
+    # path climbs into one.
+    base = Path(base_dir).resolve()
+    anchors = []
+    first = textual_location(written, base)
+    first_root = containing_root(first, approved)
+    if containing_root(base, approved) is not None and first_root is None:
         return None, 'resource_path_outside_project'
+    if first_root is not None:
+        anchors.append((first_root, first))
+    # REQ-0780/REQ-1246: then the project root and each data root in order,
+    # each reading the spelling as the layer wrote it. A root the spelling
+    # climbs out of does not participate.
+    for candidate in approved:
+        location = textual_location(written, candidate)
+        owner = containing_root(location, approved)
+        if owner is not None and (owner, location) not in anchors:
+            anchors.append((owner, location))
+    if not anchors:
+        return None, 'resource_path_outside_project'
+    for owner, location in anchors:
+        segments = location.relative_to(owner).parts
+        if not segments:
+            return None, 'resource_path_not_regular_file'
+        accepted, condition = walk_below_anchor(written, owner, segments, owner)
+        if condition != 'resource_path_missing':
+            return accepted, condition
+    return None, 'resource_path_missing'
+
+
+def textual_location(written, start):
+    """Resolve a relative written path against a directory, text only."""
+    parts = list(start.parts)
     for segment in written.split('/'):
         if segment == '.':
             continue
         if segment == '..':
-            depth -= 1
-            if depth < 0:
-                return None, 'resource_path_outside_project'
+            if len(parts) > 1:
+                parts.pop()
         else:
-            depth += 1
+            parts.append(segment)
+    return Path(*parts)
 
-    return walk_below_anchor(written, Path(base_dir), written.split('/'), root)
+
+def containing_root(location, roots):
+    """Return the innermost approved root a location sits under, if any."""
+    matches = [
+        root for root in roots if location == root or root in location.parents
+    ]
+    return max(matches, key=lambda root: len(root.parts)) if matches else None
+
+
+def resolved_source_files(spec, spec_path, project_root, provenance):
+    """Map (dataset, field) to the file each relative input path reaches."""
+    files = {}
+    datasets = spec.get('input') if isinstance(spec, dict) else None
+    if spec_path is None or not isinstance(datasets, dict):
+        return files
+    data_roots = project_data_roots(project_root)
+    for dataset_id, source in datasets.items():
+        fields = {'path': source} if isinstance(source, str) else source
+        if not isinstance(fields, dict):
+            continue
+        for field in ('path', 'schema'):
+            written = fields.get(field)
+            if not isinstance(written, str):
+                continue
+            base_dir, spelling = layer_written_path(
+                written, f"input.{dataset_id}.{field}", provenance, spec_path
+            )
+            accepted, condition = resolve_project_path(
+                spelling, base_dir, project_root, data_roots
+            )
+            if condition is None:
+                files[(dataset_id, field)] = accepted
+    return files
+
+
+def layer_written_path(written, logical, provenance, spec_path):
+    """Return the directory and spelling the layer that wrote a path used.
+
+    REQ-0780 retries a relative path in its layer's own spelling, which the
+    rebased form of REQ-0636 no longer shows. Provenance names the layer, and
+    the rebased form still names the same location from the entry file.
+    """
+    source = (provenance or {}).get(logical)
+    entry_directory = spec_path.parent
+    if source is None or rooted_project_segments(written) is not None:
+        return entry_directory, written
+    layer_directory = Path(source).resolve().parent
+    entry_resolved = entry_directory.resolve()
+    if layer_directory == entry_resolved:
+        return entry_directory, written
+    target = os.path.normpath(entry_resolved / written)
+    return layer_directory, Path(os.path.relpath(target, layer_directory)).as_posix()
 
 
 def resource_path_error(path, written, condition):
@@ -5033,6 +5128,7 @@ SOURCE_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
 
 def validate_spec_contracts(
     spec, spec_label, spec_path=None, project_root=None, snapshots=None,
+    provenance=None, sources=None,
 ):
     """Validate static cross-field contracts from normative rules."""
     errors = []
@@ -5122,7 +5218,7 @@ def validate_spec_contracts(
 
     intermediates = spec.get('intermediates')
     if isinstance(intermediates, list):
-        catalog = dataset_type_catalog(spec, spec_path)
+        catalog = dataset_type_catalog(spec, spec_path, sources=sources)
         root_keys = spec.get('keys')
         root_keys = root_keys if isinstance(root_keys, list) else []
         for index, intermediate in enumerate(intermediates):
@@ -5393,8 +5489,11 @@ def validate_spec_contracts(
             if not isinstance(source_path, str):
                 continue
             path = f"{spec_label}.input.{dataset_id}"
+            base_dir, written = layer_written_path(
+                source_path, f"input.{dataset_id}.path", provenance, spec_path
+            )
             resolved, condition = resolve_project_path(
-                source_path, spec_path.parent, project_root,
+                written, base_dir, project_root,
                 project_data_roots(project_root),
             )
             if condition is not None:
@@ -5470,8 +5569,13 @@ def specification_column_types(spec):
     }
 
 
-def dataset_type_catalog(spec, spec_path, env=None):
-    """Return statically discoverable field types for each dataset."""
+def dataset_type_catalog(spec, spec_path, env=None, sources=None):
+    """Return statically discoverable field types for each dataset.
+
+    ``sources`` maps a dataset to the files its relative ``path`` and
+    ``schema`` reach under REQ-0780, which an inherited path absent beside
+    its layer finds under the project root rather than beside the entry.
+    """
     catalog = {}
     datasets = spec.get('input')
     if not isinstance(datasets, dict):
@@ -5497,7 +5601,9 @@ def dataset_type_catalog(spec, spec_path, env=None):
             # against the approved roots before anything opens it.
             and rooted_project_segments(producer_path) is None
         ):
-            resolved = spec_path.parent / producer_path
+            resolved = (sources or {}).get((dataset_id, 'schema')) or (
+                spec_path.parent / producer_path
+            )
             try:
                 with open(resolved, 'r', encoding='utf-8') as handle:
                     producer = yaml.load(handle, Loader=UniqueKeyLoader)
@@ -5520,7 +5626,9 @@ def dataset_type_catalog(spec, spec_path, env=None):
             and classify_written_project_path(source_path) is None
             and rooted_project_segments(source_path) is None
         ):
-            resolved = spec_path.parent / source_path
+            resolved = (sources or {}).get((dataset_id, 'path')) or (
+                spec_path.parent / source_path
+            )
             delimiter = '\t' if source_path.lower().endswith('.tsv') else ','
             try:
                 with open(resolved, 'r', encoding='utf-8', newline='') as handle:
@@ -5558,7 +5666,7 @@ def iter_function_calls(value, path):
             yield from iter_function_calls(child, f"{path}[{index}]")
 
 
-def validate_spec_functions(spec, spec_label, spec_path, schema_env):
+def validate_spec_functions(spec, spec_label, spec_path, schema_env, sources=None):
     """Validate calls against R018 when an implementation is supplied."""
     calls = []
     columns = spec.get('columns')
@@ -5609,6 +5717,7 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
                 calls,
                 column_types,
                 environment_path,
+                sources,
             )
         )
     )
@@ -5640,6 +5749,7 @@ def validate_spec_functions_against(
     calls,
     column_types,
     environment_path,
+    sources=None,
 ):
     """Validate one specification's calls against one project root."""
     if not environment_path.is_file():
@@ -5698,7 +5808,7 @@ def validate_spec_functions_against(
             resolved_functions[function_name] = resolved
     functions = resolved_functions
 
-    datasets = dataset_type_catalog(spec, spec_path, schema_env)
+    datasets = dataset_type_catalog(spec, spec_path, schema_env, sources)
     intermediates = intermediate_type_catalog(spec, datasets, spec_label)
 
     def resolve_variable(name):
@@ -6113,10 +6223,12 @@ def validate_lookup_filter_scopes(spec, spec_label, env):
     return errors
 
 
-def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
+def validate_spec_predicates(
+    spec, spec_label, spec_path=None, env=None, sources=None
+):
     """Parse, resolve, and type-check every R004 predicate in a spec."""
     errors = validate_lookup_filter_scopes(spec, spec_label, env)
-    datasets = dataset_type_catalog(spec, spec_path, env)
+    datasets = dataset_type_catalog(spec, spec_path, env, sources)
     output_types = specification_column_types(spec)
     intermediates = {}
     intermediate_entries = spec.get('intermediates')
@@ -6369,11 +6481,11 @@ def validate_derivation_numeric(derivation, path, resolver):
 
 
 def validate_spec_numeric_expressions(
-    spec, spec_label, spec_path=None, env=None
+    spec, spec_label, spec_path=None, env=None, sources=None
 ):
     """Parse, resolve, and type-check every R010 expression in a spec."""
     errors = []
-    datasets = dataset_type_catalog(spec, spec_path, env)
+    datasets = dataset_type_catalog(spec, spec_path, env, sources)
     output_types = specification_column_types(spec)
     intermediates = intermediate_type_catalog(spec, datasets, spec_label)
 
@@ -7204,6 +7316,19 @@ def validate_aggregate_at(payload, path, context):
                     context={'reason': 'grouped_row_local_group_by'},
                 )
             )
+        # REQ-0142: the group is the match, so a key pair could only be
+        # ignored; it never widens the read to the scope it names.
+        for field in ('key', 'key_base'):
+            if isinstance(payload, dict) and payload.get(field) is not None:
+                errors.append(
+                    validation_diagnostic(
+                        f"{path}.{field}",
+                        'invalid_aggregate_context',
+                        'grouped-row aggregate reads its own group and '
+                        'declares no key pairs',
+                        context={'reason': 'grouped_row_key_pairs'},
+                    )
+                )
         grouped = set(context.get('row_group_by') or [])
         fields = datasets.get(driver, {})
         resolver = numeric_identifier_resolver(
@@ -8304,10 +8429,10 @@ def derivation_primary_path(spec, spec_label, name):
     return f"{spec_label}.columns.{name}.derivation"
 
 
-def validate_spec_static_semantics(spec, spec_label, spec_path, env):
+def validate_spec_static_semantics(spec, spec_label, spec_path, env, sources=None):
     """Validate static operation, aggregate, template, and graph contracts."""
     errors = []
-    datasets = dataset_type_catalog(spec, spec_path, env)
+    datasets = dataset_type_catalog(spec, spec_path, env, sources)
     output_types = specification_column_types(spec)
     intermediate_entries = spec.get('intermediates')
     intermediates = intermediate_type_catalog(spec, datasets, spec_label)
@@ -8568,30 +8693,42 @@ def validate_spec_document(
     errors.extend(validate_type(spec, ['root_class'], env, spec_label))
     errors.extend(validate_grouped_rows(spec, spec_label))
     errors.extend(validate_spec_names(spec, spec_label))
+    sources = resolved_source_files(spec, spec_path, project_root, provenance)
     errors.extend(
-        validate_retired_odm_item_references(spec, spec_label, spec_path, env)
+        validate_retired_odm_item_references(
+            spec, spec_label, spec_path, env, sources
+        )
     )
     errors.extend(validate_column_labels(spec, spec_label))
     errors.extend(
         validate_spec_contracts(
-            spec, spec_label, spec_path, project_root, snapshots
+            spec, spec_label, spec_path, project_root, snapshots, provenance,
+            sources,
         )
     )
-    errors.extend(validate_spec_predicates(spec, spec_label, spec_path, env))
     errors.extend(
-        validate_spec_numeric_expressions(spec, spec_label, spec_path, env)
+        validate_spec_predicates(spec, spec_label, spec_path, env, sources)
     )
     errors.extend(
-        validate_spec_static_semantics(spec, spec_label, spec_path, env)
+        validate_spec_numeric_expressions(
+            spec, spec_label, spec_path, env, sources
+        )
     )
-    errors.extend(validate_spec_functions(spec, spec_label, spec_path, env))
+    errors.extend(
+        validate_spec_static_semantics(
+            spec, spec_label, spec_path, env, sources
+        )
+    )
+    errors.extend(
+        validate_spec_functions(spec, spec_label, spec_path, env, sources)
+    )
 
     next_stack = set(spec_stack or ())
     next_stack.add(spec_path.resolve())
     errors.extend(
         validate_producing_specs(
             spec, spec_label, spec_path, env, next_stack, project_root,
-            snapshots,
+            snapshots, provenance,
         )
     )
     return [
@@ -8629,7 +8766,7 @@ def validate_producer_output_contract(producer, path):
 
 def validate_producing_specs(
     spec, spec_label, spec_path, env, spec_stack, project_root=None,
-    snapshots=None,
+    snapshots=None, provenance=None,
 ):
     """Validate producer workflow edges and referenced artifact headers."""
     errors = []
@@ -8672,8 +8809,11 @@ def validate_producing_specs(
         schema_ref = source.get('schema')
         if not isinstance(schema_ref, str):
             continue
+        base_dir, written = layer_written_path(
+            schema_ref, f"input.{dataset_id}.schema", provenance, spec_path
+        )
         producer_path, condition = resolve_project_path(
-            schema_ref, spec_path.parent, project_root,
+            written, base_dir, project_root,
             project_data_roots(project_root),
         )
         if condition is not None:
@@ -8725,8 +8865,11 @@ def validate_producing_specs(
         source_ref = source.get('path')
         if not isinstance(source_ref, str):
             continue
+        base_dir, written = layer_written_path(
+            source_ref, f"input.{dataset_id}.path", provenance, spec_path
+        )
         source_path, condition = resolve_project_path(
-            source_ref, spec_path.parent, project_root,
+            written, base_dir, project_root,
             project_data_roots(project_root),
         )
         if condition is not None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal
 
 import polars as pl
@@ -311,12 +312,28 @@ def load_source_tables(
     *,
     producer_contracts: Mapping[str, ProducerContract] | None = None,
     producer_snapshots: Mapping[str, ResourceSnapshot] | None = None,
+    origins: Mapping[str, tuple[Path, str]] | None = None,
 ) -> dict[str, LoadedDataset]:
-    """Capture, verify, and ingest normalized dataset declarations."""
+    """Capture, verify, and ingest normalized dataset declarations.
+
+    ``origins`` maps a dataset to the directory of the layer that wrote its
+    path and that layer's own spelling. REQ-0780 resolves the path from
+    there and retries that spelling from the project root and data roots;
+    a dataset without an origin resolves ``source.path`` from ``resources``.
+    """
     contracts = producer_contracts or {}
     snapshots = producer_snapshots or {}
+    views: dict[str, tuple[ProjectResources, str]] = {}
+    for dataset, source in datasets.items():
+        origin = (origins or {}).get(dataset)
+        views[dataset] = (
+            (resources.with_base_directory(origin[0]), origin[1])
+            if origin is not None
+            else (resources, source.path)
+        )
     diagnostics: list[SourceDiagnostic] = []
     for dataset, source in datasets.items():
+        view, written = views[dataset]
         profile = profile_of(source.path)
         if source.schema_path is not None and source.types is not None:
             diagnostics.extend(
@@ -360,9 +377,9 @@ def load_source_tables(
             )
         try:
             if dataset in snapshots:
-                resources.validate_location(source.path)
+                view.validate_location(written)
             else:
-                resources.validate(source.path)
+                view.validate(written)
             if profile is None:
                 diagnostics.append(_profile_diagnostic(dataset, source.path))
         except ResourceFailure as failure:
@@ -371,7 +388,7 @@ def load_source_tables(
                     dataset,
                     source.path,
                     failure,
-                    data_roots_checked=resources.fallback_root_count(source.path),
+                    data_roots_checked=view.fallback_root_count(written),
                 )
             )
     if diagnostics:
@@ -388,11 +405,12 @@ def load_source_tables(
     seen: set[int] = set()
     loaded: dict[str, LoadedDataset] = {}
     for dataset, source in datasets.items():
+        view, written = views[dataset]
         try:
             injected = snapshots.get(dataset)
-            snapshot = injected or resources.capture(source.path)
+            snapshot = injected or view.capture(written)
             if injected is None and id(snapshot) not in seen:
-                resources.verify(snapshot)
+                view.verify(snapshot)
             seen.add(id(snapshot))
             profile = profile_of(source.path)
             assert profile is not None
@@ -413,7 +431,7 @@ def load_source_tables(
                     dataset,
                     source.path,
                     failure,
-                    data_roots_checked=resources.fallback_root_count(source.path),
+                    data_roots_checked=view.fallback_root_count(written),
                 )
             )
             continue

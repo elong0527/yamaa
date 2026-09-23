@@ -2855,6 +2855,49 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertIsNone(resolved)
         self.assertIn('inheritance_cycle', '\n'.join(errors))
 
+    def test_inherited_input_absent_beside_its_layer_reads_the_project_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'common').mkdir()
+            (root / 'input').mkdir()
+            (root / 'input' / 'dm.csv').write_text('ID\n01\n')
+            (root / 'common' / 'base.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'domain: TEST\n'
+                'keys: [ID]\n'
+                'input: {DM: input/dm.csv}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - {name: ID, type: str, label: Identifier, '
+                'derivation: DM.ID}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: common/base.yaml\n'
+                'output: {path: out.csv, columns: [ID]}\n'
+            )
+            with open(spec_path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+
+            resolved, _, _ = self.resolve(spec_path)
+            errors = VALIDATOR.validate_spec_document(
+                spec, 'example/spec.yaml', spec_path, self.env
+            )
+            (root / 'input' / 'dm.csv').unlink()
+            missing = VALIDATOR.validate_spec_document(
+                spec, 'example/spec.yaml', spec_path, self.env
+            )
+
+        # REQ-0636 states the path from the shared layer's directory, and
+        # REQ-1246 reads it from the project root when nothing is stored there.
+        self.assertEqual(resolved['input']['DM']['path'], 'common/input/dm.csv')
+        self.assertEqual(errors, [])
+        self.assertIn(
+            "input.DM.path: resource_path_missing: 'common/input/dm.csv'",
+            '\n'.join(missing),
+        )
+
     def test_rejects_layer_version_mismatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -4431,12 +4474,40 @@ class TestProjectResourceBoundary(unittest.TestCase):
             self.resolve("input/absent.csv")[1], "resource_path_missing"
         )
 
-    def test_rejects_file_outside_a_narrower_project_root(self):
+    def test_never_reads_beside_a_layer_outside_a_narrower_project_root(self):
         confined = self.root / "project"
         confined.mkdir()
 
+        # REQ-0781: the file beside a layer stored outside every approved root
+        # is never an anchor; the path starts at the project root instead.
         self.assertEqual(
             self.resolve("input/dm.csv", project_root=confined)[1],
+            "resource_path_missing",
+        )
+        (confined / "input").mkdir()
+        (confined / "input" / "dm.csv").write_text("ID\n1\n", encoding="utf-8")
+        accepted, condition = self.resolve("input/dm.csv", project_root=confined)
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.resolve(), (confined / "input" / "dm.csv").resolve())
+
+    def test_retries_a_missing_path_from_the_project_root(self):
+        nested = self.root / "common"
+        nested.mkdir()
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            "input/dm.csv", nested, self.root
+        )
+
+        # REQ-1246: absent beside its layer, the path reads the project root.
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.resolve(), (self.input_dir / "dm.csv").resolve())
+
+    def test_an_escape_from_inside_the_project_stays_terminal(self):
+        nested = self.root / "common"
+        nested.mkdir()
+
+        self.assertEqual(
+            VALIDATOR.resolve_project_path("../../dm.csv", nested, self.root)[1],
             "resource_path_outside_project",
         )
 
@@ -4652,7 +4723,9 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
             self.contracts("input/dm.csv", project_root=confined)
         )
 
-        self.assertIn("resource_path_outside_project", message)
+        # REQ-0781: the example's own input/dm.csv lies outside the narrower
+        # root and is never read; the project root holds no such file.
+        self.assertIn("resource_path_missing", message)
 
     def test_type_catalog_does_not_read_a_rejected_path(self):
         outside = self.example_dir / "outside.csv"

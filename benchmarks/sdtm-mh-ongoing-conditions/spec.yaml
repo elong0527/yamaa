@@ -1,0 +1,113 @@
+schema_version: "1.0"
+domain: MH
+keys: [STUDYID, USUBJID, MHSEQ]
+input:
+  MH_FORM: input/mh_form.csv
+
+output:
+  path: mh.csv
+  columns: [STUDYID, USUBJID, MHSEQ, MHTERM, MHSTDTC, MHENDTC, MHENRTPT, MHENTPT]
+  order_by: [STUDYID, USUBJID, MHSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: MH_FORM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: MH_FORM.USUBJID
+
+  - name: MHSEQ
+    type: int
+    label: Sequence Number
+    derivation: MH_FORM.MHSEQ
+
+  - name: MHTERM
+    type: str
+    label: Reported Term for the Medical History Condition
+    derivation: MH_FORM.MHTERM
+    verifications:
+      not_missing: {}
+
+  - name: STDYY
+    type: str
+    label: Collected start year (intermediate, not in output)
+    derivation: MH_FORM.MHSTYY
+
+  - name: STDMM
+    type: str
+    label: Collected start month (intermediate, not in output)
+    derivation: MH_FORM.MHSTMM
+
+  - name: MHSTDTC
+    type: str
+    label: Start Date/Time of Medical History Condition
+    derivation:
+      case:
+        - when: "STDYY IS NOT NULL AND STDMM IS NULL"
+          then: STDYY
+        - when: "STDYY IS NOT NULL AND STDMM IS NOT NULL"
+          then:
+            str_template:
+              template: "{STDYY}-{STDMM}"
+
+  - name: MHENDTC
+    type: str
+    label: End Date/Time of Medical History Condition
+    derivation: MH_FORM.MHENDTC
+
+  - name: MHONGO
+    type: str
+    label: Collected ongoing tick (intermediate, not in output)
+    derivation: MH_FORM.MHONGO
+
+  - name: SCRFDTC
+    type: str
+    label: Screening visit date (intermediate, not in output)
+    derivation: MH_FORM.SCRFDTC
+
+  - name: MHENRTPT
+    type: str
+    label: End Reference Relative to the Screening Visit
+    derivation:
+      case:
+        - when: "MHONGO = 'Y'"
+          then:
+            literal: ONGOING
+        - when: "MHENDTC IS NOT NULL AND SCRFDTC IS NOT NULL AND MHENDTC < SCRFDTC"
+          then:
+            literal: BEFORE
+    verifications:
+      allowed_values:
+        values: [ONGOING, BEFORE]
+
+  - name: MHENTPT
+    type: str
+    label: Reference Time Point Name
+    derivation:
+      case:
+        - when: "MHENRTPT IS NOT NULL"
+          then:
+            literal: SCREENING
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, MHSEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: ongoing-has-no-end-date
+      when: "MHENRTPT = 'ONGOING'"
+      then: "MHENDTC IS NULL"
+  - implies:
+      id: ended-before-has-end-date
+      when: "MHENRTPT = 'BEFORE'"
+      then: "MHENDTC IS NOT NULL"
+  - implies:
+      id: end-reference-names-screening
+      when: "MHENRTPT IS NOT NULL"
+      then: "MHENTPT = 'SCREENING'"
