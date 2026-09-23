@@ -2821,6 +2821,10 @@ def _plan_lookups(
         terms: list[tuple[OrderTerm, str]] = []
         for term_index, term in enumerate(intermediate.order_by or ()):
             qualifier, _, field = term.variable.partition(".")
+            if qualifier == intermediate.dataset and field in failed_derivations:
+                # The derivation already reports why this ordering field is invalid.
+                failed = True
+                continue
             if qualifier != intermediate.dataset or field not in available_fields:
                 context = {
                     "intermediate": intermediate.id,

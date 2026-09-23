@@ -1885,6 +1885,55 @@ def test_intermediate_clauses_may_read_a_derived_name() -> None:
     assert intermediate.readable_columns == ("IDVARVAL_U",)
 
 
+def test_an_unqualified_derived_order_field_suggests_its_qualified_name() -> None:
+    spec = _intermediate_spec(
+        {"QVAL_U": {"str_upper": {"source": "QVAL"}}},
+        key=["STUDYID"],
+        order_by=[OrderTerm(variable="QVAL_U")],
+        keep="first",
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _src_table(), "SUPP": _supp_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [
+        d
+        for d in raised.value.diagnostics
+        if d.spec_paths == ("intermediates[0].order_by[0]",)
+    ]
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.context["suggestion"] == "SUPP.QVAL_U"
+
+
+def test_a_failed_derivation_does_not_repeat_as_an_unknown_order_field() -> None:
+    spec = _intermediate_spec(
+        {"QVAL_U": {"str_upper": {"source": "NOPE"}}},
+        key=["STUDYID"],
+        order_by=[OrderTerm(variable="SUPP.QVAL_U")],
+        keep="first",
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _src_table(), "SUPP": _supp_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    assert any(
+        d.spec_paths == ("intermediates[0].derivations.QVAL_U.str_upper.source",)
+        for d in raised.value.diagnostics
+    )
+    assert all(
+        d.spec_paths != ("intermediates[0].order_by[0]",)
+        for d in raised.value.diagnostics
+    )
+
+
 def _derivation_diagnostic(
     derivations: dict[str, dict[str, object]], condition: str
 ) -> object:
