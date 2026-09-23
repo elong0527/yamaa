@@ -97,8 +97,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, MHSEQ]
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - implies:
       id: ongoing-has-no-end-date
       when: "MHENRTPT = 'ONGOING'"

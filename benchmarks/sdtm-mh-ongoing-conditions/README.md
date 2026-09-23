@@ -22,7 +22,8 @@ date recorded on the same form.
 - `MHENRTPT` says how the condition's end relates to the screening visit:
   `ONGOING` when the tick box said it was still active, `BEFORE` when the
   recorded end date comes before the screening visit date recorded on the
-  form; empty otherwise.
+  form; empty otherwise (for example when the recorded end date is on or
+  after the screening visit date).
 - `MHENTPT` names the visit the end reference is measured against,
   `SCREENING`; empty when there is no end reference.
 
