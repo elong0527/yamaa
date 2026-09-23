@@ -19,9 +19,9 @@ the collected overall response (`AVALC`).
   nor progressive disease as `NON-CR/NON-PD`, progressive disease as
   `PD`, or not evaluable as `NE`. Stable disease and
   neither-complete-nor-progressive disease count only on or after
-  day 42 after randomization, and earlier ones fall back to not
-  evaluable. Any other collected value, including a missing one,
-  supports no category, so `BORCAT` stays empty.
+  day 42 after randomization; earlier ones, or ones with no day,
+  fall back to not evaluable. Any other collected value, including a
+  missing one, supports no category, so `BORCAT` stays empty.
 - `BORPRI` orders the supported categories as complete response
   (`1`), partial response (`2`), stable disease (`3`),
   neither-complete-nor-progressive disease (`4`), progressive
