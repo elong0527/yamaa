@@ -9,11 +9,12 @@ signs form collected at each visit, carrying `VSTESTCD`,
 `VSSTRESU`, `VSPOS`, `VSMETHOD`, `VSSTAT`, and `VSREASND`, plus
 the visit name in `VISIT` and the measurement date in `VSDTC`.
 
-**Input:** one form row per visit with a field per measurement
-(systolic and diastolic blood pressure, pulse, respiratory rate,
-temperature, weight), each with its unit, plus body position,
-temperature method, and a blood pressure not-done flag with its
-reason.
+**Input:** long-form Operational Data Model (ODM) rows, one row per
+collected form item, with the collected entry in the value field.
+Each visit contributes one vitals form group: the visit date, body
+position, temperature method, each measurement with its unit, and the
+blood pressure not-done flag with its reason, each as its own item,
+item.
 
 **Variables:**
 
@@ -46,7 +47,7 @@ reason.
 - `VSREASND` is the reason the form gives for blood pressure
   not done; blank otherwise.
 
-**Note:** each form row fans out into one record per test, and
+**Note:** each visit's form group fans out into one record per test, and
 records are grouped by test rather than kept in form order;
 `VSSEQ` numbers them per subject by visit date, then in form
 order. A not-done blood pressure still produces its two records
