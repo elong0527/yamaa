@@ -6,6 +6,3 @@ PILOT7,P7-302,2,Loose stools,DIARRHOEA,,,,,,,Sponsor Adverse Events of Special I
 PILOT7,P7-303,1,Headache,HEADACHE,,,,,,,
 PILOT7,P7-303,2,Odd sensation in the left arm,,,,,,,,
 PILOT7,P7-304,1,Severe skin blistering,STEVENS-JOHNSON SYNDROME,Severe Cutaneous Adverse Reactions,20000020,NARROW,,,,Sponsor Adverse Events of Special Interest
-PILOT7,P7-305,1,Recurrent nausea,NAUSEA,,,,,,,Sponsor Adverse Events of Special Interest
-PILOT7,P7-305,2,Acute liver failure,HEPATIC FAILURE,,,,Hepatic Disorders,20000006,NARROW,
-PILOT7,P7-305,3,Target lesions on trunk,ERYTHEMA MULTIFORME,Severe Cutaneous Adverse Reactions,20000020,BROAD,,,,

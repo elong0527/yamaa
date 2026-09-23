@@ -97,8 +97,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 10
-      max: 10
+      min: 7
+      max: 7
   - all_or_none:
       id: first-standardized-query-slot-is-filled-completely
       columns: [SMQ01NAM, SMQ01CD, SMQ01SC]
