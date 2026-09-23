@@ -52,8 +52,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
-      min: 5
-      max: 5
+      min: 8
+      max: 8
   - implies:
       id: ratio-needs-a-usable-lower-limit
       when: "R2ANRLO IS NULL"
