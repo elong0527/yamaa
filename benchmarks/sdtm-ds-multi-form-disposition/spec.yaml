@@ -1,0 +1,226 @@
+schema_version: "1.0"
+domain: DS
+keys: [STUDYID, USUBJID, DSSEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: ds.csv
+  columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC]
+  order_by: [STUDYID, USUBJID, DSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DS
+    verifications:
+      allowed_values:
+        values: [DS]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: SUBJKEY
+    type: str
+    label: Subject Key as Collected
+    derivation: ODM.SubjectKey
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      str_template: "{STUDYID}-{SUBJKEY}"
+
+  - name: EVENT
+    type: str
+    label: Collection Event
+
+  - name: COMPSTAT
+    type: str
+    label: Completion Status as Collected
+
+  - name: DSTERM
+    type: str
+    label: Reported Term for the Disposition Event
+    verifications:
+      - not_missing: {}
+
+  - name: DSDECOD
+    type: str
+    label: Standardized Disposition Term
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED,
+                   ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
+
+  - name: DSCAT
+    type: str
+    label: Category for Disposition Event
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
+
+  - name: DSSCAT
+    type: str
+    label: Subcategory for Disposition Event
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [INFORMED CONSENT, RANDOMIZATION, END OF TREATMENT, END OF STUDY]
+
+  - name: DSSTDTC
+    type: date
+    label: Start Date/Time of Disposition Event
+    verifications:
+      - not_missing: {}
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [DSSTDTC, DSTERM]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: consent
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'CONSENT'"
+    derivations:
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
+      DSTERM:
+        literal: INFORMED CONSENT OBTAINED
+      DSDECOD:
+        literal: INFORMED CONSENT OBTAINED
+      DSCAT:
+        literal: PROTOCOL MILESTONE
+      DSSCAT:
+        literal: INFORMED CONSENT
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
+
+  - id: randomization
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'RAND'"
+    derivations:
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
+      DSTERM:
+        literal: RANDOMIZED
+      DSDECOD:
+        literal: RANDOMIZED
+      DSCAT:
+        literal: PROTOCOL MILESTONE
+      DSSCAT:
+        literal: RANDOMIZATION
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
+
+  - id: end_of_treatment
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'EOT'"
+    derivations:
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
+      DSTERM:
+        case:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - otherwise:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASON'"
+                expr: "ONLY(ODM.Value)"
+      DSDECOD:
+        case:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - otherwise:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
+                expr: "ONLY(ODM.Value)"
+      DSCAT:
+        literal: DISPOSITION EVENT
+      DSSCAT:
+        literal: END OF TREATMENT
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
+
+  - id: end_of_study
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "EVENT = 'EOS'"
+    derivations:
+      EVENT: ODM.StudyEventOID
+      COMPSTAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.COMP'"
+          expr: "ONLY(ODM.Value)"
+      DSTERM:
+        case:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - when: "COMPSTAT = 'SCREEN FAILURE'"
+            then:
+              literal: SCREEN FAILURE
+          - otherwise:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASON'"
+                expr: "ONLY(ODM.Value)"
+      DSDECOD:
+        case:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - when: "COMPSTAT = 'SCREEN FAILURE'"
+            then:
+              literal: SCREEN FAILURE
+          - otherwise:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
+                expr: "ONLY(ODM.Value)"
+      DSCAT:
+        literal: DISPOSITION EVENT
+      DSSCAT:
+        literal: END OF STUDY
+      DSSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DS.DTC'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, DSSEQ]
+  - row_count:
+      min: 10
+      max: 10
+  - implies:
+      id: milestone-term-equals-decode
+      when: "DSCAT = 'PROTOCOL MILESTONE'"
+      then: "DSTERM = DSDECOD"
