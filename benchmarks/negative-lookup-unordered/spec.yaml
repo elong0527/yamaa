@@ -6,6 +6,8 @@ input:
   EX: input/ex.csv
 base: DM
 intermediates:
+  # Exposure records in start-date, then sequence-number order, but no
+  # keep says whether the first or the last one supplies the treatment.
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
