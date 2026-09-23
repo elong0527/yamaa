@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: SV
-keys: [STUDYID, USUBJID, VISIT]
+keys: [STUDYID, USUBJID, VISITNUM]
 input:
   DM: {path: input/dm.csv, types: {RFSTDTC: date}}
   ODM: input/odm.csv
@@ -57,6 +57,10 @@ rows:
       EPOCH:
         aggregate:
           filter: "ODM.ItemOID = 'IT.TV.EPOCH'"
+          expr: "ONLY(ODM.Value)"
+      SVUPDES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.UPDES'"
           expr: "ONLY(ODM.Value)"
 
 columns:
@@ -145,11 +149,6 @@ columns:
   - name: SVUPDES
     type: str
     label: Description of Unplanned Visit
-    derivation:
-      case:
-        - when: "VISITNUM = 99"
-          then: {literal: Unscheduled safety visit}
-        - otherwise: {literal: null}
 
   - name: SVSEQ
     type: int
@@ -162,7 +161,7 @@ columns:
 
 verifications:
   - unique:
-      columns: [STUDYID, USUBJID, VISIT]
+      columns: [STUDYID, USUBJID, VISITNUM]
   - row_count:
       min: 7
       max: 7

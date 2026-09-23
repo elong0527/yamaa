@@ -36,8 +36,9 @@ forms carry their own collection dates.
 - `TAETORD` is the planned order of the element within the arm; it stays
   empty for unscheduled visits.
 - `EPOCH` is the epoch carried on the study event, e.g. TREATMENT.
-- `SVUPDES` describes the unplanned visit; it stays empty for planned
-  visits.
+- `SVUPDES` is the description the site entered for the unplanned visit,
+  carried on the unscheduled study event as an ODM item; it stays empty
+  for planned visits.
 
 **Note:** the example keeps two subjects. Subject 001 attended an
 unscheduled safety visit between Baseline and Week 2, and their Week 2
