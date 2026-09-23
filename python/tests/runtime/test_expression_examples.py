@@ -100,8 +100,8 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
             "adam-adae-text-cleanup",
             [
                 ("columns.AEREFNUM.derivation.str_extract.missing", "missing", 2),
-                ("columns.AEREFNUM.derivation.str_extract.no_match", "no_match", 1),
-                ("columns.AERELLC.derivation.str_lower.missing", "missing", 1),
+                ("columns.AEREFNUM.derivation.str_extract.no_match", "no_match", 3),
+                ("columns.AERELLC.derivation.str_lower.missing", "missing", 2),
             ],
         ),
         (
