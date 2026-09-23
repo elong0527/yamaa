@@ -253,6 +253,8 @@ def yamaa_domain(
         approved.project_root,
         base_directory=entry.parent,
         data_roots=approved.data_roots,
+        project_configuration=approved.configuration,
+        anchor_relative_paths_to_project_root=approved.anchor_relative_paths_to_project_root,
     )
     try:
         workflow = plan_workflow(entry, load_schema_bundle(selected_schema), resources)

@@ -1,0 +1,19 @@
+schema_version: "1.0"
+input:
+  DM:
+    path: input/dm.csv
+    types:
+      ID: str
+      VAL: float
+base: DM
+columns:
+  - name: ID
+    type: str
+    label: Record Identifier
+    derivation: DM.ID
+  - name: VAL
+    type: float
+    label: Collected Value
+    derivation: DM.VAL
+metadata:
+  scope: shared

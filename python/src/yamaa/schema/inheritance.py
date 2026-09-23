@@ -140,9 +140,27 @@ def _rebase_path(value: str, layer: Path, entry: Path) -> str:
         return str(target)
 
 
-def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -> None:
+def _rebase_layer_paths(
+    document: dict[str, object],
+    layer: Path,
+    entry: Path,
+    *,
+    project_root: str | Path | None = None,
+) -> None:
+    """Rebase a layer's inherited paths to the directory that resolves them.
+
+    Without a project root, REQ-0636 resolves a relative path from the
+    specification file declaring it, and the engine anchors relative paths
+    at the entry directory -- so composition respells each inherited
+    ``input.<id>.path``/``.schema`` to the same file named from the entry.
+    When the run selected a project root (a ``yamaa-project.yaml`` the entry
+    sits under, or one the runner named), the root anchors every relative
+    dataset path instead: the written values stay untouched and the engine
+    resolves them from the root. ``output.path`` keeps its entry-relative
+    rebasing either way; the issue behind this rule is input placement.
+    """
     datasets = document.get("input")
-    if isinstance(datasets, dict):
+    if isinstance(datasets, dict) and project_root is None:
         for source in datasets.values():
             if not isinstance(source, dict):
                 continue
@@ -1240,11 +1258,16 @@ def resolve_specification(
     schema_bundle: SchemaBundle,
     *,
     entry_document: object | None = None,
+    project_root: str | Path | None = None,
 ) -> ResolvedSpecification:
     """Resolve one local R017 graph into a complete specification.
 
     ``entry_document`` lets a workflow pass the immutable R021 snapshot it
     already parsed; ordinary callers simply pass the entry path.
+    ``project_root`` names the root relative dataset paths resolve from for
+    this run (a discovered ``yamaa-project.yaml`` or a runner-named root).
+    When it is set, inherited ``input`` paths keep the spelling their layer
+    wrote; otherwise they are rebased to the entry directory (REQ-0636).
     """
     entry_path = Path(entry).resolve()
     contributions: list[tuple[Path, dict[str, object]]] = []
@@ -1346,7 +1369,9 @@ def resolve_specification(
             visit(candidate)
         active.pop()
         completed.add(canonical)
-        _rebase_layer_paths(normalized, canonical, entry_path)
+        _rebase_layer_paths(
+            normalized, canonical, entry_path, project_root=project_root
+        )
         contributions.append((canonical, normalized))
 
     raw_entry = (

@@ -585,6 +585,9 @@ examples:
   schema-derive-text-score:
     status: executable
     runtimes: ['python']
+  schema-inherited-input-path:
+    status: executable
+    runtimes: ['python']
   schema-numeric-functions:
     status: executable
     runtimes: ['python']

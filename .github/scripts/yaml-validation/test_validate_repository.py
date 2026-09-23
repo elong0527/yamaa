@@ -2918,6 +2918,82 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertIsNone(resolved)
         self.assertIn('duplicate_identifier', '\n'.join(errors))
 
+    def test_discovered_project_root_keeps_inherited_path_spelling(self):
+        # A yamaa-project.yaml above the entry selects project-root mode:
+        # the inherited relative path keeps its written spelling instead
+        # of rebasing to the entry directory.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'yamaa-project.yaml').write_text('version: "1.0"\n')
+            (root / 'input').mkdir()
+            (root / 'input' / 'dm.csv').write_text('ID\n1\n')
+            shared = root / 'shared'
+            shared.mkdir()
+            (shared / 'base.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'input:\n'
+                '  DM:\n'
+                '    path: input/dm.csv\n'
+                '    types: {ID: str}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: ID\n'
+                '    type: str\n'
+                '    label: Identifier\n'
+                '    derivation: {source: DM.ID}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: [shared/base.yaml]\n'
+                'domain: OUT\n'
+                'keys: [ID]\n'
+                'output: {path: out.csv, columns: [ID]}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            resolved['input']['DM']['path'], 'input/dm.csv'
+        )
+
+    def test_no_project_configuration_rebases_inherited_path_to_entry(self):
+        # Without a yamaa-project.yaml above the entry, the inherited
+        # relative path rebases to the entry directory as before.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            shared = root / 'shared'
+            shared.mkdir()
+            (shared / 'base.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'input:\n'
+                '  DM:\n'
+                '    path: input/dm.csv\n'
+                '    types: {ID: str}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: ID\n'
+                '    type: str\n'
+                '    label: Identifier\n'
+                '    derivation: {source: DM.ID}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: [shared/base.yaml]\n'
+                'domain: OUT\n'
+                'keys: [ID]\n'
+                'output: {path: out.csv, columns: [ID]}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            resolved['input']['DM']['path'], 'shared/input/dm.csv'
+        )
+
 
 class TestTypeValidation(unittest.TestCase):
     def test_int_rejects_string(self):

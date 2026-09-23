@@ -164,3 +164,117 @@ def test_key_reading_non_key_output_fails_at_validation() -> None:
     assert issue["spec_paths"] == ["columns.AVISIT.derivation"]
     context = json.loads(issue["context"])
     assert context == {"column": "AVISIT", "dependency": "ADY"}
+
+
+def _write_project_root_case(root: Path) -> tuple[Path, Path]:
+    """One shared layer, one project entry, one legacy entry."""
+    shared = root / "shared"
+    project = root / "project"
+    shared.mkdir(parents=True)
+    project.mkdir(parents=True)
+    (shared / "base.yaml").write_text(
+        """schema_version: "1.0"
+input:
+  DM:
+    path: input/dm.csv
+    types: {ID: str, VAL: float}
+base: DM
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: DM.ID}
+  - name: VAL
+    type: float
+    label: Value
+    derivation: {source: DM.VAL}
+""",
+        encoding="ascii",
+    )
+    (shared / "input").mkdir()
+    (shared / "input" / "dm.csv").write_text(
+        "ID,VAL\nSHARED-01,10\nSHARED-02,20\n", encoding="ascii"
+    )
+    (project / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
+    (project / "input").mkdir()
+    (project / "input" / "dm.csv").write_text(
+        "ID,VAL\nPROJ-01,100\nPROJ-02,200\n", encoding="ascii"
+    )
+    project_entry = project / "spec.yaml"
+    project_entry.write_text(
+        """schema_version: "1.0"
+parents: [../shared/base.yaml]
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID, VAL]}
+""",
+        encoding="ascii",
+    )
+    legacy_entry = root / "spec_legacy.yaml"
+    legacy_entry.write_text(
+        """schema_version: "1.0"
+parents: [shared/base.yaml]
+domain: OUT
+keys: [ID]
+output: {path: out_legacy.csv, columns: [ID, VAL]}
+""",
+        encoding="ascii",
+    )
+    return project_entry, legacy_entry
+
+
+def test_discovered_project_root_reads_the_project_file(tmp_path: Path) -> None:
+    project_entry, _ = _write_project_root_case(tmp_path)
+
+    run = yamaa_domain(project_entry)
+
+    assert run.issues.is_empty()
+    assert run.output.get_column("ID").to_list() == ["PROJ-01", "PROJ-02"]
+    assert run.output.get_column("VAL").to_list() == [100.0, 200.0]
+
+
+def test_without_project_configuration_the_layer_directory_wins(
+    tmp_path: Path,
+) -> None:
+    _, legacy_entry = _write_project_root_case(tmp_path)
+
+    run = yamaa_domain(legacy_entry)
+
+    assert run.issues.is_empty()
+    assert run.output.get_column("ID").to_list() == ["SHARED-01", "SHARED-02"]
+    assert run.output.get_column("VAL").to_list() == [10.0, 20.0]
+
+
+def test_runner_named_project_root_with_configuration_anchors_there(
+    tmp_path: Path,
+) -> None:
+    project_entry, _ = _write_project_root_case(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    relocated = elsewhere / "spec.yaml"
+    relocated.write_text(project_entry.read_text(encoding="ascii"), encoding="ascii")
+
+    run = yamaa_domain(relocated, project_root=tmp_path / "project")
+
+    assert run.issues.is_empty()
+    assert run.output.get_column("ID").to_list() == ["PROJ-01", "PROJ-02"]
+
+
+def test_runner_named_project_root_without_configuration_anchors_there(
+    tmp_path: Path,
+) -> None:
+    project_entry, _ = _write_project_root_case(tmp_path)
+    bare_root = tmp_path / "bare"
+    (bare_root / "input").mkdir(parents=True)
+    (bare_root / "input" / "dm.csv").write_text(
+        "ID,VAL\nBARE-01,300\nBARE-02,400\n", encoding="ascii"
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    relocated = elsewhere / "spec.yaml"
+    relocated.write_text(project_entry.read_text(encoding="ascii"), encoding="ascii")
+
+    run = yamaa_domain(relocated, project_root=bare_root)
+
+    assert run.issues.is_empty()
+    assert run.output.get_column("ID").to_list() == ["BARE-01", "BARE-02"]

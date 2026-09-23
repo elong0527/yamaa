@@ -1,0 +1,33 @@
+schema_version: '1.0'
+domain: PATH
+keys:
+- ID
+input:
+  DM:
+    path: input/dm.csv
+    types:
+      ID: str
+      VAL: float
+base: DM
+output:
+  path: out.csv
+  columns:
+  - ID
+  - VAL
+columns:
+- name: ID
+  type: str
+  label: Record Identifier
+  derivation:
+    value:
+      source:
+        variable: DM.ID
+- name: VAL
+  type: float
+  label: Collected Value
+  derivation:
+    value:
+      source:
+        variable: DM.VAL
+metadata:
+  scope: study

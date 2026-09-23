@@ -35,12 +35,18 @@ def load_specification(
     document = read_yaml_document(origin_path)
     if isinstance(document, dict) and "parents" in document:
         # Imported lazily so the schema interpreter remains usable on its own.
+        from yamaa.io.project import find_project_configuration
         from yamaa.schema.inheritance import resolve_specification
 
+        # A standalone load discovers the entry's project configuration the
+        # same way a run would (REQ-0768); engine calls pass the approved
+        # root through plan_workflow instead.
+        configuration = find_project_configuration(origin_path)
         resolved = resolve_specification(
             origin_path,
             bundle,
             entry_document=document,
+            project_root=(configuration.parent if configuration is not None else None),
         )
         # Row-level (value-level) submission metadata: data-independent checks.
         value_diagnostics = validate_value_metadata(resolved.specification)

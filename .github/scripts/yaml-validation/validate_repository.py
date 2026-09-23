@@ -2698,6 +2698,12 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
     completed = set()
     active = []
     errors = []
+    # A project configuration above the entry selects project-root mode:
+    # inherited relative dataset paths keep their written spelling and
+    # resolve from the project root at read time, so nothing is rebased.
+    anchor_to_project_root = (
+        discover_project_configuration(entry_path) is not None
+    )
 
     def visit(path, layer_label, supplied=None):
         canonical = path.resolve()
@@ -2770,13 +2776,13 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
         ):
             return
         completed.add(canonical)
-        contributions.append(
-            (
-                canonical,
-                layer_label,
-                rebase_layer_paths(normalized, canonical, entry_path),
+        if anchor_to_project_root:
+            layer_document = copy.deepcopy(normalized)
+        else:
+            layer_document = rebase_layer_paths(
+                normalized, canonical, entry_path
             )
-        )
+        contributions.append((canonical, layer_label, layer_document))
 
     visit(entry_path, spec_label, supplied=entry_spec)
     if errors:
@@ -4748,6 +4754,35 @@ PROJECT_CONFIGURATION_NAME = 'yamaa-project.yaml'
 PROJECT_CONFIGURATION_FIELDS = {'version', 'data_roots'}
 
 
+def discover_project_configuration(entry_path):
+    """Return the directory holding yamaa-project.yaml above the entry.
+
+    Walks up from the entry file (or directory) and returns the first
+    directory containing the project configuration, or None when the
+    entry sits under no project. Mirrors the engine's upward discovery:
+    a found configuration anchors inherited relative dataset paths at
+    the project root instead of rebasing them to the entry.
+    """
+    start = Path(entry_path).resolve()
+    directory = start if start.is_dir() else start.parent
+    for candidate in (directory, *directory.parents):
+        if (candidate / PROJECT_CONFIGURATION_NAME).is_file():
+            return candidate
+    return None
+
+
+def anchored_base_dir(spec_path, project_root):
+    """Return the directory relative dataset paths resolve from.
+
+    A project root holding yamaa-project.yaml anchors relative reads
+    at the root; otherwise they resolve from the specification's own
+    directory, preserving the pre-project fallback.
+    """
+    if (Path(project_root) / PROJECT_CONFIGURATION_NAME).is_file():
+        return Path(project_root)
+    return Path(spec_path.parent)
+
+
 def read_project_configuration(project_root, label=None):
     """Return (data_roots, errors) for the configuration at a named root.
 
@@ -5381,9 +5416,13 @@ def validate_spec_contracts(
     datasets = spec.get('input')
     if spec_path is not None and isinstance(datasets, dict):
         if project_root is None:
-            project_root = spec_path.parent
+            discovered = discover_project_configuration(spec_path)
+            project_root = (
+                discovered if discovered is not None else spec_path.parent
+            )
         if snapshots is None:
             snapshots = ProjectSnapshots()
+        base_dir = anchored_base_dir(spec_path, project_root)
         for dataset_id, source in datasets.items():
             source_path = source if isinstance(source, str) else None
             types = None
@@ -5394,7 +5433,7 @@ def validate_spec_contracts(
                 continue
             path = f"{spec_label}.input.{dataset_id}"
             resolved, condition = resolve_project_path(
-                source_path, spec_path.parent, project_root,
+                source_path, base_dir, project_root,
                 project_data_roots(project_root),
             )
             if condition is not None:
@@ -8547,7 +8586,10 @@ def validate_spec_document(
         ]
 
     if project_root is None:
-        project_root = spec_path.parent
+        discovered = discover_project_configuration(spec_path)
+        project_root = (
+            discovered if discovered is not None else spec_path.parent
+        )
     if snapshots is None:
         snapshots = ProjectSnapshots()
     spec, errors, provenance = prepare_spec_document(
@@ -8637,9 +8679,13 @@ def validate_producing_specs(
     if not isinstance(datasets, dict):
         return errors
     if project_root is None:
-        project_root = spec_path.parent
+        discovered = discover_project_configuration(spec_path)
+        project_root = (
+            discovered if discovered is not None else spec_path.parent
+        )
     if snapshots is None:
         snapshots = ProjectSnapshots()
+    base_dir = anchored_base_dir(spec_path, project_root)
 
     for dataset_id, source in datasets.items():
         if not isinstance(source, dict) or 'schema' not in source:
@@ -8673,7 +8719,7 @@ def validate_producing_specs(
         if not isinstance(schema_ref, str):
             continue
         producer_path, condition = resolve_project_path(
-            schema_ref, spec_path.parent, project_root,
+            schema_ref, base_dir, project_root,
             project_data_roots(project_root),
         )
         if condition is not None:
@@ -8726,7 +8772,7 @@ def validate_producing_specs(
         if not isinstance(source_ref, str):
             continue
         source_path, condition = resolve_project_path(
-            source_ref, spec_path.parent, project_root,
+            source_ref, base_dir, project_root,
             project_data_roots(project_root),
         )
         if condition is not None:

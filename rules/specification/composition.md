@@ -252,9 +252,13 @@ from the entry file's directory.
 
 **REQ-0636.** When the resolved specification is materialized, an inherited
 relative path is rebased relative to the entry file without changing the
-denoted local file. If the local platform cannot express that file relative
-to the entry file, the canonical absolute local path is used. An absolute
-contributed path is materialized exactly as it was written, because [Resource resolution](../storage/resources.md)
+denoted local file, unless the run selected a project root: then a
+`yamaa-project.yaml` names the root every relative dataset path resolves
+from, so inherited `input` paths keep the spelling their layer wrote and
+the engine anchors them at the root. If the local platform cannot express
+that file relative to the entry file, the canonical absolute local path is
+used. An absolute contributed path is materialized exactly as it was
+written, because [Resource resolution](../storage/resources.md)
 resolves it against the approved root it names and reads that written form.
 `parents` paths are not materialized.
 

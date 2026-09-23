@@ -86,10 +86,12 @@ did not write, while a study run by its own authors approves its own data.
 **REQ-0772.** The entry file resolves inside the approved project root. A layer
 [Specification composition](../specification/composition.md) reaches contributes declarations that are read against the same approved
 roots. A layer stored outside the project root contributes a `project_path`
-that [Specification composition](../specification/composition.md) rebases to the entry file, and the rebased form must satisfy this
-contract; a relative path from such a layer reaches a readable source only
-when the rebased form resolves inside an approved root, while a rooted path
-it writes is decided against the approved roots like any other.
+that [Specification composition](../specification/composition.md) rebases to the entry file when the run selected no project root,
+and the rebased form must satisfy this contract; a relative path from such a
+layer reaches a readable source only when the rebased form resolves inside an
+approved root, while a rooted path it writes is decided against the approved
+roots like any other. When the run selected a project root, no rebasing
+happens: the written form resolves from the project root instead.
 
 ### The written form
 
@@ -156,9 +158,13 @@ repository-authored value.
 <a id="req-0780"></a>
 
 **REQ-0780.** A relative `project_path` resolves relative to the directory of
-the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require. In a resolved
+the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require, unless the run
+selected a project root: then it resolves relative to the project root, the
+directory holding the `yamaa-project.yaml` the entry sits under (or the
+runner-named root holding one). In a resolved
 specification it is relative to the entry file, because [Specification composition](../specification/composition.md) has already
-rebased it. When that resolution reaches no entry, the run retries the written
+rebased it, except under a project root, where the written form is kept.
+When that resolution reaches no entry, the run retries the written
 segments against each approved data root in run order, the first success
 winning. A rooted `project_path` resolves against the approved root it
 names and is unaffected by rebasing, which leaves it exactly as written,

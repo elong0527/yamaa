@@ -1853,7 +1853,7 @@ requirements:
   REQ-0777: {"file": "storage/resources.md", "sources": ["R021-11"]}
   REQ-0778: {"file": "storage/resources.md", "sources": ["R021-12"]}
   REQ-0779: {"file": "storage/resources.md", "sources": ["R021-13"]}
-  REQ-0780: {"file": "storage/resources.md", "sources": ["R021-14"]}
+  REQ-0780: {"file": "storage/resources.md", "sources": ["R021-14", "yamaa:issue-846:project-root-inherited-path"]}
   REQ-0781: {"file": "storage/resources.md", "sources": ["R021-15"]}
   REQ-0782: {"file": "storage/resources.md", "sources": ["R021-16"]}
   REQ-0783: {"file": "storage/resources.md", "sources": ["R021-17"]}
@@ -2771,3 +2771,4 @@ provenance_addenda:
   - {"source": "yamaa:issue-845:entry-inherits-output", "text": "Issue #845: an entry file may omit output and inherit it whole like any other replaced root field, so a shared layer can own the artifact membership and order.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0623"}
   - {"source": "yamaa:issue-845:inherited-output-paths", "text": "Issue #845: an inherited output publishes where the layer that wrote it names; path, warning_log, and verification_log keep that layer's provenance.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0629"}
   - {"source": "yamaa:issue-845:resolved-output-required", "text": "Issue #845: missing_entry_output is retired; a resolved specification no layer gave an output fails as missing_required_field at output.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0657"}
+  - {"source": "yamaa:issue-846:project-root-inherited-path", "text": "Issue #846: a yamaa-project.yaml names the project root every relative dataset path resolves from; inherited input paths keep the spelling their layer wrote. Without one, relative paths resolve from the declaring specification's directory.", "owner": "storage/resources", "group": "project-root", "target": "REQ-0780"}

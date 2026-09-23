@@ -160,6 +160,7 @@ class ApprovedRoots:
     project_root: Path
     data_roots: tuple[Path, ...]
     configuration: Path | None
+    anchor_relative_paths_to_project_root: bool
 
 
 def _existing_directory(candidate: str | Path, label: str) -> Path:
@@ -292,6 +293,11 @@ def approve_roots(
         project_root=root,
         data_roots=declared if declared else (ceiling or ()),
         configuration=configuration,
+        # An explicitly named root anchors relative paths even without a
+        # configuration file; a discovered configuration anchors too.
+        anchor_relative_paths_to_project_root=(
+            project_root is not None or configuration is not None
+        ),
     )
 
 
@@ -304,8 +310,15 @@ class ProjectResources:
         *,
         base_directory: str | Path | None = None,
         data_roots: Iterable[str | Path] = (),
+        project_configuration: str | Path | None = None,
+        anchor_relative_paths_to_project_root: bool = False,
     ) -> None:
         root = _existing_directory(project_root, "approved project root")
+        configuration = (
+            Path(project_configuration).resolve()
+            if project_configuration is not None
+            else None
+        )
 
         base = Path(base_directory) if base_directory is not None else root
         try:
@@ -345,8 +358,33 @@ class ProjectResources:
         self._root_paths = tuple(approved_paths)
         self._root_finalizer = weakref.finalize(self, self._close_all, descriptors)
         self._project_root = root
-        self._base_root_index, self._base_components = self._relative_base(base)
+        self._project_configuration = configuration
+        self._anchor_relative_paths_to_project_root = (
+            anchor_relative_paths_to_project_root
+        )
+        if anchor_relative_paths_to_project_root:
+            # The project root names where every relative path resolves
+            # from (REQ-0772): the first anchor is the root itself,
+            # whatever spec directory this clone was rebased to.
+            self._base_root_index, self._base_components = 0, ()
+        else:
+            self._base_root_index, self._base_components = self._relative_base(base)
         self._store = _SnapshotStore({}, {}, {})
+
+    @property
+    def project_root(self) -> Path:
+        """The approved project root this run resolves relative paths from."""
+        return self._project_root
+
+    @property
+    def project_configuration(self) -> Path | None:
+        """The project configuration that selected the root, if any."""
+        return self._project_configuration
+
+    @property
+    def anchor_relative_paths_to_project_root(self) -> bool:
+        """Whether relative paths resolve from the project root."""
+        return self._anchor_relative_paths_to_project_root
 
     @property
     def capture_reads(self) -> int:
@@ -378,7 +416,16 @@ class ProjectResources:
             [root.descriptor for root in cloned_roots],
         )
         clone._project_root = self._project_root
-        clone._base_root_index, clone._base_components = clone._relative_base(base)
+        clone._project_configuration = self._project_configuration
+        clone._anchor_relative_paths_to_project_root = (
+            self._anchor_relative_paths_to_project_root
+        )
+        if self._anchor_relative_paths_to_project_root:
+            # The project root keeps anchoring relative paths even after
+            # the clone moves to another spec directory.
+            clone._base_root_index, clone._base_components = 0, ()
+        else:
+            clone._base_root_index, clone._base_components = clone._relative_base(base)
         clone._store = self._store
         return clone
 

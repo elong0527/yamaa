@@ -96,10 +96,17 @@ def _diagnostic(
     )
 
 
-def _physical_path(specification: Path, written: str) -> Path:
+def _physical_path(base: Path, written: str) -> Path:
+    """Resolve a written path against the directory that anchors it.
+
+    ``base`` is the directory relative paths resolve from: the project root
+    for inherited dataset paths when the run selected one, otherwise the
+    specification file's own directory. ``output.path`` stays entry-relative
+    and keeps passing the entry directory here.
+    """
     candidate = Path(written)
     if not candidate.is_absolute():
-        candidate = specification.parent / candidate
+        candidate = base / candidate
     return candidate.resolve()
 
 
@@ -336,10 +343,19 @@ def plan_workflow(
         if existing is not None:
             return existing
 
+        # The run's project root anchors every relative dataset path when the
+        # runner selected one (REQ-0772); otherwise each specification
+        # resolves them from its own directory (REQ-0636).
+        project_root = (
+            resources.project_root
+            if resources.anchor_relative_paths_to_project_root
+            else None
+        )
         resolved = resolve_specification(
             canonical,
             schema_bundle,
             entry_document=supplied_document,
+            project_root=project_root,
         )
         active.append(canonical)
         producer_paths: list[Path] = []
@@ -371,13 +387,16 @@ def plan_workflow(
                 raise SpecificationError(diagnostics)
 
             snapshot = _schema_snapshot(node_resources, source, dataset)
-            producer_path = _physical_path(canonical, source.schema_path)
+            input_anchor = (
+                project_root if project_root is not None else canonical.parent
+            )
+            producer_path = _physical_path(input_anchor, source.schema_path)
             producer_document = read_yaml_bytes(snapshot.content, producer_path)
             producer_node = visit(producer_path, producer_document)
             contract = _producer_contract(producer_node.resolved, dataset)
-            consumer_artifact = _physical_path(canonical, source.path)
+            consumer_artifact = _physical_path(input_anchor, source.path)
             producer_artifact = _physical_path(
-                producer_path,
+                producer_path.parent,
                 producer_node.resolved.specification.output.path,
             )
             if consumer_artifact != producer_artifact:
@@ -493,7 +512,9 @@ def execute_workflow(
             event("complete", node.entry_path)
         content = render_artifact(latest.artifact)
         generated[
-            _physical_path(node.entry_path, node.resolved.specification.output.path)
+            _physical_path(
+                node.entry_path.parent, node.resolved.specification.output.path
+            )
         ] = ResourceSnapshot(content=content)
 
     if latest is None:

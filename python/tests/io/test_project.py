@@ -845,3 +845,90 @@ def test_no_duplicate_walk_when_the_spec_directory_is_a_data_root(
 
     assert snapshot.content == b"LBTESTCD\nALT\n"
     assert resources.capture_reads == 1
+
+
+def test_project_configuration_anchors_relative_paths_at_the_root(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    study = project / "study"
+    study.mkdir(parents=True)
+    (project / PROJECT_CONFIGURATION_NAME).write_text(
+        'version: "1.0"\n', encoding="ascii"
+    )
+    (project / "input").mkdir()
+    (project / "input" / "dm.csv").write_bytes(b"ID\nproject\n")
+    (study / "input").mkdir()
+    (study / "input" / "dm.csv").write_bytes(b"ID\nstudy\n")
+    resources = ProjectResources(
+        project,
+        base_directory=study,
+        project_configuration=project / PROJECT_CONFIGURATION_NAME,
+        anchor_relative_paths_to_project_root=True,
+    )
+
+    snapshot = resources.capture("input/dm.csv")
+
+    assert snapshot.content == b"ID\nproject\n"
+
+
+def test_project_configuration_survives_a_base_directory_clone(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    study = project / "study"
+    other = project / "other"
+    study.mkdir(parents=True)
+    other.mkdir()
+    (project / PROJECT_CONFIGURATION_NAME).write_text(
+        'version: "1.0"\n', encoding="ascii"
+    )
+    (project / "input").mkdir()
+    (project / "input" / "dm.csv").write_bytes(b"ID\nproject\n")
+    resources = ProjectResources(
+        project,
+        base_directory=study,
+        project_configuration=project / PROJECT_CONFIGURATION_NAME,
+        anchor_relative_paths_to_project_root=True,
+    )
+
+    clone = resources.with_base_directory(other)
+    snapshot = clone.capture("input/dm.csv")
+
+    assert snapshot.content == b"ID\nproject\n"
+
+
+def test_without_configuration_relative_paths_anchor_at_the_base(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    study = project / "study"
+    study.mkdir(parents=True)
+    (study / "input").mkdir()
+    (study / "input" / "dm.csv").write_bytes(b"ID\nstudy\n")
+    resources = ProjectResources(project, base_directory=study)
+
+    snapshot = resources.capture("input/dm.csv")
+
+    assert snapshot.content == b"ID\nstudy\n"
+
+
+def test_named_root_without_configuration_anchors_at_the_root(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    study = project / "study"
+    study.mkdir(parents=True)
+    (project / "input").mkdir()
+    (project / "input" / "dm.csv").write_bytes(b"ID\nproject\n")
+    (study / "input").mkdir()
+    (study / "input" / "dm.csv").write_bytes(b"ID\nstudy\n")
+    resources = ProjectResources(
+        project,
+        base_directory=study,
+        anchor_relative_paths_to_project_root=True,
+    )
+
+    snapshot = resources.capture("input/dm.csv")
+
+    assert snapshot.content == b"ID\nproject\n"

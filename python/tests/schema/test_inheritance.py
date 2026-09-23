@@ -577,3 +577,90 @@ def test_a_column_reading_an_intermediate_depends_on_its_key_base() -> None:
     # REQ-0050: the intermediate's match values are dependencies of every
     # column that reads it, so R017 orders MATCHKEY before V.
     assert _column_dependencies(column, [], intermediates, bundle) == {"MATCHKEY"}
+
+
+def test_project_root_keeps_the_layer_written_path(tmp_path: Path) -> None:
+    layer_dir = tmp_path / "shared"
+    entry_dir = tmp_path / "project" / "study"
+    layer_dir.mkdir(parents=True)
+    entry_dir.mkdir(parents=True)
+    (layer_dir / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input: {DM: input/dm.csv}
+base: DM
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: DM.ID}
+""",
+        encoding="ascii",
+    )
+    entry = entry_dir / "spec.yaml"
+    entry.write_text(
+        """schema_version: "1.0"
+parents: [../../shared/parent.yaml]
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID]}
+""",
+        encoding="ascii",
+    )
+    bundle = load_schema_bundle(SCHEMA_ROOT)
+
+    resolved = resolve_specification(entry, bundle, project_root=tmp_path / "project")
+
+    assert resolved.specification.input["DM"].path == "input/dm.csv"
+
+
+def test_project_root_keeps_the_layer_written_schema(tmp_path: Path) -> None:
+    layer_dir = tmp_path / "shared"
+    entry_dir = tmp_path / "project" / "study"
+    layer_dir.mkdir(parents=True)
+    entry_dir.mkdir(parents=True)
+    (layer_dir / "producer.yaml").write_text(
+        """schema_version: "1.0"
+input: {SRC: input/src.csv}
+base: SRC
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SRC.ID}
+domain: OUT
+keys: [ID]
+output: {path: producer.csv, columns: [ID]}
+""",
+        encoding="ascii",
+    )
+    (layer_dir / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input:
+  DM:
+    path: input/dm.csv
+    schema: producer.yaml
+base: DM
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: DM.ID}
+""",
+        encoding="ascii",
+    )
+    entry = entry_dir / "spec.yaml"
+    entry.write_text(
+        """schema_version: "1.0"
+parents: [../../shared/parent.yaml]
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID]}
+""",
+        encoding="ascii",
+    )
+    bundle = load_schema_bundle(SCHEMA_ROOT)
+
+    resolved = resolve_specification(entry, bundle, project_root=tmp_path / "project")
+
+    assert resolved.specification.input["DM"].path == "input/dm.csv"
+    assert resolved.specification.input["DM"].schema_path == "producer.yaml"
