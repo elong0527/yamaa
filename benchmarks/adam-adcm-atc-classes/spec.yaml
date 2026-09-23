@@ -88,7 +88,7 @@ columns:
   # path records) keeps all eight ATC columns empty.
   - name: ATC1
     type: str
-    label: ATC Level 1
+    label: ATC Level 1 Text
     derivation:
       lookup:
         dataset: ATCDICT
@@ -98,7 +98,7 @@ columns:
 
   - name: ATC2
     type: str
-    label: ATC Level 2
+    label: ATC Level 2 Text
     derivation:
       lookup:
         dataset: ATCDICT
@@ -108,7 +108,7 @@ columns:
 
   - name: ATC3
     type: str
-    label: ATC Level 3
+    label: ATC Level 3 Text
     derivation:
       lookup:
         dataset: ATCDICT
@@ -118,7 +118,7 @@ columns:
 
   - name: ATC4
     type: str
-    label: ATC Level 4
+    label: ATC Level 4 Text
     derivation:
       lookup:
         dataset: ATCDICT
@@ -130,8 +130,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
-      min: 4
-      max: 4
+      min: 6
+      max: 6
   - implies:
       id: coded-medication-has-full-atc-path
       when: "CMDECOD IS NOT NULL"
