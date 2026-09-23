@@ -24,7 +24,10 @@ output:
 rows:
   - id: visit
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    # One row per study-event occurrence: the repeat key keeps repeated
+    # unscheduled visits as separate rows instead of silently merging them.
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey]
     derivations:
       VISIT:
         aggregate:
