@@ -3,6 +3,8 @@ domain: ADEX
 keys: [STUDYID, USUBJID, EXTRT]
 input:
   TRT: input/subject_treatment.csv
+  # EXDOSE is read as a number, so a stored dose with its unit attached
+  # (200 mg) fails while the file is read.
   EX: {path: input/ex.csv, types: {EXDOSE: float}}
 base: TRT
 
@@ -26,6 +28,8 @@ columns:
     label: Name of Treatment
     derivation: TRT.EXTRT
 
+  # Sum over the EX records sharing this row's study, subject and treatment;
+  # missing when none of them carries a dose.
   - name: DOSECUM
     type: float
     label: Cumulative Dose
