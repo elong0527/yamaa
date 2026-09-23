@@ -41,6 +41,7 @@ columns:
     label: Derivation Type
 
 rows:
+  # Every collected component result, unchanged.
   - id: collected
     derivations:
       PARAMCD: {source: LB.LBTESTCD}
@@ -48,6 +49,9 @@ rows:
       AVAL: {source: LB.LBSTRESN}
       DTYPE: {literal: null}
 
+  # One TOTAL record per subject and visit, adding the results in stored
+  # record order. A missing result is skipped; if all are missing, the total
+  # is empty.
   - id: total
     group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]
     derivations:
