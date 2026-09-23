@@ -97,8 +97,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 8
-      max: 8
+      min: 12
+      max: 12
   - implies:
       id: worst-severity-flag-requires-graded-treatment-emergent-event
       when: "AWSEVFL = 'Y'"
