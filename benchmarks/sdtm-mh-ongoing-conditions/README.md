@@ -7,8 +7,9 @@
 keeping each condition's start at the precision it was recorded and showing
 whether it ended before, or was still going at, the screening visit.
 
-**Input:** one record per condition reported on the form, with the collected
-start year and month, the collected end date, and the ongoing tick box.
+**Input:** one record per condition reported on the form, each numbered by
+its record sequence (`MHSEQ`), with the collected start year and month,
+the collected end date, and the ongoing tick box.
 
 **Variables:**
 
