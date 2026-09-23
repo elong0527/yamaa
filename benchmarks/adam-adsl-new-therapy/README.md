@@ -9,9 +9,9 @@ treatment (`NACTDY`), and a flag marking subjects who started such
 therapy (`NACTFL`).
 
 **Input:** one subject-level table carrying the treatment start date
-`TRTSDT`, alongside concomitant medication records carrying `CMCAT` and
-`CMSTDTC`, plus procedure records carrying `PRCAT`, `PRSCAT`, and
-`PRSTDTC`.
+`TRTSDT`, alongside concomitant medication records carrying a category
+(`CMCAT`) and start date (`CMSTDTC`), plus procedure records carrying a
+category (`PRCAT`), subcategory (`PRSCAT`), and start date (`PRSTDTC`).
 
 **Variables:**
 
@@ -28,7 +28,8 @@ therapy (`NACTFL`).
 - `NACTFL` holds `Y` when `NACTDT` is present and is absent
   otherwise.
 
-**Note:** a flagged therapy start falls on or after the treatment
-start date.
+**Note:** a qualifying therapy that starts before the treatment start
+date stops the run, so a flagged therapy start always falls on or
+after the treatment start date.
 
 **Standard:** ADaM | **Domain:** ADSL
