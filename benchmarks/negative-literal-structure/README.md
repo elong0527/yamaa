@@ -12,12 +12,11 @@ holding `younger`.
 **Variables:**
 
 - `AGEGRP` would contain `elderly` for subjects aged 65 or older
-  and `younger` for younger subjects.
-
-The older group's fixed value is written as a structure instead of
-a single value, and no reader may guess which part names the
-group, so the run is rejected before any data is read and no
-artifact is accepted.
+  and `younger` for everyone else, including a subject with no
+  recorded age. The older group's fixed value is written as a
+  structure instead of a single value, and no reader may guess which
+  part names the group, so the run is rejected before any data is
+  read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
