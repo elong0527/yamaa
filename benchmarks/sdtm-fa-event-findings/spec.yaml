@@ -1,0 +1,163 @@
+schema_version: "1.0"
+domain: FA
+keys: [STUDYID, USUBJID, FASEQ]
+input:
+  AE:
+    path: input/ae.csv
+    types:
+      AESEQ: int
+      AEDTC: date
+  FORM:
+    path: input/form.csv
+    types:
+      RESULTNUM: float
+      DTC: date
+
+output:
+  path: fa.csv
+  columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
+  order_by: [FASEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: FA
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: FORM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: FORM.USUBJID
+
+  - name: FATESTCD
+    type: str
+    label: Findings About Test Short Name
+
+  - name: FATEST
+    type: str
+    label: Findings About Test Name
+
+  - name: TESTORD
+    type: int
+    label: Test order within a linked event
+    derivation:
+      case:
+        - when: "FATESTCD = 'LOC'"
+          then:
+            literal: 1
+        - when: "FATESTCD = 'SIZE'"
+          then:
+            literal: 2
+        - when: "FATESTCD = 'BIOPSY'"
+          then:
+            literal: 3
+
+  - name: FASEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [FORM.AELNKID, TESTORD]
+
+  - name: FAOBJ
+    type: str
+    label: Object of the Observation
+    derivation:
+      lookup:
+        dataset: AE
+        key_base: FORM.AELNKID
+        key: AELNKID
+        value: AETERM
+
+  - name: FACAT
+    type: str
+    label: Category for Findings About
+    derivation:
+      literal: AE
+
+  - name: FAORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: FAORRESU
+    type: str
+    label: Original Units
+    derivation:
+      case:
+        - when: "FATESTCD = 'SIZE'"
+          then:
+            source: FORM.UNIT
+
+  - name: FASTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+
+  - name: FASTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation:
+      case:
+        - when: "FATESTCD = 'SIZE'"
+          then:
+            source: FORM.RESULTNUM
+
+  - name: FASTRESU
+    type: str
+    label: Standard Units
+    derivation:
+      case:
+        - when: "FATESTCD = 'SIZE'"
+          then:
+            source: FORM.UNIT
+
+  - name: FALNKID
+    type: str
+    label: Link Identifier
+    derivation: FORM.AELNKID
+
+  - name: FADTC
+    type: date
+    label: Date/Time of Collection
+    derivation: FORM.DTC
+
+rows:
+  - id: location
+    dataset: FORM
+    filter: "FORM.QUESTION = 'LOCATION'"
+    derivations:
+      FATESTCD:
+        literal: LOC
+      FATEST:
+        literal: Location
+      FAORRES: FORM.RESULT
+      FASTRESC: FORM.RESULT
+
+  - id: size
+    dataset: FORM
+    filter: "FORM.QUESTION = 'SIZE'"
+    derivations:
+      FATESTCD:
+        literal: SIZE
+      FATEST:
+        literal: Size
+      FAORRES: FORM.RESULT
+      FASTRESC: FORM.RESULT
+
+  - id: biopsy
+    dataset: FORM
+    filter: "FORM.QUESTION = 'BIOPSY'"
+    derivations:
+      FATESTCD:
+        literal: BIOPSY
+      FATEST:
+        literal: Biopsied
+      FAORRES: FORM.RESULT
+      FASTRESC: FORM.RESULT
