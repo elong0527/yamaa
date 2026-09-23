@@ -23,8 +23,10 @@ identifier.
 - `IDVARVAL` is empty on a dataset-level row and carries the
   sequence number of the related record as text on a
   record-level row.
-- `RELTYPE` is blank throughout: no row here needs a relationship
-  type beyond what `RELID` already groups.
+- `RELTYPE` carries `ONE` on the TU row and `MANY` on the TR row:
+  one tumor identification relates to many tumor results. This is
+  the only use of `RELTYPE` in SDTM; the record-level AE/CM rows
+  leave it blank.
 - `RELID` names the relationship the row takes part in; rows
   sharing a value are related to one another, and every row
   carries one.

@@ -35,8 +35,6 @@ columns:
   - name: RELTYPE
     type: str
     label: Relationship Type
-    derivation:
-      literal: null
 
   - name: RELID
     type: str
@@ -57,6 +55,8 @@ rows:
         literal: TULNKID
       IDVARVAL:
         literal: null
+      RELTYPE:
+        literal: ONE
       RELID:
         literal: "1"
 
@@ -74,6 +74,8 @@ rows:
         literal: TRLNKID
       IDVARVAL:
         literal: null
+      RELTYPE:
+        literal: MANY
       RELID:
         literal: "1"
 
@@ -91,6 +93,8 @@ rows:
         literal: AESEQ
       IDVARVAL:
         source: AE.AESEQ
+      RELTYPE:
+        literal: null
       RELID:
         literal: "2"
 
@@ -108,6 +112,8 @@ rows:
         literal: CMSEQ
       IDVARVAL:
         source: CM.CMSEQ
+      RELTYPE:
+        literal: null
       RELID:
         literal: "2"
 
@@ -125,3 +131,11 @@ verifications:
       id: record-row-carries-subject-and-record-pointer
       when: "IDVARVAL IS NOT NULL"
       then: "USUBJID IS NOT NULL"
+  - implies:
+      id: dataset-row-carries-relationship-type
+      when: "IDVARVAL IS NULL"
+      then: "RELTYPE IN ('ONE', 'MANY')"
+  - implies:
+      id: record-row-carries-no-relationship-type
+      when: "IDVARVAL IS NOT NULL"
+      then: "RELTYPE IS NULL"
