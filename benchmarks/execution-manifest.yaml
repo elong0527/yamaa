@@ -723,6 +723,9 @@ examples:
   sdtm-suppmh-linkage:
     status: executable
     runtimes: ['python']
+  sdtm-sv-subject-visits:
+    status: executable
+    runtimes: ['python']
   sdtm-suppmh-qualifiers:
     status: executable
     runtimes: ['python']
