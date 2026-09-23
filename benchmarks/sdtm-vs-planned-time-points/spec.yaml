@@ -1,0 +1,143 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW: {path: input/vs_raw.csv, types: {VSSEQ: int, VSORRES: float}}
+  TPT: {path: input/tpt.csv, types: {VSTPTNUM: int}}
+  EX: input/ex.csv
+  DM: input/dm.csv
+base: VS_RAW
+intermediates:
+  - id: TPTPLAN
+    dataset: TPT
+    key: VSTPT
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS_RAW.VSSEQ
+    verifications:
+      not_missing: {}
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: VS_RAW.VISIT
+
+  - name: VSTPT
+    type: str
+    label: Planned Time Point Name
+    derivation: VS_RAW.VSTPT
+
+  - name: VSTPTNUM
+    type: int
+    label: Planned Time Point Number
+    derivation: TPTPLAN.VSTPTNUM
+    verifications:
+      not_missing: {}
+
+  - name: VSELTM
+    type: str
+    label: Planned Elapsed Time
+    derivation: TPTPLAN.VSELTM
+    verifications:
+      not_missing: {}
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: VS_RAW.VSTESTCD
+    verifications:
+      allowed_values:
+        values: [PULSE, SYSBP, DIABP]
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: VS_RAW.VSORRES
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+    derivation: VS_RAW.VSORRESU
+    verifications:
+      allowed_values:
+        values: [beats/min, mmHg]
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation: VS_RAW.VSORRES
+
+  - name: VSSTRESU
+    type: str
+    label: Standard Units
+    derivation: VS_RAW.VSORRESU
+
+  - name: VSDTC
+    type: datetime
+    label: Date/Time of Measurements
+    derivation: VS_RAW.VSDTC
+    verifications:
+      not_missing: {}
+
+  - name: EXSTDTC
+    type: datetime
+    label: Date/Time of First Dose
+    derivation: EX.EXSTDTC
+
+  - name: RFSTDTC
+    type: date
+    label: Subject Reference Start Date/Time
+    derivation: DM.RFSTDTC
+
+  - name: VSDT
+    type: date
+    label: Date of Measurements
+    derivation:
+      to_date:
+        source: VSDTC
+
+  - name: VSDY
+    type: int
+    label: Study Day of Vital Signs
+    derivation:
+      study_day:
+        date: VSDT
+        reference: RFSTDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 24
+      max: 24
+  - implies:
+      id: post-dose-reading-at-or-after-dose
+      when: "VSTPTNUM > 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
+      then: "VSDTC >= EXSTDTC"
+  - implies:
+      id: pre-dose-reading-at-or-before-dose
+      when: "VSTPTNUM = 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
+      then: "VSDTC <= EXSTDTC"
