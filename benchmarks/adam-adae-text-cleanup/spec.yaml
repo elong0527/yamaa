@@ -29,6 +29,8 @@ columns:
     label: Sponsor-Defined Identifier
     derivation: AE.AESPID
 
+  # The three digits after "AE-" become the number; a missing identifier
+  # gives 0 and any other shape gives -1.
   - name: AEREFNUM
     type: int
     label: Adverse Event Reference Number
@@ -67,6 +69,8 @@ columns:
         source: AE.AEREL
         missing: not reported
 
+  # Upper-cases the lower-cased causality, so the "not reported" fill for a
+  # missing causality arrives as NOT REPORTED.
   - name: AREL
     type: str
     label: Analysis Causality
