@@ -630,6 +630,9 @@ examples:
   sdtm-dm-metadata:
     status: executable
     runtimes: ['python']
+  sdtm-dm-race-ethnicity:
+    status: executable
+    runtimes: ['python']
   sdtm-dm-dates:
     status: executable
     runtimes: ['python']
@@ -688,6 +691,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-se-subject-elements:
+    status: executable
+    runtimes: ['python']
+  sdtm-supdm-race-selections:
     status: executable
     runtimes: ['python']
   sdtm-suppmh-linkage:
