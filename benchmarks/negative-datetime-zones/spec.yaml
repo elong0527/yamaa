@@ -29,6 +29,9 @@ columns:
     label: Reported Term for the Adverse Event
     derivation: AE.AETERM
 
+  # A datetime is a site-clock reading with no zone or offset. Start text
+  # carrying either (Z, +02:00) is not a datetime, and nothing replaces a
+  # failed conversion, so that text stops the run.
   - name: ASTDTM
     type: datetime
     label: Analysis Start Date/Time
