@@ -14,8 +14,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: VS
+    derivation: {literal: VS}
 
   - name: STUDYID
     type: str
@@ -126,8 +125,7 @@ columns:
     derivation:
       case:
         - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
-          then:
-            literal: NOT DONE
+          then: {literal: NOT DONE}
 
   - name: VSREASND
     type: str
