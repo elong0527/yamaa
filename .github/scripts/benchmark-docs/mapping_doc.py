@@ -170,9 +170,49 @@ def submission(col):
     return block if isinstance(block, dict) else {}
 
 
+# Every ADaM dataset name starts with "AD", but so could a future SDTM
+# custom domain -- the prefix alone is not a classifier. Keep an explicit
+# registry of the ADaM datasets the corpus uses; an AD-prefixed name that
+# is not registered fails loudly instead of silently picking the wrong
+# sheet headers.
+ADAM_DATASETS = frozenset(
+    {
+        "ADAE",
+        "ADCE",
+        "ADCM",
+        "ADEG",
+        "ADEX",
+        "ADLB",
+        "ADLBC",
+        "ADOE",
+        "ADQS",
+        "ADRS",
+        "ADSL",
+        "ADTR",
+        "ADTTE",
+        "ADVS",
+    }
+)
+
+
 def is_adam(spec):
-    """ADaM datasets are named ADSL, ADAE, ADVS, ...; SDTM domains are not."""
-    return str(spec.get("domain", "")).upper().startswith("AD")
+    """True when the spec's domain is a registered ADaM dataset.
+
+    Classification is an exact lookup, not the "AD" prefix: a future SDTM
+    custom domain starting with "AD" (or a new ADaM dataset) must not
+    silently render the wrong sheet headers. An AD-prefixed name outside
+    the registry raises, so the new domain gets registered -- or the
+    domain fixed -- explicitly.
+    """
+    domain = str(spec.get("domain") or "").upper()
+    if domain in ADAM_DATASETS:
+        return True
+    if domain.startswith("AD"):
+        raise ValueError(
+            f"domain {domain!r} starts with 'AD' but is not a registered ADaM "
+            "dataset; add it to ADAM_DATASETS in mapping_doc.py or fix the domain"
+        )
+    return False
 
 
 def type_label(col_type, adam):

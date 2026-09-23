@@ -8,7 +8,6 @@ import yaml
 
 import mapping_doc
 
-
 HERE = Path(__file__).resolve().parent
 BENCHMARKS = HERE.parents[2] / "benchmarks"
 
@@ -18,10 +17,10 @@ def load_spec(name):
 
 
 def mapping_sheet(name):
-    sheets = dict(
-        (tab_id, (headers, rows))
+    sheets = {
+        tab_id: (headers, rows)
         for tab_id, _, headers, rows in mapping_doc.mapping_sheets(load_spec(name))
-    )
+    }
     return sheets["mapping"]
 
 
@@ -104,14 +103,29 @@ class AdamMappingTests(unittest.TestCase):
         self.assertEqual(by_name["AEDECOD"][3], "character")
 
 
+class AdamDetectionTests(unittest.TestCase):
+    def test_registered_adam_dataset_is_adam(self):
+        self.assertTrue(mapping_doc.is_adam(load_spec("adam-adae-death")))
+
+    def test_sdtm_domain_is_not_adam(self):
+        self.assertFalse(mapping_doc.is_adam(load_spec("sdtm-dm-basic")))
+
+    def test_unregistered_ad_prefixed_domain_raises(self):
+        with self.assertRaises(ValueError):
+            mapping_doc.is_adam({"domain": "ADHOC"})
+
+    def test_missing_domain_defaults_to_sdtm(self):
+        self.assertFalse(mapping_doc.is_adam({}))
+
+
 class SheetStructureTests(unittest.TestCase):
     def test_adlb_row_construction_keeps_paramcd_and_param_separate(self):
-        sheets = dict(
-            (tab_id, (headers, rows))
+        sheets = {
+            tab_id: (headers, rows)
             for tab_id, _, headers, rows in mapping_doc.mapping_sheets(
                 load_spec("adam-adlb-bds")
             )
-        )
+        }
         headers, rows = sheets["row-construction"]
         self.assertEqual(headers[:4], ["Template", "Include when", "PARAMCD", "PARAM"])
         templates = {row[0]: row for row in rows}
