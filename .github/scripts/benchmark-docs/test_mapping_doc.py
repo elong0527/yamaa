@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for mapping_doc.py: the human-review "Derived Excel Specification" dashboard section."""
+"""Tests for mapping_doc.py: the human-review "Mapping spec" dashboard section."""
 
 import unittest
 from pathlib import Path
