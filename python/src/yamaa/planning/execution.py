@@ -1419,7 +1419,13 @@ def _aggregate_references(
         unqualified = [name for name in unqualified if name not in derive_names]
 
     diagnostics = _aggregate_context(
-        relation, group_by, between, expr, operation_path, scope
+        relation,
+        group_by,
+        between,
+        tuple(field for field in ("key", "key_base") if payload.get(field) is not None),
+        expr,
+        operation_path,
+        scope,
     )
     if diagnostics:
         return diagnostics
@@ -1549,6 +1555,7 @@ def _aggregate_context(
     relation: str | None,
     group_by: Sequence[str],
     between: object,
+    key_fields: Sequence[str],
     expr: str,
     operation_path: str,
     scope: _Scope,
@@ -1585,6 +1592,23 @@ def _aggregate_context(
                 "a grouped row aggregate has no separate right side",
                 f"{operation_path}.between",
             )
+        if key_fields:
+            # REQ-0142: the group is the match. A key pair here would not
+            # widen the read to the scope it names; the aggregate would still
+            # reduce the current group, so the declaration is refused rather
+            # than silently ignored.
+            return [
+                _diagnostic(
+                    "invalid_aggregate_context",
+                    [f"{operation_path}.{field}" for field in key_fields],
+                    {
+                        "expr": expr,
+                        "reason": "a grouped row aggregate reads its own group "
+                        "and declares no key pairs",
+                    },
+                    requirement="REQ-0142",
+                )
+            ]
         return []
 
     if not scope.column_phase:

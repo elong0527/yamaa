@@ -28,6 +28,7 @@ conditions:
   inheritance_cycle: {rules: [R017], phases: [validation]}
   integer_overflow: {rules: [R010], phases: [derivation]}
   internal_column_in_keys: {rules: [R005], phases: [validation]}
+  invalid_aggregate_context: {rules: [R013], phases: [validation]}
   invalid_calendar_date: {rules: [R016], phases: [impute]}
   invalid_clear: {rules: [R017], phases: [validation]}
   invalid_date_text: {rules: [R016], phases: [impute]}
