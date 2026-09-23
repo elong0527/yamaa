@@ -294,6 +294,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.mapping.dict_yaml` | `"project_path"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.case_sensitive` | `"bool"` | `false` | `true` | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
+| `expressions.mapping.unmapped` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.strict` | `"bool"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.lookup.value` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
