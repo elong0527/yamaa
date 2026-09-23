@@ -136,8 +136,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
   - row_count:
-      min: 14
-      max: 14
+      min: 20
+      max: 20
   - row_count:
       id: one-baseline-record-per-subject-and-parameter
       group_by: [STUDYID, USUBJID, PARAMCD]
