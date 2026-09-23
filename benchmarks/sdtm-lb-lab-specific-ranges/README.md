@@ -7,22 +7,25 @@
 lab, test, sex and age band, and by the period the range was in effect --
 and flag each result: `LBSTNRLO`, `LBSTNRHI`, and `LBNRIND`.
 
-**Input:** collected results, one row per result carrying the test code,
-recorded sex, the collecting lab, birth date, collection date and numeric
-result, plus a reference dictionary keyed by lab, test code, sex and age
-band, each entry carrying the dates it was in effect, the unit and the
-lower and upper limits.
+**Input:** lab results as ODM item data -- one row per collected item, with
+the test code, the collecting lab, the collection date and the numeric
+result as `IT.LB.*` items of a repeating `IG.LB` panel, and recorded sex
+and birth date as `IT.DM.*` items -- plus a reference dictionary keyed by
+lab, test code, sex and age band, each entry carrying the dates it was in
+effect, the unit and the lower and upper limits.
 
 **Variables:**
 
-- `LBTESTCD` is the test code as collected; together with sex, the lab and
-  the subject's age at collection it selects the reference entry.
-- `SEX` is recorded sex as collected; together with the test code, the lab
-  and the subject's age at collection it selects the reference entry.
-- `LBNAM` is the collecting lab as collected; different labs may carry
-  different ranges for the same test.
-- `LBSTRESN` is the numeric result in standard units as collected; missing
-  when the result was not collected.
+- `LBTESTCD` is the test code from the `IT.LB.LBTESTCD` item; together
+  with sex, the lab and the subject's age at collection it selects the
+  reference entry.
+- `SEX` is recorded sex from the `IT.DM.SEX` item; together with the test
+  code, the lab and the subject's age at collection it selects the
+  reference entry.
+- `LBNAM` is the collecting lab from the `IT.LB.LBNAM` item; different labs
+  may carry different ranges for the same test.
+- `LBSTRESN` is the numeric result in standard units from the
+  `IT.LB.LBSTRESN` item; missing when the result was not collected.
 - `LBORRESU` is the reference unit for the lab, test, sex and age-band
   combination in effect on the collection date.
 - `LBSTNRLO` is the lower reference limit in standard units from that
@@ -36,6 +39,8 @@ lower and upper limits.
 **Note:** when a lab revises a range, the entry in effect on the collection
 date wins -- a result collected on the first day of the new range is judged
 against the new limits -- and a subject whose age falls on an age-band
-boundary takes the band that starts at that age.
+boundary takes the band that starts at that age. Each output row is built
+from one `IT.LB.LBDTC` item, with the other items of its panel read
+alongside; `LBSEQ` is the panel's repeat key.
 
 **Standard:** SDTM | **Domain:** LB
