@@ -21,7 +21,7 @@ def _fail(path: str, condition: str, **context: object) -> None:
             ValidationDiagnostic(
                 condition=condition,
                 spec_paths=(path,),
-                requirement="REQ-1248",
+                requirement="REQ-1249",
                 context=context,
             )
         ]
@@ -29,10 +29,35 @@ def _fail(path: str, condition: str, **context: object) -> None:
 
 
 def _catalog_records(
-    catalog: dict[str, object], resources: ProjectResources, path: str
+    catalog: object, resources: ProjectResources, path: str
 ) -> list[dict[str, object]]:
-    written = catalog["path"]
-    assert isinstance(written, str)
+    if not isinstance(catalog, dict) or set(catalog) - {
+        "path",
+        "id_column",
+        "types",
+        "unique_columns",
+    }:
+        _fail(path, "invalid_row_catalog", reason="invalid_declaration")
+    written = catalog.get("path")
+    if not isinstance(written, str) or not written:
+        _fail(path, "invalid_row_catalog", reason="invalid_path")
+    id_column = catalog.get("id_column")
+    if not isinstance(id_column, str) or not _IDENTIFIER.fullmatch(id_column):
+        _fail(path, "invalid_row_catalog", reason="invalid_id_column")
+    types = catalog.get("types", {})
+    if not isinstance(types, dict) or any(
+        not isinstance(name, str)
+        or not _IDENTIFIER.fullmatch(name)
+        or kind not in ("str", "int", "float")
+        for name, kind in types.items()
+    ):
+        _fail(path, "invalid_row_catalog", reason="invalid_types")
+    unique_columns = catalog.get("unique_columns", [])
+    if not isinstance(unique_columns, list) or any(
+        not isinstance(name, str) or not _IDENTIFIER.fullmatch(name)
+        for name in unique_columns
+    ):
+        _fail(path, "invalid_row_catalog", reason="invalid_unique_columns")
     try:
         snapshot = resources.capture(written)
         resources.verify(snapshot)
@@ -55,15 +80,10 @@ def _catalog_records(
         _fail(path, "invalid_row_catalog", reason="duplicate_header")
     if not records:
         _fail(path, "invalid_row_catalog", reason="empty_catalog")
-    id_column = catalog["id_column"]
     if id_column not in header:
         _fail(path, "invalid_row_catalog", reason="missing_id_column")
-    types = catalog.get("types") or {}
-    assert isinstance(types, dict)
     if set(types) - set(header):
         _fail(path, "invalid_row_catalog", reason="unknown_typed_column")
-    unique_columns = catalog.get("unique_columns") or []
-    assert isinstance(unique_columns, list)
     if len(unique_columns) != len(set(unique_columns)) or set(unique_columns) - set(
         header
     ):
@@ -84,7 +104,7 @@ def _catalog_records(
             _fail(path, "invalid_row_catalog", reason="duplicate_id", line=line)
         seen.add(identifier)
         for name, kind in types.items():
-            if kind not in ("int", "float"):
+            if kind == "str":
                 continue
             try:
                 item[name] = int(item[name]) if kind == "int" else float(item[name])
@@ -112,7 +132,7 @@ def _substitute(
     if not isinstance(value, str) or "${" not in value:
         return value
     match = _PLACEHOLDER.fullmatch(value)
-    if match:
+    if match and key not in ("filter", "when"):
         name = match.group(1)
         if name not in record:
             _fail(path, "unknown_row_catalog_column", column=name)
@@ -160,12 +180,15 @@ def expand_row_catalogs(
             expanded_rows.append(row)
             continue
         path = f"rows[{index}].catalog"
+        row_id = row.get("id")
+        if not isinstance(row_id, str) or not _IDENTIFIER.fullmatch(row_id):
+            _fail(path, "invalid_row_catalog", reason="invalid_template_id")
         catalog = row.pop("catalog")
-        assert isinstance(catalog, dict)
         for record in _catalog_records(catalog, view, path):
             variant = _substitute(row, record, path)
-            assert isinstance(variant, dict)
-            variant["id"] = f"{row['id']}_{record[catalog['id_column']]}"
+            if not isinstance(variant, dict):
+                _fail(path, "invalid_row_catalog", reason="invalid_template")
+            variant["id"] = f"{row_id}_{record[catalog['id_column']]}"
             if variant["id"] in seen_ids:
                 _fail(path, "invalid_row_catalog", reason="duplicate_generated_id")
             seen_ids.add(variant["id"])

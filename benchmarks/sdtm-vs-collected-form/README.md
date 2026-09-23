@@ -46,10 +46,9 @@ blood pressure not-done flag with its reason, each as its own item.
 - `VSREASND` is the reason the form gives for blood pressure
   not done; blank otherwise.
 
-**Note:** each visit's form group fans out into one record per test, and
-records are grouped by test rather than kept in form order;
-`VSSEQ` numbers them per subject by visit date, then in form
-order. A not-done blood pressure still produces its two records
+**Note:** each visit's form group fans out into one record per test.
+`VSSEQ` numbers them per subject by visit date, then in test order
+within each visit. A not-done blood pressure still produces its two records
 so the reason is kept, but they carry no result, unit, position,
 or standardized value.
 

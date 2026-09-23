@@ -2386,7 +2386,7 @@ def _rebase_local_path(value, layer_path, entry_path):
 
 
 def rebase_layer_paths(layer, layer_path, entry_path):
-    """Rebase current path-valued dataset and output fields to the entry file."""
+    """Rebase layer-owned resource paths to the entry file."""
     rebased = copy.deepcopy(layer)
     datasets = rebased.get('input')
     if isinstance(datasets, dict):
@@ -2405,6 +2405,16 @@ def rebase_layer_paths(layer, layer_path, entry_path):
             if isinstance(output.get(field), str):
                 output[field] = _rebase_local_path(
                     output[field], layer_path, entry_path
+                )
+    rows = rebased.get('rows')
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            catalog = row.get('catalog')
+            if isinstance(catalog, dict) and isinstance(catalog.get('path'), str):
+                catalog['path'] = _rebase_local_path(
+                    catalog['path'], layer_path, entry_path
                 )
     return rebased
 

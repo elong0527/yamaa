@@ -1211,7 +1211,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1245](../operations/lookup.md#req-1245) | `operations/lookup.md` | Schema prose |
 | [REQ-1246](../storage/resources.md#req-1246) | `storage/resources.md` | Schema prose |
 | [REQ-1247](../storage/resources.md#req-1247) | `storage/resources.md` | Schema prose |
-| [REQ-1248](../execution/rows.md#req-1248) | `execution/rows.md` | Schema prose |
+| [REQ-1249](../execution/rows.md#req-1249) | `execution/rows.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

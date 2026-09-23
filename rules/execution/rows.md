@@ -72,7 +72,7 @@ keep first-occurrence group order.
 operation repeats a candidate a data-dependent number of times. No generated
 index supports the repetition. A source value may decide whether a written
 row template keeps one candidate. The source value cannot create more rows.
-A row catalog under [REQ-1248](rows.md#req-1248) is an authored specification
+A row catalog under [REQ-1249](rows.md#req-1249) is an authored specification
 resource expanded into written-equivalent templates before input data is read.
 
 <a id="req-0041"></a>
@@ -121,9 +121,9 @@ never which input the column derivations read.
 
 ### Catalog expansion
 
-<a id="req-1248"></a>
+<a id="req-1249"></a>
 
-**REQ-1248.** A row template may declare `catalog` to generate a fixed set of
+**REQ-1249.** A row template may declare `catalog` to generate a fixed set of
 ordinary row templates during specification resolution. `catalog.path` names a
 CSV specification resource under the approved project roots. Its first record
 is a header of unique identifiers; each later record has one present value per
@@ -174,7 +174,7 @@ structural constraints come from its schema declaration.
 | `row_class.group_by` | Grouping keys over input records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
 | `row_class.filter` | Predicate selecting input records for an ungrouped row template or completed candidate groups for a grouped row template. |
 | `row_class.derivations` | Columns this row template derives; [Specification structure](../specification/structure.md) owns coverage across row templates. |
-| `row_class.catalog` | Fixed CSV catalog expanded into ordinary row templates under [REQ-1248](rows.md#req-1248). |
+| `row_class.catalog` | Fixed CSV catalog expanded into ordinary row templates under [REQ-1249](rows.md#req-1249). |
 | `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
 
 ## Error conditions
