@@ -687,6 +687,9 @@ examples:
   sdtm-mh-prespecified-conditions:
     status: executable
     runtimes: ['python']
+  sdtm-relrec-dataset-level:
+    status: executable
+    runtimes: ['python']
   sdtm-relrec-links:
     status: executable
     runtimes: ['python']
