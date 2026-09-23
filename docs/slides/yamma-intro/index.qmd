@@ -15,6 +15,7 @@ format:
     scrollable: true
     transition: fade
     background-transition: fade
+    logo: ../../assets/logo.jpeg
 title-slide-attributes:
   data-background-color: "#385898"
 ---
@@ -186,6 +187,12 @@ benchmarks/sdtm-dm-basic/
 
 To review: read the spec, check the golden output, leave a comment.
 Your review moves a benchmark from `draft` to `reviewed`.
+
+## Age groups, live
+
+<iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+<span class="small">Scroll inside the frame to explore the spec, inputs, and golden output — no new tab.</span>
 
 ## Bring real experience — without real data
 
