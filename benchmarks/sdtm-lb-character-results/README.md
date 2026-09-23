@@ -15,12 +15,16 @@ test and visit separate (the two creatinine records).
 
 **Variables:**
 
+- `LBSEQ` numbers the records in the documented collection order
+  within each subject.
 - `LBTESTCD` is the test short name for the collection form:
   `PROT` (protein), `GLUC` (glucose), `KETON` (ketones), `CREAT`
   (creatinine), or `CK` (creatine kinase).
 - `LBTEST` is the test name for the collection form.
 - `LBORRES` is the result as collected: a dipstick grade such as
   `Neg`, `tr`, or `1 plus`, or a censored value such as `<0.1`.
+- `LBORRESU` is the unit as reported on the collection form; empty
+  when the form records no unit.
 - `LBSTRESC` is the standardized character result: known dipstick
   spellings fold to `NEGATIVE`, `TRACE`, `1+`, or `2+`; anything
   else is kept as collected.
@@ -33,8 +37,6 @@ test and visit separate (the two creatinine records).
   otherwise.
 - `LBDTC` is the specimen collection date from the same form
   occurrence.
-- `LBSEQ` numbers the records in the documented collection order
-  within each subject.
 
 **Note:** a grade spelling outside the known spellings is kept as
 collected rather than dropped, so a new spelling shows up in the
