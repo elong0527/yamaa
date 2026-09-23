@@ -31,15 +31,15 @@ columns:
     label: Subject Identifier for the Study
     derivation: USUBJID
 
-  - name: RACECOUNT
-    type: int
-    label: Number of Reported Races
+  - name: RACEMIN
+    type: str
+    label: Alphabetically First Reported Race
     derivation:
       aggregate:
         key: [StudyOID, SubjectKey]
         key_base: [STUDYID, USUBJID]
         filter: "ODM.ItemOID = 'IT.DM.RACE'"
-        expr: "COUNT(ODM.Value)"
+        expr: "MIN(ODM.Value)"
 
   - name: RACESINGLE
     type: str
@@ -66,7 +66,7 @@ columns:
     label: Race
     derivation:
       case:
-        - when: "RACECOUNT > 1"
+        - when: "RACEMIN < RACESINGLE"
           then:
             literal: MULTIPLE
         - otherwise:

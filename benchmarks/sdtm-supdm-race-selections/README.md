@@ -15,8 +15,10 @@ input with `sdtm-dm-race-ethnicity`.
 - **RDOMAIN**: the related domain, always `DM`.
 - **IDVAR** / **IDVARVAL**: the identifying variable and its value,
   `USUBJID` and the subject identifier, linking the record to its DM row.
-- **QNAM**: the qualifier name, `RACE1` for the first reported race and
-  `RACE2` for the second; only subjects with several reported races appear.
+- **QNAM**: the qualifier name, `RACE1` for the alphabetically first reported
+  race and `RACE2` for the second; only subjects with several reported races
+  appear. The input carries no report order, so the numbering follows
+  alphabetical order.
 - **QLABEL**: the qualifier label, `Race 1` or `Race 2`.
 - **QVAL**: the reported race in controlled terms, as in **RACE** of the
   companion example.
