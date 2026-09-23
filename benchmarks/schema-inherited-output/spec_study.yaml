@@ -1,0 +1,8 @@
+schema_version: "1.0"
+parents: spec_shared.yaml
+
+input:
+  DM: input/dm.csv
+
+metadata:
+  scope: study

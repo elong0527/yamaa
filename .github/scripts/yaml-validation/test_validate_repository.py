@@ -2744,24 +2744,69 @@ class TestSpecificationInheritance(unittest.TestCase):
             {'schema_version': '1.0', 'output': {'path': 'out.csv', 'columns': []}},
         )
 
-    def test_rejects_entry_that_inherits_output(self):
+    def test_entry_inherits_output_where_its_layer_names(self):
+        # Issue #845: an entry may omit output (REQ-0623); the inherited
+        # paths keep the provenance of the layer that wrote them (REQ-0629).
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'common').mkdir()
+            (root / 'study').mkdir()
+            (root / 'common' / 'parent.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'output:\n'
+                '  path: out.csv\n'
+                '  columns: []\n'
+                '  warning_log: warnings.csv\n'
+            )
+            spec_path = root / 'study' / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: ../common/parent.yaml\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            resolved['output'],
+            {
+                'path': '../common/out.csv',
+                'columns': [],
+                'warning_log': '../common/warnings.csv',
+            },
+        )
+
+    def test_rejects_a_chain_no_layer_gives_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'output: {path: out.csv, columns: [A]}\n'
+                'input: {DM: input/dm.csv}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: A\n'
+                '    type: str\n'
+                '    label: A\n'
+                '    derivation: {literal: value}\n'
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
+                'domain: TEST\n'
+                'keys: [A]\n'
+            )
+            with open(spec_path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+
+            errors = VALIDATOR.validate_spec_document(
+                spec, 'example/spec.yaml', spec_path, self.env
             )
 
-            resolved, errors, _ = self.resolve(spec_path)
-
-        self.assertIsNone(resolved)
-        self.assertIn('missing_entry_output', '\n'.join(errors))
+        # REQ-0657: requiredness applies to the resolved specification.
+        self.assertIn('missing_required_field', '\n'.join(errors))
+        self.assertIn('example/spec.yaml.output', '\n'.join(errors))
 
     def test_rejects_parent_url(self):
         with tempfile.TemporaryDirectory() as temp_dir:

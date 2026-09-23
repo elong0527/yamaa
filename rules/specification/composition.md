@@ -102,12 +102,12 @@ before composition. Inheritance never migrates schema versions.
 
 **REQ-0623.** A layer is a schema-shaped fragment and need not be a complete
 `root_class`. Unknown root fields and invalid values are errors in the layer
-that writes them. Requiredness is deferred for root fields other than the entry
-file's `output`, for direct members of the four keyed root collections, and for
-every depth inside a `columns` member, because a later contribution may supply
-their missing fields. The entry file must declare its complete, non-null
-`output`; an inherited layer cannot choose the final artifact membership or
-order.
+that writes them. Requiredness is deferred for every root field, for direct
+members of the four keyed root collections, and for every depth inside a
+`columns` member, because a later contribution may supply their missing fields.
+The entry file is no exception: it may omit `output` and inherit it, so a
+shared layer can own the artifact membership and order of every specification
+that inherits it.
 
 <a id="req-0624"></a>
 
@@ -161,7 +161,11 @@ value.
 **REQ-0629.** Mappings and lists nested inside a replaced field are replaced
 with
 it. For example, later root `metadata`, `keys`, `output`, and `verifications`
-replace their complete inherited values.
+replace their complete inherited values. An entry that inherits `output`
+therefore publishes where the layer that wrote it names, because its
+`path`, `warning_log`, and `verification_log` keep that layer's provenance
+under [REQ-0635](composition.md#req-0635); an entry that publishes elsewhere
+declares its complete `output`.
 
 <a id="req-0630"></a>
 
@@ -396,8 +400,11 @@ reports every implicated file and value.
 
 <a id="req-0657"></a>
 
-**REQ-0657.** An entry file that omits
-`output` fails with `missing_entry_output`.
+**REQ-0657.** A resolved specification to which no layer contributed `output`
+fails as `missing_required_field` at `output`, with no requirement attached,
+because the root field's requiredness is structural. An entry file that omits
+`output` is not itself an error: it inherits the field under
+[REQ-0623](composition.md#req-0623).
 
 <a id="req-0658"></a>
 
@@ -426,8 +433,8 @@ constraint, with contributing provenance included in the diagnostic.
 Representative specifications, input data, and expected outcomes:
 
 - [schema-inheritance](../../benchmarks/schema-inheritance/README.md).
+- [schema-inherited-output](../../benchmarks/schema-inherited-output/README.md).
 - [negative-cyclic-parent](../../benchmarks/negative-cyclic-parent/README.md).
-- [negative-inherited-output](../../benchmarks/negative-inherited-output/README.md).
 - [negative-property-clear](../../benchmarks/negative-property-clear/README.md).
 - [negative-version-mismatch](../../benchmarks/negative-version-mismatch/README.md).
 
@@ -439,3 +446,7 @@ vectors. Static validation does not establish runtime parity.
 
 Resolve inherited layers into one minimal, ordered specification. Keeping this topic in one contract lets
 other owners refer to it without defining a second policy.
+
+`output` inherits like every other replaced root field. Specifications that
+publish one table keep its column manifest in the layer they share, written
+once, rather than in copies each entry must keep identical.
