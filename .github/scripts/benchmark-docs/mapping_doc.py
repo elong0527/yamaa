@@ -280,6 +280,12 @@ ADAM_HEADERS = [
 ]
 
 
+def sdtm_variable_type(spec):
+    """The Variable Type cell distinguishes a parent SDTM domain from its
+    supplemental qualifier (SUPP--) dataset."""
+    return "SUPP" if str(spec.get("domain", "")).upper().startswith("SUPP") else "SDTM"
+
+
 def mapping_row(col, index, spec, adam, input_names, code_by_var):
     """One variable-sheet row in the standard's column order."""
     name = col.get("name", "")
@@ -312,7 +318,7 @@ def mapping_row(col, index, spec, adam, input_names, code_by_var):
         origin,
         core,
         method,
-        "SDTM",
+        sdtm_variable_type(spec),
         str(index),
         define_comment(col),
     ]

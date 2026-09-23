@@ -76,6 +76,10 @@ class SdtmMappingTests(unittest.TestCase):
         self.assertEqual(age[3], "3")
         self.assertEqual(age[6], "Exp")
 
+    def test_variable_type_marks_supplemental_domains(self):
+        _, rows = mapping_sheet("sdtm-suppmh-qualifiers")
+        self.assertTrue(all(row[8] == "SUPP" for row in rows))  # Variable Type
+
     def test_authored_method_becomes_the_conversion_definition(self):
         _, rows = mapping_sheet("sdtm-dm-metadata")
         usubjid = {row[0]: row for row in rows}["USUBJID"]
