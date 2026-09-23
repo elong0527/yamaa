@@ -420,9 +420,12 @@ def test_entry_inherits_output_from_a_shared_layer(tmp_path: Path) -> None:
     common = tmp_path / "common"
     study = tmp_path / "study"
     common.mkdir()
-    (study / "input").mkdir(parents=True)
+    study.mkdir()
     (tmp_path / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
-    (study / "input/src.csv").write_text("ID\nS1\n", encoding="ascii")
+    # Issue #846: the project root anchors relative dataset paths, so the
+    # entry's input lives at the root, not under the study directory.
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input/src.csv").write_text("ID\nS1\n", encoding="ascii")
     (common / "base.yaml").write_text(
         """schema_version: "1.0"
 domain: OUT
