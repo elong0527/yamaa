@@ -672,6 +672,9 @@ examples:
   sdtm-rs-timepoint-response:
     status: executable
     runtimes: ['python']
+  sdtm-se-subject-elements:
+    status: executable
+    runtimes: ['python']
   sdtm-suppmh-linkage:
     status: executable
     runtimes: ['python']

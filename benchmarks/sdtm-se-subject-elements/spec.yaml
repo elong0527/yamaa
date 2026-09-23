@@ -1,0 +1,160 @@
+schema_version: "1.0"
+domain: SE
+keys: [STUDYID, USUBJID, ETCD]
+input:
+  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFXENDTC: date}}
+  ODM: input/odm.csv
+base: ODM
+
+# One output row per key combination (REQ-0042): the ODM driver supplies one
+# row per subject per study event, and the subject's study events ARE the
+# elements they entered. The ODM extract carries each element's trial-design
+# attributes (IT.TE.*/IT.TA.*) and the dosing dates (IT.EX.*) on every event,
+# so each SE record derives from its own ODM context. DM is a subject-level
+# table; its columns join implicitly on the keys DM shares with the output
+# (REQ-0150: STUDYID, USUBJID).
+
+output:
+  path: se.csv
+  columns: [STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
+  order_by: [STUDYID, USUBJID, SESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: SE}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: ETCD
+    type: str
+    label: Element Code
+    derivation: ODM.StudyEventOID
+
+  - name: SESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TA.TAETORD'
+        variable: ODM.Value
+
+  - name: ELEMENT
+    type: str
+    label: Description of Element
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TE.ELEMENT'
+        variable: ODM.Value
+
+  - name: TAETORD
+    type: int
+    label: Planned Order of Element within Arm
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TA.TAETORD'
+        variable: ODM.Value
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.TA.EPOCH'
+        variable: ODM.Value
+
+  - name: RFICDTC
+    type: date
+    label: Informed Consent Date
+    derivation: DM.RFICDTC
+
+  - name: RFSTDTC
+    type: date
+    label: Reference Start Date
+    derivation: DM.RFSTDTC
+
+  - name: RFXENDTC
+    type: date
+    label: End of Study Participation Date
+    derivation: DM.RFXENDTC
+
+  - name: FIRSTDTC
+    type: date
+    label: First Dosing Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.EX.FIRSTDTC'
+        variable: ODM.Value
+
+  - name: LASTDTC
+    type: date
+    label: Last Dosing Date
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.EX.LASTDTC'
+        variable: ODM.Value
+
+  - name: SESTDTC
+    type: date
+    label: Start Date/Time of Element
+    derivation:
+      case:
+        - when: "EPOCH = 'SCREENING'"
+          then: {source: RFICDTC}
+        - when: "EPOCH = 'TREATMENT'"
+          then: {source: FIRSTDTC}
+        - otherwise: {source: LASTDTC}
+
+  - name: SEENDTC
+    type: date
+    label: End Date/Time of Element
+    derivation:
+      case:
+        - when: "EPOCH = 'SCREENING'"
+          then: {source: FIRSTDTC}
+        - when: "EPOCH = 'TREATMENT'"
+          then: {source: LASTDTC}
+        - otherwise: {source: RFXENDTC}
+
+  - name: SESTDY
+    type: int
+    label: Study Day of Start of Element
+    derivation:
+      study_day:
+        date: SESTDTC
+        reference: RFSTDTC
+
+  - name: SEENDY
+    type: int
+    label: Study Day of End of Element
+    derivation:
+      study_day:
+        date: SEENDTC
+        reference: RFSTDTC
+
+  - name: SEUPDES
+    type: str
+    label: Description of Unplanned Element
+    derivation: {literal: null}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ETCD]
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: elements-have-ordered-bounds
+      expr: "SESTDTC IS NOT NULL AND SEENDTC IS NOT NULL AND SESTDTC <= SEENDTC"
+  - assert:
+      id: every-element-carries-its-plan
+      expr: "ETCD IS NOT NULL AND ELEMENT IS NOT NULL AND TAETORD IS NOT NULL"
