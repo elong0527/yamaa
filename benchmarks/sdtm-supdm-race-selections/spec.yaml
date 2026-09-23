@@ -42,6 +42,14 @@ columns:
     type: int
     label: Number of Reported Races
 
+  - name: RACEMIN
+    type: str
+    label: Alphabetically First Reported Race
+
+  - name: RACESINGLE
+    type: str
+    label: Reported Race When One Race Was Reported
+
   - name: QNAM
     type: str
     label: Qualifier Variable Name
@@ -96,7 +104,7 @@ columns:
 rows:
   - id: first_reported_race
     group_by: [ODM.StudyOID, ODM.SubjectKey]
-    filter: "RACECOUNT >= 2"
+    filter: "RACEMIN < RACESINGLE"
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
@@ -104,6 +112,14 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
           expr: "COUNT(ODM.Value)"
+      RACEMIN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RACE'"
+          expr: "MIN(ODM.Value)"
+      RACESINGLE:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RACE'"
+          expr: "MAX(ODM.Value)"
       QVALRAW:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
@@ -115,7 +131,7 @@ rows:
 
   - id: second_reported_race
     group_by: [ODM.StudyOID, ODM.SubjectKey]
-    filter: "RACECOUNT >= 2"
+    filter: "RACEMIN < RACESINGLE"
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
@@ -123,6 +139,14 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
           expr: "COUNT(ODM.Value)"
+      RACEMIN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RACE'"
+          expr: "MIN(ODM.Value)"
+      RACESINGLE:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RACE'"
+          expr: "MAX(ODM.Value)"
       QVALRAW:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
