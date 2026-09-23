@@ -32,27 +32,16 @@ columns:
     label: Analysis Start Date
     derivation: AE.AESTDTC
 
-  - name: ASTDTM
-    type: datetime
-    label: Analysis Start Datetime
-    derivation: AE.AESTDTM
-
   - name: ASTDT2
     type: date
     label: Analysis Start Date from Datetime
     derivation:
-      to_date: {source: ASTDTM}
+      to_date: {source: AE.AESTDTM}
 
-  - name: AETERM
-    type: str
-    label: Reported Term for the Adverse Event
-    derivation: AE.AETERM
-
-  - name: SCORE
-    type: float
-    label: Protocol Review Score
-    derivation: AE.SCORE
-
+  # Three checks: a review window (January 2025 by date, or from 09:30 on
+  # 1 February 2025 by datetime), a term starting with the literal text INF_
+  # ('!' escapes the underscore), and a score floor. An event with no known
+  # start cannot be shown in the window, so it falls through to N.
   - name: REVIEWFL
     type: str
     label: Protocol Review Flag
@@ -60,9 +49,9 @@ columns:
       case:
         - when: >-
             (ASTDT BETWEEN DATE '2025-01-01' AND DATE '2025-01-31'
-              OR ASTDTM >= DATETIME '2025-02-01T09:30')
-            AND AETERM LIKE 'INF!_%' ESCAPE '!'
-            AND SCORE >= -1.5
+              OR AE.AESTDTM >= DATETIME '2025-02-01T09:30')
+            AND AE.AETERM LIKE 'INF!_%' ESCAPE '!'
+            AND AE.SCORE >= -1.5
           then: {literal: Y}
         - otherwise: {literal: N}
     verifications:
