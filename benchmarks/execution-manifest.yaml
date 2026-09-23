@@ -738,6 +738,9 @@ examples:
   sdtm-vs-study-day:
     status: executable
     runtimes: ['python']
+  sdtm-vs-planned-time-points:
+    status: executable
+    runtimes: ['python']
   schema-column-composition:
     status: executable
     runtimes: ['python']
