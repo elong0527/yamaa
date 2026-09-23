@@ -99,12 +99,13 @@ class SdtmMappingTests(unittest.TestCase):
         rule = {row[1]: row[6] for row in rows}
         arrow = mapping_doc.ARROW
         self.assertIn(
-            '; missing values stay missing; unlisted values ' + arrow
+            "; missing values stay missing; unlisted values "
+            + arrow
             + ' "Outside codelist".',
             rule["SEXC"],
         )
         self.assertIn(
-            '; missing or unlisted values ' + arrow + ' "Unknown".',
+            "; missing or unlisted values " + arrow + ' "Unknown".',
             rule["SEXC_SINGLE"],
         )
 
@@ -118,7 +119,8 @@ class SdtmMappingTests(unittest.TestCase):
             }
         )
         self.assertIn(
-            '; missing values ' + mapping_doc.ARROW
+            "; missing values "
+            + mapping_doc.ARROW
             + ' "NOT DONE"; unlisted values are errors.',
             rule,
         )
