@@ -19,15 +19,11 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The three sex columns match the collected sex without regard to case
+  # ('m' is M). An empty or unlisted value takes the fallback: U, 0, Unknown.
   - name: SEX
     type: str
     label: Sex
-    verifications:
-      - not_missing: {}
-      - allowed_values:
-          values: [M, F, U]
-      - matches:
-          pattern: '^[MFU]$'
     derivation:
       mapping:
         source: DM.SEX
@@ -37,6 +33,12 @@ columns:
           F: F
           U: U
         missing: U
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [M, F, U]
+      - matches:
+          pattern: '^[MFU]$'
 
   - name: SEXN
     type: int
@@ -69,6 +71,8 @@ columns:
     label: Race
     derivation: DM.RACE
 
+  # Matched exactly as collected: a race in other case or wording is 99, as
+  # is an empty race.
   - name: RACEN
     type: int
     label: Race (N)
@@ -81,18 +85,22 @@ columns:
           ASIAN: 3
         missing: 99
 
+  # A collected age that is not a whole number (text, or 34.5) cannot become
+  # an int; the fallback makes it empty instead of stopping the run.
   - name: AGE
     type: int
     label: Age
+    derivation:
+      value:
+        source: DM.AGE
+      missing: null
     verifications:
       - range:
           min: 0
           max: 120
-    derivation:
-      value:
-        source: DM.AGE
-      missing:
 
+  # Under 18, 18 to 64, and 65 or over: each group includes its lower
+  # break. An empty AGE is UNKNOWN.
   - name: AGEGR1
     type: str
     label: Pooled Age Group 1
