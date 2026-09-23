@@ -62,7 +62,7 @@ fields fail validation.
 **REQ-0290.** `source` and `literal` are expression leaves. Every other
 expression names its input variables directly, except in the following fields
 whose declared type contains `expression`. Each is evaluated recursively and
-nests because its purpose is to select or compose expressions:
+nests to select or compose expressions:
 
 - `case` items: `case` selects among expressions, so each `then` and the
   trailing `otherwise` nests an expression.

@@ -72,7 +72,7 @@ Two extracts of the same dataset bind the same field to the same type.
 **REQ-0518.** `dataset_class.types` declares each named field's type in a
 typeless container. Any unnamed field is `str`. This declaration describes the
 dataset as this specification reads it. Two specifications may read
-the same delimited file with different declarations, because the file carries
+the same delimited file with different declarations. The file carries
 no types to contradict either declaration. A dataset whose types matter to more
 than one specification belongs in a container that carries the types.
 
@@ -192,7 +192,7 @@ and every other spelling are ordinary string values.
 <a id="req-0531"></a>
 
 **REQ-0531.** An empty field of any declared type is missing rather than a parse
-failure, because it holds no text to parse.
+failure. It holds no text to parse.
 
 ### Empty-string convention
 
@@ -244,8 +244,8 @@ another name is still read under the profile its producer wrote it with.
 **REQ-0830.** `dataset_class.path` names the file a specification reads, and its
 extension selects the profile that reads it. The mapping is closed, so an
 extension outside it names no profile and fails validation rather than
-falling back to one. The extension is matched without regard to case, because
-a study that stores `DM.CSV` names the same container as one that stores
+falling back to one. The extension is matched without regard to case. A
+study that stores `DM.CSV` names the same container as one that stores
 `dm.csv`.
 
 | Extension | Profile | Container | Source-profile owner |
