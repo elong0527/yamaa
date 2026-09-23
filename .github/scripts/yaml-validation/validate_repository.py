@@ -3639,7 +3639,7 @@ def validate_schemas(root: Path):
 
 def example_entry_specs(example_dir: Path):
     paths = example_spec_paths(example_dir)
-    parented = set()
+    named = set()
     for path in paths:
         try:
             with open(path, 'r', encoding='utf-8') as handle:
@@ -3653,8 +3653,17 @@ def example_entry_specs(example_dir: Path):
             parents = [parents]
         for parent in parents:
             if isinstance(parent, str) and parent:
-                parented.add(Path(parent).name)
-    return [path for path in paths if path.name not in parented]
+                named.add(Path(parent).name)
+        inputs = spec.get('input', {})
+        if isinstance(inputs, dict):
+            for source in inputs.values():
+                if (
+                    isinstance(source, dict)
+                    and isinstance(source.get('schema'), str)
+                    and source['schema']
+                ):
+                    named.add(Path(source['schema']).name)
+    return [path for path in paths if path.name not in named]
 
 
 def example_artifact_owners(example_dir: Path):

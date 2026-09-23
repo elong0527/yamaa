@@ -6136,6 +6136,19 @@ bad_field: "what"
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
 
+    def test_schema_linked_spec_files_are_producers_not_entries(self):
+        ex_dir = self.root_dir / 'benchmarks' / 'producer-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_dm.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_suppdm.yaml').write_text(
+            'value: valid\ninput:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n'
+        )
+
+        entries = VALIDATOR.example_entry_specs(ex_dir)
+        self.assertEqual([path.name for path in entries], ['spec_suppdm.yaml'])
+
     def test_readme_dashboard_badge_must_follow_the_title(self):
         # Issue #184 round 2c: badge-line checks live in
         # editorial.validate_examples_badges (docs-lint gate), not in the
