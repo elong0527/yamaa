@@ -11,7 +11,7 @@ metadata:
 
 output:
   path: cm.csv
-  columns: [STUDYID, USUBJID, CMSEQ, DOMAIN, CMTRT, CMDECOD, CMCLAS, CMCLASCD]
+  columns: [DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD]
   order_by: [USUBJID, CMSEQ]
 
 columns:
