@@ -20,11 +20,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  - name: REVIEWER
-    type: str
-    label: Reviewer Initials
-    derivation: DM.REVIEWER
-
+  # Read as collected: the source file's quoting keeps a comma, a doubled
+  # quote and a line break inside one comment. An empty field, quoted or
+  # not, is missing.
   - name: CMNT
     type: str
     label: Investigator Comment
