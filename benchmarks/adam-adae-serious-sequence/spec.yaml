@@ -37,6 +37,8 @@ columns:
     label: Analysis Start Date
     derivation: AE.AESTDTC
 
+  # Only serious events are numbered: earliest onset first, AESEQ breaking
+  # same-day ties, an undated onset last. Other events stay empty.
   - name: SERSEQ
     type: int
     label: Serious Event Sequence Number
