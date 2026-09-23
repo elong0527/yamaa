@@ -91,8 +91,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, CESEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 11
+      max: 11
   - implies:
       id: worst-grade-flag-requires-a-graded-event
       when: "AOCCFL = 'Y'"

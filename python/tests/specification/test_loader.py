@@ -292,6 +292,30 @@ def test_accepts_integer_for_float_schema_field(tmp_path: Path) -> None:
     assert verification[0].root == {"range": {"min": 1, "severity": "error"}}
 
 
+def test_loads_row_count_fraction_bound(tmp_path: Path) -> None:
+    path, source = _copy_basic_specification(tmp_path)
+    path.write_text(
+        source + "\nverifications:\n"
+        "  - row_count:\n"
+        "      id: too_many_missing\n"
+        '      filter: "AGE IS NULL"\n'
+        "      max_fraction: 0.05\n",
+        encoding="ascii",
+    )
+
+    loaded = load_specification(path, SCHEMA_ROOT)
+
+    assert loaded.specification.verifications is not None
+    assert loaded.specification.verifications[0].root == {
+        "row_count": {
+            "id": "too_many_missing",
+            "filter": "AGE IS NULL",
+            "max_fraction": 0.05,
+            "severity": "error",
+        }
+    }
+
+
 def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
     schema_root = _mutate_schema(
         tmp_path,

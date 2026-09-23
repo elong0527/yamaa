@@ -146,6 +146,26 @@ class _LookupPredicateResolver(_DerivedRecordResolver):
         return AbsentValue(variable=variable)
 
 
+class _DonorPredicateResolver:
+    """Resolve a source-only filter against one augmented donor record."""
+
+    def __init__(self, dataset: str, values: Mapping[str, RuntimeValue]) -> None:
+        self._dataset = dataset
+        self._values = values
+
+    def resolve(self, variable: str) -> Resolution:
+        qualifier, separator, field = variable.partition(".")
+        if not separator or qualifier != self._dataset or field not in self._values:
+            return FailedResolution(
+                condition=RuntimeCondition(
+                    phase="validation",
+                    condition="unknown_field",
+                    context={"identifier": variable},
+                )
+            )
+        return ResolvedValue(value=self._values[field])
+
+
 class _DerivationFailure(NamedTuple):
     """A derivation that raised an expression condition on a record.
 
@@ -155,6 +175,27 @@ class _DerivationFailure(NamedTuple):
 
     name: str
     condition: ConditionResult
+
+
+def _filter_records(
+    records: Sequence[IndexedRecord],
+    predicate: dict[str, object] | None,
+    dataset: str,
+) -> list[IndexedRecord] | ConditionResult:
+    """Keep donor records whose source-only predicate answers true."""
+    if predicate is None:
+        return list(records)
+    kept: list[IndexedRecord] = []
+    for record in records:
+        result = evaluate_predicate(
+            predicate, _DonorPredicateResolver(dataset, record.values)
+        )
+        if isinstance(result, ConditionResult):
+            return result
+        assert isinstance(result, PredicateValue)
+        if result.value is TruthValue.TRUE:
+            kept.append(record)
+    return kept
 
 
 class IntermediateSelector:
@@ -168,8 +209,10 @@ class IntermediateSelector:
     ) -> None:
         self.plans = {plan.identifier: plan for plan in plans}
         self._relations = relations
-        self._eligible: dict[str, tuple[IndexedRecord, ...] | ConditionResult] = {}
-        self._derived: dict[str, tuple[IndexedRecord, ...]] = {}
+        self._eligible: dict[
+            str, tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure
+        ] = {}
+        self._derived: dict[str, tuple[IndexedRecord, ...] | _DerivationFailure] = {}
         self._match_index: dict[
             str, dict[tuple[RuntimeValue, ...], tuple[IndexedRecord, ...]]
         ] = {}
@@ -180,43 +223,44 @@ class IntermediateSelector:
 
     def _filtered(
         self, plan: PlannedIntermediate
-    ) -> tuple[IndexedRecord, ...] | ConditionResult:
-        """Cache source-only filtering; defer correlated predicates to selection.
+    ) -> tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure:
+        """Cache source-only filtering over augmented donor records.
 
         A target-dependent result must never enter this run-wide cache.
         """
         cached = self._eligible.get(plan.identifier)
         if cached is None:
-            relation = self._relations[plan.dataset]
+            records = self._records(plan)
+            if isinstance(records, _DerivationFailure):
+                self._eligible[plan.identifier] = records
+                return records
             predicate = None if plan.filter_variables else plan.filter_predicate
-            kept = eligible_records(relation.records, predicate, relation)
+            kept = _filter_records(records, predicate, plan.dataset)
             cached = kept if isinstance(kept, ConditionResult) else tuple(kept)
             self._eligible[plan.identifier] = cached
         return cached
 
     def _records(
         self, plan: PlannedIntermediate
-    ) -> tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure:
-        """Return the plan's eligible records with derivations computed.
+    ) -> tuple[IndexedRecord, ...] | _DerivationFailure:
+        """Return the donor records with derivations computed.
 
         REQ-1185 computes each derivation once per record and caches the
-        augmented records, so matching and selection below read the derived
-        values as if they were stored.
+        augmented records before filtering, matching, and selection.
         """
         if not plan.derived:
-            return self._filtered(plan)
+            return tuple(self._relations[plan.dataset].records)
         cached = self._derived.get(plan.identifier)
         if cached is None:
-            eligible = self._filtered(plan)
-            if isinstance(eligible, ConditionResult):
-                return eligible
             augmented: list[IndexedRecord] = []
-            for record in eligible:
+            for record in self._relations[plan.dataset].records:
                 outcome = self._augment(plan, record)
                 if isinstance(outcome, _DerivationFailure):
-                    return outcome
+                    cached = outcome
+                    break
                 augmented.append(outcome)
-            cached = tuple(augmented)
+            else:
+                cached = tuple(augmented)
             self._derived[plan.identifier] = cached
         return cached
 
@@ -246,7 +290,7 @@ class IntermediateSelector:
     ) -> IntermediateOutcome:
         """Choose this row's record, in the order R003 lays the steps out."""
         plan = self.plans[identifier]
-        eligible = self._records(plan)
+        eligible = self._filtered(plan)
         if isinstance(eligible, ConditionResult):
             return IntermediateOutcome(
                 condition=eligible, spec_path=f"{plan.path}.filter"
@@ -275,7 +319,7 @@ class IntermediateSelector:
         for plan in self.plans.values():
             if not plan.unique_columns:
                 continue
-            records = self._records(plan)
+            records = self._filtered(plan)
             if isinstance(records, ConditionResult):
                 failures.append(
                     _materialization_failure(

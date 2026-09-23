@@ -151,8 +151,12 @@ def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -
                 if isinstance(value, str):
                     source[name] = _rebase_path(value, layer, entry)
     output = document.get("output")
-    if isinstance(output, dict) and isinstance(output.get("path"), str):
-        output["path"] = _rebase_path(output["path"], layer, entry)
+    if isinstance(output, dict):
+        # REQ-0629: an inherited output publishes where its layer names.
+        for name in ("path", "warning_log", "verification_log"):
+            value = output.get(name)
+            if isinstance(value, str):
+                output[name] = _rebase_path(value, layer, entry)
 
 
 def _validate_partial_member(
@@ -1351,24 +1355,6 @@ def resolve_specification(
     visit(entry_path, raw_entry)
     if not isinstance(raw_entry, dict):
         raise TypeError("validated entry is a mapping")
-    if "output" not in raw_entry:
-        inherited_columns: list[str] = []
-        for _, layer in contributions[:-1]:
-            output = layer.get("output")
-            if isinstance(output, dict) and isinstance(output.get("columns"), list):
-                inherited_columns = [
-                    item for item in output["columns"] if isinstance(item, str)
-                ]
-        raise SpecificationError(
-            [
-                _diagnostic(
-                    "missing_entry_output",
-                    "parents",
-                    "REQ-0657",
-                    {"inherited_columns": inherited_columns},
-                )
-            ]
-        )
 
     resolved, provenance, diagnostics = _merge_layers(contributions, schema_bundle)
     if diagnostics:

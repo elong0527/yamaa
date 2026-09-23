@@ -8,7 +8,7 @@ status: normative
 
 ## Purpose
 
-Define schema notation, registries, constraints, and canonical shorthand expansion.
+Defines schema notation, registries, constraints, and canonical shorthand.
 
 ## Scope and dependencies
 
@@ -77,10 +77,10 @@ string.
 
 <a id="req-0249"></a>
 
-**REQ-0249.** Default parser settings do not satisfy this requirement. Each
-implementation chooses how to meet the requirement, but must not require
-authors to quote values. [Types and conversion](../values/types.md)'s non-finite normalization applies
-immediately after core-schema scalar resolution.
+**REQ-0249.** Default parser settings do not satisfy this requirement.
+Implementations must meet it without requiring authors to quote values.
+[Types and conversion](../values/types.md)'s non-finite normalization
+applies immediately after core-schema scalar resolution.
 
 ### Named types
 
@@ -380,5 +380,5 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Define schema notation, registries, constraints, and canonical shorthand expansion. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
+Keeping this topic in one contract lets other owners refer to it without
+defining a second policy.

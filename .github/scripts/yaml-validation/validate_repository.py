@@ -357,7 +357,6 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R017', 'inheritance_cycle'): {'reason'},
     ('R017', 'invalid_clear'): {'field'},
     ('R017', 'invalid_parent_path'): {'reason'},
-    ('R017', 'missing_entry_output'): {'inherited_columns'},
     ('R017', 'redundant_field_type'): {'dataset', 'field', 'type'},
     ('R017', 'schema_version_mismatch'): {
         'entry_version', 'parent_version',
@@ -514,6 +513,8 @@ def predicate_operand_type(operand, resolver, errors):
 def predicate_types_comparable(left, right):
     if left is None or right is None:
         return True
+    if left is DERIVED_TYPE_UNKNOWN or right is DERIVED_TYPE_UNKNOWN:
+        return True
     if left in {'int', 'float'} and right in {'int', 'float'}:
         return True
     return left == right and left in {'str', 'date', 'datetime'}
@@ -577,7 +578,11 @@ def validate_predicate_types(ast, resolver):
             value_type = operand_type(node['value'])
             pattern_type = operand_type(node['pattern'])
             for actual in (value_type, pattern_type):
-                if actual is not None and actual != 'str':
+                if (
+                    actual is not None
+                    and actual is not DERIVED_TYPE_UNKNOWN
+                    and actual != 'str'
+                ):
                     errors.append(
                         PredicateSemanticIssue(
                             'LIKE requires str operands; '
@@ -1185,6 +1190,8 @@ def validate_numeric_expression_ast(ast, path, expression, resolver):
                     )
                 )
                 return '<invalid>'
+            if value_type is DERIVED_TYPE_UNKNOWN:
+                return None
             if value_type not in {'int', 'float'}:
                 errors.append(
                     validation_diagnostic(
@@ -2199,7 +2206,7 @@ def validate_partial_inheritance_member(
     return normalized, errors
 
 
-def validate_inheritance_layer(layer, label, env, require_output=False):
+def validate_inheritance_layer(layer, label, env):
     """Validate one R017 layer without imposing final requiredness."""
     if not isinstance(layer, dict) or not layer:
         return layer, [
@@ -2215,15 +2222,6 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
             f"ERROR: {label}.schema_version: schema_version_mismatch: every "
             "inheritance layer must declare schema_version"
         )
-    if require_output and 'output' not in layer:
-        errors.append(
-            validation_diagnostic(
-                f"{label}.parents",
-                'missing_entry_output',
-                'an inherited entry file must declare its complete output',
-            )
-        )
-
     for name in layer:
         if name not in fields:
             errors.append(
@@ -2388,18 +2386,25 @@ def _rebase_local_path(value, layer_path, entry_path):
 
 
 def rebase_layer_paths(layer, layer_path, entry_path):
-    """Rebase current path-valued dataset fields to the entry file."""
+    """Rebase current path-valued dataset and output fields to the entry file."""
     rebased = copy.deepcopy(layer)
     datasets = rebased.get('input')
-    if not isinstance(datasets, dict):
-        return rebased
-    for source in datasets.values():
-        if not isinstance(source, dict):
-            continue
-        for field in ('path', 'schema'):
-            if isinstance(source.get(field), str):
-                source[field] = _rebase_local_path(
-                    source[field], layer_path, entry_path
+    if isinstance(datasets, dict):
+        for source in datasets.values():
+            if not isinstance(source, dict):
+                continue
+            for field in ('path', 'schema'):
+                if isinstance(source.get(field), str):
+                    source[field] = _rebase_local_path(
+                        source[field], layer_path, entry_path
+                    )
+    output = rebased.get('output')
+    if isinstance(output, dict):
+        # REQ-0629: an inherited output publishes where its layer names.
+        for field in ('path', 'warning_log', 'verification_log'):
+            if isinstance(output.get(field), str):
+                output[field] = _rebase_local_path(
+                    output[field], layer_path, entry_path
                 )
     return rebased
 
@@ -2725,10 +2730,7 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
             raw_layer = supplied
 
         normalized, layer_errors = validate_inheritance_layer(
-            raw_layer,
-            layer_label,
-            env,
-            require_output=canonical == entry_path,
+            raw_layer, layer_label, env
         )
         errors.extend(layer_errors)
         if layer_errors or not isinstance(normalized, dict):
@@ -3927,7 +3929,7 @@ def validate_function_arguments(
                     f"ERROR: {path}.{name}: invalid_function_argument: "
                     f"unknown variable {value!r}"
                 )
-            elif actual != expected:
+            elif actual is not DERIVED_TYPE_UNKNOWN and actual != expected:
                 errors.append(
                     f"ERROR: {path}.{name}: invalid_function_argument: "
                     f"expected exact type {expected!r}, got {actual!r} from "
@@ -5237,16 +5239,38 @@ def validate_spec_contracts(
             if keyword == 'row_count':
                 minimum = payload.get('min')
                 maximum = payload.get('max')
-                if minimum is None and maximum is None:
+                min_fraction = payload.get('min_fraction')
+                max_fraction = payload.get('max_fraction')
+                for field, bound in (
+                    ('min_fraction', min_fraction),
+                    ('max_fraction', max_fraction),
+                ):
+                    if bound is not None and (
+                        type(bound) not in (int, float) or not 0 <= bound <= 1
+                    ):
+                        errors.append(
+                            f"ERROR: {path}.{field}: must be between 0 and 1"
+                        )
+                if all(bound is None for bound in (
+                    minimum, maximum, min_fraction, max_fraction
+                )):
                     errors.append(
                         f"ERROR: {path}: requires at least one bound"
                     )
-                elif (
+                if (
                     type(minimum) is int
                     and type(maximum) is int
                     and minimum > maximum
                 ):
                     errors.append(f"ERROR: {path}: min must not exceed max")
+                if (
+                    type(min_fraction) in (int, float)
+                    and type(max_fraction) in (int, float)
+                    and min_fraction > max_fraction
+                ):
+                    errors.append(
+                        f"ERROR: {path}: min_fraction must not exceed max_fraction"
+                    )
                 if 'group_by' in payload:
                     group_by = payload.get('group_by')
                     if not isinstance(payload.get('id'), str):
@@ -5675,16 +5699,7 @@ def validate_spec_functions_against(
     functions = resolved_functions
 
     datasets = dataset_type_catalog(spec, spec_path, schema_env)
-    intermediates = {}
-    intermediate_entries = spec.get('intermediates')
-    if isinstance(intermediate_entries, list):
-        for intermediate in intermediate_entries:
-            if not isinstance(intermediate, dict):
-                continue
-            intermediate_id = intermediate.get('id')
-            dataset_id = intermediate.get('dataset')
-            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+    intermediates = intermediate_type_catalog(spec, datasets, spec_label)
 
     def resolve_variable(name):
         if not isinstance(name, str):
@@ -5732,6 +5747,82 @@ def validate_spec_functions_against(
             )
         )
     return errors
+
+
+#: Predicate operand type for a derived name the repository validator
+#: cannot type statically. The name is known (no `unknown_field`), and it
+#: compares as an untyped value (no `incompatible_input_type`).
+DERIVED_TYPE_UNKNOWN = object()
+
+
+def _compute_expression_type(derivation, donor_fields, path):
+    """Infer the R010 type of a `compute: {expr: ...}` derivation."""
+    if not isinstance(derivation, dict) or len(derivation) != 1:
+        return None
+    keyword, payload = next(iter(derivation.items()))
+    if keyword != 'compute' or not isinstance(payload, dict):
+        return None
+    text = payload.get('expr')
+    if not isinstance(text, str):
+        return None
+    try:
+        ast = parse_numeric_expression(text)
+    except NumericExpressionError:
+        return None
+
+    def resolve(identifier):
+        _qualifier, separator, field = identifier.partition('.')
+        field_type = donor_fields.get(field if separator else identifier)
+        if field_type is None:
+            return None, (
+                'unknown_field',
+                f"unknown identifier {identifier!r}",
+                {'identifier': identifier},
+            )
+        return field_type, None
+
+    inferred, _ = validate_numeric_expression_ast(ast, path, text, resolve)
+    return inferred if inferred not in (None, '<invalid>') else None
+
+
+def _intermediate_derived_field_types(intermediate, donor_fields, operation_path):
+    """Map an intermediate's derivation names to predicate operand types.
+
+    Derived values augment each donor record before `filter`, `order_by`,
+    and `columns` (REQ-1185), so a dataset-qualified derived name must
+    resolve in the intermediate's filter. Numeric `compute` expressions
+    keep their inferred type; anything else is known-but-untyped.
+    """
+    derivations = intermediate.get('derivations')
+    if not isinstance(derivations, dict):
+        return {}
+    typed = {}
+    for name, derivation in derivations.items():
+        if not isinstance(name, str):
+            continue
+        inferred = _compute_expression_type(
+            derivation, donor_fields, f"{operation_path}.derivations.{name}"
+        )
+        typed[name] = inferred if inferred is not None else DERIVED_TYPE_UNKNOWN
+    return typed
+
+
+def intermediate_type_catalog(spec, datasets, spec_label):
+    """Return stored and derived fields exposed by each named intermediate."""
+    intermediates = {}
+    for index, intermediate in enumerate(spec.get('intermediates') or []):
+        if not isinstance(intermediate, dict):
+            continue
+        intermediate_id = intermediate.get('id')
+        dataset_id = intermediate.get('dataset')
+        if not isinstance(intermediate_id, str) or not isinstance(dataset_id, str):
+            continue
+        fields = dict(datasets.get(dataset_id, {}))
+        fields.update(_intermediate_derived_field_types(
+            intermediate, fields, f"{spec_label}.intermediates[{index}]"
+        ))
+        intermediates[intermediate_id] = fields
+    return intermediates
 
 
 def predicate_resolver(unqualified=None, qualified=None):
@@ -6035,10 +6126,25 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
                 continue
             intermediate_id = intermediate.get('id')
             dataset_id = intermediate.get('dataset')
+            # REQ-1185: derived values are available both in the donor filter
+            # and through a downstream intermediate-qualified read.
+            donor_fields = dict(datasets.get(dataset_id, {}))
+            donor_fields.update(
+                _intermediate_derived_field_types(
+                    intermediate,
+                    donor_fields,
+                    f"{spec_label}.intermediates[{index}]",
+                )
+            )
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+                intermediates[intermediate_id] = donor_fields
             if isinstance(intermediate.get('filter'), str):
-                resolver = predicate_resolver(qualified=datasets)
+                qualified = (
+                    {**datasets, dataset_id: donor_fields}
+                    if isinstance(dataset_id, str)
+                    else datasets
+                )
+                resolver = predicate_resolver(qualified=qualified)
                 errors.extend(
                     validate_predicate_at(
                         intermediate['filter'],
@@ -6132,7 +6238,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             fields = (
                 ('when', 'then') if keyword == 'implies'
                 else ('expr',) if keyword == 'assert'
-                else ('filter',) if keyword == 'row_count'
+                else ('filter', 'when') if keyword == 'row_count'
                 else ()
             )
             for field in fields:
@@ -6269,16 +6375,7 @@ def validate_spec_numeric_expressions(
     errors = []
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
-    intermediates = {}
-    intermediate_entries = spec.get('intermediates')
-    if isinstance(intermediate_entries, list):
-        for intermediate in intermediate_entries:
-            if not isinstance(intermediate, dict):
-                continue
-            intermediate_id = intermediate.get('id')
-            dataset_id = intermediate.get('dataset')
-            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+    intermediates = intermediate_type_catalog(spec, datasets, spec_label)
 
     column_resolver = numeric_identifier_resolver(
         unqualified=output_types, qualified=intermediates
@@ -7260,7 +7357,7 @@ def validate_string_template_at(text, path, resolver):
                     span=placeholder['span'],
                 )
             )
-        elif value_type != 'str':
+        elif value_type is not DERIVED_TYPE_UNKNOWN and value_type != 'str':
             errors.append(
                 validation_diagnostic(
                     path,
@@ -7279,6 +7376,8 @@ def validate_string_template_at(text, path, resolver):
 
 def runtime_types_comparable(left, right):
     if left is None or right is None:
+        return True
+    if left is DERIVED_TYPE_UNKNOWN or right is DERIVED_TYPE_UNKNOWN:
         return True
     if left in {'int', 'float'} and right in {'int', 'float'}:
         return True
@@ -7316,7 +7415,7 @@ def validate_named_input_type(
     if not isinstance(source, str):
         return []
     actual = resolver(source)
-    if actual is None or actual in accepted:
+    if actual is None or actual is DERIVED_TYPE_UNKNOWN or actual in accepted:
         return []
     return [
         incompatible_variable_diagnostic(
@@ -7684,7 +7783,7 @@ def validate_expression_static_semantics(expression, path, context):
             'source': ({'str', 'datetime'}, 'str or datetime'),
         },
         'to_date': {
-            'source': ({'datetime'}, 'datetime'),
+            'source': ({'datetime', 'str'}, 'datetime or ISO date text'),
         },
         'to_epoch_day': {
             'source': ({'date'}, 'date'),
@@ -8210,16 +8309,8 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
     errors = []
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
-    intermediates = {}
     intermediate_entries = spec.get('intermediates')
-    if isinstance(intermediate_entries, list):
-        for intermediate in intermediate_entries:
-            if not isinstance(intermediate, dict):
-                continue
-            intermediate_id = intermediate.get('id')
-            dataset_id = intermediate.get('dataset')
-            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
-                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+    intermediates = intermediate_type_catalog(spec, datasets, spec_label)
 
     # REQ-1242: a derive binding may read a keep-declared named intermediate.
     # The planned selection only honors `keep` with `order_by` (REQ-0119),

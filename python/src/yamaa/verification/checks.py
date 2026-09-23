@@ -824,15 +824,39 @@ def _row_count_failure(
 ) -> tuple[VerificationFailure | None, int]:
     minimum = arguments.get("min")
     maximum = arguments.get("max")
+    min_fraction = arguments.get("min_fraction")
+    max_fraction = arguments.get("max_fraction")
     for bound in (minimum, maximum):
         if bound is not None and (
             isinstance(bound, bool) or not isinstance(bound, int)
         ):
             raise DeclarationError(spec_path, "REQ-0397", "a row_count bound is an int")
-    if minimum is None and maximum is None:
+    for field, bound in (
+        ("min_fraction", min_fraction),
+        ("max_fraction", max_fraction),
+    ):
+        if bound is not None and (
+            isinstance(bound, bool)
+            or not isinstance(bound, (int, float))
+            or not 0 <= bound <= 1
+        ):
+            raise DeclarationError(
+                f"{spec_path}.{field}",
+                "REQ-0397",
+                "a row_count fraction is between 0 and 1",
+            )
+    if all(bound is None for bound in (minimum, maximum, min_fraction, max_fraction)):
         raise DeclarationError(spec_path, "REQ-0399", "row_count requires one bound")
     if minimum is not None and maximum is not None and minimum > maximum:
         raise DeclarationError(spec_path, "REQ-0399", "row_count min exceeds max")
+    if (
+        min_fraction is not None
+        and max_fraction is not None
+        and min_fraction > max_fraction
+    ):
+        raise DeclarationError(
+            spec_path, "REQ-0399", "row_count min_fraction exceeds max_fraction"
+        )
 
     grouped = arguments.get("group_by") is not None
     if grouped:
@@ -860,16 +884,41 @@ def _row_count_failure(
             if _truth(predicate, row, filter_path) is TruthValue.TRUE
         }
 
+    bound_groups = set(range(len(rows)))
+    if arguments.get("when") is not None:
+        when_path = f"{spec_path}.when"
+        predicate = _predicate(
+            arguments["when"], when_path, "REQ-0397", predicate_types
+        )
+        bound_groups = {
+            index
+            for index, row in enumerate(predicate_rows)
+            if _truth(predicate, row, when_path) is TruthValue.TRUE
+        }
+
     # REQ-0386 partitions the artifact rather than the counted rows, so a
     # group whose filter admits nothing still exists and still fails a `min`.
-    offending: list[tuple[KeyMap, int]] = []
+    offending: list[tuple[KeyMap, int, int]] = []
     for combined, positions in partitions.items():
+        if arguments.get("when") is not None and not any(
+            position in bound_groups for position in positions
+        ):
+            continue
         count = sum(1 for position in positions if position in admitted)
-        if (minimum is not None and count < minimum) or (
-            maximum is not None and count > maximum
+        denominator = len(positions)
+        fraction = count / denominator if denominator else 0.0
+        if (
+            (minimum is not None and count < minimum)
+            or (maximum is not None and count > maximum)
+            or (min_fraction is not None and fraction < min_fraction)
+            or (max_fraction is not None and fraction > max_fraction)
         ):
             offending.append(
-                ({name: combined[order] for order, name in enumerate(names)}, count)
+                (
+                    {name: combined[order] for order, name in enumerate(names)},
+                    count,
+                    denominator,
+                )
             )
     if not offending:
         return None, len(partitions)
@@ -881,15 +930,25 @@ def _row_count_failure(
     else:
         # Each count is aligned to the group at the same position in `keys`.
         # Keeping only the first count would make every later group ambiguous.
-        counts = {"counts": [count for _, count in shown]}
-        log_counts = {"counts": [count for _, count in offending]}
+        counts = {"counts": [count for _, count, _ in shown]}
+        log_counts = {"counts": [count for _, count, _ in offending]}
+    if min_fraction is not None or max_fraction is not None:
+        if len(offending) == 1:
+            counts = {**counts, "denominator": offending[0][2]}
+            log_counts = counts
+        else:
+            counts = {**counts, "denominators": [total for _, _, total in shown]}
+            log_counts = {
+                **log_counts,
+                "denominators": [total for _, _, total in offending],
+            }
     return (
         _failure(
             condition,
             spec_path,
             requirement,
             context,
-            [group for group, _ in offending],
+            [group for group, _, _ in offending],
             extra=counts,
             log_extra=log_counts,
             severity=severity,

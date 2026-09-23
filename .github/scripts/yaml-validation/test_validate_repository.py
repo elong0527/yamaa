@@ -2744,24 +2744,69 @@ class TestSpecificationInheritance(unittest.TestCase):
             {'schema_version': '1.0', 'output': {'path': 'out.csv', 'columns': []}},
         )
 
-    def test_rejects_entry_that_inherits_output(self):
+    def test_entry_inherits_output_where_its_layer_names(self):
+        # Issue #845: an entry may omit output (REQ-0623); the inherited
+        # paths keep the provenance of the layer that wrote them (REQ-0629).
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'common').mkdir()
+            (root / 'study').mkdir()
+            (root / 'common' / 'parent.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'output:\n'
+                '  path: out.csv\n'
+                '  columns: []\n'
+                '  warning_log: warnings.csv\n'
+            )
+            spec_path = root / 'study' / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: ../common/parent.yaml\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            resolved['output'],
+            {
+                'path': '../common/out.csv',
+                'columns': [],
+                'warning_log': '../common/warnings.csv',
+            },
+        )
+
+    def test_rejects_a_chain_no_layer_gives_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'output: {path: out.csv, columns: [A]}\n'
+                'input: {DM: input/dm.csv}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: A\n'
+                '    type: str\n'
+                '    label: A\n'
+                '    derivation: {literal: value}\n'
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
+                'domain: TEST\n'
+                'keys: [A]\n'
+            )
+            with open(spec_path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+
+            errors = VALIDATOR.validate_spec_document(
+                spec, 'example/spec.yaml', spec_path, self.env
             )
 
-            resolved, errors, _ = self.resolve(spec_path)
-
-        self.assertIsNone(resolved)
-        self.assertIn('missing_entry_output', '\n'.join(errors))
+        # REQ-0657: requiredness applies to the resolved specification.
+        self.assertIn('missing_required_field', '\n'.join(errors))
+        self.assertIn('example/spec.yaml.output', '\n'.join(errors))
 
     def test_rejects_parent_url(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3695,6 +3740,37 @@ class TestSpecContracts(unittest.TestCase):
         self.assertEqual(
             VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
         )
+
+    def test_row_count_fraction_bounds(self):
+        spec = {
+            "domain": "DM",
+            "input": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}},
+                {"name": "VAL", "derivation": {"literal": "x"}},
+            ],
+            "verifications": [{"row_count": {
+                "id": "missing-rate",
+                "filter": "VAL IS NULL",
+                "max_fraction": 0.05,
+            }}],
+        }
+        self.assertEqual(
+            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+        )
+
+        spec["verifications"][0]["row_count"]["max_fraction"] = 1.1
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        self.assertIn("max_fraction: must be between 0 and 1", "\n".join(errors))
+
+        spec["verifications"][0]["row_count"].update(
+            {"min_fraction": 0.75, "max_fraction": 0.25}
+        )
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+        self.assertIn("min_fraction must not exceed max_fraction", "\n".join(errors))
 
     def test_rejects_grouped_row_count_without_id_or_known_columns(self):
         spec = {
@@ -5215,6 +5291,122 @@ class TestDeclaredValidationErrors(unittest.TestCase):
 
     def test_ignores_a_condition_the_validator_does_not_decide(self):
         self.assertEqual(self.check("aggregate_over_scalar_source", []), [])
+
+
+class TestIntermediateDerivedFilterValidation(unittest.TestCase):
+    """REQ-1185: an intermediate's filter resolves dataset-qualified derived names."""
+
+    def validate(self, filt, extra_derivations=None, column_predicate=None):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / 'input'
+            input_dir.mkdir()
+            (input_dir / 'dm.csv').write_text(
+                'STUDYID,USUBJID\nYAMAA-01,P01\n', encoding='utf-8'
+            )
+            (input_dir / 'ds.csv').write_text(
+                'STUDYID,USUBJID,DSSEQ,DSSTDY\nYAMAA-01,P01,1,10\n',
+                encoding='utf-8',
+            )
+            derivations = {
+                'EOT_FALLBACK': {'compute': {'expr': 'DSSTDY + DSSEQ / 1000'}},
+            }
+            derivations.update(extra_derivations or {})
+            spec = {
+                'schema_version': '1.0',
+                'domain': 'ADSL',
+                'keys': ['STUDYID', 'USUBJID'],
+                'input': {
+                    'DM': 'input/dm.csv',
+                    'DS': {
+                        'path': 'input/ds.csv',
+                        'types': {'DSSEQ': 'int', 'DSSTDY': 'int'},
+                    },
+                },
+                'base': 'DM',
+                'intermediates': [
+                    {
+                        'id': 'EOT',
+                        'dataset': 'DS',
+                        'derivations': derivations,
+                        'filter': filt,
+                    }
+                ],
+            }
+            if column_predicate is not None:
+                spec['columns'] = [
+                    {
+                        'name': 'FLAG',
+                        'type': 'str',
+                        'derivation': {
+                            'case': [
+                                {'when': column_predicate, 'then': {'literal': 'Y'}},
+                                {'otherwise': {'literal': 'N'}},
+                            ]
+                        },
+                    }
+                ]
+            spec_path = root / 'spec.yaml'
+            return VALIDATOR.validate_spec_predicates(
+                spec, 'spec.yaml', spec_path, None
+            )
+
+    def conditions(self, errors):
+        return [getattr(error, 'condition', '?') for error in errors]
+
+    def test_derived_name_resolves_in_filter(self):
+        self.assertEqual(
+            self.conditions(self.validate('DS.EOT_FALLBACK IS NOT NULL')), []
+        )
+
+    def test_unknown_derived_name_still_fails(self):
+        errors = self.validate('DS.NOPE IS NOT NULL')
+        self.assertEqual(self.conditions(errors), ['unknown_field'])
+
+    def test_derived_name_keeps_its_inferred_type(self):
+        errors = self.validate("DS.EOT_FALLBACK = 'x'")
+        self.assertEqual(self.conditions(errors), ['incompatible_input_type'])
+        self.assertEqual(
+            self.conditions(self.validate('DS.EOT_FALLBACK > 1.5')), []
+        )
+
+    def test_untypable_derivation_is_known_but_unchecked(self):
+        derivations = {
+            'LABEL': {
+                'case': [
+                    {'when': "DSSEQ = 1", 'then': {'literal': 'first'}},
+                    {'otherwise': {'literal': 'other'}},
+                ]
+            }
+        }
+        self.assertEqual(
+            self.conditions(
+                self.validate("DS.LABEL = 'first'", derivations)
+            ),
+            [],
+        )
+
+    def test_downstream_predicate_reads_intermediate_derived_name(self):
+        self.assertEqual(
+            self.conditions(
+                self.validate(
+                    'DS.EOT_FALLBACK IS NOT NULL',
+                    column_predicate='EOT.EOT_FALLBACK > 1.5',
+                )
+            ),
+            [],
+        )
+
+    def test_downstream_predicate_checks_derived_type(self):
+        self.assertEqual(
+            self.conditions(
+                self.validate(
+                    'DS.EOT_FALLBACK IS NOT NULL',
+                    column_predicate="EOT.EOT_FALLBACK = 'x'",
+                )
+            ),
+            ['incompatible_input_type'],
+        )
 
 
 class TestDatasetPathExamples(unittest.TestCase):

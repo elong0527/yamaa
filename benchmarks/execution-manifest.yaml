@@ -51,6 +51,9 @@ examples:
   adam-adce-worst-toxicity:
     status: executable
     runtimes: ['python']
+  adam-adcm-atc-classes:
+    status: executable
+    runtimes: ['python']
   adam-adcm-on-treatment:
     status: executable
     runtimes: ['python']
@@ -247,9 +250,6 @@ examples:
     status: executable
     runtimes: ['python']
   negative-cyclic-parent:
-    status: executable
-    runtimes: ['python']
-  negative-inherited-output:
     status: executable
     runtimes: ['python']
   negative-property-clear:
@@ -606,6 +606,9 @@ examples:
   sdtm-ae-coding:
     status: executable
     runtimes: ['python']
+  sdtm-ae-partial-dates:
+    status: executable
+    runtimes: ['python']
   sdtm-ae-seriousness:
     status: executable
     runtimes: ['python']
@@ -625,6 +628,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-dm-dates:
+    status: executable
+    runtimes: ['python']
+  sdtm-ds-multi-form-disposition:
     status: executable
     runtimes: ['python']
   sdtm-ds-reasons:
@@ -663,13 +669,25 @@ examples:
   sdtm-lb-metadata:
     status: executable
     runtimes: ['python']
+  sdtm-mh-prespecified-conditions:
+    status: executable
+    runtimes: ['python']
   sdtm-relrec-links:
+    status: executable
+    runtimes: ['python']
+  sdtm-rs-timepoint-response:
+    status: executable
+    runtimes: ['python']
+  sdtm-se-subject-elements:
     status: executable
     runtimes: ['python']
   sdtm-suppmh-linkage:
     status: executable
     runtimes: ['python']
   sdtm-suppmh-qualifiers:
+    status: executable
+    runtimes: ['python']
+  sdtm-vs-replicates:
     status: executable
     runtimes: ['python']
   sdtm-vs-units:
@@ -690,6 +708,9 @@ examples:
   schema-inheritance:
     status: executable
     runtimes: ['python']
+  schema-inherited-output:
+    status: executable
+    runtimes: ['python']
   schema-source-binding:
     status: executable
     runtimes: ['python']
@@ -703,6 +724,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-lookup:
+    status: executable
+    runtimes: ['python']
+  schema-lookup-intermediate-derived-filter:
     status: executable
     runtimes: ['python']
   schema-lookup-intermediate-unique:
@@ -730,5 +754,8 @@ examples:
     status: executable
     runtimes: ['python']
   negative-locf-no-order:
+    status: executable
+    runtimes: ['python']
+  negative-sdtm-lb-unit-conversion:
     status: executable
     runtimes: ['python']

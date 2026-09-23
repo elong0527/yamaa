@@ -383,7 +383,8 @@ class RowResolver:
     def _lookup_read(self, identifier: str, field_name: str) -> Resolution:
         plan = self._context.intermediates.plans[identifier]
         relation = self._context.relations[plan.dataset]
-        if not relation.has(field_name):
+        derived = {name for name, _ in plan.derived}
+        if not relation.has(field_name) and field_name not in derived:
             return _failed(
                 _condition(
                     "unknown_field",

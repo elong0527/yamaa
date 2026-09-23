@@ -1,0 +1,171 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  ODM:
+    path: input/odm.csv
+    types:
+      StudyEventRepeatKey: int
+      ItemGroupRepeatKey: int
+      Value: float
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.VISIT1: VISIT 1
+          SE.VISIT2: VISIT 2
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation:
+      mapping:
+        source: ODM.ItemOID
+        dict:
+          IT.VS.SYSBP: SYSBP
+          IT.VS.DIABP: DIABP
+    verifications:
+      allowed_values:
+        values: [SYSBP, DIABP]
+
+  - name: VSTEST
+    type: str
+    label: Vital Signs Test Name
+    derivation:
+      mapping:
+        source: ODM.ItemOID
+        dict:
+          IT.VS.SYSBP: Systolic Blood Pressure
+          IT.VS.DIABP: Diastolic Blood Pressure
+
+  - name: ORD
+    type: int
+    label: Readings sort before the mean record
+
+  - name: VSREPNUM
+    type: int
+    label: Replicate Number
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: VSSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: VSSTRESN
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+    verifications:
+      allowed_values:
+        values: [mmHg]
+
+  - name: VSDRVFL
+    type: str
+    label: Derived Record Flag
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VISIT, VSTESTCD, ORD, VSREPNUM]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: systolic
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    filter: "VSSTRESN IS NOT NULL"
+    derivations:
+      ORD: {literal: 1}
+      VSREPNUM:
+        aggregate:
+          expr: "ONLY(ODM.ItemGroupRepeatKey)"
+      VSSTRESN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
+          expr: "ONLY(ODM.Value)"
+      VSORRES: {source: VSSTRESN}
+      VSORRESU: {literal: mmHg}
+      VSDRVFL: {literal: null}
+
+  - id: diastolic
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    filter: "VSSTRESN IS NOT NULL"
+    derivations:
+      ORD: {literal: 1}
+      VSREPNUM:
+        aggregate:
+          expr: "ONLY(ODM.ItemGroupRepeatKey)"
+      VSSTRESN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.DIABP'"
+          expr: "ONLY(ODM.Value)"
+      VSORRES: {source: VSSTRESN}
+      VSORRESU: {literal: mmHg}
+      VSDRVFL: {literal: null}
+
+  - id: means
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemOID]
+    derivations:
+      ORD: {literal: 2}
+      VSREPNUM: {literal: null}
+      VSSTRESN:
+        aggregate:
+          expr: "MEAN(ODM.Value)"
+      VSORRES: {source: VSSTRESN}
+      VSORRESU: {literal: mmHg}
+      VSDRVFL: {literal: Y}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 31
+      max: 31
+  - implies:
+      id: derived-mean-carries-no-replicate-number
+      when: "VSDRVFL = 'Y'"
+      then: "VSREPNUM IS NULL AND VSSTRESN IS NOT NULL"
+  - implies:
+      id: reading-carries-its-replicate-number
+      when: "VSDRVFL IS NULL"
+      then: "VSREPNUM IS NOT NULL"

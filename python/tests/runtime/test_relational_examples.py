@@ -98,6 +98,50 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
     assert render_csv(result.artifact) == committed
 
 
+def test_an_intermediate_orders_by_its_derived_distance(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(
+        """\
+schema_version: "1.0"
+domain: OUT
+keys: [ID]
+input:
+  BASE: input/base.csv
+  SRC: {path: input/src.csv, types: {DAY: int}}
+base: BASE
+intermediates:
+  - id: PICK
+    dataset: SRC
+    key: [ID]
+    derivations:
+      DIST: {compute: {expr: "ABS(DAY - 10)"}}
+    order_by: [SRC.DIST]
+    keep: first
+    columns: [VALUE]
+output:
+  path: out.csv
+  columns: [ID, VALUE]
+columns:
+  - name: ID
+    type: str
+    derivation: BASE.ID
+  - name: VALUE
+    type: str
+    derivation: PICK.VALUE
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "input/base.csv").write_text("ID\nS1\n", encoding="utf-8")
+    (tmp_path / "input/src.csv").write_text(
+        "ID,DAY,VALUE\nS1,2,a\nS1,11,b\n", encoding="utf-8"
+    )
+
+    result = _run(tmp_path)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert render_csv(result.artifact) == b"ID,VALUE\nS1,b\n"
+
+
 @pytest.mark.parametrize("name", ERROR_EXAMPLES)
 def test_a_committed_error_contract_is_reproduced(name: str) -> None:
     directory = EXAMPLES / name

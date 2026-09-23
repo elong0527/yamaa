@@ -315,25 +315,34 @@ surviving records counts one `multiple_matches` handling, and a declared
 **REQ-1185.** An intermediate may declare `derivations:`, a map of names to
 derivations written in the same expression language as row-template
 `derivations:`. Each derivation is computed once per record of the
-intermediate's dataset, before matching, and reads only that dataset: a bare
-name reads the dataset's stored field, and a qualified name must name the
-dataset. A reference to a driver field, another intermediate, another
-derivation in the same map, or anything the dataset does not store fails as
-`unknown_field`; a derived name that shadows a stored column fails as
-`duplicate_derivation`. A derived name may appear as a target-side `key`
-field and is matched like a stored column. A derivation that fails on a
-record fails the run with the expression's condition at the derivation's
-path; a derivation that yields missing for a record simply does not match.
+intermediate's dataset and reads only that dataset: a bare name reads the
+dataset's stored field, and a qualified name must name the dataset. A
+reference to a driver field, another intermediate, another derivation in the
+same map, or anything the dataset does not store fails as `unknown_field`; a
+derived name that shadows a stored column fails as `duplicate_derivation`.
+
+The derived values augment each donor record before `filter`, matching,
+`order_by` selection, and `columns` projection. A derived name may therefore
+appear as a target-side `key`, as a dataset-qualified field in `filter` or
+`order_by`, in `columns`, or in `verification.unique`, and behaves like a
+stored field there. A correlated filter sees the augmented donor record and
+the current driver record together. A derivation that fails on a record fails
+the run with the expression's condition at the derivation's path; a derivation
+that yields missing contributes an ordinary missing value, which cannot match
+a key and may be excluded by a predicate.
 
 ```yaml
 intermediates:
-  - id: SUP_EP
-    dataset: SUPPLB
+  - id: EOT
+    dataset: DS
     derivations:
-      QVAL_U: str_upper(QVAL)
-    key: [STUDYID, USUBJID, QVAL_U]
-    key_base: [LB.STUDYID, LB.USUBJID, LB.EPFLAG]
-    filter: "SUPPLB.QNAM = 'ENDPOINT'"
+      EOT_FALLBACK:
+        compute:
+          expr: "DSSTDY + DSSEQ / 1000"
+    filter: "DS.EOT_FALLBACK IS NOT NULL"
+    order_by: [DS.EOT_FALLBACK]
+    keep: first
+    columns: [DSDECOD, EOT_FALLBACK]
 ```
 
 ### Intermediate uniqueness checks
@@ -551,8 +560,8 @@ structural constraints come from its schema declaration.
 | `intermediate_class.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
-| `intermediate_class.columns` | Dataset columns the lookup may read; defaults to every dataset column. |
-| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, named in `key` ([REQ-1185](lookup.md#req-1185)). |
+| `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
+| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, available to `key`, `filter`, `order_by`, `columns`, and `verification.unique` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `intermediate_class.strict` | Fail when the lookup yields nothing. |

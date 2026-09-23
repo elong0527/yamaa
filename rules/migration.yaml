@@ -1696,13 +1696,13 @@ requirements:
   REQ-0620: {"file": "specification/composition.md", "sources": ["R017-7"]}
   REQ-0621: {"file": "specification/composition.md", "sources": ["R017-8"]}
   REQ-0622: {"file": "specification/composition.md", "sources": ["R017-9"]}
-  REQ-0623: {"file": "specification/composition.md", "sources": ["R017-10"]}
+  REQ-0623: {"file": "specification/composition.md", "sources": ["R017-10", "yamaa:issue-845:entry-inherits-output"]}
   REQ-0624: {"file": "specification/composition.md", "sources": ["R017-11"]}
   REQ-0625: {"file": "specification/composition.md", "sources": ["R017-12"]}
   REQ-0626: {"file": "specification/composition.md", "sources": ["R017-13"]}
   REQ-0627: {"file": "specification/composition.md", "sources": ["R017-14"]}
   REQ-0628: {"file": "specification/composition.md", "sources": ["R017-15"]}
-  REQ-0629: {"file": "specification/composition.md", "sources": ["R017-16"]}
+  REQ-0629: {"file": "specification/composition.md", "sources": ["R017-16", "yamaa:issue-845:inherited-output-paths"]}
   REQ-0630: {"file": "specification/composition.md", "sources": ["R017-17"]}
   REQ-0631: {"file": "specification/composition.md", "sources": ["R017-18"]}
   REQ-0632: {"file": "specification/composition.md", "sources": ["R017-19"]}
@@ -1730,7 +1730,7 @@ requirements:
   REQ-0654: {"file": "specification/composition.md", "sources": ["R017-41"]}
   REQ-0655: {"file": "specification/composition.md", "sources": ["R017-42"]}
   REQ-0656: {"file": "specification/composition.md", "sources": ["R017-43"]}
-  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44"]}
+  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44", "yamaa:issue-845:resolved-output-required"]}
   REQ-0658: {"file": "specification/composition.md", "sources": ["R017-45"]}
   REQ-0659: {"file": "specification/composition.md", "sources": ["R017-46"]}
   REQ-0660: {"file": "specification/composition.md", "sources": ["R017-47"]}
@@ -2257,7 +2257,7 @@ requirements:
   REQ-1182: {"file": "operations/temporal.md", "sources": ["yamaa:issue-461:datetime-imputation", "schema_expression_date.yaml:expressions.datetime_impute.source.description", "schema_expression_date.yaml:expressions.datetime_impute.time.description", "schema_expression_date.yaml:expressions.datetime_impute.missing.description", "schema_expression_date.yaml:expressions.datetime_impute.invalid.description"]}
   REQ-1183: {"file": "operations/temporal.md", "sources": ["yamaa:issue-461:datetime-precision", "schema_expression_date.yaml:expressions.datetime_precision.source.description", "schema_expression_date.yaml:expressions.datetime_precision.missing.description", "schema_expression_date.yaml:expressions.datetime_precision.invalid.description"]}
   REQ-1184: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:time_rule.description"]}
-  REQ-1185: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.derivations.description"]}
+  REQ-1185: {"file": "operations/lookup.md", "sources": ["yamaa:issue-767:derived-intermediate-fields", "schema.yaml:intermediate_class.derivations.description"]}
   REQ-1187: {"file": "operations/temporal.md", "sources": ["yamaa:issue-705:to-epoch-day"]}
   REQ-1188: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:expressions.to_epoch_day.source.description"]}
   REQ-1189: {"file": "operations/aggregation.md", "sources": ["yamaa:issue-704:derive-step", "yamaa:issue-705:derive-step", "schema_expression_aggregate.yaml:aggregate_class.derive.description"]}
@@ -2753,6 +2753,7 @@ provenance_addenda:
   - {"source": "schema_define.yaml:define_dataset_class.dataset_json.description", "text": "See REQ-1066 in rules/submission/define-xml.md.", "owner": "submission/define-xml", "group": "define_dataset_class", "target": "REQ-1066"}
   - {"source": "schema_define.yaml:dataset_json_path.description", "text": "See REQ-1225 in rules/submission/dataset-json.md.", "owner": "submission/dataset-json", "group": "dataset_json_path", "target": "REQ-1225"}
   - {"source": "schema.yaml:intermediate_class.derivations.description", "text": "See REQ-1185 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1185"}
+  - {"source": "yamaa:issue-767:derived-intermediate-fields", "text": "Issue #767: per-record derivations augment an intermediate's donor records before filter, matching, order_by selection, and columns projection, so those clauses resolve derived names.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1185"}
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.dict_yaml.description", "text": "See REQ-1110 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
   - {"source": "schema_expression_window.yaml:expressions.locf.source.description", "text": "Completed observed variable to carry forward.", "owner": "operations/windows", "group": "expressions.locf", "target": "REQ-1239"}
   - {"source": "schema_expression_window.yaml:expressions.locf.window.description", "text": "Partition, ordering and optional row selection.", "owner": "operations/windows", "group": "expressions.locf", "target": "REQ-1239"}
@@ -2767,3 +2768,6 @@ provenance_addenda:
   - {"source": "yamaa:issue-777:intermediate-unique-verification", "text": "Issue #777: an intermediate may declare verification.unique asserting its filtered donor records carry each key combination once; duplicates fail the run, correlated filters are rejected, and keep stays positional.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_class.verification.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_verification_class.unique.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_verification_class", "target": "REQ-1245"}
+  - {"source": "yamaa:issue-845:entry-inherits-output", "text": "Issue #845: an entry file may omit output and inherit it whole like any other replaced root field, so a shared layer can own the artifact membership and order.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0623"}
+  - {"source": "yamaa:issue-845:inherited-output-paths", "text": "Issue #845: an inherited output publishes where the layer that wrote it names; path, warning_log, and verification_log keep that layer's provenance.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0629"}
+  - {"source": "yamaa:issue-845:resolved-output-required", "text": "Issue #845: missing_entry_output is retired; a resolved specification no layer gave an output fails as missing_required_field at output.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0657"}

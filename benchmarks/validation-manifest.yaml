@@ -42,11 +42,6 @@ fixtures:
     condition: inheritance_cycle
     spec_paths: [parents]
     validator: inheritance
-  negative-inherited-output:
-    rule: R017
-    condition: missing_entry_output
-    spec_paths: [parents]
-    validator: inheritance
   negative-property-clear:
     rule: R017
     condition: invalid_clear

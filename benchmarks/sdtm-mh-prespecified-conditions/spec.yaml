@@ -1,0 +1,213 @@
+schema_version: "1.0"
+domain: MH
+keys: [STUDYID, USUBJID, MHSEQ]
+
+input:
+  ODM: input/odm.csv
+
+output:
+  path: mh.csv
+  columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT]
+  order_by: [USUBJID, MHSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: MH
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: MHTERM
+    type: str
+    label: Reported Term for the Medical History
+    verifications:
+      - not_missing: {}
+
+  - name: MHCAT
+    type: str
+    label: Category for Medical History
+
+  - name: ANSWER
+    type: str
+    label: Raw answer to the pre-specified checklist question
+
+  - name: MHPRESP
+    type: str
+    label: Pre-Specified Medical History Indicator
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  - name: MHOCCUR
+    type: str
+    label: Medical History Occurrence
+    verifications:
+      - allowed_values:
+          values: [Y, N]
+
+  - name: MHSTAT
+    type: str
+    label: Completion Status
+    verifications:
+      - allowed_values:
+          values: [NOT DONE]
+
+  - name: SORTORD
+    type: int
+    label: Record order within a subject
+    derivation:
+      case:
+        - when: "MHTERM = 'DIABETES MELLITUS'"
+          then:
+            literal: 1
+        - when: "MHTERM = 'HYPERTENSION'"
+          then:
+            literal: 2
+        - when: "MHTERM = 'ASTHMA'"
+          then:
+            literal: 3
+        - otherwise:
+            literal: 4
+
+  - name: MHSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [SORTORD]
+
+rows:
+  - id: diabetes
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    derivations:
+      MHTERM:
+        literal: DIABETES MELLITUS
+      MHCAT:
+        literal: DISEASE-SPECIFIC HISTORY
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.DIABETES'"
+          expr: "ONLY(ODM.Value)"
+      MHPRESP:
+        literal: Y
+      MHOCCUR:
+        case:
+          - when: "ANSWER = 'Y'"
+            then:
+              literal: Y
+          - when: "ANSWER = 'N'"
+            then:
+              literal: N
+          - otherwise:
+              literal: null
+      MHSTAT:
+        case:
+          - when: "ANSWER IS NULL"
+            then:
+              literal: NOT DONE
+          - otherwise:
+              literal: null
+
+  - id: hypertension
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    derivations:
+      MHTERM:
+        literal: HYPERTENSION
+      MHCAT:
+        literal: DISEASE-SPECIFIC HISTORY
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.HYPERTENSION'"
+          expr: "ONLY(ODM.Value)"
+      MHPRESP:
+        literal: Y
+      MHOCCUR:
+        case:
+          - when: "ANSWER = 'Y'"
+            then:
+              literal: Y
+          - when: "ANSWER = 'N'"
+            then:
+              literal: N
+          - otherwise:
+              literal: null
+      MHSTAT:
+        case:
+          - when: "ANSWER IS NULL"
+            then:
+              literal: NOT DONE
+          - otherwise:
+              literal: null
+
+  - id: asthma
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    derivations:
+      MHTERM:
+        literal: ASTHMA
+      MHCAT:
+        literal: DISEASE-SPECIFIC HISTORY
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.ASTHMA'"
+          expr: "ONLY(ODM.Value)"
+      MHPRESP:
+        literal: Y
+      MHOCCUR:
+        case:
+          - when: "ANSWER = 'Y'"
+            then:
+              literal: Y
+          - when: "ANSWER = 'N'"
+            then:
+              literal: N
+          - otherwise:
+              literal: null
+      MHSTAT:
+        case:
+          - when: "ANSWER IS NULL"
+            then:
+              literal: NOT DONE
+          - otherwise:
+              literal: null
+
+  - id: volunteered
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "MHTERM IS NOT NULL"
+    derivations:
+      MHTERM:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.MH.MHTERM'"
+          expr: "ONLY(ODM.Value)"
+      MHCAT:
+        literal: GENERAL HISTORY
+      ANSWER:
+        literal: null
+      MHPRESP:
+        literal: null
+      MHOCCUR:
+        literal: null
+      MHSTAT:
+        literal: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, MHSEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: unanswered-prespecified-has-status
+      when: "MHPRESP = 'Y' AND MHOCCUR IS NULL"
+      then: "MHSTAT = 'NOT DONE'"

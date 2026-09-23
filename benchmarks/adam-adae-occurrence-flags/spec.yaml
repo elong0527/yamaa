@@ -79,7 +79,7 @@ columns:
 
   - name: AOCCFL
     type: str
-    label: First Occurrence Within Subject Flag
+    label: 1st Occurrence within Subject Flag
     derivation:
       case:
         - when: "AOCCSEQ = 1"
@@ -88,7 +88,7 @@ columns:
 
   - name: AOCCSFL
     type: str
-    label: First Occurrence of Body System Flag
+    label: 1st Occurrence of SOC Flag
     derivation:
       case:
         - when: "AOCCSSEQ = 1"
@@ -97,7 +97,7 @@ columns:
 
   - name: AOCCPFL
     type: str
-    label: First Occurrence of Preferred Term Flag
+    label: 1st Occurrence of Preferred Term Flag
     derivation:
       case:
         - when: "AOCCPSEQ = 1"
@@ -108,8 +108,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 10
+      max: 10
   - implies:
       id: occurrence-flag-requires-treatment-emergence
       when: "AOCCFL = 'Y' OR AOCCSFL = 'Y' OR AOCCPFL = 'Y'"

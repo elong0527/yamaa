@@ -1,0 +1,142 @@
+schema_version: "1.0"
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM: input/cm.csv
+  FACM: input/facm.csv
+  ATCDICT: input/atc_dict.csv
+base: CM
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, ATC1, ATC2, ATC3, ATC4, ATC1CD, ATC2CD, ATC3CD, ATC4CD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Medication, or Therapy
+    derivation: CM.CMTRT
+
+  - name: CMDECOD
+    type: str
+    label: Standardized Medication Name
+    derivation: CM.CMDECOD
+
+  # The ATC code at each level, read off the medication's FACM path
+  # records: one FACM row per ATC level, linked to the CM record.
+  - name: ATC1CD
+    type: str
+    label: ATC Level 1 Code
+    derivation:
+      lookup:
+        dataset: FACM
+        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
+        key: [STUDYID, USUBJID, CMSEQ]
+        filter: "FACM.FATESTCD = 'ATC1'"
+        value: FAORRES
+
+  - name: ATC2CD
+    type: str
+    label: ATC Level 2 Code
+    derivation:
+      lookup:
+        dataset: FACM
+        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
+        key: [STUDYID, USUBJID, CMSEQ]
+        filter: "FACM.FATESTCD = 'ATC2'"
+        value: FAORRES
+
+  - name: ATC3CD
+    type: str
+    label: ATC Level 3 Code
+    derivation:
+      lookup:
+        dataset: FACM
+        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
+        key: [STUDYID, USUBJID, CMSEQ]
+        filter: "FACM.FATESTCD = 'ATC3'"
+        value: FAORRES
+
+  - name: ATC4CD
+    type: str
+    label: ATC Level 4 Code
+    derivation:
+      lookup:
+        dataset: FACM
+        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
+        key: [STUDYID, USUBJID, CMSEQ]
+        filter: "FACM.FATESTCD = 'ATC4'"
+        value: FAORRES
+
+  # The ATC class names, decoded from the codes through the small
+  # ATC dictionary. A medication with no ATC assignment (no FACM
+  # path records) keeps all eight ATC columns empty.
+  - name: ATC1
+    type: str
+    label: ATC Level 1
+    derivation:
+      lookup:
+        dataset: ATCDICT
+        key_base: ATC1CD
+        key: ATCCODE
+        value: ATCNAME
+
+  - name: ATC2
+    type: str
+    label: ATC Level 2
+    derivation:
+      lookup:
+        dataset: ATCDICT
+        key_base: ATC2CD
+        key: ATCCODE
+        value: ATCNAME
+
+  - name: ATC3
+    type: str
+    label: ATC Level 3
+    derivation:
+      lookup:
+        dataset: ATCDICT
+        key_base: ATC3CD
+        key: ATCCODE
+        value: ATCNAME
+
+  - name: ATC4
+    type: str
+    label: ATC Level 4
+    derivation:
+      lookup:
+        dataset: ATCDICT
+        key_base: ATC4CD
+        key: ATCCODE
+        value: ATCNAME
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: coded-medication-has-full-atc-path
+      when: "CMDECOD IS NOT NULL"
+      then: "ATC1CD IS NOT NULL AND ATC2CD IS NOT NULL AND ATC3CD IS NOT NULL AND ATC4CD IS NOT NULL"
+  - implies:
+      id: atc-codes-imply-atc-names
+      when: "ATC1CD IS NOT NULL"
+      then: "ATC1 IS NOT NULL AND ATC2 IS NOT NULL AND ATC3 IS NOT NULL AND ATC4 IS NOT NULL"
