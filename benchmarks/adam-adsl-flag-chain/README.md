@@ -26,10 +26,9 @@ the exposure start date `EXSTDTC`.
 - `RANDDT` holds the collected randomization date, and stays
   empty when the subject was not randomized.
 - `AGEGR1` holds `<65` when `AGE` is below 65, and `>=65` when
-  `AGE` is 65 or above, and stays empty when `AGE` is missing.
+  `AGE` is 65 or above; a subject with no age stops the run.
 - `AGERNK` holds the subject rank by `AGE`, ordered by `AGE`
   then `USUBJID` within each `STUDYID`, starting at 1.
-- `AGE` holds the collected subject age.
 
 **Note:** derive the dates and age before the flags that use them,
 derive the safety and intent-to-treat flags before the combined
