@@ -349,6 +349,9 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R003', 'unpaired_fields'): {
         'declared', 'intermediate', 'missing',
     },
+    ('R003', 'rename_only_intermediate'): {
+        'intermediate', 'dataset',
+    },
     ('R006', 'missing_required_field'): {'class', 'field'},
     ('R016', 'month_out_of_range'): {'month'},
     ('R016', 'day_out_of_range'): {'day'},
@@ -3649,7 +3652,7 @@ def validate_schemas(root: Path):
 
 def example_entry_specs(example_dir: Path):
     paths = example_spec_paths(example_dir)
-    parented = set()
+    named = set()
     for path in paths:
         try:
             with open(path, 'r', encoding='utf-8') as handle:
@@ -3663,8 +3666,53 @@ def example_entry_specs(example_dir: Path):
             parents = [parents]
         for parent in parents:
             if isinstance(parent, str) and parent:
-                parented.add(Path(parent).name)
-    return [path for path in paths if path.name not in parented]
+                named.add(Path(parent).name)
+        inputs = spec.get('input', {})
+        if isinstance(inputs, dict):
+            for source in inputs.values():
+                if (
+                    isinstance(source, dict)
+                    and isinstance(source.get('schema'), str)
+                    and source['schema']
+                ):
+                    named.add(Path(source['schema']).name)
+    return [path for path in paths if path.name not in named]
+
+
+def example_artifact_owners(example_dir: Path):
+    """Map each artifact an example's specs declare to the files declaring it.
+
+    Only an entry and a producer kept beside it own a golden: a spec another
+    reads through `input.*.schema` is part of the example, so the artifact it
+    produces sits in `expected/` next to the entry's. An inheritance level
+    owns nothing of its own; the entry that resolves it does.
+    """
+    documents = {}
+    for path in example_spec_paths(example_dir):
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                documents[path.name] = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+    owners_of = {path.name for path in example_entry_specs(example_dir)}
+    for spec in documents.values():
+        inputs = spec.get('input') if isinstance(spec, dict) else None
+        if not isinstance(inputs, dict):
+            continue
+        for source in inputs.values():
+            if isinstance(source, dict) and isinstance(source.get('schema'), str):
+                owners_of.add(Path(source['schema']).name)
+    artifacts = {}
+    for name in sorted(owners_of):
+        spec = documents.get(name)
+        output = spec.get('output') if isinstance(spec, dict) else None
+        if not isinstance(output, dict):
+            continue
+        for field in ('path', 'warning_log', 'verification_log'):
+            if isinstance(output.get(field), str):
+                artifact = PurePosixPath(output[field]).name
+                artifacts.setdefault(artifact, set()).add(name)
+    return artifacts
 
 
 def valid_temporal_literal(kind, text):
@@ -5506,6 +5554,15 @@ def validate_spec_contracts(
                 written, base_dir, project_root,
                 project_data_roots(project_root),
             )
+            if (
+                condition == 'resource_path_missing'
+                and isinstance(source, dict)
+                and isinstance(source.get('schema'), str)
+            ):
+                # REQ-0521: the producing specification writes this artifact
+                # before the consumer reads it, so it need not exist yet;
+                # validate_producing_specs checks its header when it does.
+                continue
             if condition is not None:
                 errors.append(
                     resource_path_error(f"{path}.path", source_path, condition)
@@ -8154,6 +8211,30 @@ def validate_intermediate_static_semantics(
             continue
         operation_path = f"{spec_label}.intermediates[{index}]"
         dataset = intermediate.get('dataset')
+        if (
+            intermediate.get('key') is None
+            and intermediate.get('key_base') is None
+            and intermediate.get('between') is None
+            and intermediate.get('filter') is None
+            and intermediate.get('order_by') is None
+            and intermediate.get('keep') is None
+            and intermediate.get('columns') is None
+            and intermediate.get('derivations') is None
+            and intermediate.get('verification') is None
+            and intermediate.get('missing') is None
+            and not intermediate.get('strict', False)
+        ):
+            errors.append(
+                validation_diagnostic(
+                    operation_path,
+                    'rename_only_intermediate',
+                    'named intermediate only renames its dataset',
+                    context={
+                        'intermediate': intermediate.get('id'),
+                        'dataset': dataset,
+                    },
+                )
+            )
         fields = datasets.get(dataset, {})
         sources = intermediate.get('source')
         keys = intermediate.get('key')
@@ -10934,6 +11015,7 @@ def validate_examples_csv(root: Path, env=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
+        owners = example_artifact_owners(ex_dir)
         for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
@@ -11009,6 +11091,10 @@ def validate_examples_csv(root: Path, env=None):
                             for name, column_type in VERIFICATION_LOG_TYPES.items()
                         ],
                     }
+                elif owners.get(csv_file.name, set()) - {spec_path.name}:
+                    # Another spec of this example produces this golden, and
+                    # its own pass checks the header.
+                    continue
                 else:
                     permitted = [
                         name

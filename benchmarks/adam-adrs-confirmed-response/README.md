@@ -21,7 +21,7 @@ standardized result `RSSTRESC`.
   `ADT` order within a subject.
 
 **Note:** assessments sharing a date are ordered by sequence
-number `RSSEQ`, so a partial or complete response at a subject's
-last assessment cannot be confirmed.
+number `RSSEQ`: the higher-numbered one is the next assessment for
+the lower-numbered one, zero days later, so it never confirms it.
 
 **Standard:** ADaM | **Domain:** ADRS

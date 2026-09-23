@@ -93,6 +93,35 @@ intermediates:
     keep: last
 ```
 
+<a id="req-1248"></a>
+
+**REQ-1248.** A named intermediate must narrow, derive, or reshape its
+dataset. An intermediate that declares only `id` and `dataset` merely
+renames the dataset qualifier and fails as `rename_only_intermediate`:
+read the input dataset directly instead of aliasing it.
+
+```yaml
+# rejected: CODED adds nothing to CODING
+intermediates:
+  - id: CODED
+    dataset: CODING
+```
+
+Instead, qualify the dataset in the lookup derivation:
+
+```yaml
+columns:
+  - name: CMDECOD
+    type: str
+    label: Standardized Medication Name
+    derivation:
+      lookup:
+        dataset: WHODRUG
+        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
+        key: [DRUG_RECORD_NO, ATC_CODE]
+        value: PREFERRED_NAME
+```
+
 <a id="req-0115"></a>
 
 **REQ-0115.** `key_base` and `key` pair by position, have equal length, and

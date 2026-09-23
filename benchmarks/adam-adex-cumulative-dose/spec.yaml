@@ -31,20 +31,23 @@ columns:
     label: Dose Units
     derivation: TRT.EXDOSU
 
+  # Summed and counted over the treatment's exposure records, matched on the
+  # dataset keys EX carries (STUDYID, USUBJID, EXTRT). With no records both
+  # are empty rather than zero.
   - name: DOSECUM
     type: float
     label: Cumulative Dose
     derivation:
       aggregate:
-
         expr: "SUM(EX.EXDOSE)"
+
   - name: NCYCLES
     type: int
     label: Number of Treatment Cycles
     derivation:
       aggregate:
-
         expr: "COUNT(EX.EXSEQ)"
+
   - name: PLANDOSE
     type: float
     label: Planned Dose per Cycle
@@ -55,6 +58,8 @@ columns:
     label: Planned Number of Cycles
     derivation: TRT.PLANCYC
 
+  # NULLIF turns a zero planned total into missing, so RDI is empty instead
+  # of dividing by zero.
   - name: RDI
     type: float
     label: Relative Dose Intensity
@@ -64,5 +69,5 @@ columns:
 
 verifications:
   - row_count:
-      min: 3
-      max: 3
+      min: 6
+      max: 6

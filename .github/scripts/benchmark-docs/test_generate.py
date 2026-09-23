@@ -396,6 +396,25 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(title, "Spec Inheritance")
         self.assertEqual(category, "Specification")
 
+    def test_producer_beside_the_entry_renders_as_a_second_spec(self):
+        benchmark = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
+        entry, chain = generate.benchmark_entry(benchmark)
+        self.assertEqual(entry.name, "spec_suppdm.yaml")
+        self.assertEqual([path.name for path in chain], ["spec_dm.yaml"])
+        page = generate.render_benchmark(benchmark).decode("ascii")
+        self.assertEqual(
+            re.findall(r'data-filename="([^"]+)"', page),
+            ["spec_dm.yaml", "spec_suppdm.yaml", "run.R", "run.py"],
+        )
+        self.assertIn('<span class="panel-caption">2 spec files</span>', page)
+        # RACE is a DM column: only the producer's columns can label it.
+        self.assertIn('<th scope="col" class="derived" title="Race">RACE</th>', page)
+
+    def test_example_building_two_domains_files_under_its_readme_domain(self):
+        benchmark = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
+        _, category = generate.describe_benchmark(benchmark)
+        self.assertEqual(category, "DM")
+
     def test_dashboard_badge_is_not_rendered_on_its_own_page(self):
         page = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode(
             "ascii"

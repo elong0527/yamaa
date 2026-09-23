@@ -18,21 +18,21 @@ date (`ASTDT`).
 - `STARTDT`: treatment start, copied from `TRTSDT`; missing
   when `TRTSDT` is missing.
 - `ADT`: earliest `ASTDT` across the subject's AE records, or
-  `EOSDT` when no AE record exists; ties break by lowest
-  sequence number. The selected date is moved up to `STARTDT`
-  when earlier than treatment start; missing when neither
-  source date exists.
+  `EOSDT` when no AE record has an onset date. The selected date
+  is moved up to `STARTDT` when earlier than treatment start;
+  missing when neither source date exists.
 - `AVAL`: inclusive day count from `STARTDT` through `ADT`;
   missing when either date is missing.
 - `CNSR`: `0` for an AE, `1` when censored at end of study.
 - `EVNTDESC`: `AE` for an event, `END OF STUDY` for censoring.
 - `SRCDOM`: `ADAE` for an event, `ADSL` for censoring.
 - `SRCVAR`: `ASTDT` for an event, `EOSDT` for censoring.
-- `SRCSEQ`: sequence number of the selected AE record; blank
-  when the record is censored.
+- `SRCSEQ`: sequence number of the selected AE record, the lowest
+  when several share the earliest onset date; blank when the
+  record is censored.
 
-**Note:** clamping moves the date only: a selected date earlier
-than treatment start is moved up to `STARTDT`, keeping its
-censoring, description, and source, with `AVAL` of `1`.
+**Note:** clamping moves the date only: a record whose date is
+moved up to `STARTDT` keeps its censoring, description, and
+source, with `AVAL` of `1`.
 
 **Standard:** ADaM | **Domain:** ADTTE

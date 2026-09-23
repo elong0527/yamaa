@@ -13,22 +13,21 @@ and `AGE` as reported.
 
 **Variables:**
 
-- `SEX` is the standard sex code, matched without regard to case:
-  `M` gives `M`, `F` gives `F`, and `U` gives `U`; a missing source
-  and any other reported value both give `U`.
-- `SEXN` is the numeric sex code, matched without regard to case:
-  `M` gives `1`, `F` gives `2`, and `U` gives `0`; a missing source
-  and any other reported value both give `0`.
-- `SEXDECOD` is the display form of sex, matched without regard to
-  case: `M` gives `Male`, `F` gives `Female`, and `U` gives
-  `Unknown`; a missing source and any other reported value both
-  give `Unknown`.
-- `RACEN` is the numeric race code, matched exactly as reported:
-  `WHITE` gives `1`, `BLACK OR AFRICAN AMERICAN` gives `2`, and
-  `ASIAN` gives `3`; a missing source and any other reported value
-  both give `99`.
+- `SEX` is the standard sex code: `M` gives `M`, `F` gives `F`,
+  and `U` gives `U`; a missing source and any other reported value
+  both give `U`.
+- `SEXN` is the numeric sex code: `M` gives `1`, `F` gives `2`, and
+  `U` gives `0`; a missing source and any other reported value both
+  give `0`.
+- `SEXDECOD` is the display form of sex: `M` gives `Male`, `F`
+  gives `Female`, and `U` gives `Unknown`; a missing source and any
+  other reported value both give `Unknown`.
+- `RACEN` is the numeric race code: `WHITE` gives `1`,
+  `BLACK OR AFRICAN AMERICAN` gives `2`, and `ASIAN` gives `3`; a
+  missing source and any other reported value both give `99`.
 - `AGE` is the collected `AGE` as a whole number; it is missing when
-  the source is absent and when the reported value is not a number.
+  no age was collected and when the reported value is not a whole
+  number.
 - `AGEGR1` is the age group: `<18` when age is below 18, `18-64`
   when age is at least 18 and below 65, and `>=65` when age is at
   least 65; it is `UNKNOWN` when age is missing.

@@ -25,12 +25,9 @@ is fixed to `RESP75` and `PARAM` to `EASI-75 Response`.
 
 **Note:** the checks apply in a fixed order. A subject with a
 serious adverse event or any discontinuation reason is a
-non-responder whatever the efficacy value; otherwise a subject
-with no efficacy value is not evaluable, one with a percent change
-of -75 or less (a reduction of at least 75%) is a responder, and
-everyone else is a non-responder. So a subject meeting the
-efficacy mark but flagged for safety is a non-responder, and a
-subject with no efficacy value who discontinued is a non-responder
-rather than not evaluable.
+non-responder whatever the efficacy value, even a missing one;
+otherwise a subject with no efficacy value is not evaluable, one
+with a percent change of -75 or less (a reduction of at least 75%)
+is a responder, and everyone else is a non-responder.
 
 **Standard:** ADaM | **Domain:** ADRS

@@ -20,6 +20,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # A warning, not an error: an age outside 18 to 100 stays in the output
+  # and its subject is listed in the review log instead of stopping the run.
   - name: AGE
     type: int
     label: Age

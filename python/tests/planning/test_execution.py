@@ -358,7 +358,15 @@ def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
         ]
-    ).model_copy(update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT")]})
+    ).model_copy(
+        update={
+            "intermediates": [
+                # REQ-1248: the intermediate projects its dataset; a bare
+                # alias would be rejected before key inference runs.
+                Intermediate(id="LOOK", dataset="RIGHT", columns=["X", "V"])
+            ]
+        }
+    )
 
     plan = plan_execution(
         spec,
@@ -400,7 +408,11 @@ def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> Non
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
         ]
-    ).model_copy(update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT")]})
+    ).model_copy(
+        update={
+            "intermediates": [Intermediate(id="LOOK", dataset="RIGHT", columns=["V"])]
+        }
+    )
 
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(

@@ -1,12 +1,16 @@
 USUBJID,PARAMCD,AVAL,PARAM,VISIT,DTYPE
-P01,WBC,33,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
-P01,WBC,38,Leukocyte Count (10^9/L),CYCLE 2 DAY 1,
-P01,LYMLE,0.9,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
-P01,LYMLE,0.7,Lymphocytes (fraction of 1),CYCLE 2 DAY 1,
-P01,ALB,36,Albumin (g/dL),CYCLE 2 DAY 1,
-P02,WBC,33,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
-P02,LYMPH,29,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,
-P02,LYMLE,0.87,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
-P03,LYMLE,0.89,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
-P01,LYMPH,29.7,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
-P01,LYMPH,26.599999999999998,Lymphocytes Abs (10^9/L),CYCLE 2 DAY 1,CALCULATION
+LYM-001,WBC,12,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
+LYM-001,LYMLE,0.5,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
+LYM-001,WBC,10,Leukocyte Count (10^9/L),CYCLE 2 DAY 1,
+LYM-001,LYMLE,0.75,Lymphocytes (fraction of 1),CYCLE 2 DAY 1,
+LYM-002,WBC,8,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
+LYM-002,LYMLE,1,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
+LYM-003,WBC,9,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
+LYM-004,LYMLE,0.4,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
+LYM-005,WBC,7,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
+LYM-005,LYMLE,0.25,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
+LYM-005,LYMPH,1.75,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,
+LYM-005,ALB,40,Albumin (g/dL),CYCLE 2 DAY 1,
+LYM-001,LYMPH,6,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-001,LYMPH,7.5,Lymphocytes Abs (10^9/L),CYCLE 2 DAY 1,CALCULATION
+LYM-002,LYMPH,8,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION

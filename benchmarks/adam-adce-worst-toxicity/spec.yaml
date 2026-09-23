@@ -62,6 +62,9 @@ columns:
       allowed_values:
         values: [1, 2, 3]
 
+  # Number each subject's graded events: worst grade first, then earliest
+  # start, then lowest CESEQ. AOCCFL marks number 1; an ungraded event is
+  # left out, so it is never flagged.
   - name: WGRSEQ
     type: int
     label: Worst Grade Sequence Number
@@ -81,8 +84,7 @@ columns:
     derivation:
       case:
         - when: "WGRSEQ = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

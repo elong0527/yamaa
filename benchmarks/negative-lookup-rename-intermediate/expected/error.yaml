@@ -1,0 +1,8 @@
+phase: validation
+condition: rename_only_intermediate
+spec_paths:
+  - intermediates[0]
+requirement: REQ-1248
+context:
+  intermediate: CODED
+  dataset: CODING

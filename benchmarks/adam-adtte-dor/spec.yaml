@@ -5,8 +5,8 @@ input:
   ADSL: input/adsl.csv
   ADRS_RAW: input/adrs_raw.csv
   DS: input/ds.csv
-
 base: ADSL
+
 output:
   path: adtte.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
@@ -41,11 +41,15 @@ columns:
     verifications:
       not_missing: {}
 
+  # The therapy start as a date: ADSL is read as text, and the comparisons
+  # below need a date.
   - name: NACTDT
     type: date
     label: New Anti-Cancer Therapy Start Date
     derivation: ADSL.NACTDT
 
+  # The earliest progression (PD) and its record, ties on a date to the
+  # lower ASEQ.
   - name: PDDT
     type: date
     label: Disease Progression Date
@@ -64,6 +68,8 @@ columns:
         multiple_matches:
           order_by: [ADRS_RAW.ADT, ADRS_RAW.ASEQ]
           keep: first
+
+  # The earliest death in disposition, ties on a date to the lower DSSEQ.
   - name: DEATHDT
     type: date
     label: Death Date
@@ -82,6 +88,9 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: first
+
+  # The latest assessment with a response other than not evaluable (NE),
+  # ties on a date to the higher ASEQ.
   - name: LASTVLDT
     type: date
     label: Last Valid Assessment Date
@@ -100,6 +109,7 @@ columns:
         multiple_matches:
           order_by: [ADRS_RAW.ADT, ADRS_RAW.ASEQ]
           keep: last
+
   - name: EVENTALLDT
     type: date
     label: Earliest Progression or Death Date
@@ -107,14 +117,15 @@ columns:
       least:
         sources: [PDDT, DEATHDT]
 
+  # The first of progression and death counts only on or before the start
+  # of a new anti-cancer therapy; with no therapy start it always counts.
   - name: EVENTDT
     type: date
     label: Event Date
     derivation:
       case:
         - when: "EVENTALLDT IS NOT NULL AND (NACTDT IS NULL OR EVENTALLDT <= NACTDT)"
-          then:
-            source: EVENTALLDT
+          then: EVENTALLDT
 
   - name: CNSR
     type: int
@@ -122,10 +133,8 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then:
-            literal: 0
-        - otherwise:
-            literal: 1
+          then: {literal: 0}
+        - otherwise: {literal: 1}
 
   - name: EVNTDESC
     type: str
@@ -133,14 +142,13 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NULL"
-          then:
-            literal: CENSORED
+          then: {literal: CENSORED}
         - when: "EVENTDT = PDDT"
-          then:
-            literal: DISEASE PROGRESSION
-        - otherwise:
-            literal: DEATH
+          then: {literal: DISEASE PROGRESSION}
+        - otherwise: {literal: DEATH}
 
+  # Censored at the last valid assessment, or at the therapy start when
+  # that comes first.
   - name: CENSORDT
     type: date
     label: Censoring Date
@@ -173,13 +181,10 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then:
-            literal: null
+          then: {literal: null}
         - when: "CENSORDT = LASTVLDT"
-          then:
-            literal: LAST TUMOUR ASSESSMENT
-        - otherwise:
-            literal: START OF NEW ANTI-CANCER THERAPY
+          then: {literal: LAST TUMOUR ASSESSMENT}
+        - otherwise: {literal: START OF NEW ANTI-CANCER THERAPY}
 
   - name: SRCDOM
     type: str
@@ -187,16 +192,12 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DEATH'"
-          then:
-            literal: DS
+          then: {literal: DS}
         - when: "EVNTDESC = 'DISEASE PROGRESSION'"
-          then:
-            literal: ADRS
+          then: {literal: ADRS}
         - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
-          then:
-            literal: ADRS
-        - otherwise:
-            literal: ADSL
+          then: {literal: ADRS}
+        - otherwise: {literal: ADSL}
 
   - name: SRCVAR
     type: str
@@ -204,29 +205,26 @@ columns:
     derivation:
       case:
         - when: "SRCDOM = 'DS'"
-          then:
-            literal: DSSTDTC
+          then: {literal: DSSTDTC}
         - when: "SRCDOM = 'ADRS'"
-          then:
-            literal: ADT
-        - otherwise:
-            literal: NACTDT
+          then: {literal: ADT}
+        - otherwise: {literal: NACTDT}
 
+  # Censoring at the therapy start traces to ADSL, which has no sequence
+  # number, so SRCSEQ stays empty there.
   - name: SRCSEQ
     type: int
     label: Source Sequence Number
     derivation:
       case:
         - when: "EVNTDESC = 'DISEASE PROGRESSION'"
-          then:
-            source: PDSEQ
+          then: PDSEQ
         - when: "EVNTDESC = 'DEATH'"
-          then:
-            source: DEATHSEQ
+          then: DEATHSEQ
         - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
-          then:
-            source: LASTVLSEQ
+          then: LASTVLSEQ
 
+# One record per responder: a subject with no response date has none.
 filter: "ADSL.RESPDT IS NOT NULL"
 
 verifications:

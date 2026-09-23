@@ -43,6 +43,8 @@ columns:
     label: Date/Time of Assessment
     derivation: RS.RSDTC
 
+  # A year and month take the first of the month, a year alone 1 January.
+  # No replacement is declared, so a blank or non-date RSDTC stops the run.
   - name: ADT
     type: date
     label: Analysis Date
@@ -84,6 +86,7 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
+
   - name: ADY
     type: int
     label: Analysis Relative Day
@@ -92,6 +95,9 @@ columns:
         date: ADT
         reference: TRTSDT
 
+  # One record per subject and date carries ANL01FL: the date's worst
+  # response (largest AVAL), and among ties the lowest RSSEQ. Records below
+  # the worst are not numbered.
   - name: WORSTAVAL
     type: int
     label: Worst Analysis Value
@@ -116,8 +122,7 @@ columns:
     derivation:
       case:
         - when: "WORSTORD = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

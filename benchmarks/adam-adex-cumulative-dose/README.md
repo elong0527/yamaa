@@ -14,13 +14,19 @@ plus exposure records holding administered doses.
 **Variables:**
 
 - `DOSECUM` is the total administered dose across the subject's
-  exposure records for the treatment.
+  exposure records for the treatment. A record with no collected
+  dose adds nothing; a planned treatment with no exposure records
+  has an empty total.
 - `NCYCLES` is the number of exposure records for the treatment.
+  Every record counts, even one with a zero or missing dose. A
+  planned treatment with no exposure records has an empty count.
 - `RDI` is cumulative dose as a percentage of the planned total
-  dose across its cycles; empty when the planned total is zero.
+  dose across its cycles. It is empty when the planned total is
+  zero or when there is no cumulative dose to compare.
 
-**Note:** an administered zero dose adds nothing to the total but its
-record still counts, so a treatment given only as zero doses has a
-zero total alongside a nonzero count.
+**Note:** an administered zero dose adds nothing to the total but
+its record still counts, so a treatment given only as zero doses
+has a zero total alongside a nonzero count. A duplicated exposure
+record counts once per entry, so its dose enters the total twice.
 
 **Standard:** ADaM | **Domain:** ADEX

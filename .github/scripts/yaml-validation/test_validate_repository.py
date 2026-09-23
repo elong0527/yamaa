@@ -4072,6 +4072,31 @@ class TestSpecContracts(unittest.TestCase):
             message,
         )
 
+    def test_accepts_absent_artifact_its_producer_writes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            spec_path = example_dir / "spec_supp.yaml"
+            spec = {
+                "domain": "SUPP",
+                "input": {
+                    "DM": {"path": "dm.csv", "schema": "spec_dm.yaml"},
+                },
+                "keys": ["USUBJID"],
+                "output": {"columns": ["USUBJID"]},
+                "columns": [
+                    {
+                        "name": "USUBJID",
+                        "derivation": {"source": "DM.USUBJID"},
+                    }
+                ],
+            }
+
+            errors = VALIDATOR.validate_spec_contracts(
+                spec, "example/spec_supp.yaml", spec_path
+            )
+
+        self.assertNotIn("input.DM.path", "\n".join(errors))
+
 
 class TestProducingSpecs(unittest.TestCase):
     VALID_PRODUCER_SPEC = '''schema_version: "1.0"
@@ -6021,6 +6046,40 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('csv-bad', result.stdout)
         self.assertIn('header', result.stdout.lower())
 
+    def write_producer_example(self, name):
+        ex_dir = self.root_dir / 'benchmarks' / name
+        (ex_dir / 'expected').mkdir(parents=True)
+        (ex_dir / 'spec_dm.yaml').write_text(
+            'output:\n  path: dm.csv\n  columns: [a]\n'
+            'columns:\n  - name: a\n'
+        )
+        (ex_dir / 'spec_supp.yaml').write_text(
+            'input:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n'
+            'output:\n  path: supp.csv\n  columns: [b]\n'
+            'columns:\n  - name: b\n'
+        )
+        (ex_dir / 'expected' / 'dm.csv').write_text('a\n1\n')
+        (ex_dir / 'expected' / 'supp.csv').write_text('b\n2\n')
+        return ex_dir
+
+    def test_csv_golden_of_a_sibling_producer_is_accepted(self):
+        self.write_producer_example('producer-output')
+
+        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+
+        self.assertEqual(errors, [])
+
+    def test_csv_golden_no_spec_declares_is_still_rejected(self):
+        ex_dir = self.write_producer_example('producer-stray')
+        (ex_dir / 'expected' / 'other.csv').write_text('c\n3\n')
+
+        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+
+        message = '\n'.join(errors)
+        self.assertIn('producer-stray/other.csv: expected artifact name', message)
+        self.assertNotIn('dm.csv: expected artifact name', message)
+        self.assertNotIn('supp.csv: expected artifact name', message)
+
     def test_spec_structural_unknown_field(self):
         ex_dir = self.root_dir / 'benchmarks' / 'spec-bad-field'
         ex_dir.mkdir(parents=True, exist_ok=True)
@@ -6129,6 +6188,19 @@ bad_field: "what"
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
+
+    def test_schema_linked_spec_files_are_producers_not_entries(self):
+        ex_dir = self.root_dir / 'benchmarks' / 'producer-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_dm.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_suppdm.yaml').write_text(
+            'value: valid\ninput:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n'
+        )
+
+        entries = VALIDATOR.example_entry_specs(ex_dir)
+        self.assertEqual([path.name for path in entries], ['spec_suppdm.yaml'])
 
     def test_readme_dashboard_badge_must_follow_the_title(self):
         # Issue #184 round 2c: badge-line checks live in

@@ -11,12 +11,13 @@ output:
   columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID, USUBJID, AGE]
 
 columns:
+  # The earliest exposure start date. MIN skips a missing date, so a subject
+  # with no dated exposure record has no TRTSDT.
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
     derivation:
       aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: SAFFL
@@ -25,26 +26,24 @@ columns:
     derivation:
       case:
         - when: "TRTSDT IS NOT NULL"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
 
   - name: RANDDT
     type: date
     label: Randomization Date
     derivation: DM.RANDDT
 
+  # A working flag, not in the output: ITTFL reads it, so the chain runs
+  # RANDDT -> RANDFL -> ITTFL -> POPFL.
   - name: RANDFL
     type: str
     label: Randomized Population Flag
     derivation:
       case:
         - when: "RANDDT IS NOT NULL"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
 
   - name: ITTFL
     type: str
@@ -52,10 +51,8 @@ columns:
     derivation:
       case:
         - when: "RANDFL = 'Y'"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
 
   - name: POPFL
     type: str
@@ -63,10 +60,8 @@ columns:
     derivation:
       case:
         - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
 
   - name: STUDYID
     type: str
@@ -83,6 +78,8 @@ columns:
     label: Age
     derivation: DM.AGE
 
+  # 65 itself falls in >=65. With no fallback for a missing AGE, a subject
+  # with no age stops the run.
   - name: AGEGR1
     type: str
     label: Pooled Age Group 1
@@ -93,6 +90,7 @@ columns:
         labels: ["<65", ">=65"]
         right: false
 
+  # 1 for the youngest subject in the study; USUBJID breaks ties.
   - name: AGERNK
     type: int
     label: Pooled Age Group 1 Rank

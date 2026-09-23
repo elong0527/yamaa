@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Render the human-review "Mapping spec" section of a benchmark dashboard.
 
-The section is generated from the benchmark's spec.yaml: one row per output
-column carrying the source variable(s), the derivation in plain language, the
-origin, and the codelist binding. Rendering is deterministic: an unchanged
-spec produces identical HTML.
+The section is generated from the benchmark's spec.yaml as a familiar Excel
+specification: one row per output column. The header layout follows the
+sponsor's SDTM and ADaM variable sheets, chosen by the dataset standard, so a
+reviewer reads the derived spec in the same shape they author it. Rendering is
+deterministic: an unchanged spec produces identical HTML.
 
-Origin vocabulary follows Define-XML 2.1 OriginType (non-extensible):
-Assigned, Collected, Derived, Not Available, Other, Predecessor, Protocol.
+Values come from each column's `submission:` block when present -- `core`,
+`length`, `codelist`, `origin.type`, `method`, `comment` -- and fall back to
+the derivation itself: a plain-language conversion rule and a Define-XML 2.1
+origin classification (Assigned, Collected, Derived, Not Available, Other,
+Predecessor, Protocol).
+
 This file is ASCII-only to satisfy the repository source lint; arrows and
 other non-ASCII glyphs are emitted as HTML character references.
 """
@@ -19,7 +24,6 @@ from pathlib import Path
 # lint; the dashboard's final encode("ascii", "xmlcharrefreplace") turns them
 # into HTML character references.
 ARROW = "\u2192"
-EMDASH = "\u2014"
 MAPPING_TABS_JS_PATH = Path(__file__).resolve().parent / "mapping-tabs.js"
 
 # Sentence templates: one plain-language mapping rule per derivation shape.
@@ -146,23 +150,6 @@ def describe_derivation(derivation):
     return str(derivation)
 
 
-def direct_sources(derivation):
-    if isinstance(derivation, str):
-        return [derivation]
-    if not isinstance(derivation, dict):
-        return []
-    source = derivation.get("source")
-    if isinstance(source, dict) and source.get("variable"):
-        return [source["variable"]]
-    mapping = derivation.get("mapping", {})
-    src = mapping.get("source", {}) if isinstance(mapping, dict) else {}
-    if isinstance(src, str):
-        return [src]
-    if src.get("variable"):
-        return [src["variable"]]
-    return []
-
-
 def classify_origin(derivation, input_names):
     """Origin per the Define-XML 2.1 vocabulary."""
     if isinstance(derivation, str):
@@ -177,84 +164,110 @@ def classify_origin(derivation, input_names):
     return "Derived"
 
 
-def resolve_chain(name, col_by_name, input_names, seen=None):
-    """One-level provenance chain, e.g. 'ARM (output column) -> ODM.Value
-    (ODM.ItemOID = 'IT.DM.ARM')'."""
-    seen = seen or set()
-    if name in seen:
-        return name
-    seen = seen | {name}
-    col = col_by_name.get(name)
-    if col is None:
-        return name
-    derivation = col.get("derivation")
-    if isinstance(derivation, str):
-        if "." not in derivation:
-            inner = resolve_chain(derivation, col_by_name, input_names, seen)
-            return derivation + " (output column) " + ARROW + " " + inner
-        return derivation
-    return source_cell(col, col_by_name, input_names, seen)
+def submission(col):
+    """The column's `submission:` block, or an empty mapping."""
+    block = col.get("submission")
+    return block if isinstance(block, dict) else {}
 
 
-def source_cell(col, col_by_name, input_names, seen=None):
-    derivation = col.get("derivation")
-    if isinstance(derivation, str):
-        if "." in derivation and derivation.split(".")[0] in input_names:
-            return derivation
-        if "." not in derivation:
-            inner = resolve_chain(derivation, col_by_name, input_names, seen)
-            return derivation + " (output column) " + ARROW + " " + inner
-        return derivation
-    if not isinstance(derivation, dict):
-        return EMDASH
-    if "literal" in derivation:
-        return EMDASH
-    source = derivation.get("source")
-    if isinstance(source, dict):
-        var = str(source.get("variable", ""))
-        return var + " (" + str(source["filter"]) + ")" if source.get("filter") else var
-    mapping = derivation.get("mapping")
-    if isinstance(mapping, dict):
-        src = mapping.get("source", {})
-        if isinstance(src, str):
-            return src
-        var = str(src.get("variable", ""))
-        return var + " (" + str(src["filter"]) + ")" if src.get("filter") else var
-    if "case" in derivation:
-        branches = derivation["case"] or []
-        cond = branches[0].get("when", "") if branches else ""
-        ref = cond.split()[0] if cond else ""
-        if ref and ref in col_by_name:
-            inner = resolve_chain(ref, col_by_name, input_names, seen)
-            return ref + " (output column) " + ARROW + " " + inner
-        return ref or EMDASH
-    if "compute" in derivation:
-        return "output columns in expression"
-    if "baseline_flag" in derivation:
-        node = derivation["baseline_flag"]
-        left = resolve_chain(str(node.get("date")), col_by_name, input_names, seen)
-        right = resolve_chain(
-            str(node.get("reference_date")), col_by_name, input_names, seen
+# Every ADaM dataset name starts with "AD", but so could a future SDTM
+# custom domain -- the prefix alone is not a classifier. Keep an explicit
+# registry of the ADaM datasets the corpus uses; an AD-prefixed name that
+# is not registered fails loudly instead of silently picking the wrong
+# sheet headers.
+ADAM_DATASETS = frozenset(
+    {
+        "ADAE",
+        "ADCE",
+        "ADCM",
+        "ADEG",
+        "ADEX",
+        "ADLB",
+        "ADLBC",
+        "ADOE",
+        "ADQS",
+        "ADRS",
+        "ADSL",
+        "ADTR",
+        "ADTTE",
+        "ADVS",
+    }
+)
+
+
+def is_adam(spec):
+    """True when the spec's domain is a registered ADaM dataset.
+
+    Classification is an exact lookup, not the "AD" prefix: a future SDTM
+    custom domain starting with "AD" (or a new ADaM dataset) must not
+    silently render the wrong sheet headers. An AD-prefixed name outside
+    the registry raises, so the new domain gets registered -- or the
+    domain fixed -- explicitly.
+    """
+    domain = str(spec.get("domain") or "").upper()
+    if domain in ADAM_DATASETS:
+        return True
+    if domain.startswith("AD"):
+        raise ValueError(
+            f"domain {domain!r} starts with 'AD' but is not a registered ADaM "
+            "dataset; add it to ADAM_DATASETS in mapping_doc.py or fix the domain"
         )
-        return (
-            str(node.get("date"))
-            + " "
-            + ARROW
-            + " "
-            + left
-            + "; "
-            + str(node.get("reference_date"))
-            + " "
-            + ARROW
-            + " "
-            + right
-        )
-    if "row_number" in derivation:
-        order = derivation["row_number"].get("window", {}).get("order_by", [])
-        return ", ".join(str(o) for o in order) or EMDASH
-    if "date_impute" in derivation:
-        return str(derivation["date_impute"].get("source"))
-    return EMDASH
+    return False
+
+
+def type_label(col_type, adam):
+    """Standard-specific rendering of a yamaa type.
+
+    SDTM writes Char / Num; ADaM writes character / numeric. SDTM dates are
+    ISO 8601 character values; ADaM dates are numeric.
+    """
+    text = str(col_type or "")
+    numeric = text in ("int", "float")
+    date = text in ("date", "datetime")
+    if adam:
+        if numeric or date:
+            return "numeric"
+        if text == "str":
+            return "character"
+        return text
+    if numeric:
+        return "Num"
+    if text == "str" or date:
+        return "Char"
+    return text
+
+
+def submission_origin(col):
+    origin = submission(col).get("origin")
+    if isinstance(origin, dict):
+        return str(origin.get("type") or "")
+    if isinstance(origin, str):
+        return origin
+    return ""
+
+
+def controlled_terms(col, code_by_var):
+    """Codelist or format binding: the declared `submission.codelist`, else the
+    permitted values enforced by an `allowed_values` verification."""
+    code = submission(col).get("codelist")
+    if code:
+        return str(code)
+    return code_by_var.get(col.get("name", ""), "")
+
+
+def conversion_definition(col):
+    """The authored `submission.method`, else the derivation in plain language."""
+    method = submission(col).get("method")
+    if method:
+        return str(method)
+    return describe_derivation(col.get("derivation"))
+
+
+def define_comment(col):
+    comment = submission(col).get("comment")
+    if isinstance(comment, dict):
+        return str(comment.get("text") or "")
+    return str(comment) if comment else ""
 
 
 def codelists(columns):
@@ -281,10 +294,79 @@ def describe_row_template_derivation(derivation):
     return str(derivation)
 
 
+# Variable-sheet header layouts, following the sponsor's Excel specifications.
+SDTM_HEADERS = [
+    "Variable Name",
+    "Variable Label",
+    "Type",
+    "Length",
+    "Controlled Terms or Format",
+    "Origin",
+    "Core",
+    "Conversion Definition",
+    "Variable Type",
+    "Variable Order",
+    "Comments for Define",
+]
+ADAM_HEADERS = [
+    "Dataset Name",
+    "Variable Name",
+    "Variable Label",
+    "Type",
+    "Codelist/Controlled Terms",
+    "Core",
+    "Computational Method",
+    "Origin",
+]
+
+
+def sdtm_variable_type(spec):
+    """The Variable Type cell distinguishes a parent SDTM domain from its
+    supplemental qualifier (SUPP--) dataset."""
+    return "SUPP" if str(spec.get("domain", "")).upper().startswith("SUPP") else "SDTM"
+
+
+def mapping_row(col, index, spec, adam, input_names, code_by_var):
+    """One variable-sheet row in the standard's column order."""
+    name = col.get("name", "")
+    label = col.get("label", "")
+    sub = submission(col)
+    origin = submission_origin(col) or classify_origin(
+        col.get("derivation"), input_names
+    )
+    terms = controlled_terms(col, code_by_var)
+    core = str(sub.get("core") or "")
+    method = conversion_definition(col)
+    if adam:
+        return [
+            str(spec.get("domain", "")),
+            name,
+            label,
+            type_label(col.get("type"), True),
+            terms,
+            core,
+            method,
+            origin,
+        ]
+    length = sub.get("length")
+    return [
+        name,
+        label,
+        type_label(col.get("type"), False),
+        "" if length is None else str(length),
+        terms,
+        origin,
+        core,
+        method,
+        sdtm_variable_type(spec),
+        str(index),
+        define_comment(col),
+    ]
+
+
 def mapping_sheets(spec):
     """Sheet models: list of (tab id, tab label, headers, rows)."""
     columns = [c for c in spec.get("columns", []) if isinstance(c, dict)]
-    col_by_name = {c["name"]: c for c in columns if "name" in c}
     input_names = set((spec.get("input") or {}).keys())
     output_names = (spec.get("output") or {}).get("columns") or [
         c["name"] for c in columns
@@ -292,46 +374,15 @@ def mapping_sheets(spec):
     output_set = set(output_names)
     shown = [c for c in columns if c.get("name") in output_set]
 
-    sheets = []
-    map_headers = [
-        "#",
-        "Target variable",
-        "Label",
-        "Type",
-        "Source dataset",
-        "Source variable(s)",
-        "Mapping rule (plain language)",
-        "Origin",
-        "Controlled terminology",
-        "Reviewer sign-off",
-    ]
+    adam = is_adam(spec)
     code_by_var = dict(codelists(shown))
-    map_rows = []
-    for index, col in enumerate(shown, start=1):
-        derivation = col.get("derivation")
-        sources = [s for s in direct_sources(derivation) if s]
-        datasets = sorted(
-            {
-                s.split(".")[0]
-                for s in sources
-                if "." in s and s.split(".")[0] in input_names
-            }
-        )
-        map_rows.append(
-            [
-                str(index),
-                col.get("name", ""),
-                col.get("label", ""),
-                col.get("type", ""),
-                ", ".join(datasets) if datasets else EMDASH,
-                source_cell(col, col_by_name, input_names),
-                describe_derivation(derivation),
-                classify_origin(derivation, input_names),
-                code_by_var.get(col.get("name", ""), ""),
-                "",
-            ]
-        )
-    sheets.append(("mapping", "Mapping", map_headers, map_rows))
+    map_headers = ADAM_HEADERS if adam else SDTM_HEADERS
+    map_rows = [
+        mapping_row(col, index, spec, adam, input_names, code_by_var)
+        for index, col in enumerate(shown, start=1)
+    ]
+
+    sheets = [("mapping", "Mapping", map_headers, map_rows)]
 
     rows_spec = spec.get("rows") or []
     if rows_spec:

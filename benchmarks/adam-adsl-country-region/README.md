@@ -12,14 +12,15 @@ and its region in `REGION1`.
 **Variables:**
 
 - `COUNTRY` is the collected country from demographics in upper
-  case, so the same country reported in different cases becomes
-  one value; a subject with no collected country is `UNKNOWN`.
+  case; a subject with no collected country is `UNKNOWN`. A
+  collected country other than the United States (`USA`), Canada
+  (`CAN`) or Germany (`DEU`) stops the run.
 - `REGION1` is the region for that country: `USA` and `CAN` give
-  `North America`, `DEU` gives `Europe`, and any other value,
-  including `UNKNOWN`, gives `Rest of World`, so every subject
-  has a region.
+  `North America`, `DEU` gives `Europe`, and `UNKNOWN` gives
+  `Rest of World`.
 
-**Note:** case differences never split a country, and the fallback
-values mean every subject has both a country and a region.
+**Note:** case differences never split a country (`usa` and `USA`
+are one), and the fallback values mean every subject has both a
+country and a region.
 
 **Standard:** ADaM | **Domain:** ADSL

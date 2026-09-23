@@ -39,6 +39,9 @@ columns:
     label: Analysis Value (C)
     derivation: ADRS_RAW.AVALC
 
+  # Stable disease and NON-CR/NON-PD count only from day 42 after
+  # randomization; earlier, or with no day, they fall back to NE, as does
+  # a collected NE. Any other value, or none, supports no category.
   - name: BORCAT
     type: str
     label: Best Overall Response Category
@@ -54,7 +57,7 @@ columns:
           then: {literal: NON-CR/NON-PD}
         - when: "AVALC = 'PD'"
           then: {literal: PD}
-        - when: "AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
+        - when: "AVALC IN ('SD', 'NON-CR/NON-PD', 'NE')"
           then: {literal: NE}
         - otherwise: {literal: null}
     verifications:
@@ -78,6 +81,8 @@ columns:
     verifications:
       range: {min: 1, max: 6}
 
+  # Best first: category priority, then the earlier date, then the lower
+  # sequence number. A record with no category gets no number.
   - name: BORSEQ
     type: int
     label: Best Overall Response Sequence

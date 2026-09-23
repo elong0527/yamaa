@@ -37,10 +37,12 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
+
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
     derivation: ADSL.TRT01A
+
   - name: AVAL
     type: float
     label: Analysis Value
@@ -49,6 +51,8 @@ columns:
     type: str
     label: Analysis Value Unit
 
+  # Baseline is the latest record on or before treatment start, per subject
+  # and parameter; BASE repeats its value on every record.
   - name: ABLFL
     type: str
     label: Baseline Record Flag
@@ -75,12 +79,13 @@ columns:
       compute:
         expr: "AVAL - BASE"
 
+  # NULLIF leaves the percentage empty when the baseline value is zero.
   - name: PCHG
     type: float
     label: Percent Change from Baseline
     derivation:
       compute:
-        expr: "100 * (AVAL - BASE) / NULLIF(BASE, 0)"
+        expr: "100 * CHG / NULLIF(BASE, 0)"
 
   - name: ASEQ
     type: int
@@ -91,53 +96,44 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [PARAMCD, ADT]
 
+# One record per collected ALT and AST result with a numeric value, plus a
+# second ALT record converted to SI units (1 U/L = 0.0167 ukat/L).
 rows:
   - id: alt
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD:
-        literal: ALT
-      PARAM:
-        literal: Alanine Aminotransferase
-      AVAL:
-        source: LB.LBSTRESN
-      AVALU:
-        source: LB.LBSTRESU
+      PARAMCD: {literal: ALT}
+      PARAM: {literal: Alanine Aminotransferase}
+      AVAL: LB.LBSTRESN
+      AVALU: LB.LBSTRESU
 
   - id: alt_si
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD:
-        literal: ALTSI
-      PARAM:
-        literal: Alanine Aminotransferase (SI)
+      PARAMCD: {literal: ALTSI}
+      PARAM: {literal: Alanine Aminotransferase (SI)}
       AVAL:
         compute:
           expr: "LB.LBSTRESN * 0.0167"
-      AVALU:
-        literal: ukat/L
+      AVALU: {literal: ukat/L}
 
   - id: ast
     dataset: LB
     filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD:
-        literal: AST
-      PARAM:
-        literal: Aspartate Aminotransferase
-      AVAL:
-        source: LB.LBSTRESN
-      AVALU:
-        source: LB.LBSTRESU
+      PARAMCD: {literal: AST}
+      PARAM: {literal: Aspartate Aminotransferase}
+      AVAL: LB.LBSTRESN
+      AVALU: LB.LBSTRESU
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
   - row_count:
-      min: 14
-      max: 14
+      min: 20
+      max: 20
   - row_count:
       id: one-baseline-record-per-subject-and-parameter
       group_by: [STUDYID, USUBJID, PARAMCD]

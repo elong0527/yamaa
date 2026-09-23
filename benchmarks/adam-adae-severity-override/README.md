@@ -14,14 +14,13 @@ event sequence identifiers and the reported severity `AESEV`.
 **Variables:**
 
 - `ASEV`: analysis severity in upper case (`MILD`, `MODERATE`,
-  `SEVERE`, `LIFE-THREATENING`); the approved correction reassigns
-  the one event covered by the approved correction in this benchmark
-  to `SEVERE`. An event with no reported severity and no applicable
-  correction leaves `ASEV` empty.
+  `SEVERE`, `LIFE-THREATENING`); an approved correction reassigns
+  any event it covers to `SEVERE`. An event with no reported
+  severity and no applicable correction leaves `ASEV` empty.
 - `ASEVN`: numeric rank of `ASEV`, from `1` (`MILD`) to `4`
   (`LIFE-THREATENING`). An event with no `ASEV` value has no rank.
 
-**Note:** `ASEVN` reflects the corrected `ASEV`, so the corrected
-event carries both the corrected term and its matching rank.
+**Note:** `ASEVN` reflects the corrected `ASEV`, so a corrected
+event carries both the corrected severity and its matching rank.
 
 **Standard:** ADaM | **Domain:** ADAE

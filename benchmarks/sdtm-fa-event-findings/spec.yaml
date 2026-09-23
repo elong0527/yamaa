@@ -1,0 +1,226 @@
+schema_version: "1.0"
+domain: FA
+keys: [STUDYID, USUBJID, FASEQ]
+input:
+  ODM: input/odm.csv
+  ODM_AE: input/odm.csv
+
+output:
+  path: fa.csv
+  columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
+  order_by: [FASEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: FA
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: FATESTCD
+    type: str
+    label: Findings About Test Short Name
+
+  - name: FATEST
+    type: str
+    label: Findings About Test Name
+
+  - name: FAOBJ
+    type: str
+    label: Object of the Observation
+    verifications:
+      not_missing: {}
+
+  - name: FACAT
+    type: str
+    label: Category for Findings About
+    derivation:
+      literal: AE
+
+  - name: FAORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: FAORRESU
+    type: str
+    label: Original Units
+
+  - name: FASTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+
+  - name: FASTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: FASTRESU
+    type: str
+    label: Standard Units
+
+  - name: FALNKID
+    type: str
+    label: Link Identifier
+
+  - name: FADTC
+    type: date
+    label: Date/Time of Collection
+
+  - name: TESTORD
+    type: int
+    label: Test order within a linked event
+    derivation:
+      case:
+        - when: "FATESTCD = 'LOC'"
+          then:
+            literal: 1
+        - when: "FATESTCD = 'SIZE'"
+          then:
+            literal: 2
+        - when: "FATESTCD = 'BIOPSY'"
+          then:
+            literal: 3
+
+  - name: FASEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [FALNKID, TESTORD, FAORRES]
+
+rows:
+  - id: location
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+    filter: "FAORRES IS NOT NULL"
+    derivations:
+      FATESTCD:
+        literal: LOC
+      FATEST:
+        literal: Location
+      FAOBJ:
+        lookup:
+          dataset: ODM_AE
+          filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
+          key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+          key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
+          value: Value
+          strict: true
+      FAORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
+          expr: "ONLY(ODM.Value)"
+      FASTRESC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
+          expr: "ONLY(ODM.Value)"
+      FAORRESU:
+        literal: null
+      FASTRESN:
+        literal: null
+      FASTRESU:
+        literal: null
+      FALNKID:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.AELNKID'"
+          expr: "ONLY(ODM.Value)"
+      FADTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.FADTC'"
+          expr: "ONLY(ODM.Value)"
+
+  - id: size
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+    filter: "FAORRES IS NOT NULL"
+    derivations:
+      FATESTCD:
+        literal: SIZE
+      FATEST:
+        literal: Size
+      FAOBJ:
+        lookup:
+          dataset: ODM_AE
+          filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
+          key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+          key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
+          value: Value
+          strict: true
+      FAORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.SIZE'"
+          expr: "ONLY(ODM.Value)"
+      FAORRESU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.SIZEU'"
+          expr: "ONLY(ODM.Value)"
+      FASTRESC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.SIZE'"
+          expr: "ONLY(ODM.Value)"
+      FASTRESN:
+        value:
+          source: FAORRES
+      FASTRESU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.SIZEU'"
+          expr: "ONLY(ODM.Value)"
+      FALNKID:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.AELNKID'"
+          expr: "ONLY(ODM.Value)"
+      FADTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.FADTC'"
+          expr: "ONLY(ODM.Value)"
+
+  - id: biopsy
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+    filter: "FAORRES IS NOT NULL"
+    derivations:
+      FATESTCD:
+        literal: BIOPSY
+      FATEST:
+        literal: Biopsied
+      FAOBJ:
+        lookup:
+          dataset: ODM_AE
+          filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
+          key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+          key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
+          value: Value
+          strict: true
+      FAORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"
+          expr: "ONLY(ODM.Value)"
+      FASTRESC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"
+          expr: "ONLY(ODM.Value)"
+      FAORRESU:
+        literal: null
+      FASTRESN:
+        literal: null
+      FASTRESU:
+        literal: null
+      FALNKID:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.AELNKID'"
+          expr: "ONLY(ODM.Value)"
+      FADTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.FA.FADTC'"
+          expr: "ONLY(ODM.Value)"

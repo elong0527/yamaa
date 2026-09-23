@@ -1,0 +1,221 @@
+schema_version: '1.0'
+domain: FA
+keys:
+  - STUDYID
+  - USUBJID
+  - FASEQ
+input:
+  ODM:
+    path: input/odm.csv
+    types:
+      StudyEventRepeatKey: int
+      ItemGroupRepeatKey: int
+  ODM_SIBLING:
+    path: input/odm.csv
+    types:
+      StudyEventRepeatKey: int
+      ItemGroupRepeatKey: int
+output:
+  path: fa.csv
+  columns:
+    - DOMAIN
+    - STUDYID
+    - USUBJID
+    - FASEQ
+    - FATESTCD
+    - FATEST
+    - FAOBJ
+    - FACAT
+    - FAORRES
+    - FAORRESU
+    - FASTRESC
+    - FASTAT
+    - FATPT
+    - FADTC
+  order_by:
+    - USUBJID
+    - FASEQ
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: FA
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+  - name: FATESTCD
+    type: str
+    label: Findings About Test Short Name
+  - name: FATEST
+    type: str
+    label: Findings About Test Name
+  - name: FAOBJ
+    type: str
+    label: Object of the Observation
+    derivation:
+      lookup:
+        dataset: ODM_SIBLING
+        key_base:
+          - ODM.StudyOID
+          - ODM.SubjectKey
+          - ODM.StudyEventOID
+          - ODM.StudyEventRepeatKey
+          - ODM.ItemGroupOID
+          - ODM.ItemGroupRepeatKey
+        key:
+          - StudyOID
+          - SubjectKey
+          - StudyEventOID
+          - StudyEventRepeatKey
+          - ItemGroupOID
+          - ItemGroupRepeatKey
+        filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
+        value: Value
+        strict: true
+    verifications:
+      not_missing: {}
+  - name: FACAT
+    type: str
+    label: Category for Findings About
+    derivation:
+      literal: REACTOGENICITY
+  - name: FAORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: ODM.Value
+  - name: FAORRESU
+    type: str
+    label: Original Units
+    derivation:
+      case:
+        - when: FATESTCD = 'LDIAM'
+          then:
+            literal: mm
+  - name: FASTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: FAORRES
+  - name: FASTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: FAORRES IS NULL
+          then:
+            literal: NOT DONE
+  - name: FATPT
+    type: str
+    label: Planned Time Point Name
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          DAY1: END DAY 1
+          DAY2: END DAY 2
+        strict: true
+  - name: FADTC
+    type: str
+    label: Date/Time of Collection
+    derivation:
+      lookup:
+        dataset: ODM_SIBLING
+        key_base:
+          - ODM.StudyOID
+          - ODM.SubjectKey
+          - ODM.StudyEventOID
+          - ODM.StudyEventRepeatKey
+          - ODM.ItemGroupOID
+          - ODM.ItemGroupRepeatKey
+        key:
+          - StudyOID
+          - SubjectKey
+          - StudyEventOID
+          - StudyEventRepeatKey
+          - ItemGroupOID
+          - ItemGroupRepeatKey
+        filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
+        value: Value
+        strict: true
+  - name: EVENTORD
+    type: int
+    label: Diary day order
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          DAY1: 1
+          DAY2: 2
+        strict: true
+  - name: EVENTREPEAT
+    type: int
+    label: Diary day repeat
+    derivation: ODM.StudyEventRepeatKey
+  - name: REPEATKEY
+    type: int
+    label: Reaction repeat
+    derivation: ODM.ItemGroupRepeatKey
+  - name: TESTORD
+    type: int
+    label: Test order
+  - name: FASEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by:
+            - STUDYID
+            - USUBJID
+          order_by:
+            - EVENTORD
+            - EVENTREPEAT
+            - REPEATKEY
+            - TESTORD
+rows:
+  - id: reported-finding
+    dataset: ODM
+    filter: ODM.ItemGroupOID = 'IG.FA' AND ODM.ItemOID IN ('IT.FA.OCCUR', 'IT.FA.SEV', 'IT.FA.LDIAM')
+    derivations:
+      FATESTCD:
+        mapping:
+          source: ODM.ItemOID
+          dict:
+            IT.FA.OCCUR: OCCUR
+            IT.FA.SEV: SEV
+            IT.FA.LDIAM: LDIAM
+          strict: true
+      FATEST:
+        mapping:
+          source: ODM.ItemOID
+          dict:
+            IT.FA.OCCUR: Occurrence Indicator
+            IT.FA.SEV: Severity/Intensity
+            IT.FA.LDIAM: Longest Diameter
+          strict: true
+      TESTORD:
+        mapping:
+          source: ODM.ItemOID
+          dict:
+            IT.FA.OCCUR: 1
+            IT.FA.SEV: 2
+            IT.FA.LDIAM: 3
+          strict: true
+verifications:
+  - unique:
+      columns:
+        - STUDYID
+        - USUBJID
+        - FASEQ
+  - row_count:
+      min: 9
+      max: 9
+  - implies:
+      id: uncollected-result-has-status
+      when: FAORRES IS NULL
+      then: FASTAT = 'NOT DONE'

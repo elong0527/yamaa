@@ -49,6 +49,9 @@ columns:
     derivation:
       literal: Sum of Target Lesion Diameters (mm)
 
+  # The subject's target-lesion longest diameters at this visit (TR matches
+  # on study, subject and visit). A missing result is skipped; a visit with
+  # no such record leaves both AVAL and NMEAS empty, not 0.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -65,6 +68,8 @@ columns:
         filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
         expr: "COUNT(TR.TRSTRESN)"
 
+  # TU has no visit, so it matches on study and subject alone: the same
+  # count at every visit of the subject.
   - name: NTARGET
     type: int
     label: Number of Target Lesions
@@ -79,8 +84,7 @@ columns:
     derivation:
       case:
         - when: "NMEAS = NTARGET"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

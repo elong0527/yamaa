@@ -48,10 +48,15 @@ columns:
     type: str
     label: Serious Adverse Event Flag
     derivation: ADSL.SAEFL
+
   - name: DCSREAS
     type: str
     label: Reason for Discontinuation
     derivation: ADSL.DCSREAS
+
+  # Which check decides the record, first match wins: the safety or
+  # discontinuation override, then a missing efficacy value, then the
+  # 75% reduction mark. AVALC and ARSN both translate this one code.
   - name: RULE
     type: str
     label: Decision Rule
@@ -97,17 +102,16 @@ columns:
     verifications:
       not_missing: {}
 
+  # No branch for NOT EVALUABLE, so AVAL stays empty there.
   - name: AVAL
     type: int
     label: Analysis Value
     derivation:
       case:
         - when: "AVALC = 'RESPONDER'"
-          then:
-            literal: 1
+          then: {literal: 1}
         - when: "AVALC = 'NON-RESPONDER'"
-          then:
-            literal: 0
+          then: {literal: 0}
 
 verifications:
   - unique:

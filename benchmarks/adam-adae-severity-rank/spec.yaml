@@ -44,6 +44,9 @@ columns:
           MODERATE: 2
           SEVERE: 3
 
+  # Both ranks order the subject's events worst first; an unreported
+  # severity sorts last. After a tie, SEVRANK skips (1, 1, 3) and SEVLVL
+  # does not (1, 1, 2).
   - name: SEVRANK
     type: int
     label: Severity Rank
@@ -52,9 +55,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by:
-            - variable: ASEVN
-              direction: desc
-              nulls: last
+            - {variable: ASEVN, direction: desc}
 
   - name: SEVLVL
     type: int
@@ -65,9 +66,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by:
-            - variable: ASEVN
-              direction: desc
-              nulls: last
+            - {variable: ASEVN, direction: desc}
 
 verifications:
   - row_count:

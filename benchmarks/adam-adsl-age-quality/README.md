@@ -13,9 +13,10 @@ out-of-range value for later data review.
 - `AGE`: the subject's collected age, including a value outside the
   expected range of 18 to 100.
 
-The primary dataset keeps the record. Its review log records
-`LOG_VERSION`, `ARTIFACT`, `SEVERITY`, `CONDITION`, `REQUIREMENT`,
-`SPEC_PATH`, `VERIFICATION_ID`, `FAILURE_COUNT`, `OFFENDING_KEYS`, and
-`DETAILS`, so the source value can be investigated without stopping the run.
+**Note:** an age outside that range does not stop the run: every
+subject keeps its record, and one review log row lists the subjects
+outside the range in `OFFENDING_KEYS`, with `FAILURE_COUNT` saying how
+many, beside `LOG_VERSION`, `ARTIFACT`, `SEVERITY`, `CONDITION`,
+`REQUIREMENT`, `SPEC_PATH`, `VERIFICATION_ID`, and `DETAILS`.
 
 **Standard:** ADaM | **Domain:** ADSL

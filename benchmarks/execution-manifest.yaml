@@ -474,6 +474,9 @@ examples:
   negative-lookup-mismatched:
     status: executable
     runtimes: ['python']
+  negative-lookup-rename-intermediate:
+    status: executable
+    runtimes: ['python']
   negative-round-half-away-from-zero-non-numeric-source:
     status: executable
     runtimes: ['python']
@@ -609,16 +612,25 @@ examples:
   sdtm-ae-coding:
     status: executable
     runtimes: ['python']
+  sdtm-ae-odm-repeated:
+    status: executable
+    runtimes: ['python']
   sdtm-ae-partial-dates:
     status: executable
     runtimes: ['python']
   sdtm-ae-seriousness:
     status: executable
     runtimes: ['python']
+  sdtm-cm-whodrug-coding:
+    status: executable
+    runtimes: ['python']
   sdtm-dm-arms:
     status: executable
     runtimes: ['python']
   sdtm-dm-basic:
+    status: executable
+    runtimes: ['python']
+  sdtm-cm-odm-repeated:
     status: executable
     runtimes: ['python']
   sdtm-dm-age:
@@ -628,6 +640,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-dm-metadata:
+    status: executable
+    runtimes: ['python']
+  sdtm-dm-race-ethnicity:
     status: executable
     runtimes: ['python']
   sdtm-dm-dates:
@@ -642,6 +657,9 @@ examples:
   sdtm-ds-sequence:
     status: executable
     runtimes: ['python']
+  sdtm-ec-collected-exposure:
+    status: executable
+    runtimes: ['python']
   sdtm-ex-combination:
     status: executable
     runtimes: ['python']
@@ -651,10 +669,19 @@ examples:
   sdtm-ex-from-ec:
     status: executable
     runtimes: ['python']
+  sdtm-fa-event-findings:
+    status: executable
+    runtimes: ['python']
   sdtm-fa-fever:
     status: executable
     runtimes: ['python']
+  sdtm-fa-odm-multitest:
+    status: executable
+    runtimes: ['python']
   sdtm-fa-reactogenicity-diary:
+    status: executable
+    runtimes: ['python']
+  sdtm-lb-character-results:
     status: executable
     runtimes: ['python']
   sdtm-lb-compartments:
@@ -676,6 +703,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-mh-prespecified-conditions:
+    status: executable
+    runtimes: ['python']
+  sdtm-relrec-dataset-level:
     status: executable
     runtimes: ['python']
   sdtm-relrec-links:
