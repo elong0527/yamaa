@@ -474,6 +474,9 @@ examples:
   negative-lookup-mismatched:
     status: executable
     runtimes: ['python']
+  negative-lookup-rename-intermediate:
+    status: executable
+    runtimes: ['python']
   negative-round-half-away-from-zero-non-numeric-source:
     status: executable
     runtimes: ['python']
@@ -616,6 +619,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-ae-seriousness:
+    status: executable
+    runtimes: ['python']
+  sdtm-cm-whodrug-coding:
     status: executable
     runtimes: ['python']
   sdtm-dm-arms:

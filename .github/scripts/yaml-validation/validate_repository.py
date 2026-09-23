@@ -349,6 +349,9 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R003', 'unpaired_fields'): {
         'declared', 'intermediate', 'missing',
     },
+    ('R003', 'rename_only_intermediate'): {
+        'intermediate', 'dataset',
+    },
     ('R006', 'missing_required_field'): {'class', 'field'},
     ('R016', 'month_out_of_range'): {'month'},
     ('R016', 'day_out_of_range'): {'day'},
@@ -8144,6 +8147,30 @@ def validate_intermediate_static_semantics(
             continue
         operation_path = f"{spec_label}.intermediates[{index}]"
         dataset = intermediate.get('dataset')
+        if (
+            intermediate.get('key') is None
+            and intermediate.get('key_base') is None
+            and intermediate.get('between') is None
+            and intermediate.get('filter') is None
+            and intermediate.get('order_by') is None
+            and intermediate.get('keep') is None
+            and intermediate.get('columns') is None
+            and intermediate.get('derivations') is None
+            and intermediate.get('verification') is None
+            and intermediate.get('missing') is None
+            and not intermediate.get('strict', False)
+        ):
+            errors.append(
+                validation_diagnostic(
+                    operation_path,
+                    'rename_only_intermediate',
+                    'named intermediate only renames its dataset',
+                    context={
+                        'intermediate': intermediate.get('id'),
+                        'dataset': dataset,
+                    },
+                )
+            )
         fields = datasets.get(dataset, {})
         sources = intermediate.get('source')
         keys = intermediate.get('key')
