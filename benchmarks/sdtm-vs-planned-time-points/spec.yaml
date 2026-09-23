@@ -44,8 +44,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: VS
+    derivation: {literal: VS}
 
   - name: STUDYID
     type: str
@@ -119,14 +118,11 @@ columns:
     derivation:
       case:
         - when: "VSTESTCD = 'PULSE'"
-          then:
-            literal: 1
+          then: {literal: 1}
         - when: "VSTESTCD = 'SYSBP'"
-          then:
-            literal: 2
+          then: {literal: 2}
         - when: "VSTESTCD = 'DIABP'"
-          then:
-            literal: 3
+          then: {literal: 3}
 
   - name: VSSEQ
     type: int
