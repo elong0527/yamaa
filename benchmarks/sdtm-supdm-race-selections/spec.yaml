@@ -38,10 +38,6 @@ columns:
     verifications:
       not_missing: {}
 
-  - name: RACECOUNT
-    type: int
-    label: Number of Reported Races
-
   - name: RACEMIN
     type: str
     label: Alphabetically First Reported Race
@@ -49,6 +45,10 @@ columns:
   - name: RACESINGLE
     type: str
     label: Reported Race When One Race Was Reported
+
+  - name: RACECOUNT
+    type: int
+    label: Number of Distinct Reported Races
 
   - name: QNAM
     type: str
@@ -108,10 +108,6 @@ rows:
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
-      RACECOUNT:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "COUNT(ODM.Value)"
       RACEMIN:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
@@ -120,6 +116,16 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
           expr: "MAX(ODM.Value)"
+      # The language has no COUNT(DISTINCT ...): count distinct races from the
+      # MIN/MAX distinctness signal instead, so duplicated identical rows do
+      # not inflate the count.
+      RACECOUNT:
+        case:
+          - when: "RACEMIN = RACESINGLE"
+            then:
+              literal: 1
+          - otherwise:
+              literal: 2
       QVALRAW:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
@@ -135,10 +141,6 @@ rows:
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
-      RACECOUNT:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.DM.RACE'"
-          expr: "COUNT(ODM.Value)"
       RACEMIN:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
@@ -147,6 +149,16 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
           expr: "MAX(ODM.Value)"
+      # The language has no COUNT(DISTINCT ...): count distinct races from the
+      # MIN/MAX distinctness signal instead, so duplicated identical rows do
+      # not inflate the count.
+      RACECOUNT:
+        case:
+          - when: "RACEMIN = RACESINGLE"
+            then:
+              literal: 1
+          - otherwise:
+              literal: 2
       QVALRAW:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
