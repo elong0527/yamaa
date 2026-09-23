@@ -7789,7 +7789,7 @@ def validate_expression_static_semantics(expression, path, context):
             'source': ({'str', 'datetime'}, 'str or datetime'),
         },
         'to_date': {
-            'source': ({'datetime', 'str'}, 'datetime or ISO date text'),
+            'source': ({'datetime'}, 'datetime'),
         },
         'to_epoch_day': {
             'source': ({'date'}, 'date'),

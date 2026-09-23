@@ -8,18 +8,11 @@ and end kept at the precision they were collected (`AESTDTC`,
 `AEENDTC`), and the study day (`AESTDY`, `AEENDY`) filled only when
 the date is complete.
 
-**Input:** long-form ODM data (`input/odm.csv`) with one row per
-collected item, carrying the collection form (`FormOID`), the form
-repeat (`FormRepeatKey`, the AE number within the subject), the
-item (`ItemOID`), and the stored value (`Value`). Each adverse
-event is one `FO.AE` form instance holding the reported term
-(`IT.AE.AETERM`) and the collected start and end as separate year,
-month, and day items (`IT.AE.AESTYR` / `IT.AE.AESTMO` /
-`IT.AE.AESTDY`, `IT.AE.AEENYR` / `IT.AE.AEENMO` /
-`IT.AE.AEENDY`), where any of the three may be uncollected (no
-row), plus the subject reference start date (`RFSTDTC`) from
-demographics (`input/dm.csv`), empty when the subject has no usable
-reference date.
+**Input:** adverse event records carrying the reported term
+(`AETERM`) and the collected start and end as separate year, month,
+and day fields, where any of the three may be unknown, plus the
+subject reference start date (`RFSTDTC`) from demographics, empty
+when the subject has no usable reference date.
 
 **Variables:**
 

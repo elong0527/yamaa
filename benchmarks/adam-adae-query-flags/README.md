@@ -33,9 +33,11 @@ always fills the same place.
   to; empty when not listed. No code or scope applies.
 
 **Note:** an event can sit in a standardized grouping and in the
-sponsor grouping at the same time, each shown in its own place. Two
-events with the same coded term always show the same grouping
-entries. An event still awaiting coding, with no `AEDECOD`, belongs
+sponsor grouping at the same time, each shown in its own place:
+Stevens-Johnson syndrome carries both the skin-reaction grouping and
+the sponsor grouping. Two events with the same coded term always show
+the same grouping entries: both nausea events carry the sponsor
+grouping. An event still awaiting coding, with no `AEDECOD`, belongs
 to no grouping.
 
 **Standard:** ADaM | **Domain:** ADAE
