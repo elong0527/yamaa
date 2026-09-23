@@ -1,0 +1,102 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW: input/vs_raw.csv
+  SE: {path: input/se.csv, types: {SESTDTC: datetime, SEENDTC: datetime}}
+base: VS_RAW
+
+# EPOCH comes from the subject's own elements: the element in progress at
+# the collection date-time, i.e. the SE record whose start is on or before
+# it and whose next element has not yet started. The between narrows the
+# subject's elements to the ones containing the moment; on a boundary
+# shared by two elements (both endpoints are inclusive) order_by/keep: last
+# picks the later element, so a reading exactly at an element's start
+# belongs to that element. A reading before the first element start, or
+# one with no collection date-time, matches no element and EPOCH stays
+# missing.
+intermediates:
+  - id: ELEM
+    dataset: SE
+    key: [STUDYID, USUBJID]
+    between:
+      value: VSDTM
+      lower: SESTDTC
+      upper: SEENDTC
+    order_by: [SE.SESTDTC]
+    keep: last
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS_RAW.VSSEQ
+    verifications:
+      not_missing: {}
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: VS_RAW.VSTESTCD
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: VS_RAW.VSORRES
+
+  - name: VSDTC
+    type: str
+    label: Date/Time of Measurements
+    derivation: VS_RAW.VSDTC
+
+  # The element lookup compares moments, so the collected text becomes a
+  # datetime: a full date-time passes through, a date-only collection is
+  # read as the start of that day, and a missing date stays missing.
+  - name: VSDTM
+    type: datetime
+    label: Date/Time of Measurements as a Moment
+    derivation:
+      datetime_impute:
+        source: VSDTC
+        time: first
+        missing: null
+        invalid: null
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation: ELEM.EPOCH
+    verifications:
+      allowed_values:
+        values: [SCREENING, TREATMENT, FOLLOW-UP]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: missing-date-means-missing-epoch
+      when: "VSDTC IS NULL"
+      then: "EPOCH IS NULL"
