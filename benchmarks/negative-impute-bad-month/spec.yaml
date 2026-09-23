@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # month is never used here: at month precision a year alone is left
+  # missing and a year and month keep their own. It is still range-checked,
+  # so the out-of-range 15 rejects the specification before any data is read.
   - name: ASTDT
     type: date
     label: Analysis Start Date
