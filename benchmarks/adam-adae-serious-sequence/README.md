@@ -7,8 +7,9 @@
 onset order as `SERSEQ`, so the earliest serious event carries 1.
 
 **Input:** adverse event records carrying the collection sequence
-(`AESEQ`), the serious flag (`AESER`), and the onset date (`ASTDT`,
-empty when the onset was never collected).
+(`AESEQ`), the serious flag (`AESER`), and the onset date
+(`AESTDTC`, carried as `ASTDT`; empty when the onset was never
+collected).
 
 **Variables:**
 

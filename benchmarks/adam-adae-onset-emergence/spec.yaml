@@ -40,14 +40,16 @@ columns:
     type: datetime
     label: Datetime of First Exposure to Treatment
     derivation: ADSL.TRTSDTM
+
+  # A comparison with a missing moment is unknown, never true, so the flag
+  # stays empty when either the onset or the first exposure is missing.
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
       case:
-        - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL AND ASTDTM >= TRTSDTM"
-          then:
-            literal: Y
+        - when: "ASTDTM >= TRTSDTM"
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]
@@ -68,8 +70,7 @@ columns:
     derivation:
       case:
         - when: "AOCCSEQ = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

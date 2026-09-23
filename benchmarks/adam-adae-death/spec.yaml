@@ -43,52 +43,36 @@ columns:
     label: Analysis Start Date
     derivation: AE.ASTDT
 
-  - name: EVDTHDT
-    type: date
-    label: Death Date from Fatal Event
-    derivation: DEATHEV.ASTDT
-
-  - name: WINAESEQ
+  # The subject's fatal event: the latest by start date, ties broken by
+  # the highest sequence number.
+  - name: DTHAESEQ
     type: int
-    label: Sequence Number of the Fatal Event Setting the Death Date
+    label: Sequence Number of the Fatal Event
     derivation: DEATHEV.AESEQ
-
-  - name: DMDTHDT
-    type: date
-    label: Death Date from Demographics
-    derivation: DM.DTHDT
-  - name: FATALFL
-    type: str
-    label: Fatal Event Flag
-    derivation:
-      case:
-        - when: "AE.AEOUT = 'FATAL'"
-          then:
-            literal: Y
-
-  - name: DTHFL
-    type: str
-    label: Death Flag
-    derivation:
-      case:
-        - when: "EVDTHDT IS NOT NULL OR DMDTHDT IS NOT NULL"
-          then:
-            literal: Y
-    verifications:
-      allowed_values:
-        values: [Y]
 
   - name: DTHCAUS
     type: str
     label: Cause of Death
     derivation: DEATHEV.AEDECOD
 
+  # The fatal event's start date wins; demographics fills in otherwise.
   - name: DTHDT
     type: date
     label: Date of Death
     derivation:
       first_available:
-        sources: [EVDTHDT, DMDTHDT]
+        sources: [DEATHEV.ASTDT, DM.DTHDT]
+
+  - name: DTHFL
+    type: str
+    label: Death Flag
+    derivation:
+      case:
+        - when: "DTHDT IS NOT NULL"
+          then: {literal: Y}
+    verifications:
+      allowed_values:
+        values: [Y]
 
 verifications:
   - unique:
@@ -98,7 +82,7 @@ verifications:
       max: 10
   - implies:
       id: fatal-event-carries-its-own-cause
-      when: "FATALFL = 'Y' AND AESEQ = WINAESEQ"
+      when: "AESEQ = DTHAESEQ"
       then: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
   - implies:
       id: no-cause-without-a-fatal-event

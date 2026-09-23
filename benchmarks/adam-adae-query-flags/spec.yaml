@@ -6,6 +6,9 @@ input:
   QUERY: {path: input/queries.csv, types: {GRPID: int}}
 base: AE
 intermediates:
+  # One lookup per query slot: the query dictionary entry whose TERM is the
+  # event's coded term, under that slot's prefix. A term with no entry
+  # leaves the slot empty.
   - id: SMQ1
     dataset: QUERY
     key_base: [AEDECOD]

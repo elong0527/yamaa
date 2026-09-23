@@ -31,6 +31,8 @@ columns:
     label: Dictionary-Derived Term
     derivation: AE.AEDECOD
 
+  # SUPP is matched on the dataset keys it carries (STUDYID, USUBJID,
+  # AESEQ); an event with no supplemental record gets no severity.
   - name: AESEV
     type: str
     label: Severity/Intensity
