@@ -669,6 +669,9 @@ examples:
   sdtm-fa-reactogenicity-diary:
     status: executable
     runtimes: ['python']
+  sdtm-lb-character-results:
+    status: executable
+    runtimes: ['python']
   sdtm-lb-compartments:
     status: executable
     runtimes: ['python']

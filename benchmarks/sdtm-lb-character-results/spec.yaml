@@ -1,0 +1,171 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  ODM:
+    path: input/odm.csv
+    types: {FormRepeatKey: int}
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: FORMORD
+    type: int
+    label: Collection Order
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_PROT: 1
+          FO.LB_CK: 2
+          FO.LB_GLUC: 3
+          FO.LB_KETON: 4
+          FO.LB_CREAT: 5
+
+  - name: FORMRPT
+    type: int
+    label: Form Repeat
+    derivation: ODM.FormRepeatKey
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [FORMORD, FORMRPT]
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_PROT: PROT
+          FO.LB_GLUC: GLUC
+          FO.LB_KETON: KETON
+          FO.LB_CREAT: CREAT
+          FO.LB_CK: CK
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_PROT: Protein
+          FO.LB_GLUC: Glucose
+          FO.LB_KETON: Ketones
+          FO.LB_CREAT: Creatinine
+          FO.LB_CK: Creatine Kinase
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: LBORRESU
+    type: str
+    label: Original Units
+
+  - name: LBORRES_U
+    type: str
+    label: Collected Result Uppercased
+    derivation:
+      str_upper:
+        source: LBORRES
+
+  - name: LBSTRESC
+    type: str
+    label: Character Result/Finding in Standard Units
+    derivation:
+      case:
+        - when: "LBORRES_U IN ('NEGATIVE','NEG','TRACE','TR','1+','+1','1 PLUS','2+','+2')"
+          then:
+            mapping:
+              source: LBORRES
+              case_sensitive: false
+              dict:
+                NEGATIVE: NEGATIVE
+                NEG: NEGATIVE
+                TRACE: TRACE
+                TR: TRACE
+                '1+': '1+'
+                '+1': '1+'
+                '1 PLUS': '1+'
+                '2+': '2+'
+                '+2': '2+'
+              missing: null
+        - otherwise: LBORRES
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation:
+      value:
+        source: LBSTRESC
+      missing:
+
+  - name: LBSTRESU
+    type: str
+    label: Standard Units
+    derivation: LBORRESU
+
+  - name: LBNRIND
+    type: str
+    label: Reference Range Indicator
+    derivation:
+      case:
+        - when: "LBSTRESC LIKE '<%'"
+          then: {literal: LOW}
+        - when: "LBSTRESC LIKE '>%'"
+          then: {literal: HIGH}
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+
+rows:
+  - id: lab-result
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    filter: "LBORRES IS NOT NULL"
+    derivations:
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.RESULT'"
+          expr: "ONLY(ODM.Value)"
+      LBORRESU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBORRESU'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - row_count:
+      min: 17
+      max: 17
+  - unique:
+      columns: [STUDYID, USUBJID, LBSEQ]
