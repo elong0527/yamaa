@@ -12,11 +12,8 @@ the sponsor's identifier.
 
 **Variables:**
 
-- `STUDYID`, `USUBJID`, `AESEQ` are carried through as collected.
-- `AESPID` is carried through as collected.
 - `AEREFNUM` is the number taken from `AESPID` values shaped like `AE-001`;
   a missing identifier gives `0` and any other shape gives `-1`.
-- `AETERM` is the reported term, carried through as collected.
 - `AETERMLO` is the reported term in lower case.
 - `AERELLC` is the causality in lower case; a missing causality gives `not
   reported`.

@@ -17,18 +17,15 @@ not be computed), and the measured result (`AVAL`).
   covers study days 8 through 22). It stays empty when the record
   falls outside every window or the study day is missing.
 - `AWTARGET` is the study day the visit aims at (day 15 for
-  `WEEK 2`). It stays empty when the record falls outside every
-  window or the study day is missing.
+  `WEEK 2`); empty whenever `AVISIT` is.
 - `ADIST` is how far the record's study day lies from the target,
-  in days and without direction. It stays empty when the record
-  falls outside every window or the study day is missing, and it
+  in days and without direction; empty whenever `AVISIT` is. It
   shows why a record was chosen: the smallest distance wins.
 - `ANL01FL` holds `Y` for the record that stands for its subject
   and parameter in the visit: the closest to the target, the one
   with the later study day when two are equally close, or the one
   with the lower sequence number when they share the same day. It
-  stays empty on every other record, and a record outside every
-  window or with a missing study day is never flagged.
+  stays empty on every other record.
 
 **Note:** the three window columns travel together: a record
 inside the window carries all three, while a record outside every

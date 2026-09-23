@@ -24,7 +24,8 @@ reported).
 - `SEVLVL` is the dense rank of the event: it numbers the distinct
   severities the subject reported, worst first with each severity
   counted once, so its largest value is how many different
-  severities the subject reported.
+  severities the subject has, an unreported severity counting as
+  one more.
 
 **Note:** an event with no reported severity sorts after every event
 with a reported severity, and events with no reported severity share

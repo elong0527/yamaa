@@ -44,14 +44,15 @@ columns:
     label: Analysis Value
     derivation: ADLB_RAW.AVAL
 
+  # One analysis window, study days 8 to 22 around target day 15. A record
+  # outside it, or with no study day, gets no visit, target, or distance.
   - name: AVISIT
     type: str
     label: Analysis Visit
     derivation:
       case:
-        - when: "ADY >= 8 AND ADY <= 22"
-          then:
-            literal: WEEK 2
+        - when: "ADY BETWEEN 8 AND 22"
+          then: {literal: WEEK 2}
     verifications:
       allowed_values:
         values: [WEEK 2]
@@ -62,8 +63,7 @@ columns:
     derivation:
       case:
         - when: "AVISIT IS NOT NULL"
-          then:
-            literal: 15
+          then: {literal: 15}
 
   - name: ADIST
     type: float
@@ -75,6 +75,9 @@ columns:
       range:
         min: 0
 
+  # Within each subject, parameter, and visit: closest to the target first,
+  # then the later study day, then the lower sequence number. ANL01FL marks
+  # rank 1.
   - name: ARNK
     type: int
     label: Analysis Rank
@@ -94,8 +97,7 @@ columns:
     derivation:
       case:
         - when: "ARNK = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
 
 verifications:
   - unique:
@@ -109,4 +111,4 @@ verifications:
   - implies:
       id: analysis-record-is-inside-window
       when: "ANL01FL = 'Y'"
-      then: "ADY >= 8 AND ADY <= 22"
+      then: "ADY BETWEEN 8 AND 22"

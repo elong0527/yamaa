@@ -25,10 +25,8 @@
   is flagged.
 
 **Note:** an event without a grade can never be flagged, so a
-subject with no graded event has no flagged event (one subject
-has two events with no collected severity, and neither is
-graded or flagged). Grading stays separate from flagging so
-the grade means the same thing on every event while the flag
-answers a question about the subject.
+subject with no graded event has no flagged event. Grading stays
+separate from flagging so the grade means the same thing on every
+event while the flag answers a question about the subject.
 
 **Standard:** ADaM | **Domain:** ADCE

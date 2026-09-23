@@ -18,8 +18,9 @@ Flag).
   and whenever the current or the previous dose is zero or missing.
 
 **Note:** the comparison runs in chronological treatment-start order
-within each subject, breaking timestamp ties by sequence number. A
-pause in dosing (a zero dose) neither flags a reduction nor counts as
-the dose a later administration is compared against.
+within each subject, breaking timestamp ties by sequence number. The
+previous dose is always the administration just before, never an
+earlier nonzero dose, so a pause in dosing (a zero dose) is not
+flagged and neither is the administration after it.
 
 **Standard:** ADaM | **Domain:** ADEX

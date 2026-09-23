@@ -45,11 +45,13 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [EXSTDTM, EXSEQ]
 
+  # Lower than the administration just before, with both doses above zero
+  # (0 < EXDOSE < PREVDOSE puts PREVDOSE above zero too). A missing dose on
+  # either side compares as unknown, so the flag stays empty.
   - name: DOSREDFL
     type: str
     label: Dose Reduced Flag
     derivation:
       case:
-        - when: "EXDOSE > 0 AND PREVDOSE > 0 AND EXDOSE < PREVDOSE"
-          then:
-            literal: "Y"
+        - when: "EXDOSE > 0 AND EXDOSE < PREVDOSE"
+          then: {literal: "Y"}
