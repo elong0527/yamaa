@@ -2,11 +2,12 @@ schema_version: "1.0"
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  VS_RAW:
-    path: input/vs_raw.csv
+  ODM:
+    path: input/odm.csv
     types:
-      VSORRES: float
-      VSREPNUM: int
+      StudyEventRepeatKey: int
+      ItemGroupRepeatKey: int
+      Value: float
 
 output:
   path: vs.csv
@@ -23,22 +24,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: VS_RAW.STUDYID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: VS_RAW.USUBJID
+    derivation: ODM.SubjectKey
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation: VS_RAW.VISIT
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.VISIT1: VISIT 1
+          SE.VISIT2: VISIT 2
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
-    derivation: VS_RAW.VSTESTCD
+    derivation:
+      mapping:
+        source: ODM.ItemOID
+        dict:
+          IT.VS.SYSBP: SYSBP
+          IT.VS.DIABP: DIABP
     verifications:
       allowed_values:
         values: [SYSBP, DIABP]
@@ -46,7 +57,12 @@ columns:
   - name: VSTEST
     type: str
     label: Vital Signs Test Name
-    derivation: VS_RAW.VSTEST
+    derivation:
+      mapping:
+        source: ODM.ItemOID
+        dict:
+          IT.VS.SYSBP: Systolic Blood Pressure
+          IT.VS.DIABP: Diastolic Blood Pressure
 
   - name: ORD
     type: int
@@ -95,23 +111,46 @@ columns:
       not_missing: {}
 
 rows:
-  - id: readings
+  - id: systolic
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    filter: "VSSTRESN IS NOT NULL"
     derivations:
       ORD: {literal: 1}
-      VSREPNUM: {source: VS_RAW.VSREPNUM}
-      VSSTRESN: {source: VS_RAW.VSORRES}
-      VSORRES: {source: VS_RAW.VSORRES}
-      VSORRESU: {source: VS_RAW.VSORRESU}
+      VSREPNUM:
+        aggregate:
+          expr: "ONLY(ODM.ItemGroupRepeatKey)"
+      VSSTRESN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
+          expr: "ONLY(ODM.Value)"
+      VSORRES: {source: VSSTRESN}
+      VSORRESU: {literal: mmHg}
+      VSDRVFL: {literal: null}
+
+  - id: diastolic
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    filter: "VSSTRESN IS NOT NULL"
+    derivations:
+      ORD: {literal: 1}
+      VSREPNUM:
+        aggregate:
+          expr: "ONLY(ODM.ItemGroupRepeatKey)"
+      VSSTRESN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.DIABP'"
+          expr: "ONLY(ODM.Value)"
+      VSORRES: {source: VSSTRESN}
+      VSORRESU: {literal: mmHg}
       VSDRVFL: {literal: null}
 
   - id: means
-    group_by: [VS_RAW.STUDYID, VS_RAW.USUBJID, VS_RAW.VISIT, VS_RAW.VSTESTCD, VS_RAW.VSTEST]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemOID]
     derivations:
       ORD: {literal: 2}
       VSREPNUM: {literal: null}
       VSSTRESN:
         aggregate:
-          expr: "MEAN(VS_RAW.VSORRES)"
+          expr: "MEAN(ODM.Value)"
       VSORRES: {source: VSSTRESN}
       VSORRESU: {literal: mmHg}
       VSDRVFL: {literal: Y}

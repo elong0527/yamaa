@@ -7,18 +7,23 @@ the protocol's visit value beside them: one record per reading with
 its replicate number, plus one record per test and visit holding the
 mean of the readings actually taken, marked as a derived record.
 
-**Input:** raw vital-signs rows with test code and name, result and
-unit, visit, and the replicate number of each reading.
+**Input:** long-form Operational Data Model (ODM) rows, one row per
+collected item, with the collected entry in the value field. Each
+replicate of a blood pressure reading is one repeat of the
+vital-signs item group, numbered in the item-group repeat key; the
+visit rides in the study event.
 
 **Variables:**
 
-- `VSTESTCD` is the test code as collected: `SYSBP` or `DIABP`.
-- `VSTEST` is the test name as collected.
-- `VSREPNUM` numbers the readings of one test at one visit; it stays
-  blank on the derived mean record.
+- `VSTESTCD` is the test code of the collected item: `SYSBP` or
+  `DIABP`.
+- `VSTEST` is the test name of the collected item.
+- `VSREPNUM` is the item-group repeat key: it numbers the readings
+  of one test at one visit, and stays blank on the derived mean
+  record.
 - `VSORRES` is the result exactly as collected on a reading record;
   on the mean record it carries the mean.
-- `VSORRESU` is the unit as collected: `mmHg`.
+- `VSORRESU` is `mmHg` for every record.
 - `VSSTRESN` is the numeric result: the reading itself on a reading
   record, the mean of the readings actually taken on the mean record.
 - `VSSTRESC` is the same value written as text, so it always agrees
