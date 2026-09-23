@@ -19,6 +19,8 @@ columns:
     label: Unique Subject Identifier
     derivation: LB.USUBJID
 
+  # The input declares no types, so these two columns read the collected
+  # text as whole numbers for the product below.
   - name: CELLCNT
     type: int
     label: Cell Concentration
@@ -29,6 +31,8 @@ columns:
     label: Sample Volume (L)
     derivation: LB.VOLUML
 
+  # A whole-number product beyond the signed 64-bit range fails the run
+  # rather than wrapping or becoming an approximate value.
   - name: CELLTOT
     type: int
     label: Total Cell Count
