@@ -356,6 +356,8 @@ VALIDATION_CONTEXT_FIELDS = {
     },
     ('R006', 'missing_required_field'): {'class', 'field'},
     ('R016', 'month_out_of_range'): {'month'},
+    ('R016', 'month_not_permitted'): {'month'},
+    ('R016', 'month_required'): {'minimum_source_precision'},
     ('R016', 'day_out_of_range'): {'day'},
     ('R016', 'incompatible_input_type'): {'actual', 'expected', 'source'},
     ('R016', 'value_not_permitted'): {'permitted', 'value'},
@@ -8015,9 +8017,34 @@ def validate_expression_static_semantics(expression, path, context):
 
     if keyword == 'date_impute' and isinstance(payload, dict):
         operation_path = f"{path}.date_impute"
+        minimum = payload.get('minimum_source_precision', 'year')
         month = payload.get('month')
         day = payload.get('day')
-        if type(month) is int and not 1 <= month <= 12:
+        if minimum == 'month' and 'month' in payload:
+            # REQ-0592: no specification carries a value the policy leaves
+            # unreachable; the value itself is never read.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.month",
+                    'month_not_permitted',
+                    f"month {month!r} is unreachable with "
+                    "minimum_source_precision 'month'",
+                    context={
+                        'month': month if type(month) is int else str(month)
+                    },
+                )
+            )
+        elif minimum == 'year' and 'month' not in payload:
+            # REQ-0592: the month is required where the policy can use it.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.month",
+                    'month_required',
+                    "month is required with minimum_source_precision 'year'",
+                    context={'minimum_source_precision': minimum},
+                )
+            )
+        elif type(month) is int and not 1 <= month <= 12:
             errors.append(
                 validation_diagnostic(
                     f"{operation_path}.month",
@@ -9655,7 +9682,7 @@ def validate_expected_error_contracts(root: Path):
                 continue
             spec = _desugar_bare_derivations(spec)
             for path in paths:
-                if condition == 'missing_required_field':
+                if condition in {'missing_required_field', 'month_required'}:
                     # The diagnostic points at the field that should exist.
                     continue
                 if not spec_path_exists(spec, path):

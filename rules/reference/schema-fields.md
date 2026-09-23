@@ -262,7 +262,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.date_diff.unit` | `"str"` | `true` | Absent | `{"values": ["day", "week", "month", "year"]}` | [REQ-1104](../operations/temporal.md#req-1104) |
 | `expressions.date_diff.bounds` | `"str"` | `false` | `"exclusive"` | `{"values": ["exclusive", "inclusive", "between"]}` | [REQ-1104](../operations/temporal.md#req-1104) |
 | `expressions.date_impute.source` | `"variable"` | `true` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
-| `expressions.date_impute.month` | `"int"` | `true` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
+| `expressions.date_impute.month` | `"int"` | `false` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
 | `expressions.date_impute.day` | `["int", "day_rule"]` | `true` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
 | `expressions.date_impute.minimum_source_precision` | `"str"` | `false` | `"year"` | `{"values": ["year", "month"]}` | [REQ-1105](../operations/temporal.md#req-1105) |
 | `expressions.date_impute.not_before` | `"variable"` | `false` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |

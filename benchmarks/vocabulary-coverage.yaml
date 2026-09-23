@@ -15,7 +15,8 @@ coverage:
   cut: [negative-cut-coded]
   date_diff: [negative-date-diff-endpoints,
     negative-date-diff-units]
-  date_impute: [negative-impute-bad-month]
+  date_impute: [negative-impute-bad-month,
+    negative-impute-missing-month, negative-impute-unreachable-month]
   date_precision: [negative-precision-bad-source]
   datetime_impute: [negative-datetime-impute-bad-source]
   datetime_precision: [negative-datetime-precision-bad-source]

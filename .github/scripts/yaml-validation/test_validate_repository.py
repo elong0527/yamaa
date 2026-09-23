@@ -860,7 +860,6 @@ class TestAggregateDeriveStep(unittest.TestCase):
                         'derivation': {
                             'date_impute': {
                                 'source': 'EX.EXENDTC',
-                                'month': 12,
                                 'day': 'last',
                                 'minimum_source_precision': 'month',
                                 'missing': None,

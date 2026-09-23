@@ -360,6 +360,12 @@ examples:
   negative-impute-day-rule:
     status: executable
     runtimes: ['python']
+  negative-impute-missing-month:
+    status: executable
+    runtimes: ['python']
+  negative-impute-unreachable-month:
+    status: executable
+    runtimes: ['python']
   negative-precision-bad-source:
     status: executable
     runtimes: ['python']
