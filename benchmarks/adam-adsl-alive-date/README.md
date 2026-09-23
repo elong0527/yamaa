@@ -20,9 +20,9 @@ ADAE) and vital signs dates (`ADATE` in ADVS).
   competes on the day it names. When every source is missing the date
   stays missing; otherwise the latest available date is kept.
 
-**Note:** a contact collected as `2025-02` completes to `2025-02-28`,
-which beats every date collected in full, while `2025` alone becomes
-`2025-12-31`. A contact collected in full can still lose: an adverse
-event ending one day later is kept instead.
+**Note:** completing a partial contact to the end of its month or
+year can make it the latest date, ahead of dates collected in full
+within that period: `2025-02` counts as `2025-02-28` and `2025` as
+`2025-12-31`.
 
 **Standard:** ADaM | **Domain:** ADSL
