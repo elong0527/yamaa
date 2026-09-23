@@ -28,6 +28,8 @@ reported).
 
 **Note:** an event with no reported severity sorts after every event
 with a reported severity, and events with no reported severity share
-one rank with each other because nothing tells them apart.
+one rank with each other because nothing tells them apart. A subject
+with a single event carries rank 1, and when none of a subject's
+events has a reported severity every event shares rank 1.
 
 **Standard:** ADaM | **Domain:** ADAE
