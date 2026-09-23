@@ -324,6 +324,9 @@ examples:
   negative-cut-coded:
     status: executable
     runtimes: ['python']
+  negative-cut-missing-input:
+    status: executable
+    runtimes: ['python']
   negative-path-absolute:
     status: executable
     runtimes: ['python']

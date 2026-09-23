@@ -272,7 +272,7 @@ def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
         if "missing" in payload:
             return handler_value(payload, "missing")
         return expression_condition(
-            "mapping",
+            "cut",
             "missing_input",
             {"variable": str(variable)},
             applicable_handler="missing",

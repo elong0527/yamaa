@@ -27,6 +27,7 @@ ConditionPhase: TypeAlias = Literal[
     "row_construction",
     "derivation",
     "mapping",
+    "cut",
     "join",
     "impute",
     "convert",

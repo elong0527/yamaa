@@ -301,7 +301,7 @@ def _evaluate_row_filter(
 # The phases whose failures name the record they happened on. A failure
 # decided before any row exists reports no key.
 _ROW_PHASES = frozenset(
-    {"derivation", "impute", "join", "mapping", "row_construction", "convert"}
+    {"derivation", "impute", "join", "mapping", "cut", "row_construction", "convert"}
 )
 
 
