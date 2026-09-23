@@ -7316,6 +7316,19 @@ def validate_aggregate_at(payload, path, context):
                     context={'reason': 'grouped_row_local_group_by'},
                 )
             )
+        # REQ-0142: the group is the match, so a key pair could only be
+        # ignored; it never widens the read to the scope it names.
+        for field in ('key', 'key_base'):
+            if isinstance(payload, dict) and payload.get(field) is not None:
+                errors.append(
+                    validation_diagnostic(
+                        f"{path}.{field}",
+                        'invalid_aggregate_context',
+                        'grouped-row aggregate reads its own group and '
+                        'declares no key pairs',
+                        context={'reason': 'grouped_row_key_pairs'},
+                    )
+                )
         grouped = set(context.get('row_group_by') or [])
         fields = datasets.get(driver, {})
         resolver = numeric_identifier_resolver(

@@ -1085,6 +1085,37 @@ def test_a_grouped_row_aggregate_declares_no_grain_of_its_own() -> None:
     assert raised.value.diagnostics[0].condition == "invalid_aggregate_context"
 
 
+def test_a_grouped_row_aggregate_declares_no_key_pairs() -> None:
+    # REQ-0142: the group is the match. A key pair would be ignored and the
+    # aggregate would still reduce the current group, so it is refused.
+    spec = specification(
+        [Column(name="A", type="int")],
+        [
+            Row(
+                id="row",
+                group_by=["SRC.X"],
+                derivations={
+                    "A": derivation(
+                        {"aggregate": {"key_base": ["SRC.X"], "expr": "COUNT(SRC.*)"}}
+                    )
+                },
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "invalid_aggregate_context"
+    assert diagnostic.requirement == "REQ-0142"
+    assert diagnostic.spec_paths == ("rows[0].derivations.A.aggregate.key_base",)
+
+
 def test_a_one_field_aggregate_names_the_shared_shorthand_operation() -> None:
     diagnostic = aggregate_diagnostic({"expr": "AVG(RIGHT.V)"})
 

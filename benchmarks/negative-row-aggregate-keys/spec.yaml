@@ -1,0 +1,51 @@
+schema_version: "1.0"
+domain: SUPPDM
+keys: [STUDYID, USUBJID, QVAL]
+
+input:
+  ODM: input/odm.csv
+
+output:
+  path: suppdm.csv
+  columns: [STUDYID, USUBJID, QVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ITEMOID
+    type: str
+    label: Collected Item
+
+  - name: QVAL
+    type: str
+    label: Data Value
+
+  - name: RACECOUNT
+    type: int
+    label: Number of Race Rows for the Subject
+
+rows:
+  # Each candidate is one subject and one collected value, so the count below
+  # can only ever see this group's own records. The key pair asks for the
+  # subject's race rows instead; a grouped row reduction cannot widen its
+  # read, so the specification is rejected rather than counting one.
+  - id: reported_race
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemOID, ODM.Value]
+    filter: "ITEMOID = 'IT.DM.RACE' AND RACECOUNT > 1"
+    derivations:
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      ITEMOID: ODM.ItemOID
+      QVAL: ODM.Value
+      RACECOUNT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RACE'"
+          expr: "COUNT(ODM.*)"
+          key: [StudyOID, SubjectKey]
+          key_base: [STUDYID, USUBJID]

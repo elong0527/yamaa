@@ -291,6 +291,9 @@ examples:
   negative-row-aggregate:
     status: executable
     runtimes: ['python']
+  negative-row-aggregate-keys:
+    status: executable
+    runtimes: ['python']
   negative-formula-flag:
     status: executable
     runtimes: ['python']

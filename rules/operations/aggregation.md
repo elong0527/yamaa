@@ -541,7 +541,8 @@ unqualified expression with no `group_by`: fail.
 <a id="req-0508"></a>
 
 **REQ-0508.** A grouped-row
-aggregate declaring its own `group_by`, naming an identifier outside its row
+aggregate declaring its own `group_by`, declaring `key` or `key_base`
+([REQ-0142](lookup.md#req-0142)), naming an identifier outside its row
 template's input dataset, or being used by an ungrouped row template: fail.
 
 <a id="req-0509"></a>
