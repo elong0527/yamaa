@@ -88,5 +88,5 @@ verifications:
   - unique:
       columns: [USUBJID, VISIT, PARAMCD]
   - row_count:
-      min: 11
-      max: 11
+      min: 15
+      max: 15
