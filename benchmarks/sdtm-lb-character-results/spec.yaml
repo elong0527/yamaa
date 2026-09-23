@@ -165,7 +165,7 @@ rows:
 
 verifications:
   - row_count:
-      min: 16
-      max: 16
+      min: 17
+      max: 17
   - unique:
       columns: [STUDYID, USUBJID, LBSEQ]
