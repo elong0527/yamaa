@@ -681,6 +681,9 @@ examples:
   sdtm-relrec-links:
     status: executable
     runtimes: ['python']
+  sdtm-mh-ongoing-conditions:
+    status: executable
+    runtimes: ['python']
   sdtm-rs-timepoint-response:
     status: executable
     runtimes: ['python']
