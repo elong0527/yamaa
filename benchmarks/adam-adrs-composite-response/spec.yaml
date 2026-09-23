@@ -115,8 +115,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
-      min: 5
-      max: 5
+      min: 10
+      max: 10
   - implies:
       id: numeric-response-is-missing-only-when-not-evaluable
       when: "AVAL IS NULL"
