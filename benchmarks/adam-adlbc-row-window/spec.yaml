@@ -39,13 +39,15 @@ columns:
     label: Change from Previous Value
 
 rows:
+  # One _ALB row per albumin record with a numeric result. PREV_AVAL reads
+  # the row just before in visit order among this template's rows for the
+  # same subject; the first visit has none, so CHG is empty there too.
   - id: change_alb
     dataset: LB
     filter: "LB.LBTESTCD = 'ALB' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       USUBJID: LB.USUBJID
-      PARAMCD:
-        literal: "_ALB"
+      PARAMCD: {literal: "_ALB"}
       AVISITN: LB.VISITNUM
       AVAL: LB.LBSTRESN
       PREV_AVAL:
@@ -59,13 +61,13 @@ rows:
         compute:
           expr: "AVAL - PREV_AVAL"
 
+  # The same for bilirubin, lagged among the _BILI rows only.
   - id: change_bili
     dataset: LB
     filter: "LB.LBTESTCD = 'BILI' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       USUBJID: LB.USUBJID
-      PARAMCD:
-        literal: "_BILI"
+      PARAMCD: {literal: "_BILI"}
       AVISITN: LB.VISITNUM
       AVAL: LB.LBSTRESN
       PREV_AVAL:
