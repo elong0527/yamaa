@@ -17,6 +17,7 @@ tests. The same form repeat number is reused on another diary day.
 - `FATESTCD` and `FATEST` identify occurrence, severity, or longest diameter
   from the collected result item.
 - `FAOBJ` is the reaction name exactly as reported in the sibling item.
+- `FACAT` is `REACTOGENICITY` for every diary finding.
 - `FAORRES` and `FASTRESC` keep the collected result; `FAORRESU` is `mm` for
   diameter only.
 - `FASTAT` is `NOT DONE` for the blank severity item and blank for reported
