@@ -8,6 +8,9 @@ input:
     types: {BORSEQ: int}
 base: ADSL
 intermediates:
+  # The subject's winning record in the selection (BORSEQ 1), matched on
+  # STUDYID and USUBJID. A subject without one gets an empty response and
+  # date; two such records for one subject fail the run.
   - id: RESPONSE
     dataset: ADRSSEL
     filter: "ADRSSEL.BORSEQ = 1"

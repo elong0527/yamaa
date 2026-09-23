@@ -25,11 +25,11 @@ plus a prepared response selection in which the record with
   response nor progressive disease), `5` (progressive disease), or
   `6` (not evaluable); empty when `AVALC` is empty.
 - `ADT` is the analysis date supporting the response, taken from
-  that record's date; empty when the subject has no record with
-  `BORSEQ` equal to `1`.
+  that record's date; empty whenever `AVALC` is.
 
-**Note:** response, rank, and date agree with each other: all three
-are empty for a subject with no record with `BORSEQ` equal to `1`,
-and the supporting date is never before the randomization date.
+**Note:** every subject in the subject-level records gets one record,
+so a subject with no record with `BORSEQ` equal to `1` keeps its
+randomization date with response, rank, and date all empty. The
+supporting date is never before the randomization date.
 
 **Standard:** ADaM | **Domain:** ADRS
