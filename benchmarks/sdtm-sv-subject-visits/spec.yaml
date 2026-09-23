@@ -1,0 +1,179 @@
+schema_version: "1.0"
+domain: SV
+keys: [STUDYID, USUBJID, VISITNUM]
+input:
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+  ODM: input/odm.csv
+base: ODM
+
+# One output row per subject per study event: the row template groups the ODM
+# extract by study event, and each subject's study events ARE the visits they
+# attended. The extract carries the planned-visit attributes (IT.TV.*) on
+# every study event, so each visit reads its plan from its own group. A visit
+# starts on the earliest form date across its VS, LB and EX forms and ends on
+# the latest; a visit whose forms land on different days spans them. DM is a
+# subject-level table; its columns join implicitly on the keys DM shares with
+# the output (REQ-0150: STUDYID, USUBJID).
+
+output:
+  path: sv.csv
+  columns: [STUDYID, DOMAIN, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY,
+            SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES]
+  order_by: [STUDYID, USUBJID, SVSEQ]
+
+rows:
+  - id: visit
+    dataset: ODM
+    # One row per study-event occurrence: the repeat key keeps repeated
+    # unscheduled visits as separate rows instead of silently merging them.
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey]
+    derivations:
+      VISIT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.VISIT'"
+          expr: "ONLY(ODM.Value)"
+      VISITNUM:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.VISITNUM'"
+          expr: "ONLY(ODM.Value)"
+      VISITDY:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.VISITDY'"
+          expr: "ONLY(ODM.Value)"
+      VSDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
+      EXDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.EX.EXDTC'"
+          expr: "ONLY(ODM.Value)"
+      TAETORD:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.TAETORD'"
+          expr: "ONLY(ODM.Value)"
+      EPOCH:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.EPOCH'"
+          expr: "ONLY(ODM.Value)"
+      SVUPDES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.UPDES'"
+          expr: "ONLY(ODM.Value)"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: SV}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+
+  - name: VISITNUM
+    type: int
+    label: Visit Number
+
+  - name: VISITDY
+    type: int
+    label: Planned Study Day of Visit
+
+  - name: VSDTC
+    type: date
+    label: Vital Signs Form Date
+
+  - name: LBDTC
+    type: date
+    label: Laboratory Form Date
+
+  - name: EXDTC
+    type: date
+    label: Exposure Form Date
+
+  - name: RFSTDTC
+    type: date
+    label: Reference Start Date
+    derivation: DM.RFSTDTC
+
+  - name: SVSTDTC
+    type: date
+    label: Start Date/Time of Visit
+    derivation:
+      least:
+        sources: [VSDTC, LBDTC, EXDTC]
+
+  - name: SVENDTC
+    type: date
+    label: End Date/Time of Visit
+    derivation:
+      greatest:
+        sources: [VSDTC, LBDTC, EXDTC]
+
+  - name: SVSTDY
+    type: int
+    label: Study Day of Start of Visit
+    derivation:
+      study_day:
+        date: SVSTDTC
+        reference: RFSTDTC
+
+  - name: SVENDY
+    type: int
+    label: Study Day of End of Visit
+    derivation:
+      study_day:
+        date: SVENDTC
+        reference: RFSTDTC
+
+  - name: TAETORD
+    type: int
+    label: Planned Order of Element within Arm
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+
+  - name: SVUPDES
+    type: str
+    label: Description of Unplanned Visit
+
+  - name: SVSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [SVSTDTC]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VISITNUM]
+  - row_count:
+      min: 7
+      max: 7
+  - assert:
+      id: visits-span-their-form-dates
+      expr: "SVSTDTC IS NOT NULL AND SVENDTC IS NOT NULL AND SVSTDTC <= SVENDTC"
+  - assert:
+      id: planned-visits-carry-their-plan
+      expr: "NOT (VISITNUM <> 99 AND (VISITDY IS NULL OR TAETORD IS NULL))"
+  - assert:
+      id: unplanned-visits-carry-a-description
+      expr: "NOT (VISITNUM = 99 AND SVUPDES IS NULL)"
