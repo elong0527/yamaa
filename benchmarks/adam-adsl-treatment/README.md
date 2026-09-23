@@ -17,21 +17,22 @@ demographics record adds no record.
 
 **Variables:**
 
-- `TRT01A`: treatment actually received, uppercased: the earliest
-  qualifying exposure treatment first, where a qualifying record
-  has `EXTRT` of `VITAMIN D3` or `PLACEBO` with a non-missing
-  start date and time, ordered by `EXSTDTC` with ties broken by the lower
-  `EXSEQ`; then the actual arm (`ACTARM`) when there is no
-  qualifying exposure; then the text `NOT TREATED` when neither
-  source names a treatment.
+- `TRT01A`: treatment actually received, uppercased: the treatment of the
+  earliest qualifying exposure, where a qualifying record has `EXTRT` of
+  `VITAMIN D3` or `PLACEBO` and a collected start (`EXSTDTC`), with ties on
+  the start broken by the lower `EXSEQ`; then the actual arm (`ACTARM`)
+  when there is no qualifying exposure; then the text `NOT TREATED` when
+  neither source names a treatment.
 - `TRTSDT` and `TRTSDTM`: date and date/time of the earliest qualifying
   exposure start; a start collected without a time uses `00:00:00`. Both are
   blank when the subject has no qualifying exposure record.
-- `TRTSTMF`: `H` when the first exposure time was supplied, otherwise blank.
-- `TRTEDT` and `TRTEDTM`: date and date/time of the latest qualifying exposure
-  end; an end collected without a time uses `23:59:59`. Both are blank when
-  the subject has no qualifying exposure record.
-- `TRTETMF`: `H` when the last exposure time was supplied, otherwise blank.
+- `TRTSTMF`: `H` when the first exposure start was collected without a time,
+  so its time was imputed; otherwise blank.
+- `TRTEDT` and `TRTEDTM`: date and date/time of the latest exposure end
+  among `VITAMIN D3` and `PLACEBO` records; an end collected without a time
+  uses `23:59:59`. Both are blank when no such record has an end.
+- `TRTETMF`: `H` when the last exposure end was collected without a time,
+  so its time was imputed; otherwise blank.
 - `TRTDURD`: number of days from `TRTSDT` to `TRTEDT`, counting
   both the first and the last day (inclusive), so a single
   treatment day gives one; blank when either date is blank.
@@ -39,7 +40,6 @@ demographics record adds no record.
   otherwise (never blank).
 
 **Note:** the exposure dates, date/times, and duration are all present or all
-blank together; each imputation flag is present only when its time was
-supplied.
+blank together.
 
 **Standard:** ADaM | **Domain:** ADSL
