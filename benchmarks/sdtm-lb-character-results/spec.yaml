@@ -1,0 +1,109 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB_RAW: {path: input/lb_raw.csv, types: {LBSEQ: int, LBDTC: date}}
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB_RAW.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB_RAW.LBSEQ
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation: LB_RAW.LBTESTCD
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+    derivation: LB_RAW.LBTEST
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: LB_RAW.LBORRES
+
+  - name: LBORRESU
+    type: str
+    label: Original Units
+    derivation: LB_RAW.LBORRESU
+
+  - name: LBSTRESC
+    type: str
+    label: Character Result/Finding in Standard Units
+    derivation:
+      case:
+        - when: "LB_RAW.LBORRES IN ('NEGATIVE','Neg','neg','NEG','TRACE','Trace','tr','TR','1+','+1','1 plus','1 PLUS','2+','+2')"
+          then:
+            mapping:
+              source: LB_RAW.LBORRES
+              case_sensitive: false
+              dict:
+                NEGATIVE: NEGATIVE
+                NEG: NEGATIVE
+                TRACE: TRACE
+                TR: TRACE
+                '1+': '1+'
+                '+1': '1+'
+                '1 PLUS': '1+'
+                '2+': '2+'
+                '+2': '2+'
+              missing: null
+        - otherwise: LB_RAW.LBORRES
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation:
+      value:
+        source: LBSTRESC
+      missing:
+
+  - name: LBSTRESU
+    type: str
+    label: Standard Units
+    derivation: LB_RAW.LBORRESU
+
+  - name: LBNRIND
+    type: str
+    label: Reference Range Indicator
+    derivation:
+      case:
+        - when: "LBSTRESC LIKE '<%'"
+          then: {literal: LOW}
+        - when: "LBSTRESC LIKE '>%'"
+          then: {literal: HIGH}
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+    derivation: LB_RAW.LBDTC
+
+verifications:
+  - row_count:
+      min: 14
+      max: 14
+  - unique:
+      columns: [STUDYID, USUBJID, LBSEQ]
