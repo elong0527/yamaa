@@ -65,6 +65,21 @@ def test_committed_column_composition_example_matches_resolved_artifact() -> Non
     )
 
 
+def test_committed_inherited_output_example_matches_resolved_artifact() -> None:
+    example = EXAMPLES / "schema-inherited-output"
+    resolved = resolve_specification(
+        example / "spec_study.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+    expected = yaml.safe_load(
+        (example / "expected/spec_resolved.yaml").read_text(encoding="ascii")
+    )
+
+    assert resolved.document == expected
+    assert "output" not in yaml.safe_load(
+        (example / "spec_study.yaml").read_text(encoding="ascii")
+    )
+
+
 def test_committed_column_composition_example_executes_to_its_artifact() -> None:
     example = EXAMPLES / "schema-column-composition"
 
@@ -401,6 +416,129 @@ output: {path: out.csv, columns: [ID]}
     )
 
 
+def test_entry_inherits_output_from_a_shared_layer(tmp_path: Path) -> None:
+    common = tmp_path / "common"
+    study = tmp_path / "study"
+    common.mkdir()
+    (study / "input").mkdir(parents=True)
+    (tmp_path / "yamaa-project.yaml").write_text('version: "1.0"\n', encoding="ascii")
+    (study / "input/src.csv").write_text("ID\nS1\n", encoding="ascii")
+    (common / "base.yaml").write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+output:
+  path: out.csv
+  columns: [ID]
+  warning_log: warnings.csv
+columns:
+  - name: ID
+    type: str
+    derivation: SRC.ID
+""",
+        encoding="ascii",
+    )
+    (study / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: [../common/base.yaml]
+input:
+  SRC: input/src.csv
+base: SRC
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        study / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+    run = yamaa_domain(study / "spec.yaml", schema_root=SCHEMA_ROOT)
+
+    # Issue #845: the entry declares no output and inherits it whole
+    # (REQ-0623), publishing where the shared layer names (REQ-0629).
+    assert resolved.document["output"] == {
+        "path": "../common/out.csv",
+        "columns": ["ID"],
+        "warning_log": "../common/warnings.csv",
+    }
+    assert run.issues.is_empty()
+    assert run.output is not None
+    assert run.output.to_dicts() == [{"ID": "S1"}]
+
+
+def test_entry_output_replaces_inherited_output_whole(tmp_path: Path) -> None:
+    (tmp_path / "input.csv").write_text("ID,CODE\n01,A\n", encoding="ascii")
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+input: {SRC: input.csv}
+base: SRC
+output:
+  path: shared.csv
+  columns: [ID, CODE]
+  warning_log: shared-warnings.csv
+columns:
+  - name: ID
+    type: str
+    derivation: SRC.ID
+  - name: CODE
+    type: str
+    derivation: SRC.CODE
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+output: {path: out.csv, columns: [ID]}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+
+    # REQ-0629: no inherited output field survives an entry's own output.
+    assert resolved.document["output"] == {"path": "out.csv", "columns": ["ID"]}
+    assert [column.name for column in resolved.specification.columns] == ["ID"]
+
+
+def test_output_no_layer_declares_fails_as_missing_required_field(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [ID]
+columns:
+  - name: ID
+    type: str
+    derivation: SRC.ID
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+input: {SRC: input.csv}
+base: SRC
+""",
+        encoding="ascii",
+    )
+
+    try:
+        resolve_specification(tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT))
+    except SpecificationError as error:
+        diagnostic = error.diagnostics[0]
+    else:
+        raise AssertionError("a chain with no output unexpectedly resolved")
+
+    # REQ-0657: the requiredness is structural and applies after resolution.
+    assert diagnostic.condition == "missing_required_field"
+    assert diagnostic.spec_paths == ("output",)
+
+
 def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
     bundle = load_schema_bundle(SCHEMA_ROOT)
     names = (
@@ -408,7 +546,6 @@ def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
         "negative-property-clear",
         "negative-version-mismatch",
         "negative-remote-parent",
-        "negative-inherited-output",
     )
     for name in names:
         try:
