@@ -119,7 +119,7 @@ rows:
 
 verifications:
   - unique:
-      columns: [STUDYID, RDOMAIN, IDVAR, RELID]
+      columns: [STUDYID, RDOMAIN, IDVAR, IDVARVAL, RELID]
   - row_count:
       min: 6
       max: 6
