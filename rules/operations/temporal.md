@@ -197,9 +197,9 @@ where the specification is read.
 `datetime_impute`, which completes a date source under its declared time rule.
 It is consumed by comparisons, `datetime_precision`, or `to_date`, which copies
 calendar fields and drops time fields. ISO 8601 datetime text parses as a
-`datetime` first, so `to_date` truncates it by the same field copy: the
-truncation is never a timezone conversion, because the `datetime` value space
-is zone-free. A missing `to_date` source returns a
+`datetime` first, so `to_date` truncates it by the same field copy. The
+truncation is never a timezone conversion: the `datetime` value space is
+zone-free. A missing `to_date` source returns a
 missing date. Any other source type is the incompatible-input error
 [Types and conversion](../values/types.md) defines; in particular, a `date`
 value is not accepted as an identity spelling.
