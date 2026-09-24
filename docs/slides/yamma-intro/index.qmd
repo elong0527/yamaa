@@ -252,23 +252,6 @@ Help publish an RConsortium / BBSW blog post inviting statistical programmers to
 
 ![](../../assets/logo.jpeg){.hero-logo}
 
-## yamaa in one slide
-
-<div class="flow">
-<div class="flow-step">Source data<br><span class="small">ODM, SDTM, files</span></div>
-<div class="flow-step">yamaa spec<br><span class="small">explicit intent</span></div>
-<div class="flow-step">Plan<br><span class="small">validate first</span></div>
-<div class="flow-step">Engine<br><span class="small">Python or R</span></div>
-<div class="flow-step">Outputs<br><span class="small">SDTM, ADaM, metadata</span></div>
-</div>
-
-A yamaa specification describes a deterministic transformation from clinical source data to standards-aligned datasets.
-
-<span class="pill">one specification</span>
-<span class="pill">one execution</span>
-<span class="pill">reviewable lineage</span>
-<span class="pill">runnable benchmark</span>
-
 ## The one principle
 
 <div class="kicker">Determinism is a design constraint</div>
