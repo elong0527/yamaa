@@ -11,20 +11,23 @@ row-scoped value is visible to every record the aggregate reduces.
 > The R engine does not implement it yet.
 
 **Input:** exposure records with sequence numbers (`EXSEQ`) and
-doses (`EXDOSE`), plus per-subject dose caps (`CAPDOSE`).
+doses (`EXDOSE`), plus dose caps (`CAPDOSE`), which a subject may
+have more than one of.
 
 **Variables:**
 
-- `STUDYID`: the study identifier, carried through.
-- `USUBJID`: the unique subject identifier, carried through.
-- `CUMDOSE`: the cumulative dose after capping each record's dose
-  at the subject's cap.
+- `CUMDOSE`: the cumulative dose over all of the subject's exposure
+  records, after capping each record's dose at the subject's lowest
+  cap. A subject with no cap has their doses summed uncapped, and a
+  record with a missing dose counts as the full cap.
 
-**Mechanism:** the `DOSECAP` intermediate keeps the first record
-per subject ordered by `CAPDOSE`, so it holds one row per subject.
-The `derive` step binds `CAP` from `DOSECAP.CAPDOSE` per record,
-caps each record's `DOSE` with `least`, and the reducer sums the
-capped values. The `keep` declaration is what makes the
-intermediate read valid.
+**Mechanism:** the `DOSECAP` intermediate sorts each subject's cap
+records by `CAPDOSE` and keeps the first, the lowest cap, so it
+holds one record per subject. The `derive` step binds `CAP` from
+`DOSECAP.CAPDOSE` for each exposure record, caps that record's
+`DOSE` with `least`, which ignores a missing value, and the reducer
+sums the capped values. The `keep` declaration is what makes the
+intermediate read valid. Each output row is built from the
+subject's first exposure record (`EXSEQ` 1), one row per subject.
 
 **Standard:** ADaM | **Domain:** ADEX

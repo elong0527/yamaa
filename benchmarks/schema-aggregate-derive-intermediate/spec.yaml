@@ -4,24 +4,34 @@ keys: [STUDYID, USUBJID]
 input:
   EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
   DS: {path: input/ds.csv, types: {CAPDOSE: float}}
+
+# Each subject's lowest cap: their DS records in ascending CAPDOSE order,
+# first one kept. keep makes it one record per subject, which is what lets
+# the aggregate's derive step below read it.
 intermediates:
   - id: DOSECAP
     dataset: DS
     key: [STUDYID, USUBJID]
     order_by: [DS.CAPDOSE]
     keep: first
+
 output:
   path: adex.csv
   columns: [STUDYID, USUBJID, CUMDOSE]
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: EX.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: EX.USUBJID
+
+  # Sums every EX record of the subject, each dose first capped at the
+  # subject's DOSECAP value.
   - name: CUMDOSE
     type: float
     label: Cumulative Capped Dose
@@ -35,10 +45,15 @@ columns:
           - name: CAP
             type: float
             derivation: DOSECAP.CAPDOSE
+          # least skips a missing value: with no cap record the dose is
+          # summed uncapped, and a missing dose counts as the full cap.
           - name: CAPPED
             type: float
             derivation: {least: {sources: [DOSE, CAP]}}
         expr: "SUM(CAPPED)"
+
+# One output row per subject, built from their EXSEQ 1 record; the sum
+# above still reads all of the subject's EX records.
 rows:
   - id: exposure
     dataset: EX

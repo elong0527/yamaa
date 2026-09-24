@@ -17,11 +17,12 @@ baseline it is compared with (`LBBLRESN`).
 - `BASE` would be the baseline it is compared with, taken from
   `LBBLRESN`.
 - `PCHG` would be the change from baseline as a percentage of
-  it, worked out as `100 * (AVAL - BASE) / BASE`.
+  it, worked out as `100 * (AVAL - BASE) / BASE`; missing when
+  either value is missing.
 
-One subject's baseline is zero, so the percentage has no value.
-Leaving it missing would assume a rule the specification never
-stated, so the run fails and no artifact is accepted.
+**Note:** a zero baseline leaves the percentage with no value.
+Leaving it missing would assume a rule the request never stated, so
+the run fails and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 

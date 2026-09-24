@@ -22,7 +22,11 @@ columns:
     label: Treatment Group
     derivation: DM.TRTGRP
 
-  # Qualified: counts dose records, including the one with a missing dose.
+  # Qualified aggregates (EX.x) reduce the subject's EX records, matched on
+  # USUBJID, the output key EX also carries. A subject with no EX record
+  # gets missing from every one of them, counts included.
+  #
+  # Qualified: counts dose records, including those with a missing dose.
   - name: NDOSE
     type: int
     label: Number of Dose Records
@@ -38,7 +42,8 @@ columns:
       aggregate:
         expr: "COUNT(EX.EXDOSE)"
 
-  # Qualified: the missing dose contributes nothing, never zero.
+  # Qualified: a missing dose contributes nothing, never zero; a subject
+  # whose doses are all missing gets a missing total.
   - name: TOTDOSE
     type: float
     label: Total Dose
@@ -54,6 +59,7 @@ columns:
       aggregate:
         expr: "MEAN(EX.EXDOSE)"
 
+  # Qualified: the largest present dose.
   - name: MAXDOSE
     type: float
     label: Maximum Dose

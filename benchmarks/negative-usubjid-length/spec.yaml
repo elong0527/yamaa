@@ -17,6 +17,8 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    # STUDYID-SITEID-SUBJID. With no missing: value, a record missing any
+    # part stops the run.
     derivation:
       str_concat:
         sources:
@@ -25,6 +27,8 @@ columns:
           - source: DM_RAW.SITEID
           - literal: '-'
           - source: DM_RAW.SUBJID
+    # A long site identifier pushes the joined value past 20 characters,
+    # which fails once the dataset is complete.
     verifications:
       - max_length:
           max: 20

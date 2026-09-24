@@ -13,13 +13,12 @@ country (`COUNTRY`) and the site country (`SITECNTY`).
 **Variables:**
 
 - `COUNTRY` would be the subject's own country in capitals, or the
-  site country in capitals when the subject's own entry is blank,
-  but no row is produced.
+  site country in capitals when the subject's own entry is blank.
 
-The uppercasing step also picks which text to uppercase, so the
-pick sits inside another operation and no named value feeds the
-step. Each result is built one step at a time from a named value,
-so the run is rejected before any data is read and no artifact is
+**Note:** the uppercasing step is also asked to choose between the
+two entries, but it can only read one named value. Choosing the
+entry is a step of its own whose result must be named first, so the
+run is rejected before any data is read and no artifact is
 accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
@@ -44,4 +43,6 @@ uppercasing step:
 ```
 
 Keep the helper column out of the artifact by leaving it off the artifact
-column list.
+column list. A subject with both entries blank then stops the run; if that can
+happen, add `missing: null` beside `source: COUNTRYSRC` to leave that
+subject's country blank instead.

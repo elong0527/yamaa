@@ -24,6 +24,8 @@ columns:
     label: Site Identifier
     derivation: DM.SITEID
 
+# Each SITEID must appear on one row only. A site that enrolled more than
+# one subject repeats its SITEID, so this fails on the completed dataset.
 verifications:
   - unique:
       columns: [SITEID]

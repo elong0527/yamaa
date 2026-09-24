@@ -14,8 +14,8 @@ in `AESEV`.
 - `ASEV` would contain the severity word reported for the event,
   carried unchanged from the collected severity.
 - `SEVTOT` would be the subject's total severity burden, totalling
-  the severity across the events reported for them, but no row is
-  produced.
+  the severity across all of their reported events and repeated on
+  each of their event records.
 
 **Note:** severity is recorded as words, and words have no total.
 Ordering the words and totalling their positions would be a real

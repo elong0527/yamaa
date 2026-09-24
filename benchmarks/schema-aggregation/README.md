@@ -18,7 +18,7 @@ missing dose.
 
 - `NDOSE` counts dose records (`COUNT(EX.*)`); `NDOSEVAL` counts only the
   records with a dose present (`COUNT(EX.EXDOSE)`). `TOTDOSE`, `MEANDOSE`,
-  and `MAXDOSE` reduce the present doses.
+  and `MAXDOSE` are the total, mean and largest of the present doses.
 - `DRUGDOSE` sums only the `DRUG` records; `PLACDOSE` sums only the
   `PLACEBO` records, so subjects with no placebo record read as missing.
 - `TOTDOSE_MG` binds each record's dose in milligrams first (a `derive`

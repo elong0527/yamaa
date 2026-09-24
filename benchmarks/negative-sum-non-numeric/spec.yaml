@@ -29,6 +29,9 @@ columns:
     label: Analysis Severity/Intensity
     derivation: AE.AESEV
 
+  # One total per subject, repeated on each of their event rows. ASEV
+  # holds severity words (MILD, SEVERE), and SUM needs numbers, so the
+  # run is rejected before any data is read.
   - name: SEVTOT
     type: float
     label: Total Severity Score

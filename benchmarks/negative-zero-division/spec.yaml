@@ -37,6 +37,8 @@ columns:
   - name: PCHG
     type: float
     label: Percent Change from Baseline
+    # Missing when AVAL or BASE is missing. A zero BASE stops the run with
+    # a division by zero, since no rule says what the result should be.
     derivation:
       compute:
         expr: "100 * (AVAL - BASE) / BASE"
