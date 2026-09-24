@@ -1,4 +1,4 @@
-# New Anti-Cancer Therapy
+# Derive the new anti-cancer therapy start date
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-new-therapy.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -21,7 +21,9 @@ category (`PRCAT`), subcategory (`PRSCAT`), and start date (`PRSTDTC`).
   RELATED` and `PRSCAT` equal to `ON TREATMENT`); it is absent when the
   subject started no qualifying therapy during the study. Therapy
   recorded as `PRIOR TREATMENT` does not qualify, nor do procedures
-  given for reasons other than the cancer.
+  given for reasons other than the cancer. A qualifying record with no
+  start date is skipped, and one that starts on the treatment start
+  date itself counts, with study day 1.
 - `NACTDY` is the study day of `NACTDT` counted from `TRTSDT`, with the
   treatment start date itself as day 1; it is absent when `NACTDT` is
   absent.

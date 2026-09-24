@@ -78,8 +78,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 5
-      max: 5
+      min: 7
+      max: 7
   - all_or_none:
       id: therapy-date-day-and-flag-agree
       columns: [NACTDT, NACTDY, NACTFL]
