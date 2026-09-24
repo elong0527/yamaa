@@ -14,23 +14,23 @@ with category and start date, and adverse event rows with end date.
 
 **Variables:**
 
-- `RFICDTC` is the consent date as collected; always present.
-- `RFXSTDTC` is the earliest non-missing exposure start date;
-  missing when no exposure row carries a start date.
-- `RFXENDTC` is the end date of the last exposure row among rows
-  with a non-missing end date, ordered by end date then sequence
-  number; missing when none carries an end date.
-- `RFSTDTC` is the reference start date; repeats the first
-  exposure date, so missing whenever the first exposure date is
-  missing.
-- `RFENDTC` is the latest of the last exposure end date, the
-  latest disposition start date from rows coded `DISPOSITION EVENT`
-  in category, and the latest adverse event end date; missing when
-  all three are missing.
+- `RFICDTC` is the consent date as collected; it is required, so a
+  subject with no consent date stops the run.
+- `RFXSTDTC` is the earliest exposure start date; missing when no
+  exposure row carries a start date.
+- `RFXENDTC` is the latest exposure end date; missing when no exposure
+  row carries an end date.
+- `RFSTDTC` is the reference start date, taken here as the first
+  exposure date, so it is missing whenever `RFXSTDTC` is.
+- `RFENDTC` is the latest of three dates: the last exposure end date,
+  the latest start date of a disposition row whose category is
+  `DISPOSITION EVENT`, and the latest adverse event end date. A missing
+  one is skipped; it is missing only when all three are.
 
-**Note:** only rows coded `DISPOSITION EVENT` count toward the
-reference end date; exposure, disposition, and adverse event rows
-are read within the same subject only, and an enrolled subject with
-no exposure has missing exposure and reference start dates.
+**Note:** exposure, disposition, and adverse event rows count only for
+the subject with the same study and subject identifiers, so the same
+subject identifier in two studies gives two independent records, and a
+subject with no exposure has missing exposure and reference start
+dates.
 
 **Standard:** SDTM | **Domain:** DM
