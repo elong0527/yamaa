@@ -9,19 +9,17 @@ own elements: `VSTESTCD`, `VSORRES`, `VSDTC`, and `EPOCH`.
 
 **Input:** collected vital-signs rows with test, result, and collection
 date-time; and the subject's elements with the start and end of each
-element. Subject 001 is dosed at 09:30 on 2026-01-06; subject 002 stops
-treatment early and enters follow-up on 2026-01-20.
+element.
 
 **Variables:**
 
-- `VSTESTCD` is the test short name, carried over unchanged.
-- `VSORRES` is the result in original units, carried over unchanged.
 - `VSDTC` is the collection date-time, carried over unchanged; missing
   when no date was collected.
 - `EPOCH` is the trial period of the element in progress at the
   collection date-time: the element whose start is on or before the
-  collection and whose next element has not yet started. It is missing
-  when the reading has no date or falls before the first element start.
+  collection and whose end is on or after it. It is missing when the
+  reading has no date or only a partial one, or falls outside every
+  element, such as before the first element starts.
 
 **Note:** the first-dose day shows why a date-time matters: a pre-dose
 reading on that day belongs to screening and a post-dose reading to
