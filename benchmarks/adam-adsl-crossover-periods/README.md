@@ -1,4 +1,4 @@
-# Crossover Periods
+# Derive period-scoped treatments and dates across a washout
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-crossover-periods.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -29,9 +29,10 @@ a sequence number (`EXSEQ`).
   date; empty when the subject has no such record.
 - `TRT01A` is the `EXTRT` from the subject's earliest
   exposure record with `APERIOD` of `1`, earliest by `EXSTDTC`
-  with the lower `EXSEQ` breaking ties on the same day;
-  either `VITAMIN D3` or `PLACEBO`, and empty when the subject
-  has no period-one exposure.
+  with the lower `EXSEQ` breaking ties on the same day and a
+  record with no start date sorting last; either `VITAMIN D3`
+  or `PLACEBO`, and empty when the subject has no period-one
+  exposure.
 - `TRT02A` is the `EXTRT` from the subject's earliest
   exposure record with `APERIOD` of `2`, chosen the same way;
   either `VITAMIN D3` or `PLACEBO`, and empty when the
