@@ -26,6 +26,8 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
+  # The documented collection order of the forms, then the form repeat,
+  # number each subject's records for LBSEQ.
   - name: FORMORD
     type: int
     label: Collection Order
@@ -87,6 +89,9 @@ columns:
     type: str
     label: Original Units
 
+  # Known dipstick spellings, in any letter case, fold to one standard grade;
+  # any other result is kept as collected. The uppercased copy lets the check
+  # ignore letter case, as the case-insensitive dictionary does.
   - name: LBORRES_U
     type: str
     label: Collected Result Uppercased
@@ -117,19 +122,22 @@ columns:
               missing: null
         - otherwise: LBORRES
 
+  # A result that is not a plain number (a grade, or a censored value such as
+  # <0.1) cannot convert to a number and is left empty.
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
       value:
         source: LBSTRESC
-      missing:
+      missing: null
 
   - name: LBSTRESU
     type: str
     label: Standard Units
     derivation: LBORRESU
 
+  # A censored result: below (<) or above (>) the quantification limit.
   - name: LBNRIND
     type: str
     label: Reference Range Indicator
