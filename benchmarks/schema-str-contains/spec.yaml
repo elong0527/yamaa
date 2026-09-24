@@ -33,9 +33,7 @@ columns:
     type: str
     label: Criterion 1 Evaluation Result Flag
     derivation:
-      case:
-        - when: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
-          then: {literal: Y}
+      flag: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
     verifications:
       allowed_values:
         values: [Y]
@@ -44,6 +42,4 @@ columns:
     type: str
     label: Dermatologic Event Flag
     derivation:
-      case:
-        - when: "str_contains(AE.AEDECOD, 'DERM|ERYTHEMA')"
-          then: {literal: Y}
+      flag: "str_contains(AE.AEDECOD, 'DERM|ERYTHEMA')"

@@ -30,6 +30,9 @@ columns:
     label: Subject Identifier for the Study
     derivation: USUBJID
 
+  # The alphabetically first and last race a subject marked. They differ
+  # exactly when several distinct races were marked, and both are blank when
+  # no race was marked.
   - name: RACEMIN
     type: str
     label: Alphabetically First Reported Race
@@ -50,6 +53,7 @@ columns:
         filter: "ODM.ItemOID = 'IT.DM.RACE'"
         expr: "MAX(ODM.Value)"
 
+  # One ethnicity record per subject; a second one stops the run.
   - name: ETHNICRAW
     type: str
     label: Collected Ethnicity
@@ -60,6 +64,8 @@ columns:
         filter: "ODM.ItemOID = 'IT.DM.ETHNIC'"
         expr: "ONLY(ODM.Value)"
 
+  # Several distinct races give MULTIPLE. Otherwise the one race is mapped to
+  # controlled terms, and no race or an answer not listed gives a blank.
   - name: RACE
     type: str
     label: Race
@@ -87,6 +93,7 @@ columns:
           NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE,
           OTHER, NOT REPORTED, UNKNOWN]
 
+  # No ethnicity record, or an answer not listed, gives a blank.
   - name: ETHNIC
     type: str
     label: Ethnicity

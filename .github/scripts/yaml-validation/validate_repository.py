@@ -82,17 +82,18 @@ __all__ = [
 REGEX_CONTRACT = 'regex'
 REGEX_CONTRACT_VERSION = '2.0.0'
 
-try:
-    from yamaa.regex import (
-        RegexError as _PortableRegexError,
-        capture_group_count as _portable_group_count,
-        compile_pattern as _portable_compile,
-        full_match as _portable_full_match,
-    )
-except ImportError:
-    _portable_binding = None
-else:
-    _portable_binding = True
+# The portable regex binding is imported lazily on first use. Importing the
+# yamaa package eagerly pulls in its runtime dependencies (polars), which
+# repository validation only needs when it actually compiles a pattern;
+# keeping the import lazy drops this module's import cost from ~90MB to
+# ~20MB for consumers that never touch regular expressions.
+# _portable_binding is None until the first require_regex_binding() call
+# attempts the import, then True (loaded) or False (unavailable).
+_portable_binding = None
+_PortableRegexError = None
+_portable_group_count = None
+_portable_compile = None
+_portable_full_match = None
 
 
 class RegexBindingUnavailable(Exception):
@@ -120,8 +121,26 @@ def regex_contract_requirement():
 
 
 def require_regex_binding():
-    """Return the portable binding, or fail rather than substitute another."""
+    """Import the portable binding on first use, or fail rather than substitute another."""
+    global _portable_binding, _PortableRegexError
+    global _portable_group_count, _portable_compile, _portable_full_match
     if _portable_binding is None:
+        try:
+            from yamaa.regex import (
+                RegexError as binding_error,
+                capture_group_count as binding_group_count,
+                compile_pattern as binding_compile,
+                full_match as binding_full_match,
+            )
+        except ImportError:
+            _portable_binding = False
+        else:
+            _PortableRegexError = binding_error
+            _portable_group_count = binding_group_count
+            _portable_compile = binding_compile
+            _portable_full_match = binding_full_match
+            _portable_binding = True
+    if not _portable_binding:
         raise RegexBindingUnavailable(
             "unsupported_regex_engine under R022: this validator requires "
             f"{regex_contract_requirement()} and does not fall back to "
@@ -313,6 +332,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'unknown_window'): {'window'},
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
+    ('R007', 'missing_value_required'): {'false_value'},
     ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
@@ -487,18 +507,36 @@ class PredicateSemanticIssue(str):
 # source, and validate_grammar_contracts fails when the two drift apart.
 # The parser itself is the runtime's: `yamaa.expressions.predicates` already
 # returns this validator's AST shape, so this file owns no second grammar.
-try:
-    from yamaa.expressions.predicates import (
-        COMPARISON_OPERATORS as PREDICATE_COMPARISON_OPERATORS,
-        RESERVED_NAMES as PREDICATE_RESERVED_NAMES,
-        PredicateError,
-        parse_predicate,
-    )
-except ImportError as error:
-    raise SystemExit(
-        "validate_repository.py requires the yamaa package "
-        "(run: uv sync --project python --locked)"
-    ) from error
+# The import is lazy (see the regex binding note above): importing the yamaa
+# package pulls in polars, which this module only needs when it actually
+# parses a predicate.
+PREDICATE_COMPARISON_OPERATORS = None
+PREDICATE_RESERVED_NAMES = None
+PredicateError = None
+parse_predicate = None
+
+
+def _ensure_predicate_binding():
+    """Import yamaa.expressions.predicates on first use, or exit when unavailable."""
+    global PREDICATE_COMPARISON_OPERATORS, PREDICATE_RESERVED_NAMES
+    global PredicateError, parse_predicate
+    if parse_predicate is None:
+        try:
+            from yamaa.expressions.predicates import (
+                COMPARISON_OPERATORS as comparison_operators,
+                RESERVED_NAMES as reserved_names,
+                PredicateError as predicate_error,
+                parse_predicate as parse,
+            )
+        except ImportError as error:
+            raise SystemExit(
+                "validate_repository.py requires the yamaa package "
+                "(run: uv sync --project python --locked)"
+            ) from error
+        PREDICATE_COMPARISON_OPERATORS = comparison_operators
+        PREDICATE_RESERVED_NAMES = reserved_names
+        PredicateError = predicate_error
+        parse_predicate = parse
 
 
 def predicate_operand_type(operand, resolver, errors):
@@ -1955,7 +1993,23 @@ def _check_single_type(data, t, env, path, fragment=False):
                 elif isinstance(reg_def, list): # it's a class inline
                     # Validate against an anonymous class
                     if not isinstance(val, dict):
-                        errors.append(f"ERROR: {path}.{key}: expected dict, got {type(val).__name__}")
+                        actual = (
+                            'mapping' if isinstance(val, dict)
+                            else 'sequence' if isinstance(val, list)
+                            else 'null' if val is None
+                            else type(val).__name__
+                        )
+                        errors.append(
+                            validation_diagnostic(
+                                f"{path}.{key}",
+                                'invalid_field_type',
+                                f"expected {key}, got {actual}",
+                                context={
+                                    'expected': key,
+                                    'actual': actual,
+                                },
+                            )
+                        )
                         continue
                     allowed_keys = set()
                     for field in reg_def:
@@ -2827,6 +2881,7 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
 
 
 def predicate_identifier_names(text):
+    _ensure_predicate_binding()
     try:
         ast = parse_predicate(text)
     except PredicateError:
@@ -3775,6 +3830,7 @@ def valid_temporal_literal(kind, text):
     for ``date``, ``YYYY-MM-DDThh:mm[:ss]`` for ``datetime``, and both a
     real date on the calendar.
     """
+    _ensure_csv_binding()
     if not isinstance(text, str):
         return False
     if kind == 'date':
@@ -6082,6 +6138,7 @@ def predicate_resolver(unqualified=None, qualified=None):
 
 
 def validate_predicate_at(text, path, resolver):
+    _ensure_predicate_binding()
     try:
         ast = parse_predicate(text)
     except PredicateError as exc:
@@ -6186,6 +6243,21 @@ def validate_expression_predicates(
                     f"{item_path}.then",
                     resolver,
                     datasets,
+                )
+            )
+
+    elif keyword == 'flag' and isinstance(payload, (dict, str)):
+        # REQ-1256: a bare predicate string is the condition. R006 expands
+        # it to the mapping form when the engine loads the spec, so both
+        # spellings report at the canonical condition path.
+        condition = (
+            payload if isinstance(payload, str) else payload.get('condition')
+        )
+        condition_path = f"{path}.flag.condition"
+        if isinstance(condition, str):
+            errors.extend(
+                validate_predicate_at(
+                    condition, condition_path, resolver
                 )
             )
 
@@ -7153,6 +7225,17 @@ def derive_binding_reference_names(derivation):
                             )
                             visit(item.get('then'))
                     return
+                if operation == 'flag' and isinstance(payload, (dict, str)):
+                    # The values are literals and name nothing; only the
+                    # predicate names variables. A bare string is the
+                    # condition (REQ-1256).
+                    condition = (
+                        payload
+                        if isinstance(payload, str)
+                        else payload.get('condition')
+                    )
+                    names.extend(predicate_identifier_names(condition))
+                    return
                 if operation == 'lookup' and isinstance(payload, dict):
                     key_base = payload.get('key_base')
                     entries = key_base if isinstance(key_base, list) else [key_base]
@@ -7728,6 +7811,11 @@ def validate_expression_reference_bindings(expression, path, context):
                     )
                 )
         return errors
+    if keyword == 'flag' and isinstance(payload, (dict, str)):
+        # The condition, bare or under condition, is a predicate owned by
+        # the predicate parser; the values are literals and name nothing
+        # (REQ-1256).
+        return []
     if keyword == 'str_concat' and isinstance(payload, dict):
         errors = []
         sources = payload.get('sources')
@@ -8075,6 +8163,23 @@ def validate_expression_static_semantics(expression, path, context):
                         },
                     )
                 )
+        return errors
+
+    if (
+        keyword == 'flag'
+        and isinstance(payload, dict)
+        and 'false_value' in payload
+        and 'missing_value' not in payload
+    ):
+        # REQ-1258: a flag that names its false value names its unknown one.
+        errors.append(
+            validation_diagnostic(
+                f"{path}.flag.missing_value",
+                'missing_value_required',
+                'missing_value is required with false_value',
+                context={'false_value': payload['false_value']},
+            )
+        )
         return errors
 
     if keyword == 'date_impute' and isinstance(payload, dict):
@@ -9746,7 +9851,11 @@ def validate_expected_error_contracts(root: Path):
                 continue
             spec = _desugar_bare_derivations(spec)
             for path in paths:
-                if condition in {'missing_required_field', 'month_required'}:
+                if condition in {
+                    'missing_required_field',
+                    'missing_value_required',
+                    'month_required',
+                }:
                     # The diagnostic points at the field that should exist.
                     continue
                 if not spec_path_exists(spec, path):
@@ -9765,19 +9874,46 @@ CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 # `scan_records` reads records of text-or-missing under the unified
 # missing rule, and `render_records` writes the exact quoting condition.
 # This file owns no second dialect.
-try:
-    from yamaa.io.csv import (
-        CsvProfileFailure,
-        fixed_point,
-        render_records,
-        scan_records,
-    )
-    from yamaa.models import DateTimeValue, DateValue, convert_value
-except ImportError as error:
-    raise SystemExit(
-        "validate_repository.py requires the yamaa package "
-        "(run: uv sync --project python --locked)"
-    ) from error
+# The import is lazy (see the regex binding note above): importing the yamaa
+# package pulls in polars, which this module only needs for csv-profile checks.
+CsvProfileFailure = None
+fixed_point = None
+render_records = None
+scan_records = None
+DateTimeValue = None
+DateValue = None
+convert_value = None
+
+
+def _ensure_csv_binding():
+    """Import yamaa.io.csv and yamaa.models on first use, or exit when unavailable."""
+    global CsvProfileFailure, fixed_point, render_records, scan_records
+    global DateTimeValue, DateValue, convert_value
+    if scan_records is None:
+        try:
+            from yamaa.io.csv import (
+                CsvProfileFailure as csv_failure,
+                fixed_point as profile_fixed_point,
+                render_records as profile_render_records,
+                scan_records as profile_scan_records,
+            )
+            from yamaa.models import (
+                DateTimeValue as model_datetime_value,
+                DateValue as model_date_value,
+                convert_value as model_convert_value,
+            )
+        except ImportError as error:
+            raise SystemExit(
+                "validate_repository.py requires the yamaa package "
+                "(run: uv sync --project python --locked)"
+            ) from error
+        CsvProfileFailure = csv_failure
+        fixed_point = profile_fixed_point
+        render_records = profile_render_records
+        scan_records = profile_scan_records
+        DateTimeValue = model_datetime_value
+        DateValue = model_date_value
+        convert_value = model_convert_value
 
 
 def canonical_float_text(value: str, decimals=None):
@@ -9788,6 +9924,7 @@ def canonical_float_text(value: str, decimals=None):
     itself comes from the runtime: R011's shortest text with no declared
     precision, R020's exact display rounding with one.
     """
+    _ensure_csv_binding()
     try:
         number = float(value)
     except ValueError:
@@ -9822,6 +9959,7 @@ def canonical_temporal_text(value: str, declared: str):
     from the runtime's strict parsers; the shape patterns below only route
     the message, telling a misspelled field from a date no calendar admits.
     """
+    _ensure_csv_binding()
     if declared == 'date':
         parsed_type = DateValue
         pattern = CANONICAL_DATE
@@ -9844,6 +9982,7 @@ def canonical_temporal_text(value: str, declared: str):
 
 def validate_csv_artifact(csv_path: Path, label: str, spec):
     """Check one expected artifact against R020's csv profile."""
+    _ensure_csv_binding()
     errors = []
     try:
         raw = csv_path.read_bytes()
@@ -10391,6 +10530,7 @@ def string_template_shape(parts):
 
 
 def decide_predicate(text):
+    _ensure_predicate_binding()
     try:
         ast = parse_predicate(text)
     except PredicateError:
@@ -10506,6 +10646,7 @@ def grammar_defined_symbols(document):
 
 def grammar_vocabulary_errors(contract, document, label):
     """Compare a contract's closed vocabulary with this validator's."""
+    _ensure_predicate_binding()
     errors = []
     vocabulary = document.get('vocabulary')
     if not isinstance(vocabulary, dict):

@@ -557,6 +557,37 @@ def _expression_info(
                         for name in predicate_identifiers(ast)
                     )
             nest(item.get("then"), f"{item_path}.then")
+    elif operation == "flag" and isinstance(payload, (Mapping, str)):
+        # REQ-1256: a bare predicate string is the condition. R006 expands
+        # it to the mapping form at load, so both spellings report at the
+        # canonical condition path, as the handler does.
+        condition = payload if isinstance(payload, str) else payload.get("condition")
+        condition_path = f"{operation_path}.condition"
+        if isinstance(condition, str):
+            ast = _parse_predicate_at(condition, condition_path, diagnostics)
+            if ast is not None:
+                references.extend(
+                    _Reference(
+                        name,
+                        condition_path,
+                        requirement="REQ-0189",
+                    )
+                    for name in predicate_identifiers(ast)
+                )
+        if (
+            isinstance(payload, Mapping)
+            and "false_value" in payload
+            and "missing_value" not in payload
+        ):
+            # REQ-1258: a flag that names its false value names its unknown one.
+            diagnostics.append(
+                _diagnostic(
+                    "missing_value_required",
+                    f"{operation_path}.missing_value",
+                    {"false_value": payload["false_value"]},
+                    requirement="REQ-1258",
+                )
+            )
 
     return _ExpressionInfo(
         references=_deduplicate_references(references),
@@ -1176,6 +1207,17 @@ def _derive_reference_names(derivation: object) -> list[str]:
                         else:
                             add_predicate_names(item.get("when"))
                             visit(item.get("then"))
+                    return
+                if operation == "flag" and isinstance(payload, (Mapping, str)):
+                    # The values are literals and name nothing; only the
+                    # predicate names variables. A bare string is the
+                    # condition (REQ-1256).
+                    condition = (
+                        payload
+                        if isinstance(payload, str)
+                        else payload.get("condition")
+                    )
+                    add_predicate_names(condition)
                     return
                 if operation == "lookup" and isinstance(payload, Mapping):
                     key_base = payload.get("key_base")

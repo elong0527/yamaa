@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, ELDFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  # The flag names a value for a false condition but none for an unknown
+  # one.
+  - name: ELDFL
+    type: str
+    label: Elderly Flag
+    derivation:
+      flag:
+        condition: "AGE >= 65"
+        false_value: "N"

@@ -9,8 +9,10 @@ version: "1.0"
 coverage:
   aggregate: [negative-sum-non-numeric]
   baseline_flag: [negative-tied-baseline]
-  case: [negative-review-arithmetic]
+  case: [negative-literal-structure]
   first_available: [negative-first-available-self]
+  flag: [negative-flag-condition, negative-flag-missing-value,
+         negative-flag-payload]
   compute: [negative-formula-flag]
   cut: [negative-cut-coded]
   date_diff: [negative-date-diff-endpoints,

@@ -25,8 +25,8 @@ was missed, and any dose adjustment.
   not taken.
 - `ECSTDTC` and `ECENDTC` are the dosing day, since one record covers
   one day.
-- `ECADJ` is the adjustment reason in effect on the dosing day, for
-  example `DOSE REDUCED`; blank when the dose was never adjusted.
+- `ECADJ` is the adjustment reason the log records for that day, for
+  example `DOSE REDUCED`; blank when the day records none.
 
 **Note:** a dose reduced after an adverse event carries the adjustment
 reason (`DOSE REDUCED`), not the event. A missed day keeps the

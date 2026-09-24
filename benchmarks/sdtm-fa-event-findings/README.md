@@ -8,27 +8,31 @@
 `FALNKID`, and `FADTC` for findings collected about individual
 adverse events on a supplementary form, in Findings About (FA).
 
-**Input:** `input/odm.csv` is long-form ODM item data: one row per
-collected item, identified by study (`StudyOID`), subject
-(`SubjectKey`), event (`StudyEventOID` plus its repeat key),
-item group, and item (`ItemOID`), with the collected answer in
-`Value`. Each adverse event is one event occurrence: the event
-repeat key distinguishes the two rashes, and the findings
-collected for an event ride on the same occurrence. The
-collected `IT.FA.AELNKID` item carries the link identifier
-shared with the adverse event record, whose term is the
-`IT.AE.AETERM` item on that same occurrence. No `dm.csv` is
-included: the study and subject identifiers come straight from
-the ODM rows, and no demographic values are needed.
+**Input:** long-form Operational Data Model (ODM) item data: one row per
+collected item, identified by study (`StudyOID`), subject (`SubjectKey`),
+event (`StudyEventOID` plus its repeat key), item group, and item
+(`ItemOID`), with the collected answer in `Value`. Each adverse event is one
+event occurrence, and the findings collected about it ride on the same
+occurrence. The findings form's `IT.FA.AELNKID` item carries the link
+identifier shared with the adverse event record, whose term is the
+`IT.AE.AETERM` item on that same occurrence. The study and subject
+identifiers come straight from the ODM rows; no demographics input is
+needed.
 
 **Variables:**
 
+- `FASEQ` numbers the subject's records by linked event, then by test
+  order (`LOC`, `SIZE`, `BIOPSY`); the collected result breaks any
+  remaining ties so the numbering is fully determined.
 - `FATESTCD` is `LOC` for the location record, `SIZE` for the size
-  record, and `BIOPSY` for the biopsy record.
+  record, and `BIOPSY` for the biopsy record. A test with no answer on
+  the form has no record.
 - `FATEST` is `Location`, `Size`, and `Biopsied` respectively.
-- `FAOBJ` is the event term of the linked adverse event, read
-  from the `IT.AE.AETERM` item on the same event occurrence
-  (both events here are a rash).
+- `FAOBJ` is the event term of the linked adverse event, read from the
+  `IT.AE.AETERM` item on the same event occurrence. Every event occurrence
+  must carry that term: one without it, such as a findings form with no
+  matching event, fails the run instead of writing a record with no event
+  term.
 - `FACAT` is always `AE`.
 - `FAORRES` is the answer as recorded on the form.
 - `FAORRESU` is the size unit, on `SIZE` records only.
@@ -39,17 +43,9 @@ the ODM rows, and no demographic values are needed.
 - `FALNKID` carries the link identifier shared with the linked
   adverse event record, tying each finding to its specific event.
 - `FADTC` is the date the findings form was collected.
-- `FASEQ` numbers the subject's records by linked event, then by
-  test order (`LOC`, `SIZE`, `BIOPSY`); the collected result breaks
-  any remaining ties so the numbering is fully determined.
-- An adverse event with no findings form has no FA records.
-- Every findings group must belong to a collected adverse event:
-  `FAOBJ` names that event's term, and a group with no matching
-  event fails the run instead of writing a record with no event
-  term.
 
-**Note:** the two rash events on one subject share the same event
-term, so `FAOBJ` alone does not distinguish them; `FALNKID` is
-what ties each finding to its specific event record.
+**Note:** an adverse event with no findings form has no FA records. Two
+events can share the same term, so `FAOBJ` alone does not distinguish them;
+`FALNKID` is what ties each finding to its specific event record.
 
 **Standard:** SDTM | **Domain:** FA

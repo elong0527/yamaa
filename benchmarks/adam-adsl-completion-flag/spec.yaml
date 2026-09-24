@@ -43,10 +43,10 @@ columns:
     type: str
     label: Completion Flag
     derivation:
-      case:
-        - when: "COMPREC IS NOT NULL"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "COMPREC IS NOT NULL"
+        false_value: "N"
+        missing_value: "N"
     verifications:
       allowed_values:
         values: [Y, N]
@@ -55,8 +55,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 8
+      max: 8
   - implies:
       id: completer-received-treatment
       when: "COMPFL = 'Y'"

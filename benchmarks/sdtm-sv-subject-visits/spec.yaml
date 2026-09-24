@@ -26,6 +26,8 @@ rows:
     dataset: ODM
     # One row per study-event occurrence: the repeat key keeps repeated
     # unscheduled visits as separate rows instead of silently merging them.
+    # Both carry VISITNUM 99, so a subject's second one then stops the run on
+    # a duplicate key.
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.StudyEventRepeatKey]
     derivations:

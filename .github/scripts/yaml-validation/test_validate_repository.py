@@ -214,6 +214,10 @@ class TestTextSourceBoundary(unittest.TestCase):
 
 
 class TestPredicateLanguage(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        VALIDATOR._ensure_predicate_binding()
+
     def test_parses_precedence_compounds_and_all_literal_types(self):
         predicate = (
             "NOT FLAG = 'N' OR "
@@ -1174,6 +1178,30 @@ class TestStaticSemanticContracts(unittest.TestCase):
         return VALIDATOR.validate_expression_static_semantics(
             expression, 'spec.columns.X.derivation', self.context()
         )
+
+    def test_flag_false_value_requires_missing_value(self):
+        # REQ-1258: missing_value may repeat false_value, name another
+        # value, or be null; it may not be absent.
+        condition = {'condition': 'B > 1'}
+        [error] = self.validate({'flag': {**condition, 'false_value': 'N'}})
+        self.assertEqual(error.condition, 'missing_value_required')
+        self.assertEqual(
+            error.path, 'spec.columns.X.derivation.flag.missing_value'
+        )
+        self.assertEqual(error.context, {'false_value': 'N'})
+        for missing_value in ('N', 'U', None):
+            with self.subTest(missing_value=missing_value):
+                self.assertEqual(
+                    self.validate({'flag': {
+                        **condition,
+                        'false_value': 'N',
+                        'missing_value': missing_value,
+                    }}),
+                    [],
+                )
+        for flag in ('B > 1', condition, {**condition, 'missing_value': 'U'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(self.validate({'flag': flag}), [])
 
     def test_window_order_by_required(self):
         for operation in (
@@ -4958,6 +4986,7 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertEqual(VALIDATOR.REGEX_CONTRACT_VERSION, '2.0.0')
 
     def test_the_replay_reads_through_the_shared_package_binding(self):
+        VALIDATOR.require_regex_binding()
         from yamaa import regex as package_binding
 
         self.assertIs(
@@ -4970,7 +4999,7 @@ class TestRegularExpressionContract(unittest.TestCase):
     def test_missing_binding_fails_rather_than_falling_back(self):
         saved = VALIDATOR._portable_binding
         try:
-            VALIDATOR._portable_binding = None
+            VALIDATOR._portable_binding = False
             with self.assertRaises(VALIDATOR.RegexBindingUnavailable) as caught:
                 VALIDATOR.compile_regex('a')
         finally:
@@ -6631,6 +6660,10 @@ bad_field: "what"
 
 
 class TestCsvProfile(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        VALIDATOR._ensure_csv_binding()
+
     def parse_render(self, data):
         records = VALIDATOR.scan_records(data)
         return VALIDATOR.render_records(records[0], records[1:]).decode('utf-8')
@@ -7402,6 +7435,42 @@ class TestCorrelatedLookupFilters(unittest.TestCase):
             'spec.columns.AVAL.derivation', VALIDATOR.predicate_resolver(), datasets,
         )
         self.assertEqual([e.condition for e in errors], ['incompatible_input_type'])
+
+
+class TestFlagPredicates(unittest.TestCase):
+    """Both flag spellings reach the predicate checks (REQ-1256)."""
+
+    def errors(self, flag):
+        return VALIDATOR.validate_expression_predicates(
+            {'flag': flag}, 'spec.columns.ELDFL.derivation',
+            VALIDATOR.predicate_resolver({'AGE': 'int'}), {},
+        )
+
+    def test_both_spellings_check_the_condition_at_its_field(self):
+        # R006 expands a bare string to the mapping form, so both report
+        # at the canonical condition path, as the engine does.
+        for flag in ('AGE >> 65', {'condition': 'AGE >> 65', 'false_value': 'N'}):
+            with self.subTest(flag=flag):
+                [error] = self.errors(flag)
+                self.assertEqual(error.condition, 'invalid_predicate')
+                self.assertEqual(
+                    error.path, 'spec.columns.ELDFL.derivation.flag.condition'
+                )
+
+    def test_both_spellings_resolve_their_identifiers(self):
+        for flag in ('AGEX >= 65', {'condition': 'AGEX >= 65'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    [e.condition for e in self.errors(flag)], ['unknown_field']
+                )
+
+    def test_both_spellings_name_their_dependencies(self):
+        for flag in ('AOCCSEQ = 1', {'condition': 'AOCCSEQ = 1'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    VALIDATOR.derive_binding_reference_names({'flag': flag}),
+                    ['AOCCSEQ'],
+                )
 
 
 class TestKeyColumnOrder(unittest.TestCase):

@@ -2,7 +2,9 @@
 
 `first_available`, `greatest`, `least`, and `case` select one already-computed value
 rather than compute a new one, so each retains the selected value's type
-(REQ-0316). `cut` is the one operation here that produces a new string.
+(REQ-0316). `flag` is the one-predicate shorthand for the common
+`case` that returns a flag value (REQ-1256). `cut` is the one operation
+here that produces a new string.
 """
 
 from __future__ import annotations
@@ -237,6 +239,63 @@ def _selected(
     return ValueResult(value=result.value, observations=observations)
 
 
+def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
+    def handler_value_or_missing(value: object) -> EvaluationResult:
+        return ValueResult(value=MISSING if value is None else value)
+
+    # REQ-1256: the one-predicate flag shorthand. A bare predicate string is
+    # the condition with the default values; a mapping names condition and
+    # any of true_value, false_value, missing_value. REQ-1257 gives the
+    # three-valued semantics: only TRUE takes true_value; FALSE takes
+    # false_value when present; UNKNOWN takes missing_value when present.
+    # Either absent value is missing, which is exactly the one-branch
+    # `case` the shorthand replaces; REQ-1258 lets missing_value be absent
+    # only when false_value is absent too.
+    if isinstance(payload, str):
+        payload = {"condition": payload}
+    if not isinstance(payload, Mapping):
+        return _invalid_payload(
+            "flag", "a predicate string or a mapping with a condition"
+        )
+    condition = payload.get("condition")
+    if not isinstance(condition, str):
+        return _invalid_payload("flag", "a branch predicate in condition")
+    try:
+        ast = parse_predicate_cached(condition)
+    except PredicateError as error:
+        return expression_condition(
+            "validation",
+            "invalid_predicate",
+            {"predicate": condition, "position": error.position},
+            requirement="REQ-0188",
+            field="condition",
+        )
+    if "false_value" in payload and "missing_value" not in payload:
+        return expression_condition(
+            "validation",
+            "missing_value_required",
+            {"false_value": payload["false_value"]},
+            requirement="REQ-1258",
+            field="missing_value",
+        )
+    decided = evaluate_predicate(ast, resolver)
+    if isinstance(decided, ConditionResult):
+        path_suffix = "condition"
+        if decided.condition.path_suffix is not None:
+            path_suffix = f"{path_suffix}.{decided.condition.path_suffix}"
+        return ConditionResult(
+            condition=decided.condition.model_copy(update={"path_suffix": path_suffix})
+        )
+    assert isinstance(decided, PredicateValue)
+    # R004 three-valued logic: only TRUE selects the true value; unlike
+    # `case` with `otherwise`, UNKNOWN does not fall through to false_value.
+    if decided.value is TruthValue.TRUE:
+        return handler_value_or_missing(payload.get("true_value", "Y"))
+    if decided.value is TruthValue.FALSE:
+        return handler_value_or_missing(payload.get("false_value"))
+    return handler_value_or_missing(payload.get("missing_value"))
+
+
 def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
     if not isinstance(payload, Mapping):
         return _invalid_payload("cut", "a mapping")
@@ -303,5 +362,6 @@ def scalar_handlers(dispatcher: NestedDispatcher) -> dict[str, ExpressionHandler
         "greatest": _extreme("greatest", largest=True),
         "least": _extreme("least", largest=False),
         "case": _case(dispatcher),
+        "flag": _flag,
         "cut": _cut,
     }

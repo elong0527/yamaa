@@ -4,12 +4,11 @@
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** create one CM record per reported medication course from long-form
-ODM item data.
+Operational Data Model (ODM) item data.
 
 **Input:** each collected item has its own ODM row. Items belonging to one
-medication course share the subject, visit, and form repeat identifiers. The
-extract includes a non-CM item and an incomplete repeated group to exercise
-record selection.
+medication course share the subject, visit, visit repeat, and form repeat
+identifiers. Items from other forms contribute no CM record.
 
 **Variables:**
 
@@ -17,10 +16,11 @@ record selection.
 - `CMSTDTC` and `CMENDTC` come from the same medication occurrence; an
   ongoing course has a blank end date.
 - `CMROUTE` and `CMINDC` keep that occurrence's route and indication.
-- `CMSEQ` orders courses within a subject by visit and form repeat.
+- `CMSEQ` orders courses within a subject by visit (screening before
+  baseline), visit repeat, and form repeat.
 
-**Note:** Two medication groups at screening and a later group with a reused
-form repeat number remain distinct. Acetaminophen appears in two separate
-courses. A group without a reported treatment name contributes no CM record.
+**Note:** A form repeat number reused at a later visit starts a separate
+course, and a medication reported in two courses gives two records. A course
+without a reported treatment name contributes no CM record.
 
 **Standard:** SDTM | **Domain:** CM

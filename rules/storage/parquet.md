@@ -47,10 +47,10 @@ value.
 
 <a id="req-0736"></a>
 
-**REQ-0736.** A missing value is a Parquet null. A collected empty string is a
-present `BYTE_ARRAY` of zero length, which is not null. This is the same
-distinction `csv` draws between a bare field and two quote characters, carried
-by the container instead of by a convention.
+**REQ-0736.** Retired. The missing-vs-empty distinction is stated once in
+[REQ-1034](#req-1034): a Parquet null is the missing value and a present
+zero-length string is the collected empty string, in both directions. This
+identifier is never reused.
 
 #### Temporal values
 

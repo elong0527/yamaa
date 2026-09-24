@@ -41,6 +41,8 @@ columns:
     label: Relationship Identifier
 
 rows:
+  # One dataset-level row per study for each of TU and TR: the whole TU
+  # dataset relates to the whole TR dataset through their link variables.
   - id: tu_dataset
     dataset: TU
     group_by: [TU.STUDYID]
@@ -65,6 +67,9 @@ rows:
       RELTYPE: {literal: MANY}
       RELID: {literal: "1"}
 
+  # One record-level row per AE and CM record with a link identifier, which
+  # becomes RELID: records sharing it are related. A record without one gets
+  # no row.
   - id: ae_link
     dataset: AE
     filter: "AE.AELNKID IS NOT NULL"

@@ -2157,6 +2157,118 @@ def test_a_column_case_predicate_with_a_qualified_source_field_plans() -> None:
     assert [planned.column for planned in plan.columns] == ["K", "DTHFL"]
 
 
+def _flag_field(condition: str) -> HandledExpression:
+    return derivation(
+        {"flag": {"condition": condition, "false_value": "N", "missing_value": "N"}}
+    )
+
+
+def test_a_column_flag_predicate_naming_a_source_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    # REQ-0189 / REQ-1256: the flag condition names predicate identifiers
+    # like a case when does.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="DTHFL", type="str", derivation=_flag_field("DTHFL2 = 'Y'")),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unresolvable_name"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.condition",)
+    assert diagnostic.context == {
+        "identifier": "DTHFL2",
+        "suggestion": "SRC.DTHFL2",
+    }
+
+
+def test_a_bare_string_flag_condition_names_predicate_identifiers() -> None:
+    # REQ-1256: a bare predicate string is the condition; its identifiers
+    # are reported at the canonical flag.condition path R006 expands it to.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="DTHFL",
+                type="str",
+                derivation=derivation({"flag": "DTHFL2 = 'Y'"}),
+            ),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unresolvable_name"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.condition",)
+    assert diagnostic.context == {
+        "identifier": "DTHFL2",
+        "suggestion": "SRC.DTHFL2",
+    }
+
+
+def test_a_column_flag_with_false_value_requires_missing_value() -> None:
+    # REQ-1258: the rule is checked before any data is read.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="DTHFL",
+                type="str",
+                derivation=derivation(
+                    {"flag": {"condition": "SRC.DTHFL2 = 'Y'", "false_value": "N"}}
+                ),
+            ),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = raised.value.diagnostics
+    assert diagnostic.condition == "missing_value_required"
+    assert diagnostic.requirement == "REQ-1258"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.missing_value",)
+    assert diagnostic.context == {"false_value": "N"}
+
+
+def test_a_column_flag_with_a_qualified_source_field_plans() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="DTHFL", type="str", derivation=_flag_field("SRC.DTHFL2 = 'Y'")
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": _death_source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [planned.column for planned in plan.columns] == ["K", "DTHFL"]
+
+
 def test_a_row_case_predicate_naming_a_driver_field_suggests_the_qualified_spelling() -> (
     None
 ):

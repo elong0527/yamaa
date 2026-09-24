@@ -45,6 +45,8 @@ columns:
     label: Reason Not Dosed
     derivation: LOG.MISSREAS
 
+  # The tablets taken on a day the dose was taken. On a missed day no branch
+  # applies, so the dose is blank whatever the log holds.
   - name: ECDOSE
     type: int
     label: Dose

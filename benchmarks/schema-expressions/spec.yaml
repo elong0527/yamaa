@@ -1,0 +1,79 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: {path: input/dm.csv, types: {AGE: int, WT_SCR: int, WT_BL: int}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SEX, AGEGRP, COUNTRY, SUBJLBL, WTMAX, WTMIN]
+
+columns:
+  # A literal returns its declared value unchanged.
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {literal: YAMAA-01}
+
+  # A bare string is the source shorthand: it desugars to
+  # {source: DM.USUBJID} before registry dispatch.
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+
+  # Cut assigns each age to one left-closed band; a missing age takes the
+  # declared missing value.
+  - name: AGEGRP
+    type: str
+    label: Age Group
+    derivation:
+      cut:
+        source: DM.AGE
+        breaks: [18, 65]
+        labels: ['<18', '18-64', '65+']
+        missing: NOT REPORTED
+
+  # First_available returns the first non-missing source, or the declared
+  # missing value when every source is missing.
+  - name: COUNTRY
+    type: str
+    label: Country
+    derivation:
+      first_available:
+        sources: [DM.COUNTRY, DM.SITECNTY]
+        missing: UNKNOWN
+
+  # str_concat.sources nests expressions: literals sit beside sources.
+  - name: SUBJLBL
+    type: str
+    label: Subject Label
+    derivation:
+      str_concat:
+        sources:
+          - literal: "Subject "
+          - source: DM.SUBJID
+
+  # Greatest returns the largest non-missing source, or missing when none
+  # exist. The sources must be mutually comparable.
+  - name: WTMAX
+    type: int
+    label: Highest Recorded Weight
+    derivation:
+      greatest:
+        sources: [DM.WT_SCR, DM.WT_BL]
+
+  # Least returns the smallest non-missing source, or missing when none
+  # exist.
+  - name: WTMIN
+    type: int
+    label: Lowest Recorded Weight
+    derivation:
+      least:
+        sources: [DM.WT_SCR, DM.WT_BL]

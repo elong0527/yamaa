@@ -104,9 +104,7 @@ columns:
     type: str
     label: Analysis Record Flag 01
     derivation:
-      case:
-        - when: "AWRANK = 1"
-          then: {literal: Y}
+      flag: "AWRANK = 1"
 
 verifications:
   - unique:

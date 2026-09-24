@@ -1,0 +1,154 @@
+schema_version: "1.0"
+domain: TR
+keys: [STUDYID, USUBJID, TRSEQ]
+input:
+  TR_RAW:
+    path: input/tr_raw.csv
+    types: {TRSEQ: int, VISITNUM: int, TRDTC: date}
+
+output:
+  path: tr.csv
+  columns: [DOMAIN, STUDYID, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST,
+            TRORRES, TRORRESU, TRSTRESC, TRSTRESN, TRSTRESU, TRSTAT,
+            TRMETHOD, TREVAL, VISITNUM, TRDTC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: TR}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: TR_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: TR_RAW.USUBJID
+
+  - name: TRSEQ
+    type: int
+    label: Sequence Number
+    derivation: TR_RAW.TRSEQ
+    verifications:
+      not_missing: {}
+
+  - name: TRLNKID
+    type: str
+    label: Link ID
+    derivation: TR_RAW.TRLNKID
+
+  - name: TRTESTCD
+    type: str
+    label: Tumor Result Test Short Name
+    derivation: TR_RAW.TRTESTCD
+    verifications:
+      allowed_values:
+        values: [DIAMETER, TUMSTATE]
+
+  - name: TRTEST
+    type: str
+    label: Tumor Result Test Name
+    derivation: TR_RAW.TRTEST
+
+  - name: TRORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: TR_RAW.TRORRES
+
+  - name: TRORRESU
+    type: str
+    label: Original Units
+    derivation: TR_RAW.TRORRESU
+    verifications:
+      allowed_values:
+        values: [mm, cm]
+
+  - name: TRORRES_N
+    type: float
+    label: Collected Result as a Number
+    derivation:
+      value:
+        source: TR_RAW.TRORRES
+      missing:
+
+  - name: TRSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation:
+      case:
+        - when: "TR_RAW.TRORRES = 'TOO SMALL TO MEASURE'"
+          then: {literal: 5}
+        - when: "TR_RAW.TRTESTCD = 'DIAMETER' AND TR_RAW.TRORRESU = 'cm'"
+          then:
+            compute:
+              expr: "TRORRES_N * 10"
+        - when: "TR_RAW.TRTESTCD = 'DIAMETER'"
+          then:
+            compute:
+              expr: "TRORRES_N"
+
+  - name: TRSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation:
+      case:
+        - when: "TR_RAW.TRTESTCD = 'DIAMETER'"
+          then: TRSTRESN
+        - otherwise: TR_RAW.TRORRES
+
+  - name: TRSTRESU
+    type: str
+    label: Standard Units
+    derivation:
+      case:
+        - when: "TRSTRESN IS NOT NULL"
+          then: {literal: mm}
+    verifications:
+      allowed_values:
+        values: [mm]
+
+  - name: TRSTAT
+    type: str
+    label: Completion Status
+    derivation: TR_RAW.TRSTAT
+    verifications:
+      allowed_values:
+        values: [NOT DONE]
+
+  - name: TRMETHOD
+    type: str
+    label: Method of Test or Examination
+    derivation: TR_RAW.TRMETHOD
+
+  - name: TREVAL
+    type: str
+    label: Evaluator
+    derivation: TR_RAW.TREVAL
+
+  - name: VISITNUM
+    type: int
+    label: Visit Number
+    derivation: TR_RAW.VISITNUM
+
+  - name: TRDTC
+    type: date
+    label: Date/Time of Tumor Measurement
+    derivation: TR_RAW.TRDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, TRSEQ]
+  - row_count:
+      min: 10
+      max: 10
+  - implies:
+      id: standardized-unit-is-mm
+      when: "TRSTRESN IS NOT NULL"
+      then: "TRSTRESU = 'mm'"
+  - implies:
+      id: not-done-carries-no-result
+      when: "TRSTAT = 'NOT DONE'"
+      then: "TRSTRESC IS NULL"

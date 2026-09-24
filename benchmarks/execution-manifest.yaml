@@ -228,6 +228,15 @@ examples:
   negative-review-unknown-date:
     status: executable
     runtimes: ['python']
+  negative-flag-payload:
+    status: executable
+    runtimes: ['python']
+  negative-flag-condition:
+    status: executable
+    runtimes: ['python']
+  negative-flag-missing-value:
+    status: executable
+    runtimes: ['python']
   negative-adeg-rrr:
     status: executable
     runtimes: ['python']
@@ -645,6 +654,9 @@ examples:
   sdtm-dm-basic:
     status: executable
     runtimes: ['python']
+  sdtm-cm-collected-medications:
+    status: executable
+    runtimes: ['python']
   sdtm-cm-odm-repeated:
     status: executable
     runtimes: ['python']
@@ -771,6 +783,9 @@ examples:
   schema-column-composition:
     status: executable
     runtimes: ['python']
+  schema-expressions:
+    status: executable
+    runtimes: ['python']
   schema-handlers:
     status: executable
     runtimes: ['python']
@@ -793,6 +808,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-text-mapping-unmapped:
+    status: executable
+    runtimes: ['python']
+  schema-lifecycle:
     status: executable
     runtimes: ['python']
   schema-verification-log:
@@ -832,5 +850,8 @@ examples:
     status: executable
     runtimes: ['python']
   negative-sdtm-lb-unit-conversion:
+    status: executable
+    runtimes: ['python']
+  sdtm-tr-tumor-measurements:
     status: executable
     runtimes: ['python']

@@ -1,0 +1,8 @@
+phase: validation
+condition: invalid_predicate
+spec_paths:
+  - columns.ELDFL.derivation.flag.condition
+requirement: REQ-0188
+context:
+  predicate: "AGE >> 65"
+  position: 5

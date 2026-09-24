@@ -1,0 +1,28 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, ELDFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The flag's condition is not a valid predicate.
+  - name: ELDFL
+    type: str
+    label: Elderly Flag
+    derivation:
+      flag:
+        condition: "AGE >> 65"

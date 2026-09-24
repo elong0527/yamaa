@@ -18,18 +18,33 @@ fixtures:
   negative-review-arithmetic:
     rule: R004
     condition: invalid_predicate
-    spec_paths: ["columns.REVIEWFL.derivation.case[0].when"]
+    spec_paths: ["columns.REVIEWFL.derivation.flag.condition"]
     validator: predicate
   negative-review-date-text:
     rule: R004
     condition: incompatible_input_type
-    spec_paths: ["columns.REVIEWFL.derivation.case[0].when"]
+    spec_paths: ["columns.REVIEWFL.derivation.flag.condition"]
     validator: predicate
   negative-review-unknown-date:
     rule: R004
     condition: unknown_field
-    spec_paths: ["columns.REVIEWFL.derivation.case[0].when"]
+    spec_paths: ["columns.REVIEWFL.derivation.flag.condition"]
     validator: predicate
+  negative-flag-payload:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: ["columns.ELDFL.derivation.flag"]
+    validator: schema
+  negative-flag-condition:
+    rule: R004
+    condition: invalid_predicate
+    spec_paths: ["columns.ELDFL.derivation.flag.condition"]
+    validator: predicate
+  negative-flag-missing-value:
+    rule: R007
+    condition: missing_value_required
+    spec_paths: ["columns.ELDFL.derivation.flag.missing_value"]
+    validator: static_semantics
   negative-dose-intensity:
     rule: R013
     condition: aggregate_identifier_not_grouped

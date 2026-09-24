@@ -39,6 +39,9 @@ columns:
     type: str
     label: Reported Name of the Medication
 
+  # CODING is read at the same subject and sequence number. Its drug record
+  # and ATC code pick one dictionary row (a drug has one row per ATC code);
+  # a record with no coding, or a code not in the extract, stays blank.
   - name: CMDECOD
     type: str
     label: Standardized Medication Name

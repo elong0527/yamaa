@@ -13,7 +13,7 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema.yaml) | The specification entry point: `root_class`, `column_class`, inputs, outputs, rows, verifications, metadata |
 | [`schema_shared.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_shared.yaml) | Headers shared across schema files |
 | [`schema_derivation.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_derivation.yaml) | The `derivation` field: the expression plus its `missing` / `strict` layer |
-| [`schema_expression_core.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_core.yaml) | Core expressions: `source`, `literal`, `first_available`, `case` |
+| [`schema_expression_core.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_core.yaml) | Core expressions: `source`, `literal`, `first_available`, `case`, `flag` |
 | [`schema_expression_mapping.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_mapping.yaml) | Vocabulary mapping: `mapping`, `lookup`, `cut` |
 | [`schema_expression_str.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_str.yaml) | String expressions: `str_extract`, `str_concat`, `str_template`, `str_upper`, `str_lower`, `str_sentence`, `str_title` |
 | [`schema_expression_numeric.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_numeric.yaml) | Numeric expressions: the closed `compute` grammar (Numeric computation) and `round_half_away_from_zero` |

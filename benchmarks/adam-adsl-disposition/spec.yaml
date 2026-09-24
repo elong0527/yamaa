@@ -82,8 +82,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 6
+      max: 6
   - implies:
       id: discontinuation-has-reason
       when: "EOSSTT = 'DISCONTINUED'"

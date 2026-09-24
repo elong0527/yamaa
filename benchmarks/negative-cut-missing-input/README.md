@@ -10,10 +10,10 @@ with `younger` below 65 and `elderly` at or above 65.
 
 **Variables:**
 
-- `AGEGRP` would be `younger` below 65 and `elderly` at or above
-  65 from the subject's age. A subject with no recorded age cannot
-  be placed into an age band and no fallback is stated, so the run
-  is rejected with no artifact accepted.
+- `AGEGRP` would place each subject into `younger` (below 65) or
+  `elderly` (65 and over). A subject with no recorded age cannot be
+  placed into a band and no fallback is stated, so the run is rejected
+  with no artifact accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

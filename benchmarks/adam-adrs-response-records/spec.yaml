@@ -118,9 +118,7 @@ columns:
     type: str
     label: Analysis Record Flag 01
     derivation:
-      case:
-        - when: "WORSTORD = 1"
-          then: {literal: Y}
+      flag: "WORSTORD = 1"
     verifications:
       allowed_values:
         values: [Y]
