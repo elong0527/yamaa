@@ -1,0 +1,31 @@
+DOMAIN,STUDYID,USUBJID,QSSEQ,QSTESTCD,QSTEST,QSCAT,QSORRES,QSSTRESC,QSSTRESN,QSSTAT,QSREASND,QSBLFL,QSDRVFL,VISITNUM,QSDTC
+QS,MDD01,MDD01-1001,1,PHQ901,Little interest or pleasure in doing things,PHQ-9,More than half the days,2,2,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,2,PHQ902,"Feeling down, depressed, or hopeless",PHQ-9,Several days,1,1,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,3,PHQ903,"Trouble falling or staying asleep, or sleeping too much",PHQ-9,More than half the days,2,2,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,4,PHQ904,Feeling tired or having little energy,PHQ-9,Not at all,0,0,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,5,PHQ905,Poor appetite or overeating,PHQ-9,Several days,1,1,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,6,PHQ906,Feeling bad about yourself - or that you are a failure or have let yourself or your family down,PHQ-9,More than half the days,2,2,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,7,PHQ907,"Trouble concentrating on things, such as reading the newspaper or watching television",PHQ-9,Several days,1,1,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,8,PHQ908,Moving or speaking so slowly that other people could have noticed. Or the opposite - being so fidgety or restless that you have been moving around a lot more than usual,PHQ-9,More than half the days,2,2,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,9,PHQ909,"Thoughts that you would be better off dead, or of hurting yourself in some way",PHQ-9,Several days,1,1,,,Y,,1,2026-01-05
+QS,MDD01,MDD01-1001,10,PHQ9T,Patient Health Questionnaire 9 item total score,PHQ-9,,12,12,,,Y,Y,1,2026-01-05
+QS,MDD01,MDD01-1001,11,PHQ901,Little interest or pleasure in doing things,PHQ-9,Several days,1,1,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,12,PHQ902,"Feeling down, depressed, or hopeless",PHQ-9,Not at all,0,0,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,13,PHQ903,"Trouble falling or staying asleep, or sleeping too much",PHQ-9,Several days,1,1,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,14,PHQ904,Feeling tired or having little energy,PHQ-9,Several days,1,1,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,15,PHQ905,Poor appetite or overeating,PHQ-9,Not at all,0,0,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,16,PHQ906,Feeling bad about yourself - or that you are a failure or have let yourself or your family down,PHQ-9,More than half the days,2,2,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,17,PHQ907,"Trouble concentrating on things, such as reading the newspaper or watching television",PHQ-9,Several days,1,1,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,18,PHQ908,Moving or speaking so slowly that other people could have noticed. Or the opposite - being so fidgety or restless that you have been moving around a lot more than usual,PHQ-9,Not at all,0,0,,,,,2,2026-03-02
+QS,MDD01,MDD01-1001,19,PHQ909,"Thoughts that you would be better off dead, or of hurting yourself in some way",PHQ-9,,,,NOT DONE,LOGICALLY SKIPPED ITEM,,,2,2026-03-02
+QS,MDD01,MDD01-1002,1,PHQ901,Little interest or pleasure in doing things,PHQ-9,Several days,1,1,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,2,PHQ902,"Feeling down, depressed, or hopeless",PHQ-9,Several days,1,1,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,3,PHQ903,"Trouble falling or staying asleep, or sleeping too much",PHQ-9,Not at all,0,0,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,4,PHQ904,Feeling tired or having little energy,PHQ-9,More than half the days,2,2,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,5,PHQ905,Poor appetite or overeating,PHQ-9,Several days,1,1,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,6,PHQ906,Feeling bad about yourself - or that you are a failure or have let yourself or your family down,PHQ-9,Not at all,0,0,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,7,PHQ907,"Trouble concentrating on things, such as reading the newspaper or watching television",PHQ-9,Several days,1,1,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,8,PHQ908,Moving or speaking so slowly that other people could have noticed. Or the opposite - being so fidgety or restless that you have been moving around a lot more than usual,PHQ-9,More than half the days,2,2,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,9,PHQ909,"Thoughts that you would be better off dead, or of hurting yourself in some way",PHQ-9,Not at all,0,0,,,Y,,1,2026-01-06
+QS,MDD01,MDD01-1002,10,PHQ9T,Patient Health Questionnaire 9 item total score,PHQ-9,,8,8,,,Y,Y,1,2026-01-06
+QS,MDD01,MDD01-1002,11,QSALL,All Questionnaires,PHQ-9,,,,NOT DONE,SUBJECT REFUSED,,,2,2026-03-03

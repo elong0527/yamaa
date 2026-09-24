@@ -1,0 +1,274 @@
+schema_version: "1.0"
+domain: QS
+keys: [STUDYID, USUBJID, QSSEQ]
+input:
+  ODM: {path: input/odm.csv, types: {Value: int}}
+  VISITS: {path: input/visits.csv, types: {VISITNUM: int, VisitDate: date}}
+  NOTDONE: {path: input/notdone.csv}
+  ITEMS: {path: input/items.csv, types: {ItemOrder: int}}
+
+output:
+  path: qs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT,
+            QSORRES, QSSTRESC, QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL,
+            VISITNUM, QSDTC]
+  order_by: [STUDYID, USUBJID, QSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: QS}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: VISITNUM
+    type: int
+    label: Visit Number
+
+  - name: QSDTC
+    type: date
+    label: Date/Time of Collection
+
+  - name: QSTESTCD
+    type: str
+    label: Questionnaire Test Short Name
+
+  - name: QSTEST
+    type: str
+    label: Questionnaire Test Name
+
+  # The instrument is the same on every record, so the category is set
+  # once here instead of in each row template.
+  - name: QSCAT
+    type: str
+    label: Category for Questionnaires
+    derivation: {literal: "PHQ-9"}
+
+  # Non-output working columns: the item count and score sum live only on
+  # the total template's grouped rows. They are declared before the
+  # columns whose total-record derivations read them.
+  - name: ITEMCNT
+    type: int
+    label: Count of Answered Items in the Visit Group
+
+  - name: TOTALSCORE
+    type: int
+    label: Sum of Item Scores in the Visit Group
+
+  - name: QSORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: QSSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+
+  - name: QSSTRESN
+    type: int
+    label: Numeric Result/Finding in Standard Units
+
+  - name: QSSTAT
+    type: str
+    label: Completion Status
+
+  - name: QSREASND
+    type: str
+    label: Reason Not Done
+
+  # Set once here: every record from the first visit is the baseline.
+  - name: QSBLFL
+    type: str
+    label: Baseline Flag
+    derivation:
+      case:
+        - when: "VISITNUM = 1"
+          then: {literal: "Y"}
+
+  # Only the total-score record is derived, so it is the only one flagged.
+  - name: QSDRVFL
+    type: str
+    label: Derived Flag
+    derivation:
+      case:
+        - when: "QSTESTCD = 'PHQ9T'"
+          then: {literal: "Y"}
+
+  - name: QSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VISITNUM, QSTESTCD]
+
+rows:
+  # One record per collected item: the circled score becomes both the
+  # standardized result and, through its column heading, the original text.
+  - id: item
+    dataset: ODM
+    derivations:
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      VISITNUM:
+        lookup:
+          dataset: VISITS
+          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+          key: [SubjectKey, StudyEventOID]
+          value: VISITNUM
+          strict: true
+      QSDTC:
+        lookup:
+          dataset: VISITS
+          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+          key: [SubjectKey, StudyEventOID]
+          value: VisitDate
+          strict: true
+      QSTESTCD:
+        lookup:
+          dataset: ITEMS
+          key_base: [ODM.ItemOID]
+          key: [ItemOID]
+          value: QSTESTCD
+          strict: true
+      QSTEST:
+        lookup:
+          dataset: ITEMS
+          key_base: [ODM.ItemOID]
+          key: [ItemOID]
+          value: QSTEST
+          strict: true
+      QSORRES:
+        case:
+          - when: "ODM.Value = 0"
+            then: {literal: "Not at all"}
+          - when: "ODM.Value = 1"
+            then: {literal: "Several days"}
+          - when: "ODM.Value = 2"
+            then: {literal: "More than half the days"}
+          - when: "ODM.Value = 3"
+            then: {literal: "Nearly every day"}
+      QSSTRESC: ODM.Value
+      QSSTRESN: ODM.Value
+      QSSTAT: {literal: null}
+      QSREASND: {literal: null}
+      ITEMCNT: {literal: null}
+      TOTALSCORE: {literal: null}
+
+  # One record per declared not-collected entry: no result, and the
+  # status says why. A row with no item is a whole-questionnaire
+  # refusal: it becomes one QSALL record with the reason in QSREASND,
+  # per issue #374. A row naming an item keeps that item's own record.
+  - id: notdone
+    dataset: NOTDONE
+    derivations:
+      STUDYID: NOTDONE.StudyOID
+      USUBJID: NOTDONE.SubjectKey
+      VISITNUM:
+        lookup:
+          dataset: VISITS
+          key_base: [NOTDONE.SubjectKey, NOTDONE.StudyEventOID]
+          key: [SubjectKey, StudyEventOID]
+          value: VISITNUM
+          strict: true
+      QSDTC:
+        lookup:
+          dataset: VISITS
+          key_base: [NOTDONE.SubjectKey, NOTDONE.StudyEventOID]
+          key: [SubjectKey, StudyEventOID]
+          value: VisitDate
+          strict: true
+      QSTESTCD:
+        case:
+          - when: "NOTDONE.ItemOID IS NULL"
+            then: {literal: QSALL}
+          - when: "NOTDONE.ItemOID IS NOT NULL"
+            then:
+              lookup:
+                dataset: ITEMS
+                key_base: [NOTDONE.ItemOID]
+                key: [ItemOID]
+                value: QSTESTCD
+                strict: true
+      QSTEST:
+        case:
+          - when: "NOTDONE.ItemOID IS NULL"
+            then: {literal: "All Questionnaires"}
+          - when: "NOTDONE.ItemOID IS NOT NULL"
+            then:
+              lookup:
+                dataset: ITEMS
+                key_base: [NOTDONE.ItemOID]
+                key: [ItemOID]
+                value: QSTEST
+                strict: true
+      QSORRES: {literal: null}
+      QSSTRESC: {literal: null}
+      QSSTRESN: {literal: null}
+      QSSTAT: {literal: "NOT DONE"}
+      QSREASND: NOTDONE.Reason
+      ITEMCNT: {literal: null}
+      TOTALSCORE: {literal: null}
+
+  # One total-score record per subject visit where all nine items were
+  # answered. A visit with a skipped or refused item cannot be scored.
+  - id: total
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "ITEMCNT = 9"
+    derivations:
+      ITEMCNT:
+        aggregate:
+          expr: "COUNT(ODM.Value)"
+      TOTALSCORE:
+        aggregate:
+          expr: "SUM(ODM.Value)"
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      VISITNUM:
+        lookup:
+          dataset: VISITS
+          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+          key: [SubjectKey, StudyEventOID]
+          value: VISITNUM
+          strict: true
+      QSDTC:
+        lookup:
+          dataset: VISITS
+          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+          key: [SubjectKey, StudyEventOID]
+          value: VisitDate
+          strict: true
+      QSTESTCD: {literal: PHQ9T}
+      QSTEST: {literal: "Patient Health Questionnaire 9 item total score"}
+      QSORRES: {literal: null}
+      QSSTRESC: TOTALSCORE
+      QSSTRESN: TOTALSCORE
+      QSSTAT: {literal: null}
+      QSREASND: {literal: null}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, QSSEQ]
+  - row_count:
+      min: 30
+      max: 30
+  - implies:
+      id: total-score-stays-within-the-answer-range
+      when: "QSTESTCD = 'PHQ9T'"
+      then: "QSSTRESN BETWEEN 0 AND 27"
+  - implies:
+      id: not-done-records-carry-no-result
+      when: "QSSTAT = 'NOT DONE'"
+      then: "QSORRES IS NULL AND QSSTRESC IS NULL AND QSSTRESN IS NULL"
+  - implies:
+      id: derived-records-carry-no-original-result
+      when: "QSDRVFL = 'Y'"
+      then: "QSORRES IS NULL"
