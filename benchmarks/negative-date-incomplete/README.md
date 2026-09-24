@@ -13,11 +13,11 @@ start text (`AESTDTC`).
 **Variables:**
 
 - `ASTDT`: the event start date, which would carry the collected
-  start text (`AESTDTC`). The collected text `2023-06` names a
-  month with no day, and a date answers with one day, so
-  recording the first, the last, or the middle day would each
-  answer with a day nobody recorded. The text cannot be read as a
-  date, so the run fails and no artifact is accepted.
+  start text (`AESTDTC`). A start collected to the month only, such
+  as `2023-06`, names no single day, and choosing the first, the
+  middle, or the last day would record a day nobody collected. Such
+  text cannot be read as a date, so the run fails and no artifact
+  is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
