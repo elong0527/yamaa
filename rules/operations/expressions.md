@@ -127,7 +127,7 @@ error names the dict form, so `derivation: 5` must be written
 `true`/`false` spellings, numbers, and null parse as non-strings; quote a
 column reference that YAML would otherwise parse as a non-string.
 
-<a id="req-1249"></a>
+<a id="req-1250"></a>
 
 **REQ-1250.** The canonical spelling of a literal expression is the
 single-line flow mapping `{literal: X}`, wherever the literal appears: a
