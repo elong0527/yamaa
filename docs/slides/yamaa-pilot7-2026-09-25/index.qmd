@@ -40,7 +40,7 @@ organizations or institutions.
 ## Goal 1: establish benchmarks
 
 * ODM -> SDTM -> ADaM
-  * https://elong0527.github.io/yamaa/benchmark/
+  * [https://elong0527.github.io/yamaa/benchmark/](https://elong0527.github.io/yamaa/benchmark/)
 * Minimum viable
   * Specification
   * Representative source data
@@ -52,7 +52,7 @@ organizations or institutions.
 ## Goal 2: establish ground truth from full studies
 
 * Build ground truth once. Reuse it to evaluate every agentic workflow 
-  * https://github.com/RConsortium/submissions-pilot7-synthetic-data
+  * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 * CDISC pilots (SDTM -> ADaM)
   * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
 * OpenClinica real sample data (ODM -> SDTM -> ADaM)
@@ -64,15 +64,17 @@ organizations or institutions.
 
 ::: {.columns}
 ::: {.column width="48%"}
-<div class="big-number">~150</div>
+<div class="big-number">~150 Benchmarks</div>
 <div class="metric-label">SDTM and ADaM derivation benchmarks</div>
 :::
 
 ::: {.column width="48%"}
-<div class="big-number">3</div>
+<div class="big-number">6 Studies</div>
 <div class="metric-label">PR ready for pilot 3, 5, and 6</div>
 :::
 :::
+
+[https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html)
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
