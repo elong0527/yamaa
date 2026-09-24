@@ -479,8 +479,7 @@ fraction bound outside 0 through 1 also fails.
 
 <a id="req-0400"></a>
 
-**REQ-0400.** `max_length` whose `max` is less than one: fail. A column that
-  admits no value at all is a column the specification should not declare.
+**REQ-0400.** `max_length` whose `max` is less than one: fail.
 
 <a id="req-0401"></a>
 
