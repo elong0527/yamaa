@@ -30,34 +30,46 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: CM}
+
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
+
+  # The course's ODM item group (form); the row filter keeps only CM forms.
   - name: FORM
     type: str
     label: Source Item Group
+
   - name: CMTRT
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
       not_missing: {}
+
   - name: CMSTDTC
     type: str
     label: Start Date/Time of Medication
+
   - name: CMENDTC
     type: str
     label: End Date/Time of Medication
+
   - name: CMROUTE
     type: str
     label: Route of Administration
+
   - name: CMINDC
     type: str
     label: Indication
+
+  # Visit, visit repeat and form repeat order the courses for CMSEQ.
+  # Screening comes before baseline; a visit not listed stops the run.
   - name: EVENTORD
     type: int
     label: Visit order
@@ -68,14 +80,17 @@ columns:
           SCREENING: 1
           BASELINE: 2
         strict: true
+
   - name: EVENTREPEAT
     type: int
     label: Visit repeat
     derivation: ODM.StudyEventRepeatKey
+
   - name: REPEATKEY
     type: int
     label: Form repeat
     derivation: ODM.ItemGroupRepeatKey
+
   - name: CMSEQ
     type: int
     label: Sequence Number
@@ -90,6 +105,9 @@ columns:
             - EVENTREPEAT
             - REPEATKEY
 rows:
+  # One medication course is one form repeat within one visit repeat, so a
+  # form repeat number reused at a later visit is a separate course. A
+  # course without a reported name gives no record.
   - id: collected-occurrence
     group_by:
       - ODM.StudyOID
@@ -101,6 +119,8 @@ rows:
     filter: FORM = 'IG.CM' AND CMTRT IS NOT NULL
     derivations:
       FORM: ODM.ItemGroupOID
+      # Each item's value comes from its own ODM record in the group; an
+      # item not collected in the course is missing.
       CMTRT:
         aggregate:
           filter: ODM.ItemOID = 'IT.CM.CMTRT'
