@@ -5,8 +5,8 @@
 
 **Goal:** complete the analysis start date (`ASTDT`) of each
 adverse event (AE) from the collected start (`AESTDTC`), supplying
-a month and a day only where the collected text already carries a
-month.
+a month and a day wherever the collected text does not already
+carry them.
 
 **Input:** collected event records carrying the reported term
 (`AETERM`) and the collected start (`AESTDTC`).
@@ -17,8 +17,8 @@ month.
   `AESTDTC` to the earliest date the collected text still allows,
   with `15` as the supplied month and `1` as the supplied day. A
   year and month without a day would be completed, a year alone
-  would be left missing rather than given both a month and a day,
-  and a fully collected date would be used as collected. The value
+  would be completed from the supplied month and day, and a fully
+  collected date would be used as collected. The value
   `15` is not a calendar month, so the run is rejected before any
   data is read and no artifact is accepted.
 
@@ -34,10 +34,8 @@ date_impute:
   source: AE.AESTDTC
   month: 1
   day: 1
-  minimum_source_precision: month
+  minimum_source_precision: year
 ```
 
-A year-and-month value such as `2023-06` then becomes `2023-06-01`. A
-year-only value such as `2023` is still left missing, because the declared
-minimum forbids supplying both a month and a day. Dropping
-`minimum_source_precision` as well would let `2023` become `2023-01-01`.
+A year-and-month value such as `2023-06` then becomes `2023-06-01`, and a
+year-only value such as `2023` becomes `2023-01-01`.

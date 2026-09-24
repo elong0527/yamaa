@@ -32,4 +32,4 @@ columns:
         source: AE.AESTDTC
         month: 15
         day: 1
-        minimum_source_precision: month
+        minimum_source_precision: year

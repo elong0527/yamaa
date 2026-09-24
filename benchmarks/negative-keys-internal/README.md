@@ -5,16 +5,16 @@
 
 **Goal:** derive `INVID` for each subject.
 
-**Input:** collected demographics carrying input site (`SITEID`)
+**Input:** collected demographics carrying study site (`SITEID`)
 and investigator (`INVID`).
 
 **Variables:**
 
-- `INVID` would be the investigator responsible for the subject
+- `INVID` would be the investigator responsible for the subject's
   site, read from `INVID`.
 
-The record identity depends on a site value the result does not
-carry, so a reader of the result could not check it. The run is
+**Note:** the record identity depends on a site value the result does
+not carry, so a reader of the result could not check it. The run is
 rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
@@ -30,5 +30,10 @@ output:
 ```
 
 If study and subject already form the intended unique identity, remove
-`SITEID` from the record identity instead. Choose the option that matches the
-output's actual row identity.
+`SITEID` from the record identity instead:
+
+```yaml
+keys: [STUDYID, USUBJID]
+```
+
+Choose the option that matches the output's actual row identity.

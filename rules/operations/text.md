@@ -442,8 +442,9 @@ structural constraints come from its schema declaration.
 | `expressions.mapping.dict` | Source-value to result-value dictionary. Exactly one of `dict` and `dict_yaml` is present. |
 | `expressions.mapping.dict_yaml` | Path to a YAML file holding the source-value to result-value dictionary. The file is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the `dict` contract. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
-| `expressions.mapping.missing` | Value returned when the source is missing or has no dictionary entry. |
-| `expressions.mapping.strict` | When true, a missing source or a source with no dictionary entry is an error instead of returning `missing`. Defaults to false. |
+| `expressions.mapping.missing` | Value returned when the source is missing. Also covers a source with no dictionary entry when `unmapped` is absent and `strict` is not true. |
+| `expressions.mapping.unmapped` | Value returned when the source is present but has no dictionary entry. |
+| `expressions.mapping.strict` | When true, a missing source with no `missing` handler, or a source with no dictionary entry and no `unmapped` handler, is an error instead of returning missing; `missing` no longer covers a source with no dictionary entry. Defaults to false. |
 | `Result` | Looks up a string source in a dictionary, given inline or loaded from a YAML file. Case-insensitive lookup folds ASCII a-z to A-Z under [Text values](../values/text.md); folded keys must be unique. |
 
 <a id="req-1111"></a>

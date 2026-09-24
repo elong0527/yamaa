@@ -21,8 +21,9 @@ which is missing when no numeric value was returned.
 - `ADT`: the collection date, taken directly from `LBDTC`.
 - `AVAL`: the analysis value. On a transaminase record it repeats
   `LBSTRESN`. On the ratio record it divides the day's aspartate
-  result by the alanine result, and is missing when either side
-  has no record or no value that day.
+  result by the alanine result. A ratio record exists for each
+  alanine record, and its value is missing when that day has no
+  aspartate record or either result has no value.
 
 The ratio reads its two values from other records of the result
 being built, but those values are themselves the `AVAL` under

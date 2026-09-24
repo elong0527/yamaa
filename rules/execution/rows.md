@@ -72,6 +72,8 @@ keep first-occurrence group order.
 operation repeats a candidate a data-dependent number of times. No generated
 index supports the repetition. A source value may decide whether a written
 row template keeps one candidate. The source value cannot create more rows.
+A row catalog under [REQ-1249](rows.md#req-1249) is an authored specification
+resource expanded into written-equivalent templates before input data is read.
 
 <a id="req-0041"></a>
 
@@ -117,6 +119,35 @@ the base driver: the declared `base`, or the single declared dataset when
 Like any row template filter, it states which rows the artifact carries,
 never which input the column derivations read.
 
+### Catalog expansion
+
+<a id="req-1249"></a>
+
+**REQ-1249.** A row template may declare `catalog` to generate a fixed set of
+ordinary row templates during specification resolution. `catalog.path` names a
+CSV specification resource under the approved project roots. Its first record
+is a header of unique identifiers; each later record has one present value per
+header field, and at least one record is required. `catalog.id_column` names a
+header field whose values are unique identifiers. Each generated row ID is the
+template ID, an underscore, and that field's value. Generated templates appear
+in CSV record order at the original template's position. They retain the
+template's dataset, grouping, filter, derivations, and submission metadata.
+
+The CSV profile parses the resource. Values are strings unless `catalog.types`
+declares a field `int` or `float`; numeric cells must parse to finite values.
+The catalog is specification source and contains ASCII only.
+Each field named in `catalog.unique_columns` must exist and have no repeated
+value across catalog records; the listed fields are checked separately.
+In a template value, an entire scalar `${FIELD}` is replaced by that field's
+typed value. Inside a predicate `filter` or `when`, `${FIELD}` is replaced by
+its quoted string or numeric literal, with quote escaping, before the ordinary
+predicate grammar validates it. Other embedded placeholders are invalid.
+Every referenced field must exist in the catalog header. Expansion occurs
+after inheritance composition and before column pruning and ordinary schema,
+binding, and execution validation. An invalid path, CSV, ID, type, or
+placeholder fails at the catalog field. The resolved specification contains
+only the generated ordinary templates; execution never reads the catalog.
+
 ### Expression evaluation
 
 <a id="req-0047"></a>
@@ -143,6 +174,7 @@ structural constraints come from its schema declaration.
 | `row_class.group_by` | Grouping keys over input records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
 | `row_class.filter` | Predicate selecting input records for an ungrouped row template or completed candidate groups for a grouped row template. |
 | `row_class.derivations` | Columns this row template derives; [Specification structure](../specification/structure.md) owns coverage across row templates. |
+| `row_class.catalog` | Fixed CSV catalog expanded into ordinary row templates under [REQ-1249](rows.md#req-1249). |
 | `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
 
 ## Error conditions

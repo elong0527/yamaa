@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str
@@ -40,8 +39,7 @@ columns:
   - name: LBORRESU
     type: str
     label: Original Units
-    derivation:
-      literal: mg/dL
+    derivation: {literal: mg/dL}
     submission:
       origin:
         type: Assigned
@@ -73,10 +71,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: GLUC
-      LBTEST:
-        literal: Glucose
+      LBTESTCD: {literal: GLUC}
+      LBTEST: {literal: Glucose}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.GLUC'"
@@ -89,8 +85,7 @@ rows:
         value:
           source: LBORRES
         missing:
-      LBSTRESU:
-        literal: mg/dL
+      LBSTRESU: {literal: mg/dL}
     submission:
       LBORRESU:
         origin:
@@ -102,10 +97,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: CREAT
-      LBTEST:
-        literal: Creatinine
+      LBTESTCD: {literal: CREAT}
+      LBTEST: {literal: Creatinine}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CREAT'"
@@ -118,8 +111,7 @@ rows:
         value:
           source: LBORRES
         missing:
-      LBSTRESU:
-        literal: mg/dL
+      LBSTRESU: {literal: mg/dL}
     submission:
       LBORRESU:
         origin:

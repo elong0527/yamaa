@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # The collected start text is read as a date as it stands: nothing
+  # completes a partial date and nothing replaces text that is not a date,
+  # so a start collected to the month only stops the run.
   - name: ASTDT
     type: date
     label: Analysis Start Date

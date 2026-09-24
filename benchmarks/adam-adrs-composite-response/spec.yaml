@@ -25,14 +25,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: RESP75
+    derivation: {literal: RESP75}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: EASI-75 Response
+    derivation: {literal: EASI-75 Response}
 
   - name: AVISIT
     type: str
@@ -117,8 +115,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
-      min: 5
-      max: 5
+      min: 10
+      max: 10
   - implies:
       id: numeric-response-is-missing-only-when-not-evaluable
       when: "AVAL IS NULL"

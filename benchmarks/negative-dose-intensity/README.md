@@ -18,12 +18,11 @@ planned dose (`EXPLDOS`) on each administration record.
 - `DOSECUM` is the total administered dose across the
   component's exposure records.
 - `RDI` is meant to be that total as a percentage of the planned
-  dose, but would divide the summed actual doses by the planned
-  dose of one exposure record, and no row is produced because the
-  run is rejected before any data is read: the planned dose is
-  recorded on each administration record rather than once for
-  the treatment, so which record supplies it would decide the
-  answer.
+  dose. The planned dose is recorded on each administration record
+  rather than once for the treatment, so dividing the total by it
+  leaves open which record supplies the denominator, and that
+  choice would decide the answer. The run is rejected before any
+  data is read, and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADEX
 

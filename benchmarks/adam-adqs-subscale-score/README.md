@@ -11,7 +11,11 @@ by 25 (mean divided by four, times 100).
 **Input:** collected questionnaire responses for the physical
 functioning scale, with study, subject, and visit (`STUDYID`,
 `USUBJID`, `VISIT`), category (`QSCAT`), test code and test name
-(`QSTESTCD`, `QSTEST`), and numeric result (`QSSTRESN`).
+(`QSTESTCD`, `QSTEST`), and numeric result (`QSSTRESN`) on the
+zero to four answer scale. One record on the emotional
+functioning scale is included and excluded from the output,
+showing that only the physical functioning records feed the
+dataset.
 
 **Variables:**
 

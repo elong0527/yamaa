@@ -1,0 +1,147 @@
+---
+title: "Pilot 7 Synthetic Data Update"
+subtitle: "Building benchmark and ground truth from EDC extraction to SDTM and ADaM"
+author: "Yilong Zhang, Peng Zhang, Ming-chun Chen, Bingjun Wang"
+date: "2026-09-25"
+embed-resources: true
+format:
+  revealjs:
+    theme: default
+    css: custom.css
+    mainfont: "Lato, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Liberation Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji"
+    monofont: "JetBrains Mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace"
+    smaller: true
+    slide-number: true
+    scrollable: true
+    transition: fade
+    background-transition: fade
+    logo: ../../assets/logo.jpeg
+title-slide-attributes:
+  data-background-color: "#385898"
+---
+
+## Disclaimer {.center}
+
+::: {.center-body}
+The views and opinions expressed in this presentation are those of the
+individual presenters. They do not represent those of their affiliated
+organizations or institutions.
+:::
+
+## Contributors {.center}
+
+::: {.center-body-left}
+- **Peng Zhang** CIMS Global
+- **Bingjun Wang** Genentech
+- **Ming-chun Chen** Summit Therapeutics
+- **Yilong Zhang** BBSW AI Committee
+:::
+
+## Goal 1: establish benchmarks
+
+* ODM -> SDTM -> ADaM
+  * [https://elong0527.github.io/yamaa/benchmark/](https://elong0527.github.io/yamaa/benchmark/)
+* Minimum viable
+  * Specification
+  * Representative source data
+  * Golden output
+* Human baseline
+  * Experts reviewed before finalization
+  * Clear review and decision making history
+
+## Goal 2: establish ground truth from full studies
+
+* Build ground truth once. Reuse it to evaluate every agentic workflow 
+  * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+* CDISC pilots (SDTM -> ADaM)
+  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
+* OpenClinica real sample data (ODM -> SDTM -> ADaM)
+  * Real sample data for testing the full data journey
+* Synthetic studies (ODM -> SDTM -> ADaM)
+  * KN564 and KN189 as scalable test beds
+
+## Where we are
+
+::: {.columns}
+::: {.column width="48%"}
+<div class="big-number">~150 Benchmarks</div>
+<div class="metric-label">SDTM and ADaM derivation benchmarks</div>
+:::
+
+::: {.column width="48%"}
+<div class="big-number">6 Studies</div>
+<div class="metric-label">PR ready for pilot 3, 5, and 6</div>
+:::
+:::
+
+[https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html)
+
+<iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+Scroll inside the frame to explore the spec, inputs, and golden output
+
+**[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
+
+## Help: finalize benchmarks
+
+- **Review a benchmark**: inspect the specification and golden output
+- **Add comments**: challenge assumptions, clarity, and conformance
+- **File issues**: record anything ambiguous or incorrect
+- **Open pull requests**: contribute fixes and new benchmarks
+
+## Help: creating benchmarks
+
+* **Assess privately**: Run yamaa against a proprietary submission package inside your own environment.
+* **Share safely**: Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
+
+## Help: broadcasting
+
+<div class="kicker">The next useful contribution is one reviewed benchmark.</div>
+
+::: {.center-body-left}
+Help publish an RConsortium blog to attract contributors to finalize benchmarks.
+:::
+
+# Introduction: yamaa {background-color="#385898" data-state="no-corner-logo"}
+
+::: {.center-body}
+![](../../assets/logo.jpeg){.hero-logo}
+:::
+
+## yamaa: four components
+
+| Component | Purpose | Links |
+| --- | --- | --- |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmark) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+
+## yamaa: one principle
+
+<div class="kicker">Determinism is a design constraint</div>
+
+> A yamaa specification has exactly one execution. Where it would have two, yamaa fails instead of choosing.
+
+Ambiguity is surfaced during planning, before it becomes a silent difference in the output. (e.g. rounding, missing value handling)
+
+* **For people:** the specification is readable.
+* **For agents:** the rules avoid ambiguity.
+
+## Inheritance
+
+![](../../diagrams/design.svg)
+
+Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
+
+## From benchmark to deployment
+
+<div class="pull-quote">Ongoing collaboration with [keiji.ai](https://keiji.ai/) on a user-friendly agentic workflow.</div>
+
+## Reference
+
+<div class="pull-quote">Finalize one benchmark the next contributor can trust.</div>
+
+- **Repository:** [github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)
+- **Documentation:** [elong0527.github.io/yamaa](https://elong0527.github.io/yamaa/)
+- **Benchmarks:** [elong0527.github.io/yamaa/benchmark](https://elong0527.github.io/yamaa/benchmark/)

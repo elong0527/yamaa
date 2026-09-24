@@ -12,19 +12,19 @@ and character result.
 
 **Variables:**
 
-- `SERIES` identifies the analysis series and is carried through
-  unchanged; rows with no series value share one series.
-- `AVISITN` is the visit number used to order rows within a
-  series and is carried through unchanged; rows with a missing
-  visit number sort after numbered visits.
-- `AVALC` is the current character result, kept as collected;
-  blank when no result was collected.
-- `PREVAVALC` is the closest earlier non-blank result in the same
-  series, ignoring the current row; blank at the start of a
-  series.
+- `SERIES` identifies the analysis series; rows with no series value
+  share one series.
+- `AVISITN` is the visit number that orders rows within a series.
+- `AVALC` is the current character result, kept as collected; blank
+  when no result was collected.
+- `PREVAVALC` is the closest earlier non-blank result for the same
+  subject and series, never the row's own; blank when no earlier row
+  in the series has a result.
 
-**Note:** ordering within a series is by visit number, with
-missing numbers last; the look-back skips blank results, so it
-can cross consecutive blank rows, but never crosses series.
+**Note:** within a series, rows are ordered by visit number with
+missing numbers last, and rows sharing a visit number (or both
+missing one) keep their collected order. The look-back skips blank
+results, so it can cross consecutive blank rows, but it never
+crosses into another series.
 
 **Standard:** ADaM | **Domain:** ADVS

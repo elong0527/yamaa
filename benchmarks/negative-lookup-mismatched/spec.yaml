@@ -6,6 +6,8 @@ input:
   LBRANGE: input/lbrange.csv
 base: LB_RAW
 intermediates:
+  # The reference range for the result's test code and sex. The lists pair
+  # by position, and the third table column (UNIT) has no partner.
   - id: REFRANGE
     dataset: LBRANGE
     key_base: [LBTESTCD, SEX]

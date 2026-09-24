@@ -56,6 +56,9 @@ columns:
     verifications:
       not_missing: {}
 
+  # Windows on study day, each including its lower break and excluding its
+  # upper one: before 0 SCREENING, 0-1 BASELINE (there is no day 0), 2-21
+  # WEEK 2, 22-42 WEEK 4, 43 onward POST-TREATMENT. No study day, no window.
   - name: AVISIT
     type: str
     label: Analysis Visit
@@ -84,6 +87,9 @@ columns:
           POST-TREATMENT: 99
         missing: null
 
+  # Within each subject, parameter, and window: earliest study day first,
+  # then the lower sequence number. ANL01FL marks rank 1; a record with no
+  # window is left out, so it is never flagged.
   - name: AWRANK
     type: int
     label: Analysis Window Rank
@@ -100,8 +106,7 @@ columns:
     derivation:
       case:
         - when: "AWRANK = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
 
 verifications:
   - unique:

@@ -19,11 +19,10 @@ numeric result (`VSSTRESN`), and the visit number (`VISITNUM`).
 - `VSSTRESN` would hold the numeric result in standard units,
   taken from the collected result.
 
-The requested order rests on the visit number, but no variable of
-the requested dataset carries it, so no completed record has a
-value to be ordered by. Ordering by something the records do not
-contain has no meaning the run could give it, so the run is
-rejected before any data is read and no artifact is accepted.
+**Note:** the requested order rests on the visit number, but no
+variable of the requested dataset carries it, so a completed record
+has no value to be ordered by. The run is rejected before any data
+is read and no artifact is accepted.
 
 **Standard:** SDTM | **Domain:** VS
 
@@ -35,15 +34,16 @@ the artifact columns only when the artifact should carry it:
 
 ```yaml
 output:
+  path: vs.csv
   columns: [STUDYID, USUBJID, VSSEQ, VSTESTCD, VSSTRESN]
   order_by: [USUBJID, VISITNUM]
 
 columns:
+  # ... the existing columns, then:
   - name: VISITNUM
     type: int
     label: Visit Number
-    derivation:
-      source: VS_RAW.VISITNUM
+    derivation: VS_RAW.VISITNUM
 ```
 
 When the visit number is not wanted at all, order by a variable the dataset

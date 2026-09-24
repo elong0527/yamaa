@@ -39,6 +39,10 @@ columns:
     type: float
     label: Numeric Laboratory Result
 
+  # The day's ALT and AST results, read back from the rows being built:
+  # the largest AVAL among the subject's rows of that parameter on that date.
+  # AVAL below is computed from them, which closes the cycle this benchmark
+  # shows.
   - name: ALTVAL
     type: float
     label: Alanine Aminotransferase Analysis Value
@@ -57,6 +61,7 @@ columns:
         group_by: [STUDYID, USUBJID, ADT]
         expr: "MAX(AVAL)"
 
+  # NULLIF leaves the ratio empty instead of dividing by a zero ALT.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -73,32 +78,24 @@ rows:
   - id: alt
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ALT
-      PARAM:
-        literal: Alanine Aminotransferase
-      LBRESN:
-        source: LB.LBSTRESN
+      PARAMCD: {literal: ALT}
+      PARAM: {literal: Alanine Aminotransferase}
+      LBRESN: {source: LB.LBSTRESN}
 
   - id: ast
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
-      PARAMCD:
-        literal: AST
-      PARAM:
-        literal: Aspartate Aminotransferase
-      LBRESN:
-        source: LB.LBSTRESN
+      PARAMCD: {literal: AST}
+      PARAM: {literal: Aspartate Aminotransferase}
+      LBRESN: {source: LB.LBSTRESN}
 
+  # One ratio row per ALT record; its value comes from AVAL above.
   - id: ast_alt_ratio
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ASTALT
-      PARAM:
-        literal: Aspartate to Alanine Aminotransferase Ratio
-      LBRESN:
-        literal: null
+      PARAMCD: {literal: ASTALT}
+      PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
+      LBRESN: {literal: null}
 
 verifications:
   - unique:

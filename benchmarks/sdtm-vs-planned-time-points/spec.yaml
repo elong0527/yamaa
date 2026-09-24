@@ -1,0 +1,209 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  ODM: input/odm.csv
+  DM: input/dm.csv
+  VS_MAPPING: input/vs_mapping.csv
+base: ODM
+intermediates:
+  - id: DOSE
+    dataset: ODM
+    filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
+    key: [StudyOID, SubjectKey]
+    key_base: [STUDYID, USUBJID]
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
+rows:
+  - id: vs_reading
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemOID]
+    filter: "VSTESTCD IS NOT NULL"
+    derivations:
+      VSTESTCD:
+        lookup:
+          dataset: VS_MAPPING
+          key_base: ODM.ItemOID
+          key: ItemOID
+          value: VSTESTCD
+      VSORRES:
+        aggregate:
+          expr: "ONLY(ODM.Value)"
+      VSORRESU:
+        lookup:
+          dataset: VS_MAPPING
+          key_base: ODM.ItemOID
+          key: ItemOID
+          value: UNIT
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: VS}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.D1: DAY 1
+
+  - name: VSTPT
+    type: str
+    label: Planned Time Point Name
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.VS_PREDOSE: PRE-DOSE
+          FO.VS_30MIN: 30 MIN POST-DOSE
+          FO.VS_1H: 1 H POST-DOSE
+          FO.VS_4H: 4 H POST-DOSE
+
+  - name: VSTPTNUM
+    type: int
+    label: Planned Time Point Number
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.VS_PREDOSE: 1
+          FO.VS_30MIN: 2
+          FO.VS_1H: 3
+          FO.VS_4H: 4
+    verifications:
+      not_missing: {}
+
+  - name: VSELTM
+    type: str
+    label: Planned Elapsed Time
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.VS_PREDOSE: -PT15M
+          FO.VS_30MIN: PT30M
+          FO.VS_1H: PT1H
+          FO.VS_4H: PT4H
+    verifications:
+      not_missing: {}
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    verifications:
+      allowed_values:
+        values: [PULSE, SYSBP, DIABP]
+
+  - name: ORD_TEST
+    type: int
+    label: Test order within a time point
+    derivation:
+      case:
+        - when: "VSTESTCD = 'PULSE'"
+          then: {literal: 1}
+        - when: "VSTESTCD = 'SYSBP'"
+          then: {literal: 2}
+        - when: "VSTESTCD = 'DIABP'"
+          then: {literal: 3}
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VSTPTNUM, ORD_TEST]
+    verifications:
+      not_missing: {}
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+    verifications:
+      allowed_values:
+        values: [beats/min, mmHg]
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation: VSORRES
+
+  - name: VSSTRESU
+    type: str
+    label: Standard Units
+    derivation: VSORRESU
+
+  - name: VSDTC
+    type: datetime
+    label: Date/Time of Measurements
+    derivation:
+      aggregate:
+        filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+        key: [StudyOID, SubjectKey, StudyEventOID, FormOID]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+        expr: "ONLY(ODM.Value)"
+    verifications:
+      not_missing: {}
+
+  - name: EXSTDTC
+    type: datetime
+    label: Date/Time of First Dose
+    derivation: DOSE.Value
+
+  - name: RFSTDTC
+    type: date
+    label: Subject Reference Start Date/Time
+    derivation: DM.RFSTDTC
+
+  - name: VSDT
+    type: date
+    label: Date of Measurements
+    derivation:
+      to_date:
+        source: VSDTC
+
+  - name: VSDY
+    type: int
+    label: Study Day of Vital Signs
+    derivation:
+      study_day:
+        date: VSDT
+        reference: RFSTDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 24
+      max: 24
+  - implies:
+      id: post-dose-reading-at-or-after-dose
+      when: "VSTPTNUM > 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
+      then: "VSDTC >= EXSTDTC"
+  - implies:
+      id: pre-dose-reading-at-or-before-dose
+      when: "VSTPTNUM = 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
+      then: "VSDTC <= EXSTDTC"

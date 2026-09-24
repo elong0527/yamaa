@@ -3,9 +3,9 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-absolute.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** attempt one record per subject and parameter carrying
-the collected result in `AVAL` with the upper limit of normal for
-that test and sex in `ANRHI`, chosen by `SEX`.
+**Goal:** attempt one record per subject and laboratory test
+carrying the collected result in `AVAL` and the upper limit of
+normal for that test and the subject's sex in `ANRHI`.
 
 **Input:** collected laboratory records carrying the collected
 result (`LBSTRESN`), test code (`LBTESTCD`), and sex (`SEX`),
@@ -18,14 +18,15 @@ plus a reference table of upper limits by test code and sex.
 - `AVAL` would be the collected numeric result, taken from
   `LBSTRESN`.
 - `ANRHI` would be the upper limit of normal from the reference
-  table for the record's test code and sex, matched on test code
-  and `SEX`.
+  table for the record's test code and sex; missing when the table
+  has no limit for that pair or the sex is missing.
 
-The reference table is named by an absolute location,
+**Note:** the reference table is named by an absolute location,
 `/shared/reference/lbref.csv`, which names a place on the machine
 that runs the study rather than a file the study carries. A run
-may only open files the study holds, so the run is rejected before
-any data is read and no artifact is accepted.
+opens only files inside the study or in a location the runner
+approved, so the run is rejected before any data is read and no
+artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 

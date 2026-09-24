@@ -36,6 +36,8 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # The upper limit for the parameter and sex. strict: a result whose test
+  # and sex match no table row stops the run.
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit

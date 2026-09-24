@@ -30,8 +30,7 @@ columns:
   - name: TEMP
     type: str
     label: Unused Intermediate Value
-    derivation:
-      literal: unused
+    derivation: {literal: unused}
 verifications:
   unique:
     columns: [USUBJID, PARAMCD]
