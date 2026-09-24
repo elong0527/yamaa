@@ -7,6 +7,11 @@ input:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
 base: ADVS_RAW
+
+# The window whose first-to-last study day range, both ends inclusive,
+# holds the record's study day, matched on STUDYID (the one output key the
+# window table carries). A record with no study day, or a window with no
+# last day, gives no match.
 intermediates:
   - id: AWIN
     dataset: AWINDOW
@@ -89,6 +94,9 @@ columns:
       compute:
         expr: "ABS(AWTDIFF)"
 
+  # Within each subject, parameter, and window: closest to the target day
+  # first, then the lower sequence number. ANL01FL marks rank 1; a record
+  # with no window is left out, so it is never flagged.
   - name: AWRANK
     type: int
     label: Analysis Window Rank
