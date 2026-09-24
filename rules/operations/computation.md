@@ -162,8 +162,7 @@ vocabulary requires amending the table in [REQ-0415](computation.md#req-0415).
 
 <a id="req-0417"></a>
 
-**REQ-0417.** `LOG` is excluded because its base differs between dialects.
-Write `LN(x)` or `LN(x) / LN(b)`.
+**REQ-0417.** `LOG` is excluded. Write `LN(x)` or `LN(x) / LN(b)`.
 
 #### One rounding with fixed tie behavior
 

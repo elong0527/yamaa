@@ -1,0 +1,34 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGEGRP]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  - name: AGEGRP
+    type: str
+    label: Age Group
+    derivation:
+      cut:
+        source: AGE
+        breaks: [65]
+        labels: [younger, elderly]

@@ -127,6 +127,25 @@ class SdtmMappingTests(unittest.TestCase):
 
 
 class AdamMappingTests(unittest.TestCase):
+    def test_named_window_summary_keeps_the_reference_visible(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation(
+                {"row_number": {"window": "VISIT_ORDER"}}
+            ),
+            "Row number using window VISIT_ORDER.",
+        )
+        baseline = mapping_doc.describe_derivation(
+            {"baseline_flag": {
+                "date": "ADT", "reference_date": "TRTSDT",
+                "window": "BASELINE_GROUPS",
+            }}
+        )
+        self.assertIn("ADT on or before TRTSDT using window BASELINE_GROUPS", baseline)
+
+    def test_unknown_window_benchmark_still_renders_for_review(self):
+        section = mapping_doc.render_mapping_section(load_spec("negative-unknown-window"))
+        self.assertIn("Row number using window VISITS_ORDER.", section)
+
     def test_headers_follow_the_adam_variable_sheet(self):
         headers, rows = mapping_sheet("adam-adae-death")
         self.assertEqual(headers, mapping_doc.ADAM_HEADERS)

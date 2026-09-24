@@ -39,8 +39,8 @@ study whose reference data outgrows that count is re-read against the data
 rather than left to fill the places it already has. A second value
 competing for one declared place is the ordinary multiple-match failure
 [Lookup and joins](../operations/lookup.md) defines, not a new place. The members of one family name their
-grouping by position: `SMQ02NAM`, `SMQ02CD`, and `SMQ02SC` belong together
-because each carries the `02`. Nothing in the schema links them beyond the
+grouping by position: `SMQ02NAM`, `SMQ02CD`, and `SMQ02SC` belong together.
+Each carries the `02`. Nothing in the schema links them beyond the
 `02`. A study that wants the grouping checkable records it in the columns'
 `metadata`; the schema does not.
 
@@ -105,7 +105,7 @@ may depend on an internal one.
 <a id="req-0207"></a>
 
 **REQ-0207.** `keys` must name output columns only. An internal column in
-`keys` is an error, because a key identifies rows in the artifact.
+`keys` is an error. A key identifies rows in the artifact.
 
 <a id="req-0208"></a>
 
@@ -160,6 +160,7 @@ structural constraints come from its schema declaration.
 | `root_class.input` | Source datasets readable by this specification, each under the name it is read through. |
 | `root_class.base` | Input dataset whose records build output rows when rows is absent; [Row construction](../execution/rows.md) states when it is required. |
 | `root_class.parents` | Ordered local specification layers resolved under [Specification composition](composition.md) before validation and execution. |
+| `root_class.windows` | Complete named window settings under [REQ-1251](../operations/windows.md#req-1251). |
 | `root_class.intermediates` | Named dataset lookups several columns read through <lookup-id>.<column>; [Lookup and joins](../operations/lookup.md) defines them. |
 | `root_class.output` | Artifact presentation independent of dependency-ordered declarations; [Artifact publication](../storage/publication.md) defines it. |
 | `root_class.columns` | Columns in the dependency order [Execution lifecycle](../execution/lifecycle.md) requires; output.columns controls artifact order. |
@@ -209,7 +210,7 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
-| `identifier` | Single-token identifier; the field's own description states which namespace it names (a declared dataset, a declared column, a standard, a document, a function, or similar). |
+| `identifier` | Single-token identifier; the field's own description states which naming list it belongs to (a declared dataset, a declared column, a standard, a document, a function, or similar). |
 
 ## Error conditions
 

@@ -42,7 +42,7 @@ defined below.
 <a id="req-0616"></a>
 
 **REQ-0616.** The resolver retains source provenance for every contributed value
-while it works, down to the leaf a layer wrote, because a composed column
+while it works, down to the leaf a layer wrote. A composed column
 carries values from more than one layer. Provenance is not a field of the
 resolved specification. It is diagnostic state, and for a relative
 `project_path` it also records the layer that wrote the path and that layer's
@@ -107,7 +107,7 @@ before composition. Inheritance never migrates schema versions.
 `root_class`. Unknown root fields and invalid values are errors in the layer
 that writes them. Requiredness is deferred for every root field, for direct
 members of the four keyed root collections, and for every depth inside a
-`columns` member, because a later contribution may supply their missing fields.
+`columns` member. A later contribution may supply their missing fields.
 The entry file is no exception: it may omit `output` and inherit it, so a
 shared layer can own the artifact membership and order of every specification
 that inherits it.
@@ -157,6 +157,7 @@ value.
 | `intermediates` | Keyed by `id` |
 | `columns` | Keyed by `name` |
 | `rows` | Keyed by `id` |
+| `windows` | Keyed by name; each supplied definition replaces the whole definition |
 | Every other root field | Complete field replacement |
 
 <a id="req-0629"></a>
@@ -165,7 +166,7 @@ value.
 with
 it. For example, later root `metadata`, `keys`, `output`, and `verifications`
 replace their complete inherited values. An entry that inherits `output`
-therefore publishes where the layer that wrote it names, because its
+therefore publishes where the layer that wrote it names. Its
 `path`, `warning_log`, and `verification_log` keep that layer's provenance
 under [REQ-0635](composition.md#req-0635); an entry that publishes elsewhere
 declares its complete `output`.
@@ -214,6 +215,20 @@ path becomes the long `dataset_class` form, after which matching dataset
 declarations merge the immediate `path`, `types`, and `schema` fields by the
 same rule.
 
+### Named-window composition
+
+<a id="req-1254"></a>
+
+**REQ-1254.** Root `windows` composes by name, retaining other inherited
+names. A later definition of the same name replaces that whole window;
+its omitted fields take ordinary window omission semantics rather than
+inheriting fields from the earlier definition. Every reference, including
+an inherited reference, uses the final composed definition. A window name
+is not a variable or dataset dependency. Root `windows: null` clears the
+collection under the existing optional-field rule; individual definitions
+cannot be null. Named references and inline windows are distinct composition
+kinds: replacing one with the other replaces the complete `window` value.
+
 ### Clearing an optional field
 
 <a id="req-0632"></a>
@@ -257,7 +272,7 @@ from the entry file's directory.
 relative path is rebased relative to the entry file without changing the
 denoted local file. If the local platform cannot express that file relative
 to the entry file, the canonical absolute local path is used. An absolute
-contributed path is materialized exactly as it was written, because [Resource resolution](../storage/resources.md)
+contributed path is materialized exactly as it was written. [Resource resolution](../storage/resources.md)
 resolves it against the approved root it names and reads that written form.
 `parents` paths are not materialized.
 
@@ -280,8 +295,8 @@ live. Reachability begins with:
 - columns named by `output.columns`, `keys`, or `output.order_by`;
 - columns read by dataset verifications;
 - a column carrying its own column verification;
-- every surviving row template, because declaring a row changes the artifact's
-  rows; and
+- every surviving row template (declaring a row changes the artifact's
+  rows); and
 - a dataset named by `base`, including when a surviving row falls back to it.
 
 <a id="req-0639"></a>
@@ -299,8 +314,8 @@ grouping inputs, and derivations needed for live columns live.
 **REQ-0640.** Dead entries are removed from `input`, `intermediates`, and
 `columns`. Row-derivation entries targeting dead columns are removed with those
 columns. Rows participate in reachability, but each final row declaration is
-itself a root because it can add records; a resolver cannot discard one merely
-because no other declaration names its `id`.
+itself a root. It can add records. A resolver cannot discard one merely
+when no other declaration names its `id`.
 
 <a id="req-0641"></a>
 
@@ -323,12 +338,14 @@ record-lookup, and row order remains in that stable order.
 
 <a id="req-0643"></a>
 
-**REQ-0643.** After pruning, the resolver builds the column dependency graph
-under [Execution lifecycle](../execution/lifecycle.md) and topologically orders the remaining columns. When more than one
-column is ready, the column with the earliest initial collection position
+**REQ-0643.** After pruning, the resolver orders the remaining columns so
+each column comes after every column its derivation reads, following
+[Execution lifecycle](../execution/lifecycle.md). When more than one column
+can come next, the column with the earliest initial collection position
 comes first. This stable tie-break preserves `Common`, earlier-parent,
-and child order for independent columns. An unknown dependency or dependency
-cycle fails; sorting does not repair either one.
+and child order for independent columns. A derivation that reads a column
+that is not declared fails. A derivation that reads itself, directly or
+through other columns, fails; ordering does not repair either one.
 
 <a id="req-0644"></a>
 
@@ -407,8 +424,8 @@ reports every implicated file and value.
 <a id="req-0657"></a>
 
 **REQ-0657.** A resolved specification to which no layer contributed `output`
-fails as `missing_required_field` at `output`, with no requirement attached,
-because the root field's requiredness is structural. An entry file that omits
+fails as `missing_required_field` at `output`, with no requirement attached.
+An entry file that omits
 `output` is not itself an error: it inherits the field under
 [REQ-0623](composition.md#req-0623).
 

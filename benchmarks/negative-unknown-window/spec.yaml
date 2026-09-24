@@ -1,0 +1,29 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, AVISITN]
+input:
+  VS: {path: input/vs.csv, types: {AVISITN: int}}
+output:
+  path: advs.csv
+  columns: [USUBJID, AVISITN, VISITSEQ]
+
+windows:
+  VISIT_ORDER:
+    group_by: [USUBJID]
+    order_by: [AVISITN]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+    derivation: VS.AVISITN
+  - name: VISITSEQ
+    type: int
+    label: Visit Sequence Number
+    derivation:
+      row_number:
+        window: VISITS_ORDER

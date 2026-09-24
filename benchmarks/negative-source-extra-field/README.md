@@ -18,21 +18,22 @@ surplus value holds.
 - `SEX` would be the recorded sex, taken from the collected
   listing.
 
-The result would carry `SITEID` and `SEX` beside the study and
-subject identifiers, but no row is produced: one record carries a
-field more than the listing names, so reading it would mean either
-dropping a collected value or shifting every value after it into
-the wrong field, and the run is rejected while reading the listing
-with no artifact accepted.
+Reading the longer record would mean either dropping a collected
+value or shifting every value after it into the wrong field, so the
+run is rejected while reading the listing and no artifact is
+accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
 Export one field for each named field in every record. Where the extra value
-is itself collected, name it in the header so that every record carries it:
+is itself collected, name it in the header and give every record the field,
+left empty where nothing was collected:
 
     STUDYID,USUBJID,SITEID,SEX,SITENM
+    CTX,CTX-01,701,F,
+    CTX,CTX-02,702,M,Royal Infirmary
 
 A bare separator inside a value produces the same surplus, so a value holding
 a separator is quoted rather than left bare.

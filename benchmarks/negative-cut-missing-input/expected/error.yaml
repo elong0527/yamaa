@@ -1,0 +1,7 @@
+phase: cut
+condition: missing_input
+spec_paths:
+  - columns.AGEGRP.derivation.cut
+requirement: REQ-0334
+context:
+  variable: AGE

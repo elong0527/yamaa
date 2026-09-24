@@ -23,6 +23,7 @@ columns:
     type: str
     label: Sex
     derivation: DM.SEX
+    # A missing sex passes; any other value must be exactly M, F or U.
     verifications:
       - matches:
           pattern: '^[MFU]$'

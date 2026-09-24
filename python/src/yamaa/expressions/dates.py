@@ -570,7 +570,13 @@ def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
             )
     if not isinstance(source, DateTimeValue):
         # REQ-0607: in particular a `date` is not an identity spelling.
-        return _incompatible("to_date", "source", "datetime or ISO date text", source)
+        return _incompatible(
+            "to_date",
+            "source",
+            "datetime or ISO date text",
+            source,
+            requirement="REQ-0607",
+        )
     return ValueResult(
         value=DateValue(year=source.year, month=source.month, day=source.day)
     )

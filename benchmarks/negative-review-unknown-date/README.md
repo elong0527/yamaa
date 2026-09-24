@@ -12,10 +12,13 @@ sequence identifiers.
 
 **Variables:**
 
-- `REVIEWFL`: would contain `Y` when the named date is on or
-  after `DATE '2025-01-01'` and `N` otherwise; the decision names
-  `UNKNOWNDT`, which no declared column provides, so the
-  specification is rejected before any data is read.
+- `REVIEWFL` would contain `Y` when the event onset date is on or
+  after 2025-01-01 and `N` otherwise, including when no onset date
+  was collected.
+
+**Note:** the decision names `UNKNOWNDT` instead of the onset date,
+and no declared column provides it, so the run is rejected before
+any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 

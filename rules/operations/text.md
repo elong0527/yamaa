@@ -29,8 +29,7 @@ This contract owns the requirements below. Related contracts:
 
 <a id="req-0304"></a>
 
-**REQ-0304.** `mapping` requires a string source because dictionary keys are
-strings.
+**REQ-0304.** `mapping` requires a string source.
 
 <a id="req-0308"></a>
 
@@ -244,7 +243,7 @@ consumer.
 <a id="req-0801"></a>
 
 **REQ-0801.** Every pattern uses the Unicode flag `u`. All other flags are
-clear. A pattern cannot select flags because ECMA-262 has no inline flag
+clear. A pattern cannot select flags. ECMA-262 has no inline flag
 syntax. `(?i)` is a syntax error. A consumer must not expose `i`, `m`, `s`,
 `g`, `y`, `d`, or `v` through a field, environment, or host default.
 
@@ -260,7 +259,7 @@ escape such as `\\a` a syntax error rather than a silent literal.
 <a id="req-0803"></a>
 
 **REQ-0803.** Without `i`, matching is case-sensitive. No Unicode case
-table applies, because [Text values](../values/text.md) confines casing to ASCII.
+table applies. [Text values](../values/text.md) confines casing to ASCII.
 
 <a id="req-0804"></a>
 
@@ -284,7 +283,7 @@ class uses set notation.
 
 <a id="req-0808"></a>
 
-**REQ-0808.** Because `u` is set, `\\d` is exactly `U+0030` through `U+0039`
+**REQ-0808.** `u` is set. `\\d` is exactly `U+0030` through `U+0039`
 and `\\w` is exactly those, `A-Z`, `a-z`, and `U+005F`. Neither widens to a
 Unicode category. `\\p{...}` is not part of the grammar. A pattern that uses
 it is invalid.
@@ -351,8 +350,8 @@ A `group` above the number of capturing groups in its pattern, or a negative
 <a id="req-0817"></a>
 
 **REQ-0817.** A group that the pattern declares but the match does not enter
-has no value. `str_extract` then produces missing. `no_match` does not apply,
-because the pattern did match; `no_match` applies only when the pattern
+has no value. `str_extract` then produces missing. `no_match` does not apply.
+The pattern did match; `no_match` applies only when the pattern
 matched nowhere in the subject.
 
 ### Regular expressions: Empty matches

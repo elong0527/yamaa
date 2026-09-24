@@ -45,7 +45,7 @@ owns the sequence of a run.
 | [Numeric computation](operations/computation.md) | normative | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
 | [Aggregation](operations/aggregation.md) | normative | Reduce eligible records in one of the three permitted key scopes. |
 | [Lookup and joins](operations/lookup.md) | normative | Match declared keys, narrow records, select a result, and answer absence. |
-| [Windows](operations/windows.md) | normative | Partition completed output rows and compute ranks, neighbors, and baseline selections. |
+| [Windows](operations/windows.md) | normative | Declare complete named windows and compute partitions, ranks, neighbors, and baseline selections. |
 | [Text operations](operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
 | [Temporal operations](operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
 | [Project functions](operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
@@ -99,6 +99,9 @@ citations resolve through the same map. New author-facing citations use REQ IDs.
 [Schema fields](reference/schema-fields.md) is generated from the current
 schema: it lists shapes and defaults and links to semantic owners. Edit the
 schema or owning contract and regenerate the table; do not edit the table.
+The [glossary](reference/glossary.md) pins one meaning per shared clinical
+term used across the contracts. It is informative, not normative: it states
+what the terms mean and adds no requirements.
 Closed syntax remains defined in [grammar/](yaml/grammar/README.md), with
 rendered blocks in the owning contracts and shared R/Python parser vectors.
 

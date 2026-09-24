@@ -24,13 +24,22 @@ code and reported unit.
 
 When a reported unit is absent from the conversion table, the standard
 unit remains known but its result and reference limits are missing.
-Those standardized values must be present together, so the run is
-rejected and no dataset is accepted.
+Those standardized values must be present together, so the completed
+dataset is rejected and not accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
 Confirm the appropriate conversion for the uncovered hemoglobin unit,
-add its test-and-unit row with the correct factor, and rerun. Do not
-assume a factor of one for an uncovered unit.
+add its test-and-unit row with the correct factor to the conversion
+table, and rerun. For hemoglobin reported in `mmol/L`, the usual factor
+to `g/dL` is 1.611:
+
+```csv
+TESTCD,UNIT,FACTOR
+HGB,g/L,0.1
+HGB,mmol/L,1.611
+```
+
+Do not assume a factor of one for an uncovered unit.

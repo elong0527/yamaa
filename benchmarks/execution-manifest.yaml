@@ -324,6 +324,9 @@ examples:
   negative-cut-coded:
     status: executable
     runtimes: ['python']
+  negative-cut-missing-input:
+    status: executable
+    runtimes: ['python']
   negative-path-absolute:
     status: executable
     runtimes: ['python']
@@ -493,6 +496,9 @@ examples:
     status: executable
     runtimes: ['python']
   negative-row-no-prior:
+    status: executable
+    runtimes: ['python']
+  negative-unknown-window:
     status: executable
     runtimes: ['python']
   negative-row-window-on-window-result:
@@ -702,7 +708,13 @@ examples:
   sdtm-lb-multiform:
     status: executable
     runtimes: ['python']
+  sdtm-lb-lab-specific-ranges:
+    status: executable
+    runtimes: ['python']
   sdtm-lb-ranges:
+    status: executable
+    runtimes: ['python']
+  sdtm-lb-last-observation-before-exposure:
     status: executable
     runtimes: ['python']
   sdtm-lb-metadata:
@@ -733,6 +745,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-suppmh-qualifiers:
+    status: executable
+    runtimes: ['python']
+  sdtm-vs-epoch-from-subject-elements:
     status: executable
     runtimes: ['python']
   sdtm-vs-replicates:

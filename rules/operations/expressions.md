@@ -62,7 +62,7 @@ fields fail validation.
 **REQ-0290.** `source` and `literal` are expression leaves. Every other
 expression names its input variables directly, except in the following fields
 whose declared type contains `expression`. Each is evaluated recursively and
-nests because its purpose is to select or compose expressions:
+nests to select or compose expressions:
 
 - `case` items: `case` selects among expressions, so each `then` and the
   trailing `otherwise` nests an expression.
@@ -127,7 +127,7 @@ error names the dict form, so `derivation: 5` must be written
 `true`/`false` spellings, numbers, and null parse as non-strings; quote a
 column reference that YAML would otherwise parse as a non-string.
 
-<a id="req-1249"></a>
+<a id="req-1250"></a>
 
 **REQ-1250.** The canonical spelling of a literal expression is the
 single-line flow mapping `{literal: X}`, wherever the literal appears: a
@@ -135,6 +135,18 @@ single-line flow mapping `{literal: X}`, wherever the literal appears: a
 row-template value, or any other position. The block form (the parent key on
 its own line with `literal: X` nested beneath) parses identically but is
 non-canonical; repository validation reports it.
+
+<a id="req-1255"></a>
+
+**REQ-1255.** The canonical spelling of a plain source expression is the
+bare string, wherever the source shorthand applies (REQ-0319): a
+`derivation` value, a row-template or lookup `derivations` entry, or a
+`case` branch `then` or `otherwise`. The single-key mapping form
+`{source: X}`, flow or block, parses identically but is non-canonical;
+repository validation reports it. The mapping form remains the valid
+spelling where the shorthand does not apply: nested expression arguments,
+the `value` of a handled expression, and filtered sources written
+`{source: {variable: ..., ...}}`.
 
 ### Interface behavior
 

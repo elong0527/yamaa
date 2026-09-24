@@ -22,6 +22,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The strata as recorded at randomization, from the subject's RE record
+  # (matched on the study and subject identifiers).
   - name: METSTATR
     type: str
     label: Randomization Metastatic Disease Status
@@ -29,6 +31,7 @@ columns:
       lookup:
         dataset: RE
         value: METSTAT
+
   - name: ECOG0R
     type: str
     label: Randomization Baseline ECOG Performance Status
@@ -36,6 +39,7 @@ columns:
       lookup:
         dataset: RE
         value: ECOG0
+
   - name: REGIONUSR
     type: str
     label: Randomization United States Region
@@ -43,6 +47,9 @@ columns:
       lookup:
         dataset: RE
         value: REGIONUS
+
+  # The same strata collected independently: metastatic status from the
+  # subject's MH record, performance status and region from DM.
   - name: METSTAT
     type: str
     label: Metastatic Disease Status
@@ -50,6 +57,7 @@ columns:
       lookup:
         dataset: MH
         value: METSTAT
+
   - name: ECOG0
     type: str
     label: Baseline ECOG Performance Status
@@ -60,6 +68,8 @@ columns:
     label: United States Region
     derivation: DM.REGIONUS
 
+  # Both combined values join their three factors in the same order, so
+  # the two can be compared directly.
   - name: STRAT1R
     type: str
     label: Randomization Stratification Factor 1
@@ -76,6 +86,8 @@ verifications:
   - row_count:
       min: 3
       max: 3
+  # The check this benchmark exists to fail: a subject whose randomization
+  # strata disagree with the independently collected ones rejects the run.
   - assert:
       id: randomized-strata-agree
       expr: "STRAT1R = STRAT1"

@@ -13,14 +13,10 @@ subject.
 
 **Variables:**
 
-- `STDT` would be the start date of the exposure, taken from
-  `STDT` in the demographics input.
-- `ENDT` would be the end date of the exposure, taken from `ENDT`
-  in the demographics input.
-- `DURM` would be whole months between `STDT` and `ENDT`,
-  counting both endpoints, which has no meaning beside a month
-  count. The request is rejected before any data is read and no
-  artifact is accepted.
+- `DURM` would be the number of whole months from `STDT` to `ENDT`, but it
+  also asks to count both end dates, which is defined only for a count of
+  days. The request is rejected before any data is read and no artifact is
+  accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

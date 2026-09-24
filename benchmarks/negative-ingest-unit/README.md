@@ -9,16 +9,17 @@ exposure records.
 
 **Input:** a subject-treatment inventory carrying `EXTRT`, plus
 component exposure records carrying `EXTRT`, `EXSEQ`, and
-`EXDOSE`. One exposure record carries `200 mg` where the declared
-type is numeric.
+`EXDOSE`, where the dose is declared numeric.
 
 **Variables:**
 
 - `DOSECUM` would be the total of `EXDOSE` across the matching
-  exposure records for the same subject and treatment.
+  exposure records for the same subject and treatment, and
+  missing when no matching record carries a dose.
 
-The run is rejected while reading the stored `200 mg` value
-against its declared numeric type, so no artifact is accepted.
+A stored dose that is not a plain number, such as `200 mg` with
+its unit attached, is rejected while the exposure records are
+read, so no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADEX
 

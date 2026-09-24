@@ -9,7 +9,9 @@ base: DM
 
 intermediates:
   # The fatal adverse event per subject. Only fatal records are
-  # eligible; the latest one wins.
+  # eligible; the latest one wins. With no key declared it matches on the
+  # output key USUBJID; a subject with no fatal record selects nothing,
+  # so every read of DEATHEV is blank.
   - id: DEATHEV
     dataset: AE
     filter: "AE.AEOUT = 'FATAL'"
@@ -39,7 +41,8 @@ columns:
     derivation: DEATHEV.AEDECOD
 
   # The coded cause of death: an inline lookup into the dictionary on
-  # differently named key columns.
+  # differently named key columns. A missing or unlisted cause selects
+  # nothing and gives the default missing value.
   - name: DTHPTERM
     type: str
     label: Cause of Death Preferred Term

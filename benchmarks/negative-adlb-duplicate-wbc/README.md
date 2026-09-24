@@ -13,22 +13,17 @@ fractions (`LYMLE`).
 
 **Variables:**
 
-- `AVAL`: would contain the `WBC` count multiplied by the
-  `LYMLE` fraction from the same subject and visit on a new
-  `LYMPH` record, but no row is produced when more than one
-  `WBC` record shares a subject and visit, since no single value
-  is available to use. The run fails rather than choosing one
-  record or adding both values.
-- `DTYPE`: would be `CALCULATION` on the new `LYMPH` record, but
-  no row is produced while the contributing values remain
-  ambiguous.
+- `AVAL`: the collected result on collected records. On the new `LYMPH`
+  record it is the `WBC` count multiplied by the `LYMLE` fraction from the
+  same subject and visit; that record is added only when both values are
+  present and no `LYMPH` result was collected at the visit.
+- `DTYPE`: `CALCULATION` on the new `LYMPH` record, empty on collected
+  records.
 
-The run is rejected while the new record is being assembled, and
-no artifact is accepted.
-
-**Note:** each contributing parameter may occur at most once
-within a subject and visit; a repeated result stops the run
-instead of being resolved by amount or position.
+**Note:** each contributing parameter may occur at most once within a
+subject and visit. A repeated `WBC` or `LYMLE` result leaves no single value
+to multiply, so the run stops with no artifact rather than choosing one
+record by amount or position or adding both values.
 
 **Standard:** ADaM | **Domain:** ADLB
 

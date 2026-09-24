@@ -58,16 +58,16 @@ records are the dataset records surviving `filter`.
 
 <a id="req-0113"></a>
 
-**REQ-0113.** A lookup `id` shares one namespace with dataset identifiers,
-other lookup ids, and the output `domain`. A collision fails as
-`duplicate_identifier`.
+**REQ-0113.** A lookup `id` shares one naming list with dataset
+identifiers, other lookup ids, and the output `domain`. A collision fails
+as `duplicate_identifier`.
 
 <a id="req-0114"></a>
 
 **REQ-0114.** A named lookup declares `id` and `dataset`; `key_base` and
 `key` are optional. The schema requires `id` and `dataset`: omitting
-either fails as `missing_required_field` with no requirement attached,
-because the contract is structural. An omitted `key` is inferred from
+either fails as `missing_required_field` with no requirement attached.
+An omitted `key` is inferred from
 the applicable output keys ([REQ-0153](lookup.md#req-0153)); an omitted `key_base` defaults to
 the key names ([REQ-0154](lookup.md#req-0154)). State both lists only when the intended match
 differs from the inferred match.

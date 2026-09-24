@@ -37,7 +37,7 @@ one day.
 
 **REQ-0540.** A `datetime` is a complete local civil datetime: a date of the same
 kind together with a time of day resolved to a whole second. It names a reading
-on a wall clock. It is not an instant on a timeline, because it carries no zone
+on a wall clock. It is not an instant on a timeline. It carries no zone
 and no offset.
 
 <a id="req-0541"></a>
@@ -157,8 +157,8 @@ of that rejection:
 
 <a id="req-0553"></a>
 
-**REQ-0553.** `24:00` and `23:59:60` are rejected for the same reason as the
-and not only because they are unusual. `2025-01-12T24:00` names the moment
+**REQ-0553.** `24:00` and `23:59:60` are rejected for the same reason as the rows above, and not only
+for being unusual. `2025-01-12T24:00` names the moment
 `2025-01-13T00:00` already names, and the two spellings disagree about the day,
 so admitting the first would leave the carried date dependent on the
 spelling that arrived. A leap second is not a value either runtime holds.
@@ -169,7 +169,7 @@ can be stored.
 
 **REQ-0554.** `14:00:00` is rejected for a different reason from the rest of the
 table. Every other row spells a value one of these two types holds; a clock
-reading carrying no date is not one, because both types name a position on the
+reading carrying no date is not one. Both types name a position on the
 calendar. A study that collects one, as the `--TM` family does, keeps the
 collected text as `str`. A time-only value would be a third temporal type, not
 a wider `datetime` -- a new [Types and conversion](types.md) vocabulary entry.
@@ -190,7 +190,7 @@ that pair. Python refuses to order a naive datetime against an aware one and
 raises instead. R has no naive datetime at all: a `POSIXct` always carries a
 `tzone`, and an empty one resolves against the machine's timezone, so the same
 specification would order the same column differently on two machines. Neither
-behavior is this design's to choose, because each is a property of that
+behavior is this design's to choose. Each is a property of that
 runtime's type.
 
 <a id="req-0557"></a>
@@ -201,11 +201,6 @@ local site time and carries no offset. A study that records an offset keeps
 the offset in its own column, where a specification can read the offset as
 data, and an instant-typed value can be added later without invalidating any
 specification written under this contract.
-
-<a id="req-0558"></a>
-
-**REQ-0558.** Two consequences are worth stating, because both are failure modes
-this type does not have:
 
 <a id="req-0559"></a>
 
@@ -281,7 +276,7 @@ that value never disagree. [Types and conversion](types.md) fixes the same relat
 <a id="req-0568"></a>
 
 **REQ-0568.** Canonical text is not the collected text. A value parsed from
-`2025-01-12T14:00` renders as `2025-01-12T14:00:00` because the value names
+`2025-01-12T14:00` renders as `2025-01-12T14:00:00`. The value names
 second zero. Like `float`, a declared type stores a value rather than the
 received characters. For example, `1.50` renders as `1.5`. A column
 that must keep collected characters unchanged is `str`. A `str` column
@@ -345,7 +340,7 @@ That is a type this design does not have, not a property of the two it does.
 
 <a id="req-0575"></a>
 
-**REQ-0575.** The cost is worth stating plainly, because it is the case the
+**REQ-0575.** The cost is worth stating plainly: it is the case the
 property was added for: an imputed start still decides whether an event is
 treatment emergent, and precision does not stop it. What precision changes is
 that the specification classifying the event can now see that the day was
@@ -359,14 +354,6 @@ bounds the imputation with `not_before`, or states a verification under
 <a id="req-0576"></a>
 
 **REQ-0576.** A `date` and a `datetime` do not convert in either direction.
-`date` to `datetime` would invent a time, and `datetime` to `date` would
-discard a collected time. Each conversion would silently decide what a
-specification did not state. This is why a non-integral `float` does not
-become an `int`. `to_date` explicitly discards time and returns a calendar
-date. `datetime_impute` explicitly composes a moment from complete date text
-under a declared first- or last-second rule. The conversion cell stays `fail`
-because inventing a component is an operation's to declare and never a
-conversion's to perform.
 
 <a id="req-0577"></a>
 
@@ -429,7 +416,7 @@ fail under [REQ-0005](types.md#req-0005), reported as the [REQ-0323](types.md#re
 <a id="req-0612"></a>
 
 **REQ-0612.** Storing a value no implementation can hold exactly,
-such as a fractional or leap second, is never reached because text is rejected
+such as a fractional or leap second, is never reached. Text is rejected
 first. An implementation must not round to reach such a value.
 
 ## Conformance examples

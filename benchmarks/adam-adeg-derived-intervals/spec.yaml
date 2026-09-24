@@ -55,12 +55,12 @@ rows:
   # Every collected record, unchanged.
   - id: collected
     derivations:
-      PARAMCD: {source: ADEG_RAW.PARAMCD}
-      PARAM: {source: ADEG_RAW.PARAM}
+      PARAMCD: ADEG_RAW.PARAMCD
+      PARAM: ADEG_RAW.PARAM
       QTVAL: {literal: null}
       RRVAL: {literal: null}
-      AVAL: {source: ADEG_RAW.AVAL}
-      AVALU: {source: ADEG_RAW.AVALU}
+      AVAL: ADEG_RAW.AVAL
+      AVALU: ADEG_RAW.AVALU
 
   # One QTc record per subject and visit that has both a QT and an RR
   # result; ONLY() fails if the visit has more than one of either.

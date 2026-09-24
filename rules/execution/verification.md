@@ -164,8 +164,8 @@ not by regular-expression matching.
 
 **REQ-0383.** `implies` evaluates `when` and `then` for every output row.
   When `when` is `TRUE`, `then` must be `TRUE`; a `FALSE` or `UNKNOWN` result
-  from `then` fails. When `when` is `FALSE` or `UNKNOWN`, the row passes
-  because the rule does not apply.
+  from `then` fails. When `when` is `FALSE` or `UNKNOWN`, the row passes.
+  The rule does not apply.
 
 <a id="req-0384"></a>
 
@@ -216,10 +216,10 @@ count, as `filter` means everywhere else.
 Grouping the artifact rather than the counted rows is what makes an exact
 cardinality statable. Exactly one baseline record for each subject and
 parameter is a `min` and a `max` of one over the rows whose baseline flag is
-`Y`, grouped by subject and parameter. The group exists because the subject
-has records, so a group holding no flagged record fails the `min` instead of
-disappearing. `unique` cannot state this because it admits no filter, and
-`assert` cannot because one row cannot see how many others exist. A
+`Y`, grouped by subject and parameter. The subject has records, so a group
+holding no flagged record fails the `min` instead of
+disappearing. `unique` admits no filter and cannot state this. `assert`
+sees one row at a time and cannot count the group. A
 failure reports the offending groups and their counts.
 
 <a id="req-0388"></a>
@@ -434,7 +434,7 @@ failed `error` verification still produces no accepted artifact and
 failure, it does not make the run publishable. Its rows are the checks the
 run evaluated, in execution order. The stage that failed contributes the
 checks it evaluated, at least one of them `violated` at `error` severity,
-and a check a stopped run never reached has no row, because the log
+and a check a stopped run never reached has no row. The log
 states what was checked and nothing more. This is the one place a rule
 writes a file on a failed run, and it is deliberate: the failing run is the
 one a reviewer most needs in machine-readable form.

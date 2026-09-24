@@ -11,9 +11,8 @@ age for each subject.
 **Variables:**
 
 - `AGE` would contain the collected age copied from the collected
-  records, but no row is produced because `NA` is not a number and
-  the run stops while reading the stored value, so no artifact is
-  accepted.
+  records, but a stored age of `NA` is not a number, so the run stops
+  while reading the stored value and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

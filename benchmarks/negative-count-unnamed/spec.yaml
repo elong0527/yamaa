@@ -42,6 +42,8 @@ columns:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ADT]
+  # Exactly one baseline per subject and parameter, but this grouped count
+  # has no id naming that rule.
   - row_count:
       group_by: [STUDYID, USUBJID, PARAMCD]
       filter: "ABLFL = 'Y'"
