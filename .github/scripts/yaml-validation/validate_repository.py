@@ -42,6 +42,7 @@ from editorial import (  # noqa: E402
     validate_examples_readme_presence,
     validate_literal_canonical_form,
     validate_rule_metadata,
+    validate_source_canonical_form,
     validate_unicode_scalars,
 )
 
@@ -66,6 +67,7 @@ __all__ = [
     'validate_examples_readme_presence',
     'validate_literal_canonical_form',
     'validate_rule_metadata',
+    'validate_source_canonical_form',
     'validate_unicode_scalars',
 ]
 
@@ -11096,6 +11098,7 @@ def check_yaml_files(root: Path):
     warnings = []
     errors.extend(validate_ascii_sources(root))
     errors.extend(validate_literal_canonical_form(root))
+    errors.extend(validate_source_canonical_form(root))
     for yaml_file in sorted(root.rglob('*.yaml')):
         if '.github' in yaml_file.parts:
             continue

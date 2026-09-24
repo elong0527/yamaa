@@ -16,8 +16,7 @@ columns:
       case:
         - when: "USUBJID = '01' AND PARAMCD = 'AST'"
           then: {literal: 31.0}
-        - otherwise:
-            source: LB.LBSTRESN
+        - otherwise: LB.LBSTRESN
     verifications:
       - not_missing: {}
     metadata:

@@ -52,10 +52,10 @@ rows:
   # Every collected record, unchanged, including any collected RRR record.
   - id: collected
     derivations:
-      PARAMCD: {source: ADEG_RAW.PARAMCD}
-      PARAM: {source: ADEG_RAW.PARAM}
-      AVAL: {source: ADEG_RAW.AVAL}
-      AVALU: {source: ADEG_RAW.AVALU}
+      PARAMCD: ADEG_RAW.PARAMCD
+      PARAM: ADEG_RAW.PARAM
+      AVAL: ADEG_RAW.AVAL
+      AVALU: ADEG_RAW.AVALU
       _PROVENANCE: {literal: collected}
 
   # One RR record per heart-rate record that can be inverted:

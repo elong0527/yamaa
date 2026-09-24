@@ -107,8 +107,7 @@ columns:
     derivation:
       case:
         - when: "HAS_POSITION = 1 AND VSORRES IS NOT NULL"
-          then:
-            source: POSITION
+          then: POSITION
 
   - name: VSMETHOD
     type: str
@@ -116,8 +115,7 @@ columns:
     derivation:
       case:
         - when: "HAS_METHOD = 1 AND VSORRES IS NOT NULL"
-          then:
-            source: TEMPMETHOD
+          then: TEMPMETHOD
 
   - name: VSSTAT
     type: str
@@ -133,8 +131,7 @@ columns:
     derivation:
       case:
         - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
-          then:
-            source: BPREASND
+          then: BPREASND
 
   - name: VSSEQ
     type: int
