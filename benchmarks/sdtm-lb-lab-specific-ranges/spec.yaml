@@ -64,8 +64,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str
@@ -142,16 +141,12 @@ columns:
     derivation:
       case:
         - when: "LBSTRESN IS NULL"
-          then:
-            literal: null
+          then: {literal: null}
         - when: "LBSTRESN < LBSTNRLO"
-          then:
-            literal: LOW
+          then: {literal: LOW}
         - when: "LBSTRESN > LBSTNRHI"
-          then:
-            literal: HIGH
-        - otherwise:
-            literal: NORMAL
+          then: {literal: HIGH}
+        - otherwise: {literal: NORMAL}
 
 rows:
   - id: result
