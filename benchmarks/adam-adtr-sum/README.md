@@ -1,4 +1,4 @@
-# Target Diameter Sum
+# Sum the Target Lesion Diameters
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtr-sum.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -24,13 +24,15 @@ at study entry with lesion group and lesion identifier.
 - `AVAL` is the sum of `TRSTRESN` over the target
   longest-diameter records at the assessment, those with `TRGRPID`
   of `TARGET` and `TRTESTCD` of `LDIAM` (longest diameter). A
-  record with a missing result contributes nothing; `AVAL` is
+  record with a missing result contributes nothing, while a zero
+  result (a lesion that disappeared) counts as measured; `AVAL` is
   missing when the assessment measured no target lesion.
 - `NMEAS` is how many target lesions the assessment measured: the
-  count of non-missing `TRSTRESN` values among those records;
-  missing when the assessment has no target longest-diameter
-  records, which separates an assessment that was never performed
-  from one that measured nothing.
+  count of non-missing `TRSTRESN` values among those records. It
+  is missing when the assessment has no target longest-diameter
+  records, and 0 when it has records but none carries a result;
+  this separates an assessment that was never performed from one
+  that measured nothing.
 - `NTARGET` is how many lesions were selected as target lesions at
   study entry: the count of inventory records with `TUGRPID` of
   `TARGET`, counting `TULNKID`; it is the same at every assessment
