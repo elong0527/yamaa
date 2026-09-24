@@ -6,6 +6,9 @@ input:
   DM: input/dm.csv
   VS_MAPPING: input/vs_mapping.csv
 base: ODM
+
+# The subject's first-dose date-time, from the dosing form's start item. It
+# is not in the output; only the two dose-order checks at the end read it.
 intermediates:
   - id: DOSE
     dataset: ODM
@@ -15,13 +18,18 @@ intermediates:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM,
+    VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
+# One candidate record per subject, visit, form and item. Only items in the
+# test dictionary get a test code, so the form's date-time item and the
+# dosing item give no record.
 rows:
   - id: vs_reading
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+      ODM.ItemOID]
     filter: "VSTESTCD IS NOT NULL"
     derivations:
       VSTESTCD:
@@ -124,6 +132,8 @@ columns:
         - when: "VSTESTCD = 'DIABP'"
           then: {literal: 3}
 
+  # Numbered per subject in schedule order, then pulse, systolic and
+  # diastolic within each time point.
   - name: VSSEQ
     type: int
     label: Sequence Number
@@ -146,6 +156,8 @@ columns:
       allowed_values:
         values: [beats/min, mmHg]
 
+  # Collected in standard units, so this is the collected result read as a
+  # number; a result that is not a number stops the run.
   - name: VSSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
@@ -156,6 +168,8 @@ columns:
     label: Standard Units
     derivation: VSORRESU
 
+  # The date-time item on the reading's own form, shared by every result on
+  # that form; a form without one stops the run.
   - name: VSDTC
     type: datetime
     label: Date/Time of Measurements
@@ -163,11 +177,14 @@ columns:
       aggregate:
         filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
         key: [StudyOID, SubjectKey, StudyEventOID, FormOID]
-        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+          ODM.FormOID]
         expr: "ONLY(ODM.Value)"
     verifications:
       not_missing: {}
 
+  # Typed copies of the first-dose date-time and the reference start date,
+  # for the dose-order checks and the study day; neither is in the output.
   - name: EXSTDTC
     type: datetime
     label: Date/Time of First Dose
@@ -199,6 +216,9 @@ verifications:
   - row_count:
       min: 24
       max: 24
+  # A post-dose reading dated before the first dose, or a pre-dose reading
+  # dated after it, stops the run; a subject with no dose date is not
+  # checked.
   - implies:
       id: post-dose-reading-at-or-after-dose
       when: "VSTPTNUM > 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
