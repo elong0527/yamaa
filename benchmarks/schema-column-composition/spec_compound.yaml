@@ -1,13 +1,19 @@
 schema_version: "1.0"
 parents: spec_organization.yaml
+
 columns:
+  # Merged into the organization's AVAL: this entry joins analysis_role.
   - name: AVAL
     metadata:
       source_system: central-laboratory
+
+  # Merged into the organization's mapping: L joins N and H, and the
+  # source and case_sensitive setting carry over.
   - name: ANRIND
     derivation:
       mapping:
         dict:
           L: LOW
+
 metadata:
   scope: compound

@@ -55,11 +55,11 @@ rows:
   # Every collected record, unchanged.
   - id: collected
     derivations:
-      PARAMCD: {source: ADVS_RAW.PARAMCD}
-      PARAM: {source: ADVS_RAW.PARAM}
+      PARAMCD: ADVS_RAW.PARAMCD
+      PARAM: ADVS_RAW.PARAM
       HEIGHT_VAL: {literal: null}
       WEIGHT_VAL: {literal: null}
-      AVAL: {source: ADVS_RAW.AVAL}
+      AVAL: ADVS_RAW.AVAL
       DTYPE: {literal: null}
 
   # One BSA record per subject and visit that has both a height and a

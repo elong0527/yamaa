@@ -131,8 +131,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, RSSEQ]
   - row_count:
-      min: 10
-      max: 10
+      min: 16
+      max: 16
   - implies:
       id: analysis-flag-marks-the-worst-response-of-its-date
       when: "ANL01FL = 'Y'"

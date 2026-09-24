@@ -18,13 +18,13 @@ and start date.
 - `PARAM` codes each test: a collected code with no dictionary entry,
   and a record with no collected code at all, both take the stated
   "Other measure" label.
-- `AVAL` reads the collected result as a whole number: "ND" and the
-  fractional "98.6" cannot be read that way, so the stated fallback
-  leaves them blank. A record with no collected result is blank
-  because there is nothing to read.
+- `AVAL` reads the collected result as a whole number: a result that
+  cannot be read that way, such as "ND" or the fractional "98.6", is
+  left blank by the stated fallback. A record with no collected result
+  is blank because there is nothing to read.
 - `LASTDOSE` takes each subject's latest dose: a dosing record with
-  no dose never qualifies, so the later of the dosed records wins,
-  and a subject with no dosing record keeps the dose blank.
+  no dose never qualifies, the dosed record with the latest start
+  date wins, and a subject with no dosed record keeps the dose blank.
 
 **Note:** each fallback is stated beside the read it guards, so the
 run completes with the stated answers instead of failing; a read

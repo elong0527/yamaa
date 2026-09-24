@@ -32,6 +32,10 @@ columns:
     type: str
     label: Parameter
 
+  # Sums the physical functioning responses of this row's subject and
+  # visit. The derive binding's declared float type converts each text
+  # response; a blank one stays missing and SUM skips it, while text that
+  # is not a number is a conversion failure that stops the run.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -46,6 +50,8 @@ columns:
         expr: "SUM(QSNUM)"
 
 rows:
+  # One score row per subject and visit, built from the first item's
+  # (PF01) record; a visit with no PF01 record gets no score row.
   - id: subscale
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
     derivations:

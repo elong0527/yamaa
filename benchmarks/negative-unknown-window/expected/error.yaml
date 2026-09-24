@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_window
+spec_paths:
+  - columns[2].derivation.row_number.window
+requirement: REQ-1253
+context:
+  window: VISITS_ORDER

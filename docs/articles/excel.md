@@ -42,7 +42,7 @@ columns:                       # this section (below) is the Variable sheet
   #   - name: STUDYID
   #     type: str
   #     label: Study Identifier
-  #     derivation: {source: SOURCE.STUDYID}
+  #     derivation: SOURCE.STUDYID
   - name: BMI                  #   Variable
     type: float                #   Type
     label: Body Mass Index (kg/m2)   # Label
@@ -259,8 +259,7 @@ keys: [STUDYID, USUBJID, AESEQ]
 
   - name: TRTSDTM
     type: datetime
-    derivation:
-      source: ADSL.TRTSDTM          # <- no merge statement anywhere
+    derivation: ADSL.TRTSDTM         # <- no merge statement anywhere
 
   - name: TRTEMFL
     type: str

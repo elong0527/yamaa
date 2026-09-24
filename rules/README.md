@@ -45,7 +45,7 @@ owns the sequence of a run.
 | [Numeric computation](operations/computation.md) | normative | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
 | [Aggregation](operations/aggregation.md) | normative | Reduce eligible records in one of the three permitted key scopes. |
 | [Lookup and joins](operations/lookup.md) | normative | Match declared keys, narrow records, select a result, and answer absence. |
-| [Windows](operations/windows.md) | normative | Partition completed output rows and compute ranks, neighbors, and baseline selections. |
+| [Windows](operations/windows.md) | normative | Declare complete named windows and compute partitions, ranks, neighbors, and baseline selections. |
 | [Text operations](operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
 | [Temporal operations](operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
 | [Project functions](operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |

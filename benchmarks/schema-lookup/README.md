@@ -9,8 +9,8 @@ dictionary.
 
 **Input:** one `spec.yaml` declaring three datasets. `DM` carries one
 row per subject. `AE` carries the adverse-event records: subject,
-reported term, outcome, and study day. `MEDDRA` carries the dictionary:
-each reported term beside its preferred term.
+event term, outcome, and study day. `MEDDRA` carries the dictionary:
+each lowest-level term beside its preferred term.
 
 **Lookups:**
 
@@ -20,10 +20,11 @@ each reported term beside its preferred term.
   subject with two fatal records takes the later one's day and term,
   and a subject with no fatal record keeps `DTHDY` and `DTHCAUS`
   blank.
-- The inline lookup codes the reported cause into `DTHPTERM`: the
-  subject's cause is matched against the dictionary's reported term and
-  the preferred term comes back. A missing cause matches nothing, so
-  the coded cause stays blank too.
+- The inline lookup codes the cause into `DTHPTERM`: the subject's
+  cause is matched against the dictionary's lowest-level term and the
+  preferred term comes back. A missing cause matches nothing, so the
+  coded cause stays blank too, as it does for a cause the dictionary
+  does not list.
 
 **Note:** a join never changes the row count: every subject keeps
 exactly one row, and every read of the same lookup sees the one

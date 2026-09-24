@@ -25,6 +25,8 @@ columns:
     label: Date of Birth (Collected Text)
     derivation: SOURCE.DOBTC
 
+  # The input has no declared types, so the assessment moment and the
+  # reference date arrive as text; the column types convert them.
   - name: DTM
     type: datetime
     label: Datetime of Assessment
@@ -35,6 +37,10 @@ columns:
     label: Reference Start Date
     derivation: SOURCE.REFDTSTR
 
+  # Year-only text gets June and the first day; year-month text gets the
+  # first day; a full date is returned unchanged. Blank text or text that
+  # is not a date gives a missing date. `year` is the default minimum and
+  # is what lets a year alone receive both a month and a day.
   - name: DOB_FIRST
     type: date
     label: Date of Birth Completed to First Day
@@ -47,6 +53,8 @@ columns:
         missing: null
         invalid: null
 
+  # The same completion, to the last day of the month the date lands in
+  # (28 or 29 in a February, by year).
   - name: DOB_LAST
     type: date
     label: Date of Birth Completed to Last Day
@@ -59,6 +67,7 @@ columns:
         missing: null
         invalid: null
 
+  # Y, M or D: how much of a date the collected text carries.
   - name: DOB_PREC_TX
     type: str
     label: Date of Birth Precision From Text
@@ -68,6 +77,9 @@ columns:
         missing: null
         invalid: null
 
+  # The completed date keeps the precision of the text it came from, so
+  # this reads the same code as DOB_PREC_TX. A date value is never invalid
+  # text, so only the missing case needs an answer.
   - name: DOB_PREC_DT
     type: str
     label: Date of Birth Precision From Date
@@ -83,6 +95,8 @@ columns:
       to_date:
         source: DTM
 
+  # CDISC study day: REFDT is day 1, the day before it is -1 (no day 0).
+  # Missing when either date is missing.
   - name: DOBDY
     type: int
     label: Study Day of Birth Completion

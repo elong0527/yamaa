@@ -2,6 +2,10 @@ version: "1.0"
 
 # See REQ-1129 in rules/operations/windows.md.
 
+window_selection:
+    type: [identifier, window_spec]
+    description: See REQ-1251 in rules/operations/windows.md.
+
 window_spec:
     - group_by:
         type: "list[variable]"
@@ -16,7 +20,7 @@ window_spec:
 expressions:
     row_number: # See REQ-1123 in rules/operations/windows.md.
         - window:
-            type: window_spec
+            type: window_selection
             description: See REQ-1123 in rules/operations/windows.md.
     rank: # See REQ-1124 in rules/operations/windows.md.
         - method:
@@ -25,7 +29,7 @@ expressions:
             values: [competition, dense]
             description: See REQ-1124 in rules/operations/windows.md.
         - window:
-            type: window_spec
+            type: window_selection
             description: See REQ-1124 in rules/operations/windows.md.
     row_value: # See REQ-1125 in rules/operations/windows.md.
         - source:
@@ -37,7 +41,7 @@ expressions:
             required: true
             description: See REQ-1125 in rules/operations/windows.md.
         - window:
-            type: window_spec
+            type: window_selection
             description: See REQ-1125 in rules/operations/windows.md.
     previous_non_missing: # See REQ-1126 in rules/operations/windows.md.
         - source:
@@ -45,7 +49,7 @@ expressions:
             required: true
             description: See REQ-1126 in rules/operations/windows.md.
         - window:
-            type: window_spec
+            type: window_selection
             description: See REQ-1126 in rules/operations/windows.md.
     locf: # See REQ-1239 in rules/operations/windows.md.
         - source:
@@ -53,7 +57,7 @@ expressions:
             required: true
             description: See REQ-1239 in rules/operations/windows.md.
         - window:
-            type: window_spec
+            type: window_selection
             description: See REQ-1239 in rules/operations/windows.md.
     baseline_flag: # See REQ-1127 in rules/operations/windows.md.
         - date:
@@ -65,5 +69,5 @@ expressions:
             required: true
             description: See REQ-1127 in rules/operations/windows.md.
         - window:
-            type: window_spec
+            type: window_selection
             description: See REQ-1127 in rules/operations/windows.md.

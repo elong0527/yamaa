@@ -56,8 +56,7 @@ columns:
     derivation:
       case:
         - when: "BRTH_PREC = 'D'"
-          then:
-            source: BRTHDTC
+          then: BRTHDTC
         - otherwise: {literal: null}
 
   - name: AGE

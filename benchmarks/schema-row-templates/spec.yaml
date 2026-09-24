@@ -54,8 +54,7 @@ rows:
     derivations:
       PARAMCD: {literal: ALT}
       PARAM: {literal: Alanine Aminotransferase}
-      AVAL:
-        source: LB.LBSTRESN
+      AVAL: LB.LBSTRESN
       DTYPE: {literal: null}
 
   # Case split, second section: the AST records follow all ALT rows in
@@ -66,8 +65,7 @@ rows:
     derivations:
       PARAMCD: {literal: AST}
       PARAM: {literal: Aspartate Aminotransferase}
-      AVAL:
-        source: LB.LBSTRESN
+      AVAL: LB.LBSTRESN
       DTYPE: {literal: null}
 
   # Grouped template: one candidate row per subject-visit in first

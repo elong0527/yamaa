@@ -82,14 +82,12 @@ rows:
     filter: "BX_RAW.COHORT <> 'NONAD'"
     derivations:
       LBLOC: {literal: LESIONAL}
-      LBORRES:
-        source: BX_RAW.LESRES
+      LBORRES: BX_RAW.LESRES
 
   - id: non_lesional
     derivations:
       LBLOC: {literal: NON-LESIONAL}
-      LBORRES:
-        source: BX_RAW.NLESRES
+      LBORRES: BX_RAW.NLESRES
 
 verifications:
   - unique:

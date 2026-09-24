@@ -253,15 +253,15 @@ across runtimes without a host language mean.
 
 <a id="req-0480"></a>
 
-**REQ-0480.** `SUM(x)` is a left fold of the non-missing argument values in
-relation record order. The accumulator starts with the first such value. Each
-later value is added with [Numeric computation](computation.md)'s `+` semantics. Implementations must not
+**REQ-0480.** `SUM(x)` adds the non-missing argument values in relation record
+order, starting with the first such value and adding each later value with
+[Numeric computation](computation.md)'s `+` semantics. Implementations must not
 reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records and keeps the order of
 the records that remain. [Source ingestion](../storage/ingestion.md) defines stored-source record order. [Execution lifecycle](../execution/lifecycle.md)
 defines constructed-output and grouped-input record order. `MEAN` uses the same
-ordered `SUM`, followed by division by `COUNT`. `MEAN` inherits the
-fold's binary64 rounding behavior.
+ordered `SUM`, followed by division by `COUNT`; `MEAN` inherits `SUM`'s binary64
+rounding behavior.
 
 <a id="req-0481"></a>
 
