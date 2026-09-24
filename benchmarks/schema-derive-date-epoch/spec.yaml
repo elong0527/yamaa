@@ -24,6 +24,10 @@ columns:
     label: Sequence Number
     derivation: EX.EXSEQ
 
+  # Reads the EX records with this row's STUDYID, USUBJID and EXSEQ. The
+  # derive step turns each record's start date into days since 1970-01-01
+  # before reduction; ONLY takes that one value and fails on a second match.
+  # Despite the label, the value is an epoch day, not a study day.
   - name: EXSTDY
     type: int
     label: Study Day of Exposure Start
@@ -39,6 +43,8 @@ columns:
         expr: "ONLY(EPOCHDAY)"
 
 rows:
+  # One output row per EX record with sequence number 1; every column above
+  # is derived for it, so the row template sets nothing itself.
   - id: exposure
     filter: "EX.EXSEQ = 1"
     derivations: {}
