@@ -156,7 +156,7 @@ not a wider comparison.
 **REQ-1259.** A `key_base` entry may be an expression instead of a variable.
 The expression is evaluated against the current row and its value is the
 match operand for that position; a result that is missing matches nothing,
-exactly as a missing variable does ([REQ-0117](lookup.md#req-0117)). The
+exactly as a missing variable does ([REQ-0131](lookup.md#req-0131)). The
 pair's [REQ-0118](lookup.md#req-0118) comparison uses the expression's
 statically known result type as the source side. An operation whose result
 type depends on its inputs states no static type, and the pair is then
