@@ -103,6 +103,7 @@ class PlannedIntermediate(_FrozenModel):
 
     identifier: str = Field(min_length=1)
     dataset: str = Field(min_length=1)
+    self_fields: tuple[str, ...] = ()
     path: str = Field(min_length=1)
     match_variables: tuple[str, ...]
     match_fields: tuple[str, ...]
@@ -132,6 +133,7 @@ class PlannedIntermediate(_FrozenModel):
             name
             for name in predicate_identifiers(self.filter_predicate)
             if name.split(".", 1)[0] != self.dataset
+            and not (self.dataset == "SELF" and "." not in name)
         )
 
     @property
@@ -2157,8 +2159,15 @@ def _validate_intermediate_reference(
     dataset = bindings.datasets.get(intermediate.dataset)
     readable = intermediate.readable_columns
     derived = {name for name, _ in intermediate.derived}
-    if dataset is not None and (
-        (field not in dataset.field_names and field not in derived)
+    available = (
+        set(intermediate.self_fields)
+        if intermediate.dataset == "SELF"
+        else set(dataset.field_names)
+        if dataset is not None
+        else set()
+    )
+    if (dataset is not None or intermediate.dataset == "SELF") and (
+        (field not in available and field not in derived)
         or (readable and field not in readable)
     ):
         # REQ-0125: the named column must exist in the intermediate's dataset and,
@@ -2231,13 +2240,14 @@ def _infer_applicable_keys(
     *,
     hint: str = "declare an explicit `intermediate:` with `source`/`key` pairs",
     requirement: str = "REQ-0152",
+    fields: Mapping[str, ColumnType] | None = None,
 ) -> tuple[str, ...] | None:
     """Infer the applicable keys REQ-0150 defines for an implicit join.
 
     Returns the output keys, in output-key order, that also exist on the
     right-side dataset, or None after recording why the key is unclear.
     """
-    fields = _dataset_types(bindings, dataset)
+    fields = fields if fields is not None else _dataset_types(bindings, dataset)
     keys = tuple(key for key in specification.keys if key in fields)
     if not keys:
         # REQ-0152: with no applicable key the intended match is unclear,
@@ -2684,9 +2694,16 @@ def _plan_lookups(
     dataset_fields = {
         name: _dataset_types(bindings, name) for name in bindings.datasets
     }
+    self_fields = {
+        column.name: column.type
+        for column in specification.columns
+        if column.derivation is None
+    }
+    if specification.rows:
+        dataset_fields["SELF"] = self_fields
     for index, intermediate in enumerate(specification.intermediates or ()):
         path = f"intermediates[{index}]"
-        if intermediate.dataset not in bindings.datasets:
+        if intermediate.dataset not in dataset_fields:
             continue
         if (
             not any(
@@ -2723,7 +2740,7 @@ def _plan_lookups(
                 )
             )
             continue
-        fields = _dataset_types(bindings, intermediate.dataset)
+        fields = dataset_fields[intermediate.dataset]
         key_inferred = False
         source_defaulted = False
         if intermediate.key is None:
@@ -2737,6 +2754,7 @@ def _plan_lookups(
                 diagnostics,
                 hint="declare the `key` explicitly",
                 requirement="REQ-0153",
+                fields=fields,
             )
             if inferred is None:
                 continue
@@ -2852,12 +2870,16 @@ def _plan_lookups(
                     qualifier, separator, field = identifier.partition(".")
                     donor_field = (
                         qualifier == intermediate.dataset and field in available_fields
+                    ) or (
+                        intermediate.dataset == "SELF"
+                        and not separator
+                        and identifier in available_fields
                     )
                     correlated_field = (
                         qualifier != intermediate.dataset
                         and field in dataset_fields.get(qualifier, ())
                     )
-                    if not separator or not (donor_field or correlated_field):
+                    if not (donor_field or (separator and correlated_field)):
                         context: dict[str, JsonValue] = {
                             "intermediate": intermediate.id,
                             "identifier": identifier,
@@ -2879,12 +2901,16 @@ def _plan_lookups(
 
         terms: list[tuple[OrderTerm, str]] = []
         for term_index, term in enumerate(intermediate.order_by or ()):
-            qualifier, _, field = term.variable.partition(".")
-            if qualifier == intermediate.dataset and field in failed_derivations:
+            qualifier, separator, field = term.variable.partition(".")
+            bare_self = intermediate.dataset == "SELF" and not separator
+            donor_term = qualifier == intermediate.dataset or bare_self
+            if bare_self:
+                field = qualifier
+            if donor_term and field in failed_derivations:
                 # The derivation already reports why this ordering field is invalid.
                 failed = True
                 continue
-            if qualifier != intermediate.dataset or field not in available_fields:
+            if not donor_term or field not in available_fields:
                 context = {
                     "intermediate": intermediate.id,
                     "identifier": term.variable,
@@ -2997,6 +3023,7 @@ def _plan_lookups(
         planned[intermediate.id] = PlannedIntermediate(
             identifier=intermediate.id,
             dataset=intermediate.dataset,
+            self_fields=tuple(self_fields) if intermediate.dataset == "SELF" else (),
             path=path,
             match_variables=variables,
             match_fields=match_fields,
@@ -3432,7 +3459,9 @@ def _lookup_declarations(
                 )
             )
         seen.setdefault(intermediate.id, f"{path}.id")
-        if intermediate.dataset not in specification.input:
+        if intermediate.dataset not in specification.input and not (
+            intermediate.dataset == "SELF" and specification.rows
+        ):
             diagnostics.append(
                 _diagnostic(
                     "unknown_field",
@@ -3442,6 +3471,15 @@ def _lookup_declarations(
                         "identifier": intermediate.dataset,
                     },
                     requirement="REQ-0120",
+                )
+            )
+        if intermediate.dataset == "SELF" and "SELF" in specification.input:
+            diagnostics.append(
+                _diagnostic(
+                    "duplicate_identifier",
+                    (f"{path}.dataset", "input.SELF"),
+                    {"identifier": "SELF"},
+                    requirement="REQ-0113",
                 )
             )
         for declared, missing in (
@@ -3940,6 +3978,23 @@ def plan_execution(
             for name, planned in derivations.items():
                 for reference in row_references[(index, name)]:
                     if "." in reference.name:
+                        lookup = intermediates.get(reference.name.split(".", 1)[0])
+                        if (
+                            index == 0
+                            and lookup is not None
+                            and lookup.dataset == "SELF"
+                        ):
+                            diagnostics.append(
+                                _diagnostic(
+                                    "phase_boundary",
+                                    reference.path,
+                                    {
+                                        "identifier": reference.name,
+                                        "available_phase": "completed_prior_row_template",
+                                        "required_phase": "row_construction",
+                                    },
+                                )
+                            )
                         _validate_qualified_reference(
                             reference,
                             {driver} if driver is not None else frozenset(),
