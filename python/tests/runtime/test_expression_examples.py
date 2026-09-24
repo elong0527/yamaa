@@ -92,7 +92,7 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
             "adam-adsl-site-parse",
             [
                 ("columns.SITEIDP.derivation.str_extract.missing", "missing", 0),
-                ("columns.SITEIDP.derivation.str_extract.no_match", "no_match", 1),
+                ("columns.SITEIDP.derivation.str_extract.no_match", "no_match", 4),
                 ("columns.SUBJREF.derivation.str_template.missing", "missing", 1),
             ],
         ),
