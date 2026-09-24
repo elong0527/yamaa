@@ -38,6 +38,8 @@ columns:
     type: str
     label: Findings About Test Name
 
+  # Orders the tests of one reaction on one day: occurrence, severity, then
+  # diameter.
   - name: TESTORD
     type: int
     label: Test order within a diary record
@@ -88,8 +90,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMUNIT
+          then: DIARY.DIAMUNIT
 
   - name: FASTRESC
     type: str
@@ -102,17 +103,12 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMETER
+          then: DIARY.DIAMETER
 
   - name: FASTRESU
     type: str
     label: Standard Units
-    derivation:
-      case:
-        - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMUNIT
+    derivation: FAORRESU
 
   - name: FASTAT
     type: str
@@ -133,6 +129,8 @@ columns:
     derivation: DIARY.DTC
 
 rows:
+  # Every diary row (one reaction on one day) gives an occurrence record; on
+  # a missed day its result is blank.
   - id: occurrence
     derivations:
       FATESTCD: {literal: OCCUR}
@@ -140,9 +138,9 @@ rows:
       FAORRES:
         case:
           - when: "DIARY.COMPLETED = 'Y'"
-            then:
-              source: DIARY.OCCUR
+            then: DIARY.OCCUR
 
+  # Completed days only; the severity is NONE unless the reaction occurred.
   - id: severity
     filter: "DIARY.COMPLETED = 'Y'"
     derivations:
@@ -151,10 +149,10 @@ rows:
       FAORRES:
         case:
           - when: "DIARY.OCCUR = 'Y'"
-            then:
-              source: DIARY.SEV
+            then: DIARY.SEV
           - otherwise: {literal: NONE}
 
+  # Only redness or swelling that occurred on a completed day.
   - id: longest-diameter
     filter: "DIARY.COMPLETED = 'Y' AND DIARY.OCCUR = 'Y' AND DIARY.REACTION IN ('REDNESS', 'SWELLING')"
     derivations:
