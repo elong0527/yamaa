@@ -38,8 +38,9 @@ study, subject, and sequence (`TUSEQ`) identifiers.
 
 **Note:** a lymph-node target lesion is identified like any other
 target lesion: it keeps a `T` link identifier and its category stays
-`TARGET`; the short axis measured in the results domain is what marks
-it as a lymph node. A new lesion is identified once, at the visit
-where it first appears, and earlier visits keep no record of it.
+`TARGET`; its location names it as a lymph node, and the results
+domain measures its short axis. A new lesion is identified once, at
+the visit where it first appears, and earlier visits keep no record
+of it.
 
 **Standard:** SDTM | **Domain:** TU
