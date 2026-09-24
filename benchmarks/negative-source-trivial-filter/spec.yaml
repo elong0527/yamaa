@@ -36,6 +36,8 @@ columns:
             variable: ODM.Value
         missing: Unassigned
 
+  # ARM is an output column holding one value per subject, so the filter
+  # has no records to choose among.
   - name: ACTARM
     type: str
     label: Description of Actual Arm
