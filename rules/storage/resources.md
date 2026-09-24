@@ -116,8 +116,8 @@ identically on every platform and reveals nothing about the host.
 
 **REQ-0775.** No URI scheme. A specification declares stored files;
   retrieval, caching, and authentication are not part of a derivation. One
-  One ASCII letter followed by `:/` is a drive, not a scheme, because one
-  platform spells a rooted location that way; every other `scheme:` prefix is a
+  One ASCII letter followed by `:/` is a drive, not a scheme. One
+  platform spells a rooted location that way. Every other `scheme:` prefix is a
   scheme, a drive letter followed by anything else included.
 
 <a id="req-0776"></a>
@@ -137,7 +137,7 @@ identically on every platform and reveals nothing about the host.
 **REQ-0778.** A `..` segment climbs to the parent directory and a `.` segment
   stays put. A relative path may contain both. Both resolve textually
   before the filesystem is consulted. A traversal that stays inside the
-  approved project root names one file by one spelling, because the canonical
+  approved project root names one file by one spelling. The canonical
   resolved path below is the snapshot identity. A traversal that climbs
   above the anchor keeps resolving textually against the anchor's canonical
   segments and is re-anchored at the approved root the resolved location sits
@@ -145,8 +145,8 @@ identically on every platform and reveals nothing about the host.
   root is reachable by a relative spelling. A traversal that resolves inside
   no approved root fails as `resource_path_outside_project`. An escape fails
   identically on every platform whether or not anything exists where it
-  points. A rooted path writes neither, because it already names its location
-  and a dot segment there would only obscure which approved root it names.
+  points. A rooted path writes neither. It already names its location;
+  a dot segment there would only obscure which approved root it names.
 
 <a id="req-0779"></a>
 
@@ -159,15 +159,15 @@ repository-authored value.
 
 **REQ-0780.** A relative `project_path` resolves relative to the directory of
 the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require. In a resolved
-specification it is relative to the entry file, because [Specification composition](../specification/composition.md) has already
+specification it is relative to the entry file. [Specification composition](../specification/composition.md) has already
 rebased it, and the rebased form names that same location. When that
 resolution reaches no entry, the run retries the path exactly as its layer
 wrote it: first against the approved project root, then against each approved
 data root in run order, the first success winning. The retry needs the layer's
 own spelling, which the rebased form no longer shows, so it is taken from the
 provenance [Specification composition](../specification/composition.md) keeps. A rooted `project_path` resolves against the approved root it
-names and is unaffected by rebasing, which leaves it exactly as written,
-because this contract reads that written form.
+names and is unaffected by rebasing, which leaves it exactly as written.
+This contract reads that written form.
 
 <a id="req-0781"></a>
 
@@ -175,7 +175,7 @@ because this contract reads that written form.
 first at the approved root that the location it names from the writing
 layer's directory sits under -- the approved project root when the layer is
 inside it. If that location is inside no approved root and the writing layer's
-directory is outside every approved root too, it is not an anchor, because the
+directory is outside every approved root too, it is not an anchor. The
 run reads nothing there, and the path begins at the next anchor. Only a
 resolution that reaches no entry advances to the next anchor: the approved
 project root, then the approved data roots in run order. A later anchor that
@@ -232,7 +232,7 @@ component is a regular file.
 one whose target is inside an approved root. A link is a second name for a
 file. A boundary that admits a link must re-derive containment every time
 the link changes. The link a validator followed is not necessarily the
-link a reader follows. The anchor itself is exempt because it is not a name the
+link a reader follows. The anchor itself is exempt. It is not a name the
 specification chose: the runner selected it, the run canonicalized and opened
 it before reading any specification, and every walk begins at that open
 directory, so no name above the anchor can be swapped between validation and
@@ -252,8 +252,8 @@ defect.
 <a id="req-0785"></a>
 
 **REQ-0785.** A path that reaches no entry is missing. A path that reaches a
-directory, FIFO, socket, device, or any other non-regular file is rejected,
-because its bytes are not a stored dataset and reading one can block or
+directory, FIFO, socket, device, or any other non-regular file is rejected.
+Its bytes are not a stored dataset, and reading one can block or
 consume a stream that cannot be read twice.
 
 ### One snapshot per physical file
@@ -285,7 +285,7 @@ and ingestion fails the run; the replacement is not read.
 <a id="req-0789"></a>
 
 **REQ-0789.** Content identity is over bytes. A modification time, inode
-number, or size is not the identity, because none of them changes reliably
+number, or size is not the identity. None of them changes reliably
 when content does.
 
 ### Interface behavior
@@ -309,7 +309,7 @@ contain an approved root, a canonical path, a symbolic link's target, or any
 other host path the specification did not itself write. A rooted written path
 is a host path, but it is the one the specification supplied, so repeating it
 discloses nothing its writer did not already state. The approved roots stay
-unnamed even when the failure is that a path named none of them, because those
+unnamed even when the failure is that a path named none of them. Those
 are the values a rejected specification is probing for.
 
 | Condition | Rejects |

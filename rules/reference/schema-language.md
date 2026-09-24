@@ -148,7 +148,7 @@ a non-recursive type.
 <a id="req-0257"></a>
 
 **REQ-0257.** A registry is a mapping from a permitted keyword to its payload
-shape. A registry is identified because a named type references it with
+shape. A registry is identified by a named type referencing it with
 `registry`. Multiple modules may contribute entries to the same registry:
 
 ```yaml

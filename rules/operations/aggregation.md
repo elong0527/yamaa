@@ -354,7 +354,7 @@ other results. The three target runtimes disagree:
 |---|---|
 | No record in the group after `filter` | missing, as [Lookup and joins](lookup.md)'s absent match |
 | Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN` | missing, never zero |
-| Every value missing -- `COUNT(x)` | `0`, because the records exist |
+| Every value missing -- `COUNT(x)` | `0` |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)` | missing |
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |
@@ -385,8 +385,8 @@ rather than fail says so with `NULLIF`.
 division by zero, `SQRT` of a negative argument, `LN` of a non-positive
 argument, invalid `POWER`, and integer overflow each fail the run. [Types and conversion](../values/types.md)'s non-
 finite normalization applies after every arithmetic or reduction result. `SUM`
-fails on integer overflow under the same condition. Because `MEAN` is defined
-by `SUM`, the same intermediate overflow fails even when the mathematical mean
+fails on integer overflow under the same condition. `MEAN` is defined
+by `SUM`. The same intermediate overflow fails even when the mathematical mean
 would fit.
 
 ### Determinism
