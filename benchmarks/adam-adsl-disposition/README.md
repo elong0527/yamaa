@@ -1,4 +1,4 @@
-# Disposition Summary
+# Summarize End-of-Study Disposition
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-disposition.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -30,6 +30,9 @@ sequence number (`DSSEQ`).
 
 **Note:** date, term, and reason come from a single last event, so
 the three always describe the same event: when two events share the
-latest date, the higher sequence number (`DSSEQ`) decides.
+latest date, the higher sequence number (`DSSEQ`) decides. Records
+in other categories, such as protocol milestones, and records
+without a date never count, so a subject whose disposition record
+has no date is `ONGOING`.
 
 **Standard:** ADaM | **Domain:** ADSL
