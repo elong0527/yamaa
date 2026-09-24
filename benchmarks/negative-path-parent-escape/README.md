@@ -18,10 +18,11 @@ together with a reference table of upper limits read from
 - `AVAL` would be the collected result, taken from `LBSTRESN`.
 - `ANRHI` would be the upper limit of normal for that test and
   sex, taken from the reference entry whose test code and sex
-  equal `LBTESTCD` and `SEX`.
+  equal `LBTESTCD` and `SEX`; missing when no entry matches or the
+  sex is missing.
 
-The limits live outside the study, so the run is rejected before
-any data is read and no artifact is accepted.
+**Note:** the limits live outside the study, so the run is rejected
+before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 

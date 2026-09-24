@@ -18,13 +18,14 @@ plus a reference table of upper limits by test code and sex.
 - `AVAL` would hold the collected result, copied from `LBSTRESN`.
 - `ANRHI` would hold the upper limit of normal for that test and
   sex, taken from the reference table for the matching test code
-  and `SEX`.
+  and `SEX`; missing when no row matches or the sex is missing.
 
-The name the study reads for the reference table is a stand-in
-that points at another file. Where it points can be changed
-without changing the study, so the limits that were reviewed and
-the limits that are read need not be the same. The run is
-rejected before any data is read and no artifact is accepted.
+**Note:** the name the study reads for the reference table,
+`input/lbref.csv`, is a symbolic link: a stand-in that points at
+another file. Where it points can be changed without changing the
+study, so the limits that were reviewed and the limits that are
+read need not be the same. The run is rejected before any data is
+read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
