@@ -43,11 +43,15 @@ columns:
       lookup:
         dataset: ADSL
         value: TRTSDT
+
   - name: AVAL
     type: float
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # Y on the latest result dated on or before treatment start, per subject
+  # and parameter. Two results on that latest date tie, and the run stops
+  # rather than pick one.
   - name: ABLFL
     type: str
     label: Baseline Record Flag

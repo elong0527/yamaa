@@ -23,9 +23,9 @@ subject treatment start dates from ADSL (`TRTSDT`).
   record for the subject and parameter; missing when no result
   falls on or before treatment start.
 
-Results sharing one collection date can tie for latest, and either
-candidate gives the parameter a different baseline. The run fails
-and no dataset is accepted.
+**Note:** results sharing one collection date can tie for latest,
+and either candidate gives the parameter a different baseline. The
+run fails and no dataset is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -35,7 +35,7 @@ Decide which of the two draws is the baseline before choosing how to state it.
 Two results drawn on the same day are usually a sample and its repeat, and the
 source data system should carry the result the study reports, or a collection
 time that separates the draws. Correcting it there leaves the rule saying what
-it means: the latest result before treatment.
+it means: the latest result on or before treatment start.
 
 When both draws are reportable and the study states a tie-break, choose the
 record explicitly instead of by date alone. Order the eligible results and mark
@@ -46,11 +46,12 @@ the first:
   type: int
   derivation:
     row_number:
-      group_by: [STUDYID, USUBJID, PARAMCD]
-      order_by:
-        - {variable: ADT, direction: desc}
-        - {variable: LBSEQ, direction: desc}
-      filter: "ADT <= TRTSDT"
+      window:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        order_by:
+          - {variable: ADT, direction: desc}
+          - {variable: LBSEQ, direction: desc}
+        filter: "ADT <= TRTSDT"
 
 - name: ABLFL
   type: str
