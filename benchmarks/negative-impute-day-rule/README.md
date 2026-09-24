@@ -4,29 +4,29 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** build the analysis start date (`ASTDT`) for each
-collected adverse event (AE) whose start is recorded without a
-day.
+collected adverse event (AE), completing a start recorded without
+a day.
 
 **Input:** collected adverse events carrying the reported start
 (`AESTDTC`), which is sometimes a year and month with no day.
 
 **Variables:**
 
-- `ASTDT` would contain the collected start completed with month
-  `6` and day `mid`.
+- `ASTDT` would contain the collected start, kept as collected
+  when it is a complete date and otherwise completed with day
+  `mid` (and month `6` for a year alone).
 
-The day value `mid` is not a position a calendar fixes for every
-month. Only `first` and `last` name a day every month has, so the
-run is rejected before any data is read and no artifact is
-accepted.
+The day value `mid` is neither a day number nor one of the two
+positions every month has, `first` and `last`, so the run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
 Decide where in the month the analysis date should fall, then name a position
-a calendar fixes or name the day itself. To keep an event as early as the
-collected text allows:
+a calendar fixes or name the day itself. To place a start recorded as a year
+and month on the first of that month:
 
 ```yaml
 date_impute:

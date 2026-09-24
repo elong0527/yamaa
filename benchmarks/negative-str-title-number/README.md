@@ -10,9 +10,11 @@
 
 **Variables:**
 
-- `SITE` (site name) was specified from the numeric site number
-  (`SITENUM`), which has no title-case form, so the run is rejected
-  before any data is read and no row is produced.
+- `SITE` would be the site name in title case, but it is taken from the
+  numeric site number (`SITENUM`), which has no title-case form.
+
+The request is rejected before any data is read, and no artifact is
+accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

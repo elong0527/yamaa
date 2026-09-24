@@ -137,7 +137,9 @@ def test_warning_verification_keeps_the_artifact_and_builds_the_exact_log() -> N
     assert len(result.warnings) == 1
     assert result.warnings[0].severity == "warning"
     assert result.warnings[0].offending_keys == (
-        {"STUDYID": "PILOT7", "USUBJID": "P7-732"},
+        {"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-104"},
+        {"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-105"},
+        {"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-106"},
     )
     assert result.warning_log is not None
     assert (
@@ -223,7 +225,7 @@ def test_declared_verification_log_records_every_evaluated_check() -> None:
         b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
         b"DETAILS\n"
         b"1.0,adsl.csv,columns.AGE.verifications[0].range,,range,AGE,REQ-0377,"
-        b'warning,violated,range_failed,2,1,"{""column"":""AGE""}"\n'
+        b'warning,violated,range_failed,8,3,"{""column"":""AGE""}"\n'
     )
 
 
@@ -308,7 +310,7 @@ def test_failed_run_still_builds_the_verification_log() -> None:
         b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
         b"DETAILS\n"
         b"1.0,adsl.csv,columns.AGE.verifications[0].range,,range,AGE,REQ-0377,"
-        b'error,violated,range_failed,2,1,"{""column"":""AGE""}"\n'
+        b'error,violated,range_failed,8,3,"{""column"":""AGE""}"\n'
     )
 
 

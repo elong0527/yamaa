@@ -24,6 +24,8 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # D, M or Y for a full date, a year and month, or a year alone; missing
+  # when AESTDTC is missing. Nothing answers text that is not a date.
   - name: ASTDTF
     type: str
     label: Analysis Start Date Imputation Flag

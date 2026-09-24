@@ -10,11 +10,12 @@
 
 **Variables:**
 
-- `REVIEWFL`: would contain `Y` when the event sequence number
-  plus `1` exceeds `1`, otherwise `N`, but the run is rejected
-  before any row is produced because the decision performs
-  arithmetic on the sequence number instead of comparing a named
-  value.
+- `REVIEWFL` would contain `Y` when the event sequence number
+  plus `1` exceeds `1`, otherwise `N`.
+
+**Note:** the decision performs arithmetic on the sequence number
+instead of comparing a named value, so the run is rejected before
+any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 

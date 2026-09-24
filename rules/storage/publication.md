@@ -99,9 +99,9 @@ sidecars when the specification declares them.
 
 **REQ-0716.** The path's extension selects the profile. The mapping is closed, so
 an extension outside it names no profile and fails validation rather than
-falling back to one. The extension is matched without regard to case, because a
+falling back to one. The extension is matched without regard to case. A
 study that stores `ADSL.CSV` names the same container as one that stores
-`adsl.csv` and two runtimes must not disagree about which.
+`adsl.csv`. Two runtimes must not disagree about which.
 
 | Extension | Profile | Container | What two runtimes must agree on |
 |---|---|---|---|
@@ -137,7 +137,7 @@ makes it usable as a golden contract.
 <a id="req-0720"></a>
 
 **REQ-0720.** A profile and the specification's `schema_version` identify the
-bytes exactly. A consumer receives both because [Source ingestion](ingestion.md)'s producing-specification
+bytes exactly. A consumer receives both. [Source ingestion](ingestion.md)'s producing-specification
 link carries the whole producer document, not only the profile.
 
 <a id="req-0721"></a>
@@ -246,7 +246,7 @@ and its sidecars and no other file is untouched.
 <a id="req-0753"></a>
 
 **REQ-0753.** The temporary file is regular and is in the target's own
-directory so that the replacement stays within one filesystem and remains
+directory. The replacement stays within one filesystem and remains
 atomic. The name is not fixed and must not collide with the target or with
 another run's temporary file.
 
@@ -262,7 +262,7 @@ complete new one, and never a prefix of the new one.
 **REQ-0755.** Publication happens once, after the whole artifact is complete:
 after every value's lifecycle, key validation, and verification under [Execution lifecycle](../execution/lifecycle.md), and
 after its rows are ordered. Rows are not streamed to the target as they are
-constructed, because a partially constructed dataset is not yet ordered and a
+constructed. A partially constructed dataset is not yet ordered, and a
 run that fails midway would already have published part of it.
 
 ### Warning-log publication

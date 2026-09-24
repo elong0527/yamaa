@@ -19,11 +19,14 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The site number read as an integer (DM holds it as text).
   - name: SITENUM
     type: int
     label: Site Number
     derivation: DM.SITENUM
 
+  # The defect: sentence case needs text, and SITENUM is an integer, so the
+  # spec is rejected before any data is read.
   - name: SITE
     type: str
     label: Site Name

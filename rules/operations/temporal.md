@@ -76,7 +76,7 @@ every other text this contract does not admit.
 **REQ-0583.** `minimum_source_precision` bounds how much `date_impute` may
 invent. Its default is `year`, allowing year-only and year-month sources.
 With `month`, a year-month source may receive the declared day. A valid
-year-only source produces missing because supplying month and day would
+year-only source produces missing. Supplying month and day would
 exceed the declared policy. A complete source date is always returned
 unchanged. Falling below the minimum is neither a missing source nor invalid
 text, so it does not invoke either [Local handlers](../execution/handlers.md) handler.
@@ -106,7 +106,7 @@ invalid text and invokes no handler. A missing bound is no bound.
 <a id="req-0586"></a>
 
 **REQ-0586.** A complete source date is returned unchanged whatever the bound
-says, because the date supplied nothing for the bound to move. This is what
+says. The date supplied nothing for the bound to move. This is what
 makes the bound a rule rather than a comparison a specification could write
 itself: the bound constrains an invented component and never a collected one.
 A specification constraining collected dates states a verification under [Verification](../execution/verification.md),
@@ -125,7 +125,7 @@ same two conditions about it, so one handler stage in [Local handlers](../execut
 missing source, and a non-missing source that is neither a complete date nor a
 date prefix. Text that is not a date is a different defect from an uncollected
 value, and a specification may answer them differently. A `date_precision`
-reading a value has only the first of the two to answer, because a value that
+reading a value has only the first of the two to answer. A value that
 exists is already a value of its type.
 
 <a id="req-0589"></a>
@@ -219,13 +219,13 @@ to the length of that month. With `unit: year` it counts yearly
 anniversaries the same way. Three boundary cases pin the rule:
 `2025-01-31` to `2025-02-28` is one month, `2024-02-29` to `2025-02-28`
 is twelve months and one year, and `2025-01-31` to `2025-03-01` is one
-month, because the March anniversary of January 31 is March 31.
+month. The March anniversary of January 31 is March 31.
 
 <a id="req-0596"></a>
 
 **REQ-0596.** A February 29 anniversary in a common year falls on February
-28. This is the clamping the previous requirement already states, named
-here because it is the case an age computation meets every leap year.
+28. This names the clamping the previous requirement already states. It is
+the case an age computation meets every leap year.
 
 <a id="req-0597"></a>
 

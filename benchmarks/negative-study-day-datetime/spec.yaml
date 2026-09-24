@@ -29,6 +29,8 @@ columns:
     label: Moment of Death
     derivation: DM.DTHDTC
 
+  # The defect: a study day counts calendar dates, and DTHDTM is a
+  # datetime, so the spec is rejected before any data is read.
   - name: DTHDY
     type: int
     label: Study Day of Death
