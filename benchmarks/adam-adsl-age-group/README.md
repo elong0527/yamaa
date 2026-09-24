@@ -1,10 +1,11 @@
-# Age Groups
+# Pool Subjects into Age Groups
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html)
 [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** carry each subject's collected age and derive `AGEGR1`
-and `AGEGR1N` to pool subjects into age groups.
+**Goal:** carry each subject's collected age (`AGE`) and age units
+(`AGEU`), and derive `AGEGR1` and `AGEGR1N` to pool subjects into age
+groups.
 
 **Input:** demographics (DM) records carrying age (`AGE`) and age
 units (`AGEU`).
@@ -18,6 +19,7 @@ units (`AGEU`).
   `18-64`, and `3` for `>64`; empty when `AGE` is missing.
 
 **Note:** both variables share the same bands, so the number always
-matches the text for each subject.
+matches the text for each subject. A subject aged exactly 18 or 64
+falls in `18-64`: boundary ages belong to the middle band.
 
 **Standard:** ADaM | **Domain:** ADSL
