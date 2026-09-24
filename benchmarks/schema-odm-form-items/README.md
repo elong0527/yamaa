@@ -26,7 +26,8 @@ identifier on every form.
 
 **Note:** form identity is part of the collection setting: a date
 row from one form never supplies the date for a result on another
-form at the same subject and visit. Records follow the declared
-form order within each study and subject.
+form at the same subject and visit. Within each study and subject,
+records are numbered in a fixed form order: chemistry, hematology,
+thyroid, urinalysis, then other.
 
 **Standard:** SDTM | **Domain:** LB
