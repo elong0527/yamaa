@@ -12,7 +12,7 @@ standard units (`LBSTRESN`).
 **Variables:**
 
 - `AVAL` would be the numeric analysis value, copying `LBSTRESN`.
-  A result distinguishes whole numbers from fractional numbers,
+  Whole and fractional numbers are stored as different kinds of value,
   but the declared kind says only `number`. Choosing either
   representation would invent a precision decision the
   declaration did not make, so the run is rejected before any
@@ -28,8 +28,8 @@ are impossible; otherwise use `float`:
 ```yaml
 - name: AVAL
   type: float
-  derivation:
-    source: LB.LBSTRESN
+  label: Analysis Value
+  derivation: LB.LBSTRESN
 ```
 
 The allowed column types are `str`, `int`, `float`, `date`, and `datetime`.

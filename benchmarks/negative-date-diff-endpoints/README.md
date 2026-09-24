@@ -14,20 +14,19 @@ moment (`RFSTDTC`) and the death date (`DTHDT`).
 
 - `RFSTDTM` would be the moment treatment started, time of day
   included, taken from `RFSTDTC`.
-- `DTHDT` would be the calendar date of death, taken from `DTHDT`.
 - `SURVDD` would be the whole-day count from `RFSTDTM` to `DTHDT`.
 
-A day count has no meaning between a moment and a date: the hours
-on either side could give two different answers, so the run is
-rejected before any data is read and no artifact is accepted.
+**Note:** a day count has no meaning between a moment and a date: the hours
+on either side could give two different answers, so the run is rejected
+before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
 Decide which calendar days the study counts, then state them as dates. When
-only moments are collected, take each moment's calendar date first so the
-count has whole days to count:
+only moments are collected, take each moment's calendar date first and
+count from it (`start: RFSTD`), so the count has whole days to count:
 
 ```yaml
 - name: RFSTD
