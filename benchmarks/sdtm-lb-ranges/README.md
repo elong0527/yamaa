@@ -28,8 +28,9 @@ limits.
   `HIGH` when it is above the upper limit, and `NORMAL` otherwise;
   blank when the result itself is missing.
 
-**Note:** each test-and-sex combination has one and only one
-reference entry, so the unit and both limits are present on every
-record, including one whose result is missing.
+**Note:** a test-and-sex combination with two reference entries
+stops the run. One with no entry leaves the unit and both limits
+blank, and its result is flagged `NORMAL`. A record whose result is
+missing still carries its unit and limits.
 
 **Standard:** SDTM | **Domain:** LB

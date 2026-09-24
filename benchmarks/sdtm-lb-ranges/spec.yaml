@@ -5,6 +5,9 @@ input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
 base: LB_RAW
+
+# The reference entry for the record's test code and sex. Two entries for
+# one combination stop the run; none leaves UNIT, NRLO and NRHI missing.
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
@@ -65,6 +68,9 @@ columns:
     label: Reference Range Upper Limit-Std Units
     derivation: REFRANGE.NRHI
 
+  # A result equal to a limit is NORMAL. The first branch keeps a missing
+  # result from falling through to NORMAL. A record with no reference entry
+  # has missing limits, so both comparisons are unknown and it gets NORMAL.
   - name: LBNRIND
     type: str
     label: Reference Range Indicator
