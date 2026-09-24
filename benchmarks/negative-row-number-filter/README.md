@@ -12,11 +12,12 @@ result (`LBSTRESN`) and the collection sequence.
 **Variables:**
 
 - `VISITSEQ` would number each result within its subject in
-  collection-sequence order, keeping only rows where the filter
-  holds. The filter arrives as a bare number instead of a
-  comparison, so no reader may guess which rows it keeps, and the
-  run is rejected before any data is read and no artifact is
-  accepted.
+  collection-sequence order, counting only the results a stated
+  condition selects; the other results would keep their rows with
+  a missing number. The condition arrives as a bare number (`7`)
+  instead of a comparison, so which results it selects is
+  undefined, and the run is rejected before any data is read and
+  no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -30,10 +31,12 @@ When every collected result counts, leave the filter out entirely:
   type: int
   derivation:
     row_number:
-      group_by: [STUDYID, USUBJID]
-      order_by:
-        - {variable: LBSEQ, direction: asc}
+      window:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBSEQ]
 ```
 
-When only some rows count, write the condition they satisfy rather than
-numbering the rows by hand.
+When only some results count, write the condition they satisfy under
+`window`, for example `filter: "LBSTRESN > 5.5"`, rather than numbering
+the rows by hand. The results it excludes keep their rows with a missing
+number.

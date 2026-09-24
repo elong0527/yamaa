@@ -16,11 +16,11 @@ weight, carrying `ADT`, `AVAL`, and `AVALF` for each measurement.
   date.
 - `AVAL` would be the collected weight taken from the collected
   result, and missing when no measurement was taken.
-- `AVALF` would be the current weight, or the earlier filled
-  value from the most recent earlier measurement when the current
-  weight is missing. When a gap follows a filled gap, the value
-  would have to come from a record that was itself filled in, so
-  the filled value is stated in terms of its own earlier value.
+- `AVALF` would be the current weight or, when it is missing, the
+  filled weight of the previous measurement in date order. After
+  two gaps in a row, the second would read a weight that was
+  itself filled in, so the filled weight is stated in terms of
+  itself.
 
 **Note:** filling one gap and stopping, or resolving the records
 in an order nothing states, would each give a different answer
@@ -32,7 +32,8 @@ read and no artifact is accepted.
 ## How to fix
 
 Carry from the collected series rather than from the filled output. Search the
-earlier collected values, then take the first available of AVAL and PRIOR:
+earlier collected values, then take the first available of `AVAL` and
+`PRIOR`:
 
 ```yaml
 - name: PRIOR
@@ -40,8 +41,10 @@ earlier collected values, then take the first available of AVAL and PRIOR:
   derivation:
     previous_non_missing:
       source: AVAL
-      group_by: [STUDYID, USUBJID, PARAMCD]
-      order_by: [ADT, VSSEQ]
+      window:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        order_by: [ADT, VSSEQ]
+
 - name: AVALF
   type: float
   derivation:

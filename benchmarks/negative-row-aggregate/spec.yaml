@@ -29,6 +29,9 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # The defect: SUM totals several records, but a row formula sees one
+  # record at a time, so the specification is rejected before any data is
+  # read.
   - name: AVALTOT
     type: float
     label: Total Analysis Value
