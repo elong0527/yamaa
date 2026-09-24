@@ -10,6 +10,8 @@ input:
     types:
       StudyEventRepeatKey: int
       ItemGroupRepeatKey: int
+  # The same file under a second name, read for the reaction name and date
+  # items that sit beside each result item.
   ODM_SIBLING:
     path: input/odm.csv
     types:
@@ -40,20 +42,28 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: FA}
+
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
+
   - name: FATESTCD
     type: str
     label: Findings About Test Short Name
+
   - name: FATEST
     type: str
     label: Findings About Test Name
+
+  # The reaction name and collection date come from the sibling items in the
+  # same diary occurrence (diary day and form repeat). A result item whose
+  # occurrence has no such item stops the run.
   - name: FAOBJ
     type: str
     label: Object of the Observation
@@ -79,14 +89,17 @@ columns:
         strict: true
     verifications:
       not_missing: {}
+
   - name: FACAT
     type: str
     label: Category for Findings About
     derivation: {literal: REACTOGENICITY}
+
   - name: FAORRES
     type: str
     label: Result or Finding in Original Units
     derivation: ODM.Value
+
   - name: FAORRESU
     type: str
     label: Original Units
@@ -94,10 +107,13 @@ columns:
       case:
         - when: FATESTCD = 'LDIAM'
           then: {literal: mm}
+
   - name: FASTRESC
     type: str
     label: Character Result/Finding in Std Format
     derivation: FAORRES
+
+  # A result item that is present but blank is NOT DONE.
   - name: FASTAT
     type: str
     label: Completion Status
@@ -105,6 +121,7 @@ columns:
       case:
         - when: FAORRES IS NULL
           then: {literal: NOT DONE}
+
   - name: FATPT
     type: str
     label: Planned Time Point Name
@@ -115,6 +132,7 @@ columns:
           DAY1: END DAY 1
           DAY2: END DAY 2
         strict: true
+
   - name: FADTC
     type: str
     label: Date/Time of Collection
@@ -138,6 +156,9 @@ columns:
         filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
         value: Value
         strict: true
+
+  # Diary day, day repeat, reaction repeat and test order number the findings
+  # for FASEQ. A diary day not listed here or in FATPT stops the run.
   - name: EVENTORD
     type: int
     label: Diary day order
@@ -148,17 +169,21 @@ columns:
           DAY1: 1
           DAY2: 2
         strict: true
+
   - name: EVENTREPEAT
     type: int
     label: Diary day repeat
     derivation: ODM.StudyEventRepeatKey
+
   - name: REPEATKEY
     type: int
     label: Reaction repeat
     derivation: ODM.ItemGroupRepeatKey
+
   - name: TESTORD
     type: int
     label: Test order
+
   - name: FASEQ
     type: int
     label: Sequence Number
@@ -174,6 +199,8 @@ columns:
             - REPEATKEY
             - TESTORD
 rows:
+  # One record per collected result item; a test with no item on the form
+  # gives no record.
   - id: reported-finding
     dataset: ODM
     filter: ODM.ItemGroupOID = 'IG.FA' AND ODM.ItemOID IN ('IT.FA.OCCUR', 'IT.FA.SEV', 'IT.FA.LDIAM')

@@ -59,6 +59,8 @@ columns:
     type: str
     label: Collected Race
 
+  # Races are numbered in alphabetical order of the collected answer; the
+  # input carries no report order.
   - name: RACENUM
     type: int
     label: Race Number Within Subject
@@ -89,6 +91,7 @@ columns:
     derivation:
       str_template: "Race {RACENUMC}"
 
+  # The same race dictionary as RACE in spec_dm.yaml.
   - name: QVAL
     type: str
     label: Data Value

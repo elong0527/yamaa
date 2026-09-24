@@ -25,7 +25,7 @@ collected record); and a WHODrug dictionary extract.
   not yet coded.
 
 **Note:** one drug can carry several ATC codes, and the coder assigns
-the class for the use at hand: the same drug record codes to a
-different `CMCLAS` for different subjects.
+the class for the use at hand: the same drug record can code to a
+different `CMCLAS` on different records.
 
 Standard: SDTM | Domain: CM

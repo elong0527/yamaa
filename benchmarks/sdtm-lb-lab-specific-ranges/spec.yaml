@@ -135,6 +135,9 @@ columns:
     label: Reference Range Upper Limit-Std Units
     derivation: REFRANGE.NRHI
 
+  # The first branch keeps a missing result blank; without it the result
+  # would fall through to NORMAL. A result with no reference entry is NORMAL,
+  # since neither limit comparison can be true.
   - name: LBNRIND
     type: str
     label: Reference Range Indicator

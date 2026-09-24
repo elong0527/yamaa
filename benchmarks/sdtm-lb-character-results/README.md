@@ -6,17 +6,18 @@
 `LBSTRESN` for true numerics only, and state `LBNRIND` for results
 at the quantification limits.
 
-**Input:** long-form ODM data with one row per recorded item. Each
-laboratory result is one form occurrence carrying the reported
-result (`IT.LB.RESULT`), the collection date (`IT.LB.LBDTC`), and
-the reported unit (`IT.LB.LBORRESU`); the collection form names the
-test. A repeated form occurrence keeps a second result for the same
-test and visit separate (the two creatinine records).
+**Input:** long-form Operational Data Model (ODM) data with one row per
+recorded item. Each laboratory result is one form occurrence carrying the
+reported result (`IT.LB.RESULT`), the collection date (`IT.LB.LBDTC`), and
+the reported unit (`IT.LB.LBORRESU`); the collection form names the test. A
+repeated form occurrence keeps a second result for the same test and visit
+separate.
 
 **Variables:**
 
 - `LBSEQ` numbers the records in the documented collection order
-  within each subject.
+  within each subject (protein, creatine kinase, glucose, ketones,
+  creatinine), then by form repeat.
 - `LBTESTCD` is the test short name for the collection form:
   `PROT` (protein), `GLUC` (glucose), `KETON` (ketones), `CREAT`
   (creatinine), or `CK` (creatine kinase).
@@ -26,8 +27,8 @@ test and visit separate (the two creatinine records).
 - `LBORRESU` is the unit as reported on the collection form; empty
   when the form records no unit.
 - `LBSTRESC` is the standardized character result: known dipstick
-  spellings fold to `NEGATIVE`, `TRACE`, `1+`, or `2+`; anything
-  else is kept as collected.
+  spellings, in any letter case, fold to `NEGATIVE`, `TRACE`, `1+`, or
+  `2+`; anything else is kept as collected.
 - `LBSTRESN` is the standardized numeric result. It holds a number
   only for a true numeric such as `0.9`; it stays empty for grades
   and for censored values.

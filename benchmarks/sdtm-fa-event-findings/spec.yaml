@@ -3,6 +3,8 @@ domain: FA
 keys: [STUDYID, USUBJID, FASEQ]
 input:
   ODM: input/odm.csv
+  # The same file under a second name, so the event term lookup can read the
+  # adverse event items while the findings items build the rows.
   ODM_AE: input/odm.csv
 
 output:
@@ -73,6 +75,7 @@ columns:
     type: date
     label: Date/Time of Collection
 
+  # Test order within a linked event, for FASEQ.
   - name: TESTORD
     type: int
     label: Test order within a linked event
@@ -95,6 +98,11 @@ columns:
           order_by: [FALNKID, TESTORD, FAORRES]
 
 rows:
+  # One row template per test, each grouping the items by event occurrence:
+  # an occurrence gives one record per answered test, and none when the test
+  # has no answer. FAOBJ is the adverse event term on the same occurrence. It
+  # is sought before the answer is checked, so any occurrence with no term,
+  # even one with no findings, stops the run.
   - id: location
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
@@ -114,10 +122,7 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
           expr: "ONLY(ODM.Value)"
-      FASTRESC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
-          expr: "ONLY(ODM.Value)"
+      FASTRESC: FAORRES
       FAORRESU: {literal: null}
       FASTRESN: {literal: null}
       FASTRESU: {literal: null}
@@ -153,17 +158,9 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.SIZEU'"
           expr: "ONLY(ODM.Value)"
-      FASTRESC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.FA.SIZE'"
-          expr: "ONLY(ODM.Value)"
-      FASTRESN:
-        value:
-          source: FAORRES
-      FASTRESU:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.FA.SIZEU'"
-          expr: "ONLY(ODM.Value)"
+      FASTRESC: FAORRES
+      FASTRESN: FAORRES
+      FASTRESU: FAORRESU
       FALNKID:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.AELNKID'"
@@ -192,10 +189,7 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"
           expr: "ONLY(ODM.Value)"
-      FASTRESC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"
-          expr: "ONLY(ODM.Value)"
+      FASTRESC: FAORRES
       FAORRESU: {literal: null}
       FASTRESN: {literal: null}
       FASTRESU: {literal: null}
