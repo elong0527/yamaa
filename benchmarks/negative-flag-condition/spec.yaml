@@ -24,4 +24,5 @@ columns:
     type: str
     label: Elderly Flag
     derivation:
-      flag: "AGE >> 65"
+      flag:
+        condition: "AGE >> 65"
