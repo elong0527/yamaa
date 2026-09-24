@@ -691,6 +691,14 @@ def _merge_layers(
                 resolved.pop(name, None)
                 _clear_provenance(provenance, name)
                 continue
+            if name == "windows":
+                target = resolved.setdefault(name, {})
+                assert isinstance(target, dict) and isinstance(value, dict)
+                for window, definition in value.items():
+                    target[window] = _replace(
+                        definition, f"windows.{window}", origin, provenance
+                    )
+                continue
             if collection is None:
                 resolved[name] = copy.deepcopy(value)
                 _clear_provenance(provenance, name)
@@ -1429,11 +1437,17 @@ def resolve_specification(
     from yamaa.schema.row_catalog import expand_row_catalogs
 
     resolved = expand_row_catalogs(resolved, entry_path, resources)
+    from yamaa.schema.windows import expand_named_windows
+
+    resolved = expand_named_windows(
+        resolved, schema_bundle, strict=False, provenance=provenance
+    )
     if "parents" in raw_entry:
         resolved = _prune(resolved, schema_bundle)
         resolved, diagnostics = _order_columns(resolved, schema_bundle)
         if diagnostics:
             raise SpecificationError(diagnostics)
+    resolved = expand_named_windows(resolved, schema_bundle)
     resolved = _schema_order(resolved, schema_bundle)
     diagnostics = validate_specification(resolved, schema_bundle)
     if diagnostics:

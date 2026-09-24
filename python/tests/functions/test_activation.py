@@ -35,8 +35,14 @@ from yamaa.specification import load_specification
 # missing value to a non-accepting parameter and are short-circuited.
 INVOKED_VECTORS = [(70.0, 175.0, 100), (80.0, 200.0, 100), (0.0, 175.0, 100)]
 # The study rows of `adam-adsl-bmi` that reach the binding. The
-# fourth subject has no height, so REQ-0681 answers it without a call.
-STUDY_ROWS = [(81.0, 180.0, 100), (64.0, 160.0, 100), (45.0, 150.0, 100)]
+# fourth, fifth and sixth subjects carry a missing height or weight,
+# so REQ-0681 answers them without a call.
+STUDY_ROWS = [
+    (81.0, 180.0, 100),
+    (64.0, 160.0, 100),
+    (45.0, 150.0, 100),
+    (0.0, 200.0, 100),
+]
 
 
 def _specification(repository):

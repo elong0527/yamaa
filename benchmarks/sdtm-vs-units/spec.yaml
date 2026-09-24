@@ -82,8 +82,7 @@ rows:
   - id: height
     filter: "VS_RAW.VSTESTCD = 'HEIGHT'"
     derivations:
-      VSSTRESN:
-        source: VS_RAW.VSORRES
+      VSSTRESN: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL"
@@ -98,8 +97,7 @@ rows:
             then:
               compute:
                 expr: "VS_RAW.VSORRES * 0.45359237"
-          - otherwise:
-              source: VS_RAW.VSORRES
+          - otherwise: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL"
@@ -114,8 +112,7 @@ rows:
             then:
               compute:
                 expr: "(VS_RAW.VSORRES - 32) * 5 / 9"
-          - otherwise:
-              source: VS_RAW.VSORRES
+          - otherwise: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL"

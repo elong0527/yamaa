@@ -195,7 +195,8 @@ schema failure.
 
 <a id="req-0363"></a>
 
-**REQ-0363.** A result wrapper with no `missing` and without `strict: true`: fail.
+**REQ-0363.** A result wrapper with no `missing` and without `strict: true`:
+a failed output conversion is fatal under [Execution lifecycle](lifecycle.md).
 
 <a id="req-0364"></a>
 

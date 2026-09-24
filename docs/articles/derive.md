@@ -58,15 +58,15 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: DM.STUDYID}
+    derivation: DM.STUDYID
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: {source: DM.USUBJID}
+    derivation: DM.USUBJID
   - name: AGE
     type: int
     label: Age
-    derivation: {source: DM.AGE}
+    derivation: DM.AGE
 ```
 
 ![A key table containing one row per distinct key combination, with columns derived onto it without changing its row count.](../diagrams/derive-simple.svg)
@@ -99,13 +99,13 @@ rows:
     filter: "VS.PARAMCD = 'HEIGHT'"
     derivations:
       PARAMCD: {literal: HEIGHT}
-      AVAL: {source: VS.AVAL}
+      AVAL: VS.AVAL
 
   - id: weight
     filter: "VS.PARAMCD = 'WEIGHT'"
     derivations:
       PARAMCD: {literal: WEIGHT}
-      AVAL: {source: VS.AVAL}
+      AVAL: VS.AVAL
 ```
 
 The constructed rows must still satisfy `keys`: every key value must be

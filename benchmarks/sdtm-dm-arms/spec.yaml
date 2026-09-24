@@ -73,8 +73,7 @@ columns:
     derivation:
       case:
         - when: "EXTRT1 IS NOT NULL AND ACTARMCD IS NULL"
-          then:
-            source: EXTRT1
+          then: EXTRT1
 
   - name: ARMNRS
     type: str

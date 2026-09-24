@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # Intentionally a fixed day 31: a year alone becomes 31 December, but a
+  # year and month with fewer than 31 days completes to no calendar date,
+  # which fails the run.
   - name: AENDT
     type: date
     label: Analysis End Date

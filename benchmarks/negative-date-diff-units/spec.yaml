@@ -29,6 +29,8 @@ columns:
     label: End Date
     derivation: DM.ENDT
 
+  # Counting both end dates is defined only for a day count, so inclusive
+  # beside unit: month is rejected before any data is read.
   - name: DURM
     type: int
     label: Duration in Whole Months

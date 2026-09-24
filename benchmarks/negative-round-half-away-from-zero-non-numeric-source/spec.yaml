@@ -24,6 +24,8 @@ columns:
     label: Sex
     derivation: DM.SEX
 
+  # The defect: SEX is a text code, and rounding accepts only a numeric
+  # source, so the specification is rejected before any data is read.
   - name: RNDVAL
     type: float
     label: Rounded Value

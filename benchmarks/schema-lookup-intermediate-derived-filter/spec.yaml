@@ -7,6 +7,11 @@ input:
 base: DM
 
 intermediates:
+  # Each subject's DS records (no key: it matches on the output keys),
+  # ranked by study day with the sequence number, scaled down by 1000,
+  # breaking a tie within a day. The filter and order_by read the derived
+  # rank qualified with DS, like a DS field. A record with no study day
+  # has a missing rank and is never chosen; the smallest rank is kept.
   - id: EOT
     dataset: DS
     derivations:
@@ -27,18 +32,22 @@ columns:
     type: str
     label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: DSDECOD
     type: str
     label: Selected Disposition Term
     derivation: EOT.DSDECOD
+
   - name: DSVALUE
     type: float
     label: Selected Numeric Value
     derivation: EOT.DSVALUE
+
   - name: EOT_FALLBACK
     type: float
     label: Selected Derived Rank

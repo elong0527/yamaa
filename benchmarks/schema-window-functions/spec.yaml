@@ -10,6 +10,17 @@ output:
   columns: [STUDYID, USUBJID, VISITN, VISIT, VSDTC, TRTSDT, VSSTRESN, VSEVAL,
             VSSEQ, SEVRANKC, SEVRANKD, PREVRES, NEXTRES, LASTRES, CARRYRES, BLFL]
 
+windows:
+  RESULT_ORDER:
+    group_by: [USUBJID]
+    order_by:
+      - variable: VSSTRESN
+        direction: desc
+        nulls: last
+  VISIT_ORDER:
+    group_by: [USUBJID]
+    order_by: [VISITN]
+
 columns:
   - name: STUDYID
     type: str
@@ -73,12 +84,7 @@ columns:
     derivation:
       rank:
         method: competition
-        window:
-          group_by: [USUBJID]
-          order_by:
-            - variable: VSSTRESN
-              direction: desc
-              nulls: last
+        window: RESULT_ORDER
 
   # Dense rank of the same ordering: no number is skipped after a tie.
   - name: SEVRANKD
@@ -87,12 +93,7 @@ columns:
     derivation:
       rank:
         method: dense
-        window:
-          group_by: [USUBJID]
-          order_by:
-            - variable: VSSTRESN
-              direction: desc
-              nulls: last
+        window: RESULT_ORDER
 
   # The result from the previous visit. A missing value is not skipped: a
   # present row with a missing value reads the same as an absent row.
@@ -103,9 +104,7 @@ columns:
       row_value:
         source: VSSTRESN
         offset: -1
-        window:
-          group_by: [USUBJID]
-          order_by: [VISITN]
+        window: VISIT_ORDER
 
   # The result from the next visit; the last visit of each subject reads
   # missing.
@@ -116,9 +115,7 @@ columns:
       row_value:
         source: VSSTRESN
         offset: 1
-        window:
-          group_by: [USUBJID]
-          order_by: [VISITN]
+        window: VISIT_ORDER
 
   # The closest strictly earlier non-missing result; the current row is
   # never a candidate. Crosses any number of consecutive gaps: subject 02
@@ -129,9 +126,7 @@ columns:
     derivation:
       previous_non_missing:
         source: VSSTRESN
-        window:
-          group_by: [USUBJID]
-          order_by: [VISITN]
+        window: VISIT_ORDER
 
   # Returns the current result when present, otherwise the closest
   # strictly earlier non-missing result. Differs from the previous
@@ -143,9 +138,7 @@ columns:
     derivation:
       locf:
         source: VSSTRESN
-        window:
-          group_by: [USUBJID]
-          order_by: [VISITN]
+        window: VISIT_ORDER
 
   # Marks the unique latest visit dated on or before treatment start. The
   # baseline visit can carry a missing result (subject 02 visit 2), and a

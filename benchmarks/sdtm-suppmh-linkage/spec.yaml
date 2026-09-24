@@ -78,8 +78,7 @@ rows:
     derivations:
       QNAM: {literal: MHFAMHX}
       QLABEL: {literal: Family History}
-      QVAL:
-        source: MH_SUPP_RAW.MHFAMHX
+      QVAL: MH_SUPP_RAW.MHFAMHX
 
   - id: medical_record_confirmation
     dataset: MH_SUPP_RAW
@@ -87,8 +86,7 @@ rows:
     derivations:
       QNAM: {literal: MHCONF}
       QLABEL: {literal: Confirmed by Medical Records}
-      QVAL:
-        source: MH_SUPP_RAW.MHCONF
+      QVAL: MH_SUPP_RAW.MHCONF
 
 verifications:
   - unique:

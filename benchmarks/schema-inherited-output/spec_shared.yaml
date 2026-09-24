@@ -2,10 +2,14 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 
+# Written once here and inherited whole. The path is read from this
+# file's directory; a study that writes its own output replaces all of it.
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGE, AGEU]
 
+# The columns read DM, which this level does not declare: each study
+# supplies its own DM input.
 columns:
   - name: STUDYID
     type: str

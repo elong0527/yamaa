@@ -8,23 +8,19 @@ day of its month and read how much was collected.
 
 **Input:** subject-level records carrying a birth date as text
 `DOBTC` (a year, a year and month, or a full date), an
-assessment moment, and a reference start date.
+assessment moment `DTM`, and a reference start date `REFDT`.
+All three reach the output as collected, blank when nothing was
+collected.
 
 **Variables:**
 
-- `DOBTC` holds the birth date text as collected; blank when
-  nothing was collected.
-- `DTM` holds the assessment moment; blank when nothing was
-  collected.
-- `REFDT` holds the reference start date; blank when nothing
-  was collected.
 - `DOB_FIRST` holds the birth date with a missing month set to
   June and a missing day set to the first of the month; a full
   date stands as collected, and blank stays blank.
-- `DOB_LAST` holds the same birth date with a missing day set
-  to the last of the month, so February lands on the 28th or
-  29th by year; a full date stands as collected, and blank
-  stays blank.
+- `DOB_LAST` holds the birth date completed the same way, but
+  with a missing day set to the last of the month, so February
+  lands on the 28th or 29th by year; a full date stands as
+  collected, and blank stays blank.
 - `DOB_PREC_TX` holds `Y` for a year alone, `M` for a year and
   month, and `D` for a full date, read from the collected text;
   blank when the text is blank.

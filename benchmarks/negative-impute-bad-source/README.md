@@ -13,14 +13,13 @@ collected adverse event (AE) from its collected onset text.
 
 - `ASTDT` would be the analysis start date of the event,
   completed to the earliest calendar date the collected onset
-  text (`AESTDTC`) still allows, and missing when the text
-  carries no date at all.
+  text (`AESTDTC`) still allows.
 
 Onset text entered as a word rather than as a date or the
 beginning of one has no stated completion. A date that was never
 collected and text that cannot be read as a date are different
-defects, so the run stops when it reaches the unreadable text and
-no artifact is accepted.
+defects, and neither has a stated outcome here, so the run stops
+when it reaches the unreadable text and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
@@ -39,4 +38,5 @@ derivation:
 ```
 
 The `invalid` outcome applies to text that is not a calendar date or date
-beginning; it is distinct from text that was never collected.
+beginning; it is distinct from text that was never collected, which
+`missing` answers.

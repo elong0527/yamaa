@@ -8,15 +8,20 @@ input:
       LBSTRESN: float
       LBNRIND: str
 base: LB
+
 columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: LB.USUBJID
+
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation: LB.LBTESTCD
+
+  # The compound and study levels each add a metadata entry; the study
+  # level also replaces the derivation and the whole verification list.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -26,6 +31,9 @@ columns:
           min: 0
     metadata:
       analysis_role: analysis-value
+
+  # Later levels add an entry to dict and a missing handler; source and
+  # case_sensitive are inherited from here unchanged.
   - name: ANRIND
     type: str
     label: Analysis Reference Range Indicator
@@ -36,6 +44,8 @@ columns:
           N: NORMAL
           H: HIGH
         case_sensitive: false
+
+  # The study level replaces this mapping with a literal.
   - name: PARCAT1
     type: str
     label: Parameter Category
@@ -45,5 +55,6 @@ columns:
         dict:
           ALT: HEPATIC
           AST: HEPATIC
+
 metadata:
   scope: organization

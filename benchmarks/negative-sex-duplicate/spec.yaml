@@ -28,6 +28,9 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
+  # No answer, a blank answer or any other answer gives U. The defect: a
+  # subject whose sex was answered differently in two entries of the visit
+  # gives one record two values, which stops the run.
   - name: SEX
     type: str
     label: Sex
