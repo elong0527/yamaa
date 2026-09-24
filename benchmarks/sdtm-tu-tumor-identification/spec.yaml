@@ -1,0 +1,139 @@
+schema_version: "1.0"
+domain: TU
+keys: [STUDYID, USUBJID, TUSEQ]
+input:
+  TU_RAW:
+    path: input/tu_raw.csv
+    types: {TUSEQ: int, VISITNUM: int, TUDTC: date}
+
+output:
+  path: tu.csv
+  columns: [DOMAIN, STUDYID, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST,
+            TUORRES, TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM,
+            VISIT, TUDTC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: TU}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: TU_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: TU_RAW.USUBJID
+
+  - name: TUSEQ
+    type: int
+    label: Sequence Number
+    derivation: TU_RAW.TUSEQ
+    verifications:
+      not_missing: {}
+
+  - name: TULNKID
+    type: str
+    label: Link ID
+    derivation:
+      case:
+        - when: "TU_RAW.LESION_CATEGORY = 'Target'"
+          then:
+            str_template: "T{TU_RAW.LESION_NUM}"
+        - when: "TU_RAW.LESION_CATEGORY = 'Non-target'"
+          then:
+            str_template: "NT{TU_RAW.LESION_NUM}"
+        - when: "TU_RAW.LESION_CATEGORY = 'New'"
+          then:
+            str_template: "NEW{TU_RAW.LESION_NUM}"
+    verifications:
+      matches:
+        pattern: "^(T|NT|NEW)[0-9]+$"
+
+  - name: TUTESTCD
+    type: str
+    label: Tumor Identification Test Short Name
+    derivation: {literal: TUMIDENT}
+    verifications:
+      allowed_values:
+        values: [TUMIDENT]
+
+  - name: TUTEST
+    type: str
+    label: Tumor Identification Test Name
+    derivation: {literal: "Tumor Identification"}
+
+  - name: TUORRES
+    type: str
+    label: Tumor Identification Result
+    derivation:
+      str_upper:
+        source: TU_RAW.LESION_CATEGORY
+    verifications:
+      allowed_values:
+        values: [TARGET, NON-TARGET, NEW]
+
+  - name: TUSTRESC
+    type: str
+    label: Tumor Identification Result in Std Format
+    derivation: TUORRES
+
+  - name: TULOC
+    type: str
+    label: Location of the Tumor
+    derivation:
+      str_upper:
+        source: TU_RAW.LOCATION
+
+  - name: TULAT
+    type: str
+    label: Laterality
+    derivation:
+      str_upper:
+        source: TU_RAW.LATERALITY
+        missing:
+
+  - name: TUMETHOD
+    type: str
+    label: Method of Identification
+    derivation: TU_RAW.METHOD
+
+  - name: TUEVAL
+    type: str
+    label: Evaluator
+    derivation: TU_RAW.EVALUATOR
+
+  - name: VISITNUM
+    type: int
+    label: Visit Number
+    derivation: TU_RAW.VISITNUM
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: TU_RAW.VISIT
+
+  - name: TUDTC
+    type: date
+    label: Date/Time of Tumor Identification
+    derivation: TU_RAW.TUDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, TUSEQ]
+  - unique:
+      columns: [STUDYID, USUBJID, TULNKID]
+  - row_count:
+      min: 6
+      max: 6
+  - implies:
+      id: new-lesion-identified-post-baseline
+      when: "TUORRES = 'NEW'"
+      then: "VISITNUM > 1"
+  - implies:
+      id: standardized-result-copies-classification
+      when: "TUORRES IS NOT NULL"
+      then: "TUSTRESC = TUORRES"

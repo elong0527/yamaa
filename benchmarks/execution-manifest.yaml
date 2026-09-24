@@ -858,3 +858,6 @@ examples:
   sdtm-tr-tumor-measurements:
     status: executable
     runtimes: ['python']
+  sdtm-tu-tumor-identification:
+    status: executable
+    runtimes: ['python']
