@@ -15,7 +15,7 @@ carrying a treatment (`TRT01A`).
   record for the same subject.
 
 When more than one analysis-subject record shares one subject's
-identifiers, nothing says which treatment answers. Taking either
+identifiers, nothing says which treatment applies. Taking either
 one would report a treatment the study data does not single out,
 so the run is rejected with no artifact accepted.
 
@@ -28,11 +28,11 @@ treatment. If multiple records are legitimate, add a field that expresses the
 choice, such as an effective timestamp, and select by it explicitly:
 
 ```yaml
-source:
-  variable: ADSL_RAW.TRT01A
-  multiple_matches:
-    order_by: [ADSL_RAW.EFFECTIVEDTC]
-    keep: last
+lookup:
+  dataset: ADSL_RAW
+  value: TRT01A
+  order_by: [ADSL_RAW.EFFECTIVEDTC]
+  keep: last
 ```
 
 Do not use file order or treatment text as a substitute for a study rule.
