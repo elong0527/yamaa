@@ -792,6 +792,9 @@ examples:
   schema-text-mapping-unmapped:
     status: executable
     runtimes: ['python']
+  schema-lifecycle:
+    status: executable
+    runtimes: ['python']
   schema-verification-log:
     status: executable
     runtimes: ['python']
