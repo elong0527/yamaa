@@ -89,8 +89,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
-      min: 7
-      max: 7
+      min: 14
+      max: 14
   - implies:
       id: dated-assessment-has-a-nadir
       when: "ADT IS NOT NULL"
