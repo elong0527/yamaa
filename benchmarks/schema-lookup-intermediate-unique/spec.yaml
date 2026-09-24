@@ -9,7 +9,9 @@ base: DM
 intermediates:
   # Each subject's end-of-study record. Only disposition events that are
   # not screen failures are eligible, and the subject key is asserted
-  # unique across the eligible records, so no ordering or keep is needed.
+  # unique across the eligible records, so no ordering or keep is needed:
+  # a repeated subject fails the run before any row is built, and a
+  # subject with no eligible record reads a missing EOSDT.
   - id: DS_EOS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
@@ -25,10 +27,12 @@ columns:
     type: str
     label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: EOSDT
     type: str
     label: End of Study Date
