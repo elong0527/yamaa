@@ -435,9 +435,7 @@ failure, it does not make the run publishable. Its rows are the checks the
 run evaluated, in execution order. The stage that failed contributes the
 checks it evaluated, at least one of them `violated` at `error` severity,
 and a check a stopped run never reached has no row. The log
-states what was checked and nothing more. This is the one place a rule
-writes a file on a failed run, and it is deliberate: the failing run is the
-one a reviewer most needs in machine-readable form.
+states what was checked and nothing more.
 
 <a id="req-1178"></a>
 
