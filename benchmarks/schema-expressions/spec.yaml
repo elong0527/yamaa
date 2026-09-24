@@ -14,8 +14,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      literal: YAMAA-01
+    derivation: {literal: YAMAA-01}
 
   # A bare string is the source shorthand: it desugars to
   # {source: DM.USUBJID} before registry dispatch.
@@ -24,29 +23,22 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The canonical dict form of the same shorthand.
   - name: SEX
     type: str
     label: Sex
-    derivation:
-      source: DM.SEX
+    derivation: DM.SEX
 
-  # Each then and the trailing otherwise nests an expression. The first
-  # true branch wins; a missing age is unknown in both comparisons, so
-  # subject 03 falls through to otherwise.
+  # Cut assigns each age to one left-closed band; a missing age takes the
+  # declared missing value.
   - name: AGEGRP
     type: str
     label: Age Group
     derivation:
-      case:
-        - when: "DM.AGE >= 65"
-          then:
-            literal: 65+
-        - when: "DM.AGE >= 18"
-          then:
-            literal: 18-64
-        - otherwise:
-            literal: NOT REPORTED
+      cut:
+        source: DM.AGE
+        breaks: [18, 65]
+        labels: ['<18', '18-64', '65+']
+        missing: NOT REPORTED
 
   # First_available returns the first non-missing source, or the declared
   # missing value when every source is missing.
