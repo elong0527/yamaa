@@ -13,12 +13,8 @@ with `DSSEQ` numbering the subject's two milestones.
 **Input:** EDC output in long form, one row per collected
 item; each row names the subject, the visit (end of
 treatment or end of study), the item (completion flag,
-reason text, controlled code, or date) and the value. The
-three subjects are invented: 001 completes treatment and
-study; 002 stops treatment for `Severe nausea` and then
-completes the study; 003 completes treatment and then
-withdraws from the study for `Moving abroad`. Input rows
-are shuffled and are not in date order.
+reason text, controlled code, or date) and the value, in
+no particular order.
 
 **Variables:**
 
@@ -31,22 +27,19 @@ are shuffled and are not in date order.
   end-of-treatment form and `STUDY` for the end-of-study
   form.
 - `DSTERM` holds the reported term: `COMPLETED` when the
-  completion flag says so, else the collected reason text
-  (`Severe nausea`, `Moving abroad`).
+  completion flag says so, else the collected reason text.
 - `DSDECOD` holds the controlled term: `COMPLETED` when
-  completed, else the collected code (`ADVERSE EVENT`,
-  `OTHER`).
+  completed, else the collected code, which must be
+  `ADVERSE EVENT` or `OTHER`.
 - `DSSTDTC` is the collected start date for that
   milestone.
 
-Note: the completion flag, the reason, the code and the
-date of one milestone are four separate collected rows.
-One record covers all four, and each variable names the
-item it reads, so the shuffled collection order of the
-input never reaches the output. Records are listed by
-subject and then by `DSSEQ`. A subject stops treatment
-before leaving the study, so `DSSTDTC` rises with `DSSEQ`
-within a subject.
+**Note:** the completion flag, the reason, the code and
+the date of one milestone are four separate collected
+rows. One record covers all four, and each variable reads
+its own item, so the order of the input rows never
+reaches the output. Records are listed by subject and
+then by `DSSEQ`.
 
 Provenance: `DSCAT`/`DSSCAT`/`DSTERM`/`DSDECOD` follow
 the CDISC SDTMIG DS assumptions, and the controlled terms
