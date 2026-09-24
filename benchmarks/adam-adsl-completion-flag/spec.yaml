@@ -55,8 +55,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 8
+      max: 8
   - implies:
       id: completer-received-treatment
       when: "COMPFL = 'Y'"
