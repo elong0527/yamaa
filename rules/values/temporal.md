@@ -294,9 +294,7 @@ fixes rendered precision at one day and one second.
 not observable outside the derivation. A temporal value converted to `str`
 under [Types and conversion](types.md)'s row, the artifact's record of a temporal column, and the typed
 value [Project functions](../operations/functions.md) encodes for a function argument all carry the day or the moment and
-nothing about how much of it was collected. This is deliberate: the property
-answers a question about a study's collection, and a reader holding only the
-text has no way to check an answer to it. A specification that must carry
+nothing about how much of it was collected. A specification that must carry
 precision past any of those three boundaries derives a column from
 `date_precision` or `datetime_precision`, which is data the artifact records
 like any other.
