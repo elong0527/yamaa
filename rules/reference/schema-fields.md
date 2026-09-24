@@ -235,15 +235,15 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.greatest.sources` | `"list[variable]"` | `true` | Absent | -- | [REQ-1096](../operations/expressions.md#req-1096) |
 | `expressions.least.sources` | `"list[variable]"` | `true` | Absent | -- | [REQ-1097](../operations/expressions.md#req-1097) |
 | `expressions.case` | `"list[case_item_class]"` | `false` | Absent | -- | [REQ-1098](../operations/expressions.md#req-1098) |
-| `expressions.flag` | `["predicate", "flag_class"]` | `false` | Absent | -- | [REQ-1255](../operations/expressions.md#req-1255) |
+| `expressions.flag` | `["predicate", "flag_class"]` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `source_binding_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.multiple_matches` | `"multiple_matches_class"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `flag_class.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1255](../operations/expressions.md#req-1255) |
-| `flag_class.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1255](../operations/expressions.md#req-1255) |
-| `flag_class.false_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
-| `flag_class.missing_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
+| `flag_class.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
+| `flag_class.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1256](../operations/expressions.md#req-1256) |
+| `flag_class.false_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |
+| `flag_class.missing_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |
 | `filtered_source` | `["variable", "filtered_source_class"]` | `false` | Absent | -- | [REQ-1052](../operations/lookup.md#req-1052) |
 | `filtered_source_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1053](../operations/lookup.md#req-1053) |
 | `filtered_source_class.filter` | `"predicate"` | `true` | Absent | -- | [REQ-1053](../operations/lookup.md#req-1053) |

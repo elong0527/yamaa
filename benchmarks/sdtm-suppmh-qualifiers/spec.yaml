@@ -72,16 +72,14 @@ rows:
     derivations:
       QNAM: {literal: MHFAMHX}
       QLABEL: {literal: Family History}
-      QVAL:
-        source: MH_RAW.MHFAMHX
+      QVAL: MH_RAW.MHFAMHX
 
   - id: medical_record_confirmation
     filter: "MH_RAW.MHCONF IS NOT NULL"
     derivations:
       QNAM: {literal: MHCONF}
       QLABEL: {literal: Confirmed by Medical Records}
-      QVAL:
-        source: MH_RAW.MHCONF
+      QVAL: MH_RAW.MHCONF
 
 verifications:
   - unique:

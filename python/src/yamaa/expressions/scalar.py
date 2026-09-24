@@ -3,7 +3,7 @@
 `first_available`, `greatest`, `least`, and `case` select one already-computed value
 rather than compute a new one, so each retains the selected value's type
 (REQ-0316). `flag` is the one-predicate shorthand for the common
-`case` that returns a flag value (REQ-1255). `cut` is the one operation
+`case` that returns a flag value (REQ-1256). `cut` is the one operation
 here that produces a new string.
 """
 
@@ -243,9 +243,9 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
     def handler_value_or_missing(value: object) -> EvaluationResult:
         return ValueResult(value=MISSING if value is None else value)
 
-    # REQ-1255: the one-predicate flag shorthand. A bare predicate string is
+    # REQ-1256: the one-predicate flag shorthand. A bare predicate string is
     # the condition with the default values; a mapping names condition and
-    # any of true_value, false_value, missing_value. REQ-1256 gives the
+    # any of true_value, false_value, missing_value. REQ-1257 gives the
     # three-valued semantics: only TRUE takes true_value; FALSE takes
     # false_value when present; UNKNOWN takes missing_value when present.
     # Either absent value is missing, which is exactly the one-branch

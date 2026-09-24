@@ -54,12 +54,12 @@ rows:
   # Every collected record, unchanged.
   - id: collected
     derivations:
-      PARAMCD: {source: ADLB_RAW.PARAMCD}
-      PARAM: {source: ADLB_RAW.PARAM}
+      PARAMCD: ADLB_RAW.PARAMCD
+      PARAM: ADLB_RAW.PARAM
       WBCVAL: {literal: null}
       LYMLEVAL: {literal: null}
       EXISTING_ABS_COUNT: {literal: null}
-      AVAL: {source: ADLB_RAW.AVAL}
+      AVAL: ADLB_RAW.AVAL
       DTYPE: {literal: null}
 
   # One LYMPH record per subject and visit that has a WBC and a LYMLE result

@@ -2164,7 +2164,7 @@ def _flag_field(condition: str) -> HandledExpression:
 def test_a_column_flag_predicate_naming_a_source_field_suggests_the_qualified_spelling() -> (
     None
 ):
-    # REQ-0189 / REQ-1255: the flag condition names predicate identifiers
+    # REQ-0189 / REQ-1256: the flag condition names predicate identifiers
     # like a case when does.
     spec = specification(
         [
@@ -2190,7 +2190,7 @@ def test_a_column_flag_predicate_naming_a_source_field_suggests_the_qualified_sp
 
 
 def test_a_bare_string_flag_condition_names_predicate_identifiers() -> None:
-    # REQ-1255: a bare predicate string is the condition; its identifiers
+    # REQ-1256: a bare predicate string is the condition; its identifiers
     # are reported at the flag itself, not at flag.condition.
     spec = specification(
         [

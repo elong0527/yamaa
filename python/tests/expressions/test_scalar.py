@@ -242,7 +242,7 @@ def test_flag_returns_false_value_when_the_condition_is_false() -> None:
 
 
 def test_an_unknown_condition_takes_missing_value_not_false_value() -> None:
-    # REQ-1256: unlike `case` with `otherwise`, an unknown condition never
+    # REQ-1257: unlike `case` with `otherwise`, an unknown condition never
     # falls through to false_value.
     expression = _flag(false_value="N", missing_value="U")
 
@@ -263,7 +263,7 @@ def test_flag_accepts_custom_true_and_missing_values() -> None:
 
 
 def test_flag_accepts_a_bare_predicate_string_as_the_condition() -> None:
-    # REQ-1255: a bare predicate string is the condition with the default
+    # REQ-1256: a bare predicate string is the condition with the default
     # values.
     expression = {"flag": "AGE >= 65"}
 

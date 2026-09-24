@@ -558,7 +558,7 @@ def _expression_info(
                     )
             nest(item.get("then"), f"{item_path}.then")
     elif operation == "flag" and isinstance(payload, (Mapping, str)):
-        # REQ-1255: a bare predicate string is the condition.
+        # REQ-1256: a bare predicate string is the condition.
         if isinstance(payload, str):
             condition, condition_path = payload, operation_path
         else:
@@ -1200,7 +1200,7 @@ def _derive_reference_names(derivation: object) -> list[str]:
                 if operation == "flag" and isinstance(payload, (Mapping, str)):
                     # The values are literals and name nothing; only the
                     # predicate names variables. A bare string is the
-                    # condition (REQ-1255).
+                    # condition (REQ-1256).
                     condition = (
                         payload
                         if isinstance(payload, str)

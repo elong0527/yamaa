@@ -136,6 +136,18 @@ row-template value, or any other position. The block form (the parent key on
 its own line with `literal: X` nested beneath) parses identically but is
 non-canonical; repository validation reports it.
 
+<a id="req-1255"></a>
+
+**REQ-1255.** The canonical spelling of a plain source expression is the
+bare string, wherever the source shorthand applies (REQ-0319): a
+`derivation` value, a row-template or lookup `derivations` entry, or a
+`case` branch `then` or `otherwise`. The single-key mapping form
+`{source: X}`, flow or block, parses identically but is non-canonical;
+repository validation reports it. The mapping form remains the valid
+spelling where the shorthand does not apply: nested expression arguments,
+the `value` of a handled expression, and filtered sources written
+`{source: {variable: ..., ...}}`.
+
 ### Interface behavior
 
 <a id="req-1093"></a>
@@ -227,9 +239,9 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `case_otherwise_class.otherwise` | Result used when no branch condition is true. |
 
-<a id="req-1255"></a>
+<a id="req-1256"></a>
 
-**REQ-1255.** The `expressions.flag` interface has the following meanings. Shape, defaults, and
+**REQ-1256.** The `expressions.flag` interface has the following meanings. Shape, defaults, and
 structural constraints come from its schema declaration. `flag` is the shorthand
 for the common one-branch `case` that returns a flag value.
 
@@ -240,7 +252,7 @@ for the common one-branch `case` that returns a flag value.
 | `expressions.flag.true_value` | Value returned when the condition is true; default `"Y"`. |
 | `expressions.flag.false_value` | Value returned when the condition is false; missing when absent. |
 | `expressions.flag.missing_value` | Value returned when the condition is unknown; missing when absent. |
-| `Result` | Returns `true_value`, `false_value`, or `missing_value` per [REQ-1256](#req-1256). |
+| `Result` | Returns `true_value`, `false_value`, or `missing_value` per [REQ-1257](#req-1257). |
 
 ## Error conditions
 
@@ -267,9 +279,9 @@ instead; the `otherwise` item, when present, is the last item. A `case`
 with no `when`/`then` item, more than one `otherwise` item, or an
 `otherwise` item in any other position: fail.
 
-<a id="req-1256"></a>
+<a id="req-1257"></a>
 
-**REQ-1256.** A `flag` evaluates its `condition` under the three-valued logic
+**REQ-1257.** A `flag` evaluates its `condition` under the three-valued logic
 [Predicates](predicates.md) gives `case`: only TRUE selects the true value.
 FALSE returns `false_value`, or missing when `false_value` is absent.
 UNKNOWN returns `missing_value`, or missing when `missing_value` is absent.
