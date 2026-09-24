@@ -214,6 +214,10 @@ class TestTextSourceBoundary(unittest.TestCase):
 
 
 class TestPredicateLanguage(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        VALIDATOR._ensure_predicate_binding()
+
     def test_parses_precedence_compounds_and_all_literal_types(self):
         predicate = (
             "NOT FLAG = 'N' OR "
@@ -4897,6 +4901,7 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertEqual(VALIDATOR.REGEX_CONTRACT_VERSION, '2.0.0')
 
     def test_the_replay_reads_through_the_shared_package_binding(self):
+        VALIDATOR.require_regex_binding()
         from yamaa import regex as package_binding
 
         self.assertIs(
@@ -4909,7 +4914,7 @@ class TestRegularExpressionContract(unittest.TestCase):
     def test_missing_binding_fails_rather_than_falling_back(self):
         saved = VALIDATOR._portable_binding
         try:
-            VALIDATOR._portable_binding = None
+            VALIDATOR._portable_binding = False
             with self.assertRaises(VALIDATOR.RegexBindingUnavailable) as caught:
                 VALIDATOR.compile_regex('a')
         finally:
@@ -6570,6 +6575,10 @@ bad_field: "what"
 
 
 class TestCsvProfile(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        VALIDATOR._ensure_csv_binding()
+
     def parse_render(self, data):
         records = VALIDATOR.scan_records(data)
         return VALIDATOR.render_records(records[0], records[1:]).decode('utf-8')
