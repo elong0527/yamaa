@@ -23,7 +23,7 @@ columns:
   # The first TRUE branch wins: subject 01 matches both age branches and
   # takes HIGH. A missing age is UNKNOWN in both comparisons, so subject
   # 03 falls through to otherwise. The 40-year-old pins the inclusive
-  # BETWEEN endpoint.
+  # >= 40 boundary.
   - name: AGERISK
     type: str
     label: Age Risk Category
@@ -35,9 +35,10 @@ columns:
           then: {literal: MEDIUM}
         - otherwise: {literal: LOW}
 
-  # NOT UNKNOWN is UNKNOWN, not TRUE: subject 03's missing age skips the
-  # first branch and is caught by the explicit IS NULL test, while the
-  # subjects whose predicate is FALSE fall through to otherwise.
+  # Y marks a male under 65. NOT UNKNOWN is UNKNOWN, not TRUE: subject
+  # 03's missing age skips the first branch and is caught by the explicit
+  # IS NULL test, while the subjects whose predicate is FALSE fall
+  # through to otherwise.
   - name: SENIOR_M
     type: str
     label: Senior Male Flag
@@ -53,6 +54,7 @@ columns:
   # 'DRUGX' matches 'DRUG%'. NOT IN over a missing value is UNKNOWN, not
   # TRUE, so subject 04 skips to the IS NULL branch. The first branch
   # uses the bare-source shorthand, copying the matched value through.
+  # DRUG is caught by 'DRUG%', so only PLACEBO reaches otherwise.
   - name: TRTCLASS
     type: str
     label: Treatment Class
