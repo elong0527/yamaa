@@ -5,7 +5,6 @@ from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, DateValue, TypedColumn
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
 from yamaa.planning import KeyBaseExpression, PlannedIntermediate
-from yamaa.specification.models import Expression
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
     _select_eligible,
@@ -13,7 +12,7 @@ from yamaa.runtime.intermediates import (
 )
 from yamaa.runtime.joins import RelationIndex
 from yamaa.runtime.rows import CandidateRow, RelationalContext, RowResolver
-from yamaa.specification.models import OrderTerm
+from yamaa.specification.models import Expression, OrderTerm
 
 
 def relation(
