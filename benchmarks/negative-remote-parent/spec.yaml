@@ -1,4 +1,5 @@
 schema_version: "1.0"
+# Intentionally invalid: a parent must be a local file, not a URL.
 parents: https://example.test/organization.yaml
 output:
   path: adsl.csv
