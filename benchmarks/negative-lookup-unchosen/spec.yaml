@@ -6,6 +6,9 @@ input:
   EX: input/ex.csv
 base: DM
 intermediates:
+  # The subject's exposure record, matched on study and subject. No order
+  # or end to keep is stated, so a subject with more than one exposure
+  # record stops the run.
   - id: DOSING
     dataset: EX
     columns: [EXTRT, EXDOSE]
