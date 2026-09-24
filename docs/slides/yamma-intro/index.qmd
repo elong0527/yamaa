@@ -171,34 +171,10 @@ Synthetic-data generation (supported by Keiji.ai members) and benchmark evaluati
 
 ## The human baseline is the work
 
-<div class="flow">
-<div class="flow-step">Create</div>
-<div class="flow-step">Review</div>
-<div class="flow-step">Discuss</div>
-<div class="flow-step">Finalize</div>
-<div class="flow-step">Evaluate</div>
-</div>
-
 - **Review a benchmark** — inspect the specification and golden output
 - **Add comments** — challenge assumptions, clarity, and conformance
 - **File issues** — record anything ambiguous or incorrect
 - **Open pull requests** — contribute fixes and new benchmarks
-
-## Anatomy of a benchmark
-
-Every benchmark is a self-contained unit, ready for review:
-
-```text
-benchmarks/sdtm-dm-basic/
-├── spec.yaml      # the specification under review
-├── input/         # source data — ODM extracts, CSVs
-├── expected/      # golden output: the human-verified truth
-├── run.py, run.R  # one-command reproduction
-└── README.md      # intent, mapping notes, lifecycle badge
-```
-
-To review: read the spec, check the golden output, leave a comment.
-Your review moves a benchmark from `draft` to `reviewed`.
 
 ## Benchmark Example: Age Group
 
@@ -230,19 +206,8 @@ A reusable contribution skill is planned to make this path easier.
 
 ## Help the community find the work
 
-::: {.columns}
-::: {.column width="48%"}
-### Review
-
-Choose one benchmark and leave one concrete comment.
-:::
-
-::: {.column width="48%"}
-### Broadcast
-
-Help publish an RConsortium / BBSW blog post inviting statistical programmers to participate.
-:::
-:::
+- **Review** — choose one benchmark and leave one concrete comment.
+- **Broadcast** — help publish an RConsortium / BBSW blog post inviting statistical programmers to participate.
 
 <div class="pull-quote">The next useful contribution is one reviewed benchmark.</div>
 
