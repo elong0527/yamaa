@@ -356,6 +356,8 @@ VALIDATION_CONTEXT_FIELDS = {
     },
     ('R006', 'missing_required_field'): {'class', 'field'},
     ('R016', 'month_out_of_range'): {'month'},
+    ('R016', 'month_not_permitted'): {'month'},
+    ('R016', 'month_required'): {'minimum_source_precision'},
     ('R016', 'day_out_of_range'): {'day'},
     ('R016', 'incompatible_input_type'): {'actual', 'expected', 'source'},
     ('R016', 'value_not_permitted'): {'permitted', 'value'},
@@ -8015,9 +8017,34 @@ def validate_expression_static_semantics(expression, path, context):
 
     if keyword == 'date_impute' and isinstance(payload, dict):
         operation_path = f"{path}.date_impute"
+        minimum = payload.get('minimum_source_precision', 'year')
         month = payload.get('month')
         day = payload.get('day')
-        if type(month) is int and not 1 <= month <= 12:
+        if minimum == 'month' and 'month' in payload:
+            # REQ-0592: no specification carries a value the policy leaves
+            # unreachable; the value itself is never read.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.month",
+                    'month_not_permitted',
+                    f"month {month!r} is unreachable with "
+                    "minimum_source_precision 'month'",
+                    context={
+                        'month': month if type(month) is int else str(month)
+                    },
+                )
+            )
+        elif minimum == 'year' and 'month' not in payload:
+            # REQ-0592: the month is required where the policy can use it.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.month",
+                    'month_required',
+                    "month is required with minimum_source_precision 'year'",
+                    context={'minimum_source_precision': minimum},
+                )
+            )
+        elif type(month) is int and not 1 <= month <= 12:
             errors.append(
                 validation_diagnostic(
                     f"{operation_path}.month",
@@ -9655,7 +9682,7 @@ def validate_expected_error_contracts(root: Path):
                 continue
             spec = _desugar_bare_derivations(spec)
             for path in paths:
-                if condition == 'missing_required_field':
+                if condition in {'missing_required_field', 'month_required'}:
                     # The diagnostic points at the field that should exist.
                     continue
                 if not spec_path_exists(spec, path):
@@ -10022,6 +10049,94 @@ def validate_csv_shapes(root: Path):
                 f"ERROR: {example_dir.relative_to(root)}: {declared} is "
                 "declared but no source fixture reports it"
             )
+    return errors
+
+
+KEY_COLUMN_ORDER = ('DOMAIN', 'STUDYID', 'USUBJID')
+
+
+def _key_column_order_errors(names, label):
+    """Check populated key columns keep DOMAIN, STUDYID, USUBJID in order.
+
+    Only key columns present in `names` constrain the order; an absent key
+    column imposes nothing.
+    """
+    present = [column for column in KEY_COLUMN_ORDER if column in names]
+    actual = [column for column in names if column in present]
+    if actual != present:
+        return [
+            f"ERROR: {label}: key columns out of order: "
+            f"{', '.join(actual)}; populated key columns keep the order "
+            f"{', '.join(present)}"
+        ]
+    return []
+
+
+def validate_key_column_order(root: Path):
+    """Keep DOMAIN, STUDYID, USUBJID in that order across benchmark artifacts.
+
+    Checks each entry spec's declared `columns`, its `output.columns`
+    artifact order, and the golden CSV header, so the column order the
+    GitHub Action verifies stays consistent everywhere a benchmark's
+    columns are populated.
+    """
+    errors = []
+    examples_dir = root / 'benchmarks'
+    if not examples_dir.exists():
+        return errors
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+        for spec_path in example_entry_specs(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as handle:
+                    spec = yaml.load(handle, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            if not isinstance(spec, dict):
+                continue
+            declared = spec.get('columns')
+            if isinstance(declared, list):
+                names = [
+                    column.get('name') if isinstance(column, dict) else column
+                    for column in declared
+                ]
+                names = [name for name in names if isinstance(name, str)]
+                errors.extend(_key_column_order_errors(
+                    names, f"{ex_dir.name}/{spec_path.name}: declared columns",
+                ))
+            artifact_name = None
+            output = spec.get('output')
+            if isinstance(output, dict):
+                artifact_columns = output.get('columns')
+                if (
+                    isinstance(artifact_columns, list)
+                    and all(isinstance(c, str) for c in artifact_columns)
+                ):
+                    errors.extend(_key_column_order_errors(
+                        artifact_columns,
+                        f"{ex_dir.name}/{spec_path.name}: output columns",
+                    ))
+                artifact_path = output.get('path')
+                if isinstance(artifact_path, str) and artifact_path:
+                    artifact_name = PurePosixPath(artifact_path).name
+            if artifact_name:
+                golden = ex_dir / 'expected' / artifact_name
+                # Parquet goldens carry no header contract; only CSV
+                # goldens pin the column order.
+                if golden.suffix.lower() != '.csv' or not golden.is_file():
+                    continue
+                try:
+                    with open(golden, 'r', encoding='utf-8', newline='') as f:
+                        header = next(csv.reader(f))
+                except (StopIteration, UnicodeDecodeError, OSError):
+                    # Empty, non-UTF-8, or unreadable goldens are
+                    # reported by the CSV shape checks; skip them here.
+                    continue
+                errors.extend(_key_column_order_errors(
+                    header,
+                    f"{ex_dir.name}/expected/{artifact_name}: header",
+                ))
     return errors
 
 
@@ -10994,6 +11109,7 @@ def check_yaml_files(root: Path):
     errors.extend(validate_examples_define_documents(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
+    errors.extend(validate_key_column_order(root))
     errors.extend(validate_grammar_contracts(root))
     errors.extend(validate_regex_conformance(root))
 

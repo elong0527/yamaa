@@ -13,7 +13,7 @@ identifier (`SITEID`) and the subject identifier for the study
 **Variables:**
 
 - `SUBJREF` would contain the site and subject identifiers joined
-  by a colon (for example `101:0007`), but no row is produced.
+  by a colon (for example `UCSD:0001`).
 
 The braced text holds several inputs and punctuation instead of
 one input name. Reading that text as instructions would make its
@@ -32,5 +32,5 @@ derivation:
   str_template: "{SITEID}:{SUBJID}"
 ```
 
-This produces values such as `101:0007` without evaluating code
+This produces values such as `UCSD:0001` without evaluating code
 embedded in the template.

@@ -53,7 +53,7 @@ This contract owns the requirements below. Related contracts:
 <a id="req-0727"></a>
 
 **REQ-0727.** An artifact with no rows is the header record and its terminator
-  alone. It is not empty, because the columns exist whether or not a row
+  alone. It is not empty. The columns exist whether or not a row
   does.
 
 #### Quoting

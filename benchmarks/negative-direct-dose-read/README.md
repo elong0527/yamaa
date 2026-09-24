@@ -13,15 +13,13 @@ and `EXDOSE`.
 **Variables:**
 
 - `DOSEDBL` would contain twice the exposure dose (`EXDOSE * 2`)
-  for the subject, but no row is produced.
-
-A subject can have several exposure records, so a formula naming
-`EX.EXDOSE` does not say which record it means. Choosing one
-without a stated rule, or totalling them, would each give a
-different result from the same request, so the run is rejected
-before any data is read and no artifact is accepted. A formula
-computes from values the record already carries, and a value
-taken from another source is bound to one of those first.
+  for the subject. A subject can have several exposure records, so
+  a formula naming `EX.EXDOSE` does not say which record it means,
+  and choosing one without a stated rule, or totalling them, would
+  each give a different result. A formula computes only from values
+  the output row already carries, and a value taken from another
+  source is bound to one of those first, so the run is rejected
+  before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADEX
 

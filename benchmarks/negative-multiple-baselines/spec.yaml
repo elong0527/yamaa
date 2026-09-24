@@ -37,6 +37,8 @@ columns:
   - name: BAVL
     type: float
     label: Baseline Value
+    # The result on the subject's one flagged row: no flagged row gives
+    # missing, and more than one stops the run.
     derivation:
       aggregate:
         filter: "LBBLFL = 'Y'"

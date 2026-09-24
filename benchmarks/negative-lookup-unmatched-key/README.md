@@ -13,17 +13,17 @@ sex (`SEX`), plus a reference table carrying an upper limit
 **Variables:**
 
 - `LBSTNRHI` would be the upper limit read from the reference
-  table matched on test code and sex. One collected combination
-  has no reference entry, and no answer is stated for that case,
-  so the run is rejected with no artifact accepted.
+  table matched on test code and sex. A result whose test code and
+  sex have no reference entry has no stated answer, so it rejects
+  the run with no artifact accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
 Add the governed `AST/M` range to the reference table when one exists. If an
-absent range is intentionally represented by a missing value, state that policy
-explicitly:
+absent range is intentionally represented by a missing value, drop
+`strict: true`:
 
 ```yaml
 intermediates:

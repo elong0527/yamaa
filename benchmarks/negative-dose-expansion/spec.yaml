@@ -51,6 +51,7 @@ columns:
     label: Analysis End Date
     derivation: EX.EXENDTC
 
+  # Set by each row template below.
   - name: ADOSEN
     type: int
     label: Administration Sequence Number
@@ -60,6 +61,8 @@ columns:
     label: Number of Administrations
     derivation: EX.EXDOSCNT
 
+  # Internal: the highest administration number built from each collected
+  # record, compared against NDOSE by the assert below.
   - name: NDOSMAX
     type: int
     label: Maximum Administration Sequence Number
@@ -68,6 +71,9 @@ columns:
         group_by: [STUDYID, USUBJID, EXSEQ]
         expr: "MAX(ADOSEN)"
 
+# One row per administration, written out in advance for only three: a
+# record counting more loses the rest, and a record with a missing or zero
+# count builds no row.
 rows:
   - id: dose_1
     filter: "EX.EXDOSCNT >= 1"
@@ -87,6 +93,8 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, EXSEQ, ADOSEN]
+  # Fails on every row of a record counting more administrations than
+  # were built.
   - assert:
       id: a-record-is-expanded-into-every-administration-it-holds
       expr: "NDOSMAX = NDOSE"

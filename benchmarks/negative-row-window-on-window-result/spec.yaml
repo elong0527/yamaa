@@ -61,6 +61,10 @@ rows:
       CHG:
         compute:
           expr: "AVAL - PREV_AVAL"
+      # The defect: PREV2 reads the previous row's CHG, which is computed
+      # from another window's result (PREV_AVAL). A row template's windows
+      # run in one pass, so the specification is rejected before any data
+      # is read.
       PREV2:
         row_value:
           source: CHG

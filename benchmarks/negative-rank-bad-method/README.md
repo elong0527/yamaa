@@ -4,7 +4,7 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** rank each subject's adverse events (AEs) by reported
-severity, carrying through `AESEV` and numbering ties with
+severity, carrying through `AESEV` and numbering the events in
 `SEVRANK`.
 
 **Input:** collected adverse event records carrying the reported
@@ -12,16 +12,15 @@ severity (`AESEV`).
 
 **Variables:**
 
-- `AESEV` would be the reported severity of the event, carried
-  through unchanged; blank when no severity was reported.
 - `SEVRANK` would be the number of the event among the subject's
   events ordered by severity, worst first, with equally severe
-  events sharing one number so they compare as equal.
+  events sharing one number so they compare as equal. An event
+  with no reported severity would come after every rated one.
 
-The tie-numbering choice arrives as a structured value instead of
-one of the two named methods. No reader may guess which method a
-structure means, so the run is rejected before any data is read
-and no artifact is accepted.
+**Note:** the tie-numbering choice arrives as a structured value
+instead of one of the two named methods. No reader may guess which
+method a structure means, so the run is rejected before any data is
+read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
@@ -37,9 +36,10 @@ after the gap, write it plainly:
   derivation:
     rank:
       method: competition
-      group_by: [STUDYID, USUBJID]
-      order_by:
-        - {variable: AESEV, direction: desc}
+      window:
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - {variable: AESEV, direction: desc}
 ```
 
 When no numbers may be skipped, name the dense method instead. Do not encode

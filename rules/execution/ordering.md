@@ -45,9 +45,9 @@ or first-occurrence group order within each row template.
 
 <a id="req-0223"></a>
 
-**REQ-0223.** A term may name any declared column, output or internal,
-because a submission order often rests on a working value the artifact does
-not publish: a numeric ordinal beside the text it labels, or a rank.
+**REQ-0223.** A term may name any declared column, output or internal.
+A working value the artifact does not publish is admissible: a numeric
+ordinal beside the text it labels, or a rank.
 
 <a id="req-0224"></a>
 

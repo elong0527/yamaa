@@ -5,6 +5,8 @@ input:
   DM: input/dm.csv
 
 output:
+  # A SAS Transport (.xpt) file is not a format this run writes, so the
+  # spec is rejected before any data is read.
   path: adsl.xpt
   columns: [STUDYID, USUBJID, AGE, SEX]
 

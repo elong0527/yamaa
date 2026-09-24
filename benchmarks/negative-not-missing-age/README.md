@@ -13,8 +13,8 @@ demographics, requiring a value for each subject.
 - `AGE` would be the subject's age, copied from the collected
   records.
 
-A subject with no recorded age leaves it missing, so the
-completed-dataset check fails it and no artifact is accepted.
+**Note:** a subject with no recorded age leaves it missing, so the
+check on the completed dataset fails and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
@@ -23,13 +23,14 @@ completed-dataset check fails it and no artifact is accepted.
 Decide whether the study can proceed without the value, then either correct
 the data or loosen the rule. When the age exists on the case report form,
 correct it at the governed source and rerun. When absence is genuinely
-possible, drop the rule and let the column stay missing:
+possible, drop the `not_missing` check and let that subject's age stay
+missing:
 
 ```yaml
 - name: AGE
   type: int
-  derivation:
-    source: DM.AGE
+  label: Age
+  derivation: DM.AGE
 ```
 
 Do not fill the gap with a placeholder age, which reports a value nobody

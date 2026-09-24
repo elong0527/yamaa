@@ -42,25 +42,29 @@ columns:
     type: str
     label: Analysis Value Unit
 
+  # Which row template built the row; the last check reads it to tell a
+  # calculated RRR record from one that arrived as collected.
   - name: _PROVENANCE
     type: str
     label: Internal Row Provenance
 
 rows:
+  # Every collected record, unchanged, including any collected RRR record.
   - id: collected
     derivations:
-      PARAMCD:
-        source: ADEG_RAW.PARAMCD
-      PARAM:
-        source: ADEG_RAW.PARAM
-      AVAL:
-        source: ADEG_RAW.AVAL
-      AVALU:
-        source: ADEG_RAW.AVALU
+      PARAMCD: {source: ADEG_RAW.PARAMCD}
+      PARAM: {source: ADEG_RAW.PARAM}
+      AVAL: {source: ADEG_RAW.AVAL}
+      AVALU: {source: ADEG_RAW.AVALU}
       _PROVENANCE: {literal: collected}
 
+  # One RR record per heart-rate record that can be inverted:
+  # 60000 ms per minute divided by beats per minute.
   - id: derived_rrr
-    filter: "ADEG_RAW.PARAMCD = 'HR' AND ADEG_RAW.AVAL IS NOT NULL AND ADEG_RAW.AVAL <> 0"
+    filter: >-
+      ADEG_RAW.PARAMCD = 'HR'
+      AND ADEG_RAW.AVAL IS NOT NULL
+      AND ADEG_RAW.AVAL <> 0
     derivations:
       PARAMCD: {literal: RRR}
       PARAM: {literal: RR Duration Rederived (ms)}
@@ -77,6 +81,8 @@ verifications:
       id: contributing-hr-uses-beats-per-minute
       when: "PARAMCD = 'HR' AND AVAL IS NOT NULL AND AVAL <> 0"
       then: "AVALU = 'beats/min'"
+  # An RRR record that did not come from the calculation fails here; the
+  # collected RRR input record is the defect this benchmark shows.
   - implies:
       id: reject-pre-existing-rrr
       when: "PARAMCD = 'RRR'"

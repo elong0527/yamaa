@@ -13,13 +13,14 @@ option a subject marks contributes one race row.
 **Variables:**
 
 - **QVAL**: would be one race the subject marked, kept only for a subject
-  with several; no value is produced.
+  with several.
 
 Each record being built stands for one subject and one race, so a count
-taken while building it sees only that race's rows. Asking the count to
-span the whole subject does not widen it, and the run would keep no
-record at all without saying why, so it is rejected before any data is
-read.
+taken while building it sees only that race's rows: a subject with two
+different races would count one for each and be dropped, while a race
+marked twice would count two and be kept. Asking the count to span the
+whole subject does not widen it, so the run is rejected before any data
+is read.
 
 **Standard:** SDTM | **Domain:** SUPPDM
 
@@ -28,7 +29,8 @@ read.
 Decide which record already says that a subject marked several races, and
 read it instead of recounting inside the record being built. When the
 same run builds DM, its `RACE` is `MULTIPLE` exactly then: read DM through
-an input with `schema:` and filter on `DMRACE = 'MULTIPLE'`.
+an input with `schema:` and filter on `DMRACE = 'MULTIPLE'`, as
+`sdtm-dm-race-ethnicity` does.
 
 Without DM, select the subject's lowest and highest race with keyed
 lookups and keep the record when they differ. Unlike a row count, this
@@ -53,3 +55,6 @@ rows:
       RACELOWV: RACELOW.Value
       RACEHIGHV: RACEHIGH.Value
 ```
+
+Declare `RACELOWV` and `RACEHIGHV` as text columns in place of
+`RACECOUNT`, and leave them out of the output.

@@ -13,10 +13,9 @@ measurement was not taken.
 
 **Variables:**
 
-- `SYSBP` would repeat the collected pressure, carried over from
-  the collected records.
 - `PRIORBP` would hold the closest earlier taken pressure for the
-  same subject, in visit-sequence order.
+  same subject, in sequence-number order, and be missing when no
+  earlier pressure was taken.
 
 **Note:** the carried value arrives as the fixed number `120`
 instead of a variable to search, so the run is rejected before any
@@ -36,9 +35,9 @@ pressure variable itself:
   derivation:
     previous_non_missing:
       source: SYSBP
-      group_by: [STUDYID, USUBJID]
-      order_by:
-        - {variable: VSSEQ, direction: asc}
+      window:
+        group_by: [STUDYID, USUBJID]
+        order_by: [VSSEQ]
 ```
 
 When every gap should instead read a fixed fallback, state that as a separate

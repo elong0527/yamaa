@@ -16,19 +16,19 @@ base: ODM
 
 output:
   path: se.csv
-  columns: [STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
+  columns: [DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
   order_by: [STUDYID, USUBJID, SESEQ]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: ODM.StudyOID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: {literal: SE}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str

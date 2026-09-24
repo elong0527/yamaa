@@ -20,15 +20,13 @@ study, subject, and sequence number.
   `NON-CR/NON-PD`, progressive disease (`PD`), or not evaluable
   (`NE`).
 
-A complete response leaves no measurable disease to respond
-partly, so an assessment recording `PR` directly after `CR` for
-the same subject is a fault in the collected data. The run is
-rejected and no artifact is accepted; the expected output records
-the completed rows presented to that check.
-
-**Note:** records are read in date order within a subject, so a
-partial response that later becomes complete is ordinary and
-passes: only a fall-back after a complete response is rejected.
+**Note:** assessments are compared in date order within a subject.
+A complete response leaves no measurable disease to respond partly,
+so an assessment recording `PR` directly after `CR` for the same
+subject is a fault in the collected data: the whole run is rejected
+and no artifact is accepted, and the expected output records the
+completed rows presented to that check. A partial response that
+later becomes complete is ordinary and passes.
 
 **Standard:** ADaM | **Domain:** ADRS
 

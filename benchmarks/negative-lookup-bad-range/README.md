@@ -13,19 +13,31 @@ with integer day bounds (`DYLO`, `DYHI`).
 **Variables:**
 
 - `EPOCH` would be the period name from the epoch-table row whose
-  day range contains the visit.
-
-A calendar date cannot be ordered directly against integer day
-bounds, so the run is rejected before any data is read and no
-artifact is accepted.
+  day range contains the visit, and blank when no range does. A
+  calendar date cannot be ordered directly against integer day
+  bounds, so the run is rejected before any data is read and no
+  artifact is accepted.
 
 **Standard:** SDTM | **Domain:** VS
 
 ## How to fix
 
-Derive the integer study day from the date and the subject's reference date,
-then compare that value with the integer bounds:
+Derive the integer study day from the date and the subject's reference start
+date (`RFSTDTC`, read from demographics into a date column):
+
+```yaml
+- name: VSDY
+  type: int
+  derivation:
+    study_day:
+      date: VSDTC
+      reference: RFSTDTC
+```
+
+Then compare that value with the integer bounds:
 
 ```yaml
 between: {value: VSDY, lower: DYLO, upper: DYHI}
 ```
+
+[`sdtm-vs-study-day`](../sdtm-vs-study-day/) attaches the epoch this way.

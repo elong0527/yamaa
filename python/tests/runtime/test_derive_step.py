@@ -264,7 +264,6 @@ columns:
             derivation:
               date_impute:
                 source: EX.EXENDTC
-                month: 12
                 day: last
                 minimum_source_precision: month
                 missing: null
@@ -490,7 +489,6 @@ def test_plan_accepts_enum_strings_inside_binding_derivation() -> None:
             "derivation": {
                 "date_impute": {
                     "source": "QS.QSORRES",
-                    "month": 12,
                     "day": "last",
                     "minimum_source_precision": "month",
                     "missing": None,

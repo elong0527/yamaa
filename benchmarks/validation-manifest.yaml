@@ -144,6 +144,16 @@ fixtures:
     condition: month_out_of_range
     spec_paths: [columns.ASTDT.derivation.date_impute.month]
     validator: temporal_contract
+  negative-impute-missing-month:
+    rule: R016
+    condition: month_required
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
+  negative-impute-unreachable-month:
+    rule: R016
+    condition: month_not_permitted
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
   negative-impute-day-rule:
     rule: R016
     condition: value_not_permitted

@@ -29,6 +29,9 @@ columns:
     label: Severity
     derivation: AE.AESEV
 
+  # Meant as each subject's events numbered worst first: descending text
+  # order puts SEVERE before MODERATE before MILD, and equally severe
+  # events share a number. The numbering method is a structure, not a name.
   - name: SEVRANK
     type: int
     label: Severity Rank

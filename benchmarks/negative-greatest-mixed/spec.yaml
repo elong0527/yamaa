@@ -29,6 +29,9 @@ columns:
     label: Last Visit Study Day
     derivation: DM.LSTVSDY
 
+  # Intentionally mixes scales: DTHDT is a calendar date and LSTVSDY a
+  # study-day number, which share no order, so the specification is rejected
+  # before any data is read.
   - name: LSTALVDT
     type: date
     label: Last Known Alive Date

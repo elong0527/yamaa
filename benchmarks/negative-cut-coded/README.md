@@ -11,19 +11,26 @@ and coded sex (`SEX`).
 
 **Variables:**
 
-- `AGEGRP` would be `younger` below 65 and `elderly` at or above
-  65 from the coded sex, which comes from `SEX` in the collected
-  demographics, but no row is produced.
+- `AGEGRP` would be `younger` below 65 and `elderly` at or above 65.
 
-Placing a coded value into numeric bands has no meaning, so the
-run is rejected before any data is read and no artifact is
-accepted.
+**Note:** the bands are applied to the coded sex (`SEX`) instead of the age.
+Placing a coded value into numeric bands has no meaning, so the run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Group by the numeric age rather than the coded sex:
+Group by the numeric age rather than the coded sex. The demographics file is
+read as text unless a field is given a type, so declare `AGE` as a whole
+number on the input:
+
+```yaml
+input:
+  DM: {path: input/dm.csv, types: {AGE: int}}
+```
+
+and band that age:
 
 ```yaml
 cut:

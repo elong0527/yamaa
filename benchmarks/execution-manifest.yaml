@@ -324,6 +324,9 @@ examples:
   negative-cut-coded:
     status: executable
     runtimes: ['python']
+  negative-cut-missing-input:
+    status: executable
+    runtimes: ['python']
   negative-path-absolute:
     status: executable
     runtimes: ['python']
@@ -358,6 +361,12 @@ examples:
     status: executable
     runtimes: ['python']
   negative-impute-day-rule:
+    status: executable
+    runtimes: ['python']
+  negative-impute-missing-month:
+    status: executable
+    runtimes: ['python']
+  negative-impute-unreachable-month:
     status: executable
     runtimes: ['python']
   negative-precision-bad-source:
@@ -696,6 +705,9 @@ examples:
   sdtm-lb-multiform:
     status: executable
     runtimes: ['python']
+  sdtm-lb-lab-specific-ranges:
+    status: executable
+    runtimes: ['python']
   sdtm-lb-ranges:
     status: executable
     runtimes: ['python']
@@ -727,6 +739,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-suppmh-qualifiers:
+    status: executable
+    runtimes: ['python']
+  sdtm-vs-epoch-from-subject-elements:
     status: executable
     runtimes: ['python']
   sdtm-vs-replicates:

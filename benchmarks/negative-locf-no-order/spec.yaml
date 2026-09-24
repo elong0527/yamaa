@@ -6,30 +6,40 @@ input:
     path: input/vs.csv
     types: {AVISITN: int, AVALCOL: float}
 base: VS
+
 output:
   path: advs.csv
   columns: [USUBJID, PARAMCD, AVISITN, AVAL]
+
 columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: VS.USUBJID
+
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation: VS.PARAMCD
+
   - name: AVISITN
     type: int
     label: Analysis Visit Number
     derivation: VS.AVISITN
+
+  # The collected value, left out of the output; AVAL carries from it.
   - name: AVALCOL
     type: float
     label: Collected Analysis Value
     derivation: VS.AVALCOL
+
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
+      # Carrying a value forward needs an order that says which visits are
+      # earlier. The window names none, so the specification is rejected
+      # before any data is read.
       locf:
         source: AVALCOL
         window:

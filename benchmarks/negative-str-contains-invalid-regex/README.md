@@ -10,25 +10,26 @@ carrying the event term.
 
 **Variables:**
 
-- `AESEV` would hold `SEVERE` when the event term contains the word
-  `SEVERE` and `MILD` otherwise; but no row is produced because the
-  pattern `SEVERE[` is not a valid portable regex (the `[` opens a
-  character class that never closes), so the request is rejected
-  before any data is read and no artifact is accepted.
+- `AESEV` would hold `SEVERE` when the event term contains `SEVERE`
+  anywhere, and `MILD` otherwise, including when the term is missing.
+
+The pattern `SEVERE[` is not a valid portable regex: the `[` opens a
+character class that never closes. The request is rejected before any
+data is read, and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
-Close the character class or drop the bracket. To match the literal
-text `SEVERE[`, escape the bracket:
-
-```yaml
-when: "str_contains(AE.AETERM, 'SEVERE\\[')"
-```
-
-To match just the word `SEVERE`, remove the bracket:
+Decide what the term must contain. To flag a term that mentions severe
+intensity, as the goal states, remove the bracket:
 
 ```yaml
 when: "str_contains(AE.AETERM, 'SEVERE')"
+```
+
+Only if the literal text `SEVERE[` is meant, escape the bracket:
+
+```yaml
+when: "str_contains(AE.AETERM, 'SEVERE\\[')"
 ```

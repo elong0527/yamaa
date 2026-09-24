@@ -13,23 +13,21 @@ study day (`ADY`), and measured value (`AVAL`).
 
 **Variables:**
 
-- `ADT` would be the record's analysis date, carried through from
-  the pre-derived slice as given, and missing when the slice date
-  is missing.
-- `ADY` would be the record's study day, carried through from the
-  pre-derived slice as given, and missing when the slice day is
-  missing.
-- `AVAL` would be the value measured, carried through from the
-  pre-derived slice as given.
-- `AVISIT` would be the analysis window the study day falls in,
-  and blank when the study day is missing so the record belongs
+- `AVISIT` would be the analysis window the study day falls in:
+  `SCREENING` before day 0, `BASELINE` on days 0 and 1, `WEEK 2` on
+  days 2 to 21, `WEEK 4` on days 22 to 42, and `POST-TREATMENT` from
+  day 43; blank when the study day is missing, so the record belongs
   to no window.
 
-A record is identified here by study, subject, parameter, and
-analysis window. A record left with a blank window carries no
-identity. The values are complete before that is checked, and the
-expected file records the completed rows presented to the check,
-but the run still fails and no artifact is accepted.
+**Note:** a record is identified here by study, subject, parameter,
+and analysis window. With nothing else choosing the rows, those
+identities are the rows, so they are settled before any other value
+is computed. The window is placed from the study day, which is one of
+those other values, so the run is rejected before any data is read
+and no artifact is accepted. Even if the window read the slice's
+study day directly, a record with no study day would have no window
+and so no identity. The expected file shows the intended rows, not
+an accepted result.
 
 **Standard:** ADaM | **Domain:** ADVS
 
@@ -39,8 +37,9 @@ Decide which keys the dataset is on. If it is one record per analysis visit,
 every record must fall in a window. Recover the analysis date in the governed
 source where it is available. Where it is not, keep the record out of the
 dataset rather than give it a place it does not have. A row template selects
-the records that become rows, so move one column's derivation into it and
-leave the rest where they are:
+the records that become rows, and each row then comes from one kept record, so
+its window can be placed from its study day. Move one column's derivation into
+it and leave the rest where they are:
 
 ```yaml
 - name: AVAL

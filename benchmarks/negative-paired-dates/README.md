@@ -7,26 +7,20 @@
 date `DTHDT` into a subject-level record, where the two dates must
 be present together or absent together.
 
-**Input:** collected demographics records holding the study and
-subject identifiers with the treatment start date in `RFSTDT` and
-the date of death in `DTHDTC`, which is missing when the subject
-has not died.
+**Input:** collected demographics records, one per subject, holding
+the treatment start date in `RFSTDT` and the date of death in
+`DTHDTC`.
 
 **Variables:**
 
 - `RFSTD` would be the date treatment started, taken from
-  `RFSTDT` in the demographics input, but this run is rejected so
-  no dataset is accepted.
+  `RFSTDT` in the demographics input.
 - `DTHDT` would be the date of death, taken from `DTHDTC` in the
-  demographics input and missing when the subject has not died,
-  but this run is rejected so no dataset is accepted.
+  demographics input and missing when the subject has not died.
 
-A record with only one of the two dates present fails the
-pairing, so the run is rejected and no artifact is accepted.
-
-**Note:** a record with both dates present and a record with both
-dates missing both satisfy the pairing; only a half-present pair
-fails.
+**Note:** a record with both dates present or both missing passes;
+a record with only one present fails the pairing, so the whole run
+is rejected and no dataset is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
@@ -34,14 +28,16 @@ fails.
 
 Decide which absences the study allows, then assert each side on its
 own. When every subject must have a start date but only some have died,
-require the start and leave death optional:
+remove the pairing, require the start and leave death optional:
 
 ```yaml
 columns:
   - name: RFSTD
     type: date
+    label: Reference Start Date
+    derivation: DM.RFSTDT
     verifications:
-      - not_missing
+      - not_missing: {}
 ```
 
 When two dates truly travel together, keep the pairing and correct the

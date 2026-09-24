@@ -40,6 +40,8 @@ columns:
     type: float
     label: Analysis Normal Range Upper Limit
     derivation:
+      # The lists pair by position: two current-row values (test, sex) but
+      # one reference column (test), so the lookup is rejected.
       lookup:
         key_base: [PARAMCD, SEX]
         dataset: LBREF

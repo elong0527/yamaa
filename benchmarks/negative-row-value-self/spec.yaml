@@ -39,6 +39,9 @@ columns:
     label: Analysis Value
     derivation: VS.VSSTRESN
 
+  # The defect: AVALF reads PRIORF, and PRIORF reads the previous row's
+  # AVALF, so each column waits on the other and the specification is
+  # rejected before any data is read.
   - name: AVALF
     type: float
     label: Filled Analysis Value

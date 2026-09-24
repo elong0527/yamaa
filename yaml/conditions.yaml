@@ -45,12 +45,14 @@ conditions:
   ln_of_nonpositive: {rules: [R010], phases: [derivation]}
   mapping_dictionary_source_conflict: {rules: [R007], phases: [validation]}
   matches_failed: {rules: [R009], phases: [verification]}
-  missing_input: {rules: [R008], phases: [mapping]}
+  missing_input: {rules: [R008], phases: [cut, mapping]}
   missing_key: {rules: [R005], phases: [output]}
   missing_required_field: {rules: [R006], phases: [validation]}
   missing_verification_id: {rules: [R009], phases: [validation]}
   missing_warning_log: {rules: [R009], phases: [validation]}
+  month_not_permitted: {rules: [R016], phases: [validation]}
   month_out_of_range: {rules: [R016], phases: [validation]}
+  month_required: {rules: [R016], phases: [validation]}
   multiple_matches: {rules: [R003, R008], phases: [join]}
   multiple_values_per_key: {rules: [R001], phases: [derivation]}
   no_applicable_keys: {rules: [R003], phases: [validation]}

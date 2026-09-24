@@ -13,8 +13,10 @@ and `U`.
 - `SEX` would be the subject's sex, copied from the collected
   records, holding `M`, `F`, or `U`.
 
-The text rule the check is written in cannot be read, so the run
-is rejected before any data is read and no artifact is accepted.
+**Note:** the text pattern the codes are checked against names a
+group in a spelling (`(?P<code>...)`) that only some pattern readers
+accept, so the run is rejected before any data is read and no
+artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

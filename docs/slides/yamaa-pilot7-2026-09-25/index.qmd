@@ -40,6 +40,7 @@ organizations or institutions.
 ## Goal 1: establish benchmarks
 
 * ODM -> SDTM -> ADaM
+  * [https://elong0527.github.io/yamaa/benchmark/](https://elong0527.github.io/yamaa/benchmark/)
 * Minimum viable
   * Specification
   * Representative source data
@@ -50,40 +51,30 @@ organizations or institutions.
 
 ## Goal 2: establish ground truth from full studies
 
-> Build ground truth once. Reuse it to evaluate every agentic workflow 
-https://github.com/RConsortium/submissions-pilot7-synthetic-data
-
-::: {.card}
-<div class="card-title">CDISC pilots (SDTM -> ADaM)</div>
-
-cdiscpilot01 and Rconsortium submission pilots 3, 5, and 6
-:::
-
-::: {.card}
-<div class="card-title">OpenClinica real sample data (ODM -> SDTM -> ADaM)</div>
-
-Real sample data for testing the full data journey
-:::
-
-::: {.card}
-<div class="card-title">Synthetic studies (ODM -> SDTM -> ADaM)</div>
-
-KN564 and KN189 as scalable test beds
-:::
+* Build ground truth once. Reuse it to evaluate every agentic workflow 
+  * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+* CDISC pilots (SDTM -> ADaM)
+  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
+* OpenClinica real sample data (ODM -> SDTM -> ADaM)
+  * Real sample data for testing the full data journey
+* Synthetic studies (ODM -> SDTM -> ADaM)
+  * KN564 and KN189 as scalable test beds
 
 ## Where we are
 
 ::: {.columns}
 ::: {.column width="48%"}
-<div class="big-number">~150</div>
+<div class="big-number">~150 Benchmarks</div>
 <div class="metric-label">SDTM and ADaM derivation benchmarks</div>
 :::
 
 ::: {.column width="48%"}
-<div class="big-number">3</div>
+<div class="big-number">6 Studies</div>
 <div class="metric-label">PR ready for pilot 3, 5, and 6</div>
 :::
 :::
+
+[https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html)
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
@@ -100,35 +91,22 @@ Scroll inside the frame to explore the spec, inputs, and golden output
 
 ## Help: creating benchmarks
 
-::: {.columns}
-::: {.column width="48%"}
-::: {.card}
-<div class="card-title">Assess privately</div>
-
-Run yamaa against a proprietary submission package inside your own environment.
-:::
-:::
-
-::: {.column width="48%"}
-::: {.card}
-<div class="card-title">Share safely</div>
-
-Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
-:::
-:::
-:::
+* **Assess privately**: Run yamaa against a proprietary submission package inside your own environment.
+* **Share safely**: Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
 
 ## Help: broadcasting
 
 <div class="kicker">The next useful contribution is one reviewed benchmark.</div>
 
+::: {.center-body-left}
 Help publish an RConsortium blog to attract contributors to finalize benchmarks.
-
-**[github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)** / **[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
+:::
 
 # Introduction: yamaa {background-color="#385898" data-state="no-corner-logo"}
 
+::: {.center-body}
 ![](../../assets/logo.jpeg){.hero-logo}
+:::
 
 ## yamaa: four components
 
@@ -147,15 +125,8 @@ Help publish an RConsortium blog to attract contributors to finalize benchmarks.
 
 Ambiguity is surfaced during planning, before it becomes a silent difference in the output. (e.g. rounding, missing value handling)
 
-**For people:** the specification is readable.
-**For agents:** the rules avoid ambiguity.
-
-
-### Deterministic by construction
-
-- Same inputs -- source data, specification, declared resources
-- Same results -- dataset values, validation outcome, execution lineage
-- Python and R implement the same contract -- not competing interpretations
+* **For people:** the specification is readable.
+* **For agents:** the rules avoid ambiguity.
 
 ## Inheritance
 
