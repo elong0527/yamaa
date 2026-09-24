@@ -21,11 +21,12 @@ the collection date rides along in the same visit group.
   `Creatinine` when it is `CREAT`.
 - `LBORRES` is the collected entry, kept exactly as reported.
 - `LBORRESU` is `mg/dL` for every record. Its submission
-  metadata is declared once at column level and overridden per
-  test code at row level: the glucose template points at the
-  glucose codelist with a vendor origin, the creatinine template
-  at the creatinine codelist with an investigator origin.
-- `LBSTRESN` is the numeric form of the collected entry.
+  metadata is stated once for the whole column and overridden for
+  each test code: glucose records name the glucose codelist with a
+  vendor origin, creatinine records the creatinine codelist with an
+  investigator origin.
+- `LBSTRESN` is the numeric form of the collected entry; missing
+  when the entry is not a number.
 - `LBSTRESU` is `mg/dL` for every record.
 - `LBDTC` is the collection date from the same visit group.
 
