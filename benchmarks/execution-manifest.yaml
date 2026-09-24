@@ -702,6 +702,9 @@ examples:
   sdtm-lb-multiform:
     status: executable
     runtimes: ['python']
+  sdtm-lb-lab-specific-ranges:
+    status: executable
+    runtimes: ['python']
   sdtm-lb-ranges:
     status: executable
     runtimes: ['python']

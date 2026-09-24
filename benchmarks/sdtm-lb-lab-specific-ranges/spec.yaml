@@ -1,0 +1,168 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+
+input:
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, ItemGroupRepeatKey: int}
+  LBRANGE:
+    path: input/lbrange.csv
+    # EFFSTDT/EFFENDT stay text on purpose: the reference-range filter
+    # compares them against ODM.Value, and ODM item data is untyped text.
+    # Both sides hold ISO-8601 dates, so lexicographic comparison matches
+    # chronological order.
+    types: {AGELO: int, AGEHI: int, NRLO: float, NRHI: float}
+
+base: ODM
+
+intermediates:
+  # Lab panel items, one row per (subject, event, panel repeat).
+  - id: LB_TESTCD
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, ItemGroupOID, ItemGroupRepeatKey]
+    filter: "ODM.ItemOID = 'IT.LB.LBTESTCD'"
+  - id: LB_LBNAM
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, ItemGroupOID, ItemGroupRepeatKey]
+    filter: "ODM.ItemOID = 'IT.LB.LBNAM'"
+  - id: LB_STRESN
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    key: [StudyOID, SubjectKey, StudyEventOID, ItemGroupOID, ItemGroupRepeatKey]
+    filter: "ODM.ItemOID = 'IT.LB.LBSTRESN'"
+  # Subject-level demographics from the DM form.
+  - id: DM_SEX
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey]
+    key: [StudyOID, SubjectKey]
+    filter: "ODM.ItemOID = 'IT.DM.SEX'"
+  - id: DM_BRTHDTC
+    dataset: ODM
+    key_base: [ODM.StudyOID, ODM.SubjectKey]
+    key: [StudyOID, SubjectKey]
+    filter: "ODM.ItemOID = 'IT.DM.BRTHDTC'"
+  # Reference-range entry for the lab, test, sex and age band that was in
+  # effect on the collection date. The row is anchored on the IT.LB.LBDTC
+  # item, so the current collection date is the driver's ODM.Value.
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBNAM, LBTESTCD, SEX]
+    between: {value: AGE, lower: AGELO, upper: AGEHI}
+    filter: >-
+      LBRANGE.EFFSTDT <= ODM.Value
+      AND (LBRANGE.EFFENDT IS NULL OR ODM.Value <= LBRANGE.EFFENDT)
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN,
+    LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: ODM.ItemGroupRepeatKey
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation: LB_TESTCD.Value
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_SEX.Value
+
+  - name: LBNAM
+    type: str
+    label: Lab Name
+    derivation: LB_LBNAM.Value
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+    derivation: ODM.Value
+
+  - name: BRTHDTC
+    type: date
+    label: Date/Time of Birth
+    derivation: DM_BRTHDTC.Value
+
+  - name: AGE
+    type: int
+    label: Age at Collection
+    derivation:
+      date_diff:
+        start: BRTHDTC
+        end: LBDTC
+        unit: year
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation: LB_STRESN.Value
+
+  - name: LBORRESU
+    type: str
+    label: Original Units
+    derivation: REFRANGE.UNIT
+
+  - name: LBSTNRLO
+    type: float
+    label: Reference Range Lower Limit-Std Units
+    derivation: REFRANGE.NRLO
+
+  - name: LBSTNRHI
+    type: float
+    label: Reference Range Upper Limit-Std Units
+    derivation: REFRANGE.NRHI
+
+  - name: LBNRIND
+    type: str
+    label: Reference Range Indicator
+    derivation:
+      case:
+        - when: "LBSTRESN IS NULL"
+          then:
+            literal: null
+        - when: "LBSTRESN < LBSTNRLO"
+          then:
+            literal: LOW
+        - when: "LBSTRESN > LBSTNRHI"
+          then:
+            literal: HIGH
+        - otherwise:
+            literal: NORMAL
+
+rows:
+  - id: result
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+    derivations: {}
+
+verifications:
+  - row_count:
+      min: 7
+      max: 7
+  - all_or_none:
+      id: reference-dictionary-entry-is-complete
+      columns: [LBORRESU, LBSTNRLO, LBSTNRHI]
