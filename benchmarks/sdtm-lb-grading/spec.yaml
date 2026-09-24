@@ -48,12 +48,19 @@ columns:
     type: str
     label: Analysis Toxicity Grade
 
+  # The independently recorded grade, read only by the agreement check
+  # below; not in the output.
   - name: REPROGRADE
     type: str
     label: Reproduced Toxicity Grade
     derivation: LB_RAW.REPROGRADE
 
+# A result for any other test, or a hemoglobin result whose sex is not M
+# or F, matches no row template and gets no record. Each band includes its
+# lower break; a missing result stops the run.
 rows:
+  # One band set for both sexes: below 0.1 grade 4, below 0.5 grade 3,
+  # below 1.0 grade 2, below 1.5 grade 1, 1.5 and above grade 0.
   - id: neutrophils
     filter: "LB_RAW.LBTESTCD = 'ANC'"
     derivations:
@@ -64,6 +71,8 @@ rows:
           labels: ['4', '3', '2', '1', '0']
           right: false
 
+  # Below 8.0 grade 3, below 10.0 grade 2, below 13.5 grade 1, 13.5 and
+  # above grade 0.
   - id: haemoglobin-male
     filter: "LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'M'"
     derivations:
@@ -74,6 +83,7 @@ rows:
           labels: ['3', '2', '1', '0']
           right: false
 
+  # As for males, except that grade 0 starts at 12.0.
   - id: haemoglobin-female
     filter: "LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'F'"
     derivations:
@@ -88,6 +98,7 @@ verifications:
   - row_count:
       min: 6
       max: 6
+  # A grade that differs from the recorded one stops the run.
   - assert:
       id: reproduced-grade-agrees
       expr: "ATOXGR = REPROGRADE"
