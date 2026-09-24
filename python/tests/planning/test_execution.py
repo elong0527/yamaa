@@ -853,7 +853,6 @@ def test_an_inline_lookup_with_strict_true_and_explicit_missing_null_is_rejected
     assert diagnostic.requirement == "REQ-0123"
     assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
     assert diagnostic.context == {"missing": None}
-    assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
 
 
 def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
