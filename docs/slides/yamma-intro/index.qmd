@@ -200,11 +200,11 @@ benchmarks/sdtm-dm-basic/
 To review: read the spec, check the golden output, leave a comment.
 Your review moves a benchmark from `draft` to `reviewed`.
 
-## Age groups, live
+## Benchmark Example: Age Group
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
-<span class="small">Scroll inside the frame to explore the spec, inputs, and golden output — no new tab.</span>
+<span class="footnote">Scroll inside the frame to explore the spec, inputs, and golden output — no new tab. [Direct link to this slide](https://elong0527.github.io/yamaa/slides/yamma-intro/#/benchmark-example-age-group)</span>
 
 ## Bring real experience — without real data
 
@@ -248,7 +248,9 @@ Help publish an RConsortium / BBSW blog post inviting statistical programmers to
 
 **[github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)**
 
-# Framework {background-color="#385898"}
+# Framework {background-color="#385898" data-state="no-corner-logo"}
+
+![](../../assets/logo.jpeg){.hero-logo}
 
 ## yamaa in one slide
 
@@ -318,14 +320,6 @@ Ambiguity is surfaced during planning — before it becomes a silent difference 
 <div class="pull-quote">Python and R should implement the same contract — not competing interpretations.</div>
 
 ## Inheritance
-
-<div class="flow">
-<div class="flow-step">Organization<br><span class="small">shared conventions</span></div>
-<div class="flow-step">Compound<br><span class="small">program decisions</span></div>
-<div class="flow-step">Study<br><span class="small">protocol specifics</span></div>
-<div class="flow-step">Approved spec<br><span class="small">resolved intent</span></div>
-<div class="flow-step">Validated build<br><span class="small">data + lineage</span></div>
-</div>
 
 ![](../../diagrams/design.svg)
 

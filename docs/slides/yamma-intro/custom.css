@@ -198,6 +198,23 @@
   padding: 2px;
 }
 
+/* larger footnote text, e.g. under embedded dashboards */
+.footnote {
+  color: var(--yamaa-muted);
+  font-size: 0.9rem;
+}
+
+/* large logo on the Framework section divider; corner logo hidden there */
+.hero-logo {
+  border-radius: 0.75rem;
+  background: #fff;
+  padding: 0.5rem;
+  width: min(320px, 60vw);
+}
+.reveal:has(section.present[data-state="no-corner-logo"]) .slide-logo {
+  display: none;
+}
+
 /* embedded benchmark dashboard: explorable without leaving the deck */
 .benchmark-embed {
   width: 100%;
