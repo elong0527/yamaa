@@ -13,12 +13,17 @@ base: ODM
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT, LBLOBXFL]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,
+            LBDTC, LBSTAT, LBLOBXFL]
 
+# One record per result item of each item group occurrence. The date and
+# status items are not in the dictionary, so their LBTESTCD is missing and
+# the filter drops them; they are read back onto the result record below.
 rows:
   - id: lb_result
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "LBTESTCD IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -72,14 +77,18 @@ columns:
     type: str
     label: Result or Finding in Original Units
 
+  # The date and status items of the same item group occurrence as the
+  # result; missing when that occurrence has none.
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
     derivation:
       aggregate:
         filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
-        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID, ItemGroupRepeatKey]
-        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID,
+              ItemGroupRepeatKey]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+                   ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
         expr: "ONLY(ODM.Value)"
 
   - name: LBSTAT
@@ -88,8 +97,10 @@ columns:
     derivation:
       aggregate:
         filter: "ODM.ItemOID = 'IT.LB.LBSTAT'"
-        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID, ItemGroupRepeatKey]
-        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID,
+              ItemGroupRepeatKey]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+                   ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
         expr: "ONLY(ODM.Value)"
 
   - name: RFSTDTC
@@ -112,7 +123,8 @@ columns:
           order_by:
             - {variable: LBDTC, direction: desc}
             - {variable: LBSEQ, direction: desc}
-          filter: "LBORRES IS NOT NULL AND (RFSTDTC IS NULL OR LBDTC <= RFSTDTC)"
+          filter: >-
+            LBORRES IS NOT NULL AND (RFSTDTC IS NULL OR LBDTC <= RFSTDTC)
 
   - name: LBLOBXFL
     type: str
