@@ -296,6 +296,73 @@ def test_a_lookup_defaults_to_missing_on_absence() -> None:
     assert plan.intermediates[0].missing is None
 
 
+def test_a_named_lookup_with_strict_true_and_missing_literal_is_rejected() -> None:
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=["A"],
+                    key=["X"],
+                    strict=True,
+                    missing="n/a",
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    diagnostic = raised.value.diagnostics[0]
+    # REQ-0123: a failing absence and a returned literal contradict.
+    assert diagnostic.condition == "conflicting_absent_policy"
+    assert diagnostic.requirement == "REQ-0123"
+    assert diagnostic.spec_paths == ("intermediates[0]",)
+    assert diagnostic.context == {"intermediate": "LOOK", "missing": "n/a"}
+
+
+def test_a_named_lookup_with_strict_true_and_explicit_missing_null_is_rejected() -> (
+    None
+):
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=["A"],
+                    key=["X"],
+                    strict=True,
+                    missing=None,
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    diagnostic = raised.value.diagnostics[0]
+    # REQ-0123: the check is declaration-based, so an explicit `missing: null`
+    # contradicts `strict: true` even though the literal is null.
+    assert diagnostic.condition == "conflicting_absent_policy"
+    assert diagnostic.requirement == "REQ-0123"
+    assert diagnostic.spec_paths == ("intermediates[0]",)
+    assert diagnostic.context == {"intermediate": "LOOK", "missing": None}
+
+
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
     spec = specification(
         [
@@ -753,6 +820,39 @@ def test_an_inline_lookup_with_a_key_naming_no_identifiers_is_reported() -> None
     # so it is reported here instead of reaching the runtime unvalidated.
     assert diagnostic.condition == "invalid_field_type"
     assert diagnostic.requirement == "REQ-0321"
+
+
+def test_an_inline_lookup_with_strict_true_and_explicit_missing_null_is_rejected() -> (
+    None
+):
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="str",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key_base": "SRC.X",
+                            "key": ["X"],
+                            "value": "V",
+                            "strict": True,
+                            "missing": None,
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    # REQ-0123: the inline form is the same explicit declared-key mechanism as
+    # the named one, so an explicit `missing: null` contradicts `strict: true`.
+    assert diagnostic.condition == "conflicting_absent_policy"
+    assert diagnostic.requirement == "REQ-0123"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
+    assert diagnostic.context == {"missing": None}
     assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
 
 
