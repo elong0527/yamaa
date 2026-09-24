@@ -4,6 +4,8 @@ keys: [USUBJID]
 input:
   DM:
     path: input/dm.csv
+    # Declared float, so the stored text .inf, -.Inf, and .NAN is read as
+    # non-finite numbers, and each is stored as missing on the way in.
     types:
       POSITIVE_INFINITY: float
       NEGATIVE_INFINITY: float
@@ -29,6 +31,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # Unquoted YAML spellings, one in each accepted letter case, resolve to
+  # non-finite floats and are stored as missing.
   - name: YAML_PINF
     type: float
     label: Positive Infinity YAML Literal
@@ -59,6 +63,9 @@ columns:
     label: Not-a-Number Source Value
     derivation: DM.NOT_A_NUMBER
 
+  # The project calculation returns a real infinity or NaN. Its contract
+  # allows a missing result, so each is stored as missing; without that
+  # allowance the returned value fails the run.
   - name: FUNCTION_PINF
     type: float
     label: Positive Infinity Function Result

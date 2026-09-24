@@ -3,47 +3,34 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-non-finite.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** show that non-finite numeric values (positive
-infinity, negative infinity, and Not-a-Number (NaN)) are
-stored as missing, no matter which of the three channels
-carries them: a YAML literal, a source read, or a study
-calculation.
+**Goal:** show that a non-finite number (positive infinity, negative
+infinity, or Not-a-Number, NaN) is stored as missing, whichever of
+three routes brings it into a column: a value written in the
+specification, a value read from the source, or a value returned by a
+study calculation.
 
-**Input:** subject-level source fields `POSITIVE_INFINITY`,
-`NEGATIVE_INFINITY`, and `NOT_A_NUMBER`, each holding a
-non-finite value.
+**Input:** one `spec.yaml` over a subject-level dataset whose numeric
+fields `POSITIVE_INFINITY`, `NEGATIVE_INFINITY`, and `NOT_A_NUMBER`
+each hold one non-finite value.
 
-**Variables:**
+**Columns:** every one of these is stored as missing.
 
-- `YAML_PINF`: positive infinity stated directly; stored as
-  missing.
-- `YAML_NINF`: negative infinity stated directly; stored as
-  missing.
-- `YAML_NAN`: Not-a-Number (NaN) stated directly; stored as
-  missing.
-- `SOURCE_PINF`: positive infinity copied from
-  `POSITIVE_INFINITY`; stored as missing.
-- `SOURCE_NINF`: negative infinity copied from
-  `NEGATIVE_INFINITY`; stored as missing.
-- `SOURCE_NAN`: Not-a-Number (NaN) copied from `NOT_A_NUMBER`;
-  stored as missing.
-- `FUNCTION_PINF`: positive infinity from the study
-  calculation; stored as missing.
-- `FUNCTION_NINF`: negative infinity from the study
-  calculation; stored as missing.
-- `FUNCTION_NAN`: Not-a-Number (NaN) from the study
-  calculation; stored as missing.
+- `YAML_PINF`, `YAML_NINF`, and `YAML_NAN` write positive infinity,
+  negative infinity, and NaN directly in `spec.yaml`.
+- `SOURCE_PINF`, `SOURCE_NINF`, and `SOURCE_NAN` copy them from
+  `POSITIVE_INFINITY`, `NEGATIVE_INFINITY`, and `NOT_A_NUMBER`.
+- `FUNCTION_PINF`, `FUNCTION_NINF`, and `FUNCTION_NAN` take them from
+  the study calculation `numeric_constant`. Its contract allows a
+  missing result; a calculation that may not return one fails the run
+  when it returns a non-finite value.
 
-**Note:** a quoted spelling such as `.inf` remains text unless
+**Note:** a quoted spelling such as `'.inf'` remains text unless
 converted to a numeric type.
 
-**Engines:** the study calculation `numeric_constant` is
-illustrated in both runtimes under the same contract
-(`python/contracts.yaml`, conformance
-`python/conformance/numeric_constant.yaml`): the Python
-runtime in `python/runtime/projectconstants.py`, the R
-runtime in `environment.R`. Both spell the same three
-non-finite constants, and the engine stores each one as
-missing.
+**Engines:** `numeric_constant` is implemented in both runtimes under
+one contract (`python/contracts.yaml`, checked against
+`python/conformance/numeric_constant.yaml`): Python in
+`python/runtime/projectconstants.py` and R in `environment.R`. Both
+return the same three non-finite constants.
 
 **Standard:** ADaM | **Domain:** ADSL
