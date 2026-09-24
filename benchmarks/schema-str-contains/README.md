@@ -5,21 +5,22 @@
 
 **Goal:** flag adverse events whose dictionary-derived term contains
 one of the dermatologic criterion terms (`APPLICATION`,
-`DERMATITIS`, `ERYTHEMA`, or `BLISTER`) -- the CQ01NAM-style test
-from #778.
+`DERMATITIS`, `ERYTHEMA`, or `BLISTER`), the kind of term search
+behind a customized query name such as `CQ01NAM`.
 
 **Input:** one record per adverse event carrying `AESEQ` (sequence
 number) and `AEDECOD` (dictionary-derived term).
 
 **Variables:**
 
-- `CRIT1FL`: `Y` when the term matches any criterion word, and
+- `CRIT1FL`: `Y` when the term contains any of the four criterion
+  terms anywhere in its text, as `APPLICATION SITE DERMATITIS` does;
   missing otherwise.
-- `DERMFL`: `Y` when the term mentions a dermatitis-like or
-  erythema-like word, and missing otherwise.
+- `DERMFL`: `Y` when the term contains `DERM` (as in `DERMATITIS`)
+  or `ERYTHEMA` anywhere in its text; missing otherwise.
 
-**Note:** an event with no recorded term stays unflagged rather than
-counting as a non-match, and the criterion words are matched as a
-single pattern with alternatives.
+**Note:** each flag is `Y` or blank, never `N`. An event with no
+recorded term is blank as well: its search is unknown rather than a
+non-match, and only a match sets the flag.
 
 **Standard:** ADaM | **Domain:** ADAE
