@@ -48,9 +48,10 @@ Each carries the `02`. Nothing in the schema links them beyond the
 
 <a id="req-0197"></a>
 
-**REQ-0197.** Every declared column is derived in exactly one place. The five
-requirements below make that precise, and they apply to internal columns
-exactly as they apply to output ones.
+**REQ-0197.** A column-level derivation is the column's default derivation.
+The requirements below make that precise, and they apply to internal columns
+exactly as they apply to output ones. A `rows` entry may override the default
+for that entry's rows.
 
 <a id="req-0198"></a>
 
@@ -60,17 +61,19 @@ same-named source variable; [Name binding](binding.md) forbids that inference.
 
 <a id="req-0199"></a>
 
-**REQ-0199.** A column is derived either at column level or at row level, never
-both. A column declaring `derivation` must not also appear in any `rows`
-entry's `derivations`. The two placements would produce the same value
-twice, with no rule for which value survives.
+**REQ-0199.** A column-level derivation is the column's default derivation.
+A `rows` entry naming the column in its `derivations` overrides the default
+for that entry's rows only; an entry not naming the column inherits the
+default. Pairing a column-level derivation with row-level derivations for
+the same column is therefore covered, not duplicated.
 
 <a id="req-0200"></a>
 
-**REQ-0200.** A row-derived column must be derived in every `rows` entry.
-Deriving a column in only some entries leaves other constructed rows
-with no value. Partial row coverage is an error, not an implied
-missing value.
+**REQ-0200.** A column with no column-level derivation must be derived in
+every `rows` entry. Deriving a column in only some entries leaves other
+constructed rows with no value. Partial row coverage is an error, not an
+implied missing value. A column with a column-level derivation is covered
+whether or not any entry overrides it.
 
 <a id="req-0201"></a>
 
@@ -92,6 +95,21 @@ templates at row level and all other columns at column level.
 
 **REQ-0204.** A column whose value is intentionally absent is still derived.
 Write `literal: null` rather than omitting the derivation.
+
+<a id="req-1260"></a>
+
+**REQ-1260.** A column-level derivation is that column's default derivation
+when at least one `rows` entry names the column, or when a row-phase context
+(a `rows` derivation or filter, an intermediate derivation, filter, or
+ordering, or a window) references the column, transitively. The reference rule applies only
+to row-local derivations; a derivation needing dataset-level operations
+(lookup, aggregate, or a qualified intermediate reference) keeps its
+column-phase meaning even when referenced. An inherited default is
+evaluated in the inheriting `rows` entry's scope, exactly as if the
+derivation were written in that entry. An entry's own derivation overrides
+the default for that entry's rows only. A column-level derivation that no
+`rows` entry names and no row-phase context references keeps its
+column-phase meaning.
 
 ### Output and internal columns
 

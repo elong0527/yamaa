@@ -2728,6 +2728,7 @@ def _plan_lookups(
     resolved: list[ResolvedJoin],
     supported_operations: Collection[str],
     unsupported: list[UnsupportedFeature],
+    default_columns: frozenset[str],
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
@@ -2739,7 +2740,7 @@ def _plan_lookups(
     self_fields = {
         column.name: column.type
         for column in specification.columns
-        if column.derivation is None
+        if column.derivation is None or column.name in default_columns
     }
     if specification.rows:
         dataset_fields["SELF"] = self_fields
@@ -3347,15 +3348,10 @@ def _coverage_diagnostics(specification: Specification) -> list[ExecutionDiagnos
         at_column = column.derivation is not None
         at_rows = [column.name in row.derivations for row in rows]
         path = f"columns.{column.name}.derivation"
-        if at_column and any(at_rows):
-            diagnostics.append(
-                _diagnostic(
-                    "duplicate_derivation",
-                    path,
-                    {"column": column.name},
-                )
-            )
-        elif rows and not at_column and not all(at_rows):
+        # REQ-0199: a column-level derivation is the column's default; a row
+        # template naming the column overrides it for that template only, so
+        # the two placements together are covered, not duplicated.
+        if rows and not at_column and not all(at_rows):
             diagnostics.append(
                 _diagnostic(
                     "missing_derivation",
@@ -3366,6 +3362,7 @@ def _coverage_diagnostics(specification: Specification) -> list[ExecutionDiagnos
                             row.id for row, present in zip(rows, at_rows) if not present
                         ],
                     },
+                    requirement="REQ-0200",
                 )
             )
         elif not rows and not at_column:
@@ -3374,6 +3371,7 @@ def _coverage_diagnostics(specification: Specification) -> list[ExecutionDiagnos
                     "missing_derivation",
                     path,
                     {"column": column.name},
+                    requirement="REQ-0198",
                 )
             )
     return diagnostics
@@ -3769,6 +3767,100 @@ def preflight_execution(
         raise UnsupportedPlanningError(unsupported)
 
 
+def _row_phase_default_columns(specification: Specification) -> set[str]:
+    """Column names whose column-level derivations evaluate row-phase.
+
+    REQ-1260: a column-level derivation is a row-phase default when (a) at
+    least one row template names the column (the template overrides the
+    default), or (b) the column is referenced from a row-phase context --
+    a template derivation or filter, an intermediate filter/order_by, or a
+    window -- even when no template names it. Case (b) applies only to
+    row-local derivations (not lookups or aggregates, which need
+    column-phase); it is transitive: a promoted column's own derivation may
+    reference further column-level columns, which promote in turn. A
+    column-level derivation that no template names and no row-phase context
+    references keeps its column-phase meaning, so specifications without
+    row-phase needs are untouched. Detection is syntactic (word-boundary
+    search over the row-phase payloads); over-promotion is fail-safe,
+    planning the derivation row-phase either succeeds with identical values
+    or fails loudly.
+    """
+    import re
+
+    column_derivations = {
+        column.name: column.derivation
+        for column in specification.columns
+        if column.derivation is not None
+    }
+    if not column_derivations:
+        return set()
+    rows = specification.rows or ()
+    if not rows:
+        # Without row templates there is no row phase; column-level
+        # derivations keep their column-phase meaning.
+        return set()
+
+    def derivation_text(name: str) -> str:
+        derivation = column_derivations[name]
+        assert derivation is not None
+        return derivation.value.model_dump_json()
+
+    def is_row_local(name: str) -> bool:
+        """A derivation can evaluate row-phase unless it needs dataset-level
+        operations (lookup, aggregate, or a qualified intermediate reference)
+        that only run column-phase."""
+        text = derivation_text(name)
+        # Syntactic check: the JSON payload names the operation, or the
+        # derivation references a qualified variable like "DOSE.Value".
+        if '"lookup"' in text or '"aggregate"' in text:
+            return False
+        # A qualified variable (containing a dot) references an
+        # intermediate/dataset column, not a row-local value.
+        return not re.search(r'"variable":"[^"]*\.[^"]*"', text)
+
+    # (a) the override rule: a template naming the column makes the
+    # column-level derivation its default.
+    promoted = {
+        name
+        for name in column_derivations
+        if any(name in row.derivations for row in rows)
+    }
+    # (b) row-phase contexts that may reference column-level columns.
+    contexts: list[str] = []
+    for row in rows:
+        if row.filter is not None:
+            contexts.append(row.filter)
+        contexts.extend(
+            handled.value.model_dump_json() for handled in row.derivations.values()
+        )
+    for intermediate in specification.intermediates or ():
+        if intermediate.filter is not None:
+            contexts.append(intermediate.filter)
+        for term in intermediate.order_by or ():
+            contexts.append(term.variable)
+        if intermediate.derivations is not None:
+            contexts.extend(
+                handled.value.model_dump_json()
+                for handled in intermediate.derivations.values()
+            )
+
+    changed = True
+    while changed:
+        changed = False
+        searchable = "\n".join(contexts) + "\n".join(
+            derivation_text(name) for name in promoted
+        )
+        for name in column_derivations:
+            if (
+                name not in promoted
+                and is_row_local(name)
+                and re.search(rf"\b{re.escape(name)}\b", searchable)
+            ):
+                promoted.add(name)
+                changed = True
+    return promoted
+
+
 def plan_execution(
     specification: Specification,
     sources: Mapping[str, LoadedDataset | TypedTable],
@@ -3815,6 +3907,21 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
+    # REQ-1260: compute row-phase defaults early; SELF intermediates need
+    # them in their available fields (below).
+    _default_columns = _row_phase_default_columns(specification)
+    # REQ-1260: a column-level derivation is that column's default derivation
+    # when at least one row template names the column (override) or when a
+    # row-phase context references it (transitively). Templates naming the
+    # column override the default; the rest inherit it, planned in each
+    # template's own row scope. A column-level derivation no template names
+    # and no row-phase context references keeps its column-phase meaning,
+    # so specs without defaults are untouched.
+    default_derivations = {
+        column.name: column.derivation
+        for column in specification.columns
+        if column.name in _default_columns
+    }
     resolved_joins: list[ResolvedJoin] = []
     # REQ-0120: an inline lookup's filter/order_by suggests the qualified
     # spelling, so the lookup datasets' columns ride along for suggestions.
@@ -3845,6 +3952,7 @@ def plan_execution(
         resolved_joins,
         supported_operations,
         unsupported,
+        frozenset(_default_columns),
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
@@ -3956,12 +4064,19 @@ def plan_execution(
             derivations: dict[str, PlannedDerivation] = {}
             for name in column_order:
                 declaration = row.derivations.get(name)
+                # REQ-1260: a template without its own derivation inherits
+                # the column-level default, planned in this template's scope.
+                inherited = declaration is None and name in default_derivations
+                if inherited:
+                    declaration = default_derivations[name]
                 if declaration is None:
                     continue
                 planned, references, inferred_paths = _plan_derivation(
                     name,
                     declaration,
-                    f"rows[{index}].derivations.{name}",
+                    f"columns.{name}.derivation"
+                    if inherited
+                    else f"rows[{index}].derivations.{name}",
                     supported_operations,
                     diagnostics,
                     unsupported,
@@ -4202,6 +4317,10 @@ def plan_execution(
     for column in specification.columns:
         if column.derivation is None:
             continue
+        if column.name in default_derivations:
+            # REQ-1260: a default derivation evaluates in each inheriting
+            # template's row phase, never in the column phase.
+            continue
         planned, references, inferred_paths = _plan_derivation(
             column.name,
             column.derivation,
@@ -4360,7 +4479,12 @@ def plan_execution(
         raise UnsupportedPlanningError(unique_unsupported)
 
     row_derived = tuple(
-        column.name for column in specification.columns if column.derivation is None
+        column.name
+        for column in specification.columns
+        # REQ-1260: a default derivation is a row-phase value in every
+        # template (overridden or inherited), so SELF sees it like any
+        # other template-derived column.
+        if column.derivation is None or column.name in default_derivations
     )
     # REQ-0050 records an intermediate's match values as dependencies so the
     # keys' inputs come before the read. The forward_reference check above

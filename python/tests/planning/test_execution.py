@@ -105,7 +105,9 @@ def test_a_column_cycle_is_reported_as_a_cycle_not_an_ordering_repair() -> None:
     assert diagnostic.context == {"cycle": ["A", "B", "A"]}
 
 
-def test_a_row_derivation_cannot_read_a_column_phase_value() -> None:
+def test_a_row_reference_promotes_a_column_derivation_to_row_phase() -> None:
+    # REQ-1260: a column-level derivation referenced from a row-phase
+    # context becomes a row-phase default, even when no template names it.
     spec = specification(
         [
             Column(name="A", type="str"),
@@ -119,13 +121,154 @@ def test_a_row_derivation_cannot_read_a_column_phase_value() -> None:
         ],
     )
 
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [column.column for column in plan.columns] == []
+    assert plan.row_derived_columns == ("A", "B")
+    (row_plan,) = plan.rows
+    by_column = {planned.column: planned for planned in row_plan.derivations}
+    assert by_column["B"].path == "columns.B.derivation"
+    assert by_column["A"].path == "rows[0].derivations.A"
+
+
+def test_a_column_default_is_inherited_by_templates_without_an_override() -> None:
+    # REQ-0199/REQ-1260: the column-level derivation is the default; a template
+    # naming the column overrides it for that template only.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="int", derivation=derivation({"literal": 10})),
+        ],
+        [
+            Row(id="override", derivations={"D": derivation({"literal": 20})}),
+            Row(id="inherits", derivations={}),
+        ],
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    by_id = {row.declaration.id: row for row in plan.rows}
+    (overridden,) = by_id["override"].derivations
+    assert overridden.column == "D"
+    assert overridden.path == "rows[0].derivations.D"
+    (inherited,) = by_id["inherits"].derivations
+    assert inherited.column == "D"
+    # The inherited default is declared at column level but planned in the
+    # template's row scope.
+    assert inherited.path == "columns.D.derivation"
+    # A default never evaluates in the column phase.
+    assert [column.column for column in plan.columns] == ["K"]
+    assert plan.row_derived_columns == ("D",)
+
+
+def test_an_inherited_default_reads_the_template_scope() -> None:
+    # REQ-1260: the default evaluates as if written in the inheriting
+    # template, so it sees that template's row-derived values.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="int"),
+            Column(
+                name="D",
+                type="int",
+                derivation=derivation({"compute": {"expr": "X * 2"}}),
+            ),
+        ],
+        [
+            Row(
+                id="one",
+                filter="SRC.X = 'one'",
+                derivations={
+                    "X": derivation({"literal": 1}),
+                    "D": derivation({"literal": 100}),
+                },
+            ),
+            Row(
+                id="two",
+                filter="SRC.X = 'two'",
+                derivations={"X": derivation({"literal": 5})},
+            ),
+        ],
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [column.column for column in plan.columns] == ["K"]
+    assert plan.row_derived_columns == ("X", "D")
+    by_id = {row.declaration.id: row for row in plan.rows}
+    (inherited,) = [
+        planned for planned in by_id["two"].derivations if planned.column == "D"
+    ]
+    assert inherited.path == "columns.D.derivation"
+
+
+def test_a_default_plus_override_is_not_a_duplicate_derivation() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="int", derivation=derivation({"literal": 10})),
+        ],
+        [Row(id="row", derivations={"D": derivation({"literal": 20})})],
+    )
+
+    # Must not raise: REQ-0199 covers the pairing, it is not duplicated.
+    plan_execution(spec, {"SRC": source_table()})
+
+
+def test_missing_derivation_still_requires_full_coverage_without_a_default() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="int"),
+        ],
+        [Row(id="row", derivations={})],
+    )
+
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, {"SRC": source_table()})
 
-    diagnostic = raised.value.diagnostics[0]
-    assert diagnostic.condition == "phase_boundary"
-    assert diagnostic.context["identifier"] == "B"
-    assert diagnostic.context["required_phase"] == "row_construction"
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "missing_derivation"
+    assert diagnostic.requirement == "REQ-0200"
+    assert diagnostic.context == {"column": "D", "rows": ["row"]}
+
+
+def test_a_column_level_derivation_without_overrides_stays_column_phase() -> None:
+    # REQ-1260 changes nothing for specifications that do not pair a
+    # column-level derivation with row-level derivations of the same column.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="int", derivation=derivation({"literal": 10})),
+        ],
+        [Row(id="row", derivations={})],
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [column.column for column in plan.columns] == ["K", "D"]
+    assert plan.row_derived_columns == ()
+
+
+def test_no_row_templates_means_no_row_phase_promotion() -> None:
+    # REQ-1260: without row templates there is no row phase, so
+    # column-level derivations keep their column-phase meaning.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="int", derivation=derivation({"literal": 10})),
+        ],
+        [],
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [column.column for column in plan.columns] == ["K", "D"]
+    assert plan.row_derived_columns == ()
 
 
 def test_an_undeclared_row_driver_fails_planning() -> None:
