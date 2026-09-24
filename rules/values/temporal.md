@@ -359,14 +359,6 @@ bounds the imputation with `not_before`, or states a verification under
 <a id="req-0576"></a>
 
 **REQ-0576.** A `date` and a `datetime` do not convert in either direction.
-`date` to `datetime` would invent a time, and `datetime` to `date` would
-discard a collected time. Each conversion would silently decide what a
-specification did not state. This is why a non-integral `float` does not
-become an `int`. `to_date` explicitly discards time and returns a calendar
-date. `datetime_impute` explicitly composes a moment from complete date text
-under a declared first- or last-second rule. The conversion cell stays `fail`.
-Inventing a component is an operation's to declare, never a
-conversion's to perform.
 
 <a id="req-0577"></a>
 
