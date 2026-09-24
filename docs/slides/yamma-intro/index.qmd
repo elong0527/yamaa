@@ -277,14 +277,8 @@ A yamaa specification describes a deterministic transformation from clinical sou
 
 Ambiguity is surfaced during planning — before it becomes a silent difference in the output.
 
-::: {.columns}
-::: {.column width="48%"}
 **For people:** the specification is reviewable.
-:::
-::: {.column width="48%"}
 **For agents:** the expected behavior is testable.
-:::
-:::
 
 ## Four components
 
