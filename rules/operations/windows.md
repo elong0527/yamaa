@@ -32,7 +32,7 @@ A named definition is an inline mapping, never another reference. A reference
 accepts no additions or overrides, and there is no `ref` mapping form.
 Omitted fields retain their ordinary window meanings: omission does not
 create a parameter the caller can supply. Names belong to a separate window
-namespace and are compared exactly.
+naming list and are compared exactly.
 
 <a id="req-1252"></a>
 
