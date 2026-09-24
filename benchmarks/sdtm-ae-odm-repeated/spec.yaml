@@ -1,74 +1,68 @@
 schema_version: '1.0'
 domain: AE
-keys:
-  - STUDYID
-  - USUBJID
-  - AESEQ
+keys: [STUDYID, USUBJID, AESEQ]
 input:
   ODM:
     path: input/odm.csv
     types:
       StudyEventRepeatKey: int
       ItemGroupRepeatKey: int
+
 output:
   path: ae.csv
-  columns:
-    - DOMAIN
-    - STUDYID
-    - USUBJID
-    - AESEQ
-    - AETERM
-    - AESTDTC
-    - AEENDTC
-    - AESEV
-    - AESER
-  order_by:
-    - USUBJID
-    - AESEQ
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC,
+            AESEV, AESER]
+  order_by: [USUBJID, AESEQ]
+
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: {literal: AE}
+
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
+
   - name: FORM
     type: str
     label: Source Item Group
+
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
     verifications:
       not_missing: {}
+
   - name: AESTDTC
     type: date
     label: Start Date/Time of Adverse Event
+
   - name: AEENDTC
     type: date
     label: End Date/Time of Adverse Event
+
   - name: AESEV
     type: str
     label: Severity/Intensity
     verifications:
       allowed_values:
-        values:
-          - MILD
-          - MODERATE
-          - SEVERE
+        values: [MILD, MODERATE, SEVERE]
+
   - name: AESER
     type: str
     label: Serious Event
     verifications:
       allowed_values:
-        values:
-          - Y
-          - N
+        values: [Y, N]
+
+  # Visit order for AESEQ; a kept event at any other visit stops the run.
   - name: EVENTORD
     type: int
     label: Visit order
@@ -79,27 +73,31 @@ columns:
           SCREENING: 1
           BASELINE: 2
         strict: true
+
   - name: EVENTREPEAT
     type: int
     label: Visit repeat
     derivation: ODM.StudyEventRepeatKey
+
   - name: REPEATKEY
     type: int
     label: Form repeat
     derivation: ODM.ItemGroupRepeatKey
+
+  # Events numbered from 1 within each subject: by visit, then visit repeat,
+  # then form repeat.
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation:
       row_number:
         window:
-          group_by:
-            - STUDYID
-            - USUBJID
-          order_by:
-            - EVENTORD
-            - EVENTREPEAT
-            - REPEATKEY
+          group_by: [STUDYID, USUBJID]
+          order_by: [EVENTORD, EVENTREPEAT, REPEATKEY]
+
+# One candidate row per form occurrence: the items sharing subject, visit,
+# visit repeat, form, and form repeat. Only AE forms with a reported term
+# are kept.
 rows:
   - id: collected-occurrence
     group_by:
@@ -109,35 +107,35 @@ rows:
       - ODM.StudyEventRepeatKey
       - ODM.ItemGroupOID
       - ODM.ItemGroupRepeatKey
-    filter: FORM = 'IG.AE' AND AETERM IS NOT NULL
+    filter: "FORM = 'IG.AE' AND AETERM IS NOT NULL"
+    # Each AE item is read from its one record in the occurrence: an absent
+    # item gives missing, and an item recorded twice stops the run.
     derivations:
       FORM: ODM.ItemGroupOID
       AETERM:
         aggregate:
-          filter: ODM.ItemOID = 'IT.AE.AETERM'
+          filter: "ODM.ItemOID = 'IT.AE.AETERM'"
           expr: ONLY(ODM.Value)
       AESTDTC:
         aggregate:
-          filter: ODM.ItemOID = 'IT.AE.AESTDTC'
+          filter: "ODM.ItemOID = 'IT.AE.AESTDTC'"
           expr: ONLY(ODM.Value)
       AEENDTC:
         aggregate:
-          filter: ODM.ItemOID = 'IT.AE.AEENDTC'
+          filter: "ODM.ItemOID = 'IT.AE.AEENDTC'"
           expr: ONLY(ODM.Value)
       AESEV:
         aggregate:
-          filter: ODM.ItemOID = 'IT.AE.AESEV'
+          filter: "ODM.ItemOID = 'IT.AE.AESEV'"
           expr: ONLY(ODM.Value)
       AESER:
         aggregate:
-          filter: ODM.ItemOID = 'IT.AE.AESER'
+          filter: "ODM.ItemOID = 'IT.AE.AESER'"
           expr: ONLY(ODM.Value)
+
 verifications:
   - unique:
-      columns:
-        - STUDYID
-        - USUBJID
-        - AESEQ
+      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 4
       max: 4
