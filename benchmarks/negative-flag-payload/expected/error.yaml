@@ -4,5 +4,5 @@ spec_paths:
   - columns.ELDFL.derivation.flag
 requirement: REQ-0287
 context:
-  expected: str
+  expected: predicate
   actual: int
