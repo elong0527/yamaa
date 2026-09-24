@@ -131,12 +131,7 @@ whitespace is accepted, and no other separator or field order is recognised.
 
 <a id="req-0552"></a>
 
-**REQ-0552.** Rejecting everything else lets two implementations agree.
-Each runtime's own parser accepts a wider and a different set: a space
-separator, lowercase `t`, bare date read as a moment, and trailing `Z` are
-each read by one of them and not the other, so a rule admitting whatever a
-runtime happened to accept would not be portable. These cases are the cost
-of that rejection:
+**REQ-0552.** These text forms are rejected:
 
 | Rejected | Offered as | Why |
 |---|---|---|
