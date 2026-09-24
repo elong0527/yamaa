@@ -215,6 +215,12 @@
   display: none;
 }
 
+/* embedded diagrams: fit the slide on any screen (phones included) */
+.reveal section img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* embedded benchmark dashboard: explorable without leaving the deck */
 .benchmark-embed {
   width: 100%;
