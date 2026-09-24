@@ -39,32 +39,14 @@ organizations or institutions.
 
 ## Goal 1: establish benchmarks
 
-<div class="flow flow-3">
-<div class="flow-step">ODM</div>
-<div class="flow-step">SDTM</div>
-<div class="flow-step">ADaM</div>
-</div>
-
-::: {.columns}
-::: {.column width="48%"}
-::: {.card}
-<div class="card-title">Minimum viable</div>
-
-- Specification
-- Representative source data
-- Golden output
-:::
-:::
-
-::: {.column width="48%"}
-::: {.card}
-<div class="card-title">Human baseline</div>
-
-- Experts reviewed before finalization
-- Clear review and decision making history
-:::
-:::
-:::
+* ODM -> SDTM -> ADaM
+* Minimum viable
+  * Specification
+  * Representative source data
+  * Golden output
+* Human baseline
+  * Experts reviewed before finalization
+  * Clear review and decision making history
 
 ## Goal 2: establish ground truth from full studies
 
