@@ -56,10 +56,7 @@ The levels correspond in order. The spellings name the same ladder.
 
 **REQ-0581.** `date_precision` reads a precision from either kind of source.
 Given the collected text it reports how much of a date that text carries. Given
-a temporal value it reports that value's collected precision. This lets a
-specification derive an imputation flag from the analysis date itself.
-Reading the date binds the flag to its value. Reading the text leaves the
-flag and value in step only by convention, and drift is undetected.
+a temporal value it reports that value's collected precision.
 
 <a id="req-0582"></a>
 
