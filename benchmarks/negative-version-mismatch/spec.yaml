@@ -1,4 +1,6 @@
 schema_version: "1.0"
+# The parent declares schema_version "2.0", so the two files cannot be
+# combined and the run is rejected before any data is read.
 parents: layers/parent.yaml
 output:
   path: adsl.csv
