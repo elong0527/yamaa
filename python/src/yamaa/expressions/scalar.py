@@ -249,7 +249,8 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
     # three-valued semantics: only TRUE takes true_value; FALSE takes
     # false_value when present; UNKNOWN takes missing_value when present.
     # Either absent value is missing, which is exactly the one-branch
-    # `case` the shorthand replaces.
+    # `case` the shorthand replaces; REQ-1258 lets missing_value be absent
+    # only when false_value is absent too.
     if isinstance(payload, str):
         payload = {"condition": payload}
     if not isinstance(payload, Mapping):
@@ -268,6 +269,14 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
             {"predicate": condition, "position": error.position},
             requirement="REQ-0188",
             field="condition",
+        )
+    if "false_value" in payload and "missing_value" not in payload:
+        return expression_condition(
+            "validation",
+            "missing_value_required",
+            {"false_value": payload["false_value"]},
+            requirement="REQ-1258",
+            field="missing_value",
         )
     decided = evaluate_predicate(ast, resolver)
     if isinstance(decided, ConditionResult):

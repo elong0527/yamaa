@@ -251,7 +251,7 @@ for the common one-branch `case` that returns a flag value.
 | `expressions.flag.condition` | Predicate selecting the true value. |
 | `expressions.flag.true_value` | Value returned when the condition is true; default `"Y"`. |
 | `expressions.flag.false_value` | Value returned when the condition is false; missing when absent. |
-| `expressions.flag.missing_value` | Value returned when the condition is unknown; missing when absent. |
+| `expressions.flag.missing_value` | Value returned when the condition is unknown; missing when absent. Required when `false_value` is declared ([REQ-1258](#req-1258)). |
 | `Result` | Returns `true_value`, `false_value`, or `missing_value` per [REQ-1257](#req-1257). |
 
 ## Error conditions
@@ -284,11 +284,20 @@ with no `when`/`then` item, more than one `otherwise` item, or an
 **REQ-1257.** A `flag` evaluates its `condition` under the three-valued logic
 [Predicates](predicates.md) gives `case`: only TRUE selects the true value.
 FALSE returns `false_value`, or missing when `false_value` is absent.
-UNKNOWN returns `missing_value`, or missing when `missing_value` is absent.
+UNKNOWN returns `missing_value`, or missing when `missing_value` is absent,
+which [REQ-1258](#req-1258) permits only when `false_value` is absent too.
 Unlike `case` with `otherwise`, an unknown condition never falls through to
 `false_value`. A `flag` whose payload is neither a predicate string nor a
 mapping, whose mapping form lacks `condition` or names a non-predicate
 `condition`, or whose condition is not a valid predicate: fail.
+
+<a id="req-1258"></a>
+
+**REQ-1258.** A `flag` that declares `false_value` also declares
+`missing_value`. `missing_value` may repeat `false_value`, name another
+value, or be `null` for missing. A `flag` that declares `false_value`
+without `missing_value`: fail as `missing_value_required` at
+`missing_value`.
 
 ## Conformance examples
 
@@ -298,6 +307,7 @@ Representative specifications, input data, and expected outcomes:
 - [negative-multiple-baselines](../../benchmarks/negative-multiple-baselines/README.md).
 - [negative-previous-fixed](../../benchmarks/negative-previous-fixed/README.md).
 - [negative-variable-nested](../../benchmarks/negative-variable-nested/README.md).
+- [negative-flag-missing-value](../../benchmarks/negative-flag-missing-value/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared
@@ -307,3 +317,11 @@ vectors. Static validation does not establish runtime parity.
 
 This topic lives in one contract.
 Other owners refer to it without defining a second policy.
+
+A `flag` never lets an unknown condition fall through to `false_value`
+([REQ-1257](#req-1257)), so a flag written with only `false_value: N` would
+return missing for an unknown condition beside `N` for a false one, without
+the specification ever saying so.
+[REQ-1258](#req-1258) makes that outcome a written choice: an author who
+declares the false value also declares the unknown one, even when it is
+the same `N` or `null`.

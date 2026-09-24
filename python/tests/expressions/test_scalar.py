@@ -235,7 +235,7 @@ def test_flag_without_false_value_is_missing_when_the_condition_is_false() -> No
 
 
 def test_flag_returns_false_value_when_the_condition_is_false() -> None:
-    expression = _flag(false_value="N")
+    expression = _flag(false_value="N", missing_value="N")
 
     assert _evaluate(expression, {"AGE": 70}) == ValueResult(value="Y")
     assert _evaluate(expression, {"AGE": 5}) == ValueResult(value="N")
@@ -249,10 +249,23 @@ def test_an_unknown_condition_takes_missing_value_not_false_value() -> None:
     assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value="U")
 
 
-def test_an_unknown_condition_without_missing_value_is_missing() -> None:
-    expression = _flag(false_value="N")
+def test_an_unknown_condition_with_a_null_missing_value_is_missing() -> None:
+    # REQ-1258: null is the explicit way to keep missing beside a false value.
+    expression = _flag(false_value="N", missing_value=None)
 
+    assert _evaluate(expression, {"AGE": 5}) == ValueResult(value="N")
     assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value=MISSING)
+
+
+def test_a_false_value_without_missing_value_names_the_missing_field() -> None:
+    # REQ-1258: a flag that names its false value names its unknown one.
+    result = _evaluate(_flag(false_value="N"), {"AGE": 70})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "missing_value_required"
+    assert result.condition.requirement == "REQ-1258"
+    assert result.condition.path_suffix == "missing_value"
+    assert result.condition.context == {"false_value": "N"}
 
 
 def test_flag_accepts_custom_true_and_missing_values() -> None:

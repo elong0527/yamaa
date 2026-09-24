@@ -46,6 +46,7 @@ columns:
       flag:
         condition: "COMPREC IS NOT NULL"
         false_value: "N"
+        missing_value: "N"
     verifications:
       allowed_values:
         values: [Y, N]

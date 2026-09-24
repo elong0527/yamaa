@@ -231,6 +231,9 @@ examples:
   negative-flag-condition:
     status: executable
     runtimes: ['python']
+  negative-flag-missing-value:
+    status: executable
+    runtimes: ['python']
   negative-adeg-rrr:
     status: executable
     runtimes: ['python']

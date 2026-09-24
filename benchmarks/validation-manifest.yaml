@@ -40,6 +40,11 @@ fixtures:
     condition: invalid_predicate
     spec_paths: ["columns.ELDFL.derivation.flag.condition"]
     validator: predicate
+  negative-flag-missing-value:
+    rule: R007
+    condition: missing_value_required
+    spec_paths: ["columns.ELDFL.derivation.flag.missing_value"]
+    validator: static_semantics
   negative-dose-intensity:
     rule: R013
     condition: aggregate_identifier_not_grouped

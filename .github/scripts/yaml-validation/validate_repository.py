@@ -332,6 +332,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'unknown_window'): {'window'},
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
+    ('R007', 'missing_value_required'): {'false_value'},
     ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
@@ -8147,6 +8148,23 @@ def validate_expression_static_semantics(expression, path, context):
                 )
         return errors
 
+    if (
+        keyword == 'flag'
+        and isinstance(payload, dict)
+        and 'false_value' in payload
+        and 'missing_value' not in payload
+    ):
+        # REQ-1258: a flag that names its false value names its unknown one.
+        errors.append(
+            validation_diagnostic(
+                f"{path}.flag.missing_value",
+                'missing_value_required',
+                'missing_value is required with false_value',
+                context={'false_value': payload['false_value']},
+            )
+        )
+        return errors
+
     if keyword == 'date_impute' and isinstance(payload, dict):
         operation_path = f"{path}.date_impute"
         minimum = payload.get('minimum_source_precision', 'year')
@@ -9816,7 +9834,11 @@ def validate_expected_error_contracts(root: Path):
                 continue
             spec = _desugar_bare_derivations(spec)
             for path in paths:
-                if condition in {'missing_required_field', 'month_required'}:
+                if condition in {
+                    'missing_required_field',
+                    'missing_value_required',
+                    'month_required',
+                }:
                     # The diagnostic points at the field that should exist.
                     continue
                 if not spec_path_exists(spec, path):

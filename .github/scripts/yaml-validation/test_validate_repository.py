@@ -1179,6 +1179,30 @@ class TestStaticSemanticContracts(unittest.TestCase):
             expression, 'spec.columns.X.derivation', self.context()
         )
 
+    def test_flag_false_value_requires_missing_value(self):
+        # REQ-1258: missing_value may repeat false_value, name another
+        # value, or be null; it may not be absent.
+        condition = {'condition': 'B > 1'}
+        [error] = self.validate({'flag': {**condition, 'false_value': 'N'}})
+        self.assertEqual(error.condition, 'missing_value_required')
+        self.assertEqual(
+            error.path, 'spec.columns.X.derivation.flag.missing_value'
+        )
+        self.assertEqual(error.context, {'false_value': 'N'})
+        for missing_value in ('N', 'U', None):
+            with self.subTest(missing_value=missing_value):
+                self.assertEqual(
+                    self.validate({'flag': {
+                        **condition,
+                        'false_value': 'N',
+                        'missing_value': missing_value,
+                    }}),
+                    [],
+                )
+        for flag in ('B > 1', condition, {**condition, 'missing_value': 'U'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(self.validate({'flag': flag}), [])
+
     def test_window_order_by_required(self):
         for operation in (
             'row_number', 'rank', 'row_value', 'previous_non_missing'

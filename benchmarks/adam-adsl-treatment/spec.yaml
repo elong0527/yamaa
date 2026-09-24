@@ -165,6 +165,7 @@ columns:
       flag:
         condition: "TRTSDT IS NOT NULL"
         false_value: "N"
+        missing_value: "N"
     verifications:
       - not_missing: {}
       - allowed_values:

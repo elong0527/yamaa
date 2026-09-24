@@ -38,3 +38,4 @@ columns:
       flag:
         condition: "ASTDT >= '2025-01-01'"
         false_value: "N"
+        missing_value: "N"

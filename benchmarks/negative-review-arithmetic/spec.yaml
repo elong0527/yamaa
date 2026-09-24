@@ -33,3 +33,4 @@ columns:
       flag:
         condition: "AE.AESEQ + 1 > 1"
         false_value: "N"
+        missing_value: "N"

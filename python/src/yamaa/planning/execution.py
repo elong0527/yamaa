@@ -574,6 +574,20 @@ def _expression_info(
                     )
                     for name in predicate_identifiers(ast)
                 )
+        if (
+            isinstance(payload, Mapping)
+            and "false_value" in payload
+            and "missing_value" not in payload
+        ):
+            # REQ-1258: a flag that names its false value names its unknown one.
+            diagnostics.append(
+                _diagnostic(
+                    "missing_value_required",
+                    f"{operation_path}.missing_value",
+                    {"false_value": payload["false_value"]},
+                    requirement="REQ-1258",
+                )
+            )
 
     return _ExpressionInfo(
         references=_deduplicate_references(references),
