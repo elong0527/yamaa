@@ -813,29 +813,6 @@ _KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
 }
 
 
-def _key_base_identifiers(expression: Expression) -> tuple[str, ...]:
-    """Return the variable names a key_base expression reads.
-
-    REQ-1259: these become the expression's current-row dependencies. The
-    walk collects every string leaf; the validator reports the precise
-    references and any unknown fields separately.
-    """
-
-    def walk(node: object, found: list[str]) -> None:
-        if isinstance(node, str):
-            found.append(node)
-        elif isinstance(node, Mapping):
-            for value in node.values():
-                walk(value, found)
-        elif isinstance(node, Sequence) and not isinstance(node, (bytes, bytearray)):
-            for item in node:
-                walk(item, found)
-
-    found: list[str] = []
-    walk(expression.root, found)
-    return tuple(dict.fromkeys(found))
-
-
 def _key_base_result_type(
     expression: Expression,
     bindings: BindingPlan,
@@ -939,6 +916,12 @@ def _lookup_references(
             )
         )
         return
+    # REQ-1259: key_base expressions arrive as raw mappings on this path;
+    # validate each once so every use below sees an Expression model.
+    entries = tuple(
+        entry if isinstance(entry, str) else Expression.model_validate(dict(entry))
+        for entry in entries
+    )
     rendered = [
         entry if isinstance(entry, str) else entry.model_dump() for entry in entries
     ]
@@ -998,17 +981,19 @@ def _lookup_references(
             # row and supplies that key position's match value. The inner
             # references validate as ordinary reads; the synthetic match name
             # only carries the paired-type check.
-            keyed = KeyBaseExpression(
-                name=f"key_base[{index}]",
-                expression=entry,
-                variables=_key_base_identifiers(entry),
-            )
             info = _expression_info(
                 entry,
                 entry_path,
                 supported_operations,
                 scope=scope,
                 dataset_fields=dataset_fields,
+            )
+            keyed = KeyBaseExpression(
+                name=f"key_base[{index}]",
+                expression=entry,
+                # The expression's current-row dependencies are exactly the
+                # identifiers its references read -- not every string leaf.
+                variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
             )
             references.extend(info.references)
             unsupported.extend(info.unsupported)
@@ -1717,6 +1702,16 @@ def _aggregate_references(
     if joined is not None:
         keys = _as_names(payload.get("key"))
         entries = _key_base_entries(payload.get("key_base"))
+        if entries is not None:
+            # REQ-1259: key_base expressions arrive as raw mappings on this
+            # path; validate each once so every use below sees an
+            # Expression model.
+            entries = tuple(
+                entry
+                if isinstance(entry, str)
+                else Expression.model_validate(dict(entry))
+                for entry in entries
+            )
         if (payload.get("key") is not None and keys is None) or (
             payload.get("key_base") is not None and entries is None
         ):
@@ -1791,19 +1786,22 @@ def _aggregate_references(
                     continue
                 # REQ-1259: a key_base expression evaluates against the
                 # current row and supplies that key position's match value.
-                planned = KeyBaseExpression(
-                    name=f"key_base[{index}]",
-                    expression=entry,
-                    variables=_key_base_identifiers(entry),
-                )
-                keyed.append(planned)
-                variables.append(planned.name)
                 info = _expression_info(
                     entry,
                     f"{operation_path}.key_base[{index}]",
                     supported_operations,
                     scope=scope,
                 )
+                planned = KeyBaseExpression(
+                    name=f"key_base[{index}]",
+                    expression=entry,
+                    # The expression's current-row dependencies are exactly
+                    # the identifiers its references read -- not every
+                    # string leaf.
+                    variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
+                )
+                keyed.append(planned)
+                variables.append(planned.name)
                 references.extend(info.references)
                 unsupported.extend(info.unsupported)
                 diagnostics.extend(info.diagnostics)
@@ -3096,17 +3094,28 @@ def _plan_lookups(
             # supplies that key position's match value.
             variables_list: list[str] = []
             keyed_list: list[KeyBaseExpression] = []
+            keyed_infos: dict[str, _ExpressionInfo] = {}
             for index, entry in enumerate(intermediate.key_base):
                 if isinstance(entry, str):
                     variables_list.append(entry)
                     continue
+                info = _expression_info(
+                    entry,
+                    f"{path}.key_base[{index}]",
+                    supported_operations,
+                    dataset_fields=dataset_fields,
+                )
                 keyed = KeyBaseExpression(
                     name=f"key_base[{index}]",
                     expression=entry,
-                    variables=_key_base_identifiers(entry),
+                    # The expression's current-row dependencies are exactly
+                    # the identifiers its references read -- not every
+                    # string leaf.
+                    variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
                 )
                 variables_list.append(keyed.name)
                 keyed_list.append(keyed)
+                keyed_infos[keyed.name] = info
             variables = tuple(variables_list)
             match_expressions = tuple(keyed_list)
         if len(variables) != len(match_fields) or not variables:
@@ -3205,12 +3214,7 @@ def _plan_lookups(
                 # REQ-1259: every identifier a key_base expression reads must
                 # be known; the inner references validate as ordinary reads
                 # at the entry's exact spec path.
-                info = _expression_info(
-                    keyed.expression,
-                    f"{path}.key_base[{index}]",
-                    supported_operations,
-                    dataset_fields=dataset_fields,
-                )
+                info = keyed_infos[keyed.name]
                 unsupported.extend(info.unsupported)
                 diagnostics.extend(info.diagnostics)
                 for reference in info.references:

@@ -354,6 +354,103 @@ def test_key_base_expression_type_mismatch_fails() -> None:
     assert raised.value.diagnostics[0].condition == "incompatible_input_type"
 
 
+def test_an_inline_lookup_key_base_expression_plans() -> None:
+    # REQ-1259: an inline lookup accepts a key_base expression; the planner
+    # validates it as an expression model, not a raw mapping.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="str",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "SRC",
+                            "key_base": [{"str_upper": {"source": "A"}}],
+                            "key": ["X"],
+                            "value": "X",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    # A clean return means no diagnostics: plan_execution raises otherwise.
+    assert plan.columns[-1].column == "V"
+
+
+def test_a_qualified_aggregate_key_base_expression_plans() -> None:
+    # REQ-1259: a qualified aggregate accepts a key_base expression; the
+    # planner normalizes it to an expression model before rendering.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="N",
+                type="int",
+                derivation=derivation(
+                    {
+                        "aggregate": {
+                            "dataset": "SRC",
+                            "key_base": [{"str_upper": {"source": "A"}}],
+                            "key": ["X"],
+                            "expr": "COUNT(SRC.*)",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert plan.columns[-1].column == "N"
+
+
+def test_a_key_base_expression_collects_only_real_references() -> None:
+    # REQ-1259: the expression's dependencies are its references, not every
+    # string leaf, so a literal string contributes no dependency.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"literal": "A"}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=("source", "literal", "mapping"),
+    )
+
+    keyed = plan.intermediates[0].match_expressions[0]
+    assert keyed.variables == ()
+    assert plan.intermediates[0].dependencies == ()
+
+
 def test_a_lookup_defaults_to_missing_on_absence() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]

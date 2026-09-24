@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from yamaa.expressions import ResolvedValue, parse_predicate
+from yamaa.expressions.dispatch import ExpressionDispatcher
 from yamaa.io.polars import frame_from_values
-from yamaa.models import MISSING, DateValue, TypedColumn
+from yamaa.models import MISSING, ConditionResult, DateValue, TypedColumn, ValueResult
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
 from yamaa.planning import KeyBaseExpression, PlannedIntermediate
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
     _select_eligible,
+    evaluate_intermediate,
     types_comparable,
 )
 from yamaa.runtime.joins import RelationIndex
@@ -246,6 +248,49 @@ def test_key_base_expression_missing_result_matches_nothing() -> None:
 
     assert answered.condition is None
     assert answered.record is None
+
+
+def inline_payload() -> dict[str, object]:
+    return {
+        "dataset": "EX",
+        "key_base": [{"double": {"source": "SUBJECT"}}],
+        "key": ["USUBJID"],
+        "value": "EXTRT",
+        "order_by": ["EX.EXSEQ"],
+        "keep": "first",
+    }
+
+
+def test_an_inline_key_base_expression_uses_the_configured_dispatcher() -> None:
+    # REQ-1189/REQ-1259: an inline lookup key_base expression evaluates
+    # through the caller's configured dispatcher, so an R018 function
+    # operation resolves there instead of failing as unsupported.
+
+    def double(payload, resolver):
+        return ValueResult(value="S1")
+
+    dispatcher = ExpressionDispatcher(extensions={"double": double})
+    result = evaluate_intermediate(
+        inline_payload(),
+        ex(),
+        lambda name: ResolvedValue(value="s1"),
+        evaluate=dispatcher.evaluate,
+    )
+
+    assert isinstance(result, ValueResult)
+    assert result.value == "VITAMIN D3"
+
+
+def test_an_inline_key_base_expression_without_a_dispatcher_is_a_condition() -> None:
+    # REQ-1259: without a configured dispatcher an unsupported operation
+    # yields a clean condition, never an AttributeError on the result.
+    result = evaluate_intermediate(
+        inline_payload(), ex(), lambda name: ResolvedValue(value="s1")
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
 
 
 def epochs() -> RelationIndex:

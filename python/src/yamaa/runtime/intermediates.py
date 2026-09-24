@@ -767,13 +767,15 @@ def evaluate_intermediate(
     payload: Mapping[str, object],
     relation: RelationIndex,
     resolve: Callable[[str], Resolution],
+    evaluate: Callable[[Expression, Resolver], EvaluationResult] | None = None,
 ) -> EvaluationResult:
     """Evaluate one inline `lookup:` operation against its dataset.
 
     The planner validates the declaration; this answers the row. `resolve`
     reads one current-row variable the way the derivation's own resolver
     does, so a source may name an output column or a driver-qualified
-    dataset column exactly as the specification wrote it.
+    dataset column exactly as the specification wrote it. `evaluate` is the
+    configured expression dispatcher; it defaults to the module-level one.
     """
     entries = _key_base_entries(payload.get("key_base"))
     keys = _names(payload.get("key"))
@@ -810,6 +812,7 @@ def evaluate_intermediate(
     match_variables: list[str] = []
     match_expressions: list[KeyBaseExpression] = []
     key_resolver = CallableResolver(resolve)
+    evaluate_expression_with = evaluate or evaluate_expression
     for index, entry in enumerate(entries):
         if isinstance(entry, str):
             match_variables.append(entry)
@@ -818,9 +821,19 @@ def evaluate_intermediate(
         # through the lookup's own resolver and supplies that key position's
         # match value. A missing result matches nothing.
         expression = Expression.model_validate(dict(entry))
-        result = evaluate_expression(expression, key_resolver)
+        result = evaluate_expression_with(expression, key_resolver)
         if isinstance(result, ConditionResult):
             return result
+        if not isinstance(result, ValueResult):
+            return _condition(
+                "invalid_field_type",
+                "REQ-0321",
+                {
+                    "operation": "lookup",
+                    "reason": "a key_base expression that did not evaluate to a value",
+                },
+                phase="validation",
+            )
         name = f"key_base[{index}]"
         match_variables.append(name)
         match_expressions.append(

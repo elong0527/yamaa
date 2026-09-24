@@ -30,7 +30,6 @@ from yamaa.expressions import (
     aggregate_identifiers,
     aggregate_star_datasets,
     evaluate_aggregate,
-    evaluate_expression,
     evaluate_predicate,
     numeric_identifiers,
     parse_aggregate_cached,
@@ -378,7 +377,14 @@ class RowResolver:
             keep = multiple_matches.get("keep")
             if keep is not None:
                 payload["keep"] = keep
-        result = evaluate_intermediate(payload, relation, self.resolve)
+        result = evaluate_intermediate(
+            payload,
+            relation,
+            self.resolve,
+            evaluate=self._dispatcher.evaluate
+            if self._dispatcher is not None
+            else None,
+        )
         if isinstance(result, ValueResult):
             return ResolvedValue(value=result.value, handled_by=result.handled_by)
         return FailedResolution(condition=result.condition)
@@ -592,7 +598,12 @@ class RowResolver:
         if not isinstance(dataset, str) or dataset not in self._context.relations:
             return _invalid("lookup", "an undeclared dataset")
         return evaluate_intermediate(
-            payload, self._context.relations[dataset], self.resolve
+            payload,
+            self._context.relations[dataset],
+            self.resolve,
+            evaluate=self._dispatcher.evaluate
+            if self._dispatcher is not None
+            else None,
         )
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:
@@ -646,6 +657,9 @@ class RowResolver:
                 return _invalid("aggregate", "declared key and source pairs")
             key_values: list[RuntimeValue] = []
             key_resolver = CallableResolver(self.resolve)
+            # REQ-1189: the key_base expressions evaluate through the
+            # configured dispatcher, like the derive bindings below.
+            dispatcher = self._dispatcher or ExpressionDispatcher()
             for index, entry in enumerate(key_entries):
                 if isinstance(entry, str):
                     resolved = self.resolve(entry)
@@ -660,9 +674,14 @@ class RowResolver:
                 # current row and supplies that key position's match value.
                 # A missing result matches nothing.
                 expression = Expression.model_validate(dict(entry))
-                evaluated = evaluate_expression(expression, key_resolver)
+                evaluated = dispatcher.evaluate(expression, key_resolver)
                 if isinstance(evaluated, ConditionResult):
                     return evaluated
+                if not isinstance(evaluated, ValueResult):
+                    return _invalid(
+                        "aggregate",
+                        "a key_base expression that did not evaluate to a value",
+                    )
                 key_values.append(evaluated.value)
             selected = self._right_side(
                 relation_name,
