@@ -124,6 +124,8 @@ columns:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, TUSEQ]
+  - unique:
+      columns: [STUDYID, USUBJID, TULNKID]
   - row_count:
       min: 6
       max: 6
