@@ -72,6 +72,10 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [EXSTDTC, EXTRT]
 
+# One record per subject, treatment and dose (with its unit and frequency),
+# bounded by the first and last administration dates. A dose that recurs
+# later is not split, so its record spans the gap. EXADJ is the
+# alphabetically first reason recorded in the interval; none gives missing.
 rows:
   - id: dose_intervals
     group_by: [EC_RAW.STUDYID, EC_RAW.USUBJID, EC_RAW.ECTRT, EC_RAW.ECDOSE, EC_RAW.ECDOSU, EC_RAW.ECDOSFRQ]

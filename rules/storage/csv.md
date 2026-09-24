@@ -86,12 +86,7 @@ collected empty string is written as two quote characters. The two forms stay
 apart in the artifact, and no text is ever pressed into service as a sentinel
 for absence. Reading does not restore the pair: [REQ-0529](ingestion.md#req-0529) reads an empty field as
 missing whether it was bare or quoted, so a collected empty string written here
-returns as missing if this artifact is later read as a delimited source. The
-asymmetry is deliberate. A source is authored by a producer this language does
-not control. A distinction no such producer reliably spells is not one a
-reader may invent. An artifact this contract writes has one writer and can
-afford the finer form. The `parquet` profile carries the pair in its container
-and keeps it in both directions.
+returns as missing if this artifact is later read as a delimited source.
 
     STUDYID,COMMENT,NOTE
     S1,plain text,

@@ -65,6 +65,9 @@ columns:
       - allowed_values:
           values: [STUDY TREATMENT, STUDY]
 
+  # The completion flag, which decides DSTERM and DSDECOD. Like the reason,
+  # code and date below, it is read from this milestone's own item rows;
+  # an item the milestone lacks reads as missing.
   - name: COMPSTAT
     type: str
     label: Completion Status as Collected

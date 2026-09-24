@@ -20,41 +20,32 @@ study event, form and item. The four study events are
 a date item (`IT.DS.DTC`), and the treatment and study
 forms also carry a completion status (`IT.DS.COMP`), a
 reported reason (`IT.DS.REASON`) and a standardized
-reason (`IT.DS.REASONCD`). The three subjects are
-invented: 001 is consented and randomized on the same
-day and completes treatment and the study; 002 stops
-treatment for `Severe nausea` and then leaves the study
-after moving away; 003 consents but is a screen failure
-and never reaches randomization.
+reason (`IT.DS.REASONCD`).
 
 **Variables:**
 
 - `DSSEQ` numbers each subject's records in the order
-  they happened, by `DSSTDTC` and then by `DSTERM` so
-  the same-day consent and randomization keep a fixed
-  order. With `STUDYID` and `USUBJID` it identifies the
-  record.
+  they happened, by `DSSTDTC` and then by `DSTERM`, so
+  records on the same day keep a fixed order. With
+  `STUDYID` and `USUBJID` it identifies the record.
+- `DSTERM` holds the reported term: the controlled term
+  for a milestone; `COMPLETED` when the completion
+  status says so, or `SCREEN FAILURE` at end of study
+  when it says so; else the collected reason.
+- `DSDECOD` holds the controlled term: the same term as
+  `DSTERM` for a milestone, a completion or a screen
+  failure, else the collected standardized reason.
 - `DSCAT` follows the event, not the term:
   `PROTOCOL MILESTONE` for consent and randomization,
   `DISPOSITION EVENT` for end of treatment and end of
   study.
 - `DSSCAT` names the event: `INFORMED CONSENT`,
   `RANDOMIZATION`, `END OF TREATMENT` or `END OF STUDY`.
-- `DSTERM` holds the reported term: the controlled term
-  for a milestone, `COMPLETED` when the completion
-  status says so, else the collected reason item
-  (`Severe nausea`, `Subject moved`) or `SCREEN FAILURE`.
-- `DSDECOD` holds the controlled term: the same term as
-  `DSTERM` for milestones, `COMPLETED` when completed,
-  else the collected standardized reason
-  (`ADVERSE EVENT`, `LOST TO FOLLOW-UP`,
-  `SCREEN FAILURE`).
 - `DSSTDTC` is the collected date item for that record.
 
-Note: one subject has records on the same day from two
-events; the term order keeps `DSSEQ` deterministic. A
-screen failure has a consent record and a disposition
-record only, and never reaches randomization.
+**Note:** each collected form gives one record and an
+event with no form gives none, so a screen failure has
+only its consent and end-of-study records.
 
 Provenance: `DSCAT`/`DSSCAT`/`DSTERM`/`DSDECOD` follow
 the CDISC SDTMIG DS assumptions (protocol milestones

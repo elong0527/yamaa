@@ -16,8 +16,12 @@ and whether the diary day was completed.
 
 **Variables:**
 
-- `FATESTCD` is `OCCUR` for the occurrence record, `SEV` for the
-  severity record, and `LDIAM` for the longest-diameter record.
+- `FASEQ` numbers the subject's records by diary day, reaction name,
+  and test order (`OCCUR`, `SEV`, `LDIAM`).
+- `FATESTCD` is `OCCUR` for the occurrence record, one per reaction
+  per diary day; `SEV` for the severity record, on completed days
+  only; and `LDIAM` for the longest-diameter record, only for redness
+  or swelling that occurred on a completed day.
 - `FATEST` is `Occurrence Indicator`, `Severity/Intensity`, and
   `Longest Diameter` respectively.
 - `FAOBJ` copies the solicited reaction.
@@ -25,9 +29,8 @@ and whether the diary day was completed.
 - `FASCAT` is `ADMINISTRATION SITE` for local reactions and
   `SYSTEMIC` for systemic reactions.
 - `FAORRES` is the recorded `Y`/`N` for `OCCUR`, the recorded
-  severity for `SEV` (`NONE` when the reaction did not occur), and
-  the measured diameter text for `LDIAM`; it is blank on a missed
-  diary day.
+  severity for `SEV` (`NONE` unless the reaction occurred), and the
+  measured diameter for `LDIAM`; it is blank on a missed diary day.
 - `FAORRESU` is the diameter unit, on `LDIAM` records only.
 - `FASTRESC` copies `FAORRES`.
 - `FASTRESN` is the measured diameter as a number, on `LDIAM`
@@ -37,11 +40,6 @@ and whether the diary day was completed.
   otherwise.
 - `FATPT` is the diary day label (`END DAY 1`, ...).
 - `FADTC` is the diary collection date.
-- `FASEQ` numbers the subject's records by diary day, reaction,
-  and test order (`OCCUR`, `SEV`, `LDIAM`).
-- A `LDIAM` record is emitted only for redness or swelling when the
-  reaction occurred; no diameter record is emitted for a reaction
-  that did not occur.
 
 **Note:** temperature stays in Vital Signs (VS) and is not a
 reactogenicity diary record, so it never becomes an FA record here.
