@@ -1,0 +1,200 @@
+schema_version: "1.0"
+domain: PR
+keys: [STUDYID, USUBJID, PRSEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: pr.csv
+  columns: [DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC]
+  order_by: [STUDYID, USUBJID, PRSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: PR}
+    verifications:
+      allowed_values:
+        values: [PR]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: SUBJKEY
+    type: str
+    label: Subject Key as Collected
+    derivation: ODM.SubjectKey
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      str_template: "{STUDYID}-{SUBJKEY}"
+
+  - name: FORM
+    type: str
+    label: Procedure Form as Collected
+
+  - name: PRTRT
+    type: str
+    label: Reported Name of the Procedure
+    verifications:
+      - not_missing: {}
+
+  - name: PRCAT
+    type: str
+    label: Category for Procedures
+    verifications:
+      - not_missing: {}
+
+  - name: ANSWER
+    type: str
+    label: Answer to the Pre-Specified Radiotherapy Question
+
+  - name: PRPRESP
+    type: str
+    label: Pre-Specified Procedure Indicator
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  - name: PROCCUR
+    type: str
+    label: Procedure Occurrence
+    verifications:
+      - allowed_values:
+          values: [Y, N]
+
+  - name: PRLOC
+    type: str
+    label: Location of Procedure
+
+  - name: PRLAT
+    type: str
+    label: Laterality
+    verifications:
+      - allowed_values:
+          values: [LEFT, RIGHT, BILATERAL, UNILATERAL]
+
+  - name: PRDOSE
+    type: float
+    label: Dose per Administration
+
+  - name: PRDOSU
+    type: str
+    label: Dose Units
+
+  - name: PRSTDTC
+    type: str
+    label: Start Date/Time of Procedure
+
+  - name: PRENDTC
+    type: str
+    label: End Date/Time of Procedure
+
+  - name: PRSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [PRSTDTC, PRTRT]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: surgery
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "FORM = 'IG.PR.SURGERY'"
+    derivations:
+      FORM: ODM.ItemGroupOID
+      PRTRT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRTRT'"
+          expr: "ONLY(ODM.Value)"
+      PRCAT: {literal: PRIOR CANCER SURGERY}
+      ANSWER: {literal: null}
+      PRPRESP: {literal: null}
+      PROCCUR: {literal: null}
+      PRLOC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRLOC'"
+          expr: "ONLY(ODM.Value)"
+      PRLAT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRLAT'"
+          expr: "ONLY(ODM.Value)"
+      PRDOSE: {literal: null}
+      PRDOSU: {literal: null}
+      PRSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRSTDTC'"
+          expr: "ONLY(ODM.Value)"
+      PRENDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRENDTC'"
+          expr: "ONLY(ODM.Value)"
+
+  - id: radiotherapy
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "FORM = 'IG.PR.RADIOTHERAPY'"
+    derivations:
+      FORM: ODM.ItemGroupOID
+      PRTRT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRTRT'"
+          expr: "ONLY(ODM.Value)"
+      PRCAT: {literal: PRIOR RADIOTHERAPY}
+      ANSWER:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.RTPRSP'"
+          expr: "ONLY(ODM.Value)"
+      PRPRESP: {literal: Y}
+      PROCCUR:
+        case:
+          - when: "ANSWER = 'Y'"
+            then: {literal: Y}
+          - when: "ANSWER = 'N'"
+            then: {literal: N}
+          - otherwise: {literal: null}
+      PRLOC: {literal: null}
+      PRLAT: {literal: null}
+      PRDOSE:
+        case:
+          - when: "PROCCUR = 'Y'"
+            then:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.PR.PRDOSE'"
+                expr: "ONLY(ODM.Value)"
+          - otherwise: {literal: null}
+      PRDOSU:
+        case:
+          - when: "PROCCUR = 'Y'"
+            then:
+              aggregate:
+                filter: "ODM.ItemOID = 'IT.PR.PRDOSU'"
+                expr: "ONLY(ODM.Value)"
+          - otherwise: {literal: null}
+      PRSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRSTDTC'"
+          expr: "ONLY(ODM.Value)"
+      PRENDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.PR.PRENDTC'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PRSEQ]
+  - row_count:
+      min: 3
+      max: 3
+  - implies:
+      id: no-dose-without-occurrence
+      when: "PROCCUR = 'N'"
+      then: "PRDOSE IS NULL"

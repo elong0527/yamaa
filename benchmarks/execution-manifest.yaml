@@ -738,6 +738,9 @@ examples:
   sdtm-mh-prespecified-conditions:
     status: executable
     runtimes: ['python']
+  sdtm-pr-procedures:
+    status: executable
+    runtimes: ['python']
   sdtm-qs-questionnaire-items:
     status: executable
     runtimes: ['python']
