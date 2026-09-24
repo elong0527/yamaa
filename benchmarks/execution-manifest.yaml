@@ -642,6 +642,9 @@ examples:
   sdtm-dm-basic:
     status: executable
     runtimes: ['python']
+  sdtm-cm-collected-medications:
+    status: executable
+    runtimes: ['python']
   sdtm-cm-odm-repeated:
     status: executable
     runtimes: ['python']

@@ -1,0 +1,231 @@
+schema_version: "1.0"
+domain: CM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, ItemGroupRepeatKey: int}
+
+output:
+  path: cm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMINDC, CMDOSE, CMDOSTXT, CMDOSU, CMDOSFRQ, CMROUTE, CMSTDTC, CMENDTC, CMSTRTPT, CMSTTPT, CMENRTPT, CMENTPT]
+  order_by: [USUBJID, CMSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: CM}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: ODM.ItemGroupRepeatKey
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+    verifications:
+      not_missing: {}
+
+  - name: CMINDC
+    type: str
+    label: Indication
+
+  - name: DSTXT
+    type: str
+    label: Collected dose text (intermediate, not in output)
+
+  # A collected dose that is a plain number is the numeric dose.
+  - name: CMDOSE
+    type: float
+    label: Dose per Administration
+    derivation:
+      str_extract:
+        source: DSTXT
+        pattern: '^[0-9]+(\.[0-9]+)?$'
+        missing: null
+        no_match: null
+
+  # Any other collected dose, such as the range "200-400", stays as text.
+  - name: CMDOSTXT
+    type: str
+    label: Dose Description
+    derivation:
+      case:
+        - when: "DSTXT IS NOT NULL AND CMDOSE IS NULL"
+          then: DSTXT
+
+  - name: CMDOSU
+    type: str
+    label: Dose Units
+    verifications:
+      allowed_values:
+        values: [mg]
+
+  - name: FRQLBL
+    type: str
+    label: Collected frequency label (intermediate, not in output)
+
+  - name: CMDOSFRQ
+    type: str
+    label: Dosing Frequency per Interval
+    derivation:
+      mapping:
+        source: FRQLBL
+        dict:
+          Once daily: QD
+          Twice daily: BID
+        missing: null
+        strict: true
+
+  - name: ROUTELBL
+    type: str
+    label: Collected route label (intermediate, not in output)
+
+  - name: CMROUTE
+    type: str
+    label: Route of Administration
+    derivation:
+      mapping:
+        source: ROUTELBL
+        dict:
+          By mouth: ORAL
+        missing: null
+        strict: true
+
+  - name: CMSTDTC
+    type: str
+    label: Start Date/Time of Medication
+    # As collected, including partial ISO 8601 dates such as "2023-09".
+
+  - name: CMENDTC
+    type: str
+    label: End Date/Time of Medication
+
+  - name: PRIOR
+    type: str
+    label: Collected taken-before-study box (intermediate, not in output)
+
+  - name: CMSTRTPT
+    type: str
+    label: Start Relative to Reference Time Point
+    derivation:
+      case:
+        - when: "PRIOR = 'Y'"
+          then: {literal: BEFORE}
+
+  - name: CMSTTPT
+    type: str
+    label: Start Reference Time Point
+    derivation:
+      case:
+        - when: "CMSTRTPT IS NOT NULL"
+          then: {literal: SCREENING}
+
+  - name: ONGO
+    type: str
+    label: Collected ongoing box (intermediate, not in output)
+
+  - name: CMENRTPT
+    type: str
+    label: End Relative to Reference Time Point
+    derivation:
+      case:
+        - when: "ONGO = 'Y'"
+          then: {literal: ONGOING}
+
+  - name: CMENTPT
+    type: str
+    label: End Reference Time Point
+    derivation:
+      case:
+        - when: "CMENRTPT IS NOT NULL"
+          then: {literal: END OF STUDY}
+
+rows:
+  - id: medication
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations:
+      CMTRT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMTRT'"
+          expr: "ONLY(ODM.Value)"
+      CMINDC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMINDC'"
+          expr: "ONLY(ODM.Value)"
+      DSTXT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMDSTXT'"
+          expr: "ONLY(ODM.Value)"
+      CMDOSU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMDOSU'"
+          expr: "ONLY(ODM.Value)"
+      FRQLBL:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMDOSFRQ'"
+          expr: "ONLY(ODM.Value)"
+      ROUTELBL:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMROUTE'"
+          expr: "ONLY(ODM.Value)"
+      CMSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMSTDTC'"
+          expr: "ONLY(ODM.Value)"
+      CMENDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMENDTC'"
+          expr: "ONLY(ODM.Value)"
+      PRIOR:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMPRIOR'"
+          expr: "ONLY(ODM.Value)"
+      ONGO:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMONGO'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ]
+  - row_count:
+      min: 3
+      max: 3
+  - implies:
+      id: numeric-dose-has-no-dose-text
+      when: "CMDOSE IS NOT NULL"
+      then: "CMDOSTXT IS NULL"
+  - implies:
+      id: dose-range-kept-as-text
+      when: "CMTRT = 'IBUPROFEN'"
+      then: "CMDOSTXT = '200-400' AND CMDOSE IS NULL"
+  - implies:
+      id: partial-start-date-kept-at-collected-precision
+      when: "CMTRT = 'LISINOPRIL'"
+      then: "CMSTDTC = '2023-09'"
+  - implies:
+      id: taken-before-study-names-screening
+      when: "CMSTRTPT = 'BEFORE'"
+      then: "CMSTTPT = 'SCREENING'"
+  - implies:
+      id: ongoing-has-no-end-date
+      when: "CMENRTPT = 'ONGOING'"
+      then: "CMENDTC IS NULL AND CMENTPT = 'END OF STUDY'"
+  - implies:
+      id: blank-end-date-is-ongoing
+      when: "CMENDTC IS NULL"
+      then: "CMENRTPT = 'ONGOING'"
