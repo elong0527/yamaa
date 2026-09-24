@@ -95,9 +95,8 @@ where missing values sit among the non-missing ones for that term.
 <a id="req-0300"></a>
 
 **REQ-0300.** `nulls` does not flip with `direction`. `last` means last under
-`asc` and last under `desc`. SQL engines disagree on this default, so an
-implementation must apply the declared placement rather than inherit its
-engine's.
+`asc` and last under `desc`. An implementation applies the declared placement
+rather than the engine's default.
 
 <a id="req-0301"></a>
 
