@@ -19,6 +19,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # A subject collected on two records is still one row. Its records hold
+  # two different ages and nothing says which answers, so the run fails
+  # here. SEX is the same on both records and carries through.
   - name: AGE
     type: int
     label: Age
