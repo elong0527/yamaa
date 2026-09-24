@@ -559,15 +559,26 @@ def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
         # REQ-0593: a missing source returns a missing date.
         return ValueResult(value=MISSING)
     if isinstance(source, str):
-        # REQ-0607: ISO date text parses directly; anything else is invalid.
+        # REQ-0607: ISO date text parses directly; ISO datetime text parses
+        # as a datetime whose calendar fields are copied and time fields
+        # dropped, exactly as a `datetime` value (issue #995). The datetime
+        # value space is zone-free, so the truncation is a field copy, never
+        # a timezone conversion. Anything else is invalid.
         try:
             return ValueResult(value=DateValue.parse(source))
+        except ValueError:
+            pass
+        try:
+            moment = DateTimeValue.parse(source)
         except ValueError:
             return _condition(
                 "invalid_date_text",
                 {"operation": "to_date", "value": source},
                 requirement="REQ-0607",
             )
+        return ValueResult(
+            value=DateValue(year=moment.year, month=moment.month, day=moment.day)
+        )
     if not isinstance(source, DateTimeValue):
         # REQ-0607: in particular a `date` is not an identity spelling.
         return _incompatible(
