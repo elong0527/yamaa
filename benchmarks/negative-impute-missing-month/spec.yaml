@@ -35,10 +35,9 @@ columns:
     label: Start Date/Time of Adverse Event
     derivation: AE.AESTDTC
 
-  # Complete a year-only start to the 15th of the stated month. Year
-  # precision is the minimum accepted, so a month is required wherever
-  # the policy can use it: omitting it is rejected before any data is
-  # read.
+  # A year-and-month start gets day 15; a year-only start gets day 15 of
+  # the stated month. Year is the least precision accepted, so the month
+  # is required: omitting it is rejected before any data is read.
   - name: ASTDT
     type: date
     label: Analysis Start Date

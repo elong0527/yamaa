@@ -12,6 +12,9 @@ input:
 
 base: PLAN
 intermediates:
+  # The vital-signs record collected for a planned measurement: same subject,
+  # test code as the parameter, and date as ADT. A planned measurement with
+  # no such record leaves VSSEQ and AVALCOL missing.
   - id: COLLECTED
     dataset: VS
     key_base: [STUDYID, USUBJID, PARAMCD, ADT]
@@ -57,6 +60,8 @@ columns:
     label: Collected Analysis Value
     derivation: COLLECTED.VSSTRESN
 
+  # The closest earlier collected value for the same subject and parameter,
+  # in date then planned order; the current row is never a candidate.
   - name: AVALPREV
     type: float
     label: Previous Non-Missing Analysis Value
@@ -67,6 +72,7 @@ columns:
           group_by: [STUDYID, USUBJID, PARAMCD]
           order_by: [ADT, ASEQ]
 
+  # The collected value when there is one, otherwise the carried value.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -79,6 +85,8 @@ columns:
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
 
+  # Date of a collected height only, so weight rows and an uncollected height
+  # can never be the baseline height.
   - name: HGTDT
     type: date
     label: Height Assessment Date
@@ -87,6 +95,7 @@ columns:
         - when: "PARAMCD = 'HEIGHT' AND AVALCOL IS NOT NULL"
           then: ADT
 
+  # Y on the subject's latest collected height dated on or before TRTSDT.
   - name: HGTBLFL
     type: str
     label: Baseline Height Record Flag
@@ -97,6 +106,8 @@ columns:
         date: HGTDT
         reference_date: TRTSDT
 
+  # The flagged height, repeated on every row of the subject; missing when
+  # no height is flagged.
   - name: HEIGHTBL
     type: float
     label: Baseline Height

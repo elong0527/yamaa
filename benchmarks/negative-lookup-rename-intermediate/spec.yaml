@@ -7,6 +7,8 @@ input:
   WHODRUG: input/whodrug.csv
 base: CM_RAW
 intermediates:
+  # CODED only renames CODING: it adds no filter, key, computed field or
+  # projection, so the spec is rejected before any data is read.
   - id: CODED
     dataset: CODING
 

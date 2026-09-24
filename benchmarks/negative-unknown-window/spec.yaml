@@ -3,6 +3,7 @@ domain: ADVS
 keys: [USUBJID, AVISITN]
 input:
   VS: {path: input/vs.csv, types: {AVISITN: int}}
+
 output:
   path: advs.csv
   columns: [USUBJID, AVISITN, VISITSEQ]
@@ -17,13 +18,17 @@ columns:
     type: str
     label: Unique Subject Identifier
     derivation: VS.USUBJID
+
   - name: AVISITN
     type: int
     label: Analysis Visit Number
     derivation: VS.AVISITN
+
   - name: VISITSEQ
     type: int
     label: Visit Sequence Number
     derivation:
       row_number:
+        # VISITS_ORDER misspells VISIT_ORDER, the one declared window, so the
+        # spec is rejected before any data is read.
         window: VISITS_ORDER
