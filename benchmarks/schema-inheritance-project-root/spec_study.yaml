@@ -1,7 +1,11 @@
 schema_version: "1.0"
+# Inherits the input, keys and columns; this level adds the output and
+# replaces the metadata.
 parents: common/spec_common.yaml
+
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGE]
+
 metadata:
   scope: study

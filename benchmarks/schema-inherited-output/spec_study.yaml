@@ -1,6 +1,8 @@
 schema_version: "1.0"
 parents: spec_shared.yaml
 
+# The study's own demographics file. The keys, the columns and the
+# whole output come from the shared level.
 input:
   DM: input/dm.csv
 

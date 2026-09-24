@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # Month 1 and day 1 give the earliest date the text allows. No outcome is
+  # declared for a missing onset or for text that is not a date (UNKNOWN), so
+  # either one stops the run.
   - name: ASTDT
     type: date
     label: Analysis Start Date

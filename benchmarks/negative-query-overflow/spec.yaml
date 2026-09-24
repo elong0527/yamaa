@@ -6,6 +6,9 @@ input:
   QUERY: {path: input/queries.csv, types: {GRPID: int}}
 base: AE
 intermediates:
+  # One lookup per place: the dictionary entry in place SMQ01 (or SMQ02)
+  # whose term is the event's coded term; no entry gives missing values.
+  # Two entries for one term in the same place stop the run.
   - id: SMQ1
     dataset: QUERY
     key_base: [AEDECOD]

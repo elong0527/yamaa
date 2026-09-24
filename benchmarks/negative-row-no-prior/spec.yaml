@@ -34,6 +34,8 @@ columns:
     label: Analysis Value
     derivation: VS.VSSTRESN
 
+  # The defect: a zero step reads the record's own AVAL rather than the
+  # prior visit's, so the specification is rejected before any data is read.
   - name: PREVAL
     type: float
     label: Previous Analysis Value

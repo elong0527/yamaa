@@ -5,6 +5,11 @@ version: "1.0"
 # registered condition at every declared path. Blocked entries name the open
 # issue that owns the missing diagnostic.
 fixtures:
+  negative-unknown-window:
+    rule: R007
+    condition: unknown_window
+    spec_paths: ['columns[2].derivation.row_number.window']
+    validator: window_contract
   negative-output-transport:
     rule: R020
     condition: unknown_artifact_profile

@@ -4,17 +4,20 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** derive `REVIEWFL` to mark adverse events (AEs)
-starting on or after `'2025-01-01'`.
+starting on or after 2025-01-01.
 
 **Input:** collected adverse events carrying `AESTDTC` (event
-start date-time).
+start date).
 
 **Variables:**
 
-- `REVIEWFL` is `Y` when the analysis start date taken from
-  `AESTDTC` is on or after `'2025-01-01'`, and `N` otherwise,
-  but the run is rejected before any row is produced because the
-  comparison tests that calendar date against text.
+- `REVIEWFL` would be `Y` when the event start date is on or
+  after 2025-01-01, and `N` otherwise, including when no start
+  date was collected.
+
+**Note:** the cutoff is written as text rather than as a calendar
+date, and a date cannot be compared with text, so the run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 

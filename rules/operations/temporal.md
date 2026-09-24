@@ -148,11 +148,11 @@ nests these operations. Their input and result types are:
 |---|---|---|
 | `date_diff` | `start` and `end` are `date` | `int` |
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
-| `date_impute` | inputs in [REQ-0578](temporal.md#req-0578)--53 | `date` |
+| `date_impute` | inputs in [REQ-0578](temporal.md#req-0578)--[REQ-0589](temporal.md#req-0589) | `date` |
 | `date_precision` | `source` is `str` or `date` | `str` |
 | `datetime_impute` | `source` is complete date or datetime text; `time` is `first` or `last` | `datetime` |
 | `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
-| `to_date` | `source` is `datetime` | `date` with collected precision `day` |
+| `to_date` | `source` is `datetime` or ISO 8601 date text | `date` with collected precision `day` |
 | `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
 
 <a id="req-1187"></a>

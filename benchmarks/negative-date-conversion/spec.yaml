@@ -15,18 +15,24 @@ columns:
     type: str
     label: Study Identifier
     derivation: AE.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: AE.USUBJID
+
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation: AE.AESEQ
+
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation: AE.AESTDTC
+
+  # ASTDT is already a date, but taking a calendar date needs a date-time
+  # value or date text, so this is rejected before any data is read.
   - name: ASTDT2
     type: date
     label: Analysis Start Date from Datetime

@@ -62,6 +62,9 @@ def load_specification(
 
     assert isinstance(document, dict)
     normalized = normalize_specification(document, bundle)
+    from yamaa.schema.windows import expand_named_windows
+
+    normalized = expand_named_windows(normalized, bundle)
     try:
         specification = Specification.model_validate(normalized, strict=True)
     except ValidationError as error:

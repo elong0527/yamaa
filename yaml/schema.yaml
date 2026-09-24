@@ -33,6 +33,10 @@ root_class:
         type: [path, "list[path]"]
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
+    - windows:
+        type: "dict[identifier, window_spec]"
+        required: false
+        description: See REQ-1251 in rules/operations/windows.md.
     - intermediates:
         type: "list[intermediate_class]"
         required: false

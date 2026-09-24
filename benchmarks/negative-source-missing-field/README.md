@@ -10,10 +10,11 @@ subject has a sex row and an age row.
 
 **Variables:**
 
-- **AGE** would be the age in whole years as collected, but the collected
-  rows it selects are chosen by a subject identifier the records do not
-  carry, and a selection nothing answers is rejected before any data is
-  read, so no artifact is accepted.
+- **AGE** would be the age in whole years as collected. The collected
+  rows it reads are also chosen by subject, under the name `USUBJID`,
+  which those rows do not carry: they hold the subject as `SubjectKey`.
+  The run is therefore rejected before any data is read, and no
+  artifact is accepted.
 
 **Standard:** SDTM | **Domain:** DM
 
@@ -26,6 +27,7 @@ answer and the subject they belong to under the extract's own names:
 ```yaml
 - name: AGE
   type: int
+  label: Age
   derivation:
     source:
       filter: ODM.ItemOID = 'IT.DM.AGE'

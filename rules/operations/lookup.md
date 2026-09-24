@@ -58,9 +58,9 @@ records are the dataset records surviving `filter`.
 
 <a id="req-0113"></a>
 
-**REQ-0113.** A lookup `id` shares one namespace with dataset identifiers,
-other lookup ids, and the output `domain`. A collision fails as
-`duplicate_identifier`.
+**REQ-0113.** A lookup `id` shares one naming list with dataset
+identifiers, other lookup ids, and the output `domain`. A collision fails
+as `duplicate_identifier`.
 
 <a id="req-0114"></a>
 

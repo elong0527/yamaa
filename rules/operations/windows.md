@@ -14,11 +14,40 @@ Partition completed output rows and compute ranks, neighbors, and baseline selec
 
 This contract owns the requirements below. Related contracts:
 
+- [Specification composition](../specification/composition.md).
 - [Aggregation](aggregation.md).
 - [Expression evaluation](expressions.md).
 - [Temporal values](../values/temporal.md).
 
 ## Requirements
+
+### Named windows
+
+<a id="req-1251"></a>
+
+**REQ-1251.** Root `windows` declares complete window settings by identifier.
+An expression's `window` accepts either an inline `window_spec` mapping or
+one of those identifiers as a string, for example `window: RESPONSE_ORDER`.
+A named definition is an inline mapping, never another reference. A reference
+accepts no additions or overrides, and there is no `ref` mapping form.
+Omitted fields retain their ordinary window meanings: omission does not
+create a parameter the caller can supply. Names belong to a separate window
+naming list and are compared exactly.
+
+<a id="req-1252"></a>
+
+**REQ-1252.** After layer composition, each named reference is replaced by an
+independent copy of its definition before semantic dependency analysis and
+execution. The expansion retains the reference's caller scope, including a
+row template's own constructed rows; it does not create a shared row set.
+All operation-specific restrictions apply to the expanded window. Definition
+shapes are checked in every written layer, including unused definitions.
+Expanded dependencies participate in reachability and column ordering;
+unreachable inherited declarations retain the pruning behavior of
+[REQ-0641](../specification/composition.md#req-0641). The resolved
+specification contains only inline windows and omits root `windows`.
+Diagnostic provenance retains the reference location and attributes expanded
+fields to their named definition.
 
 ### Evaluation kinds
 
@@ -182,6 +211,13 @@ structural constraints come from its schema declaration.
 
 ## Error conditions
 
+<a id="req-1253"></a>
+
+**REQ-1253.** A surviving reference to an undeclared window fails validation
+as `unknown_window` at the expression's `window` field, with the unknown name
+in context `window`. Malformed definitions, reference chains, and mappings
+with `ref` or other undeclared window fields fail ordinary schema validation.
+
 <a id="req-0326"></a>
 
 **REQ-0326.** A window expression used during row construction partitions
@@ -218,7 +254,11 @@ ignored.
 
 Representative specifications, input data, and expected outcomes:
 
+- [adam-adae-severity-rank](../../benchmarks/adam-adae-severity-rank/README.md).
+- [adam-adrs-confirmed-response](../../benchmarks/adam-adrs-confirmed-response/README.md).
+- [schema-window-functions](../../benchmarks/schema-window-functions/README.md).
 - [adam-advs-locf](../../benchmarks/adam-advs-locf/README.md).
+- [negative-unknown-window](../../benchmarks/negative-unknown-window/README.md).
 - [negative-locf-no-order](../../benchmarks/negative-locf-no-order/README.md).
 - [negative-row-no-prior](../../benchmarks/negative-row-no-prior/README.md).
 

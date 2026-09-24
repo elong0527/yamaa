@@ -19,6 +19,8 @@ columns:
     label: Unique Subject Identifier
     derivation: LB.USUBJID
 
+  # Intentionally out of order: AVALDOUBLED reads AVAL, which is declared
+  # after it, so the specification is rejected before any data is read.
   - name: AVALDOUBLED
     type: float
     label: Doubled Analysis Value

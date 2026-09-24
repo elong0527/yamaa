@@ -12,9 +12,9 @@ concentration (`CELLCNT`) and the sample volume (`VOLUML`).
 **Variables:**
 
 - `CELLTOT` would contain the whole number of cells, `CELLCNT`
-  multiplied by `VOLUML`, but the product exceeds the largest
-  whole number the result can hold, so the run fails and no
-  artifact is accepted.
+  multiplied by `VOLUML`, and missing when either is missing. A
+  product beyond the largest whole number the result can hold
+  stops the run, and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 

@@ -50,14 +50,16 @@ columns:
 rows:
   - id: collected
     derivations:
-      PARAMCD: {source: ADLB_RAW.PARAMCD}
-      PARAM: {source: ADLB_RAW.PARAM}
+      PARAMCD: ADLB_RAW.PARAMCD
+      PARAM: ADLB_RAW.PARAM
       WBCVAL: {literal: null}
       LYMLEVAL: {literal: null}
       EXISTING_ABS_COUNT: {literal: null}
-      AVAL: {source: ADLB_RAW.AVAL}
+      AVAL: ADLB_RAW.AVAL
       DTYPE: {literal: null}
 
+  # One new LYMPH record per subject and visit, kept only when both a WBC
+  # count and a LYMLE fraction are present and no LYMPH record was collected.
   - id: derived_lymph
     group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
     filter: >-
@@ -67,6 +69,8 @@ rows:
     derivations:
       PARAMCD: {literal: LYMPH}
       PARAM: {literal: Lymphocytes Abs (10^9/L)}
+      # ONLY takes the one WBC (or LYMLE) result at the visit; a second
+      # record stops the run instead of one being picked.
       WBCVAL:
         aggregate:
           filter: "ADLB_RAW.PARAMCD = 'WBC'"
@@ -75,6 +79,8 @@ rows:
         aggregate:
           filter: "ADLB_RAW.PARAMCD = 'LYMLE'"
           expr: "ONLY(ADLB_RAW.AVAL)"
+      # A count over no records is missing rather than 0, so the filter's
+      # EXISTING_ABS_COUNT IS NULL means no LYMPH record was collected.
       EXISTING_ABS_COUNT:
         aggregate:
           filter: "ADLB_RAW.PARAMCD = 'LYMPH'"

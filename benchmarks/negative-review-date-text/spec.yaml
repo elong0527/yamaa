@@ -5,24 +5,32 @@ input:
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
+
 output: {path: adae.csv, columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: AE.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: AE.USUBJID
+
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation: AE.AESEQ
+
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation: AE.AESTDTC
+
+  # Intentionally invalid: '2025-01-01' is text, not a date, and a date
+  # cannot be compared with text.
   - name: REVIEWFL
     type: str
     label: Protocol Review Flag

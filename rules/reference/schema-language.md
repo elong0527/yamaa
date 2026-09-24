@@ -175,6 +175,18 @@ meaning.
 **REQ-0260.** An unreferenced registry, an empty registry, an unknown
 registry reference, or a duplicate registry entry is an error.
 
+### Naming lists
+
+A naming list is the set of names used in one place. Two things in one
+naming list may not share a name. The requirements name each place's list
+explicitly: a schema descriptor's `type`, a column's declared `type`, and
+a value's runtime type belong to different naming lists
+([REQ-0001](../values/types.md)); datasets and record lookups share one
+naming list ([REQ-0084](../specification/binding.md)); a lookup `id` shares
+one naming list with dataset identifiers, other lookup ids, and the output
+`domain` ([REQ-0113](../operations/lookup.md)); window names belong to a
+separate window naming list ([REQ-1251](../operations/windows.md)).
+
 ### Type expressions
 
 <a id="req-0261"></a>

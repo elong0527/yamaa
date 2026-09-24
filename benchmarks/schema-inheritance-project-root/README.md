@@ -15,15 +15,17 @@ stays with the study's project, and derive `AGE` from it.
   and declares every column;
 - `spec_study.yaml` is the entry: it names the shared level as its
   parent and declares the complete output;
-- `input/dm.csv` sits at the project root, not beside the shared level.
+- `input/dm.csv` sits at the project root (this benchmark's
+  directory), not beside the shared level.
 
 The chain resolves to `expected/spec_resolved.yaml`, the default view in
 the specification dropdown.
 
 **Note:** a path is read from the directory of the file that writes it
 first, so the resolved chain states it as `common/input/dm.csv`.
-Nothing is stored there, so the run reads the same path from the
-project root instead, which is where each study keeps its own data.
-A file stored beside the shared level would still win.
+Nothing is stored there, so the run reads the path as the shared level
+wrote it, `input/dm.csv`, from the project root instead, which is where
+each study keeps its own data. A file stored beside the shared level
+would still win.
 
 **Standard:** ADaM | **Domain:** ADSL

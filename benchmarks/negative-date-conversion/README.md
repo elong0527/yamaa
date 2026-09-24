@@ -14,16 +14,16 @@ start (`AESTDTC`).
 - `ASTDT` would contain the analysis start date taken from the
   reported start.
 - `ASTDT2` would be the calendar date taken from the analysis
-  start, but taking a calendar date needs a local datetime while
-  the analysis start is already a date, so the run fails at
-  evaluation and no row is produced.
+  start, but taking a calendar date needs a date-time value or date
+  text while the analysis start is already a date, so the run is
+  rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
-Use the date directly. When the source is a datetime, extract its calendar
-date explicitly:
+Use the date directly (`derivation: ASTDT`). When the source is a datetime,
+extract its calendar date explicitly:
 
 ```yaml
 - name: ASTDT2

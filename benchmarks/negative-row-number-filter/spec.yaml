@@ -29,6 +29,8 @@ columns:
     label: Numeric Result
     derivation: LB.LBSTRESN
 
+  # The defect: the window filter is the number 7 rather than a condition,
+  # so the specification is rejected before any data is read.
   - name: VISITSEQ
     type: int
     label: Visit Sequence
@@ -36,6 +38,5 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by:
-            - {variable: LBSEQ, direction: asc}
+          order_by: [LBSEQ]
           filter: 7

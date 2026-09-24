@@ -157,6 +157,7 @@ value.
 | `intermediates` | Keyed by `id` |
 | `columns` | Keyed by `name` |
 | `rows` | Keyed by `id` |
+| `windows` | Keyed by name; each supplied definition replaces the whole definition |
 | Every other root field | Complete field replacement |
 
 <a id="req-0629"></a>
@@ -213,6 +214,20 @@ whole derivation.
 path becomes the long `dataset_class` form, after which matching dataset
 declarations merge the immediate `path`, `types`, and `schema` fields by the
 same rule.
+
+### Named-window composition
+
+<a id="req-1254"></a>
+
+**REQ-1254.** Root `windows` composes by name, retaining other inherited
+names. A later definition of the same name replaces that whole window;
+its omitted fields take ordinary window omission semantics rather than
+inheriting fields from the earlier definition. Every reference, including
+an inherited reference, uses the final composed definition. A window name
+is not a variable or dataset dependency. Root `windows: null` clears the
+collection under the existing optional-field rule; individual definitions
+cannot be null. Named references and inline windows are distinct composition
+kinds: replacing one with the other replaces the complete `window` value.
 
 ### Clearing an optional field
 
@@ -323,12 +338,14 @@ record-lookup, and row order remains in that stable order.
 
 <a id="req-0643"></a>
 
-**REQ-0643.** After pruning, the resolver builds the column dependency graph
-under [Execution lifecycle](../execution/lifecycle.md) and topologically orders the remaining columns. When more than one
-column is ready, the column with the earliest initial collection position
+**REQ-0643.** After pruning, the resolver orders the remaining columns so
+each column comes after every column its derivation reads, following
+[Execution lifecycle](../execution/lifecycle.md). When more than one column
+can come next, the column with the earliest initial collection position
 comes first. This stable tie-break preserves `Common`, earlier-parent,
-and child order for independent columns. An unknown dependency or dependency
-cycle fails; sorting does not repair either one.
+and child order for independent columns. A derivation that reads a column
+that is not declared fails. A derivation that reads itself, directly or
+through other columns, fails; ordering does not repair either one.
 
 <a id="req-0644"></a>
 
