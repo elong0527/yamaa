@@ -17,10 +17,11 @@ term (`AETERM`) and the onset date (`AESTDTC`).
 - `ASTDT` would be the date the event began, carried over from the
   collected onset date.
 
-The records are to be presented by subject ascending, then by
-onset date with the most recent first, then by subject descending
-again: one value takes two places in the presentation, so there is
-no single order the run could give the records. The run is
+**Note:** the records are to be presented by subject ascending,
+then by onset date with the most recent first, then by subject
+descending again. The subject takes two places with opposite
+directions, and the second can never change the order the first
+already fixed, so the intended order is unclear. The run is
 rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
@@ -33,6 +34,7 @@ ascending first and the date descending:
 
 ```yaml
 output:
+  path: adae.csv
   columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT]
   order_by:
     - USUBJID

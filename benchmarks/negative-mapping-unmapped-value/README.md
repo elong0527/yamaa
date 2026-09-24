@@ -14,9 +14,9 @@ response (`OVRLRESP`).
 - `AVALC` would contain the analysis category matching the
   collected overall response: `CR` means `COMPLETE RESPONSE`, `PR`
   means `PARTIAL RESPONSE`, `SD` means `STABLE DISEASE`, and `PD`
-  means `PROGRESSIVE DISEASE`. The collected value `NE` matches no
-  entry and no fallback is stated, so the run is rejected with no
-  artifact accepted.
+  means `PROGRESSIVE DISEASE`. Every response must be present and
+  listed; the collected value `NE` is not, so the run is rejected
+  with no artifact accepted.
 
 **Standard:** ADaM | **Domain:** ADRS
 
@@ -29,7 +29,12 @@ the dictionary:
 mapping:
   source: RS.OVRLRESP
   dict:
+    CR: COMPLETE RESPONSE
+    PR: PARTIAL RESPONSE
+    SD: STABLE DISEASE
+    PD: PROGRESSIVE DISEASE
     NE: NOT EVALUABLE
+  strict: true
 ```
 
 If an unknown response should instead produce a missing result, state that
