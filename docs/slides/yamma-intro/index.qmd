@@ -20,17 +20,13 @@ title-slide-attributes:
   data-background-color: "#385898"
 ---
 
-# Today {background-color="#385898"}
-
 ## Disclaimer
 
 The views and opinions expressed in this presentation are those of the
 individual presenters. They do not represent those of their affiliated
 organizations or institutions.
 
-# People and proof {background-color="#385898"}
-
-## Built by practitioners
+## Contributors
 
 ::: {.columns}
 ::: {.column width="48%"}
@@ -50,66 +46,34 @@ organizations or institutions.
 :::
 :::
 
-<div class="pull-quote">Built at the intersection of statistical programming, clinical standards, and production software.</div>
-
 ## Evidence before adoption
 
-::: {.columns}
-::: {.column width="48%"}
 ::: {.card}
-<div class="card-title">Pilot submissions</div>
+<div class="card-title">CDISC Pilots</div>
 
 CDISC pilot and RConsortium pilot submissions are reference implementations the community can rerun.
-:::
-:::
-
-::: {.column width="48%"}
-::: {.card}
-<div class="card-title">Real-package assessment</div>
-
-yamaa will be assessed to fully reproduce a proprietary medical device 510(k) submission package.
-:::
-:::
-:::
-
-::: callout-note
-CDISC standards are recommended, not mandatory, for medical devices.
 :::
 
 # Goals {background-color="#385898"}
 
 ## One benchmark, three kinds of evidence
 
-::: {.columns}
-::: {.column width="32%"}
 ::: {.card}
 <div class="card-title">CDISC pilots</div>
 
-cdiscpilot01 and submission pilots 3, 5, and 6
-
-**SDTM → ADaM**
-:::
+cdiscpilot01 and submission pilots 3, 5, and 6 — **SDTM → ADaM**
 :::
 
-::: {.column width="32%"}
 ::: {.card}
 <div class="card-title">OpenClinica real sample data</div>
 
-Real sample data for testing the full data journey
-
-**ODM → SDTM → ADaM**
-:::
+Real sample data for testing the full data journey — **ODM → SDTM → ADaM**
 :::
 
-::: {.column width="32%"}
 ::: {.card}
 <div class="card-title">[Synthetic studies](https://github.com/RConsortium/submissions-pilot7-synthetic-data)</div>
 
-KN564 and KN189 as scalable test beds
-
-**ODM → SDTM → ADaM**
-:::
-:::
+KN564 and KN189 as scalable test beds — **ODM → SDTM → ADaM**
 :::
 
 ## The data journey
