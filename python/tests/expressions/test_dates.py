@@ -497,6 +497,7 @@ def test_to_date_refuses_a_date_as_an_identity_spelling() -> None:
     condition = _condition("to_date", {"source": "S"}, {"S": date("2025-01-12")})
 
     assert condition.condition.condition == "incompatible_input_type"
+    assert condition.condition.requirement == "REQ-0607"
 
 
 def test_a_missing_datetime_yields_a_missing_date() -> None:
