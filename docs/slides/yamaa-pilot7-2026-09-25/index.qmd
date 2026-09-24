@@ -20,18 +20,22 @@ title-slide-attributes:
   data-background-color: "#385898"
 ---
 
-## Disclaimer
+## Disclaimer {.center}
 
+::: {.center-body}
 The views and opinions expressed in this presentation are those of the
 individual presenters. They do not represent those of their affiliated
 organizations or institutions.
+:::
 
-## Contributors
+## Contributors {.center}
 
+::: {.center-body-left}
 - **Peng Zhang** CIMS Global
 - **Bingjun Wang** Genentech
 - **Ming-chun Chen** Summit Therapeutics
 - **Yilong Zhang** BBSW AI Committee
+:::
 
 ## Goal 1: establish benchmarks
 
@@ -117,8 +121,6 @@ Contribute a synthetic benchmark or an issue that captures the pattern without d
 :::
 :::
 :::
-
-A reusable contribution skill is planned to make this path easier.
 
 ## Help: broadcasting
 
