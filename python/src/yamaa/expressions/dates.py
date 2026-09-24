@@ -584,7 +584,7 @@ def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
         return _incompatible(
             "to_date",
             "source",
-            "datetime or ISO date text",
+            "datetime, ISO date text, or ISO 8601 datetime text",
             source,
             requirement="REQ-0607",
         )
