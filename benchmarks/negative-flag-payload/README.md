@@ -1,4 +1,4 @@
-# Reject Bare Flag
+# Reject Numeric Flag
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-flag-payload.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -11,15 +11,19 @@
 
 - `ELDFL` would be `Y` for subjects aged 65 or older, missing otherwise.
 
-**Note:** the flag is written as a bare string (`flag: AGE >= 65`)
-instead of a mapping naming its condition, so the run is rejected
-before any data is read and no artifact is accepted.
+**Note:** the flag is written as a bare number (`flag: 65`) instead of
+a predicate string or a mapping naming its condition, so the run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Name the condition inside the flag:
+Write the condition as a predicate string, or name it inside the flag:
+
+```yaml
+flag: AGE >= 65
+```
 
 ```yaml
 flag:

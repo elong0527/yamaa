@@ -67,8 +67,7 @@ columns:
     type: str
     label: Death Flag
     derivation:
-      flag:
-        condition: "DTHDT IS NOT NULL"
+      flag: "DTHDT IS NOT NULL"
     verifications:
       allowed_values:
         values: [Y]

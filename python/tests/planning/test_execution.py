@@ -2189,6 +2189,36 @@ def test_a_column_flag_predicate_naming_a_source_field_suggests_the_qualified_sp
     }
 
 
+def test_a_bare_string_flag_condition_names_predicate_identifiers() -> None:
+    # REQ-1255: a bare predicate string is the condition; its identifiers
+    # are reported at the flag itself, not at flag.condition.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="DTHFL",
+                type="str",
+                derivation=derivation({"flag": "DTHFL2 = 'Y'"}),
+            ),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unresolvable_name"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag",)
+    assert diagnostic.context == {
+        "identifier": "DTHFL2",
+        "suggestion": "SRC.DTHFL2",
+    }
+
+
 def test_a_column_flag_with_a_qualified_source_field_plans() -> None:
     spec = specification(
         [

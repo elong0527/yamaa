@@ -227,7 +227,7 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `case_otherwise_class.otherwise` | Result used when no branch condition is true. |
 
-<a id="req-1251"></a>
+<a id="req-1255"></a>
 
 **REQ-1255.** The `expressions.flag` interface has the following meanings. Shape, defaults, and
 structural constraints come from its schema declaration. `flag` is the shorthand
@@ -235,12 +235,12 @@ for the common one-branch `case` that returns a flag value.
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.flag` | A one-predicate flag derivation. |
+| `expressions.flag` | A one-predicate flag derivation. A bare predicate string is the condition with the default values (`true_value: "Y"`, `false_value` and `missing_value` missing). |
 | `expressions.flag.condition` | Predicate selecting the true value. |
 | `expressions.flag.true_value` | Value returned when the condition is true; default `"Y"`. |
 | `expressions.flag.false_value` | Value returned when the condition is false; missing when absent. |
 | `expressions.flag.missing_value` | Value returned when the condition is unknown; missing when absent. |
-| `Result` | Returns `true_value`, `false_value`, or `missing_value` per [REQ-1256](#req-1252). |
+| `Result` | Returns `true_value`, `false_value`, or `missing_value` per [REQ-1256](#req-1256). |
 
 ## Error conditions
 
@@ -267,16 +267,16 @@ instead; the `otherwise` item, when present, is the last item. A `case`
 with no `when`/`then` item, more than one `otherwise` item, or an
 `otherwise` item in any other position: fail.
 
-<a id="req-1252"></a>
+<a id="req-1256"></a>
 
 **REQ-1256.** A `flag` evaluates its `condition` under the three-valued logic
 [Predicates](predicates.md) gives `case`: only TRUE selects the true value.
 FALSE returns `false_value`, or missing when `false_value` is absent.
 UNKNOWN returns `missing_value`, or missing when `missing_value` is absent.
 Unlike `case` with `otherwise`, an unknown condition never falls through to
-`false_value`. A `flag` whose payload is not a mapping, whose `condition` is
-absent or not a predicate string, or whose `condition` is not a valid
-predicate: fail.
+`false_value`. A `flag` whose payload is neither a predicate string nor a
+mapping, whose mapping form lacks `condition` or names a non-predicate
+`condition`, or whose condition is not a valid predicate: fail.
 
 ## Conformance examples
 

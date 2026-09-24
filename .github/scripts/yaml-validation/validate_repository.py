@@ -6199,12 +6199,17 @@ def validate_expression_predicates(
                 )
             )
 
-    elif keyword == 'flag' and isinstance(payload, dict):
-        condition = payload.get('condition')
+    elif keyword == 'flag' and isinstance(payload, (dict, str)):
+        # REQ-1255: a bare predicate string is the condition.
+        if isinstance(payload, str):
+            condition, condition_path = payload, f"{path}.flag"
+        else:
+            condition = payload.get('condition')
+            condition_path = f"{path}.flag.condition"
         if isinstance(condition, str):
             errors.extend(
                 validate_predicate_at(
-                    condition, f"{path}.flag.condition", resolver
+                    condition, condition_path, resolver
                 )
             )
 
@@ -7159,11 +7164,17 @@ def derive_binding_reference_names(derivation):
                             )
                             visit(item.get('then'))
                     return
-                if operation == 'flag' and isinstance(payload, dict):
+                if operation == 'flag' and isinstance(payload, (dict, str)):
                     # The values are literals and name nothing; only the
-                    # predicate names variables.
+                    # predicate names variables. A bare string is the
+                    # condition (REQ-1255).
+                    condition = (
+                        payload
+                        if isinstance(payload, str)
+                        else payload.get('condition')
+                    )
                     names.extend(
-                        predicate_identifier_names(payload.get('condition'))
+                        predicate_identifier_names(condition)
                     )
                     return
                 if operation == 'lookup' and isinstance(payload, dict):
@@ -7741,7 +7752,7 @@ def validate_expression_reference_bindings(expression, path, context):
                     )
                 )
         return errors
-    if keyword == 'flag' and isinstance(payload, dict):
+    if keyword == 'flag' and isinstance(payload, (dict, str)):
         # The condition is a predicate owned by the predicate parser;
         # the values are literals and name nothing.
         return []

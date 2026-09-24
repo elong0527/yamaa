@@ -58,8 +58,7 @@ columns:
     type: str
     label: On Treatment Record Flag
     derivation:
-      flag:
-        condition: >
+      flag: >
             TRTSDT IS NOT NULL AND
             (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
             (AENDT IS NULL OR AENDT >= TRTSDT)

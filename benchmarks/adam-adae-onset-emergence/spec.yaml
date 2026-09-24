@@ -47,8 +47,7 @@ columns:
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
-      flag:
-        condition: "ASTDTM >= TRTSDTM"
+      flag: "ASTDTM >= TRTSDTM"
     verifications:
       allowed_values:
         values: [Y]
@@ -67,8 +66,7 @@ columns:
     type: str
     label: First Occurrence Within Subject Flag
     derivation:
-      flag:
-        condition: "AOCCSEQ = 1"
+      flag: "AOCCSEQ = 1"
     verifications:
       allowed_values:
         values: [Y]

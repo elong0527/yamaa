@@ -243,13 +243,19 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
     def handler_value_or_missing(value: object) -> EvaluationResult:
         return ValueResult(value=MISSING if value is None else value)
 
-    # REQ-1255: the one-predicate flag shorthand. REQ-1256 gives the
+    # REQ-1255: the one-predicate flag shorthand. A bare predicate string is
+    # the condition with the default values; a mapping names condition and
+    # any of true_value, false_value, missing_value. REQ-1256 gives the
     # three-valued semantics: only TRUE takes true_value; FALSE takes
     # false_value when present; UNKNOWN takes missing_value when present.
     # Either absent value is missing, which is exactly the one-branch
     # `case` the shorthand replaces.
+    if isinstance(payload, str):
+        payload = {"condition": payload}
     if not isinstance(payload, Mapping):
-        return _invalid_payload("flag", "a mapping with a condition")
+        return _invalid_payload(
+            "flag", "a predicate string or a mapping with a condition"
+        )
     condition = payload.get("condition")
     if not isinstance(condition, str):
         return _invalid_payload("flag", "a branch predicate in condition")

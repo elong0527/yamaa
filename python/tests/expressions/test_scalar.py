@@ -262,8 +262,18 @@ def test_flag_accepts_custom_true_and_missing_values() -> None:
     assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value="Unknown")
 
 
-def test_flag_rejects_a_non_mapping_payload() -> None:
-    result = _evaluate({"flag": "AGE >= 65"}, {"AGE": 70})
+def test_flag_accepts_a_bare_predicate_string_as_the_condition() -> None:
+    # REQ-1255: a bare predicate string is the condition with the default
+    # values.
+    expression = {"flag": "AGE >= 65"}
+
+    assert _evaluate(expression, {"AGE": 70}) == ValueResult(value="Y")
+    assert _evaluate(expression, {"AGE": 5}) == ValueResult(value=MISSING)
+    assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value=MISSING)
+
+
+def test_flag_rejects_a_non_string_non_mapping_payload() -> None:
+    result = _evaluate({"flag": 42}, {"AGE": 70})
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_field_type"

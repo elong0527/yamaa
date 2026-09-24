@@ -1,7 +1,7 @@
 phase: validation
 condition: invalid_predicate
 spec_paths:
-  - columns.ELDFL.derivation.flag.condition
+  - columns.ELDFL.derivation.flag
 requirement: REQ-0188
 context:
   predicate: "AGE >> 65"

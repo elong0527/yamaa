@@ -21,6 +21,5 @@ run is rejected before any data is read and no artifact is accepted.
 Write the condition as a valid rule:
 
 ```yaml
-flag:
-  condition: AGE >= 65
+flag: AGE >= 65
 ```

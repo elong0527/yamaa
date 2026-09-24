@@ -104,8 +104,7 @@ columns:
     type: str
     label: Analysis Record Flag 01
     derivation:
-      flag:
-        condition: "AWRANK = 1"
+      flag: "AWRANK = 1"
 
 verifications:
   - unique:

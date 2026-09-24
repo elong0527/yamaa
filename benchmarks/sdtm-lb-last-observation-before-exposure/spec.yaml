@@ -118,8 +118,7 @@ columns:
     type: str
     label: Last Observation Before Exposure Flag
     derivation:
-      flag:
-        condition: "LOBXRNK = 1"
+      flag: "LOBXRNK = 1"
 
 verifications:
   - unique:

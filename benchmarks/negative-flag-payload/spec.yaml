@@ -19,10 +19,10 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The flag is written as a bare string instead of a mapping naming
-  # its condition.
+  # The flag is written as a bare number instead of a predicate string or
+  # a mapping naming its condition.
   - name: ELDFL
     type: str
     label: Elderly Flag
     derivation:
-      flag: "AGE >= 65"
+      flag: 65
