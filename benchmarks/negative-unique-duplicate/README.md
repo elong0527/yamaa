@@ -14,9 +14,10 @@ enrolling site.
 - `SITEID` would hold the site the subject enrolled at, copied from
   the collected site.
 
-The completed-dataset check rejects the run with no artifact
-accepted because one `SITEID` value is shared by more than one
-subject and so cannot uniquely identify a subject record.
+**Note:** the completed dataset is checked for one record per
+site, but a site that enrolled more than one subject repeats its
+`SITEID`, which then cannot identify a subject record. The run is
+rejected and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
