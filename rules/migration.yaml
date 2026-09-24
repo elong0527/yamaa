@@ -574,7 +574,7 @@ sources:
   R016-17: {"file": "R016-temporal-values.md", "targets": ["REQ-0555"]}
   R016-18: {"file": "R016-temporal-values.md", "targets": ["REQ-0556"]}
   R016-19: {"file": "R016-temporal-values.md", "targets": ["REQ-0557"]}
-  R016-20: {"file": "R016-temporal-values.md", "targets": ["REQ-0558"]}
+  R016-20: {"file": "R016-temporal-values.md", "targets": ["REQ-0559", "REQ-0560"]}
   R016-21: {"file": "R016-temporal-values.md", "targets": ["REQ-0559"]}
   R016-22: {"file": "R016-temporal-values.md", "targets": ["REQ-0560"]}
   R016-23: {"file": "R016-temporal-values.md", "targets": ["REQ-0561"]}
@@ -1631,9 +1631,8 @@ requirements:
   REQ-0555: {"file": "values/temporal.md", "sources": ["R016-17"]}
   REQ-0556: {"file": "values/temporal.md", "sources": ["R016-18"]}
   REQ-0557: {"file": "values/temporal.md", "sources": ["R016-19"]}
-  REQ-0558: {"file": "values/temporal.md", "sources": ["R016-20"]}
-  REQ-0559: {"file": "values/temporal.md", "sources": ["R016-21"]}
-  REQ-0560: {"file": "values/temporal.md", "sources": ["R016-22"]}
+  REQ-0559: {"file": "values/temporal.md", "sources": ["R016-20", "R016-21"]}
+  REQ-0560: {"file": "values/temporal.md", "sources": ["R016-20", "R016-22"]}
   REQ-0561: {"file": "values/temporal.md", "sources": ["R016-23"]}
   REQ-0562: {"file": "values/temporal.md", "sources": ["R016-24"]}
   REQ-0563: {"file": "values/temporal.md", "sources": ["R016-25"]}
@@ -2285,6 +2284,7 @@ requirements:
   REQ-1252: {"file": "operations/windows.md", "sources": ["yamaa:issue-882:window-expansion"]}
   REQ-1253: {"file": "operations/windows.md", "sources": ["yamaa:issue-882:unknown-window"]}
   REQ-1254: {"file": "specification/composition.md", "sources": ["yamaa:issue-882:window-composition"]}
+  REQ-1255: {"file": "operations/expressions.md", "sources": ["yamaa:issue-953:source-canonical-form"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2796,3 +2796,4 @@ provenance_addenda:
   - {"source": "yamaa:issue-882:window-expansion", "text": "Issue #882: complete named windows expand to independent inline settings in the caller scope, with dependency reachability and definition provenance preserved.", "owner": "operations/windows", "group": "named-windows", "target": "REQ-1252"}
   - {"source": "yamaa:issue-882:unknown-window", "text": "Issue #882: an undeclared surviving window reference fails validation as unknown_window at its use site.", "owner": "operations/windows", "group": "named-windows", "target": "REQ-1253"}
   - {"source": "yamaa:issue-882:window-composition", "text": "Issue #882: windows compose by name across layers, with whole-definition replacement and final-definition binding for inherited references.", "owner": "specification/composition", "group": "named-windows", "target": "REQ-1254"}
+  - {"source": "yamaa:issue-953:source-canonical-form", "text": "Issue #953: the canonical spelling of a plain source expression is the bare string wherever the source shorthand applies; the single-key mapping form {source: X}, flow or block, parses identically but is non-canonical and repository validation reports it.", "owner": "operations/expressions", "group": "source-canonical-form", "target": "REQ-1255"}

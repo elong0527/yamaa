@@ -564,9 +564,8 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0555](../values/temporal.md#req-0555) | `values/temporal.md` | R016-17 |
 | [REQ-0556](../values/temporal.md#req-0556) | `values/temporal.md` | R016-18 |
 | [REQ-0557](../values/temporal.md#req-0557) | `values/temporal.md` | R016-19 |
-| [REQ-0558](../values/temporal.md#req-0558) | `values/temporal.md` | R016-20 |
-| [REQ-0559](../values/temporal.md#req-0559) | `values/temporal.md` | R016-21 |
-| [REQ-0560](../values/temporal.md#req-0560) | `values/temporal.md` | R016-22 |
+| [REQ-0559](../values/temporal.md#req-0559) | `values/temporal.md` | R016-20, R016-21 |
+| [REQ-0560](../values/temporal.md#req-0560) | `values/temporal.md` | R016-20, R016-22 |
 | [REQ-0561](../values/temporal.md#req-0561) | `values/temporal.md` | R016-23 |
 | [REQ-0562](../values/temporal.md#req-0562) | `values/temporal.md` | R016-24 |
 | [REQ-0563](../values/temporal.md#req-0563) | `values/temporal.md` | R016-25 |
@@ -1218,6 +1217,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1252](../operations/windows.md#req-1252) | `operations/windows.md` | Schema prose |
 | [REQ-1253](../operations/windows.md#req-1253) | `operations/windows.md` | Schema prose |
 | [REQ-1254](../specification/composition.md#req-1254) | `specification/composition.md` | Schema prose |
+| [REQ-1255](../operations/expressions.md#req-1255) | `operations/expressions.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

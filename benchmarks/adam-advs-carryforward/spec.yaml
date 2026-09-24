@@ -85,7 +85,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'HEIGHT' AND AVALCOL IS NOT NULL"
-          then: {source: ADT}
+          then: ADT
 
   - name: HGTBLFL
     type: str

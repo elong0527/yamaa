@@ -71,8 +71,7 @@ columns:
           then:
             compute:
               expr: "ASTVAL / NULLIF(ALTVAL, 0)"
-        - otherwise:
-            source: LBRESN
+        - otherwise: LBRESN
 
 rows:
   - id: alt
@@ -80,14 +79,14 @@ rows:
     derivations:
       PARAMCD: {literal: ALT}
       PARAM: {literal: Alanine Aminotransferase}
-      LBRESN: {source: LB.LBSTRESN}
+      LBRESN: LB.LBSTRESN
 
   - id: ast
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
       PARAMCD: {literal: AST}
       PARAM: {literal: Aspartate Aminotransferase}
-      LBRESN: {source: LB.LBSTRESN}
+      LBRESN: LB.LBSTRESN
 
   # One ratio row per ALT record; its value comes from AVAL above.
   - id: ast_alt_ratio

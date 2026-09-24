@@ -136,6 +136,18 @@ row-template value, or any other position. The block form (the parent key on
 its own line with `literal: X` nested beneath) parses identically but is
 non-canonical; repository validation reports it.
 
+<a id="req-1255"></a>
+
+**REQ-1255.** The canonical spelling of a plain source expression is the
+bare string, wherever the source shorthand applies (REQ-0319): a
+`derivation` value, a row-template or lookup `derivations` entry, or a
+`case` branch `then` or `otherwise`. The single-key mapping form
+`{source: X}`, flow or block, parses identically but is non-canonical;
+repository validation reports it. The mapping form remains the valid
+spelling where the shorthand does not apply: nested expression arguments,
+the `value` of a handled expression, and filtered sources written
+`{source: {variable: ..., ...}}`.
+
 ### Interface behavior
 
 <a id="req-1093"></a>

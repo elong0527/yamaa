@@ -73,7 +73,7 @@ columns:
               expr: "100 * (ITEMSUM / ITEMANS) / 4"
         - when: "PARAMCD = 'PFSCORE'"
           then: {literal: null}
-        - otherwise: {source: ITEMRESN}
+        - otherwise: ITEMRESN
     verifications:
       range:
         min: 0

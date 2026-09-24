@@ -29,8 +29,7 @@ This contract owns the requirements below. Related contracts:
 
 <a id="req-0304"></a>
 
-**REQ-0304.** `mapping` requires a string source. Dictionary keys are
-strings.
+**REQ-0304.** `mapping` requires a string source.
 
 <a id="req-0308"></a>
 

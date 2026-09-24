@@ -795,6 +795,9 @@ examples:
   schema-text-mapping-unmapped:
     status: executable
     runtimes: ['python']
+  schema-lifecycle:
+    status: executable
+    runtimes: ['python']
   schema-verification-log:
     status: executable
     runtimes: ['python']
@@ -832,5 +835,8 @@ examples:
     status: executable
     runtimes: ['python']
   negative-sdtm-lb-unit-conversion:
+    status: executable
+    runtimes: ['python']
+  sdtm-tr-tumor-measurements:
     status: executable
     runtimes: ['python']

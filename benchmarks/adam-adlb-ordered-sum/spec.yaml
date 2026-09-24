@@ -44,9 +44,9 @@ rows:
   # Every collected component result, unchanged.
   - id: collected
     derivations:
-      PARAMCD: {source: LB.LBTESTCD}
-      PARAM: {source: LB.LBTEST}
-      AVAL: {source: LB.LBSTRESN}
+      PARAMCD: LB.LBTESTCD
+      PARAM: LB.LBTEST
+      AVAL: LB.LBSTRESN
       DTYPE: {literal: null}
 
   # One TOTAL record per subject and visit, adding the results in stored

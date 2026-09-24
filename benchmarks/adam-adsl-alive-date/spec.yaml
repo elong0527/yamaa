@@ -74,7 +74,7 @@ columns:
   # four are missing.
   - name: LSTALVDT
     type: date
-    label: Last Known Alive Date
+    label: Date Last Known Alive
     derivation:
       greatest:
         sources: [TRTEDT, LSTCNTDT, ADAE_LST, ADVS_LST]

@@ -115,8 +115,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 8
-      max: 8
+      min: 11
+      max: 11
   - assert:
       id: numeric-mappings-are-in-range
       expr: "SEXN >= 0 AND RACEN >= 1"
