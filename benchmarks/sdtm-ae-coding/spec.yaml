@@ -39,6 +39,9 @@ columns:
     label: Reported Term for the Adverse Event
     derivation: AE_RAW.AETERM
 
+  # Both coded terms come from the dictionary row whose lowest-level term
+  # equals the reported term exactly, letter case included. No such row, or
+  # a missing reported term, gives NOT CODED.
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
@@ -49,6 +52,7 @@ columns:
         key: LLTNAME
         value: PTNAME
         missing: NOT CODED
+
   - name: AEBODSYS
     type: str
     label: Body System or Organ Class

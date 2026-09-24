@@ -8,6 +8,9 @@ input:
   AE: input/ae.csv
 base: DM_RAW
 intermediates:
+  # Each subject's last exposure record with an end date: latest end date,
+  # ties to the higher sequence number. The filter matters: a record with
+  # no end date would otherwise sort last and be the one kept.
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"
@@ -16,7 +19,8 @@ intermediates:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFENDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
+            RFENDTC]
 
 columns:
   - name: DOMAIN
@@ -41,12 +45,12 @@ columns:
     verifications:
       not_missing: {}
 
+  # MIN and MAX skip missing dates; a subject with none gets no date.
   - name: RFXSTDTC
     type: date
     label: Date/Time of First Study Treatment
     derivation:
       aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: RFXENDTC
@@ -59,6 +63,7 @@ columns:
     label: Subject Reference Start Date/Time
     derivation: RFXSTDTC
 
+  # Not in the output: read only by the exposure completeness check.
   - name: EXDOSE0
     type: float
     label: Last Exposure Dose
@@ -69,7 +74,7 @@ columns:
     label: Latest Disposition Date
     derivation:
       aggregate:
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT'"
         expr: "MAX(DS.DSSTDTC)"
 
   - name: AEDT0
@@ -77,9 +82,10 @@ columns:
     label: Latest Adverse Event End Date
     derivation:
       aggregate:
-        filter: "AE.AEENDTC IS NOT NULL"
         expr: "MAX(AE.AEENDTC)"
 
+  # The latest of the three dates; a missing one is skipped, and all three
+  # missing gives no date.
   - name: RFENDTC
     type: date
     label: Subject Reference End Date/Time

@@ -8,7 +8,8 @@ base: RAND
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD]
+  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS,
+            ACTARMUD]
 
 columns:
   - name: DOMAIN
@@ -41,10 +42,15 @@ columns:
     label: Screen Failure Flag as Collected
     derivation: RAND.SCRNFL
 
+  # The treatment received, read from the subject's exposure record;
+  # missing when the subject has none.
   - name: EXTRT1
     type: str
     label: Treatment Received as Collected
     derivation: EX.EXTRT
+
+  # No treatment, or a treatment outside the planned arms, gives no actual
+  # arm: with no unmapped value declared, the missing value answers both.
   - name: ACTARMCD
     type: str
     label: Actual Arm Code
@@ -75,6 +81,9 @@ columns:
         - when: "EXTRT1 IS NOT NULL AND ACTARMCD IS NULL"
           then: EXTRT1
 
+  # Neither arm: SCREEN FAILURE when flagged, otherwise NOT ASSIGNED.
+  # Randomized with no treatment: NOT TREATED. A treatment outside the
+  # planned arms gets no reason; ACTARMUD records it.
   - name: ARMNRS
     type: str
     label: Reason Arm and/or Actual Arm is Null

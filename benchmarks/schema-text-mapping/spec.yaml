@@ -20,9 +20,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # Inline dictionary, exact matching: 'M' and 'F' translate, the
-  # unmapped code 'U' and the missing value both read as the declared
-  # missing value.
+  # Inline dictionary, exact matching: 'M' and 'F' translate. With no
+  # unmapped value declared, the missing value answers both a missing sex
+  # and a code with no entry, such as 'U'.
   - name: SEXC
     type: str
     label: Sex Decoded

@@ -8,7 +8,8 @@ base: VS
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, VISITN, VISIT, VSDTC, TRTSDT, VSSTRESN, VSEVAL,
-            VSSEQ, SEVRANKC, SEVRANKD, PREVRES, NEXTRES, LASTRES, CARRYRES, BLFL]
+            VSSEQ, SEVRANKC, SEVRANKD, PREVRES, NEXTRES, LASTRES, CARRYRES,
+            BLFL]
 
 windows:
   RESULT_ORDER:
@@ -76,8 +77,8 @@ columns:
 
   # Competition rank of the visit results, highest first, ties sharing a
   # number with the next distinct value skipping positions. The two tied
-  # visits of subject 01 share rank 1 and the next value takes rank 3; the
-  # missing result of subject 02 sorts last.
+  # visits of subject 01 share rank 1 and the next value takes rank 3;
+  # missing results sort last and tie with each other.
   - name: SEVRANKC
     type: int
     label: Competition Rank of Result
@@ -95,8 +96,8 @@ columns:
         method: dense
         window: RESULT_ORDER
 
-  # The result from the previous visit. A missing value is not skipped: a
-  # present row with a missing value reads the same as an absent row.
+  # The result from the previous visit. A missing result is not skipped:
+  # it reads as missing, just as the first visit does with no predecessor.
   - name: PREVRES
     type: float
     label: Previous Visit Result
@@ -140,10 +141,10 @@ columns:
         source: VSSTRESN
         window: VISIT_ORDER
 
-  # Marks the unique latest visit dated on or before treatment start. The
-  # baseline visit can carry a missing result (subject 02 visit 2), and a
-  # subject with no visit on or before treatment start (subject 04) has no
-  # baseline at all.
+  # Marks the unique latest visit dated on or before treatment start; a
+  # tie on that date stops the run. The baseline visit can carry a missing
+  # result (subject 02 visit 2), and a subject with no visit on or before
+  # treatment start (subject 04) has no baseline at all.
   - name: BLFL
     type: str
     label: Baseline Visit Flag

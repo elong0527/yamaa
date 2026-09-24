@@ -12,12 +12,10 @@ and `PEERTXT` (comparison text).
 
 **Variables:**
 
-- `RAWTXT` is the collected text, carried through unchanged.
 - `UPPERTXT` is `RAWTXT` with American Standard Code for
   Information Interchange (ASCII) lowercase letters changed to
-  uppercase; every other character is unchanged (comparison is by
-  Unicode code-point order, called scalar order below), and missing
-  text gives the text `MISSING`.
+  uppercase; every other character is unchanged, and missing text
+  gives the text `MISSING`.
 - `LOWERTXT` is `RAWTXT` with ASCII uppercase letters changed to
   lowercase; every other character is unchanged, and missing text
   gives the text `MISSING`.
@@ -25,13 +23,15 @@ and `PEERTXT` (comparison text).
   character sequences (same code points in the same order),
   including when both are missing; otherwise it is `N`.
 - `LEASTTXT` is the earlier non-missing value of `RAWTXT` and
-  `PEERTXT` by scalar order, left blank when both are missing.
+  `PEERTXT` by Unicode code-point order (called scalar order
+  below), left blank when both are missing.
 - `GREATESTTXT` is the later non-missing value of `RAWTXT` and
   `PEERTXT` by scalar order, left blank when both are missing.
-- `MAPCAT` groups ASCII spelling variants without regard to case:
-  `ABC` gives `ASCII` and `I` gives `ASCII_I`, missing text gives
-  the text `MISSING`, and any other text gives `OTHER`, so text
-  outside ASCII never joins a group.
+- `MAPCAT` groups spellings that differ only in the case of ASCII
+  letters: any casing of `abc` gives `ASCII` and `i` or `I` gives
+  `ASCII_I`. Missing text gives the text `MISSING`, and any other
+  text gives `OTHER`, so text holding a character outside ASCII
+  never joins a group.
 - `TEXTSEQ` numbers rows in scalar order of the collected text,
   breaking ties by subject, with missing text last.
 - `MINTXT` is the earliest collected text in the study by scalar
@@ -39,9 +39,10 @@ and `PEERTXT` (comparison text).
 - `MAXTXT` is the latest collected text in the study by scalar
   order, shown on every row.
 
-**Note:** every comparison uses scalar order, so composed and
-decomposed spellings of the same word compare as different values
-and the flag, earlier, later, sequence, minimum, and maximum values
-all follow that one order.
+**Note:** text is never normalized, so a composed and a decomposed
+spelling of the same word (an accented letter stored as one
+character, or as the base letter plus a combining accent) are
+different values. The flag, the earlier and later values, the
+sequence, and the minimum and maximum all follow scalar order.
 
 **Standard:** ADaM | **Domain:** ADSL

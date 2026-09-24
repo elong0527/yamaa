@@ -8,7 +8,8 @@ base: ODM
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY,
+            AEENDY]
   order_by: [USUBJID, AESEQ]
 
 columns:
@@ -40,6 +41,8 @@ columns:
         filter: ODM.ItemOID = 'IT.AE.AETERM'
         variable: ODM.Value
 
+  # Each collected date part is its own ODM item; an uncollected part has
+  # no record, so it reads as missing.
   - name: AEST_YR
     type: str
     label: Collected Start Year
@@ -93,6 +96,10 @@ columns:
     label: Subject Reference Start Date/Time
     derivation: DM.RFSTDTC
 
+  # The most precise collected part sets the form: a day gives YYYY-MM-DD,
+  # a month YYYY-MM, a year alone YYYY, and nothing collected gives no date.
+  # The templates have no fallback, so a day without its month, or a month
+  # without its year, stops the run.
   - name: AESTDTC
     type: str
     label: Start Date/Time of Adverse Event
@@ -109,6 +116,7 @@ columns:
         - when: "AEST_YR IS NOT NULL"
           then: AEST_YR
 
+  # Same ladder for the end date.
   - name: AEENDTC
     type: str
     label: End Date/Time of Adverse Event
@@ -125,6 +133,8 @@ columns:
         - when: "AEEN_YR IS NOT NULL"
           then: AEEN_YR
 
+  # Collected precision: Y, M or D; missing when nothing was collected or
+  # the text is not a date.
   - name: AESTPR
     type: str
     label: Collected Precision of Adverse Event Start
@@ -143,6 +153,8 @@ columns:
         missing: null
         invalid: null
 
+  # Only a complete date (precision D) becomes a date, so a partial date
+  # gets no study day.
   - name: AESTDT
     type: date
     label: Start Date of Adverse Event (Complete Dates Only)
@@ -163,6 +175,8 @@ columns:
             to_date:
               source: AEENDTC
 
+  # Day 1 is the reference start date and there is no day zero. A missing
+  # date or reference start gives no study day.
   - name: AESTDY
     type: int
     label: Study Day of Start of Adverse Event

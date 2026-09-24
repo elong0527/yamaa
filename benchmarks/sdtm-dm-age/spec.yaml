@@ -42,6 +42,8 @@ columns:
         filter: ODM.ItemOID = 'IT.DM.BRTHDT'
         variable: ODM.Value
 
+  # Y, M or D by how much of the birth date was collected; missing when
+  # none was.
   - name: BRTH_PREC
     type: str
     label: Collected Precision of the Birth Date
@@ -50,6 +52,8 @@ columns:
         source: BRTHDTC
         missing: null
 
+  # Only a complete birth date becomes a date; a year-month or year-only
+  # one gives none, and so no age.
   - name: BRTHDT
     type: date
     label: Birth Date as a Date
@@ -59,6 +63,8 @@ columns:
           then: BRTHDTC
         - otherwise: {literal: null}
 
+  # Completed years from birth to informed consent: one fewer when the
+  # birthday falls after the consent date's month and day.
   - name: AGE
     type: int
     label: Age in AGEU at RFICDTC
