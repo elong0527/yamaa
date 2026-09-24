@@ -19,7 +19,9 @@ visit identifiers.
   or `TEMP`.
 - `VSTEST` is the test name as collected: `Height`, `Weight`, or
   `Temperature`.
-- `VSORRES` is the result exactly as collected, never overwritten.
+- `VSORRES` is the collected result, read as a number and written
+  back as text (so a collected `72.50` reads `72.5`); the conversion
+  never overwrites it.
 - `VSORRESU` is the unit exactly as collected: `cm`, `kg`, `C`,
   `LB`, or `F`.
 - `VSSTRESN` is the numeric result in the test's standard unit:

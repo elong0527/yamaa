@@ -78,6 +78,10 @@ columns:
       allowed_values:
         values: [cm, kg, C]
 
+# One row template per test, so the output holds all HEIGHT records, then
+# WEIGHT, then TEMP, each in input order. Each template sets its test's
+# standard unit only when a result was collected; a missing result stays
+# missing through the conversion.
 rows:
   - id: height
     filter: "VS_RAW.VSTESTCD = 'HEIGHT'"
@@ -91,6 +95,8 @@ rows:
   - id: weight
     filter: "VS_RAW.VSTESTCD = 'WEIGHT'"
     derivations:
+      # Pounds become kilograms; any other weight (kg, or no unit) passes
+      # through.
       VSSTRESN:
         case:
           - when: "VS_RAW.VSORRESU = 'LB'"
@@ -106,6 +112,8 @@ rows:
   - id: temp
     filter: "VS_RAW.VSTESTCD = 'TEMP'"
     derivations:
+      # Fahrenheit becomes Celsius; any other temperature (C, or no unit)
+      # passes through.
       VSSTRESN:
         case:
           - when: "VS_RAW.VSORRESU = 'F'"
