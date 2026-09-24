@@ -17,8 +17,8 @@ non-lesional result, and unit.
 - `LBSPEC` is `SKIN` on every record.
 - `LBLOC` is `LESIONAL` on the lesional record and `NON-LESIONAL`
   on the non-lesional record; the lesional record is built only
-  when the cohort is not `NONAD`, while every subject gets the
-  non-lesional record.
+  when a cohort is recorded and is not `NONAD`, while every subject
+  gets the non-lesional record.
 - `LBORRES` is the collected result as reported, taken from the
   lesional result on lesional records and from the non-lesional
   result on non-lesional records; blank when the expected sample
@@ -26,7 +26,8 @@ non-lesional result, and unit.
 - `LBORRESU` is the collected unit, taken on every record,
   including records whose result is blank.
 - `LBSTRESN` is the numeric form of the reported result; missing
-  when the reported result is blank.
+  when the reported result is blank. A result that is not a number
+  stops the run.
 - `LBSTAT` is `NOT DONE` when the reported result is blank; blank
   otherwise.
 

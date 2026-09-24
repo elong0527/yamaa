@@ -12,6 +12,8 @@ output:
             RSSTRESC, RSSTAT]
 
 rows:
+  # One record per subject and scheduled assessment that has a visit
+  # number; ONLY() fails if the assessment carries a visit item twice.
   - id: visit
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "AVISITN IS NOT NULL"
@@ -71,12 +73,16 @@ columns:
     label: Response Test Name
     derivation: {literal: Timepoint Response}
 
+  # SUMV, NMEAS, NTARGET and NTR are matched to the record by subject and,
+  # except NTARGET, by visit. With no matching record a count is missing
+  # rather than 0, which is why RSSTAT and RSSTRESC also test IS NULL.
   - name: SUMV
     type: float
     label: Sum of Target Lesion Diameters at Visit
     derivation:
       aggregate:
-        filter: "ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        filter: >-
+          ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'
         key: [SubjectKey, StudyEventOID]
         key_base: [ODM.SubjectKey, ODM.StudyEventOID]
         derive:
@@ -85,12 +91,14 @@ columns:
             derivation: ODM.Value
         expr: "SUM(D)"
 
+  # Target lesions with a recorded diameter at this visit.
   - name: NMEAS
     type: int
     label: Number of Measured Target Lesions at Visit
     derivation:
       aggregate:
-        filter: "ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        filter: >-
+          ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'
         key: [SubjectKey, StudyEventOID]
         key_base: [ODM.SubjectKey, ODM.StudyEventOID]
         derive:
@@ -99,32 +107,42 @@ columns:
             derivation: ODM.Value
         expr: "COUNT(D)"
 
+  # Target lesions chosen at study entry.
   - name: NTARGET
     type: int
     label: Number of Target Lesions
     derivation:
       aggregate:
-        filter: "ODM.ItemGroupOID = 'IG.TUTARGET' AND ODM.ItemOID = 'IT.TU.TULNKID'"
+        filter: >-
+          ODM.ItemGroupOID = 'IG.TUTARGET' AND ODM.ItemOID = 'IT.TU.TULNKID'
         key: [SubjectKey]
         key_base: [ODM.SubjectKey]
         expr: "COUNT(ODM.Value)"
 
+  # Target and non-target measurement records at this visit, counted by
+  # lesion link.
   - name: NTR
     type: int
     label: Number of Tumor Measurement Records at Visit
     derivation:
       aggregate:
-        filter: "ODM.ItemGroupOID IN ('IG.TRTARGET', 'IG.TRNT') AND ODM.ItemOID = 'IT.TR.TRLNKID'"
+        filter: >-
+          ODM.ItemGroupOID IN ('IG.TRTARGET', 'IG.TRNT')
+          AND ODM.ItemOID = 'IT.TR.TRLNKID'
         key: [SubjectKey, StudyEventOID]
         key_base: [ODM.SubjectKey, ODM.StudyEventOID]
         expr: "COUNT(ODM.Value)"
 
+  # The baseline target sum; with no baseline diameters it is missing, and
+  # a missing or zero BASE leaves PCHG missing.
   - name: BASE
     type: float
     label: Baseline Sum of Target Lesion Diameters
     derivation:
       aggregate:
-        filter: "ODM.StudyEventOID = 'BASELINE' AND ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'"
+        filter: >-
+          ODM.StudyEventOID = 'BASELINE' AND ODM.ItemGroupOID = 'IG.TRTARGET'
+          AND ODM.ItemOID = 'IT.TR.LDIAM'
         key: [SubjectKey]
         key_base: [ODM.SubjectKey]
         derive:
@@ -148,6 +166,10 @@ columns:
         - when: "NTR IS NULL OR NTR = 0"
           then: {literal: NOT DONE}
 
+  # The first branch that holds wins: not done; then NE at baseline, with
+  # no target lesion chosen, with a chosen lesion not measured, or with no
+  # percent change; then CR when the sum is 0, PR and PD by threshold, and
+  # SD otherwise.
   - name: RSSTRESC
     type: str
     label: Result or Finding in Standard Format

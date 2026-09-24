@@ -43,6 +43,8 @@ columns:
     type: str
     label: Location Used for Measurement
 
+  # Numbered within each subject in text order of LBLOC, so a lesional
+  # record comes before the non-lesional one.
   - name: LBSEQ
     type: int
     label: Sequence Number
@@ -61,6 +63,8 @@ columns:
     label: Original Units
     derivation: BX_RAW.RESU
 
+  # The result text read as a number: a blank stays missing, and a result
+  # that is not a number stops the run.
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
@@ -78,12 +82,14 @@ columns:
         values: [NOT DONE]
 
 rows:
+  # Only for a subject whose cohort is recorded and is not NONAD.
   - id: lesional
     filter: "BX_RAW.COHORT <> 'NONAD'"
     derivations:
       LBLOC: {literal: LESIONAL}
       LBORRES: BX_RAW.LESRES
 
+  # Every subject.
   - id: non_lesional
     derivations:
       LBLOC: {literal: NON-LESIONAL}

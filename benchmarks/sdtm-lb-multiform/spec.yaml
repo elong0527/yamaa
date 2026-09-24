@@ -6,7 +6,9 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST,
+            LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN,
+            LBSTRESU, LBSTAT, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -105,9 +107,8 @@ columns:
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
-      value:
-        source: LBORRES
-      missing:
+      value: {source: LBORRES}
+      missing: null
     verifications:
       range:
         min: 0
@@ -131,6 +132,9 @@ columns:
     type: date
     label: Date/Time of Specimen Collection
 
+  # Numbered within each subject by collection date, test code, then
+  # specimen. The lesional and non-lesional results of one form tie on all
+  # three and keep row template order, lesional first.
   - name: LBSEQ
     type: int
     label: Sequence Number
@@ -140,9 +144,14 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [LBDTC, LBTESTCD, LBSPEC]
 
+# Each row template builds one record per subject, visit and form
+# occurrence (item group and repeat key) whose result item for that test
+# and site is present. The record takes the date item of the same
+# occurrence; ONLY() fails if the occurrence carries either item twice.
 rows:
   - id: serum_vitamin_d
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: VITD25OH}
@@ -162,7 +171,8 @@ rows:
           expr: "ONLY(ODM.Value)"
 
   - id: biopsy_il13_lesional
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: IL13}
@@ -182,7 +192,8 @@ rows:
           expr: "ONLY(ODM.Value)"
 
   - id: biopsy_il13_nonlesional
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: IL13}
@@ -202,7 +213,8 @@ rows:
           expr: "ONLY(ODM.Value)"
 
   - id: saliva_cathelicidin
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CAMPPRO}
@@ -222,7 +234,8 @@ rows:
           expr: "ONLY(ODM.Value)"
 
   - id: tape_cathelicidin_lesional
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CAMPPRO}
@@ -242,7 +255,8 @@ rows:
           expr: "ONLY(ODM.Value)"
 
   - id: tape_cathelicidin_nonlesional
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CAMPPRO}

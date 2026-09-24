@@ -32,51 +32,36 @@ columns:
     verifications:
       not_missing: {}
 
-  - name: STDYY
-    type: str
-    label: Collected start year (intermediate, not in output)
-    derivation: MH_FORM.MHSTYY
-
-  - name: STDMM
-    type: str
-    label: Collected start month (intermediate, not in output)
-    derivation: MH_FORM.MHSTMM
-
+  # The collected start year alone, or year and month joined with a hyphen.
+  # A month with no year, or no year at all, leaves the start empty.
   - name: MHSTDTC
     type: str
     label: Start Date/Time of Medical History Condition
     derivation:
       case:
-        - when: "STDYY IS NOT NULL AND STDMM IS NULL"
-          then: STDYY
-        - when: "STDYY IS NOT NULL AND STDMM IS NOT NULL"
+        - when: "MH_FORM.MHSTYY IS NOT NULL AND MH_FORM.MHSTMM IS NULL"
+          then: MH_FORM.MHSTYY
+        - when: "MH_FORM.MHSTYY IS NOT NULL AND MH_FORM.MHSTMM IS NOT NULL"
           then:
             str_template:
-              template: "{STDYY}-{STDMM}"
+              template: "{MH_FORM.MHSTYY}-{MH_FORM.MHSTMM}"
 
   - name: MHENDTC
     type: str
     label: End Date/Time of Medical History Condition
     derivation: MH_FORM.MHENDTC
 
-  - name: MHONGO
-    type: str
-    label: Collected ongoing tick (intermediate, not in output)
-    derivation: MH_FORM.MHONGO
-
-  - name: SCRFDTC
-    type: str
-    label: Screening visit date (intermediate, not in output)
-    derivation: MH_FORM.SCRFDTC
-
+  # An ongoing answer of Y wins. Otherwise BEFORE when the end date is
+  # earlier than the screening date (both compared as ISO 8601 text); an
+  # end on or after screening, or a missing date, leaves it empty.
   - name: MHENRTPT
     type: str
     label: End Reference Relative to the Screening Visit
     derivation:
       case:
-        - when: "MHONGO = 'Y'"
+        - when: "MH_FORM.MHONGO = 'Y'"
           then: {literal: ONGOING}
-        - when: "MHENDTC IS NOT NULL AND SCRFDTC IS NOT NULL AND MHENDTC < SCRFDTC"
+        - when: "MHENDTC < MH_FORM.SCRFDTC"
           then: {literal: BEFORE}
     verifications:
       allowed_values:

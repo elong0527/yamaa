@@ -36,6 +36,8 @@ columns:
     type: str
     label: Result or Finding in Original Units
 
+  # Column-wide submission metadata; each row template below overrides it
+  # for its own test code.
   - name: LBORRESU
     type: str
     label: Original Units
@@ -57,6 +59,7 @@ columns:
     type: date
     label: Date/Time of Specimen Collection
 
+  # Numbered within each subject by collection date, then test code.
   - name: LBSEQ
     type: int
     label: Sequence Number
@@ -67,6 +70,10 @@ columns:
           order_by: [LBDTC, LBTESTCD]
 
 rows:
+  # One record per subject and visit with a glucose entry, dated by the
+  # visit's collection date item; ONLY() fails if the visit carries either
+  # item more than once. An entry that is not a number gives a missing
+  # LBSTRESN.
   - id: glucose
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
@@ -82,9 +89,8 @@ rows:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
       LBSTRESN:
-        value:
-          source: LBORRES
-        missing:
+        value: {source: LBORRES}
+        missing: null
       LBSTRESU: {literal: mg/dL}
     submission:
       LBORRESU:
@@ -93,6 +99,7 @@ rows:
           source: Vendor
         codelist: CL_GLUCOSE
 
+  # The same for the creatinine entry, with its own LBORRESU metadata.
   - id: creatinine
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
@@ -108,9 +115,8 @@ rows:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
       LBSTRESN:
-        value:
-          source: LBORRES
-        missing:
+        value: {source: LBORRES}
+        missing: null
       LBSTRESU: {literal: mg/dL}
     submission:
       LBORRESU:

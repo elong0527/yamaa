@@ -6,8 +6,8 @@
 **Goal:** map a pre-specified medical history checklist into MH and carry
 any number of volunteered free-text conditions alongside it.
 
-**Input:** the ODM extract has one item record for each asked checklist
-condition, including an unanswered condition with a blank value. A small
+**Input:** the ODM extract has one item record for each checklist
+condition asked, with a blank value when it was not answered. An
 item-definition table gives each checklist item its reported term and form
 order. Each volunteered condition has its own repeated free-text record.
 Repeat numbers can be reused at another visit.
@@ -15,9 +15,10 @@ Repeat numbers can be reused at another visit.
 **Variables:**
 
 - `MHTERM` is the checklist condition from the item-definition table, or the
-  volunteered text exactly as reported.
-- `MHCAT` distinguishes disease-specific checklist history from general
-  volunteered history.
+  volunteered text exactly as reported. A checklist item the table does not
+  define stops the run.
+- `MHCAT` is `DISEASE-SPECIFIC HISTORY` for checklist records and
+  `GENERAL HISTORY` for volunteered records.
 - `MHPRESP` is `Y` for checklist records and blank for volunteered records.
 - `MHOCCUR` is `Y` or `N` for an answered checklist condition and blank
   otherwise.
@@ -27,8 +28,8 @@ Repeat numbers can be reused at another visit.
   conditions by visit and form repeat.
 
 **Note:** an unanswered checklist item still has an ODM record. A question
-entirely absent from the extract is not assumed to have been asked. Two
-volunteered conditions at one visit, and another condition whose repeat
-number is reused at a later visit, remain three distinct MH records.
+entirely absent from the extract is not assumed to have been asked. Each
+volunteered condition is its own MH record, even when its repeat number is
+reused at another visit.
 
 **Standard:** SDTM | **Domain:** MH

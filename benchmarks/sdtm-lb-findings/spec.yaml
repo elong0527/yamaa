@@ -52,6 +52,7 @@ columns:
     type: date
     label: Date/Time of Specimen Collection
 
+  # Numbered within each subject by collection date, then test code.
   - name: LBSEQ
     type: int
     label: Sequence Number
@@ -62,6 +63,10 @@ columns:
           order_by: [LBDTC, LBTESTCD]
 
 rows:
+  # One record per subject and visit with a calcium entry, dated by the
+  # visit's collection date item; ONLY() fails if the visit carries either
+  # item more than once. An entry that is not a number, such as NOT DONE,
+  # gives a missing LBSTRESN.
   - id: calcium
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
@@ -78,11 +83,11 @@ rows:
           expr: "ONLY(ODM.Value)"
       LBORRESU: {literal: mg/dL}
       LBSTRESN:
-        value:
-          source: LBORRES
-        missing:
+        value: {source: LBORRES}
+        missing: null
       LBSTRESU: {literal: mg/dL}
 
+  # The same for the creatinine entry.
   - id: creatinine
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
@@ -99,7 +104,6 @@ rows:
           expr: "ONLY(ODM.Value)"
       LBORRESU: {literal: mg/dL}
       LBSTRESN:
-        value:
-          source: LBORRES
-        missing:
+        value: {source: LBORRES}
+        missing: null
       LBSTRESU: {literal: mg/dL}
