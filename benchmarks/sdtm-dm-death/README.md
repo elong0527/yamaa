@@ -11,8 +11,9 @@ date, and adverse events with outcome and end date.
 
 **Variables:**
 
-- `DTHDTC` is the disposition death date, or the fatal adverse event end date
-  when disposition has no death; empty when neither source records a death.
+- `DTHDTC` is the latest disposition death date, or the latest fatal adverse
+  event end date when disposition has no death; empty when neither source
+  records a death.
 - `DTHFL` is `Y` when either source supplies a death date; empty otherwise.
 
 **Note:** when the sources record different death dates, the disposition date

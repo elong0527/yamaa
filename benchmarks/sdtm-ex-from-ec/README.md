@@ -17,25 +17,24 @@ form repeat (`StudyOID`, `SubjectKey`, `StudyEventOID`, `FormOID`,
 `IT.EC.STRENGTHMG`, `IT.EC.DOSEMKG`, `IT.EC.AUCTARGET`,
 `IT.EC.KIT`, `IT.EC.ECSTDTC`, `IT.EC.ECENDTC`); body weight is the
 `IT.VS.WEIGHT` item on the `FO.VS` form at the same visit. The kit
-list comes from the IRT system, not the EDC, so it stays a lookup
-input (`input/kit_list.csv`) mapping kit numbers to treatments.
+list comes from the interactive response technology (IRT) system,
+not electronic data capture (EDC), so it stays a separate input
+(`input/kit_list.csv`) mapping kit numbers to treatments and doses.
 
 **Variables:**
 
 - `EXSEQ` is the order of the administration within the subject,
-  numbered by start date then form repeat.
+  numbered by start date and then by the form's repeat number within
+  the visit.
 - `EXTRT` is the administered treatment: the kit list's treatment
   for a blinded kit, otherwise as collected.
 - `EXDOSE` is the administered dose: tablets times strength, the
   `mg/kg` dose times the visit's body weight, the kit list's dose
   for a blinded kit, and the AUC target as collected.
 - `EXDOSU` is `mg`, except the AUC target keeps `AUC`.
-- `EXSTDTC` is the administration start as collected.
-- `EXENDTC` is the administration end as collected.
 
-**Note:** the skipped tablet dose (`IT.EC.ECOCCUR = 'N'`) leaves no
-exposure record - only administered treatments appear. The placebo
-kit keeps its zero dose. The `IT.VS.HEIGHT` item on the same form
-shows that the weight lookup reads only the weight item.
+**Note:** only a form whose occurrence item (`IT.EC.ECOCCUR`) is `Y`
+gives an exposure record, so a skipped dose leaves none. The placebo
+kit keeps its zero dose.
 
 **Standard:** SDTM | **Domain:** EX

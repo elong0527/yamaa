@@ -14,20 +14,17 @@ the test code, the category, the numeric result, and the unit.
 
 - `FASEQ` copies the collected sequence number, so each output row
   keeps the identity of its source record.
-- `FATESTCD` is always `OCCUR`.
-- `FATEST` is always `Occurrence Indicator`.
-- `FACAT` is always `REACTOGENICITY`.
-- `FASCAT` is always `SYSTEMIC`.
-- `FAOBJ` is always `FEVER`.
-- `FAORRES` is `Y` when the unit is Celsius (`C`) and the numeric
-  result is 38 or higher, `N` when the unit is Celsius (`C`) and
-  the result is lower, and blank when the numeric result is missing
-  or the unit is not Celsius (`C`).
-- `FASTRESC` copies `FAORRES`, and is blank when `FAORRES` is
-  blank.
+- `FATESTCD`, `FATEST`, `FACAT`, `FASCAT`, and `FAOBJ` are always
+  `OCCUR`, `Occurrence Indicator`, `REACTOGENICITY`, `SYSTEMIC`, and
+  `FEVER`.
+- `FAORRES` is `Y` for a temperature of 38 degrees Celsius or higher
+  and `N` for a lower one; blank when the result is missing or its
+  unit is not Celsius (`C`).
+- `FASTRESC` copies `FAORRES`.
 - `VSSTRESN` repeats the collected numeric result used for the
   threshold, and is missing when none was collected.
 
-**Note:** only temperature reactogenicity records qualify.
+**Note:** only temperature records in the reactogenicity category
+qualify; other vital signs records give no row.
 
 **Standard:** SDTM | **Domain:** FA

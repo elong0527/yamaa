@@ -38,6 +38,8 @@ columns:
     type: str
     label: Findings About Test Name
 
+  # Orders the tests of one reaction on one day: occurrence, severity, then
+  # diameter.
   - name: TESTORD
     type: int
     label: Test order within a diary record
@@ -106,10 +108,7 @@ columns:
   - name: FASTRESU
     type: str
     label: Standard Units
-    derivation:
-      case:
-        - when: "FATESTCD = 'LDIAM'"
-          then: DIARY.DIAMUNIT
+    derivation: FAORRESU
 
   - name: FASTAT
     type: str
@@ -130,6 +129,8 @@ columns:
     derivation: DIARY.DTC
 
 rows:
+  # Every diary row (one reaction on one day) gives an occurrence record; on
+  # a missed day its result is blank.
   - id: occurrence
     derivations:
       FATESTCD: {literal: OCCUR}
@@ -139,6 +140,7 @@ rows:
           - when: "DIARY.COMPLETED = 'Y'"
             then: DIARY.OCCUR
 
+  # Completed days only; the severity is NONE unless the reaction occurred.
   - id: severity
     filter: "DIARY.COMPLETED = 'Y'"
     derivations:
@@ -150,6 +152,7 @@ rows:
             then: DIARY.SEV
           - otherwise: {literal: NONE}
 
+  # Only redness or swelling that occurred on a completed day.
   - id: longest-diameter
     filter: "DIARY.COMPLETED = 'Y' AND DIARY.OCCUR = 'Y' AND DIARY.REACTION IN ('REDNESS', 'SWELLING')"
     derivations:

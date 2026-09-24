@@ -15,19 +15,15 @@ and adjustment reason.
 **Variables:**
 
 - `EXSEQ` is the order of the administration within the subject,
-  numbered by start date then treatment.
-- `EXTRT` is the administered component name as collected.
-- `EXDOSE` is the administered dose as collected, including `0`
-  for a saline placebo component.
+  numbered by start date and then, on the same date, by treatment
+  name.
 - `EXDOSU` is the dose unit as collected; milligrams (`mg`),
   milligrams per square metre (`mg/m2`), and area under the curve
   (`AUC`) remain distinct.
-- `EXSTDTC` is the administration start as collected.
-- `EXENDTC` is the administration end as collected.
 - `EXADJ` is the adjustment reason as collected (for example
   `DOSE INTERRUPTED`); blank when none was reported.
 
-**Note:** a saline placebo dose of `0` is an administered component
-and keeps its zero dose; it is not treated as an uncollected dose.
+**Note:** a saline placebo component is administered, so it keeps its
+`EXDOSE` of `0`; a zero dose is not an uncollected dose.
 
 **Standard:** SDTM | **Domain:** EX

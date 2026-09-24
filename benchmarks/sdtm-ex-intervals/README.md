@@ -15,22 +15,22 @@ the adjustment reason recorded when the dose changed.
 - `EXSEQ` numbers the subject's intervals in the order they started, by
   start date then treatment. With `STUDYID` and `USUBJID` it identifies
   the record.
-- `EXTRT` is the administered treatment name as collected.
-- `EXDOSE` is the dose level of the interval as collected, including `0`
-  for an interrupted interval.
-- `EXDOSU` is the dose unit as collected.
-- `EXDOSFRQ` is the dosing frequency as collected.
+- `EXDOSE` is the collected dose that defines the interval: the
+  subject's administrations of one treatment at one dose, unit, and
+  frequency form one interval.
 - `EXSTDTC` is the first administration date at the interval's dose
   level.
 - `EXENDTC` is the last administration date at the interval's dose
   level.
-- `EXADJ` is the adjustment reason recorded when the interval's dose
-  level started, for example `DOSE REDUCED` or `DOSE INTERRUPTED`; blank
-  when the dose was never adjusted.
+- `EXADJ` is the adjustment reason recorded on any administration in
+  the interval, for example `DOSE REDUCED` or `DOSE INTERRUPTED` (the
+  alphabetically first when they differ); blank when none was
+  recorded.
 
 **Note:** a dose interruption is its own interval with a zero dose and
-the reason recorded. A dose level resumed after an interruption is not
-split; the record spans the whole level.
+the reason recorded. A dose level that recurs later, for example one
+resumed after an interruption, is not split: its one record spans from
+the level's first to its last administration.
 
 Provenance: one record per constant dosing interval follows the CDISC
 SDTMIG exposure assumption, with the adjustment reason on the record

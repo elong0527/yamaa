@@ -24,7 +24,9 @@ intermediates:
     key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     key: [StudyOID, SubjectKey, StudyEventOID]
     filter: "ODM.ItemOID = 'IT.VS.WEIGHT'"
-  # The occurrence item is unique at the form level, so it can anchor rows.
+  # Nothing reads this lookup. It checks that no EC form carries two
+  # occurrence items, so the row template below, which builds a record from
+  # each occurrence item of Y, builds at most one per form.
   - id: EC_OCCUR
     dataset: ODM
     key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
@@ -106,16 +108,12 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
-  # Internal working columns are omitted from the output artifact.
+  # Working columns, not in the output. The dose items are read as numbers
+  # for the dose arithmetic below, and KIT is the key into the kit list.
   - name: FORM
     type: str
     label: Dose form as collected
     derivation: EC_FORM.Value
-
-  - name: ECTRT
-    type: str
-    label: Treatment as collected
-    derivation: EC_ECTRT.Value
 
   - name: TABLETS
     type: float
@@ -142,25 +140,10 @@ columns:
     label: Kit number as collected
     derivation: EC_KIT.Value
 
-  - name: ECSTDTC
-    type: str
-    label: Administration start as collected
-    derivation: EC_ECSTDTC.Value
-
-  - name: ECENDTC
-    type: str
-    label: Administration end as collected
-    derivation: EC_ECENDTC.Value
-
   - name: FRMREP
     type: int
     label: EC form repeat within the visit
     derivation: ODM.FormRepeatKey
-
-  - name: KIT_TRT
-    type: str
-    label: Treatment from the kit list
-    derivation: KITMAP.TREATMENT
 
   - name: KIT_DOSE
     type: float
@@ -178,8 +161,8 @@ columns:
     derivation:
       case:
         - when: "FORM = 'KITDOSE'"
-          then: KIT_TRT
-        - otherwise: ECTRT
+          then: KITMAP.TREATMENT
+        - otherwise: EC_ECTRT.Value
     verifications:
       - not_missing: {}
 
@@ -217,12 +200,12 @@ columns:
   - name: EXSTDTC
     type: date
     label: Start Date/Time of Treatment
-    derivation: ECSTDTC
+    derivation: EC_ECSTDTC.Value
 
   - name: EXENDTC
     type: date
     label: End Date/Time of Treatment
-    derivation: ECENDTC
+    derivation: EC_ECENDTC.Value
 
   - name: EXSEQ
     type: int

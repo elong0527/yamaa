@@ -27,6 +27,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DS_RAW.PATNUM
 
+  # Numbered on the date text as collected, not on the completed DSDTC: a
+  # partial entry (2024-01, 2024) sorts before every full date that starts
+  # with it, and a record with no date comes last.
   - name: DSSEQ
     type: int
     label: Sequence Number
