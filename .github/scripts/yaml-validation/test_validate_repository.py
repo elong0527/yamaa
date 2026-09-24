@@ -7352,6 +7352,42 @@ class TestCorrelatedLookupFilters(unittest.TestCase):
         self.assertEqual([e.condition for e in errors], ['incompatible_input_type'])
 
 
+class TestFlagPredicates(unittest.TestCase):
+    """Both flag spellings reach the predicate checks (REQ-1256)."""
+
+    def errors(self, flag):
+        return VALIDATOR.validate_expression_predicates(
+            {'flag': flag}, 'spec.columns.ELDFL.derivation',
+            VALIDATOR.predicate_resolver({'AGE': 'int'}), {},
+        )
+
+    def test_both_spellings_check_the_condition_at_its_field(self):
+        # R006 expands a bare string to the mapping form, so both report
+        # at the canonical condition path, as the engine does.
+        for flag in ('AGE >> 65', {'condition': 'AGE >> 65', 'false_value': 'N'}):
+            with self.subTest(flag=flag):
+                [error] = self.errors(flag)
+                self.assertEqual(error.condition, 'invalid_predicate')
+                self.assertEqual(
+                    error.path, 'spec.columns.ELDFL.derivation.flag.condition'
+                )
+
+    def test_both_spellings_resolve_their_identifiers(self):
+        for flag in ('AGEX >= 65', {'condition': 'AGEX >= 65'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    [e.condition for e in self.errors(flag)], ['unknown_field']
+                )
+
+    def test_both_spellings_name_their_dependencies(self):
+        for flag in ('AOCCSEQ = 1', {'condition': 'AOCCSEQ = 1'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    VALIDATOR.derive_binding_reference_names({'flag': flag}),
+                    ['AOCCSEQ'],
+                )
+
+
 class TestKeyColumnOrder(unittest.TestCase):
     """Populated DOMAIN, STUDYID, USUBJID columns keep that order everywhere."""
 

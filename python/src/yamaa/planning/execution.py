@@ -558,14 +558,11 @@ def _expression_info(
                     )
             nest(item.get("then"), f"{item_path}.then")
     elif operation == "flag" and isinstance(payload, (Mapping, str)):
-        # REQ-1256: a bare predicate string is the condition.
-        if isinstance(payload, str):
-            condition, condition_path = payload, operation_path
-        else:
-            condition, condition_path = (
-                payload.get("condition"),
-                f"{operation_path}.condition",
-            )
+        # REQ-1256: a bare predicate string is the condition. R006 expands
+        # it to the mapping form at load, so both spellings report at the
+        # canonical condition path, as the handler does.
+        condition = payload if isinstance(payload, str) else payload.get("condition")
+        condition_path = f"{operation_path}.condition"
         if isinstance(condition, str):
             ast = _parse_predicate_at(condition, condition_path, diagnostics)
             if ast is not None:

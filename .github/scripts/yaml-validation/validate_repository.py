@@ -6241,10 +6241,13 @@ def validate_expression_predicates(
                 )
             )
 
-    elif keyword == 'flag' and isinstance(payload, dict):
-        # REQ-1256: R006 normalizes a bare predicate string to the mapping
-        # form before this runs, so the condition path is canonical.
-        condition = payload.get('condition')
+    elif keyword == 'flag' and isinstance(payload, (dict, str)):
+        # REQ-1256: a bare predicate string is the condition. R006 expands
+        # it to the mapping form when the engine loads the spec, so both
+        # spellings report at the canonical condition path.
+        condition = (
+            payload if isinstance(payload, str) else payload.get('condition')
+        )
         condition_path = f"{path}.flag.condition"
         if isinstance(condition, str):
             errors.extend(
@@ -7204,13 +7207,16 @@ def derive_binding_reference_names(derivation):
                             )
                             visit(item.get('then'))
                     return
-                if operation == 'flag' and isinstance(payload, dict):
+                if operation == 'flag' and isinstance(payload, (dict, str)):
                     # The values are literals and name nothing; only the
-                    # predicate names variables. R006 normalizes a bare
-                    # string to the mapping form (REQ-1256).
-                    names.extend(
-                        predicate_identifier_names(payload.get('condition'))
+                    # predicate names variables. A bare string is the
+                    # condition (REQ-1256).
+                    condition = (
+                        payload
+                        if isinstance(payload, str)
+                        else payload.get('condition')
                     )
+                    names.extend(predicate_identifier_names(condition))
                     return
                 if operation == 'lookup' and isinstance(payload, dict):
                     key_base = payload.get('key_base')
@@ -7787,10 +7793,10 @@ def validate_expression_reference_bindings(expression, path, context):
                     )
                 )
         return errors
-    if keyword == 'flag' and isinstance(payload, dict):
-        # The condition is a predicate owned by the predicate parser;
-        # the values are literals and name nothing. R006 normalizes a
-        # bare string to the mapping form (REQ-1256).
+    if keyword == 'flag' and isinstance(payload, (dict, str)):
+        # The condition, bare or under condition, is a predicate owned by
+        # the predicate parser; the values are literals and name nothing
+        # (REQ-1256).
         return []
     if keyword == 'str_concat' and isinstance(payload, dict):
         errors = []
