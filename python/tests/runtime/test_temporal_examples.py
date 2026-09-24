@@ -188,13 +188,13 @@ def test_treatment_datetimes_record_supplied_start_and_end_times() -> None:
     assert isinstance(result, ExecutionSuccess), result
     rows = {row["USUBJID"]: row for row in result.table.frame.to_dicts()}
 
-    imputed = rows["CATH-UCSD-0001"]
+    imputed = rows["YAMAA-01-101"]
     assert imputed["TRTSDTM"].isoformat() == "2025-01-08T00:00:00"
     assert imputed["TRTSTMF"] == "H"
     assert imputed["TRTEDTM"].isoformat() == "2025-01-28T23:59:59"
     assert imputed["TRTETMF"] == "H"
 
-    collected = rows["CATH-UCSD-0002"]
+    collected = rows["YAMAA-01-102"]
     assert collected["TRTSDTM"].isoformat() == "2025-02-08T09:00:00"
     assert collected["TRTSTMF"] is None
     assert collected["TRTEDTM"].isoformat() == "2025-02-28T17:00:00"

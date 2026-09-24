@@ -175,8 +175,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 8
+      max: 8
   - all_or_none:
       id: treatment-period-completeness
       columns: [TRTSDT, TRTSDTM, TRTEDT, TRTEDTM, TRTDURD]
