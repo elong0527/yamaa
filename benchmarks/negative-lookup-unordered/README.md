@@ -15,11 +15,11 @@ sequence number (`EXSEQ`).
 - `TRT01A` would be the treatment from the chosen exposure
   record.
 
-The administrations are placed in start-date and sequence-number
-order with no statement of which end supplies the treatment, so a
-subject whose administrations disagree has more than one possible
-answer. The run is rejected before any data is read and no
-artifact is accepted.
+**Note:** the administrations are placed in start-date and
+sequence-number order with no statement of which end supplies the
+treatment, so a subject whose administrations disagree has more
+than one possible answer. The run is rejected before any data is
+read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
