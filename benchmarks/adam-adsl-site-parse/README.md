@@ -14,8 +14,8 @@ identifier, the collected subject number, and the collected site
 **Variables:**
 
 - `SITEIDP` is the site code read from the middle of the unique subject
-  identifier when it has the study, site, and exactly four-digit
-  subject-number form; empty otherwise.
+  identifier when it has the form `CATH-<site>-<four digits>`: the study,
+  the site, and an exactly four-digit subject number; empty otherwise.
 - `SITEID` is the site to use: the parsed value when present, else the
   collected site, else `UNKNOWN`.
 - `SUBJREF` is the display reference combining the site to use and the

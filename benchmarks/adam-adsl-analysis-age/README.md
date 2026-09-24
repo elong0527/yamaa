@@ -8,7 +8,7 @@
 
 **Input:** demographics (DM) records carrying the birth date
 (`BRTHDT`) and the randomization date (`RANDDT`); both dates are
-carried through unchanged, and the unit is fixed to `YEARS`.
+carried through unchanged.
 
 **Variables:**
 

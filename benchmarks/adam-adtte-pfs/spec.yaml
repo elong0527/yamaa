@@ -7,6 +7,9 @@ input:
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: ADSL
 intermediates:
+  # Per subject: the first adequate progression (PD), the first death, and
+  # the last adequate assessment, which sets the censoring date. Records
+  # sharing a date are ordered by sequence number.
   - id: PROGRESSION
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
@@ -41,49 +44,33 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: PFS
+    derivation: {literal: PFS}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Progression-Free Survival
+    derivation: {literal: Progression-Free Survival}
 
   - name: STARTDT
     type: date
     label: Time-to-Event Origin Date
     derivation: ADSL.RANDDT
 
+  # The chosen records' dates as dates: RS and DS hold them as text.
   - name: PDDT
     type: date
     label: Disease Progression Date
     derivation: PROGRESSION.RSDTC
-
-  - name: PDSEQ
-    type: int
-    label: Disease Progression Source Sequence Number
-    derivation: PROGRESSION.RSSEQ
 
   - name: DEATHDT
     type: date
     label: Death Date
     derivation: DEATH.DSDTC
 
-  - name: DEATHSEQ
-    type: int
-    label: Death Source Sequence Number
-    derivation: DEATH.DSSEQ
-
   - name: CENSORDT
     type: date
     label: Censoring Date
     derivation: LASTASSESS.RSDTC
-
-  - name: CENSORSEQ
-    type: int
-    label: Censoring Source Sequence Number
-    derivation: LASTASSESS.RSSEQ
 
   - name: EVENTDT
     type: date
@@ -92,21 +79,18 @@ columns:
       least:
         sources: [PDDT, DEATHDT]
 
-  # CNSR is derived first: 0 when the event occurred, 1 when censored. The
-  # event-priority rule lives here alone: an event wins even after the last
-  # adequate assessment, so ADT never needs a separate race primitive.
+  # An event (progression or death) always wins over censoring, even when
+  # it comes after the last adequate assessment.
   - name: CNSR
     type: int
     label: Censor
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then:
-            literal: 0
-        - otherwise:
-            literal: 1
+          then: {literal: 0}
+        - otherwise: {literal: 1}
 
-  # ADT follows CNSR: the event date for an event, else the censoring date.
+  # The event date for an event (CNSR 0), else the censoring date.
   - name: ADT
     type: date
     label: Analysis Date
@@ -124,19 +108,17 @@ columns:
         unit: day
         bounds: inclusive
 
+  # A progression and a death on the same day count as progression.
   - name: EVNTDESC
     type: str
     label: Event or Censoring Description
     derivation:
       case:
         - when: "EVENTDT IS NULL"
-          then:
-            literal: CENSORED
+          then: {literal: CENSORED}
         - when: "PDDT IS NOT NULL AND (DEATHDT IS NULL OR PDDT <= DEATHDT)"
-          then:
-            literal: DISEASE PROGRESSION
-        - otherwise:
-            literal: DEATH
+          then: {literal: DISEASE PROGRESSION}
+        - otherwise: {literal: DEATH}
 
   - name: SRCDOM
     type: str
@@ -144,10 +126,8 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DEATH'"
-          then:
-            literal: DS
-        - otherwise:
-            literal: RS
+          then: {literal: DS}
+        - otherwise: {literal: RS}
 
   - name: SRCVAR
     type: str
@@ -155,10 +135,8 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DEATH'"
-          then:
-            literal: DSDTC
-        - otherwise:
-            literal: RSDTC
+          then: {literal: DSDTC}
+        - otherwise: {literal: RSDTC}
 
   - name: SRCSEQ
     type: int
@@ -166,13 +144,10 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DISEASE PROGRESSION'"
-          then:
-            source: PDSEQ
+          then: PROGRESSION.RSSEQ
         - when: "EVNTDESC = 'DEATH'"
-          then:
-            source: DEATHSEQ
-        - otherwise:
-            source: CENSORSEQ
+          then: DEATH.DSSEQ
+        - otherwise: LASTASSESS.RSSEQ
 
 verifications:
   - row_count:

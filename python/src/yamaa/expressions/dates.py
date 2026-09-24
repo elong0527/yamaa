@@ -226,10 +226,34 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(source, ConditionResult):
         return source
 
+    minimum = payload.get("minimum_source_precision", "year")
+    if minimum not in {"year", "month"}:
+        return _condition(
+            "value_not_permitted",
+            {"field": "minimum_source_precision", "value": str(minimum)},
+            requirement="REQ-0583",
+        )
     month = payload.get("month")
-    if type(month) is not int or not 1 <= month <= 12:
-        # REQ-0592: the range checks apply even when the component is unused,
-        # so a policy cannot hide an invalid literal.
+    if minimum == "month":
+        if "month" in payload:
+            # REQ-0592: no specification carries a value the policy leaves
+            # unreachable; the value itself is never read.
+            return _condition(
+                "month_not_permitted",
+                {"month": month if isinstance(month, int) else str(month)},
+                requirement="REQ-0592",
+                field="month",
+            )
+    elif "month" not in payload:
+        # REQ-0592: the month is required where the policy can use it.
+        return _condition(
+            "month_required",
+            {"minimum_source_precision": minimum},
+            requirement="REQ-0592",
+            field="month",
+        )
+    elif type(month) is not int or not 1 <= month <= 12:
+        # REQ-0608: a used month still lies in the calendar range.
         return _condition(
             "month_out_of_range",
             {"month": month if isinstance(month, int) else str(month)},
@@ -280,13 +304,6 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
             requirement="REQ-0588",
         )
 
-    minimum = payload.get("minimum_source_precision", "year")
-    if minimum not in {"year", "month"}:
-        return _condition(
-            "value_not_permitted",
-            {"field": "minimum_source_precision", "value": str(minimum)},
-            requirement="REQ-0583",
-        )
     if _LADDER.index(precision) < _LADDER.index(minimum):  # type: ignore[arg-type]
         # REQ-0583: below the declared minimum is neither a missing source nor
         # invalid text, so neither handler answers it.

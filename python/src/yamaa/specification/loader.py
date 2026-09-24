@@ -33,7 +33,11 @@ def load_specification(
     origin_path = written_path.resolve()
     bundle = load_schema_bundle(schema_root)
     document = read_yaml_document(origin_path)
-    if isinstance(document, dict) and "parents" in document:
+    rows = document.get("rows") if isinstance(document, dict) else None
+    has_catalog = isinstance(rows, list) and any(
+        isinstance(row, dict) and "catalog" in row for row in rows
+    )
+    if isinstance(document, dict) and ("parents" in document or has_catalog):
         # Imported lazily so the schema interpreter remains usable on its own.
         from yamaa.schema.inheritance import resolve_specification
 

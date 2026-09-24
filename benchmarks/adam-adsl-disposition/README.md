@@ -17,11 +17,9 @@ sequence number (`DSSEQ`).
   records whose category (`DSCAT`) is `DISPOSITION EVENT`; a record
   without a date never counts, and a subject with no dated
   disposition record is empty.
-- `EOSDECOD` is the coded term (`DSDECOD`) on the last dated
-  disposition event record whose category is `DISPOSITION EVENT`,
-  ordered by start date (`DSSTDTC`) and then by sequence number
-  (`DSSEQ`); empty when the subject has no dated disposition
-  record.
+- `EOSDECOD` is the coded term (`DSDECOD`) on the subject's last
+  dated `DISPOSITION EVENT` record, the one with the latest start
+  date; empty when the subject has no dated disposition record.
 - `EOSREAS` is the reported term (`DSTERM`) on that same last
   record; empty when the subject has no dated disposition record.
 - `EOSSTT` is `COMPLETED` when the last coded term is `COMPLETED`,

@@ -49,7 +49,5 @@ rows:
   - id: subscale
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
     derivations:
-      PARAMCD:
-        literal: PFSCORE
-      PARAM:
-        literal: Physical Functioning Subscale Score
+      PARAMCD: {literal: PFSCORE}
+      PARAM: {literal: Physical Functioning Subscale Score}

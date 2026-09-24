@@ -32,7 +32,7 @@ at study entry with lesion group and lesion identifier.
   records, which separates an assessment that was never performed
   from one that measured nothing.
 - `NTARGET` is how many lesions were selected as target lesions at
-  study entry: the count of inventory rows with `TUGRPID` of
+  study entry: the count of inventory records with `TUGRPID` of
   `TARGET`, counting `TULNKID`; it is the same at every assessment
   of the subject.
 - `ANL01FL` is `Y` when every target lesion was measured, that is

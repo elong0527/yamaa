@@ -24,6 +24,8 @@ columns:
     label: Subject Identifier for the Study
     derivation: DM.SUBJID
 
+  # The site part of a USUBJID shaped CATH-<site>-<four digits>; any other
+  # shape leaves it empty.
   - name: SITEIDP
     type: str
     label: Parsed Study Site Identifier
@@ -45,6 +47,7 @@ columns:
     verifications:
       not_missing: {}
 
+  # SITEID is never missing, so UNKNOWN here means SUBJID is missing.
   - name: SUBJREF
     type: str
     label: Subject Display Reference

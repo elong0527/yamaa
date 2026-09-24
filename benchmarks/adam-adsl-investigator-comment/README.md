@@ -17,7 +17,7 @@ was collected in `CMNTFL`.
 - `CMNTFL` is `Y` when a comment was collected and `N` when none
   was.
 
-**Note:** when the flag shows no comment was collected, the comment
-itself is absent.
+**Note:** an empty comment field, quoted or not, counts as no
+comment collected: the flag is `N` and the comment is absent.
 
 **Standard:** ADaM | **Domain:** ADSL

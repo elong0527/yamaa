@@ -90,11 +90,14 @@ def test_reported_precision_rounds_once_at_the_written_field() -> None:
         ("R2ANRLO", "float"),
     ]
     rows: list[list[object]] = [
-        ["CTX", "CTX-01", "ALT", 44.0, 32.0, 44.0 / 32.0],
-        ["CTX", "CTX-02", "ALT", 73.5, 32.0, 73.5 / 32.0],
-        ["CTX", "CTX-03", "ALT", 110.0, 32.0, 110.0 / 32.0],
-        ["CTX", "CTX-04", "ALT", 1.0, 32.0, 1.0 / 32.0],
-        ["CTX", "CTX-05", "ALT", 58.0, None, None],
+        ["YAMAA-01", "YAMAA-01-101", "ALT", 44.0, 32.0, 44.0 / 32.0],
+        ["YAMAA-01", "YAMAA-01-102", "ALT", 73.5, 32.0, 73.5 / 32.0],
+        ["YAMAA-01", "YAMAA-01-103", "ALT", 110.0, 32.0, 110.0 / 32.0],
+        ["YAMAA-01", "YAMAA-01-104", "ALT", 1.0, 32.0, 1.0 / 32.0],
+        ["YAMAA-01", "YAMAA-01-105", "ALT", 58.0, None, None],
+        ["YAMAA-01", "YAMAA-01-106", "ALT", 58.0, 0.0, None],
+        ["YAMAA-01", "YAMAA-01-107", "ALT", None, 32.0, None],
+        ["YAMAA-01", "YAMAA-01-108", "AST", 28.0, 32.0, 28.0 / 32.0],
     ]
 
     content = rendered(declared, rows, decimals=4, keys=["STUDYID", "USUBJID"])
@@ -102,7 +105,7 @@ def test_reported_precision_rounds_once_at_the_written_field() -> None:
     committed = (
         EXAMPLES / "adam-adlb-reported-precision" / "expected" / "adlb.csv"
     ).read_bytes()
-    assert content == b"\n".join(committed.split(b"\n")[:6]) + b"\n"
+    assert content == b"\n".join(committed.split(b"\n")[:9]) + b"\n"
 
 
 @pytest.mark.parametrize(

@@ -22,8 +22,7 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: CONFRESP
+    derivation: {literal: CONFRESP}
 
   - name: RSSEQ
     type: int
@@ -40,6 +39,9 @@ columns:
     label: Analysis Value (C)
     derivation: RS.RSSTRESC
 
+  # NEXTDT and NEXTRESP read the subject's next assessment, in date order
+  # with same-day ties broken by sequence number; both are empty at the
+  # last assessment, and so is DAYS_TO_NEXT.
   - name: NEXTDT
     type: date
     label: Next Assessment Date
@@ -71,21 +73,21 @@ columns:
         end: NEXTDT
         unit: day
 
+  # Progressive disease needs no confirmation. A PR or CR is confirmed only
+  # by a PR or CR at the very next assessment, 28 or more days later; with
+  # no next assessment the test is unknown, so the record falls to N.
   - name: CONFIRMED
     type: str
     label: Confirmation Flag
     derivation:
       case:
         - when: "AVALC = 'PD'"
-          then:
-            literal: Y
+          then: {literal: Y}
         - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR', 'CR') AND DAYS_TO_NEXT >= 28"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
 
 verifications:
   - row_count:
-      min: 9
-      max: 9
+      min: 14
+      max: 14

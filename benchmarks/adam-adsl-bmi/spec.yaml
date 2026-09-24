@@ -29,6 +29,8 @@ columns:
     label: Weight (kg)
     derivation: SOURCE.WEIGHTKG
 
+  # NULLIF turns a zero height into missing, so BMI is empty instead of
+  # dividing by zero; a missing height or weight also leaves it empty.
   - name: BMI
     type: float
     label: Body Mass Index (kg/m2)
@@ -36,6 +38,9 @@ columns:
       compute:
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
+  # The same index from the project's own bmi routine; the runner picks the
+  # project root that implements it. A missing height or weight skips the
+  # call, so BMI_FN is empty there.
   - name: BMI_FN
     type: float
     label: Body Mass Index via Project Routine (kg/m2)

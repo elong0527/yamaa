@@ -367,6 +367,94 @@ def validate_unicode_scalars(value, path):
     return errors
 
 
+def _block_literal_positions(text):
+    """Positions of block-form single-key {literal: <scalar>} mappings.
+
+    Returns [(line_1based, column_1based), ...] pointing at the parent key of
+    each mapping whose value is exactly one `literal:` scalar written in
+    block style (the parent key on its own line, `literal: <scalar>` nested
+    beneath). The canonical spelling (REQ-1250) is the single-line flow
+    form `{literal: <scalar>}`.
+    """
+    positions = []
+    try:
+        node = yaml.compose(text)
+    except yaml.YAMLError:
+        # Parse errors are reported by the main YAML pass; a style check
+        # must not double-report them.
+        return positions
+    if node is None:
+        return positions
+
+    def visit(mapping_node):
+        for key_node, value_node in mapping_node.value:
+            if (
+                isinstance(key_node, yaml.ScalarNode)
+                and isinstance(value_node, yaml.MappingNode)
+                and len(value_node.value) == 1
+            ):
+                literal_key, literal_value = value_node.value[0]
+                if (
+                    isinstance(literal_key, yaml.ScalarNode)
+                    and literal_key.value == "literal"
+                    and isinstance(literal_value, yaml.ScalarNode)
+                    and literal_value.start_mark.line
+                    == literal_key.start_mark.line
+                    and key_node.start_mark.line < literal_key.start_mark.line
+                ):
+                    positions.append(
+                        (
+                            key_node.start_mark.line + 1,
+                            key_node.start_mark.column + 1,
+                        )
+                    )
+            if isinstance(value_node, yaml.MappingNode):
+                visit(value_node)
+            elif isinstance(value_node, yaml.SequenceNode):
+                for item in value_node.value:
+                    if isinstance(item, yaml.MappingNode):
+                        visit(item)
+
+    if isinstance(node, yaml.MappingNode):
+        visit(node)
+    elif isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            if isinstance(item, yaml.MappingNode):
+                visit(item)
+    return positions
+
+
+def validate_literal_canonical_form(root: Path):
+    """Report block-form literal expressions in benchmark spec files.
+
+    REQ-1250 names the single-line flow mapping `{literal: X}` the canonical
+    spelling of a literal expression in every position; the block form
+    (parent key on its own line with `literal: X` nested beneath) parses
+    identically but is non-canonical.
+    """
+    errors = []
+    benchmarks_dir = root / "benchmarks"
+    if not benchmarks_dir.is_dir():
+        return errors
+    for example_dir in sorted(
+        path for path in benchmarks_dir.iterdir() if path.is_dir()
+    ):
+        for spec_path in example_spec_paths(example_dir):
+            relative = spec_path.relative_to(root)
+            try:
+                text = spec_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                errors.append(f"ERROR: {relative}: cannot read spec: {exc}")
+                continue
+            for line, column in _block_literal_positions(text):
+                errors.append(
+                    f"ERROR: {relative}:{line}:{column}: "
+                    f"non_canonical_literal_form write the literal on one "
+                    f"line as {{literal: ...}} (see REQ-1250)"
+                )
+    return errors
+
+
 def validate_examples_index(root: Path):
     errors = []
     examples_dir = root / "benchmarks"

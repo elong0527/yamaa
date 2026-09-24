@@ -23,6 +23,9 @@ columns:
     label: Unique Subject Identifier
     derivation: ADSL_RAW.USUBJID
 
+  # Per subject and source: how many records report an adjustment, and how
+  # many records there are. A count over no records is empty, not 0, so
+  # either count is empty when there is nothing to count.
   - name: EX_ADJ_CNT
     type: int
     label: Dose Adjustment Count in EX
@@ -58,7 +61,9 @@ columns:
     label: Dose Adjustment Count in FA
     derivation:
       aggregate:
-        filter: "FA.FATESTCD = 'OCCUR' AND FA.FAOBJ = 'DOSE ADJUSTMENT' AND FA.FASTRESC = 'Y'"
+        filter: >-
+          FA.FATESTCD = 'OCCUR' AND FA.FAOBJ = 'DOSE ADJUSTMENT'
+          AND FA.FASTRESC = 'Y'
         expr: "COUNT(FA.USUBJID)"
 
   - name: FA_ANY_CNT
@@ -68,17 +73,17 @@ columns:
       aggregate:
         expr: "COUNT(FA.USUBJID)"
 
+  # Y on any reported adjustment; N when the subject has records but none
+  # reports one. A subject in none of the three sources stays empty.
   - name: DOSADJFL
     type: str
     label: Dose Adjustment Flag
     derivation:
       case:
         - when: "EX_ADJ_CNT > 0 OR EC_ADJ_CNT > 0 OR FA_ADJ_CNT > 0"
-          then:
-            literal: "Y"
+          then: {literal: "Y"}
         - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
-          then:
-            literal: "N"
+          then: {literal: "N"}
     verifications:
       allowed_values:
         values: ["Y", "N"]

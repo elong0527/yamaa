@@ -21,7 +21,8 @@ assessment leave none.
 
 - `ADT` is the completed analysis date. A fully collected date is
   used as it stands; a year and month without a day is completed to
-  the first of the month.
+  the first of the month, and a year alone to 1 January. An
+  assessment with no readable date stops the run.
 - `ADY` is the study day of the assessment, counting the treatment
   start as day one.
 - `AVAL` is the rank of the response, from best to worst: `1` for a

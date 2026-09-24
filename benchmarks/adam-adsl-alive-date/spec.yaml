@@ -41,6 +41,8 @@ columns:
     label: Date of Last Contact
     derivation: ADSL_RAW.LSTCNTDC
 
+  # A year and month take the month's last day, a year alone 31 December;
+  # blank or non-date text leaves the date empty.
   - name: LSTCNTDT
     type: date
     label: Analysis Date of Last Contact
@@ -52,6 +54,8 @@ columns:
         missing: null
         invalid: null
 
+  # The subject's latest adverse event end and vital signs date, matched on
+  # STUDYID and USUBJID; empty with no records or only missing dates.
   - name: ADAE_LST
     type: date
     label: Latest Adverse Event Date
@@ -66,6 +70,8 @@ columns:
       aggregate:
         expr: "MAX(ADVS.ADATE)"
 
+  # The latest of the four, passing over missing ones; empty only when all
+  # four are missing.
   - name: LSTALVDT
     type: date
     label: Last Known Alive Date

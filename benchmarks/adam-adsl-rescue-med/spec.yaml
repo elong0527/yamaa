@@ -21,6 +21,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The subject's earliest rescue medication: smallest start date, then the
+  # lower sequence number. No rescue record at all leaves it empty.
   - name: RESCTRT
     type: str
     label: Rescue Medication
@@ -31,6 +33,7 @@ columns:
         multiple_matches:
           order_by: [CM.CMSTDTC, CM.CMSEQ]
           keep: first
+
 verifications:
   - row_count:
       min: 2

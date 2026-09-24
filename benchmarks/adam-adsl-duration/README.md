@@ -13,14 +13,13 @@ start and end dates.
 **Variables:**
 
 - `DURW` is the count of whole seven-day blocks from `STDT` to
-  `ENDT`; a leftover partial week adds nothing, and the count is
-  missing when either date is absent.
+  `ENDT`; a leftover partial week adds nothing.
 - `DURM` is the count of monthly anniversaries of `STDT` falling
   on or before `ENDT`; an anniversary keeps the start day, or the
-  last day of the month where the month is too short, and the
-  count is missing when either date is absent.
+  last day of the month where the month is too short.
 
-**Note:** when the end date falls before the start date, each
-duration is the negated count computed with the dates exchanged.
+**Note:** both durations are missing when either date is missing.
+When the end date falls before the start date, each duration is
+the negated count computed with the dates exchanged.
 
 **Standard:** ADaM | **Domain:** ADSL

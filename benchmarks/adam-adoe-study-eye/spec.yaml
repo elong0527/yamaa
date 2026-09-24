@@ -44,31 +44,33 @@ columns:
     label: Analysis Value
     derivation: OE.OESTRESN
 
+  # The subject's assigned eye from ADSL, matched on STUDYID and USUBJID;
+  # empty for a subject ADSL does not list. It is not in the output.
   - name: STUDYEYE
     type: str
-    label: Study Eye Laterality
+    label: Assigned Study Eye
     derivation: ADSL.STUDYEYE
     verifications:
       allowed_values:
         values: [LEFT, RIGHT, BILATERAL]
 
+  # First match wins: a bilateral measurement is Both Eyes; with both eyes
+  # assigned, a single eye is the study eye; otherwise the matching eye is
+  # the study eye and the other the fellow eye. With no assigned eye or no
+  # laterality no branch fires, so AFEYE is empty.
   - name: AFEYE
     type: str
     label: Analysis Eye
     derivation:
       case:
         - when: "OELAT = 'BILATERAL' AND STUDYEYE IS NOT NULL"
-          then:
-            literal: Both Eyes
+          then: {literal: Both Eyes}
         - when: "STUDYEYE = 'BILATERAL' AND OELAT IS NOT NULL"
-          then:
-            literal: Study Eye
+          then: {literal: Study Eye}
         - when: "OELAT = STUDYEYE"
-          then:
-            literal: Study Eye
+          then: {literal: Study Eye}
         - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
-          then:
-            literal: Fellow Eye
+          then: {literal: Fellow Eye}
     verifications:
       allowed_values:
         values: [Study Eye, Fellow Eye, Both Eyes]
@@ -77,8 +79,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, OESEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 10
+      max: 10
   - implies:
       id: study-eye-record-carries-the-study-laterality
       when: "AFEYE = 'Study Eye'"

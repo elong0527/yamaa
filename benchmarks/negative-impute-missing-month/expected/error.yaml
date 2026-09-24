@@ -1,0 +1,7 @@
+phase: validation
+condition: month_required
+spec_paths:
+  - columns.ASTDT.derivation.date_impute.month
+requirement: REQ-0592
+context:
+  minimum_source_precision: year

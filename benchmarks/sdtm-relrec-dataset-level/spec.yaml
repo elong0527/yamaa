@@ -1,0 +1,126 @@
+schema_version: "1.0"
+domain: RELREC
+keys: [STUDYID, RDOMAIN, IDVAR, RELID]
+input:
+  TU: input/tu.csv
+  TR: input/tr.csv
+  AE: input/ae.csv
+  CM: input/cm.csv
+
+output:
+  path: relrec.csv
+  columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: RDOMAIN
+    type: str
+    label: Related Domain Abbreviation
+
+  - name: IDVAR
+    type: str
+    label: Identifying Variable
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
+
+  - name: RELTYPE
+    type: str
+    label: Relationship Type
+
+  - name: RELID
+    type: str
+    label: Relationship Identifier
+
+rows:
+  - id: tu_dataset
+    dataset: TU
+    group_by: [TU.STUDYID]
+    derivations:
+      STUDYID:
+        source: TU.STUDYID
+      USUBJID: {literal: null}
+      RDOMAIN: {literal: TU}
+      IDVAR: {literal: TULNKID}
+      IDVARVAL: {literal: null}
+      RELTYPE: {literal: ONE}
+      RELID: {literal: "1"}
+
+  - id: tr_dataset
+    dataset: TR
+    group_by: [TR.STUDYID]
+    derivations:
+      STUDYID:
+        source: TR.STUDYID
+      USUBJID: {literal: null}
+      RDOMAIN: {literal: TR}
+      IDVAR: {literal: TRLNKID}
+      IDVARVAL: {literal: null}
+      RELTYPE: {literal: MANY}
+      RELID: {literal: "1"}
+
+  - id: ae_link
+    dataset: AE
+    filter: "AE.AELNKID IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: AE.STUDYID
+      USUBJID:
+        source: AE.USUBJID
+      RDOMAIN: {literal: AE}
+      IDVAR: {literal: AESEQ}
+      IDVARVAL:
+        source: AE.AESEQ
+      RELTYPE: {literal: null}
+      RELID:
+        source: AE.AELNKID
+
+  - id: cm_link
+    dataset: CM
+    filter: "CM.CMLNKID IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: CM.STUDYID
+      USUBJID:
+        source: CM.USUBJID
+      RDOMAIN: {literal: CM}
+      IDVAR: {literal: CMSEQ}
+      IDVARVAL:
+        source: CM.CMSEQ
+      RELTYPE: {literal: null}
+      RELID:
+        source: CM.CMLNKID
+
+verifications:
+  # Asserted grain: one row per domain per relationship. IDVARVAL is null on
+  # dataset-level rows, so keys cannot name it (REQ-0240 missing_key); the
+  # uniqueness check mirrors the declared keys.
+  - unique:
+      columns: [STUDYID, RDOMAIN, IDVAR, RELID]
+  - row_count:
+      min: 6
+      max: 6
+  - implies:
+      id: dataset-row-carries-no-record-pointer
+      when: "IDVARVAL IS NULL"
+      then: "USUBJID IS NULL"
+  - implies:
+      id: record-row-carries-subject-and-record-pointer
+      when: "IDVARVAL IS NOT NULL"
+      then: "USUBJID IS NOT NULL"
+  - implies:
+      id: dataset-row-carries-relationship-type
+      when: "IDVARVAL IS NULL"
+      then: "RELTYPE IN ('ONE', 'MANY')"
+  - implies:
+      id: record-row-carries-no-relationship-type
+      when: "IDVARVAL IS NOT NULL"
+      then: "RELTYPE IS NULL"
