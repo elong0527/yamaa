@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DS
+    derivation: {literal: DS}
     verifications:
       allowed_values:
         values: [DS]
@@ -54,10 +53,8 @@ columns:
     derivation:
       case:
         - when: "DSDECOD = 'RANDOMIZED'"
-          then:
-            literal: PROTOCOL MILESTONE
-        - otherwise:
-            literal: DISPOSITION EVENT
+          then: {literal: PROTOCOL MILESTONE}
+        - otherwise: {literal: DISPOSITION EVENT}
     verifications:
       allowed_values:
         values: [PROTOCOL MILESTONE, DISPOSITION EVENT]

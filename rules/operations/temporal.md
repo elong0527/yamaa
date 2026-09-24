@@ -182,9 +182,10 @@ example needs it.
 
 **REQ-0592.** `date_impute` requires its `month` and a numeric `day` to lie
 within its registered calendar ranges, and the completed value
-must be a real calendar date. The range checks still apply when a component is
-not used, so a specification cannot hide an invalid literal behind a precision
-policy. A `day` naming a position in its month is not a literal to range-check,
+must be a real calendar date. `month` is required when
+`minimum_source_precision` is `year` and must be absent when it is `month`:
+a specification carries no value the precision policy leaves unreachable.
+A `day` naming a position in its month is not a literal to range-check,
 and the calendar-date requirement cannot fail for one: it names whichever day
 the target month begins or ends with rather than a number that month might not
 have. Any other `day` token is neither a number nor a position, and is rejected
@@ -266,13 +267,13 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.date_impute.source` | ISO 8601 date text, complete or truncated to year or month. |
-| `expressions.date_impute.month` | Month used when the source carries only a year, 1 to 12. |
+| `expressions.date_impute.month` | Month used when the source carries only a year, 1 to 12; required when `minimum_source_precision` is `year`, absent when it is `month`. |
 | `expressions.date_impute.day` | Day used when the source carries no day: an integer from 1 to 31, or first or last resolved against the month the date lands in. |
 | `expressions.date_impute.minimum_source_precision` | Least precision the collected source must carry before imputation; month leaves a year-only source missing instead of supplying both month and day. |
 | `expressions.date_impute.not_before` | Date the completed value must not precede; it moves only the components imputation supplied, and never a collected date. |
 | `expressions.date_impute.missing` | Result when the source value is missing. |
 | `expressions.date_impute.invalid` | Result when the source is not an ISO 8601 date or date prefix. |
-| `Result` | Completes a truncated ISO 8601 date and returns a date. A complete source date is returned unchanged; a source carrying only a year, or a year and month, is completed from month and day unless minimum_source_precision forbids supplying that much information. A day token is resolved after month is fixed, so it names a day in the month the completed date lands in. not_before is applied last, to the completed date alone: a date already on or after the bound stands, and otherwise the result is the earliest day the collected text still admits that satisfies the bound. When the collected text admits no such day the result is missing, invoking no handler. A source that is not an ISO 8601 date or an ISO 8601 date prefix is an invalid value, distinct from a missing one; both yield no date unless a handler is declared. [Temporal values](../values/temporal.md) governs the resulting date. |
+| `Result` | Completes a truncated ISO 8601 date and returns a date. A complete source date is returned unchanged; a source carrying only a year, or a year and month, is completed from month and day unless minimum_source_precision forbids supplying that much information. A day token is resolved after month is fixed, so it names a day in the month the completed date lands in. not_before is applied last, to the completed date alone: a date already on or after the bound stands, and otherwise the result is the earliest day the collected text still admits that satisfies the bound. When the collected text admits no such day the result is missing, invoking no handler. A source that is not an ISO 8601 date or an ISO 8601 date prefix is an invalid value, distinct from a missing one; omitting the `missing` or `invalid` handler makes its condition fatal per [REQ-0344](../execution/handlers.md#req-0344). [Temporal values](../values/temporal.md) governs the resulting date. |
 
 <a id="req-1106"></a>
 

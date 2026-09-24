@@ -15,22 +15,36 @@ when no severity was recorded.
 
 - `SEVAL`: the collected severity when one was recorded at the
   visit, otherwise the value of `SEVAL` itself, otherwise `0`.
-
-`SEVAL` reads its own value, so there is no earlier value to carry
-and the definition loops back on itself. The run is rejected
-before any data is read, and no artifact is accepted.
+  Because `SEVAL` reads its own value, there is no earlier value to
+  carry and the definition loops back on itself, so the run is
+  rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 
 Carry forward from the collected source instead of the column being
-derived. Search the collected values on the earlier rows:
+derived. Search the subject's earlier collected values in a separate column,
+and fall back to it, then to `0`, only when the current record has no
+severity:
 
 ```yaml
-previous_non_missing:
-  source: VS.SEVAL
+- name: SEVPREV
+  type: int
+  derivation:
+    previous_non_missing:
+      source: VS.SEVAL
+      window:
+        group_by: [STUDYID, USUBJID]
+        order_by: [VSSEQ]
+
+- name: SEVAL
+  type: int
+  derivation:
+    first_available:
+      sources: [VS.SEVAL, SEVPREV]
+      missing: 0
 ```
 
-and, when the first row may itself be missing, keep the default for that
-row only.
+Keep `SEVPREV` internal by omitting it from `output.columns`. A subject whose
+first record has no severity gets `0` there, because no earlier value exists.

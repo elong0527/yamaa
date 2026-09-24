@@ -11,10 +11,10 @@ and start text (`AESTDTC`).
 
 **Variables:**
 
-- `ASTDTM` would contain the start moment copied from `AESTDTC`.
-  One value reads without a clock offset and another reads with
-  one, and the two are not the same kind of value, so the run
-  stops while converting values and no artifact is accepted.
+- `ASTDTM` would contain the start moment copied from `AESTDTC`, a
+  site-clock reading with no clock offset. A start that carries an
+  offset, such as `+02:00`, is not the same kind of value, so the
+  run stops while converting values and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
@@ -32,8 +32,8 @@ If the offset is real data, collect it as a field of its own and keep
 column holds the offset, where a later analysis can read it.
 
 To see the collected value rather than fail on it, declare `ASTDTM` as text.
-It keeps the collected characters and still orders chronologically, and a
-column that converts it later can answer for the failure:
+It keeps the collected characters, and a column that converts it later can
+answer for the failure:
 
 ```yaml
 - name: ASTDTM

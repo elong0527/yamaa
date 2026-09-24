@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str
@@ -67,10 +66,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: CA
-      LBTEST:
-        literal: Calcium
+      LBTESTCD: {literal: CA}
+      LBTEST: {literal: Calcium}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CALCIUM'"
@@ -79,23 +76,19 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: mg/dL
+      LBORRESU: {literal: mg/dL}
       LBSTRESN:
         value:
           source: LBORRES
         missing:
-      LBSTRESU:
-        literal: mg/dL
+      LBSTRESU: {literal: mg/dL}
 
   - id: creatinine
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: CREAT
-      LBTEST:
-        literal: Creatinine
+      LBTESTCD: {literal: CREAT}
+      LBTEST: {literal: Creatinine}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CREAT'"
@@ -104,11 +97,9 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: mg/dL
+      LBORRESU: {literal: mg/dL}
       LBSTRESN:
         value:
           source: LBORRES
         missing:
-      LBSTRESU:
-        literal: mg/dL
+      LBSTRESU: {literal: mg/dL}

@@ -234,7 +234,13 @@ def test_a_source_below_the_declared_minimum_is_missing_and_fires_no_handler() -
     # REQ-0583: neither a missing source nor invalid text.
     value = _value(
         "date_impute",
-        impute(None, minimum_source_precision="month", missing="X", invalid="X"),
+        {
+            "source": "S",
+            "day": 15,
+            "minimum_source_precision": "month",
+            "missing": "X",
+            "invalid": "X",
+        },
         {"S": "2025"},
     )
 
@@ -273,13 +279,36 @@ def test_a_completed_value_that_is_not_a_calendar_date_fails() -> None:
 
 
 def test_a_month_outside_the_calendar_fails_even_when_it_is_unused() -> None:
-    # REQ-0592: the range checks still apply when a component is not used, so
-    # a specification cannot hide an invalid literal behind a policy.
+    # REQ-0592: the month is contractually required wherever the policy can
+    # use it, so its range is checked even for a source needing no imputation.
     condition = _condition(
         "date_impute", {"source": "S", "month": 13, "day": 15}, {"S": "2025-01-05"}
     )
 
     assert condition.condition.condition == "month_out_of_range"
+
+
+def test_a_month_is_unreachable_when_the_minimum_is_month() -> None:
+    # REQ-0592: no specification carries a value the precision policy leaves
+    # unreachable; presence is the defect, so no range is considered.
+    condition = _condition(
+        "date_impute",
+        {"source": "S", "month": 6, "day": 15, "minimum_source_precision": "month"},
+        {"S": "2025-01"},
+    )
+
+    assert condition.condition.condition == "month_not_permitted"
+
+
+def test_a_missing_month_fails_when_the_minimum_is_year() -> None:
+    # REQ-0592: the month is required where the policy can use it.
+    condition = _condition(
+        "date_impute",
+        {"source": "S", "day": 15, "minimum_source_precision": "year"},
+        {"S": "2025"},
+    )
+
+    assert condition.condition.condition == "month_required"
 
 
 def test_the_bound_moves_the_result_only_inside_the_interval_it_admits() -> None:

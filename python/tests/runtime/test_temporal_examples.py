@@ -50,6 +50,8 @@ ERROR_EXAMPLES = [
     "negative-impute-bad-day",
     "negative-impute-bad-month",
     "negative-impute-bad-source",
+    "negative-impute-missing-month",
+    "negative-impute-unreachable-month",
     "negative-precision-bad-source",
     "negative-datetime-impute-bad-source",
     "negative-datetime-precision-bad-source",

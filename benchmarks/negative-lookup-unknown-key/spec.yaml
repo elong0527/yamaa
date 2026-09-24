@@ -6,6 +6,8 @@ input:
   LBRANGE: input/lbrange.csv
 base: LB_RAW
 intermediates:
+  # No table columns are named, so they are inferred from the output keys
+  # LBRANGE carries -- and it carries none of STUDYID, USUBJID, LBSEQ.
   - id: REFRANGE
     dataset: LBRANGE
     key_base: [LBTESTCD, SEX]

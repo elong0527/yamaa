@@ -43,15 +43,14 @@ columns:
 
   # Complete a year-and-month start to the 15th, never before first
   # exposure. A year alone, non-date text, or nothing gives no date.
-  # (month is required by the schema but unused: month precision is the
-  # minimum accepted, so no month is ever supplied.)
+  # (Month precision is the minimum accepted, so no month is ever
+  # supplied, and none is written.)
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation:
       date_impute:
         source: AESTDTC
-        month: 6
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT

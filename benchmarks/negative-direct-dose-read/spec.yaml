@@ -21,6 +21,10 @@ columns:
     label: Unique Subject Identifier
     derivation: TRT.USUBJID
 
+  # The formula names EX.EXDOSE, a field of another input that can hold
+  # several records per subject. A formula reads only this row's columns
+  # and declared record lookups, so the specification is rejected before
+  # any data is read.
   - name: DOSEDBL
     type: float
     label: Doubled Dose

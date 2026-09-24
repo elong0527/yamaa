@@ -47,18 +47,12 @@ rows:
     derivations:
       STUDYID:
         source: TU.STUDYID
-      USUBJID:
-        literal: null
-      RDOMAIN:
-        literal: TU
-      IDVAR:
-        literal: TULNKID
-      IDVARVAL:
-        literal: null
-      RELTYPE:
-        literal: ONE
-      RELID:
-        literal: "1"
+      USUBJID: {literal: null}
+      RDOMAIN: {literal: TU}
+      IDVAR: {literal: TULNKID}
+      IDVARVAL: {literal: null}
+      RELTYPE: {literal: ONE}
+      RELID: {literal: "1"}
 
   - id: tr_dataset
     dataset: TR
@@ -66,18 +60,12 @@ rows:
     derivations:
       STUDYID:
         source: TR.STUDYID
-      USUBJID:
-        literal: null
-      RDOMAIN:
-        literal: TR
-      IDVAR:
-        literal: TRLNKID
-      IDVARVAL:
-        literal: null
-      RELTYPE:
-        literal: MANY
-      RELID:
-        literal: "1"
+      USUBJID: {literal: null}
+      RDOMAIN: {literal: TR}
+      IDVAR: {literal: TRLNKID}
+      IDVARVAL: {literal: null}
+      RELTYPE: {literal: MANY}
+      RELID: {literal: "1"}
 
   - id: ae_link
     dataset: AE
@@ -87,14 +75,11 @@ rows:
         source: AE.STUDYID
       USUBJID:
         source: AE.USUBJID
-      RDOMAIN:
-        literal: AE
-      IDVAR:
-        literal: AESEQ
+      RDOMAIN: {literal: AE}
+      IDVAR: {literal: AESEQ}
       IDVARVAL:
         source: AE.AESEQ
-      RELTYPE:
-        literal: null
+      RELTYPE: {literal: null}
       RELID:
         source: AE.AELNKID
 
@@ -106,14 +91,11 @@ rows:
         source: CM.STUDYID
       USUBJID:
         source: CM.USUBJID
-      RDOMAIN:
-        literal: CM
-      IDVAR:
-        literal: CMSEQ
+      RDOMAIN: {literal: CM}
+      IDVAR: {literal: CMSEQ}
       IDVARVAL:
         source: CM.CMSEQ
-      RELTYPE:
-        literal: null
+      RELTYPE: {literal: null}
       RELID:
         source: CM.CMLNKID
 

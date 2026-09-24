@@ -53,15 +53,31 @@ def describe_mapping(mapping):
         '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
         for k, v in mapping.get("dict", {}).items()
     )
-    fallback = mapping.get("missing")
     strict = mapping.get("strict", False)
-    if fallback is not None:
-        tail = "; missing or unlisted values " + ARROW + ' "' + str(fallback) + '"'
-    elif strict:
-        tail = "; missing or unlisted values are errors"
+    absent = describe_mapping_handler(mapping, "missing", strict)
+    if "unmapped" in mapping or strict:
+        unlisted = describe_mapping_handler(mapping, "unmapped", strict)
     else:
-        tail = ""
+        # Without `unmapped`, `missing` answers the unlisted value too.
+        unlisted = absent
+    if absent == unlisted:
+        tail = "" if absent is None else "; missing or unlisted values " + absent
+    else:
+        tail = (
+            "; missing values "
+            + (absent or "stay missing")
+            + "; unlisted values "
+            + (unlisted or "stay missing")
+        )
     return "Recode " + str(var) + where + ": " + pairs + tail + "."
+
+
+def describe_mapping_handler(mapping, handler, strict):
+    """What one mapping event yields: a literal, an error, or None for missing."""
+    if handler in mapping:
+        value = mapping[handler]
+        return None if value is None else ARROW + ' "' + str(value) + '"'
+    return "are errors" if strict else None
 
 
 def describe_case(branches):

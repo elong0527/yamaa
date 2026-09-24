@@ -11,11 +11,9 @@ collected time.
 **Variables:**
 
 - `TRTSTPR`: `S` when the exposure start included a time and `D` when it was a
-  complete date with no time.
-
-A year and month identify neither a complete date nor a moment, so they cannot
-answer whether only the time is absent. The run stops rather than reporting a
-misleading precision.
+  complete date with no time. A start collected to the year and month only is
+  neither a complete date nor a moment, so it cannot answer whether only the
+  time is absent; the run stops rather than reporting a misleading precision.
 
 **Standard:** ADaM | **Domain:** ADSL
 

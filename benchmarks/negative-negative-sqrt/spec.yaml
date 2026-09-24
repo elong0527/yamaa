@@ -19,6 +19,7 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # Numeric copies of the measurements: DM is read as text.
   - name: HEIGHTCM
     type: float
     label: Height (cm)
@@ -29,6 +30,8 @@ columns:
     label: Weight (kg)
     derivation: DM.WEIGHTKG
 
+  # Mosteller formula. A missing measurement gives missing; a negative
+  # height times weight has no real square root and stops the run.
   - name: BSA
     type: float
     label: Body Surface Area (m2)

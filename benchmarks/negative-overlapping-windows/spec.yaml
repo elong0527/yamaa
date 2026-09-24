@@ -10,6 +10,9 @@ input:
     types: {AWLO: int, AWHI: int}
 base: ADVS_RAW
 intermediates:
+  # The study's window whose first and last analysis days (both included)
+  # surround the record's ADY. Two windows holding the same day are two
+  # matches with no rule to choose one, so the run stops.
   - id: AWIN
     dataset: AWINDOW
     key: STUDYID

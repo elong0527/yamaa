@@ -1,0 +1,7 @@
+phase: validation
+condition: month_not_permitted
+spec_paths:
+  - columns.ASTDT.derivation.date_impute.month
+requirement: REQ-0592
+context:
+  month: 6
