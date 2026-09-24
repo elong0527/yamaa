@@ -7,6 +7,9 @@ input:
   AE: input/ae.csv
 base: DM_RAW
 intermediates:
+  # Per subject: the latest death disposition record and the latest fatal
+  # adverse event. An undated record sorts after every dated one, so it is
+  # the one kept, and that source then gives no death date.
   - id: DTHDS
     dataset: DS
     filter: "DS.DSDECOD = 'DEATH'"
@@ -38,6 +41,7 @@ columns:
     label: Unique Subject Identifier
     derivation: DM_RAW.USUBJID
 
+  # Each source's death date as a date: DS and AE hold dates as text.
   - name: DSDTHDT
     type: date
     label: Death Date from Disposition
