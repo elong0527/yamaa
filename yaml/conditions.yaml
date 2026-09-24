@@ -88,6 +88,7 @@ conditions:
   unique_failed: {rules: [R009], phases: [verification]}
   unknown_artifact_profile: {rules: [R020], phases: [validation]}
   unknown_field: {rules: [R002, R003, R004, R010, R013, R014], phases: [validation]}
+  unknown_window: {rules: [R007], phases: [validation]}
   unmapped_key: {rules: [R008], phases: [mapping]}
   unmapped_value: {rules: [R008], phases: [mapping]}
   unmatched_key: {rules: [R003], phases: [join]}

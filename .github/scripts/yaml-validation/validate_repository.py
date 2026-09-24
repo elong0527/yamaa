@@ -308,6 +308,7 @@ VALIDATION_CONTEXT_FIELDS = {
     },
     ('R007', 'zero_offset'): {'offset'},
     ('R007', 'window_on_window_result'): {'column', 'depends_on'},
+    ('R007', 'unknown_window'): {'window'},
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R009', 'missing_verification_id'): set(),
@@ -2649,6 +2650,15 @@ def merge_inheritance_layers(contributions, env):
                 _clear_provenance(provenance, name)
                 continue
 
+            if name == 'windows':
+                target = resolved.setdefault(name, {})
+                for window, definition in value.items():
+                    target[window] = _replace_value(
+                        definition, f"windows.{window}", provenance_source,
+                        provenance,
+                    )
+                continue
+
             if collection is None:
                 resolved[name] = copy.deepcopy(value)
                 _clear_provenance(provenance, name)
@@ -2806,7 +2816,7 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
     if errors:
         return None, errors, provenance
     resolved, final_errors = finalize_resolved_inheritance(
-        resolved, env
+        resolved, env, provenance, spec_label
     )
     errors.extend(final_errors)
     if errors:
@@ -3639,8 +3649,41 @@ def order_resolved_spec_fields(spec, env):
     return ordered
 
 
-def finalize_resolved_inheritance(spec, env):
-    resolved = prune_inheritance_collections(spec, env)
+def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
+    from yamaa.schema.windows import expand_named_windows
+    from yamaa.specification.diagnostics import SpecificationError
+    from yamaa.specification.schema import SchemaBundle
+
+    bundle = SchemaBundle(
+        version=env.get('version', '1.0'),
+        path=Path(env.get('root', '.')) / 'yaml' / 'schema.yaml',
+        classes=env.get('classes', {}),
+        aliases=env.get('aliases', {}),
+        registries=env.get('registries', {}),
+    )
+    try:
+        return expand_named_windows(
+            spec, bundle, strict=strict, provenance=provenance
+        ), []
+    except SpecificationError as error:
+        return spec, [
+            validation_diagnostic(
+                f"{label}.{item.spec_paths[0]}" if label else item.spec_paths[0],
+                item.condition, item.condition,
+                context=item.context,
+            )
+            for item in error.diagnostics
+        ]
+
+
+def finalize_resolved_inheritance(spec, env, provenance=None, label=""):
+    resolved, errors = expand_spec_windows(spec, env, False, provenance, label)
+    if errors:
+        return resolved, errors
+    resolved = prune_inheritance_collections(resolved, env)
+    resolved, errors = expand_spec_windows(resolved, env, label=label)
+    if errors:
+        return resolved, errors
     resolved, errors = order_inherited_columns(resolved, env)
     if errors:
         return resolved, errors
@@ -8742,6 +8785,8 @@ def prepare_spec_document(spec, spec_label, spec_path, env):
         # validator works on the same normalized shape so its paths and
         # reference walkers agree with engine diagnostics.
         resolved = _desugar_bare_derivations(resolved)
+        resolved, window_errors = expand_spec_windows(resolved, env, label=spec_label)
+        errors.extend(window_errors)
     return resolved, errors, provenance
 
 

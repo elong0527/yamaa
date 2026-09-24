@@ -8,6 +8,11 @@ output:
   path: adrs.csv
   columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]
 
+windows:
+  RESPONSE_ORDER:
+    group_by: [STUDYID, USUBJID]
+    order_by: [ADT, RSSEQ]
+
 columns:
   - name: STUDYID
     type: str
@@ -49,9 +54,7 @@ columns:
       row_value:
         source: ADT
         offset: 1
-        window:
-          group_by: [STUDYID, USUBJID]
-          order_by: [ADT, RSSEQ]
+        window: RESPONSE_ORDER
 
   - name: NEXTRESP
     type: str
@@ -60,9 +63,7 @@ columns:
       row_value:
         source: AVALC
         offset: 1
-        window:
-          group_by: [STUDYID, USUBJID]
-          order_by: [ADT, RSSEQ]
+        window: RESPONSE_ORDER
 
   - name: DAYS_TO_NEXT
     type: int

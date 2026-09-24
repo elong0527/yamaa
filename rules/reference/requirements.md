@@ -1214,6 +1214,10 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1248](../operations/lookup.md#req-1248) | `operations/lookup.md` | Schema prose |
 | [REQ-1249](../execution/rows.md#req-1249) | `execution/rows.md` | Schema prose |
 | [REQ-1250](../operations/expressions.md#req-1250) | `operations/expressions.md` | Schema prose |
+| [REQ-1251](../operations/windows.md#req-1251) | `operations/windows.md` | Schema prose |
+| [REQ-1252](../operations/windows.md#req-1252) | `operations/windows.md` | Schema prose |
+| [REQ-1253](../operations/windows.md#req-1253) | `operations/windows.md` | Schema prose |
+| [REQ-1254](../specification/composition.md#req-1254) | `specification/composition.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

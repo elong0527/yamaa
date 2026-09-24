@@ -99,6 +99,8 @@ def describe_case(branches):
 
 def describe_row_number(node):
     window = node.get("window", {})
+    if isinstance(window, str):
+        return "Row number using window " + window + "."
     groups = ", ".join(str(g) for g in window.get("group_by", []))
     order = ", ".join(str(o) for o in window.get("order_by", []))
     text = "Row number within each (" + groups + ")"
@@ -113,15 +115,20 @@ def describe_compute(node):
 
 def describe_baseline_flag(node):
     window = node.get("window", {})
-    groups = ", ".join(str(g) for g in window.get("group_by", []))
+    scope = (
+        " using window " + window
+        if isinstance(window, str)
+        else " within each ("
+        + ", ".join(str(g) for g in window.get("group_by", []))
+        + ")"
+    )
     return (
         '"Y" for the last record with '
         + str(node.get("date"))
         + " on or before "
         + str(node.get("reference_date"))
-        + " within each ("
-        + groups
-        + "); blank otherwise."
+        + scope
+        + "; blank otherwise."
     )
 
 

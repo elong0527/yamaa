@@ -8,6 +8,12 @@ output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, ASEV, ASEVN, SEVRANK, SEVLVL]
 
+windows:
+  SEVERITY_ORDER:
+    group_by: [STUDYID, USUBJID]
+    order_by:
+      - {variable: ASEVN, direction: desc}
+
 columns:
   - name: STUDYID
     type: str
@@ -52,10 +58,7 @@ columns:
     label: Severity Rank
     derivation:
       rank:
-        window:
-          group_by: [STUDYID, USUBJID]
-          order_by:
-            - {variable: ASEVN, direction: desc}
+        window: SEVERITY_ORDER
 
   - name: SEVLVL
     type: int
@@ -63,10 +66,7 @@ columns:
     derivation:
       rank:
         method: dense
-        window:
-          group_by: [STUDYID, USUBJID]
-          order_by:
-            - {variable: ASEVN, direction: desc}
+        window: SEVERITY_ORDER
 
 verifications:
   - row_count:

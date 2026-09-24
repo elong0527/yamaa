@@ -15,6 +15,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `root_class.input` | `"dict[identifier, dataset_source]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.base` | `"identifier"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.parents` | `["path", "list[path]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.windows` | `"dict[identifier, window_spec]"` | `false` | Absent | -- | [REQ-1251](../operations/windows.md#req-1251) |
 | `root_class.intermediates` | `"list[intermediate_class]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.output` | `"output_class"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.columns` | `"list[column_class]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
@@ -352,22 +353,23 @@ requirement link for behavior. It is not an additional semantic contract.
 
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
+| `window_selection` | `["identifier", "window_spec"]` | `false` | Absent | -- | [REQ-1251](../operations/windows.md#req-1251) |
 | `window_spec.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1122](../operations/windows.md#req-1122) |
 | `window_spec.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1122](../operations/windows.md#req-1122) |
 | `window_spec.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1122](../operations/windows.md#req-1122) |
-| `expressions.row_number.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1123](../operations/windows.md#req-1123) |
+| `expressions.row_number.window` | `"window_selection"` | `false` | Absent | -- | [REQ-1123](../operations/windows.md#req-1123) |
 | `expressions.rank.method` | `"str"` | `false` | `"competition"` | `{"values": ["competition", "dense"]}` | [REQ-1124](../operations/windows.md#req-1124) |
-| `expressions.rank.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1124](../operations/windows.md#req-1124) |
+| `expressions.rank.window` | `"window_selection"` | `false` | Absent | -- | [REQ-1124](../operations/windows.md#req-1124) |
 | `expressions.row_value.source` | `"variable"` | `true` | Absent | -- | [REQ-1125](../operations/windows.md#req-1125) |
 | `expressions.row_value.offset` | `"int"` | `true` | Absent | -- | [REQ-1125](../operations/windows.md#req-1125) |
-| `expressions.row_value.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1125](../operations/windows.md#req-1125) |
+| `expressions.row_value.window` | `"window_selection"` | `false` | Absent | -- | [REQ-1125](../operations/windows.md#req-1125) |
 | `expressions.previous_non_missing.source` | `"variable"` | `true` | Absent | -- | [REQ-1126](../operations/windows.md#req-1126) |
-| `expressions.previous_non_missing.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1126](../operations/windows.md#req-1126) |
+| `expressions.previous_non_missing.window` | `"window_selection"` | `false` | Absent | -- | [REQ-1126](../operations/windows.md#req-1126) |
 | `expressions.locf.source` | `"variable"` | `true` | Absent | -- | [REQ-1239](../operations/windows.md#req-1239) |
-| `expressions.locf.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1239](../operations/windows.md#req-1239) |
+| `expressions.locf.window` | `"window_selection"` | `false` | Absent | -- | [REQ-1239](../operations/windows.md#req-1239) |
 | `expressions.baseline_flag.date` | `"variable"` | `true` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
 | `expressions.baseline_flag.reference_date` | `"variable"` | `true` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
-| `expressions.baseline_flag.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
+| `expressions.baseline_flag.window` | `"window_selection"` | `false` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
 
 ## schema_function.yaml
 
