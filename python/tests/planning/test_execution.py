@@ -271,6 +271,193 @@ def test_no_row_templates_means_no_row_phase_promotion() -> None:
     assert plan.row_derived_columns == ()
 
 
+@pytest.mark.parametrize(
+    "read",
+    [{"source": "SRC.X"}, {"literal": "X"}],
+    ids=["qualified-field", "string-literal"],
+)
+def test_a_name_that_only_spells_a_column_promotes_nothing(
+    read: dict[str, object],
+) -> None:
+    # REQ-1260: a driver field or a literal that happens to spell a column's
+    # name is not a reference to that column, so X keeps its column phase.
+    spec = specification(
+        [
+            Column(name="K", type="str"),
+            Column(name="X", type="str", derivation=derivation({"literal": "x"})),
+        ],
+        [Row(id="row", derivations={"K": derivation(read)})],
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [column.column for column in plan.columns] == ["X"]
+    assert plan.row_derived_columns == ("K",)
+
+
+def lookup_default_specification(
+    columns: list[Column], overrides: dict[str, HandledExpression]
+) -> Specification:
+    return two_dataset_specification(
+        [Column(name="X", type="str"), *columns],
+    ).model_copy(
+        update={
+            "intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key=["X"])],
+            "rows": [
+                Row(
+                    id="override",
+                    dataset="SRC",
+                    derivations={"X": derivation({"source": "SRC.X"}), **overrides},
+                ),
+                Row(
+                    id="inherits",
+                    dataset="SRC",
+                    derivations={"X": derivation({"source": "SRC.X"})},
+                ),
+            ],
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "default",
+    [
+        {"source": "LOOK.V"},
+        {"lookup": {"dataset": "RIGHT", "key": ["X"], "value": "V"}},
+        {"row_number": {"window": {"order_by": ["X"]}}},
+    ],
+    ids=["named-intermediate", "inline-lookup", "window"],
+)
+def test_a_dataset_level_column_derivation_is_not_an_overridable_default(
+    default: dict[str, object],
+) -> None:
+    # REQ-1260: a derivation that reads beyond the current row keeps its
+    # column-phase meaning, so a template deriving the same column derives
+    # it twice rather than overriding a default.
+    spec = lookup_default_specification(
+        [Column(name="V", type="float", derivation=derivation(default))],
+        {"V": derivation({"literal": 2.0})},
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "duplicate_derivation"
+    assert diagnostic.requirement == "REQ-1260"
+    assert diagnostic.spec_paths == ("columns.V.derivation",)
+    assert diagnostic.context == {"column": "V", "rows": ["override"]}
+
+
+def test_a_column_derivation_reading_a_dataset_level_column_is_not_a_default() -> None:
+    # REQ-1260: D reads L, which only the column phase can derive, so D must
+    # stay in the column phase too and cannot be overridden.
+    spec = lookup_default_specification(
+        [
+            Column(name="L", type="float", derivation=derivation({"source": "LOOK.V"})),
+            Column(
+                name="D",
+                type="float",
+                derivation=derivation({"compute": {"expr": "L"}}),
+            ),
+        ],
+        {"D": derivation({"literal": 2.0})},
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "duplicate_derivation"
+    assert diagnostic.context == {"column": "D", "rows": ["override"]}
+
+
+def test_a_row_reference_does_not_promote_a_dataset_level_column() -> None:
+    # REQ-1260: the reference rule leaves a lookup in the column phase, so a
+    # template reading it still crosses the phase boundary.
+    spec = lookup_default_specification(
+        [
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+            Column(name="W", type="float"),
+        ],
+        {},
+    )
+    spec = spec.model_copy(
+        update={
+            "rows": [
+                row.model_copy(
+                    update={
+                        "derivations": {
+                            **row.derivations,
+                            "W": derivation({"source": "V"}),
+                        }
+                    }
+                )
+                for row in spec.rows or ()
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "phase_boundary"
+    assert diagnostic.context["identifier"] == "V"
+    assert diagnostic.context["required_phase"] == "row_construction"
+
+
+def test_a_read_through_self_promotes_the_donor_column() -> None:
+    # REQ-1260/REQ-0120: DONOR.D reads a donor field, and donor fields are
+    # row-derived, so the column-level D becomes a row-phase default.
+    spec = specification(
+        [
+            Column(name="K", type="str"),
+            Column(name="D", type="int", derivation=derivation({"literal": 10})),
+            Column(name="P", type="int"),
+        ],
+        [
+            Row(
+                id="first",
+                derivations={
+                    "K": derivation({"source": "SRC.X"}),
+                    "P": derivation({"literal": None}),
+                },
+            ),
+            Row(
+                id="second",
+                derivations={
+                    "K": derivation({"source": "SRC.X"}),
+                    "P": derivation({"source": "DONOR.D"}),
+                },
+            ),
+        ],
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="DONOR", dataset="SELF", key=["K"], strict=True)
+            ]
+        }
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [column.column for column in plan.columns] == []
+    assert plan.row_derived_columns == ("K", "D", "P")
+
+
 def test_an_undeclared_row_driver_fails_planning() -> None:
     spec = specification(
         [Column(name="A", type="str")],

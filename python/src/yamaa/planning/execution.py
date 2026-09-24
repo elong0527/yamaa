@@ -3328,10 +3328,24 @@ def _topological_row_order(
     return tuple(ordered)
 
 
-def _coverage_diagnostics(specification: Specification) -> list[ExecutionDiagnostic]:
+def _coverage_diagnostics(
+    specification: Specification,
+    supported_operations: Collection[str],
+) -> list[ExecutionDiagnostic]:
     diagnostics: list[ExecutionDiagnostic] = []
     rows = specification.rows or ()
     declared = {column.name for column in specification.columns}
+    overridden = [
+        column.name
+        for column in specification.columns
+        if column.derivation is not None
+        and any(column.name in row.derivations for row in rows)
+    ]
+    column_phase_only = (
+        _column_level_reads(specification, supported_operations)[1]
+        if overridden
+        else frozenset()
+    )
 
     for index, row in enumerate(rows):
         for name in row.derivations:
@@ -3350,8 +3364,24 @@ def _coverage_diagnostics(specification: Specification) -> list[ExecutionDiagnos
         path = f"columns.{column.name}.derivation"
         # REQ-0199: a column-level derivation is the column's default; a row
         # template naming the column overrides it for that template only, so
-        # the two placements together are covered, not duplicated.
-        if rows and not at_column and not all(at_rows):
+        # the two placements together are covered, not duplicated. REQ-1260:
+        # a derivation that is not row-local cannot be a default, so pairing
+        # it with a template's derivation still derives the column twice.
+        if at_column and any(at_rows) and column.name in column_phase_only:
+            diagnostics.append(
+                _diagnostic(
+                    "duplicate_derivation",
+                    path,
+                    {
+                        "column": column.name,
+                        "rows": [
+                            row.id for row, present in zip(rows, at_rows) if present
+                        ],
+                    },
+                    requirement="REQ-1260",
+                )
+            )
+        elif rows and not at_column and not all(at_rows):
             diagnostics.append(
                 _diagnostic(
                     "missing_derivation",
@@ -3660,7 +3690,11 @@ def _preflight_findings(
     supported_operations: Collection[str],
 ) -> tuple[list[ExecutionDiagnostic], list[UnsupportedFeature]]:
     """Find source-independent failures before any dataset is ingested."""
-    diagnostics = [] if specification.parents else _coverage_diagnostics(specification)
+    diagnostics = (
+        []
+        if specification.parents
+        else _coverage_diagnostics(specification, supported_operations)
+    )
     unsupported: list[UnsupportedFeature] = []
 
     if specification.domain in specification.input:
@@ -3767,98 +3801,189 @@ def preflight_execution(
         raise UnsupportedPlanningError(unsupported)
 
 
-def _row_phase_default_columns(specification: Specification) -> set[str]:
-    """Column names whose column-level derivations evaluate row-phase.
+# REQ-1260: operations that read beyond the current row -- another dataset's
+# records, or the completed rows a window partitions. A derivation using one
+# keeps its column-phase meaning.
+_DATASET_LEVEL_OPERATIONS = frozenset({"lookup", "aggregate", *WINDOW_OPERATIONS})
 
-    REQ-1260: a column-level derivation is a row-phase default when (a) at
-    least one row template names the column (the template overrides the
-    default), or (b) the column is referenced from a row-phase context --
-    a template derivation or filter, an intermediate filter/order_by, or a
-    window -- even when no template names it. Case (b) applies only to
-    row-local derivations (not lookups or aggregates, which need
-    column-phase); it is transitive: a promoted column's own derivation may
-    reference further column-level columns, which promote in turn. A
-    column-level derivation that no template names and no row-phase context
-    references keeps its column-phase meaning, so specifications without
-    row-phase needs are untouched. Detection is syntactic (word-boundary
-    search over the row-phase payloads); over-promotion is fail-safe,
-    planning the derivation row-phase either succeeds with identical values
-    or fails loudly.
+
+def _column_level_reads(
+    specification: Specification,
+    supported_operations: Collection[str],
+) -> tuple[dict[str, frozenset[str]], frozenset[str]]:
+    """Return each column-level derivation's bare reads and the non-row-local names.
+
+    REQ-1260: a column-level derivation is row-local unless it uses a
+    dataset-level operation, reads a named intermediate, or reads another
+    column-level column that is not row-local.
     """
-    import re
+    intermediates = _intermediate_ids(specification)
+    # With the dataset-level operations withheld, the planner's own walk
+    # reports each one it meets, however deeply nested, as unsupported.
+    row_local_operations = tuple(
+        operation
+        for operation in supported_operations
+        if operation not in _DATASET_LEVEL_OPERATIONS
+    )
+    reads: dict[str, frozenset[str]] = {}
+    blocked: set[str] = set()
+    for column in specification.columns:
+        if column.derivation is None:
+            continue
+        info = _expression_info(
+            column.derivation.value,
+            f"columns.{column.name}.derivation",
+            row_local_operations,
+            scope=_Scope(intermediates=intermediates),
+        )
+        if any(
+            feature.operation in _DATASET_LEVEL_OPERATIONS
+            for feature in info.unsupported
+        ) or any(
+            reference.name.partition(".")[0] in intermediates
+            for reference in info.references
+            if "." in reference.name
+        ):
+            blocked.add(column.name)
+        reads[column.name] = frozenset(
+            reference.name for reference in info.references if "." not in reference.name
+        )
+    changed = True
+    while changed:
+        changed = False
+        for name, names in reads.items():
+            if name not in blocked and names & blocked:
+                blocked.add(name)
+                changed = True
+    return reads, frozenset(blocked)
 
-    column_derivations = {
-        column.name: column.derivation
-        for column in specification.columns
-        if column.derivation is not None
-    }
-    if not column_derivations:
-        return set()
+
+def _row_phase_default_columns(
+    specification: Specification,
+    supported_operations: Collection[str],
+) -> frozenset[str]:
+    """Column names whose column-level derivations are row-phase defaults.
+
+    REQ-1260: a row-local column-level derivation is a default when a row
+    template names its column, or when a row-phase context reads the column:
+    a template derivation (windows included), a grouped template filter, or a
+    `SELF` intermediate's donor field. A default's own reads of column-level
+    columns are defaults in turn. The references come from the planner's own
+    expression walk, so a qualified field or a string literal that happens to
+    spell a column name promotes nothing.
+    """
     rows = specification.rows or ()
     if not rows:
         # Without row templates there is no row phase; column-level
         # derivations keep their column-phase meaning.
-        return set()
+        return frozenset()
+    reads, blocked = _column_level_reads(specification, supported_operations)
+    candidates = reads.keys() - blocked
+    if not candidates:
+        return frozenset()
 
-    def derivation_text(name: str) -> str:
-        derivation = column_derivations[name]
-        assert derivation is not None
-        return derivation.value.model_dump_json()
-
-    def is_row_local(name: str) -> bool:
-        """A derivation can evaluate row-phase unless it needs dataset-level
-        operations (lookup, aggregate, or a qualified intermediate reference)
-        that only run column-phase."""
-        text = derivation_text(name)
-        # Syntactic check: the JSON payload names the operation, or the
-        # derivation references a qualified variable like "DOSE.Value".
-        if '"lookup"' in text or '"aggregate"' in text:
-            return False
-        # A qualified variable (containing a dot) references an
-        # intermediate/dataset column, not a row-local value.
-        return not re.search(r'"variable":"[^"]*\.[^"]*"', text)
-
-    # (a) the override rule: a template naming the column makes the
-    # column-level derivation its default.
-    promoted = {
-        name
-        for name in column_derivations
-        if any(name in row.derivations for row in rows)
+    intermediates = specification.intermediates or ()
+    intermediate_ids = _intermediate_ids(specification)
+    self_ids = {
+        intermediate.id
+        for intermediate in intermediates
+        if intermediate.dataset == "SELF"
     }
-    # (b) row-phase contexts that may reference column-level columns.
-    contexts: list[str] = []
-    for row in rows:
-        if row.filter is not None:
-            contexts.append(row.filter)
-        contexts.extend(
-            handled.value.model_dump_json() for handled in row.derivations.values()
-        )
-    for intermediate in specification.intermediates or ():
-        if intermediate.filter is not None:
-            contexts.append(intermediate.filter)
-        for term in intermediate.order_by or ():
-            contexts.append(term.variable)
-        if intermediate.derivations is not None:
-            contexts.extend(
-                handled.value.model_dump_json()
-                for handled in intermediate.derivations.values()
-            )
+    referenced: set[str] = set()
 
-    changed = True
-    while changed:
-        changed = False
-        searchable = "\n".join(contexts) + "\n".join(
-            derivation_text(name) for name in promoted
-        )
-        for name in column_derivations:
-            if (
-                name not in promoted
-                and is_row_local(name)
-                and re.search(rf"\b{re.escape(name)}\b", searchable)
-            ):
-                promoted.add(name)
-                changed = True
-    return promoted
+    def references(
+        declaration: HandledExpression, path: str, scope: _Scope = _COLUMN_SCOPE
+    ) -> tuple[_Reference, ...]:
+        return _expression_info(
+            declaration.value, path, supported_operations, scope=scope
+        ).references
+
+    def donor_reads(found: Sequence[_Reference]) -> set[str]:
+        # REQ-0120: a read through a SELF intermediate names a donor field,
+        # and donor fields are row-derived output columns.
+        return {
+            field
+            for qualifier, separator, field in (
+                reference.name.partition(".") for reference in found
+            )
+            if separator and qualifier in self_ids
+        }
+
+    for index, row in enumerate(rows):
+        driver = row.dataset
+        if driver is None and len(specification.input) == 1:
+            driver = next(iter(specification.input))
+        scope = _row_scope(specification, row, driver)
+        for name, declaration in row.derivations.items():
+            found = references(declaration, f"rows[{index}].derivations.{name}", scope)
+            referenced.update(
+                reference.name for reference in found if "." not in reference.name
+            )
+            referenced.update(donor_reads(found))
+        if row.group_by is not None and row.filter is not None:
+            # REQ-0068: a grouped filter reads the candidate's completed
+            # columns; an ungrouped filter reads no output column at all.
+            try:
+                filter_ast = parse_predicate(row.filter)
+            except PredicateError:
+                pass
+            else:
+                referenced.update(
+                    name
+                    for name in predicate_identifiers(filter_ast)
+                    if "." not in name
+                )
+    for column in specification.columns:
+        if column.derivation is not None:
+            referenced.update(
+                donor_reads(
+                    references(
+                        column.derivation,
+                        f"columns.{column.name}.derivation",
+                        _Scope(intermediates=intermediate_ids),
+                    )
+                )
+            )
+    for index, intermediate in enumerate(intermediates):
+        if intermediate.dataset != "SELF":
+            continue
+        # REQ-0120: SELF's own fields are donor fields, named bare or as
+        # `SELF.field`.
+        names = [*(intermediate.key or ()), *(intermediate.columns or ())]
+        names.extend(term.variable for term in intermediate.order_by or ())
+        if intermediate.filter is not None:
+            try:
+                names.extend(
+                    predicate_identifiers(parse_predicate(intermediate.filter))
+                )
+            except PredicateError:
+                pass
+        for name, declaration in (intermediate.derivations or {}).items():
+            names.extend(
+                reference.name
+                for reference in references(
+                    declaration, f"intermediates[{index}].derivations.{name}"
+                )
+            )
+        for name in names:
+            qualifier, separator, field = name.partition(".")
+            if not separator:
+                referenced.add(name)
+            elif qualifier == "SELF":
+                referenced.add(field)
+
+    promoted: set[str] = set()
+    pending = [
+        name
+        for name in sorted(candidates)
+        if name in referenced or any(name in row.derivations for row in rows)
+    ]
+    while pending:
+        name = pending.pop()
+        if name not in promoted:
+            promoted.add(name)
+            pending.extend(sorted(reads[name] & candidates))
+    return frozenset(promoted)
 
 
 def plan_execution(
@@ -3907,20 +4032,14 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
-    # REQ-1260: compute row-phase defaults early; SELF intermediates need
-    # them in their available fields (below).
-    _default_columns = _row_phase_default_columns(specification)
-    # REQ-1260: a column-level derivation is that column's default derivation
-    # when at least one row template names the column (override) or when a
-    # row-phase context references it (transitively). Templates naming the
-    # column override the default; the rest inherit it, planned in each
-    # template's own row scope. A column-level derivation no template names
-    # and no row-phase context references keeps its column-phase meaning,
-    # so specs without defaults are untouched.
+    # REQ-1260: templates naming a default's column override it; the rest
+    # inherit it, planned in each template's own row scope. Computed before
+    # the intermediates, since a default is a SELF donor field.
+    default_columns = _row_phase_default_columns(specification, supported_operations)
     default_derivations = {
         column.name: column.derivation
         for column in specification.columns
-        if column.name in _default_columns
+        if column.name in default_columns
     }
     resolved_joins: list[ResolvedJoin] = []
     # REQ-0120: an inline lookup's filter/order_by suggests the qualified
@@ -3952,7 +4071,7 @@ def plan_execution(
         resolved_joins,
         supported_operations,
         unsupported,
-        frozenset(_default_columns),
+        default_columns,
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}

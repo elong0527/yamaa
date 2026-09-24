@@ -65,7 +65,9 @@ same-named source variable; [Name binding](binding.md) forbids that inference.
 A `rows` entry naming the column in its `derivations` overrides the default
 for that entry's rows only; an entry not naming the column inherits the
 default. Pairing a column-level derivation with row-level derivations for
-the same column is therefore covered, not duplicated.
+the same column is therefore covered, not duplicated, unless
+[REQ-1260](structure.md#req-1260) keeps the column-level derivation in the
+column phase.
 
 <a id="req-0200"></a>
 
@@ -98,18 +100,20 @@ Write `literal: null` rather than omitting the derivation.
 
 <a id="req-1260"></a>
 
-**REQ-1260.** A column-level derivation is that column's default derivation
-when at least one `rows` entry names the column, or when a row-phase context
-(a `rows` derivation or filter, an intermediate derivation, filter, or
-ordering, or a window) references the column, transitively. The reference rule applies only
-to row-local derivations; a derivation needing dataset-level operations
-(lookup, aggregate, or a qualified intermediate reference) keeps its
-column-phase meaning even when referenced. An inherited default is
-evaluated in the inheriting `rows` entry's scope, exactly as if the
-derivation were written in that entry. An entry's own derivation overrides
-the default for that entry's rows only. A column-level derivation that no
-`rows` entry names and no row-phase context references keeps its
-column-phase meaning.
+**REQ-1260.** A column-level derivation is row-local unless it uses a
+lookup, an aggregate, or a window, reads a named intermediate, or reads a
+column whose column-level derivation is not row-local. A row-local
+column-level derivation is that column's default derivation when at least
+one `rows` entry names the column, or when a row-phase context reads the
+column: a `rows` derivation (windows included), a grouped `rows` filter, or
+a donor field of a `SELF` intermediate. A default's own reads of
+column-level columns make those derivations defaults too. A qualified field
+or a literal that only spells a column's name does not read that column. An
+inherited default is evaluated in the inheriting `rows` entry's scope,
+exactly as if the derivation were written in that entry. An entry's own
+derivation overrides the default for that entry's rows only. Every other
+column-level derivation keeps its column-phase meaning, and a `rows` entry
+naming its column fails as `duplicate_derivation`.
 
 ### Output and internal columns
 
