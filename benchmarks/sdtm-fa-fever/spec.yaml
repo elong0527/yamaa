@@ -70,6 +70,8 @@ columns:
     label: Object of the Observation
     derivation: {literal: FEVER}
 
+  # Fever is 38 degrees Celsius or higher. A missing result or a unit other
+  # than C matches neither branch, so the result is left blank.
   - name: FAORRES
     type: str
     label: Result or Finding in Original Units
