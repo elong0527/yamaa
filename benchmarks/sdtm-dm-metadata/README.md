@@ -11,6 +11,9 @@
 
 **Variables:**
 
+- `USUBJID` joins the study, site, and subject identifiers with hyphens;
+  an identifier longer than 30 characters stops the run rather than being
+  shortened.
 - `SITEID` is the collected site identifier.
 - `AGE` is the collected age in whole years, between 0 and 120;
   missing when not collected.
@@ -21,11 +24,9 @@
 
 **Note:** the dataset and its variables carry the description,
 labels, provenance, lengths, terminology, class, structure, and
-standard version a review needs, and the benchmark carries the
-data-definition document those declarations produce beside the data
-itself; a combined identifier longer than 30 characters is rejected
-rather than shortened. The same declarations also produce the
-exchange file `dm.json`, which carries the rows and the column
-metadata together and is the file the document points at.
+standard version a review needs. The same declarations produce the
+data-definition document beside the data and the exchange file
+`dm.json`, which carries the rows and the column metadata together and
+is the file the document points at.
 
 **Standard:** SDTM | **Domain:** DM
