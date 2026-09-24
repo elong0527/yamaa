@@ -5,12 +5,15 @@
 
 **Goal:** number each subject's vital-sign visits in analysis visit order.
 
-**Input:** two planned visits for one subject, identified by `USUBJID` and
-analysis visit number `AVISITN`.
+**Input:** vital-sign visit records identified by subject (`USUBJID`) and
+analysis visit number (`AVISITN`).
 
-**Variables:** `VISITSEQ` would number the subject's visits from one in
-analysis visit order. The requested ordering is undefined, so the run is
-rejected before data is read and no artifact is accepted.
+**Variables:**
+
+- `VISITSEQ` would number the subject's visits from one in analysis visit
+  order. It names that ordering with a misspelling that matches no defined
+  ordering, so the run is rejected before any data is read and no artifact
+  is accepted.
 
 **Standard:** ADaM | **Domain:** ADVS
 

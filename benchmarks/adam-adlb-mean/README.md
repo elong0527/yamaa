@@ -17,12 +17,10 @@ result.
 - `AVALMEAN`: the mean of the subject's non-missing `AVAL`
   values for the parameter, repeated on every record for that
   subject and parameter, including a record whose own `AVAL`
-  is empty; empty when the subject has no non-missing `AVAL`
-  for the parameter.
+  is empty; empty, never zero, when the subject has no
+  non-missing `AVAL` for the parameter.
 
 **Note:** the mean is taken separately for each test code, so
-one subject's records for different tests carry different
-means. A subject with no usable result for a parameter has an
-empty mean, never zero.
+each of a subject's records carries the mean for its own test.
 
 **Standard:** ADaM | **Domain:** ADLB

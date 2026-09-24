@@ -19,11 +19,14 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The age read as a number, which the banding below needs.
   - name: AGE
     type: int
     label: Age
     derivation: DM.AGE
 
+  # Below 65 is younger, 65 and over elderly. No band is stated for a missing
+  # AGE, so a subject with no recorded age stops the run.
   - name: AGEGRP
     type: str
     label: Age Group

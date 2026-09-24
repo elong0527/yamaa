@@ -34,6 +34,8 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # Mean of AVAL over the output rows sharing study, subject and parameter.
+  # Missing AVAL values are skipped; a group with none gives a missing mean.
   - name: AVALMEAN
     type: float
     label: Mean Analysis Value
