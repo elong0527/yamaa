@@ -55,13 +55,15 @@ columns:
     type: str
     label: Original Units
 
+  # The form collects standard units, so this is the collected result read
+  # as a number. A result that is not a number becomes missing here, and the
+  # completeness check at the end then stops the run.
   - name: VSSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
-      value:
-        source: VSORRES
-      missing:
+      value: {source: VSORRES}
+      missing: null
 
   - name: VSSTRESC
     type: str
@@ -73,6 +75,8 @@ columns:
     label: Standard Units
     derivation: VSORRESU
 
+  # The form-level items, which every test's record reads from its visit
+  # form group; none is in the output.
   - name: POSITION
     type: str
     label: Body Position Collected on the Form
@@ -89,6 +93,8 @@ columns:
     type: str
     label: Blood Pressure Not-Done Reason Collected on the Form
 
+  # Test catalog flags, 1 or 0: whether the test uses the form's body
+  # position, its temperature method, or its blood pressure not-done flag.
   - name: HAS_POSITION
     type: int
     label: Test Uses Collected Body Position
@@ -101,6 +107,8 @@ columns:
     type: int
     label: Test Uses Blood Pressure Not-Done Flag
 
+  # Position and method go only on the tests that use them, and only when
+  # a result was collected; otherwise they stay missing.
   - name: VSPOS
     type: str
     label: Position of Subject
@@ -117,6 +125,8 @@ columns:
         - when: "HAS_METHOD = 1 AND VSORRES IS NOT NULL"
           then: TEMPMETHOD
 
+  # A not-done flag of Y marks only the blood pressure tests, which then
+  # also carry the form's reason.
   - name: VSSTAT
     type: str
     label: Completion Status
@@ -133,6 +143,8 @@ columns:
         - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
           then: BPREASND
 
+  # Numbered per subject by visit date, then by catalog test order within
+  # the visit.
   - name: VSSEQ
     type: int
     label: Sequence Number
@@ -144,7 +156,10 @@ columns:
     verifications:
       not_missing: {}
 
-
+# Each test catalog record becomes its own row template, so every visit form
+# group yields one record per test even when the test's items are absent.
+# Each item value reads the group's single record for that item: an absent
+# item gives missing, and a repeated item stops the run.
 rows:
   - id: vs
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
