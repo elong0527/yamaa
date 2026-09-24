@@ -7,6 +7,8 @@ input:
 output:
   path: adsl.csv
   columns: [USUBJID, AGE]
+  # Violated warnings, with their offending keys, go to the warning log;
+  # every declared check, held or violated, gets one line in the check log.
   warning_log: adsl-warnings.csv
   verification_log: adsl-checks.csv
 
@@ -22,6 +24,8 @@ columns:
     derivation: DM.AGE
     verifications:
       - not_missing: {}
+      # A warning, not an error: an age outside 18-100 is logged and the
+      # run still succeeds with every row kept.
       - range:
           min: 18
           max: 100
