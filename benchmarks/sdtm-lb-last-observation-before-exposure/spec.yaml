@@ -2,17 +2,40 @@ schema_version: "1.0"
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  LB_RAW:
-    path: input/lb_raw.csv
-    types: {LBSEQ: int}
+  ODM:
+    path: input/odm.csv
+    types: {ItemGroupRepeatKey: int}
   DM:
     path: input/dm.csv
     types: {RFSTDTC: date}
-base: LB_RAW
+  LB_MAPPING: input/lb_mapping.csv
+base: ODM
 
 output:
   path: lb.csv
   columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT, LBLOBXFL]
+
+rows:
+  - id: lb_result
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    filter: "LBTESTCD IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        lookup:
+          dataset: LB_MAPPING
+          key_base: ODM.ItemOID
+          key: ItemOID
+          value: LBTESTCD
+      LBSPEC:
+        lookup:
+          dataset: LB_MAPPING
+          key_base: ODM.ItemOID
+          key: ItemOID
+          value: LBSPEC
+      LBORRES:
+        aggregate:
+          expr: "ONLY(ODM.Value)"
 
 columns:
   - name: DOMAIN
@@ -24,44 +47,51 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: LB_RAW.STUDYID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: LB_RAW.USUBJID
+    derivation: ODM.SubjectKey
 
   - name: LBSEQ
     type: int
     label: Sequence Number
-    derivation: LB_RAW.LBSEQ
+    derivation: ODM.ItemGroupRepeatKey
     verifications:
       not_missing: {}
 
   - name: LBTESTCD
     type: str
     label: Lab Test or Examination Short Name
-    derivation: LB_RAW.LBTESTCD
 
   - name: LBSPEC
     type: str
     label: Specimen Material Type
-    derivation: LB_RAW.LBSPEC
 
   - name: LBORRES
     type: str
     label: Result or Finding in Original Units
-    derivation: LB_RAW.LBORRES
 
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
-    derivation: LB_RAW.LBDTC
+    derivation:
+      aggregate:
+        filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID, ItemGroupRepeatKey]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+        expr: "ONLY(ODM.Value)"
 
   - name: LBSTAT
     type: str
     label: Completion Status
-    derivation: LB_RAW.LBSTAT
+    derivation:
+      aggregate:
+        filter: "ODM.ItemOID = 'IT.LB.LBSTAT'"
+        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID, ItemGroupRepeatKey]
+        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+        expr: "ONLY(ODM.Value)"
 
   - name: RFSTDTC
     type: date

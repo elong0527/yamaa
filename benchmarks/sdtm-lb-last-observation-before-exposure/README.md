@@ -6,17 +6,19 @@
 **Goal:** flag the last laboratory record collected on or before
 first exposure for each subject, test, and specimen: `LBLOBXFL`.
 
-**Input:** laboratory results, one row per result carrying the test
-code, specimen, result, collection date, and completion status, plus
-one demographics row per subject carrying the reference start date
+**Input:** long-form Operational Data Model (ODM) data with one row
+per collected item: a laboratory result, its collection date, or
+its completion status. A small test dictionary (`lb_mapping.csv`)
+translates result items into test codes and specimens. One
+demographics row per subject carries the reference start date
 (first exposure).
 
 **Variables:**
 
-- `LBTESTCD` is the test code as collected; together with the
-  specimen it defines the series the flag is assigned within.
-- `LBSPEC` is the specimen as collected; a test measured in more
-  than one specimen is flagged separately per specimen.
+- `LBTESTCD` is the test code from the item dictionary; together
+  with the specimen it defines the series the flag is assigned within.
+- `LBSPEC` is the specimen from the item dictionary; a test measured
+  in more than one specimen is flagged separately per specimen.
 - `LBORRES` is the result as collected; missing on records that were
   not done.
 - `LBDTC` is the collection date as collected.
