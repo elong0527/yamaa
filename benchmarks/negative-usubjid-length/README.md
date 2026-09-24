@@ -3,22 +3,25 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-usubjid-length.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** attempt the subject-level demographics dataset carrying
-the site identifier (`SITEID`).
+**Goal:** build one demographics record per subject, carrying the
+unique subject identifier (`USUBJID`) and the site identifier
+(`SITEID`).
 
-**Input:** collected demographics rows, each carrying the site
-identifier (`SITEID`) and the subject number.
+**Input:** collected demographics records, each carrying the study
+identifier, the site identifier (`SITEID`) and the subject number
+(`SUBJID`).
 
 **Variables:**
 
-- `SITEID` would be the study site identifier, carried through
-  unchanged from the matching input field; it is present on every
-  record.
+- `USUBJID` would be the study, site and subject identifiers joined
+  by hyphens, such as `CATH-UCSD-0001`; a record missing any of the
+  three parts stops the run.
+- `SITEID` would be the study site identifier, as collected.
 
-**Note:** the 20-character limit applies to the joined identifier
-on every record. A site identifier long enough to push the joined
-value past that limit is rejected after the dataset completes, so
-no artifact is accepted.
+**Note:** the subject identifier must fit in 20 characters on every
+record. A site identifier long enough to push it past that limit
+rejects the run after the dataset completes, so no artifact is
+accepted.
 
 **Standard:** SDTM | **Domain:** DM
 
