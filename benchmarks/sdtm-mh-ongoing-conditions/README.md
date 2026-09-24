@@ -17,7 +17,7 @@ date recorded on the same form.
 - `MHTERM` is the condition as written on the form.
 - `MHSTDTC` is the start of the condition at the precision recorded: the
   year alone (for example `2015`) when only the year was known, or year and
-  month (for example `2019-03`); empty when nothing was recorded.
+  month (for example `2019-03`); empty when no year was recorded.
 - `MHENDTC` is the date the condition ended, when an end was recorded.
 - `MHENRTPT` says how the condition's end relates to the screening visit:
   `ONGOING` when the tick box said it was still active, `BEFORE` when the
