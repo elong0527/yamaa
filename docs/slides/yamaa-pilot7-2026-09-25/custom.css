@@ -215,6 +215,9 @@
   background: #fff;
   padding: 0.5rem;
   width: min(320px, 60vw);
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 .reveal:has(section.present[data-state="no-corner-logo"]) .slide-logo {
   display: none;

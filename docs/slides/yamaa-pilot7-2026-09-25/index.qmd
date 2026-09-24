@@ -138,11 +138,11 @@ Contribute a synthetic benchmark or an issue that captures the pattern without d
 
 ## Help: broadcasting
 
+<div class="kicker">The next useful contribution is one reviewed benchmark.</div>
+
 Help publish an RConsortium blog to attract contributors to finalize benchmarks.
 
-<div class="pull-quote">The next useful contribution is one reviewed benchmark.</div>
-
-**[github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)**
+**[github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)** / **[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
 
 # Introduction: yamaa {background-color="#385898" data-state="no-corner-logo"}
 
