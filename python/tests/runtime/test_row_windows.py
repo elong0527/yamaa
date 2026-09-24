@@ -304,14 +304,17 @@ def test_row_window_on_window_derived_value_fails() -> None:
     assert diagnostic.requirement == "REQ-0326"
 
 
-def test_row_window_cannot_read_a_column_another_template_derives() -> None:
-    # OTHER is a column-level derivation, so no row template must derive
-    # it. The second template's window reads OTHER anyway: the reference
-    # is outside the template's row scope, so planning rejects it at the
-    # phase boundary.
-    first = lag_template({"group_by": ["GRP"], "order_by": ["SEQ"]})
+def test_row_window_promotes_a_referenced_column_derivation() -> None:
+    # REQ-1260: OTHER is a column-level derivation referenced by the second
+    # template's window. The reference promotes OTHER to a row-phase default,
+    # so the window reads it from the template's row scope.
+    first = lag_template(
+        {"group_by": ["GRP"], "order_by": ["SEQ"]}, row_filter="SRC.S <= 2"
+    )
     second = Row(
         id="second",
+        dataset="SRC",
+        filter="SRC.S > 2",
         derivations={
             "GRP": derive({"source": "SRC.G"}),
             "SEQ": derive({"source": "SRC.S"}),
@@ -323,15 +326,15 @@ def test_row_window_cannot_read_a_column_another_template_derives() -> None:
     )
     specification = make_spec(
         [first, second],
-        COLUMNS + [("OTHER", "str")],
+        COLUMNS + [("OTHER", "float")],
         ["GRP", "SEQ", "VAL", "PREV"],
-        column_derivations={"OTHER": {"literal": "x"}},
+        column_derivations={"OTHER": {"literal": 1.5}},
     )
 
     result = execute_specification(specification, visits_source())
 
-    assert isinstance(result, ExecutionFailure)
-    assert any(d.condition == "phase_boundary" for d in result.diagnostics)
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame["PREV"].to_list() == [None, 1.0, None, 10.0, None]
 
 
 def test_row_window_still_requires_order_by() -> None:
