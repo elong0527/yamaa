@@ -11,12 +11,9 @@ with `younger` below 65 and `elderly` at or above 65.
 **Variables:**
 
 - `AGEGRP` would be `younger` below 65 and `elderly` at or above
-  65 from the subject's age, but one subject has no recorded age
-  and no row is produced.
-
-A subject with no recorded age cannot be placed into an age band,
-so the run is rejected before any data is read and no artifact is
-accepted.
+  65 from the subject's age. A subject with no recorded age cannot
+  be placed into an age band and no fallback is stated, so the run
+  is rejected with no artifact accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
