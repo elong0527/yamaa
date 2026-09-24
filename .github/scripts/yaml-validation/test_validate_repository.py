@@ -1326,6 +1326,67 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'incompatible_input_type')
 
+    def test_self_intermediate_resolves_output_columns(self):
+        # REQ-0120: a SELF intermediate reads completed output rows, so its
+        # dataset needs no input declaration and its donor fields resolve
+        # against the output columns, including from row derivations.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            (example_dir / 'ae.csv').write_text('USUBJID,AESEQ\n01,1\n')
+            spec_path = example_dir / 'spec.yaml'
+            spec = {
+                'domain': 'ADAE',
+                'input': {
+                    'AE': {'path': 'ae.csv', 'types': {'AESEQ': 'int'}},
+                },
+                'keys': ['USUBJID', 'AESEQ'],
+                'output': {
+                    'path': 'adae.csv',
+                    'columns': ['USUBJID', 'AESEQ', 'PRIOR'],
+                },
+                'intermediates': [{
+                    'id': 'PRIOR_SAE',
+                    'dataset': 'SELF',
+                    'key': ['USUBJID'],
+                    'filter': "SELF.AESEQ < AE.AESEQ",
+                    'order_by': [{'variable': 'SELF.AESEQ', 'direction': 'desc'}],
+                    'keep': 'first',
+                }],
+                'columns': [
+                    {'name': 'USUBJID', 'type': 'str'},
+                    {'name': 'AESEQ', 'type': 'int'},
+                    {'name': 'PRIOR', 'type': 'int'},
+                ],
+                'rows': [
+                    {
+                        'id': 'first',
+                        'derivations': {
+                            'USUBJID': 'AE.USUBJID',
+                            'AESEQ': 'AE.AESEQ',
+                            'PRIOR': {'literal': None},
+                        },
+                    },
+                    {
+                        'id': 'second',
+                        'derivations': {
+                            'USUBJID': 'AE.USUBJID',
+                            'AESEQ': 'AE.AESEQ',
+                            'PRIOR': 'PRIOR_SAE.AESEQ',
+                        },
+                    },
+                ],
+            }
+
+            self.assertEqual(
+                VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'), []
+            )
+            self.assertEqual(
+                VALIDATOR.validate_spec_predicates(
+                    spec, 'example/spec.yaml', spec_path
+                ),
+                [],
+            )
+
     def test_dependency_cycle_reports_each_participating_derivation(self):
         root = TOOL_PATH.parents[3]
         env, env_errors = VALIDATOR.build_schema_env(root)

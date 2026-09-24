@@ -1,0 +1,120 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER, PRIOR_SAEFL, PRIOR_SAEDECOD, PRIOR_SAESEQ, FIRST_SAEDECOD, FIRST_SAESEQ]
+
+# Named intermediates reading the records completed by earlier row
+# templates (dataset SELF). Their donor fields are output columns, so
+# every row template below derives them; a column-phase derivation
+# would come too late for the records the second template reads.
+intermediates:
+  # The subject's serious events before the current record's event,
+  # most recent first. The filter correlates with the current record's
+  # sequence number, so each record selects among the donors on its
+  # own terms.
+  - id: PRIOR_SAE
+    dataset: SELF
+    key: [STUDYID, USUBJID]
+    filter: "SELF.AESER = 'Y' AND SELF.AESEQ < AE.AESEQ"
+    order_by:
+      - {variable: SELF.AESEQ, direction: desc}
+    keep: first
+
+  # The subject's first serious event. The donor records are checked
+  # for unique event sequences after each completed row template.
+  - id: FIRST_SAE
+    dataset: SELF
+    key: [STUDYID, USUBJID]
+    filter: "SELF.AESER = 'Y'"
+    order_by:
+      - SELF.AESEQ
+    keep: first
+    verification:
+      unique: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+  - name: AESER
+    type: str
+    label: Serious Event
+  - name: PRIOR_SAEFL
+    type: str
+    label: Prior Serious Event Flag
+  - name: PRIOR_SAEDECOD
+    type: str
+    label: Prior Serious Event Dictionary-Derived Term
+  - name: PRIOR_SAESEQ
+    type: int
+    label: Prior Serious Event Sequence Number
+  - name: FIRST_SAEDECOD
+    type: str
+    label: First Serious Event Dictionary-Derived Term
+  - name: FIRST_SAESEQ
+    type: int
+    label: First Serious Event Sequence Number
+
+rows:
+  # One record per serious event. The prior and first serious event
+  # fields stay empty here: the first row template cannot read the
+  # records it is still building.
+  - id: serious
+    filter: "AE.AESER = 'Y'"
+    derivations:
+      STUDYID: AE.STUDYID
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      AEDECOD: AE.AEDECOD
+      AESER: AE.AESER
+      PRIOR_SAEFL: {literal: null}
+      PRIOR_SAEDECOD: {literal: null}
+      PRIOR_SAESEQ: {literal: null}
+      FIRST_SAEDECOD: {literal: null}
+      FIRST_SAESEQ: {literal: null}
+
+  # One record per non-serious event, carrying the subject's most
+  # recent earlier serious event and first serious event, read through
+  # SELF from the records the first template completed.
+  - id: nonserious
+    filter: "AE.AESER = 'N'"
+    derivations:
+      STUDYID: AE.STUDYID
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      AEDECOD: AE.AEDECOD
+      AESER: AE.AESER
+      PRIOR_SAEFL:
+        case:
+          - when: "PRIOR_SAE.AEDECOD IS NOT NULL"
+            then: {literal: "Y"}
+          - otherwise: {literal: null}
+      PRIOR_SAEDECOD: PRIOR_SAE.AEDECOD
+      PRIOR_SAESEQ: PRIOR_SAE.AESEQ
+      FIRST_SAEDECOD: FIRST_SAE.AEDECOD
+      FIRST_SAESEQ: FIRST_SAE.AESEQ
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 10
+      max: 10
+  - implies:
+      id: prior-serious-flag-names-a-term
+      when: "PRIOR_SAEFL = 'Y'"
+      then: "PRIOR_SAEDECOD IS NOT NULL"

@@ -24,6 +24,9 @@ examples:
   adam-adae-post-covid:
     status: executable
     runtimes: ['python']
+  adam-adae-prior-serious-event:
+    status: executable
+    runtimes: ['python']
   adam-adae-protocol-review:
     status: executable
     runtimes: ['python']

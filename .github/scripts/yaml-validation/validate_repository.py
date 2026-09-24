@@ -4807,7 +4807,11 @@ def validate_spec_names(spec, spec_label):
                         )
                     )
             lookup_dataset = intermediate.get('dataset')
-            if isinstance(lookup_dataset, str) and lookup_dataset not in dataset_names:
+            if (
+                isinstance(lookup_dataset, str)
+                and lookup_dataset != 'SELF'
+                and lookup_dataset not in dataset_names
+            ):
                 errors.append(
                     f"ERROR: {spec_label}.intermediates[{index}].dataset: "
                     f"undeclared dataset {lookup_dataset!r}"
@@ -6356,7 +6360,12 @@ def validate_spec_predicates(
             dataset_id = intermediate.get('dataset')
             # REQ-1185: derived values are available both in the donor filter
             # and through a downstream intermediate-qualified read.
-            donor_fields = dict(datasets.get(dataset_id, {}))
+            # REQ-0120: a SELF intermediate reads completed output rows, so
+            # its donor fields are the output columns.
+            if dataset_id == 'SELF':
+                donor_fields = dict(output_types)
+            else:
+                donor_fields = dict(datasets.get(dataset_id, {}))
             donor_fields.update(
                 _intermediate_derived_field_types(
                     intermediate,
@@ -6418,9 +6427,17 @@ def validate_spec_predicates(
             is_grouped = isinstance(row.get('group_by'), list)
             row_resolver = predicate_resolver(
                 unqualified=row_output,
-                qualified={driver: driver_fields}
-                if isinstance(driver, str)
-                else {},
+                qualified={
+                    **(
+                        {driver: driver_fields}
+                        if isinstance(driver, str)
+                        else {}
+                    ),
+                    # REQ-0125: a lookup-qualified variable reads the named
+                    # intermediate's selected record wherever a variable may
+                    # appear, including row-template derivations.
+                    **intermediates,
+                },
             )
             if isinstance(row.get('filter'), str):
                 filter_resolver = (
