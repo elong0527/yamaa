@@ -39,21 +39,32 @@ organizations or institutions.
 
 ## Goal 1: establish benchmarks
 
-::: {.card}
-ODM -> SDTM -> ADaM 
-:::
+<div class="flow flow-3">
+<div class="flow-step">ODM</div>
+<div class="flow-step">SDTM</div>
+<div class="flow-step">ADaM</div>
+</div>
 
-### Minimum visible
+::: {.columns}
+::: {.column width="48%"}
+::: {.card}
+<div class="card-title">Minimum viable</div>
 
 - Specification
 - Representative source data
 - Golden output
+:::
+:::
 
-
-### Human baseline 
+::: {.column width="48%"}
+::: {.card}
+<div class="card-title">Human baseline</div>
 
 - Experts reviewed before finalization
 - Clear review and decision making history
+:::
+:::
+:::
 
 ## Goal 2: establish ground truth from full studies
 
@@ -81,19 +92,22 @@ KN564 and KN189 as scalable test beds
 ## Where we are
 
 ::: {.columns}
+::: {.column width="48%"}
 <div class="big-number">~150</div>
 <div class="metric-label">SDTM and ADaM derivation benchmarks</div>
 :::
 
+::: {.column width="48%"}
 <div class="big-number">3</div>
 <div class="metric-label">PR ready for pilot 3, 5, and 6</div>
 :::
-
 :::
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
 Scroll inside the frame to explore the spec, inputs, and golden output
+
+**[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
 
 ## Help: finalize benchmarks
 

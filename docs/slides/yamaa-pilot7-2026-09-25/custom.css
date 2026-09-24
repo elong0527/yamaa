@@ -155,6 +155,11 @@
   margin-top: 0.25rem;
 }
 
+/* three-step variant (Goal 1: ODM -> SDTM -> ADaM) */
+.flow-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .flow-step:not(:last-child)::after {
   color: var(--yamaa-blue);
   content: "\2192";
