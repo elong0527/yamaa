@@ -70,7 +70,7 @@ columns:
           then:
             compute:
               expr: "ASTVAL / NULLIF(ALTDEN, 0)"
-        - otherwise: {source: LBRESN}
+        - otherwise: LBRESN
 
 rows:
   - id: alt
@@ -79,7 +79,7 @@ rows:
     derivations:
       PARAMCD: {literal: ALT}
       PARAM: {literal: Alanine Aminotransferase}
-      LBRESN: {source: LB.LBSTRESN}
+      LBRESN: LB.LBSTRESN
       ALTDEN: {literal: null}
 
   - id: ast
@@ -88,7 +88,7 @@ rows:
     derivations:
       PARAMCD: {literal: AST}
       PARAM: {literal: Aspartate Aminotransferase}
-      LBRESN: {source: LB.LBSTRESN}
+      LBRESN: LB.LBSTRESN
       ALTDEN: {literal: null}
 
   # One ratio record per ALT record, carrying the ALT result as the
@@ -100,7 +100,7 @@ rows:
       PARAMCD: {literal: ASTALT}
       PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
       LBRESN: {literal: null}
-      ALTDEN: {source: LB.LBSTRESN}
+      ALTDEN: LB.LBSTRESN
 
 verifications:
   - unique:

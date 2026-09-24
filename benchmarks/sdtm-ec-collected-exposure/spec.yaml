@@ -51,7 +51,7 @@ columns:
     derivation:
       case:
         - when: "ECOCCUR = 'Y'"
-          then: {source: LOG.TABLETS}
+          then: LOG.TABLETS
 
   - name: ECDOSU
     type: str

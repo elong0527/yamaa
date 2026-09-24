@@ -88,8 +88,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMUNIT
+          then: DIARY.DIAMUNIT
 
   - name: FASTRESC
     type: str
@@ -102,8 +101,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMETER
+          then: DIARY.DIAMETER
 
   - name: FASTRESU
     type: str
@@ -111,8 +109,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMUNIT
+          then: DIARY.DIAMUNIT
 
   - name: FASTAT
     type: str
@@ -140,8 +137,7 @@ rows:
       FAORRES:
         case:
           - when: "DIARY.COMPLETED = 'Y'"
-            then:
-              source: DIARY.OCCUR
+            then: DIARY.OCCUR
 
   - id: severity
     filter: "DIARY.COMPLETED = 'Y'"
@@ -151,8 +147,7 @@ rows:
       FAORRES:
         case:
           - when: "DIARY.OCCUR = 'Y'"
-            then:
-              source: DIARY.SEV
+            then: DIARY.SEV
           - otherwise: {literal: NONE}
 
   - id: longest-diameter

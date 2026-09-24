@@ -76,7 +76,7 @@ columns:
     derivation:
       case:
         - when: "EOSSTT = 'DISCONTINUED'"
-          then: {source: EOSREAS}
+          then: EOSREAS
 
 verifications:
   - unique:
