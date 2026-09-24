@@ -10,11 +10,12 @@ demographics, accepting only ages from 18 to 100.
 
 **Variables:**
 
-- `AGE` would be the subject's age, taken from the collected age.
+- `AGE` would be the subject's age, taken from the collected age,
+  and missing when no age was collected; a missing age is not
+  rejected.
 
-A collected age of `214` falls outside the accepted range of 18 to
-100, so it is rejected after the dataset completes and no artifact
-is accepted.
+An age below 18 or above 100 is rejected once the dataset is
+complete, so no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
