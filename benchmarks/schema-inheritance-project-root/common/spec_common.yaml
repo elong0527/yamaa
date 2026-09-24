@@ -1,24 +1,32 @@
 schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
+
+# The path is read from this file's directory, so the resolved chain names
+# common/input/dm.csv. Nothing is stored there, so the run retries
+# input/dm.csv, as written here, against the project root.
 input:
   DM:
     path: input/dm.csv
     types:
       AGE: int
 base: DM
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: AGE
     type: int
     label: Age
     derivation: DM.AGE
+
 metadata:
   scope: common
