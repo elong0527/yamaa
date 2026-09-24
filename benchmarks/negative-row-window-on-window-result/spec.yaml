@@ -8,6 +8,11 @@ output:
   path: adlbc.csv
   columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, PREV_AVAL, CHG, PREV2]
 
+windows:
+  VISIT_ORDER:
+    group_by: [USUBJID, PARAMCD]
+    order_by: [AVISITN]
+
 columns:
   - name: STUDYID
     type: str
@@ -55,9 +60,7 @@ rows:
         row_value:
           source: AVAL
           offset: -1
-          window:
-            group_by: [USUBJID, PARAMCD]
-            order_by: [AVISITN]
+          window: VISIT_ORDER
       CHG:
         compute:
           expr: "AVAL - PREV_AVAL"
@@ -69,6 +72,4 @@ rows:
         row_value:
           source: CHG
           offset: -1
-          window:
-            group_by: [USUBJID, PARAMCD]
-            order_by: [AVISITN]
+          window: VISIT_ORDER

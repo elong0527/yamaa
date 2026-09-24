@@ -157,6 +157,7 @@ value.
 | `intermediates` | Keyed by `id` |
 | `columns` | Keyed by `name` |
 | `rows` | Keyed by `id` |
+| `windows` | Keyed by name; each supplied definition replaces the whole definition |
 | Every other root field | Complete field replacement |
 
 <a id="req-0629"></a>
@@ -213,6 +214,20 @@ whole derivation.
 path becomes the long `dataset_class` form, after which matching dataset
 declarations merge the immediate `path`, `types`, and `schema` fields by the
 same rule.
+
+### Named-window composition
+
+<a id="req-1254"></a>
+
+**REQ-1254.** Root `windows` composes by name, retaining other inherited
+names. A later definition of the same name replaces that whole window;
+its omitted fields take ordinary window omission semantics rather than
+inheriting fields from the earlier definition. Every reference, including
+an inherited reference, uses the final composed definition. A window name
+is not a variable or dataset dependency. Root `windows: null` clears the
+collection under the existing optional-field rule; individual definitions
+cannot be null. Named references and inline windows are distinct composition
+kinds: replacing one with the other replaces the complete `window` value.
 
 ### Clearing an optional field
 

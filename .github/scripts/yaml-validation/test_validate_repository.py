@@ -3301,6 +3301,72 @@ class TestToDateSchema(unittest.TestCase):
         self.assertIn("unknown field 'timezone'", unknown_field[0])
 
 
+class TestNamedWindows(unittest.TestCase):
+    def setUp(self):
+        self.env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.assertEqual(errors, [])
+        self.path = TOOL_PATH.parents[3] / 'benchmarks/adam-adrs-confirmed-response/spec.yaml'
+        self.spec = yaml.load(self.path.read_text(), Loader=VALIDATOR.UniqueKeyLoader)
+
+    def prepare(self, spec):
+        return VALIDATOR.prepare_spec_document(spec, 'spec', self.path, self.env)
+
+    def test_expands_full_references_without_mutating_authoring(self):
+        resolved, errors, _ = self.prepare(self.spec)
+        self.assertEqual(errors, [])
+        self.assertNotIn('windows', resolved)
+        windows = [column['derivation']['row_value']['window']
+                   for column in resolved['columns']
+                   if isinstance(column.get('derivation'), dict)
+                   and 'row_value' in column['derivation']]
+        self.assertEqual(len(windows), 2)
+        self.assertEqual(windows[0], self.spec['windows']['RESPONSE_ORDER'])
+        self.assertEqual(windows[0], windows[1])
+        self.assertIsNot(windows[0], windows[1])
+        self.assertIn('windows', self.spec)
+
+    def test_unknown_reference_keeps_structured_diagnostic(self):
+        self.spec.pop('windows')
+        _, errors, _ = self.prepare(self.spec)
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(errors[0].condition, 'unknown_window')
+        self.assertEqual(errors[0].context, {'window': 'RESPONSE_ORDER'})
+        self.assertTrue(errors[0].path.endswith('.row_value.window'))
+        self.assertTrue(errors[0].path.startswith('spec.columns['))
+
+    def test_unused_malformed_definition_is_not_discarded(self):
+        for definition in ('RESPONSE_ORDER', {'ref': 'RESPONSE_ORDER'}, {'unknown': 1}):
+            with self.subTest(definition=definition):
+                self.spec['windows']['UNUSED'] = definition
+                _, errors, _ = self.prepare(self.spec)
+                self.assertTrue(errors)
+
+    def test_reference_mapping_is_rejected_by_schema(self):
+        for value in ({'ref': 'RESPONSE_ORDER'},
+                      {'ref': 'RESPONSE_ORDER', 'group_by': ['USUBJID']}):
+            errors = VALIDATOR.validate_type(
+                {'row_value': {'source': 'ADT', 'offset': 1, 'window': value}},
+                ['expression'], self.env, 'spec.columns.NEXTDT.derivation')
+            self.assertTrue(errors)
+
+    def test_inheritance_replaces_definitions_before_dependency_pruning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            parent = root / 'parent.yaml'
+            parent.write_text(yaml.safe_dump(self.spec, sort_keys=False))
+            child = {'schema_version': '1.0', 'parents': 'parent.yaml',
+                     'windows': {'RESPONSE_ORDER': {'order_by': ['ADT']},
+                                 'UNUSED': {'group_by': ['ABSENT']}}}
+            resolved, errors, _ = VALIDATOR.resolve_spec_inheritance(
+                child, 'spec', root / 'spec.yaml', self.env)
+            self.assertEqual(errors, [])
+            nextdt = next(c for c in resolved['columns'] if c['name'] == 'NEXTDT')
+            window = nextdt['derivation']['value']['row_value']['window']
+            self.assertNotIn('group_by', window)
+            self.assertEqual(window['order_by'][0]['variable'], 'ADT')
+            self.assertNotIn('windows', resolved)
+
+
 class TestPreviousNonMissingSchema(unittest.TestCase):
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])

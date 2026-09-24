@@ -160,6 +160,7 @@ structural constraints come from its schema declaration.
 | `root_class.input` | Source datasets readable by this specification, each under the name it is read through. |
 | `root_class.base` | Input dataset whose records build output rows when rows is absent; [Row construction](../execution/rows.md) states when it is required. |
 | `root_class.parents` | Ordered local specification layers resolved under [Specification composition](composition.md) before validation and execution. |
+| `root_class.windows` | Complete named window settings under [REQ-1251](../operations/windows.md#req-1251). |
 | `root_class.intermediates` | Named dataset lookups several columns read through <lookup-id>.<column>; [Lookup and joins](../operations/lookup.md) defines them. |
 | `root_class.output` | Artifact presentation independent of dependency-ordered declarations; [Artifact publication](../storage/publication.md) defines it. |
 | `root_class.columns` | Columns in the dependency order [Execution lifecycle](../execution/lifecycle.md) requires; output.columns controls artifact order. |

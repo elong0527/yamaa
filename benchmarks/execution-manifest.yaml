@@ -498,6 +498,9 @@ examples:
   negative-row-no-prior:
     status: executable
     runtimes: ['python']
+  negative-unknown-window:
+    status: executable
+    runtimes: ['python']
   negative-row-window-on-window-result:
     status: executable
     runtimes: ['python']
