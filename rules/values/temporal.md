@@ -202,11 +202,6 @@ the offset in its own column, where a specification can read the offset as
 data, and an instant-typed value can be added later without invalidating any
 specification written under this contract.
 
-<a id="req-0558"></a>
-
-**REQ-0558.** Two consequences are worth stating: both are failure modes
-this type does not have:
-
 <a id="req-0559"></a>
 
 **REQ-0559.** No civil time is nonexistent or ambiguous. A daylight-saving gap
