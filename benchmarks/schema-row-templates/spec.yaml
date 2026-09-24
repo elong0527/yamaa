@@ -48,14 +48,13 @@ columns:
 rows:
   # Case split, first section: every collected ALT record becomes one
   # row. The filter reads the input record before any row derivation,
-  # so the record with a missing result is dropped here, never derived.
+  # so a record with a missing result is dropped here, never derived.
   - id: alt
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD: {literal: ALT}
       PARAM: {literal: Alanine Aminotransferase}
-      AVAL:
-        source: LB.LBSTRESN
+      AVAL: {source: LB.LBSTRESN}
       DTYPE: {literal: null}
 
   # Case split, second section: the AST records follow all ALT rows in
@@ -66,15 +65,15 @@ rows:
     derivations:
       PARAMCD: {literal: AST}
       PARAM: {literal: Aspartate Aminotransferase}
-      AVAL:
-        source: LB.LBSTRESN
+      AVAL: {source: LB.LBSTRESN}
       DTYPE: {literal: null}
 
   # Grouped template: one candidate row per subject-visit in first
-  # appearance order. The filter reads the completed candidate's
-  # unqualified columns after the group reduction: a total failing the
-  # comparison is FALSE and suppressed, while the visit whose results
-  # are all missing reduces to missing, which is UNKNOWN and suppressed.
+  # appearance order, totaling every test of the visit (SUM skips missing
+  # results). The filter reads the completed candidate's unqualified
+  # columns after the group reduction: a total failing the comparison is
+  # FALSE and suppressed, while a visit whose results are all missing
+  # reduces to missing, which is UNKNOWN and suppressed.
   - id: visit_total
     group_by: [LB.USUBJID, LB.VISIT]
     derivations:
