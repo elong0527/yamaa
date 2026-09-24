@@ -1,0 +1,99 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [USUBJID, VISIT, PARAMCD]
+input:
+  # Results arrive as text: the row-building stage converts each
+  # derived value to its declared type while the rows are built.
+  LB: {path: input/lb.csv, types: {LBSTRESN: str}}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL, DOUBLE, FLAG]
+
+columns:
+  # Uniform derivations shared by both row templates live at column
+  # level and run in declaration order.
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {literal: YAMAA-01}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: VISIT
+    type: int
+    label: Visit Number
+    derivation: LB.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  # A row-stage column: each template derives it while building its
+  # rows, converting the text result to the declared float there. Its
+  # stage-4 check runs over the completed column, which never contains
+  # the discarded visit below.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    verifications:
+      - not_missing: {}
+
+  # Column stage: enriches the built rows with exactly one value each
+  # and may not change the row count. The arithmetic reads AVAL's
+  # converted float value; a text value would fail the
+  # no-implicit-conversion rule.
+  - name: DOUBLE
+    type: float
+    label: Twice the Analysis Value
+    derivation:
+      compute:
+        expr: "2 * AVAL"
+
+  - name: FLAG
+    type: str
+    label: High Value Flag
+    derivation:
+      case:
+        - when: "AVAL > 50"
+          then: {literal: H}
+        - otherwise: {literal: N}
+
+rows:
+  # The record screen runs before any row value is built: records with
+  # no result never become rows.
+  - id: components
+    filter: "LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD: LB.LBTESTCD
+      PARAM:
+        case:
+          - when: "LB.LBTESTCD = 'ALT'"
+            then: {literal: Alanine Aminotransferase}
+          - otherwise: {literal: Aspartate Aminotransferase}
+      AVAL: LB.LBSTRESN
+
+  # One candidate row per subject-visit. The visit screen runs after
+  # the lowest result is reduced: the visit whose results are all
+  # missing is discarded, so the final checks below never see it.
+  - id: visit_low
+    group_by: [LB.USUBJID, LB.VISIT]
+    derivations:
+      PARAMCD: {literal: LOW}
+      PARAM: {literal: Lowest Result of Visit}
+      AVAL:
+        aggregate:
+          expr: "MIN(LB.LBSTRESN)"
+    filter: "AVAL IS NOT NULL"
+
+verifications:
+  - unique:
+      columns: [USUBJID, VISIT, PARAMCD]

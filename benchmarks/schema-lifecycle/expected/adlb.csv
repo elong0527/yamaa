@@ -1,0 +1,9 @@
+STUDYID,USUBJID,VISIT,PARAMCD,PARAM,AVAL,DOUBLE,FLAG
+YAMAA-01,S1,1,ALT,Alanine Aminotransferase,32,64,N
+YAMAA-01,S1,1,AST,Aspartate Aminotransferase,45,90,N
+YAMAA-01,S1,2,ALT,Alanine Aminotransferase,28,56,N
+YAMAA-01,S2,1,ALT,Alanine Aminotransferase,60,120,H
+YAMAA-01,S2,1,AST,Aspartate Aminotransferase,70,140,H
+YAMAA-01,S1,1,LOW,Lowest Result of Visit,32,64,N
+YAMAA-01,S1,2,LOW,Lowest Result of Visit,28,56,N
+YAMAA-01,S2,1,LOW,Lowest Result of Visit,60,120,H
