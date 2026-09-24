@@ -210,7 +210,7 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
-| `identifier` | Single-token identifier; the field's own description states which namespace it names (a declared dataset, a declared column, a standard, a document, a function, or similar). |
+| `identifier` | Single-token identifier; the field's own description states which naming list it belongs to (a declared dataset, a declared column, a standard, a document, a function, or similar). |
 
 ## Error conditions
 
