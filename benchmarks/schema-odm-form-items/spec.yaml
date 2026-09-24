@@ -6,7 +6,8 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT,
+    LBORRES, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -71,6 +72,8 @@ columns:
     type: date
     label: Date/Time of Specimen Collection
 
+  # Not in the output: the fixed form order that numbers LBSEQ within
+  # each study and subject.
   - name: FORMORD
     type: int
     label: Form Order
@@ -94,6 +97,9 @@ columns:
           order_by: [FORMORD]
 
 rows:
+  # One record per subject, visit, and form. Each value is read only from
+  # that form's item rows, so a date never crosses forms; ONLY() fails on
+  # a second result or date. No result, no record; no date, missing LBDTC.
   - id: reported-result
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
     filter: "LBORRES IS NOT NULL"

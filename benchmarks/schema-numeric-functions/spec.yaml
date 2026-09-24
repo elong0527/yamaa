@@ -49,6 +49,7 @@ columns:
       compute:
         expr: "FLOOR(AVAL)"
 
+  # Toward zero: -2.7 gives -2, where FLOOR gives -3.
   - name: TRUNCVAL
     type: int
     label: Truncation of Analysis Value
@@ -63,6 +64,7 @@ columns:
       compute:
         expr: "EXP(AVAL)"
 
+  # The remainder takes the sign of BVAL, so -7 gives -1 rather than 2.
   - name: MODVAL
     type: int
     label: Remainder of Secondary Value Divided by Three
@@ -70,6 +72,8 @@ columns:
       compute:
         expr: "MOD(BVAL, 3)"
 
+  # GREATEST and LEAST skip missing arguments, so with the literal 0 among
+  # them neither result is ever missing.
   - name: GREATESTVAL
     type: int
     label: Largest of Secondary, Tertiary, and Zero

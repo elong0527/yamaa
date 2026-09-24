@@ -8,9 +8,10 @@ base: AE
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESTDY]
-  # The input is deliberately shuffled. Missing study days come first,
-  # then the present days ascend; the sequence number breaks ties
-  # descending. Rows equal on both terms keep their construction order.
+  # The input is deliberately shuffled. Missing study days come first
+  # (left out, nulls is last under either direction), then the present
+  # days ascend; the sequence number breaks ties descending, two missing
+  # days included. Rows equal on both terms keep their input order.
   order_by:
     - variable: AESTDY
       direction: asc

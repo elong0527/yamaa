@@ -30,6 +30,8 @@ columns:
     label: Visit Name
     derivation: LB.VISIT
 
+  # First character up, every later ASCII letter down:
+  # END OF TREATMENT -> End of treatment.
   - name: AVISIT
     type: str
     label: Analysis Visit
@@ -37,6 +39,8 @@ columns:
       str_sentence:
         source: LB.VISIT
 
+  # Each run of ASCII letters starts uppercase, so a hyphen starts a new
+  # word: FOLLOW-UP -> Follow-Up, where sentence case gives Follow-up.
   - name: AVISIT_TITLE
     type: str
     label: Analysis Visit Title Case

@@ -1,6 +1,7 @@
 schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
+# Parquet fields carry their own types, so the input declares none.
 input:
   DM: input/dm.parquet
 
@@ -24,6 +25,8 @@ columns:
     type: int
     label: Age
     derivation: DM.AGE
+    # A warning, not a failure: an age outside 18-100 stays in the output
+    # and is listed in the warning log.
     verifications:
       - range:
           min: 18

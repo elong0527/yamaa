@@ -29,6 +29,9 @@ columns:
     label: Dictionary-Derived Term
     derivation: AE.AEDECOD
 
+  # One regular expression, '|' separating the alternatives, searched
+  # anywhere in the term. There is no otherwise: a non-match (FALSE) and a
+  # missing term (UNKNOWN) both leave the flag missing.
   - name: CRIT1FL
     type: str
     label: Criterion 1 Evaluation Result Flag
@@ -38,6 +41,7 @@ columns:
       allowed_values:
         values: [Y]
 
+  # DERM matches inside a longer word, so DERMATITIS counts.
   - name: DERMFL
     type: str
     label: Dermatologic Event Flag

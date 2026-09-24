@@ -4,7 +4,7 @@
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** derive each subject's end-of-study date from their
-disposition records, asserting that each subject carries exactly one
+disposition records, checking that no subject has more than one
 end-of-study record.
 
 **Input:** one `spec.yaml` declaring two datasets. `DM` carries one
@@ -13,12 +13,16 @@ decoded term, and start date.
 
 **Lookups:**
 
-- `DS_EOS` names each subject's end-of-study record. Only disposition
-  events that are not screen failures are eligible; the subject key is
-  shared with the output, so it is inferred rather than restated. The
-  spec asserts the subject key is unique across the eligible records,
-  so no ordering or keep is needed to choose among them: a repeated
-  key fails the run instead of resolving ambiguously. A subject with
-  no eligible record keeps `EOSDT` blank.
+- `DS_EOS` names each subject's end-of-study record: a disposition
+  event that is not a screen failure. The subject key is shared with
+  the output, so it is inferred rather than restated. `EOSDT` is that
+  record's start date; a subject with no such record, such as one who
+  only failed screening, keeps `EOSDT` blank.
+
+**Note:** the eligible records are checked for a repeated subject
+before any row is built, so the lookup needs no rule for choosing
+among them: a subject with two end-of-study records stops the run
+rather than taking either one. A screen-failure record is never
+eligible, so it may sit beside a subject's end-of-study record.
 
 **Standard:** ADaM | **Domain:** ADSL
