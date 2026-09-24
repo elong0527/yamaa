@@ -1463,6 +1463,20 @@ class TestStaticSemanticContracts(unittest.TestCase):
             VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'),
         )
 
+    def test_self_intermediate_rejects_declared_self_input(self):
+        # REQ-0120: SELF is reserved for the completed rows, so it cannot
+        # also name an input dataset.
+        spec = self.self_intermediate_spec('SELF.AESEQ < AE.AESEQ')
+        spec['input']['SELF'] = {
+            'path': 'self.csv', 'types': {'AESEQ': 'int'},
+        }
+
+        self.assertIn(
+            "ERROR: example/spec.yaml.intermediates[0].dataset: "
+            "'SELF' cannot also name an input",
+            VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'),
+        )
+
     def test_dependency_cycle_reports_each_participating_derivation(self):
         root = TOOL_PATH.parents[3]
         env, env_errors = VALIDATOR.build_schema_env(root)

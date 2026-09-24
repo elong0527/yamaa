@@ -4876,6 +4876,13 @@ def validate_spec_names(spec, spec_label):
                     f"ERROR: {spec_label}.intermediates[{index}].dataset: "
                     f"undeclared dataset {lookup_dataset!r}"
                 )
+            # REQ-0120: SELF is reserved for the completed rows, so it
+            # cannot also name an input dataset.
+            if lookup_dataset == 'SELF' and 'SELF' in dataset_names:
+                errors.append(
+                    f"ERROR: {spec_label}.intermediates[{index}].dataset: "
+                    "'SELF' cannot also name an input"
+                )
 
     return errors
 
