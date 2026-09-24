@@ -1,0 +1,103 @@
+schema_version: "1.0"
+domain: CM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  ODM:
+    path: input/odm.csv
+    types: {StudyEventRepeatKey: int, ItemGroupRepeatKey: int}
+
+output:
+  path: cm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDOSE, CMDOSU, CMSTDTC, CMENDTC]
+  order_by: [USUBJID, CMSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: CM}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: ODM.ItemGroupRepeatKey
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of the Medication
+    verifications:
+      not_missing: {}
+
+  - name: CMDOSE
+    type: str
+    label: Dose of Medication Taken
+    # Text form: the form collects a single amount or a range such as "200-400".
+
+  - name: CMDOSU
+    type: str
+    label: Dose Units
+
+  - name: CMSTDTC
+    type: str
+    label: Start Date/Time of Medication
+    # As collected, including partial ISO 8601 dates such as "2023-09".
+
+  - name: CMENDTC
+    type: str
+    label: End Date/Time of Medication
+    # Blank when the form marks the medication ongoing.
+
+rows:
+  - id: medication
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations:
+      CMTRT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMTRT'"
+          expr: "ONLY(ODM.Value)"
+      CMDOSE:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMDOSE'"
+          expr: "ONLY(ODM.Value)"
+      CMDOSU:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMDOSU'"
+          expr: "ONLY(ODM.Value)"
+      CMSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMSTDTC'"
+          expr: "ONLY(ODM.Value)"
+      CMENDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMENDTC'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ]
+  - row_count:
+      min: 3
+      max: 3
+  - implies:
+      id: ongoing-medication-has-no-end-date
+      when: "CMTRT = 'LISINOPRIL'"
+      then: "CMENDTC IS NULL"
+  - implies:
+      id: partial-start-date-kept-at-collected-precision
+      when: "CMTRT = 'LISINOPRIL'"
+      then: "CMSTDTC = '2023-09'"
+  - implies:
+      id: dose-range-kept-as-text
+      when: "CMTRT = 'IBUPROFEN'"
+      then: "CMDOSE = '200-400'"
