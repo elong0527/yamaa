@@ -162,8 +162,10 @@ rows:
       ITEMCNT: {literal: null}
       TOTALSCORE: {literal: null}
 
-  # One record per declared not-collected item: no result, and the status
-  # says why. The nine items of a refused questionnaire each get one.
+  # One record per declared not-collected entry: no result, and the
+  # status says why. A row with no item is a whole-questionnaire
+  # refusal: it becomes one QSALL record with the reason in QSREASND,
+  # per issue #374. A row naming an item keeps that item's own record.
   - id: notdone
     dataset: NOTDONE
     derivations:
@@ -184,19 +186,29 @@ rows:
           value: VisitDate
           strict: true
       QSTESTCD:
-        lookup:
-          dataset: ITEMS
-          key_base: [NOTDONE.ItemOID]
-          key: [ItemOID]
-          value: QSTESTCD
-          strict: true
+        case:
+          - when: "NOTDONE.ItemOID IS NULL"
+            then: {literal: QSALL}
+          - when: "NOTDONE.ItemOID IS NOT NULL"
+            then:
+              lookup:
+                dataset: ITEMS
+                key_base: [NOTDONE.ItemOID]
+                key: [ItemOID]
+                value: QSTESTCD
+                strict: true
       QSTEST:
-        lookup:
-          dataset: ITEMS
-          key_base: [NOTDONE.ItemOID]
-          key: [ItemOID]
-          value: QSTEST
-          strict: true
+        case:
+          - when: "NOTDONE.ItemOID IS NULL"
+            then: {literal: "All Questionnaires"}
+          - when: "NOTDONE.ItemOID IS NOT NULL"
+            then:
+              lookup:
+                dataset: ITEMS
+                key_base: [NOTDONE.ItemOID]
+                key: [ItemOID]
+                value: QSTEST
+                strict: true
       QSORRES: {literal: null}
       QSSTRESC: {literal: null}
       QSSTRESN: {literal: null}
@@ -246,8 +258,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, QSSEQ]
   - row_count:
-      min: 38
-      max: 38
+      min: 30
+      max: 30
   - implies:
       id: total-score-stays-within-the-answer-range
       when: "QSTESTCD = 'PHQ9T'"

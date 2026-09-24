@@ -15,20 +15,24 @@ per collected item, identified by study (`StudyOID`), subject
 (`SubjectKey`), visit (`StudyEventOID`), item group, and item
 (`ItemOID`), with the circled score (0 through 3) in `Value`.
 `input/visits.csv` gives the visit number and collection date
-for each subject visit. `input/notdone.csv` declares items that
-were not collected, with the reason: one logically skipped item
-and one whole questionnaire the subject refused. `input/items.csv`
+for each subject visit. `input/notdone.csv` declares what was
+not collected, with the reason: one logically skipped item
+(its own item row) and one whole questionnaire the subject
+refused (a single row with no item, standing for the
+questionnaire). `input/items.csv`
 lists the nine instrument items with their short names and
 full text.
 
 **Variables:**
 
 - `QSTESTCD` is `PHQ901` through `PHQ909` for the nine items,
-  and `PHQ9T` for the total-score record. These short names are
+  `PHQ9T` for the total-score record, and `QSALL` for the refused
+  questionnaire. These short names are
   fixture-local labels for this benchmark, not verified CDISC
   controlled terminology.
 - `QSTEST` is the item text; the total record reads
-  "Patient Health Questionnaire 9 item total score".
+  "Patient Health Questionnaire 9 item total score"; the
+  refused-questionnaire record reads "All Questionnaires".
 - `QSCAT` is always `PHQ-9`.
 - `QSORRES` is the response text matching the circled score
   ("Not at all", "Several days", "More than half the days",
@@ -39,9 +43,9 @@ full text.
   text on the total record.
 - `QSSTRESN` is the collected score as a number, or the total
   as a number.
-- `QSSTAT` is `NOT DONE` on records for items that were not
-  collected; `QSREASND` says why (`LOGICALLY SKIPPED ITEM` or
-  `SUBJECT REFUSED`).
+- `QSSTAT` is `NOT DONE` on the skipped-item record and on the
+  refused-questionnaire record; `QSREASND` says why
+  (`LOGICALLY SKIPPED ITEM` or `SUBJECT REFUSED`).
 - Records with `QSSTAT = 'NOT DONE'` carry no result:
   `QSORRES`, `QSSTRESC`, and `QSSTRESN` stay empty.
 - The total-score record appears only for a visit where all
@@ -52,11 +56,14 @@ full text.
 - `QSDTC` is the date the questionnaire was collected.
 - `QSSEQ` numbers the subject's records by visit, then by test
   short name, so the total-score record (`PHQ9T`) sorts after
-  the nine items.
+  the nine items, and the refused-questionnaire record
+  (`QSALL`) sorts last, alphabetically.
 
 **Note:** the logically skipped item keeps its record with
 `QSSTAT = 'NOT DONE'` instead of disappearing, following the
 FDA convention for items the instrument instructions skip; the
-refused questionnaire keeps nine such records, one per item.
+refused questionnaire keeps one record instead of nine, with
+`QSTESTCD = 'QSALL'`, `QSSTAT = 'NOT DONE'`, and
+`QSREASND = 'SUBJECT REFUSED'`, per issue #374's design.
 
 **Standard:** SDTM | **Domain:** QS
