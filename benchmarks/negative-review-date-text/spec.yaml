@@ -35,7 +35,7 @@ columns:
     type: str
     label: Protocol Review Flag
     derivation:
-      case:
-        - when: "ASTDT >= '2025-01-01'"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "ASTDT >= '2025-01-01'"
+        false_value: "N"
+        missing_value: "N"

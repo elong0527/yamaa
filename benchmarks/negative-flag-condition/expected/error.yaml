@@ -1,7 +1,8 @@
 phase: validation
 condition: invalid_predicate
 spec_paths:
-  - columns.REVIEWFL.derivation.flag.condition
+  - columns.ELDFL.derivation.flag.condition
 requirement: REQ-0188
 context:
-  predicate: "AE.AESEQ + 1 > 1"
+  predicate: "AGE >> 65"
+  position: 5

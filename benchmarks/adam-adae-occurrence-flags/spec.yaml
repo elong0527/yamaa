@@ -83,25 +83,19 @@ columns:
     type: str
     label: 1st Occurrence within Subject Flag
     derivation:
-      case:
-        - when: "AOCCSEQ = 1"
-          then: {literal: Y}
+      flag: "AOCCSEQ = 1"
 
   - name: AOCCSFL
     type: str
     label: 1st Occurrence of SOC Flag
     derivation:
-      case:
-        - when: "AOCCSSEQ = 1"
-          then: {literal: Y}
+      flag: "AOCCSSEQ = 1"
 
   - name: AOCCPFL
     type: str
     label: 1st Occurrence of Preferred Term Flag
     derivation:
-      case:
-        - when: "AOCCPSEQ = 1"
-          then: {literal: Y}
+      flag: "AOCCPSEQ = 1"
 
 verifications:
   - unique:

@@ -1179,6 +1179,30 @@ class TestStaticSemanticContracts(unittest.TestCase):
             expression, 'spec.columns.X.derivation', self.context()
         )
 
+    def test_flag_false_value_requires_missing_value(self):
+        # REQ-1258: missing_value may repeat false_value, name another
+        # value, or be null; it may not be absent.
+        condition = {'condition': 'B > 1'}
+        [error] = self.validate({'flag': {**condition, 'false_value': 'N'}})
+        self.assertEqual(error.condition, 'missing_value_required')
+        self.assertEqual(
+            error.path, 'spec.columns.X.derivation.flag.missing_value'
+        )
+        self.assertEqual(error.context, {'false_value': 'N'})
+        for missing_value in ('N', 'U', None):
+            with self.subTest(missing_value=missing_value):
+                self.assertEqual(
+                    self.validate({'flag': {
+                        **condition,
+                        'false_value': 'N',
+                        'missing_value': missing_value,
+                    }}),
+                    [],
+                )
+        for flag in ('B > 1', condition, {**condition, 'missing_value': 'U'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(self.validate({'flag': flag}), [])
+
     def test_window_order_by_required(self):
         for operation in (
             'row_number', 'rank', 'row_value', 'previous_non_missing'
@@ -7350,6 +7374,42 @@ class TestCorrelatedLookupFilters(unittest.TestCase):
             'spec.columns.AVAL.derivation', VALIDATOR.predicate_resolver(), datasets,
         )
         self.assertEqual([e.condition for e in errors], ['incompatible_input_type'])
+
+
+class TestFlagPredicates(unittest.TestCase):
+    """Both flag spellings reach the predicate checks (REQ-1256)."""
+
+    def errors(self, flag):
+        return VALIDATOR.validate_expression_predicates(
+            {'flag': flag}, 'spec.columns.ELDFL.derivation',
+            VALIDATOR.predicate_resolver({'AGE': 'int'}), {},
+        )
+
+    def test_both_spellings_check_the_condition_at_its_field(self):
+        # R006 expands a bare string to the mapping form, so both report
+        # at the canonical condition path, as the engine does.
+        for flag in ('AGE >> 65', {'condition': 'AGE >> 65', 'false_value': 'N'}):
+            with self.subTest(flag=flag):
+                [error] = self.errors(flag)
+                self.assertEqual(error.condition, 'invalid_predicate')
+                self.assertEqual(
+                    error.path, 'spec.columns.ELDFL.derivation.flag.condition'
+                )
+
+    def test_both_spellings_resolve_their_identifiers(self):
+        for flag in ('AGEX >= 65', {'condition': 'AGEX >= 65'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    [e.condition for e in self.errors(flag)], ['unknown_field']
+                )
+
+    def test_both_spellings_name_their_dependencies(self):
+        for flag in ('AOCCSEQ = 1', {'condition': 'AOCCSEQ = 1'}):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    VALIDATOR.derive_binding_reference_names({'flag': flag}),
+                    ['AOCCSEQ'],
+                )
 
 
 class TestKeyColumnOrder(unittest.TestCase):

@@ -80,9 +80,7 @@ columns:
     type: str
     label: Analysis Record Flag 01
     derivation:
-      case:
-        - when: "NMEAS = NTARGET"
-          then: {literal: Y}
+      flag: "NMEAS = NTARGET"
     verifications:
       allowed_values:
         values: [Y]

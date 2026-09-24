@@ -59,9 +59,7 @@ columns:
     type: str
     label: Subject Death Flag
     derivation:
-      case:
-        - when: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
-          then: {literal: Y}
+      flag: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
     verifications:
       allowed_values:
         values: [Y]

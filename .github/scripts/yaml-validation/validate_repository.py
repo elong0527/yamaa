@@ -332,6 +332,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'unknown_window'): {'window'},
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
+    ('R007', 'missing_value_required'): {'false_value'},
     ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
@@ -1992,7 +1993,23 @@ def _check_single_type(data, t, env, path, fragment=False):
                 elif isinstance(reg_def, list): # it's a class inline
                     # Validate against an anonymous class
                     if not isinstance(val, dict):
-                        errors.append(f"ERROR: {path}.{key}: expected dict, got {type(val).__name__}")
+                        actual = (
+                            'mapping' if isinstance(val, dict)
+                            else 'sequence' if isinstance(val, list)
+                            else 'null' if val is None
+                            else type(val).__name__
+                        )
+                        errors.append(
+                            validation_diagnostic(
+                                f"{path}.{key}",
+                                'invalid_field_type',
+                                f"expected {key}, got {actual}",
+                                context={
+                                    'expected': key,
+                                    'actual': actual,
+                                },
+                            )
+                        )
                         continue
                     allowed_keys = set()
                     for field in reg_def:
@@ -6225,6 +6242,21 @@ def validate_expression_predicates(
                 )
             )
 
+    elif keyword == 'flag' and isinstance(payload, (dict, str)):
+        # REQ-1256: a bare predicate string is the condition. R006 expands
+        # it to the mapping form when the engine loads the spec, so both
+        # spellings report at the canonical condition path.
+        condition = (
+            payload if isinstance(payload, str) else payload.get('condition')
+        )
+        condition_path = f"{path}.flag.condition"
+        if isinstance(condition, str):
+            errors.extend(
+                validate_predicate_at(
+                    condition, condition_path, resolver
+                )
+            )
+
     elif keyword == 'source' and isinstance(payload, dict):
         errors.extend(
             source_filter_errors(payload, f"{path}.source", datasets)
@@ -7176,6 +7208,17 @@ def derive_binding_reference_names(derivation):
                             )
                             visit(item.get('then'))
                     return
+                if operation == 'flag' and isinstance(payload, (dict, str)):
+                    # The values are literals and name nothing; only the
+                    # predicate names variables. A bare string is the
+                    # condition (REQ-1256).
+                    condition = (
+                        payload
+                        if isinstance(payload, str)
+                        else payload.get('condition')
+                    )
+                    names.extend(predicate_identifier_names(condition))
+                    return
                 if operation == 'lookup' and isinstance(payload, dict):
                     key_base = payload.get('key_base')
                     entries = key_base if isinstance(key_base, list) else [key_base]
@@ -7751,6 +7794,11 @@ def validate_expression_reference_bindings(expression, path, context):
                     )
                 )
         return errors
+    if keyword == 'flag' and isinstance(payload, (dict, str)):
+        # The condition, bare or under condition, is a predicate owned by
+        # the predicate parser; the values are literals and name nothing
+        # (REQ-1256).
+        return []
     if keyword == 'str_concat' and isinstance(payload, dict):
         errors = []
         sources = payload.get('sources')
@@ -8098,6 +8146,23 @@ def validate_expression_static_semantics(expression, path, context):
                         },
                     )
                 )
+        return errors
+
+    if (
+        keyword == 'flag'
+        and isinstance(payload, dict)
+        and 'false_value' in payload
+        and 'missing_value' not in payload
+    ):
+        # REQ-1258: a flag that names its false value names its unknown one.
+        errors.append(
+            validation_diagnostic(
+                f"{path}.flag.missing_value",
+                'missing_value_required',
+                'missing_value is required with false_value',
+                context={'false_value': payload['false_value']},
+            )
+        )
         return errors
 
     if keyword == 'date_impute' and isinstance(payload, dict):
@@ -9769,7 +9834,11 @@ def validate_expected_error_contracts(root: Path):
                 continue
             spec = _desugar_bare_derivations(spec)
             for path in paths:
-                if condition in {'missing_required_field', 'month_required'}:
+                if condition in {
+                    'missing_required_field',
+                    'missing_value_required',
+                    'month_required',
+                }:
                     # The diagnostic points at the field that should exist.
                     continue
                 if not spec_path_exists(spec, path):
