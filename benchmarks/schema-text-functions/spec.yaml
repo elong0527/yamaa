@@ -61,6 +61,8 @@ columns:
         source: RAWTXT
         missing: MISSING
 
+  # Two missing texts count as equal. With only one side missing the
+  # comparison is unknown, not true, so the flag falls through to N.
   - name: EQUALFL
     type: str
     label: Exact Text Equality Flag
@@ -86,6 +88,9 @@ columns:
       greatest:
         sources: [RAWTXT, PEERTXT]
 
+  # Missing text is answered by the first branch, so the mapping's missing
+  # value (with no unmapped value declared) answers only text that has no
+  # dictionary entry after ASCII case folding.
   - name: MAPCAT
     type: str
     label: ASCII Folded Mapping Category
@@ -102,6 +107,8 @@ columns:
                 I: ASCII_I
               missing: OTHER
 
+  # One sequence over the whole study: text order, then subject; missing
+  # text sorts last.
   - name: TEXTSEQ
     type: int
     label: Text Scalar Order Sequence
