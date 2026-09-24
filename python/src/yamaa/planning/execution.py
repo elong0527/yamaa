@@ -941,8 +941,9 @@ def _lookup_references(
                     )
                 )
 
-    if payload.get("strict") is True and payload.get("missing") is not None:
-        # REQ-0123: a failing absence and a returned literal contradict.
+    if payload.get("strict") is True and "missing" in payload:
+        # REQ-0123: a failing absence and a declared literal contradict, even
+        # when the declared literal is null.
         diagnostics.append(
             _diagnostic(
                 "conflicting_absent_policy",
@@ -2991,7 +2992,10 @@ def _plan_lookups(
                     )
                     failed = True
 
-        if intermediate.strict and intermediate.missing is not None:
+        if intermediate.strict and "missing" in intermediate.model_fields_set:
+            # REQ-0123: a failing absence and a declared literal contradict,
+            # even when the declared literal is null: the check is
+            # declaration-based, not value-based.
             diagnostics.append(
                 _diagnostic(
                     "conflicting_absent_policy",
