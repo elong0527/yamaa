@@ -2,10 +2,10 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-sv-subject-visits.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** build the SDTM SV domain from ODM item data plus a DM extract,
-naming for each visit the study events its subjects attended, when each
-visit started and ended, and the planned day, order, and epoch it belongs
-to.
+**Goal:** build the SDTM subject visits (SV) domain from Operational Data
+Model (ODM) item data plus a demographics (DM) extract, naming for each
+visit the study events its subjects attended, when each visit started and
+ended, and the planned day, order, and epoch it belongs to.
 
 **Input:** an ODM extract, one row per item value with the columns StudyOID,
 MetaDataVersionOID, SubjectKey, StudyEventOID, StudyEventRepeatKey,
@@ -17,9 +17,6 @@ forms carry their own collection dates.
 
 **Variables:**
 
-- `STUDYID` is the study identifier from the ODM extract.
-- `DOMAIN` is the domain abbreviation, always "SV".
-- `USUBJID` is the unique subject identifier from the ODM extract.
 - `SVSEQ` numbers each subject's visits in date order.
 - `VISIT` is the visit name carried on the study event, e.g. Week 2.
 - `VISITNUM` is the planned visit number; 99 marks an unscheduled visit.
@@ -40,10 +37,10 @@ forms carry their own collection dates.
   carried on the unscheduled study event as an ODM item; it stays empty
   for planned visits.
 
-**Note:** the example keeps two subjects. Subject 001 attended an
-unscheduled safety visit between Baseline and Week 2, and their Week 2
-forms were collected across two days, so the visit spans both. Subject 002
-shows a straightforward planned sequence.
+**Note:** visits are numbered by their start date, so an unscheduled visit
+takes its place between the planned visits around it. Every unscheduled
+visit is visit number 99, so a subject's second unscheduled visit stops the
+run rather than repeating the visit number.
 
 **Provenance:** the fixtures are hand-built from a realistic EDC visit
 flow with plausible ODM naming, not records from a real study.
