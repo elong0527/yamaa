@@ -15,8 +15,8 @@ item record.
 
 **Variables:**
 
-- `VISITNUM` is the visit number, one of `1`, `2`, `3`, or `99`,
-  with the visit name from the same item.
+- `VISITNUM` is the visit number: `1` screening, `2` baseline, `3`
+  day 21, and `99` unscheduled; `VISIT` is the matching visit name.
 - `LBTESTCD` is the short test code for the collected item:
   `VITD25OH`, `IL13`, or `CAMPPRO`.
 - `LBTEST` is the full test name for that code: `25-Hydroxyvitamin
@@ -30,13 +30,13 @@ item record.
   blank for serum and saliva results.
 - `LBORRES` is the collected result, exactly as reported,
   including text such as `NOT DONE`.
-- `LBORRESU` is the collected unit: `ng/mL`, or `CYCLE` for biopsy
-  results.
+- `LBORRESU` is the unit fixed for each form: `CYCLE` for biopsy
+  results and `ng/mL` otherwise.
 - `LBSTRESC` repeats the reported result in standard form,
   including `NOT DONE`.
 - `LBSTRESN` is the numeric form of the reported result; missing
   when the result is `NOT DONE`.
-- `LBSTRESU` is the standard unit, matching the collected unit.
+- `LBSTRESU` is the standard unit, the same as `LBORRESU`.
 - `LBSTAT` is `NOT DONE` when the reported result is `NOT DONE`;
   blank otherwise.
 - `LBDTC` is the collection date from the date item on the same
