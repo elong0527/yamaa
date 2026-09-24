@@ -14,19 +14,14 @@ names.
 
 **Variables:**
 
-- `AETERM` is the term as reported, kept exactly as written; blank
-  when no term was reported.
-- `AEDECOD` is the preferred term for the reported term, taken as
-  the preferred name whose lowest-level name exactly equals the
-  reported term, including letter case; `NOT CODED` when no
-  lowest-level term equals it, including a blank reported term.
-- `AEBODSYS` is the body system for the reported term, taken as
-  the body-system name whose lowest-level name exactly equals the
-  reported term, including letter case; `NOT CODED` when no
-  lowest-level term equals it, including a blank reported term.
+- `AEDECOD` is the preferred term of the dictionary entry whose
+  lowest-level term matches the reported term.
+- `AEBODSYS` is the body system of that same entry.
 
-**Note:** the coded terms follow the recorded dictionary, MedDRA
-version `26.1`, since the same reported term can code differently
-between releases.
+**Note:** a reported term codes only when it equals a lowest-level term
+exactly, including letter case; a term with no exact match, or a blank
+term, gives `NOT CODED` in both coded variables. The coded terms follow
+the recorded dictionary, MedDRA version `26.1`, since the same reported
+term can code differently between releases.
 
 **Standard:** SDTM | **Domain:** AE
