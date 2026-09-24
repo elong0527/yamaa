@@ -104,8 +104,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 3
-      max: 3
+      min: 7
+      max: 7
   - implies:
       id: analysis-population-requires-both-flags
       when: "POPFL = 'Y'"
