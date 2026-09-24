@@ -4863,10 +4863,14 @@ def validate_spec_names(spec, spec_label):
                         )
                     )
             lookup_dataset = intermediate.get('dataset')
+            # REQ-0120: SELF names the completed rows only when the spec
+            # declares row templates to complete them.
             if (
                 isinstance(lookup_dataset, str)
-                and lookup_dataset != 'SELF'
                 and lookup_dataset not in dataset_names
+                and not (
+                    lookup_dataset == 'SELF' and isinstance(rows, list) and rows
+                )
             ):
                 errors.append(
                     f"ERROR: {spec_label}.intermediates[{index}].dataset: "
@@ -6093,6 +6097,27 @@ def _intermediate_derived_field_types(intermediate, donor_fields, operation_path
     return typed
 
 
+def intermediate_donor_fields(spec, datasets, dataset_id):
+    """Return the stored fields of a named intermediate's donor records.
+
+    REQ-0120: a SELF intermediate reads completed rows, so its donor fields
+    are the columns the row templates derive; a column derived only in the
+    later column phase is unavailable to it.
+    """
+    if dataset_id == 'SELF' and dataset_id not in datasets:
+        columns = spec.get('columns')
+        column_phase = {
+            column.get('name') for column in columns
+            if isinstance(column, dict) and 'derivation' in column
+        } if isinstance(columns, list) else set()
+        return {
+            name: column_type
+            for name, column_type in specification_column_types(spec).items()
+            if name not in column_phase
+        }
+    return dict(datasets.get(dataset_id, {}))
+
+
 def intermediate_type_catalog(spec, datasets, spec_label):
     """Return stored and derived fields exposed by each named intermediate."""
     intermediates = {}
@@ -6103,7 +6128,7 @@ def intermediate_type_catalog(spec, datasets, spec_label):
         dataset_id = intermediate.get('dataset')
         if not isinstance(intermediate_id, str) or not isinstance(dataset_id, str):
             continue
-        fields = dict(datasets.get(dataset_id, {}))
+        fields = intermediate_donor_fields(spec, datasets, dataset_id)
         fields.update(_intermediate_derived_field_types(
             intermediate, fields, f"{spec_label}.intermediates[{index}]"
         ))
@@ -6432,12 +6457,7 @@ def validate_spec_predicates(
             dataset_id = intermediate.get('dataset')
             # REQ-1185: derived values are available both in the donor filter
             # and through a downstream intermediate-qualified read.
-            # REQ-0120: a SELF intermediate reads completed output rows, so
-            # its donor fields are the output columns.
-            if dataset_id == 'SELF':
-                donor_fields = dict(output_types)
-            else:
-                donor_fields = dict(datasets.get(dataset_id, {}))
+            donor_fields = intermediate_donor_fields(spec, datasets, dataset_id)
             donor_fields.update(
                 _intermediate_derived_field_types(
                     intermediate,
@@ -6453,7 +6473,12 @@ def validate_spec_predicates(
                     if isinstance(dataset_id, str)
                     else datasets
                 )
-                resolver = predicate_resolver(qualified=qualified)
+                # REQ-0120: a SELF filter may name its donor fields bare; a
+                # bare name there is a donor field, never the current row.
+                resolver = predicate_resolver(
+                    unqualified=donor_fields if dataset_id == 'SELF' else None,
+                    qualified=qualified,
+                )
                 errors.extend(
                     validate_predicate_at(
                         intermediate['filter'],
@@ -6746,8 +6771,10 @@ def validate_spec_numeric_expressions(
                 for name in derivations or {}
                 if name in output_types
             } if isinstance(derivations, dict) else {}
+            # REQ-0125: a lookup-qualified variable reads the named
+            # intermediate's selected record in row derivations too.
             row_resolver = numeric_identifier_resolver(
-                unqualified=row_output, qualified=qualified
+                unqualified=row_output, qualified={**qualified, **intermediates}
             )
             if isinstance(derivations, dict):
                 for name, derivation in derivations.items():

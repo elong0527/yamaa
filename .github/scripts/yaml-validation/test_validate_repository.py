@@ -1354,66 +1354,114 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'incompatible_input_type')
 
-    def test_self_intermediate_resolves_output_columns(self):
-        # REQ-0120: a SELF intermediate reads completed output rows, so its
-        # dataset needs no input declaration and its donor fields resolve
-        # against the output columns, including from row derivations.
+    @staticmethod
+    def self_intermediate_spec(prior_filter):
+        # The second row template reads the first one's completed rows.
+        return {
+            'domain': 'ADAE',
+            'input': {
+                'AE': {'path': 'ae.csv', 'types': {'AESEQ': 'int'}},
+            },
+            'keys': ['USUBJID', 'AESEQ'],
+            'output': {
+                'path': 'adae.csv',
+                'columns': ['USUBJID', 'AESEQ', 'PRIOR', 'GAP'],
+            },
+            'intermediates': [{
+                'id': 'PRIOR_SAE',
+                'dataset': 'SELF',
+                'key': ['USUBJID'],
+                'filter': prior_filter,
+                'order_by': [{'variable': 'SELF.AESEQ', 'direction': 'desc'}],
+                'keep': 'first',
+            }],
+            'columns': [
+                {'name': 'USUBJID', 'type': 'str'},
+                {'name': 'AESEQ', 'type': 'int'},
+                {'name': 'PRIOR', 'type': 'int'},
+                {'name': 'GAP', 'type': 'int'},
+            ],
+            'rows': [
+                {
+                    'id': 'first',
+                    'derivations': {
+                        'USUBJID': 'AE.USUBJID',
+                        'AESEQ': 'AE.AESEQ',
+                        'PRIOR': {'literal': None},
+                        'GAP': {'literal': None},
+                    },
+                },
+                {
+                    'id': 'second',
+                    'derivations': {
+                        'USUBJID': 'AE.USUBJID',
+                        'AESEQ': 'AE.AESEQ',
+                        'PRIOR': 'PRIOR_SAE.AESEQ',
+                        'GAP': {
+                            'compute': {'expr': 'AE.AESEQ - PRIOR_SAE.AESEQ'}
+                        },
+                    },
+                },
+            ],
+        }
+
+    def self_intermediate_errors(self, spec):
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
             (example_dir / 'ae.csv').write_text('USUBJID,AESEQ\n01,1\n')
             spec_path = example_dir / 'spec.yaml'
-            spec = {
-                'domain': 'ADAE',
-                'input': {
-                    'AE': {'path': 'ae.csv', 'types': {'AESEQ': 'int'}},
-                },
-                'keys': ['USUBJID', 'AESEQ'],
-                'output': {
-                    'path': 'adae.csv',
-                    'columns': ['USUBJID', 'AESEQ', 'PRIOR'],
-                },
-                'intermediates': [{
-                    'id': 'PRIOR_SAE',
-                    'dataset': 'SELF',
-                    'key': ['USUBJID'],
-                    'filter': "SELF.AESEQ < AE.AESEQ",
-                    'order_by': [{'variable': 'SELF.AESEQ', 'direction': 'desc'}],
-                    'keep': 'first',
-                }],
-                'columns': [
-                    {'name': 'USUBJID', 'type': 'str'},
-                    {'name': 'AESEQ', 'type': 'int'},
-                    {'name': 'PRIOR', 'type': 'int'},
-                ],
-                'rows': [
-                    {
-                        'id': 'first',
-                        'derivations': {
-                            'USUBJID': 'AE.USUBJID',
-                            'AESEQ': 'AE.AESEQ',
-                            'PRIOR': {'literal': None},
-                        },
-                    },
-                    {
-                        'id': 'second',
-                        'derivations': {
-                            'USUBJID': 'AE.USUBJID',
-                            'AESEQ': 'AE.AESEQ',
-                            'PRIOR': 'PRIOR_SAE.AESEQ',
-                        },
-                    },
-                ],
-            }
+            label = 'example/spec.yaml'
+            return (
+                VALIDATOR.validate_spec_names(spec, label)
+                + VALIDATOR.validate_spec_predicates(spec, label, spec_path)
+                + VALIDATOR.validate_spec_numeric_expressions(
+                    spec, label, spec_path
+                )
+            )
 
-            self.assertEqual(
-                VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'), []
-            )
-            self.assertEqual(
-                VALIDATOR.validate_spec_predicates(
-                    spec, 'example/spec.yaml', spec_path
-                ),
-                [],
-            )
+    def test_self_intermediate_resolves_output_columns(self):
+        # REQ-0120: a SELF intermediate reads completed output rows, so its
+        # dataset needs no input declaration and its donor fields resolve
+        # against the output columns, bare or SELF-qualified in its filter.
+        # REQ-0125: row derivations read it through its id, in predicates
+        # and numeric expressions alike.
+        for prior_filter in (
+            'SELF.AESEQ < AE.AESEQ',
+            'AESEQ < AE.AESEQ',
+        ):
+            with self.subTest(prior_filter=prior_filter):
+                spec = self.self_intermediate_spec(prior_filter)
+                self.assertEqual(self.self_intermediate_errors(spec), [])
+
+    def test_self_intermediate_excludes_column_phase_columns(self):
+        # REQ-0120: a column derived only in the column phase is not on the
+        # completed rows a SELF intermediate reads.
+        spec = self.self_intermediate_spec(
+            'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
+        )
+        spec['columns'].append(
+            {'name': 'LATE', 'type': 'int', 'derivation': 'AE.AESEQ'}
+        )
+
+        errors = self.self_intermediate_errors(spec)
+
+        self.assertEqual(
+            [(error.path, error.condition) for error in errors],
+            [('example/spec.yaml.intermediates[0].filter', 'unknown_field')],
+        )
+        self.assertEqual(errors[0].context, {'identifier': 'SELF.LATE'})
+
+    def test_self_intermediate_requires_row_templates(self):
+        # REQ-0120: SELF names completed rows only when the spec declares
+        # row templates; without them it is an undeclared dataset.
+        spec = self.self_intermediate_spec('SELF.AESEQ < AE.AESEQ')
+        del spec['rows']
+
+        self.assertIn(
+            "ERROR: example/spec.yaml.intermediates[0].dataset: "
+            "undeclared dataset 'SELF'",
+            VALIDATOR.validate_spec_names(spec, 'example/spec.yaml'),
+        )
 
     def test_dependency_cycle_reports_each_participating_derivation(self):
         root = TOOL_PATH.parents[3]

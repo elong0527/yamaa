@@ -6,12 +6,12 @@ input:
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER, PRIOR_SAEFL, PRIOR_SAEDECOD, PRIOR_SAESEQ, FIRST_SAEDECOD, FIRST_SAESEQ]
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER, PRIOR_SAEFL, PRIOR_SAEDECOD, PRIOR_SAESEQ, FIRST_SAEDECOD, FIRST_SAESEQ, PREV_AEDECOD]
 
-# Named intermediates reading the records completed by earlier row
-# templates (dataset SELF). Their donor fields are output columns, so
-# every row template below derives them; a column-phase derivation
-# would come too late for the records the second template reads.
+# Named intermediates reading completed records (dataset SELF): during
+# row construction, the records of earlier row templates; during column
+# derivation, every record. Their donor fields are the columns every row
+# template below derives; a column derived later is not on the records.
 intermediates:
   # The subject's serious events before the current record's event,
   # most recent first. The filter correlates with the current record's
@@ -36,6 +36,18 @@ intermediates:
     keep: first
     verification:
       unique: [STUDYID, USUBJID, AESEQ]
+
+  # The subject's immediately preceding event, serious or not. Only a
+  # column derivation reads it, after both row templates have completed,
+  # so its donors hold the records of both. Bare donor fields name the
+  # completed record, never the current one.
+  - id: PREV_AE
+    dataset: SELF
+    key: [STUDYID, USUBJID]
+    filter: "AESEQ < AE.AESEQ"
+    order_by:
+      - {variable: AESEQ, direction: desc}
+    keep: first
 
 columns:
   - name: STUDYID
@@ -68,6 +80,10 @@ columns:
   - name: FIRST_SAESEQ
     type: int
     label: First Serious Event Sequence Number
+  - name: PREV_AEDECOD
+    type: str
+    label: Preceding Event Dictionary-Derived Term
+    derivation: PREV_AE.AEDECOD
 
 rows:
   # One record per serious event. The prior and first serious event
