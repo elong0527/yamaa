@@ -83,8 +83,9 @@ variable in the output dataset.
 
 <a id="req-0084"></a>
 
-**REQ-0084.** A qualifier is a dataset or record lookup identifier. Both
-share one namespace. Lookup and joins defines record lookup resolution.
+**REQ-0084.** A qualifier is a dataset or record lookup identifier. Datasets
+and record lookups share one naming list. Lookup and joins defines record
+lookup resolution.
 
 <a id="req-0085"></a>
 

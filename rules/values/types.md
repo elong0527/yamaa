@@ -25,7 +25,7 @@ and [ingestion](../storage/ingestion.md) owns source-field typing.
 <a id="req-0001"></a>
 
 **REQ-0001.** A schema descriptor's `type`, a column's declared `type`, and
-a value's runtime type are distinct namespaces. In
+a value's runtime type belong to different naming lists. In
 `- type: {type: column_type, required: true}`, the outer `type` names a
 specification field and the inner `type` is a schema descriptor keyword.
 Schema types include `str`, `int`, `float`, `bool`, `"null"`, `list`, `dict`,
