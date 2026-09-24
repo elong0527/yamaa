@@ -7,32 +7,26 @@
 `GREATEST`, `LEAST`, and `COALESCE` to carried values.
 
 **Input:** subject-level records carrying `AVAL` as a decimal
-number and `BVAL` and `CVAL` as whole numbers.
+number and `BVAL` and `CVAL` as whole numbers, each copied to the
+output unchanged (a blank stays blank).
 
 **Variables:**
 
-- `AVAL` holds the decimal number read from the source; blank
-  when the source carried nothing.
-- `BVAL` holds the whole number read from the source; blank when
-  the source carried nothing.
-- `CVAL` holds the second whole number read from the source;
-  blank when the source carried nothing.
 - `CEILVAL` holds the smallest whole number at or above `AVAL`;
   blank when `AVAL` is blank.
 - `FLOORVAL` holds the largest whole number at or below `AVAL`;
   blank when `AVAL` is blank.
 - `TRUNCVAL` holds `AVAL` with its fraction cut away toward
-  zero; blank when `AVAL` is blank.
+  zero, so a negative value with a fraction moves up, not down;
+  blank when `AVAL` is blank.
 - `EXPVAL` holds the constant e raised to `AVAL`; blank when
   `AVAL` is blank.
 - `MODVAL` holds the remainder of `BVAL` divided by three, with
   the sign of `BVAL`; blank when `BVAL` is blank.
 - `GREATESTVAL` holds the largest among `BVAL`, `CVAL`, and
-  zero, skipping blanks; blank only when all three are blank,
-  which the zero here prevents.
+  zero, skipping blanks; the zero means it is never blank.
 - `LEASTVAL` holds the smallest among `BVAL`, `CVAL`, and zero,
-  skipping blanks; blank only when all three are blank, which
-  the zero here prevents.
+  skipping blanks; the zero means it is never blank.
 - `COALESCEVAL` holds `CVAL` when present and otherwise `BVAL`;
   blank when both are blank.
 
