@@ -12,22 +12,22 @@ two in `FSTALVDT` as the first known alive date.
 **Variables:**
 
 - `DTHDT` would be the date of death taken from `DTHDTC`, missing
-  for subjects still followed.
+  when no death was recorded.
 - `LSTVSDY` would be the study day of the last visit, counting
   days, not dates.
-- `FSTALVDT` is intended as the earlier of the two dates as the
-  first known alive date.
-
-A calendar date and a day count have no common order, so the run
-is rejected before any data is read and no artifact is accepted.
+- `FSTALVDT` would be the first known alive date: the earlier of the
+  death date and the last visit, or the one present when the other is
+  missing. A calendar date and a day count have no common order, so
+  the run is rejected before any data is read and no artifact is
+  accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Decide which date the study reports, then state it in dates. When the last
-contact is only known as a study day, convert it against the reference start
-date first so both sides are dates:
+Decide which date the study reports, then state it in dates. Take the last
+contact from the date the visit was collected on, read into a date column
+(`LSTCONDT` here), not from its study day, so both sides are dates:
 
 ```yaml
 - name: FSTALVDT

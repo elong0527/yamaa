@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # Intentionally invalid day: a day is a number or one of the positions
+  # first and last, and mid is neither, so the specification is rejected
+  # before any data is read.
   - name: ASTDT
     type: date
     label: Analysis Start Date

@@ -11,6 +11,7 @@ output:
     - USUBJID
     - variable: ASTDT
       direction: desc
+    # The subject again, now descending: a column may be named only once.
     - variable: USUBJID
       direction: desc
 

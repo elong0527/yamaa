@@ -59,6 +59,7 @@ from yamaa.runtime import (
 )
 from yamaa.specification import SpecificationError, ValidationDiagnostic
 from yamaa.specification._yaml import read_yaml_document
+from yamaa.specification.models import Output
 from yamaa.specification.schema import load_schema_bundle
 
 # Bumped when the envelope changes shape. The `-draft` suffix states that
@@ -273,29 +274,44 @@ def _report(name: str, outcome: Outcome, **observations: object) -> ExampleRepor
     )
 
 
+def _named_specifications(document: object) -> set[str]:
+    """Return the file names one specification names as a parent or producer."""
+    if not isinstance(document, dict):
+        return set()
+    parents = document.get("parents", ())
+    if isinstance(parents, str):
+        parents = (parents,)
+    named = {
+        Path(parent).name for parent in parents if isinstance(parent, str) and parent
+    }
+    inputs = document.get("input", {})
+    if isinstance(inputs, dict):
+        named.update(
+            Path(source["schema"]).name
+            for source in inputs.values()
+            if isinstance(source, dict)
+            and isinstance(source.get("schema"), str)
+            and source["schema"]
+        )
+    return named
+
+
 def entry_specification(example: Path) -> Path:
     """Return the specification an example is entered through.
 
-    A benchmark states one specification as `spec.yaml`. One that keeps its
-    inheritance levels side by side names none of them that, and the level
-    no other level names in `parents` is the entry.
+    A benchmark states one specification as `spec.yaml`. One that keeps
+    several side by side names none of them that: inheritance levels, or a
+    producer whose artifact another reads through `schema`. The one no other
+    names as a parent or a producer is the entry.
     """
     single = example / SPEC_NAME
     if single.is_file():
         return single
     levels = sorted(example.glob("spec_*.yaml"))
-    parented = set()
+    named: set[str] = set()
     for path in levels:
-        document = read_yaml_document(path)
-        parents = document.get("parents", ()) if isinstance(document, dict) else ()
-        if isinstance(parents, str):
-            parents = (parents,)
-        parented.update(
-            Path(parent).name
-            for parent in parents
-            if isinstance(parent, str) and parent
-        )
-    entries = [path for path in levels if path.name not in parented]
+        named.update(_named_specifications(read_yaml_document(path)))
+    entries = [path for path in levels if path.name not in named]
     if len(entries) != 1:
         raise ConformanceError(f"example has no single entry specification: {example}")
     return entries[0]
@@ -409,11 +425,35 @@ def _execute(
         )
 
     assert isinstance(result, ExecutionSuccess)
-    declared = (
-        result.verification_log is not None and output.verification_log is not None
+    published: list[ArtifactObservation] = []
+    for node in workflow.nodes:
+        # A producer kept beside the entry is part of the example, so its
+        # artifact is published and compared like the entry's. A producer
+        # under `input/` records where an input came from and stays an input.
+        produced = execution.results.get(node.entry_path)
+        if (
+            node is not entry_node
+            and node.entry_path.parent == workflow.entry_path.parent
+            and isinstance(produced, ExecutionSuccess)
+        ):
+            published.extend(
+                _published(node.resolved.specification.output, produced, destination)
+            )
+    published.extend(_published(output, result, destination))
+    return _report(
+        name,
+        "success",
+        artifacts=tuple(published),
+        handler_counts=handler_counts,
     )
+
+
+def _published(
+    output: Output, result: ExecutionSuccess, destination: Path
+) -> list[ArtifactObservation]:
+    """Publish one successful specification's artifacts in REQ-1181 order."""
     published = []
-    if declared:
+    if result.verification_log is not None and output.verification_log is not None:
         # REQ-1181: a run declaring the verification log publishes it first.
         published.append(
             _observe_artifact(
@@ -438,12 +478,7 @@ def _execute(
             destination / Path(output.path).name,
         )
     )
-    return _report(
-        name,
-        "success",
-        artifacts=tuple(published),
-        handler_counts=handler_counts,
-    )
+    return published
 
 
 def execute_example(

@@ -16,16 +16,18 @@ carrying the upper limit (`NRHI`) by test code and sex.
 - `LBSTNRHI` would be the upper limit from the limits table for
   the matching test code and sex.
 
-One collected result has a blank sex, so its lookup key is
-incomplete and the run is rejected with no artifact accepted.
+**Note:** a result with a blank sex has an incomplete lookup key
+and cannot find its sex-specific limit. Every result is required to
+find one, so such a result rejects the run with no artifact
+accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
 Recover the missing sex when possible. If an incomplete lookup key is
-intended to make every value read from the lookup missing, omit `strict:`
-so the lookup answers with its declared absence:
+intended to leave the upper limit missing, omit `strict:`; a result with a
+blank sex then gets a missing `LBSTNRHI`:
 
 ```yaml
 intermediates:
@@ -34,6 +36,6 @@ intermediates:
     key: [LBTESTCD, SEX]
 ```
 
-REQ-0124 gives an incomplete key and a complete key the table does not
-contain the one absence policy: both yield nothing, and `strict:` decides
-whether that fails or answers `missing:`.
+An incomplete key and a complete key the table does not contain share one
+absence policy (REQ-0129, REQ-0131): both yield nothing, and `strict:`
+decides whether that fails or answers `missing:`.

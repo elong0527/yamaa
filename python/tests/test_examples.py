@@ -43,27 +43,35 @@ def positive_runners() -> tuple[Path, ...]:
 
 
 def entry_spec(example: Path) -> Path:
-    """The specification a benchmark's run.py executes.
+    """The specification a benchmark's run.py executes last.
 
     Mirrors the dashboard's entry resolution: `spec.yaml` when present,
-    otherwise the `spec_*.yaml` file no other file names as a parent.
+    otherwise the `spec_*.yaml` file no other file names as a parent or as
+    an input's producing `schema`.
     """
     single = example / "spec.yaml"
     if single.exists():
         return single
     specs = sorted(example.glob("spec_*.yaml"))
-    parented = set()
+    named = set()
     for path in specs:
         document = read_yaml_document(path)
-        parents = document.get("parents", []) if isinstance(document, dict) else []
+        document = document if isinstance(document, dict) else {}
+        parents = document.get("parents", [])
         if isinstance(parents, str):
             parents = [parents]
-        parented.update(
+        named.update(
             Path(parent).name
             for parent in parents
             if isinstance(parent, str) and parent
         )
-    entries = [path for path in specs if path.name not in parented]
+        inputs = document.get("input", {})
+        named.update(
+            Path(source["schema"]).name
+            for source in (inputs.values() if isinstance(inputs, dict) else ())
+            if isinstance(source, dict) and isinstance(source.get("schema"), str)
+        )
+    entries = [path for path in specs if path.name not in named]
     return entries[0] if entries else specs[0]
 
 

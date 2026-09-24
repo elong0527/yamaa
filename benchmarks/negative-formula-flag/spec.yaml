@@ -34,6 +34,9 @@ columns:
     label: Analysis Normal Range Upper Limit
     derivation: LB.LBSTNRHI
 
+  # A formula admits no comparison: a yes-or-no question belongs in a case,
+  # which states how the answer becomes 1 or 0. The specification is
+  # rejected before any data is read.
   - name: HIFL
     type: int
     label: High Result Flag

@@ -35,4 +35,6 @@ columns:
           PR: PARTIAL RESPONSE
           SD: STABLE DISEASE
           PD: PROGRESSIVE DISEASE
+        # A missing or unlisted response (the collected NE) stops the run
+        # instead of giving a missing AVALC.
         strict: true

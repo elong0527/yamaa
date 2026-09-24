@@ -42,8 +42,7 @@ columns:
       value:
         case:
           - when: USUBJID = '01' AND PARAMCD = 'AST'
-            then:
-              literal: 31.0
+            then: {literal: 31.0}
           - otherwise:
               source:
                 variable: LB.LBSTRESN
@@ -71,7 +70,6 @@ columns:
     type: str
     label: Parameter Category
     derivation:
-      value:
-        literal: CHEMISTRY
+      value: {literal: CHEMISTRY}
 metadata:
   scope: study

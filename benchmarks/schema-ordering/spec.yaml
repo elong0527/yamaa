@@ -22,8 +22,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      literal: YAMAA-01
+    derivation: {literal: YAMAA-01}
 
   - name: USUBJID
     type: str

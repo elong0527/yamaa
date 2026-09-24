@@ -1,4 +1,4 @@
-# Best Overall Response
+# Select the Best Overall Response
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-best-response.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -27,9 +27,10 @@ plus a prepared response selection in which the record with
 - `ADT` is the analysis date supporting the response, taken from
   that record's date; empty whenever `AVALC` is.
 
-**Note:** every subject in the subject-level records gets one record,
-so a subject with no record with `BORSEQ` equal to `1` keeps its
-randomization date with response, rank, and date all empty. The
-supporting date is never before the randomization date.
+**Note:** every subject in the subject-level records gets one
+record, so a subject with no record with `BORSEQ` equal to `1`
+keeps its randomization date with response, rank, and date all
+empty. The supporting date is never before the randomization
+date; it may fall exactly on it.
 
 **Standard:** ADaM | **Domain:** ADRS

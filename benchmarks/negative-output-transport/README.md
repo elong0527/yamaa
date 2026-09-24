@@ -5,8 +5,7 @@
 **Goal:** attempt one record for every subject carrying the collected
 age (`AGE`) and sex (`SEX`), written to a SAS Transport file.
 
-**Input:** collected demographics records carrying age (`AGE`) and
-sex (`SEX`).
+**Input:** collected demographics records, one per subject.
 
 **Variables:**
 

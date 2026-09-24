@@ -19,6 +19,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The defect: the pattern sets aside one part (the site code), so there
+  # is no part 2 to return and the spec is rejected before any data is read.
   - name: SITEID
     type: str
     label: Study Site Identifier

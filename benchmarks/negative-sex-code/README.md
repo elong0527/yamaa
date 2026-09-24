@@ -24,7 +24,8 @@ dataset is completed, so no artifact is accepted.
 
 Confirm the code against the study's sex coding convention. Correct `X` at
 the governed source when it is a data-entry error. If `X` is an intentional
-study code, document that policy and add it to the anchored accepted set:
+study code, document that policy and add it to the anchored accepted set
+on the `SEX` column:
 
 ```yaml
 verifications:

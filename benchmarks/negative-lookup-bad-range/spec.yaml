@@ -10,6 +10,9 @@ input:
     types: {DYLO: int, DYHI: int}
 base: VS_RAW
 intermediates:
+  # The epoch whose day range holds the record. VSDTC is a date and the
+  # bounds are day counts, which have no common order, so the specification
+  # is rejected before any data is read.
   - id: EPOCHDEF
     dataset: EPOCHS
     key: STUDYID

@@ -13,13 +13,13 @@ Data Model (ODM) extract.
 **Variables:**
 
 - `RANDDT` would be the subject's randomization date, taken from
-  `RANDDT` in the demographics file, but no row is produced.
+  `RANDDT` in the demographics file.
 
-The date's value kind is already fixed where the demographics
-file is produced. Stating it again beside the source would leave
-two authorities for the same field even when they agree, so the
-run is rejected before any data is read and no artifact is
-accepted.
+**Note:** the date's value kind is already fixed where the
+demographics file is produced. Stating it again beside the source
+would leave two authorities for the same field even when they
+agree, so the run is rejected before any data is read and no
+artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

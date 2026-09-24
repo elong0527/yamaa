@@ -75,11 +75,9 @@ columns:
     derivation:
       case:
         - when: "MHONGO = 'Y'"
-          then:
-            literal: ONGOING
+          then: {literal: ONGOING}
         - when: "MHENDTC IS NOT NULL AND SCRFDTC IS NOT NULL AND MHENDTC < SCRFDTC"
-          then:
-            literal: BEFORE
+          then: {literal: BEFORE}
     verifications:
       allowed_values:
         values: [ONGOING, BEFORE]
@@ -90,8 +88,7 @@ columns:
     derivation:
       case:
         - when: "MHENRTPT IS NOT NULL"
-          then:
-            literal: SCREENING
+          then: {literal: SCREENING}
 
 verifications:
   - unique:

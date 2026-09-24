@@ -13,11 +13,13 @@ holding `SITEID`.
 - `SITEID` would be the site the subject enrolled at, taken
   directly from the collected listing.
 
-The file name says nothing about how to read it. Its bytes happen
-to use commas today, but nothing states that, and a reader that
-decided by looking inside could read the same file differently
-another time or differently from the next reader. The run is
-rejected before any data is read, so no artifact is accepted.
+The file's `.txt` ending names neither of the two formats a listing
+can be read from, `.csv` (comma-separated text) or `.parquet`, so
+nothing says how to read it. Its bytes happen to use commas today,
+but a reader that decided by looking inside could read the same
+file differently another time or differently from the next reader.
+The run is rejected before any data is read, so no artifact is
+accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

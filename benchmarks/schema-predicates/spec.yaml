@@ -13,8 +13,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      literal: YAMAA-01
+    derivation: {literal: YAMAA-01}
 
   - name: USUBJID
     type: str
@@ -31,13 +30,10 @@ columns:
     derivation:
       case:
         - when: "DM.AGE > 65"
-          then:
-            literal: HIGH
+          then: {literal: HIGH}
         - when: "DM.AGE >= 40"
-          then:
-            literal: MEDIUM
-        - otherwise:
-            literal: LOW
+          then: {literal: MEDIUM}
+        - otherwise: {literal: LOW}
 
   # NOT UNKNOWN is UNKNOWN, not TRUE: subject 03's missing age skips the
   # first branch and is caught by the explicit IS NULL test, while the
@@ -48,13 +44,10 @@ columns:
     derivation:
       case:
         - when: "NOT (DM.AGE >= 65) AND DM.SEX = 'M'"
-          then:
-            literal: Y
+          then: {literal: Y}
         - when: "DM.AGE IS NULL"
-          then:
-            literal: U
-        - otherwise:
-            literal: N
+          then: {literal: U}
+        - otherwise: {literal: N}
 
   # LIKE is case-sensitive: 'drug-low' matches neither LIKE branch, while
   # 'DRUGX' matches 'DRUG%'. NOT IN over a missing value is UNKNOWN, not
@@ -68,13 +61,9 @@ columns:
         - when: "DM.TRTGRP LIKE 'SCRN%'"
           then: DM.TRTGRP
         - when: "DM.TRTGRP LIKE 'DRUG%'"
-          then:
-            literal: DRUG_FAMILY
+          then: {literal: DRUG_FAMILY}
         - when: "DM.TRTGRP NOT IN ('DRUG', 'PLACEBO')"
-          then:
-            literal: OTHER
+          then: {literal: OTHER}
         - when: "DM.TRTGRP IS NULL"
-          then:
-            literal: MISSING
-        - otherwise:
-            literal: STANDARD
+          then: {literal: MISSING}
+        - otherwise: {literal: STANDARD}

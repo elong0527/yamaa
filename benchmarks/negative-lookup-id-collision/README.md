@@ -15,12 +15,12 @@ administration sequence number (`EXSEQ`), the treatment name
 - `TRT01A` would contain the treatment name from the earliest
   exposure record.
 
-The chosen-record name `EX` already names the exposure records, so
-a read of `EX.EXTRT` cannot say whether it means the treatment of
-the chosen record or of every exposure record. The two readings
-differ whenever a subject has more than a single administration, so
-the run is rejected before any data is read and no artifact is
-accepted.
+**Note:** the chosen record is named `EX`, which already names the
+exposure records, so a read of `EX.EXTRT` cannot say whether it
+means the treatment of the chosen record or of every exposure
+record. The two readings differ whenever a subject has more than one
+administration. The name itself is rejected before any data is
+read, so no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

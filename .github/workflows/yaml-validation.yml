@@ -67,6 +67,13 @@ jobs:
           uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
           uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
 
+      - name: Check rules prose and requirement registry
+        run: |
+          uv run --project python --no-sync python .github/scripts/yaml-validation/test_rationale_phrases.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rationale_phrases.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/test_requirement_registry.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_requirement_registry.py
+
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

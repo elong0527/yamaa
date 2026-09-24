@@ -84,7 +84,7 @@ family-dependent requirement rests on it.
 <a id="req-0966"></a>
 
 **REQ-0966.** The entry order is the document's dataset order. This contract imposes
-no other order, because the recommended order of a submission's datasets is a
+no other order. The recommended order of a submission's datasets is a
 property of the standard a study follows rather than of this language, and a
 study that follows one writes its entries in it.
 
@@ -191,7 +191,7 @@ rather than written empty.
 **REQ-0975.** The element order is the order the Define-XML 2.1 schema
 requires, so a document that departs from it is not merely different but
 invalid. Within each repeated element the order above is this contract's choice,
-and it is fixed so that two implementations agree.
+and it is fixed. Two implementations agree.
 
 <a id="req-0976"></a>
 

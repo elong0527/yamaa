@@ -29,6 +29,9 @@ columns:
     label: Sex
     derivation: DM.SEX
 
+# One output row per DM record, so a subject entered twice reaches the
+# output twice and fails the key check. Without rows the output would hold
+# one row per subject, and the two ages would clash earlier instead.
 rows:
   - id: record
     derivations: {}

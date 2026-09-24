@@ -360,6 +360,12 @@ examples:
   negative-impute-day-rule:
     status: executable
     runtimes: ['python']
+  negative-impute-missing-month:
+    status: executable
+    runtimes: ['python']
+  negative-impute-unreachable-month:
+    status: executable
+    runtimes: ['python']
   negative-precision-bad-source:
     status: executable
     runtimes: ['python']
@@ -472,6 +478,9 @@ examples:
     status: executable
     runtimes: ['python']
   negative-lookup-mismatched:
+    status: executable
+    runtimes: ['python']
+  negative-lookup-rename-intermediate:
     status: executable
     runtimes: ['python']
   negative-round-half-away-from-zero-non-numeric-source:
@@ -618,6 +627,9 @@ examples:
   sdtm-ae-seriousness:
     status: executable
     runtimes: ['python']
+  sdtm-cm-whodrug-coding:
+    status: executable
+    runtimes: ['python']
   sdtm-dm-arms:
     status: executable
     runtimes: ['python']
@@ -634,6 +646,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-dm-metadata:
+    status: executable
+    runtimes: ['python']
+  sdtm-dm-race-ethnicity:
     status: executable
     runtimes: ['python']
   sdtm-dm-dates:
@@ -687,6 +702,9 @@ examples:
   sdtm-lb-multiform:
     status: executable
     runtimes: ['python']
+  sdtm-lb-lab-specific-ranges:
+    status: executable
+    runtimes: ['python']
   sdtm-lb-ranges:
     status: executable
     runtimes: ['python']
@@ -717,7 +735,13 @@ examples:
   sdtm-suppmh-linkage:
     status: executable
     runtimes: ['python']
+  sdtm-sv-subject-visits:
+    status: executable
+    runtimes: ['python']
   sdtm-suppmh-qualifiers:
+    status: executable
+    runtimes: ['python']
+  sdtm-vs-epoch-from-subject-elements:
     status: executable
     runtimes: ['python']
   sdtm-vs-replicates:
@@ -726,7 +750,13 @@ examples:
   sdtm-vs-units:
     status: executable
     runtimes: ['python']
+  sdtm-vs-collected-form:
+    status: executable
+    runtimes: ['python']
   sdtm-vs-study-day:
+    status: executable
+    runtimes: ['python']
+  sdtm-vs-planned-time-points:
     status: executable
     runtimes: ['python']
   schema-column-composition:
@@ -751,6 +781,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-text-mapping:
+    status: executable
+    runtimes: ['python']
+  schema-text-mapping-unmapped:
     status: executable
     runtimes: ['python']
   schema-verification-log:

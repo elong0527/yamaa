@@ -7,8 +7,9 @@ input:
 base: DM
 
 intermediates:
-  # The subject key is asserted unique across the eligible disposition
-  # events, but P01 carries two of them, so the run must fail.
+  # Each subject's end-of-study record: a disposition event other than a
+  # screen failure, asserted unique per subject. P01 carries two of them,
+  # so the run fails before any output row is built.
   - id: DS_EOS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
@@ -24,10 +25,12 @@ columns:
     type: str
     label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: EOSDT
     type: str
     label: End of Study Date

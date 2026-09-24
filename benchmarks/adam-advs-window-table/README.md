@@ -33,12 +33,11 @@ and its target day.
   visit, with the lower sequence number breaking a tie; blank on
   every other record, including any record with no window.
 
-**Note:** an assigned window brings its order number and target
-day together, so a record with no window has none of the three. A
-record has no window when it has no study day, when its day falls
-in a gap between stated ranges, or when its day sits on or past
-the first day of a window whose last day was never stated: an
-absent bound is not an open-ended one. Window tables are
-study-specific.
+**Note:** an assigned window brings its analysis visit (`AVISIT`),
+order number, and target day together, so a record with no window
+has none of the three. A record has no window when it has no study
+day, when its day falls in a gap between stated ranges, or when its
+day sits on or past the first day of a window whose last day was
+never stated: an absent bound is not an open-ended one.
 
 **Standard:** ADaM | **Domain:** ADVS

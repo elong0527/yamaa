@@ -19,13 +19,14 @@ columns:
     label: Unique Subject Identifier
     derivation: AE.USUBJID
 
+  # The defect: '[' opens a character class that never closes, so the
+  # pattern is not a valid regex and the spec is rejected before any data
+  # is read.
   - name: AESEV
     type: str
     label: Severity/Intensity
     derivation:
       case:
         - when: "str_contains(AE.AETERM, 'SEVERE[')"
-          then:
-            literal: SEVERE
-        - otherwise:
-            literal: MILD
+          then: {literal: SEVERE}
+        - otherwise: {literal: MILD}

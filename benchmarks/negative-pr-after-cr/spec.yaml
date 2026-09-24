@@ -27,8 +27,7 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: OVR
+    derivation: {literal: OVR}
 
   - name: ADT
     type: date
@@ -43,6 +42,8 @@ columns:
       allowed_values:
         values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
 
+  # The subject's previous response in date order (sequence number breaks
+  # a same-day tie); missing on the subject's first assessment.
   - name: PREVAVALC
     type: str
     label: Previous Analysis Value (C)
@@ -60,6 +61,8 @@ verifications:
   - row_count:
       min: 6
       max: 6
+  # A PR directly after a CR fails. The IS NOT NULL keeps a PR on the
+  # first assessment passing: without it that row would be UNKNOWN and fail.
   - assert:
       id: response-does-not-fall-back-after-a-complete-response
       expr: "NOT (AVALC = 'PR' AND PREVAVALC IS NOT NULL AND PREVAVALC = 'CR')"

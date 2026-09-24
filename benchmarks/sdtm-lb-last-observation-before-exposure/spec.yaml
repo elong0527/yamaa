@@ -41,8 +41,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str

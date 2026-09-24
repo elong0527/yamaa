@@ -860,7 +860,6 @@ class TestAggregateDeriveStep(unittest.TestCase):
                         'derivation': {
                             'date_impute': {
                                 'source': 'EX.EXENDTC',
-                                'month': 12,
                                 'day': 'last',
                                 'minimum_source_precision': 'month',
                                 'missing': None,
@@ -2438,6 +2437,59 @@ class TestSpecificationInheritance(unittest.TestCase):
         return VALIDATOR.resolve_spec_inheritance(
             spec, 'example/spec.yaml', path, self.env
         )
+
+    def test_parent_row_catalog_path_rebases_before_expansion(self):
+        from yamaa.schema.row_catalog import expand_row_catalogs
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            layers = root / 'layers'
+            layers.mkdir()
+            (layers / 'tests.csv').write_text('ID,CODE\nsysbp,SYSBP\n')
+            entry = root / 'spec.yaml'
+            layer = {
+                'rows': [{
+                    'id': 'vs',
+                    'catalog': {'path': 'tests.csv', 'id_column': 'ID'},
+                    'derivations': {'VSTESTCD': {'literal': '${CODE}'}},
+                }]
+            }
+
+            rebased = VALIDATOR.rebase_layer_paths(
+                layer, layers / 'parent.yaml', entry
+            )
+            rows = expand_row_catalogs(rebased, entry)['rows']
+
+        self.assertEqual(rebased['rows'][0]['catalog']['path'], 'layers/tests.csv')
+        self.assertEqual(rows[0]['id'], 'vs_sysbp')
+        self.assertEqual(rows[0]['derivations']['VSTESTCD'], {'literal': 'SYSBP'})
+
+    def test_malformed_catalog_reports_a_validator_diagnostic(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            entry = Path(temp_dir) / 'spec.yaml'
+            (entry.parent / 'tests.csv').write_text('ID,ORDER\nsysbp,1\n')
+            catalogs = (
+                None,
+                {
+                    'path': 'tests.csv',
+                    'id_column': 'ID',
+                    'types': {'ORDER': 'integer'},
+                },
+            )
+            for catalog in catalogs:
+                with self.subTest(catalog=catalog):
+                    spec = {
+                        'rows': [
+                            {'id': 'vs', 'catalog': catalog, 'derivations': {}}
+                        ]
+                    }
+                    _, errors, _ = VALIDATOR.prepare_spec_document(
+                        spec, 'example/spec.yaml', entry, self.env
+                    )
+                    self.assertIn(
+                        'example/spec.yaml.rows[0].catalog: invalid_row_catalog',
+                        '\n'.join(errors),
+                    )
 
     def test_bare_string_derivation_normalizes_to_source(self):
         # REQ-0319: the repository validator mirrors the engine's parse-time
@@ -4018,6 +4070,31 @@ class TestSpecContracts(unittest.TestCase):
             "does not exist",
             message,
         )
+
+    def test_accepts_absent_artifact_its_producer_writes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            spec_path = example_dir / "spec_supp.yaml"
+            spec = {
+                "domain": "SUPP",
+                "input": {
+                    "DM": {"path": "dm.csv", "schema": "spec_dm.yaml"},
+                },
+                "keys": ["USUBJID"],
+                "output": {"columns": ["USUBJID"]},
+                "columns": [
+                    {
+                        "name": "USUBJID",
+                        "derivation": {"source": "DM.USUBJID"},
+                    }
+                ],
+            }
+
+            errors = VALIDATOR.validate_spec_contracts(
+                spec, "example/spec_supp.yaml", spec_path
+            )
+
+        self.assertNotIn("input.DM.path", "\n".join(errors))
 
 
 class TestProducingSpecs(unittest.TestCase):
@@ -5968,6 +6045,40 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('csv-bad', result.stdout)
         self.assertIn('header', result.stdout.lower())
 
+    def write_producer_example(self, name):
+        ex_dir = self.root_dir / 'benchmarks' / name
+        (ex_dir / 'expected').mkdir(parents=True)
+        (ex_dir / 'spec_dm.yaml').write_text(
+            'output:\n  path: dm.csv\n  columns: [a]\n'
+            'columns:\n  - name: a\n'
+        )
+        (ex_dir / 'spec_supp.yaml').write_text(
+            'input:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n'
+            'output:\n  path: supp.csv\n  columns: [b]\n'
+            'columns:\n  - name: b\n'
+        )
+        (ex_dir / 'expected' / 'dm.csv').write_text('a\n1\n')
+        (ex_dir / 'expected' / 'supp.csv').write_text('b\n2\n')
+        return ex_dir
+
+    def test_csv_golden_of_a_sibling_producer_is_accepted(self):
+        self.write_producer_example('producer-output')
+
+        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+
+        self.assertEqual(errors, [])
+
+    def test_csv_golden_no_spec_declares_is_still_rejected(self):
+        ex_dir = self.write_producer_example('producer-stray')
+        (ex_dir / 'expected' / 'other.csv').write_text('c\n3\n')
+
+        errors, _ = VALIDATOR.validate_examples_csv(self.root_dir)
+
+        message = '\n'.join(errors)
+        self.assertIn('producer-stray/other.csv: expected artifact name', message)
+        self.assertNotIn('dm.csv: expected artifact name', message)
+        self.assertNotIn('supp.csv: expected artifact name', message)
+
     def test_spec_structural_unknown_field(self):
         ex_dir = self.root_dir / 'benchmarks' / 'spec-bad-field'
         ex_dir.mkdir(parents=True, exist_ok=True)
@@ -6076,6 +6187,19 @@ bad_field: "what"
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
+
+    def test_schema_linked_spec_files_are_producers_not_entries(self):
+        ex_dir = self.root_dir / 'benchmarks' / 'producer-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_dm.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_suppdm.yaml').write_text(
+            'value: valid\ninput:\n  DM: {path: dm.csv, schema: spec_dm.yaml}\n'
+        )
+
+        entries = VALIDATOR.example_entry_specs(ex_dir)
+        self.assertEqual([path.name for path in entries], ['spec_suppdm.yaml'])
 
     def test_readme_dashboard_badge_must_follow_the_title(self):
         # Issue #184 round 2c: badge-line checks live in
@@ -7151,6 +7275,61 @@ class TestCorrelatedLookupFilters(unittest.TestCase):
             'spec.columns.AVAL.derivation', VALIDATOR.predicate_resolver(), datasets,
         )
         self.assertEqual([e.condition for e in errors], ['incompatible_input_type'])
+
+
+class TestKeyColumnOrder(unittest.TestCase):
+    """Populated DOMAIN, STUDYID, USUBJID columns keep that order everywhere."""
+
+    def example(self, raw, name, declared, artifact, header):
+        example = Path(raw) / 'benchmarks' / name
+        (example / 'expected').mkdir(parents=True)
+        (example / 'spec.yaml').write_text(
+            'schema_version: "1.0"\n'
+            'domain: SE\n'
+            'keys: [USUBJID]\n'
+            'input: {}\n'
+            f"output:\n  path: {name}.csv\n  columns: [{', '.join(artifact)}]\n"
+            'columns:\n'
+            + ''.join(
+                f"  - name: {column}\n    type: str\n    label: {column}\n"
+                f"    derivation: {{literal: X}}\n"
+                for column in declared
+            )
+        )
+        (example / 'expected' / f'{name}.csv').write_text(
+            ','.join(header) + '\n' + ','.join('x' for _ in header) + '\n'
+        )
+        return Path(raw)
+
+    def findings(self, name, declared, artifact, header):
+        with tempfile.TemporaryDirectory() as raw:
+            root = self.example(raw, name, declared, artifact, header)
+            return VALIDATOR.validate_key_column_order(root)
+
+    def test_accepts_ordered_key_columns(self):
+        ordered = ['DOMAIN', 'STUDYID', 'USUBJID', 'SESEQ']
+        self.assertEqual(
+            self.findings('order-ok', ordered, ordered, ordered), [],
+        )
+
+    def test_accepts_a_missing_key_column(self):
+        cols = ['DOMAIN', 'USUBJID', 'SESEQ']
+        self.assertEqual(self.findings('order-skip', cols, cols, cols), [])
+
+    def test_rejects_a_swapped_declaration(self):
+        declared = ['STUDYID', 'DOMAIN', 'USUBJID', 'SESEQ']
+        ordered = ['DOMAIN', 'STUDYID', 'USUBJID', 'SESEQ']
+        errors = self.findings('order-bad', declared, ordered, ordered)
+        self.assertEqual(len(errors), 1)
+        self.assertIn('order-bad/spec.yaml: declared columns', errors[0])
+        self.assertIn('key columns out of order', errors[0])
+
+    def test_rejects_a_swapped_golden_header(self):
+        ordered = ['DOMAIN', 'STUDYID', 'USUBJID', 'SESEQ']
+        header = ['STUDYID', 'DOMAIN', 'USUBJID', 'SESEQ']
+        errors = self.findings('order-golden', ordered, ordered, header)
+        self.assertEqual(len(errors), 1)
+        self.assertIn('order-golden/expected/order-golden.csv: header', errors[0])
 
 
 if __name__ == '__main__':

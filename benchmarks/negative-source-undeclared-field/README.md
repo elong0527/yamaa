@@ -11,9 +11,9 @@ subject.
 **Variables:**
 
 - `AGE` would be the age, copied from the collected age field, but
-  the collected demographics declare no field by the name the copy
-  asks for, so the run is rejected before any data is read and no
-  artifact is accepted.
+  the copy asks for a field named `AGEYRS`, which the collected
+  demographics do not have, so the run is rejected before any data
+  is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
@@ -25,6 +25,7 @@ source carries the age under its own name, copy that field:
 ```yaml
 - name: AGE
   type: int
+  label: Age
   derivation:
     source: DM.AGE
 ```

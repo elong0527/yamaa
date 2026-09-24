@@ -27,7 +27,6 @@ expressions:
             description: See REQ-1105 in rules/operations/temporal.md.
         - month:
             type: int
-            required: true
             description: See REQ-1105 in rules/operations/temporal.md.
         - day:
             type: [int, day_rule]

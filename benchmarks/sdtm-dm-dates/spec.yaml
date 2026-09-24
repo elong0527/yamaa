@@ -22,8 +22,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: STUDYID
     type: str

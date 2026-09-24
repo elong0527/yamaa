@@ -9,6 +9,11 @@ input:
     path: input/vs.csv
     types: {AVISITN: int, AVAL: float, ADT: date, QSSEQ: int}
 base: PLAN
+
+# For each planned visit, the latest analysis-flagged observation with a
+# result at or before it: highest visit number, then highest QSSEQ. The
+# match is on subject and parameter only (not visit); with no such
+# observation AVAL, ADT, and QSSEQ stay missing.
 intermediates:
   - id: DONOR
     dataset: OBS
@@ -18,30 +23,39 @@ intermediates:
       AND OBS.AVISITN <= PLAN.AVISITN
     order_by: [OBS.AVISITN, OBS.QSSEQ]
     keep: last
+
 output:
   path: advs.csv
   columns: [USUBJID, PARAMCD, AVISITN, AVAL, ADT, QSSEQ]
+
 columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: PLAN.USUBJID
+
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation: PLAN.PARAMCD
+
   - name: AVISITN
     type: int
     label: Analysis Visit Number
     derivation: PLAN.AVISITN
+
+  # All three read the one chosen observation, so a missing ADT on it
+  # stays missing rather than coming from an earlier observation.
   - name: AVAL
     type: float
     label: Analysis Value
     derivation: DONOR.AVAL
+
   - name: ADT
     type: date
     label: Analysis Date
     derivation: DONOR.ADT
+
   - name: QSSEQ
     type: int
     label: Source Sequence Number

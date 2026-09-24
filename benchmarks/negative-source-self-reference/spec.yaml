@@ -47,9 +47,10 @@ columns:
   - name: ASTCODE
     type: str
     label: Aspartate Aminotransferase Parameter Code
-    derivation:
-      literal: AST
+    derivation: {literal: AST}
 
+  # The AST value for the same subject and date, read from input ADLB --
+  # a name this specification also gives the dataset it builds.
   - name: ASTVAL
     type: float
     label: Aspartate Aminotransferase Analysis Value
@@ -59,6 +60,7 @@ columns:
         key_base: [USUBJID, ADT, ASTCODE]
         key: [USUBJID, ADT, PARAMCD]
         value: AVAL
+
   - name: AVAL
     type: float
     label: Analysis Value
@@ -68,48 +70,37 @@ columns:
           then:
             compute:
               expr: "ASTVAL / NULLIF(ALTDEN, 0)"
-        - otherwise:
-            source: LBRESN
+        - otherwise: {source: LBRESN}
 
 rows:
   - id: alt
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ALT
-      PARAM:
-        literal: Alanine Aminotransferase
-      LBRESN:
-        source: LB.LBSTRESN
-      ALTDEN:
-        literal:
+      PARAMCD: {literal: ALT}
+      PARAM: {literal: Alanine Aminotransferase}
+      LBRESN: {source: LB.LBSTRESN}
+      ALTDEN: {literal: null}
 
   - id: ast
     dataset: LB
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
-      PARAMCD:
-        literal: AST
-      PARAM:
-        literal: Aspartate Aminotransferase
-      LBRESN:
-        source: LB.LBSTRESN
-      ALTDEN:
-        literal:
+      PARAMCD: {literal: AST}
+      PARAM: {literal: Aspartate Aminotransferase}
+      LBRESN: {source: LB.LBSTRESN}
+      ALTDEN: {literal: null}
 
+  # One ratio record per ALT record, carrying the ALT result as the
+  # denominator.
   - id: ast_alt_ratio
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ASTALT
-      PARAM:
-        literal: Aspartate to Alanine Aminotransferase Ratio
-      LBRESN:
-        literal:
-      ALTDEN:
-        source: LB.LBSTRESN
+      PARAMCD: {literal: ASTALT}
+      PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
+      LBRESN: {literal: null}
+      ALTDEN: {source: LB.LBSTRESN}
 
 verifications:
   - unique:

@@ -32,7 +32,7 @@ ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "source": ("missing", "multiple_matches"),
     "intermediate": ("missing", "multiple_matches"),
-    "mapping": ("missing",),
+    "mapping": ("missing", "unmapped"),
     "cut": ("missing",),
     "date_impute": ("missing", "invalid"),
     "date_precision": ("missing", "invalid"),

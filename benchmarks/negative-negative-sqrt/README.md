@@ -11,13 +11,14 @@ collected height and weight.
 
 **Variables:**
 
-- `BSA` would contain body surface area in square meters, the
-  square root of the collected height (`HEIGHTCM`) times the
-  collected weight (`WEIGHTKG`) divided by `3600`.
+- `BSA` would contain body surface area in square meters by the
+  Mosteller formula: height in centimeters (`HEIGHTCM`) times
+  weight in kilograms (`WEIGHTKG`), divided by `3600`, then
+  square-rooted; missing when either measurement is missing.
 
-A negative weight leaves the area with no real value. Any answer
-would be invented rather than derived, so the run fails and no
-artifact is accepted.
+**Note:** when height times weight is negative, as with a negative
+weight, the area has no real value. Any answer would be invented
+rather than derived, so the run fails and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

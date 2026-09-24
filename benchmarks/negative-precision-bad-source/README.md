@@ -11,12 +11,12 @@ the start-date completeness flag `ASTDTF`.
 
 **Variables:**
 
-- `ASTDTF` would contain the start-date completeness read from
-  `AESTDTC`: blank when the full date was collected and when the
-  source was never collected, and `D` when only the year and month
-  were collected. Text that is neither a date nor the beginning of
-  one has no completeness to report, so the run stops when it
-  tries to read precision from it and no artifact is accepted.
+- `ASTDTF` would contain how much of the start date `AESTDTC`
+  carries: `D` for a full date, `M` for a year and month, `Y` for a
+  year alone, and blank when the start was never collected. Text
+  that is neither a date nor the beginning of one has no
+  completeness to report, so the run stops when it tries to read
+  precision from it and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADAE
 
