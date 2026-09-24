@@ -79,6 +79,8 @@ columns:
     verifications:
       - not_missing: {}
 
+  # Per subject, by date and then by reported term, so records on the same
+  # day keep a fixed order.
   - name: DSSEQ
     type: int
     label: Sequence Number
@@ -90,6 +92,9 @@ columns:
     verifications:
       not_missing: {}
 
+# One row per collected form of each event. Each item is read from the
+# form's single record for it: a form holding the item twice fails the run,
+# and a form without it gives a missing value.
 rows:
   - id: consent
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
