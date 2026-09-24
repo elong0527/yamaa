@@ -39,8 +39,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: FA
+    derivation: {literal: FA}
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -83,8 +82,7 @@ columns:
   - name: FACAT
     type: str
     label: Category for Findings About
-    derivation:
-      literal: REACTOGENICITY
+    derivation: {literal: REACTOGENICITY}
   - name: FAORRES
     type: str
     label: Result or Finding in Original Units
@@ -95,8 +93,7 @@ columns:
     derivation:
       case:
         - when: FATESTCD = 'LDIAM'
-          then:
-            literal: mm
+          then: {literal: mm}
   - name: FASTRESC
     type: str
     label: Character Result/Finding in Std Format
@@ -107,8 +104,7 @@ columns:
     derivation:
       case:
         - when: FAORRES IS NULL
-          then:
-            literal: NOT DONE
+          then: {literal: NOT DONE}
   - name: FATPT
     type: str
     label: Planned Time Point Name

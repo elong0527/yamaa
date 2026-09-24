@@ -6,6 +6,8 @@ input:
   LBRANGE: input/lbrange.csv
 base: LB_RAW
 intermediates:
+  # The limit for the result's test code and sex. strict: a result whose
+  # test code and sex match no table row stops the run.
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]

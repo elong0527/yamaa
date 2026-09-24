@@ -35,14 +35,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: MDIS
+    derivation: {literal: MDIS}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Measurable Disease at Baseline
+    derivation: {literal: Measurable Disease at Baseline}
 
   - name: AVALC
     type: str
@@ -76,5 +74,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
-      min: 3
-      max: 3
+      min: 6
+      max: 6

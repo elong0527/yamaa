@@ -44,14 +44,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: PFS
+    derivation: {literal: PFS}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Progression-Free Survival
+    derivation: {literal: Progression-Free Survival}
 
   - name: STARTDT
     type: date

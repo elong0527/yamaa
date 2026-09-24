@@ -11,11 +11,9 @@ exposure start text.
 **Variables:**
 
 - `TRTSDTM`: the collected exposure start date/time, or the first second of a
-  completely collected date when only its time is absent.
-
-A year and month do not identify a day, so supplying only a time cannot turn
-that text into a treatment date/time. The run stops rather than inventing both
-a day and a time.
+  completely collected date when only its time is absent. A start collected to
+  the year and month only names no day, and supplying a time cannot supply
+  one, so the run stops rather than inventing both a day and a time.
 
 **Standard:** ADaM | **Domain:** ADSL
 

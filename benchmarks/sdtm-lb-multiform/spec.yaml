@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
     verifications:
       allowed_values:
         values: [LB]
@@ -123,8 +122,7 @@ columns:
     derivation:
       case:
         - when: "LBORRES = 'NOT DONE'"
-          then:
-            literal: NOT DONE
+          then: {literal: NOT DONE}
     verifications:
       allowed_values:
         values: [NOT DONE]
@@ -147,24 +145,17 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: VITD25OH
-      LBTEST:
-        literal: 25-Hydroxyvitamin D
-      LBCAT:
-        literal: CHEMISTRY
-      LBSPEC:
-        literal: SERUM
-      LBLOC:
-        literal: null
+      LBTESTCD: {literal: VITD25OH}
+      LBTEST: {literal: 25-Hydroxyvitamin D}
+      LBCAT: {literal: CHEMISTRY}
+      LBSPEC: {literal: SERUM}
+      LBLOC: {literal: null}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.LB.VITD'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: ng/mL
-      LBSTRESU:
-        literal: ng/mL
+      LBORRESU: {literal: ng/mL}
+      LBSTRESU: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.LB.LBDTC'"
@@ -174,24 +165,17 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: IL13
-      LBTEST:
-        literal: Interleukin 13 mRNA
-      LBCAT:
-        literal: GENE EXPRESSION
-      LBSPEC:
-        literal: SKIN BIOPSY
-      LBLOC:
-        literal: LESIONAL
+      LBTESTCD: {literal: IL13}
+      LBTEST: {literal: Interleukin 13 mRNA}
+      LBCAT: {literal: GENE EXPRESSION}
+      LBSPEC: {literal: SKIN BIOPSY}
+      LBLOC: {literal: LESIONAL}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.IL13_LES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: CYCLE
-      LBSTRESU:
-        literal: CYCLE
+      LBORRESU: {literal: CYCLE}
+      LBSTRESU: {literal: CYCLE}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.BXDTC'"
@@ -201,24 +185,17 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: IL13
-      LBTEST:
-        literal: Interleukin 13 mRNA
-      LBCAT:
-        literal: GENE EXPRESSION
-      LBSPEC:
-        literal: SKIN BIOPSY
-      LBLOC:
-        literal: NON-LESIONAL
+      LBTESTCD: {literal: IL13}
+      LBTEST: {literal: Interleukin 13 mRNA}
+      LBCAT: {literal: GENE EXPRESSION}
+      LBSPEC: {literal: SKIN BIOPSY}
+      LBLOC: {literal: NON-LESIONAL}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.IL13_NONLES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: CYCLE
-      LBSTRESU:
-        literal: CYCLE
+      LBORRESU: {literal: CYCLE}
+      LBSTRESU: {literal: CYCLE}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.BXDTC'"
@@ -228,24 +205,17 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: CAMPPRO
-      LBTEST:
-        literal: Cathelicidin Protein
-      LBCAT:
-        literal: ANTIMICROBIAL PEPTIDE
-      LBSPEC:
-        literal: SALIVA
-      LBLOC:
-        literal: null
+      LBTESTCD: {literal: CAMPPRO}
+      LBTEST: {literal: Cathelicidin Protein}
+      LBCAT: {literal: ANTIMICROBIAL PEPTIDE}
+      LBSPEC: {literal: SALIVA}
+      LBLOC: {literal: null}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.SAL.SAL_CAMP'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: ng/mL
-      LBSTRESU:
-        literal: ng/mL
+      LBORRESU: {literal: ng/mL}
+      LBSTRESU: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.SAL.SALDTC'"
@@ -255,24 +225,17 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: CAMPPRO
-      LBTEST:
-        literal: Cathelicidin Protein
-      LBCAT:
-        literal: ANTIMICROBIAL PEPTIDE
-      LBSPEC:
-        literal: TAPE STRIP
-      LBLOC:
-        literal: LESIONAL
+      LBTESTCD: {literal: CAMPPRO}
+      LBTEST: {literal: Cathelicidin Protein}
+      LBCAT: {literal: ANTIMICROBIAL PEPTIDE}
+      LBSPEC: {literal: TAPE STRIP}
+      LBLOC: {literal: LESIONAL}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_LES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: ng/mL
-      LBSTRESU:
-        literal: ng/mL
+      LBORRESU: {literal: ng/mL}
+      LBSTRESU: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TSDTC'"
@@ -282,24 +245,17 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD:
-        literal: CAMPPRO
-      LBTEST:
-        literal: Cathelicidin Protein
-      LBCAT:
-        literal: ANTIMICROBIAL PEPTIDE
-      LBSPEC:
-        literal: TAPE STRIP
-      LBLOC:
-        literal: NON-LESIONAL
+      LBTESTCD: {literal: CAMPPRO}
+      LBTEST: {literal: Cathelicidin Protein}
+      LBCAT: {literal: ANTIMICROBIAL PEPTIDE}
+      LBSPEC: {literal: TAPE STRIP}
+      LBLOC: {literal: NON-LESIONAL}
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_NONLES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU:
-        literal: ng/mL
-      LBSTRESU:
-        literal: ng/mL
+      LBORRESU: {literal: ng/mL}
+      LBSTRESU: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TSDTC'"

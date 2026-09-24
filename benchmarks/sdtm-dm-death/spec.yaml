@@ -26,8 +26,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: STUDYID
     type: str
@@ -62,8 +61,7 @@ columns:
     derivation:
       case:
         - when: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

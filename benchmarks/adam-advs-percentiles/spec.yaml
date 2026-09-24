@@ -9,6 +9,9 @@ input:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
 base: ADVS_RAW
+
+# The growth reference row for the collected measurement code (not the
+# output PARAMCD, which is the percentile code), sex, and age in days.
 intermediates:
   - id: GROWTH
     dataset: LMS
@@ -35,6 +38,7 @@ columns:
     label: Analysis Visit
     derivation: ADVS_RAW.AVISIT
 
+  # The collected result as a number; the input stores it as text.
   - name: AVALSRC
     type: float
     label: Source Analysis Value
@@ -46,11 +50,9 @@ columns:
     derivation:
       case:
         - when: "ADVS_RAW.PARAMCD = 'BMI'"
-          then:
-            literal: BMIPCTL
+          then: {literal: BMIPCTL}
         - when: "ADVS_RAW.PARAMCD = 'WEIGHT'"
-          then:
-            literal: WGTPCTL
+          then: {literal: WGTPCTL}
     verifications:
       allowed_values:
         values: [BMIPCTL, WGTPCTL]
@@ -61,12 +63,12 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'BMIPCTL'"
-          then:
-            literal: BMI-for-Age Percentile
+          then: {literal: BMI-for-Age Percentile}
         - when: "PARAMCD = 'WGTPCTL'"
-          then:
-            literal: Weight-for-Age Percentile
+          then: {literal: Weight-for-Age Percentile}
 
+  # LMS z-score of the collected value X: ((X / M) ^ L - 1) / (L * S).
+  # With no reference row the coefficients are missing, and so is ZNUM.
   - name: ZNUM
     type: float
     label: LMS Standard Normal Score
@@ -74,14 +76,15 @@ columns:
       compute:
         expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
 
+  # A measurement with no z-score gets no probability, and so no
+  # percentile.
   - name: NORMCDF
     type: float
     label: Standard Normal Cumulative Probability
     derivation:
       case:
         - when: "ZNUM IS NULL"
-          then:
-            literal: null
+          then: {literal: null}
         - otherwise:
             function:
               name: normal_cdf

@@ -27,8 +27,7 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: OVR
+    derivation: {literal: OVR}
 
   - name: ADT
     type: date

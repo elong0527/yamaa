@@ -1,0 +1,80 @@
+schema_version: "1.0"
+domain: CM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  ODM: {path: input/odm.csv, types: {ItemGroupRepeatKey: int}}
+  CODING: {path: input/coding_output.csv, types: {CMSEQ: int}}
+  WHODRUG: input/whodrug_extract.csv
+metadata:
+  dictionary: WHODrug
+  dictionary_version: "C3 2024"
+
+output:
+  path: cm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD]
+  order_by: [USUBJID, CMSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: CM}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: ODM.ItemGroupRepeatKey
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of the Medication
+
+  - name: CMDECOD
+    type: str
+    label: Standardized Medication Name
+    derivation:
+      lookup:
+        dataset: WHODRUG
+        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
+        key: [DRUG_RECORD_NO, ATC_CODE]
+        value: PREFERRED_NAME
+
+  - name: CMCLAS
+    type: str
+    label: Medication Class
+    derivation:
+      lookup:
+        dataset: WHODRUG
+        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
+        key: [DRUG_RECORD_NO, ATC_CODE]
+        value: ATC_CLASS_NAME
+
+  - name: CMCLASCD
+    type: str
+    label: Medication Class Code
+    derivation:
+      lookup:
+        dataset: WHODRUG
+        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
+        key: [DRUG_RECORD_NO, ATC_CODE]
+        value: ATC_CLASS_CODE
+
+rows:
+  - id: medication
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations:
+      CMTRT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.CM.CMTRT'"
+          expr: "ONLY(ODM.Value)"

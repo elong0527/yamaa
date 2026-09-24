@@ -13,8 +13,9 @@ without regard to case.
 
 - `SMOKEFL` would be the smoking flag taken from `SMOKSTAT`
   without regard to case: `Y` gives `Y`, `y` gives `Y`, and `N`
-  gives `N`. The entries for `Y` and `y` collide on the folded key
-  `Y`, so no row is produced.
+  gives `N`. The entries for `Y` and `y` collide on the key `Y`
+  once case is ignored, so the run is rejected before any data is
+  read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

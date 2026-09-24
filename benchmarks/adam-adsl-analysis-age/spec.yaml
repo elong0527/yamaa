@@ -45,5 +45,4 @@ columns:
   - name: AAGEU
     type: str
     label: Analysis Age Unit
-    derivation:
-      literal: YEARS
+    derivation: {literal: YEARS}

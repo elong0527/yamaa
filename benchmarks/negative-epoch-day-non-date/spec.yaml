@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: EX.EXSEQ
 
+  # EX.EXSTDT has no declared input type, so it is text, and to_epoch_day
+  # counts days only from a date: the specification is rejected before any
+  # data is read.
   - name: EXSTDY
     type: int
     label: Study Day of Exposure Start
@@ -31,6 +34,7 @@ columns:
       to_epoch_day:
         source: EX.EXSTDT
 
+# One row for each exposure record with sequence number 1.
 rows:
   - id: exposure
     filter: "EX.EXSEQ = 1"

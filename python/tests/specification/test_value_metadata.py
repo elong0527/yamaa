@@ -64,7 +64,7 @@ def test_executes_value_level_metadata() -> None:
 def test_rejects_dynamic_discriminator(tmp_path: Path) -> None:
     path = _mutated(
         tmp_path,
-        "      LBTESTCD:\n        literal: GLUC",
+        "      LBTESTCD: {literal: GLUC}",
         "      LBTESTCD: ODM.TestCode",
     )
 
@@ -78,8 +78,8 @@ def test_rejects_dynamic_discriminator(tmp_path: Path) -> None:
 def test_rejects_conflicting_value_metadata(tmp_path: Path) -> None:
     path = _mutated(
         tmp_path,
-        "      LBTESTCD:\n        literal: CREAT",
-        "      LBTESTCD:\n        literal: GLUC",
+        "      LBTESTCD: {literal: CREAT}",
+        "      LBTESTCD: {literal: GLUC}",
     )
 
     assert _condition(path) == (
@@ -91,7 +91,7 @@ def test_rejects_conflicting_value_metadata(tmp_path: Path) -> None:
 
 def test_accepts_identical_duplicate_declarations(tmp_path: Path) -> None:
     source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
-    old_testcd = "      LBTESTCD:\n        literal: CREAT"
+    old_testcd = "      LBTESTCD: {literal: CREAT}"
     assert old_testcd in source
     old_submission = (
         "        origin:\n"
@@ -102,7 +102,7 @@ def test_accepts_identical_duplicate_declarations(tmp_path: Path) -> None:
     assert old_submission in source
     path = tmp_path / "spec.yaml"
     path.write_text(
-        source.replace(old_testcd, "      LBTESTCD:\n        literal: GLUC", 1).replace(
+        source.replace(old_testcd, "      LBTESTCD: {literal: GLUC}", 1).replace(
             old_submission,
             "        origin:\n"
             "          type: Assigned\n"

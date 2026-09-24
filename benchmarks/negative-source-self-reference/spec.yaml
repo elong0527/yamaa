@@ -47,8 +47,7 @@ columns:
   - name: ASTCODE
     type: str
     label: Aspartate Aminotransferase Parameter Code
-    derivation:
-      literal: AST
+    derivation: {literal: AST}
 
   - name: ASTVAL
     type: float
@@ -76,38 +75,29 @@ rows:
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ALT
-      PARAM:
-        literal: Alanine Aminotransferase
+      PARAMCD: {literal: ALT}
+      PARAM: {literal: Alanine Aminotransferase}
       LBRESN:
         source: LB.LBSTRESN
-      ALTDEN:
-        literal:
+      ALTDEN: {literal: null}
 
   - id: ast
     dataset: LB
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
-      PARAMCD:
-        literal: AST
-      PARAM:
-        literal: Aspartate Aminotransferase
+      PARAMCD: {literal: AST}
+      PARAM: {literal: Aspartate Aminotransferase}
       LBRESN:
         source: LB.LBSTRESN
-      ALTDEN:
-        literal:
+      ALTDEN: {literal: null}
 
   - id: ast_alt_ratio
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD:
-        literal: ASTALT
-      PARAM:
-        literal: Aspartate to Alanine Aminotransferase Ratio
-      LBRESN:
-        literal:
+      PARAMCD: {literal: ASTALT}
+      PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
+      LBRESN: {literal: null}
       ALTDEN:
         source: LB.LBSTRESN
 

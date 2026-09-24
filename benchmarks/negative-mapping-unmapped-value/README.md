@@ -33,5 +33,5 @@ mapping:
 ```
 
 If an unknown response should instead produce a missing result, state that
-missing-value answer explicitly. Prefer completing the dictionary when the
-value is valid.
+missing-value answer explicitly with `unmapped: null`. Prefer completing the
+dictionary when the value is valid.

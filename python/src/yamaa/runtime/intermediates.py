@@ -139,7 +139,9 @@ class _LookupPredicateResolver(_DerivedRecordResolver):
         self._current = current
 
     def resolve(self, variable: str) -> Resolution:
-        if variable.split(".", 1)[0] == self._dataset:
+        if variable.split(".", 1)[0] == self._dataset or (
+            self._dataset == "SELF" and "." not in variable
+        ):
             return super().resolve(variable)
         if variable in self._current:
             return ResolvedValue(value=self._current[variable])
@@ -155,6 +157,10 @@ class _DonorPredicateResolver:
 
     def resolve(self, variable: str) -> Resolution:
         qualifier, separator, field = variable.partition(".")
+        if not separator and self._dataset == "SELF":
+            field = qualifier
+            qualifier = "SELF"
+            separator = "."
         if not separator or qualifier != self._dataset or field not in self._values:
             return FailedResolution(
                 condition=RuntimeCondition(
@@ -217,6 +223,21 @@ class IntermediateSelector:
             str, dict[tuple[RuntimeValue, ...], tuple[IndexedRecord, ...]]
         ] = {}
         self._evaluate = evaluate or evaluate_expression
+        self._self_records: tuple[IndexedRecord, ...] = ()
+        self.uses_self = any(plan.dataset == "SELF" for plan in plans)
+
+    def add_self_records(self, rows: Sequence[Mapping[str, RuntimeValue]]) -> None:
+        """Expose completed row templates to subsequent SELF selections."""
+        start = len(self._self_records)
+        self._self_records += tuple(
+            IndexedRecord(position=start + index, values=dict(values))
+            for index, values in enumerate(rows)
+        )
+        for identifier, plan in self.plans.items():
+            if plan.dataset == "SELF":
+                self._eligible.pop(identifier, None)
+                self._derived.pop(identifier, None)
+                self._match_index.pop(identifier, None)
 
     def declares(self, identifier: str) -> bool:
         return identifier in self.plans
@@ -248,12 +269,17 @@ class IntermediateSelector:
         REQ-1185 computes each derivation once per record and caches the
         augmented records before filtering, matching, and selection.
         """
+        source = (
+            self._self_records
+            if plan.dataset == "SELF"
+            else self._relations[plan.dataset].records
+        )
         if not plan.derived:
-            return tuple(self._relations[plan.dataset].records)
+            return tuple(source)
         cached = self._derived.get(plan.identifier)
         if cached is None:
             augmented: list[IndexedRecord] = []
-            for record in self._relations[plan.dataset].records:
+            for record in source:
                 outcome = self._augment(plan, record)
                 if isinstance(outcome, _DerivationFailure):
                     cached = outcome
@@ -304,12 +330,14 @@ class IntermediateSelector:
             plan, eligible, current, index=self._match_index_for(plan, eligible)
         )
 
-    def verify_uniqueness(self) -> tuple[VerificationFailure, ...]:
+    def verify_uniqueness(
+        self, *, self_only: bool = False
+    ) -> tuple[VerificationFailure, ...]:
         """Evaluate every declared intermediate uniqueness check (REQ-1245).
 
         Each check runs over the source-only filtered donor records with
-        derivations computed, before any row is built, so a repeated key
-        combination fails the run loudly instead of resolving ambiguously.
+        derivations computed. Input checks precede row construction; SELF
+        checks follow each completed template.
         A filter or derivation that failed to materialize fails the run
         here too: the verification is load-bearing for a declared
         intermediate, so its failure cannot wait for a selection that may
@@ -317,6 +345,8 @@ class IntermediateSelector:
         """
         failures: list[VerificationFailure] = []
         for plan in self.plans.values():
+            if (plan.dataset == "SELF") != self_only:
+                continue
             if not plan.unique_columns:
                 continue
             records = self._filtered(plan)

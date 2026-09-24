@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: EX.EXSEQ
 
+  # A collected date/time is kept; a complete date gets the first second of
+  # its day. Neither handler is declared, so a missing start, or one cut off
+  # before its day such as 2025-01, stops the run.
   - name: TRTSDTM
     type: datetime
     label: Datetime of First Exposure to Treatment

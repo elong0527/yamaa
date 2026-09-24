@@ -28,6 +28,9 @@ columns:
     type: str
     label: Age Group
     derivation:
+      # The first branch's fixed value is a mapping, not a single value, so
+      # the specification is rejected before any data is read. A missing AGE
+      # would reach otherwise and get younger.
       case:
         - when: "AGE >= 65"
           then: {literal: {group: elderly}}

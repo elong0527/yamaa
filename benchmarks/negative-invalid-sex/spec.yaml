@@ -23,6 +23,8 @@ columns:
     type: str
     label: Sex
     derivation: DM.SEX
+    # Checked once SEX is derived: any non-missing code other than M or F
+    # fails the run. A missing sex passes this check.
     verifications:
       - allowed_values:
           values: [M, F]

@@ -58,7 +58,13 @@ requirement link for behavior. It is not an additional semantic contract.
 | `row_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `row_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `row_class.derivations` | `"dict[identifier, derivation]"` | `true` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
+| `row_class.catalog` | `"row_catalog_class"` | `false` | Absent | -- | [REQ-1249](../execution/rows.md#req-1249) |
 | `row_class.submission` | `"dict[identifier, submission_column_class]"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
+| `row_catalog_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1249](../execution/rows.md#req-1249) |
+| `row_catalog_class.id_column` | `"identifier"` | `true` | Absent | -- | [REQ-1249](../execution/rows.md#req-1249) |
+| `row_catalog_class.types` | `"dict[identifier, row_catalog_type]"` | `false` | Absent | -- | [REQ-1249](../execution/rows.md#req-1249) |
+| `row_catalog_class.unique_columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1249](../execution/rows.md#req-1249) |
+| `row_catalog_type` | `"str"` | `false` | Absent | `{"values": ["str", "int", "float"]}` | [REQ-1249](../execution/rows.md#req-1249) |
 | `variable` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"}` | [REQ-1057](../specification/binding.md#req-1057) |
 | `dataset_source` | `["project_path", "dataset_class"]` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
 | `dataset_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
@@ -256,7 +262,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.date_diff.unit` | `"str"` | `true` | Absent | `{"values": ["day", "week", "month", "year"]}` | [REQ-1104](../operations/temporal.md#req-1104) |
 | `expressions.date_diff.bounds` | `"str"` | `false` | `"exclusive"` | `{"values": ["exclusive", "inclusive", "between"]}` | [REQ-1104](../operations/temporal.md#req-1104) |
 | `expressions.date_impute.source` | `"variable"` | `true` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
-| `expressions.date_impute.month` | `"int"` | `true` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
+| `expressions.date_impute.month` | `"int"` | `false` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
 | `expressions.date_impute.day` | `["int", "day_rule"]` | `true` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
 | `expressions.date_impute.minimum_source_precision` | `"str"` | `false` | `"year"` | `{"values": ["year", "month"]}` | [REQ-1105](../operations/temporal.md#req-1105) |
 | `expressions.date_impute.not_before` | `"variable"` | `false` | Absent | -- | [REQ-1105](../operations/temporal.md#req-1105) |
@@ -288,6 +294,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.mapping.dict_yaml` | `"project_path"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.case_sensitive` | `"bool"` | `false` | `true` | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
+| `expressions.mapping.unmapped` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.strict` | `"bool"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.lookup.value` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |

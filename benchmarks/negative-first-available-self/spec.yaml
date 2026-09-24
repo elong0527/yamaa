@@ -24,6 +24,8 @@ columns:
     label: Sequence Number
     derivation: VS.VSSEQ
 
+  # SEVAL lists itself as its own fallback. A column cannot read its own
+  # value, so the cycle rejects the specification before any data is read.
   - name: SEVAL
     type: int
     label: Severity Value
