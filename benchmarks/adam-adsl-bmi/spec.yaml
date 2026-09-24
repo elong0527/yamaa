@@ -57,9 +57,9 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 7
+      max: 7
   - implies:
-      id: bmi-missing-only-without-usable-height
+      id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
-      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0"
+      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
