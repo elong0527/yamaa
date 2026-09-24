@@ -14,8 +14,6 @@ identifiers shared across the three files.
 
 **Variables:**
 
-The study and subject identifiers carry through unchanged.
-
 - `METSTATR`: metastatic disease status recorded at
   randomization, copied from input `METSTAT` in the
   randomization file.
@@ -36,9 +34,8 @@ The study and subject identifiers carry through unchanged.
 - `STRAT1`: combined independently collected strata, joining
   `METSTAT`, `ECOG0`, and `REGIONUS` with `|` in the same order.
 
-The two combined values must agree. When the two values disagree
-for any subject, the run is rejected and no artifact is accepted
-from this input.
+The two combined values must agree for every subject; a single
+disagreement rejects the run, and no artifact is accepted.
 
 **Note:** the expected file records the completed rows as
 presented to the check; the disagreement still rejects the run.
