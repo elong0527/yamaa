@@ -293,6 +293,31 @@ def test_an_inline_key_base_expression_without_a_dispatcher_is_a_condition() -> 
     assert result.condition.requirement == "REQ-0321"
 
 
+def test_a_select_key_base_expression_without_a_dispatcher_is_a_condition() -> None:
+    # REQ-1259: in select, a key_base expression that does not evaluate to
+    # a value yields a clean condition, never an AttributeError on .value.
+    plan = PlannedIntermediate(
+        identifier="UPPER",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("key_base[0]",),
+        match_fields=("USUBJID",),
+        match_expressions=(
+            KeyBaseExpression(
+                name="key_base[0]",
+                expression=Expression.model_validate({"double": {"source": "SUBJECT"}}),
+                variables=("SUBJECT",),
+            ),
+        ),
+    )
+    answered = selector(plan).select("UPPER", {"SUBJECT": "s1"})
+
+    assert answered.record is None
+    assert answered.condition is not None
+    assert answered.condition.condition.condition == "invalid_field_type"
+    assert answered.condition.condition.requirement == "REQ-0321"
+
+
 def epochs() -> RelationIndex:
     return relation(
         "EPOCHS",

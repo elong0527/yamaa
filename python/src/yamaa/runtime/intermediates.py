@@ -341,6 +341,22 @@ class IntermediateSelector:
                         condition=result,
                         spec_path=f"{plan.path}.{keyed.name}",
                     )
+                if not isinstance(result, ValueResult):
+                    return IntermediateOutcome(
+                        condition=_condition(
+                            "invalid_field_type",
+                            "REQ-0321",
+                            {
+                                "operation": "lookup",
+                                "reason": (
+                                    "a key_base expression that did not "
+                                    "evaluate to a value"
+                                ),
+                            },
+                            phase="validation",
+                        ),
+                        spec_path=f"{plan.path}.{keyed.name}",
+                    )
                 resolved_current[keyed.name] = result.value
             current = resolved_current
         return _select_eligible(

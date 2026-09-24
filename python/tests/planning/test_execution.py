@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
+
 import pytest
 
 from yamaa.expressions import DEFAULT_EXPRESSION_OPERATIONS
@@ -352,6 +354,125 @@ def test_key_base_expression_type_mismatch_fails() -> None:
         )
 
     assert raised.value.diagnostics[0].condition == "incompatible_input_type"
+
+
+def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:
+    # REQ-1259: mapping's result type depends on its dict values, so it
+    # states no static type; a mapping returning ints pairs with an int
+    # donor key and the pair is judged at run time, not planning time.
+    int_table = frame_from_values(
+        (TypedColumn(name="X", type="int"),),
+        [[1], [2]],
+    )
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="int", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"mapping": {"source": "A", "dict": {"x": 1, "y": 2}}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": int_table},
+        supported_operations=("source", "literal", "mapping"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+
+
+def test_a_date_precision_key_base_expression_pairs_with_a_str_key() -> None:
+    # REQ-1259: date_precision returns a str precision code ("Y"/"M"/"D"),
+    # so it pairs with a str donor key.
+    src_table = frame_from_values(
+        (TypedColumn(name="D", type="date"), TypedColumn(name="X", type="str")),
+        [[date(2024, 1, 15), "Y"], [date(2024, 3, 20), "M"]],
+    )
+    spec = specification(
+        [
+            Column(name="A", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"date_precision": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": src_table},
+        supported_operations=("source", "literal", "date_precision"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+
+
+def test_a_datetime_precision_key_base_expression_pairs_with_a_str_key() -> None:
+    # REQ-1259: datetime_precision returns a str precision code ("D"/"S"),
+    # so it pairs with a str donor key.
+    src_table = frame_from_values(
+        (
+            TypedColumn(name="D", type="datetime"),
+            TypedColumn(name="X", type="str"),
+        ),
+        [
+            [datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC), "D"],
+            [datetime(2024, 3, 20, 8, 30, 0, tzinfo=UTC), "S"],
+        ],
+    )
+    spec = specification(
+        [
+            Column(
+                name="A",
+                type="datetime",
+                derivation=derivation({"source": "SRC.D"}),
+            ),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"datetime_precision": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": src_table},
+        supported_operations=("source", "literal", "datetime_precision"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
 
 
 def test_an_inline_lookup_key_base_expression_plans() -> None:
