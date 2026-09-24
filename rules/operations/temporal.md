@@ -152,7 +152,7 @@ nests these operations. Their input and result types are:
 | `date_precision` | `source` is `str` or `date` | `str` |
 | `datetime_impute` | `source` is complete date or datetime text; `time` is `first` or `last` | `datetime` |
 | `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
-| `to_date` | `source` is `datetime` or ISO 8601 date text | `date` with collected precision `day` |
+| `to_date` | `source` is `datetime`, ISO 8601 date text, or ISO 8601 datetime text | `date` with collected precision `day` |
 | `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
 
 <a id="req-1187"></a>
@@ -196,7 +196,10 @@ where the specification is read.
 **REQ-0593.** A `datetime` is produced by converting datetime text or by
 `datetime_impute`, which completes a date source under its declared time rule.
 It is consumed by comparisons, `datetime_precision`, or `to_date`, which copies
-calendar fields and drops time fields. A missing `to_date` source returns a
+calendar fields and drops time fields. ISO 8601 datetime text parses as a
+`datetime` first, so `to_date` truncates it by the same field copy. The
+truncation is never a timezone conversion: the `datetime` value space is
+zone-free. A missing `to_date` source returns a
 missing date. Any other source type is the incompatible-input error
 [Types and conversion](../values/types.md) defines; in particular, a `date`
 value is not accepted as an identity spelling.
@@ -294,8 +297,8 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.to_date.source` | Datetime whose calendar date is returned, or ISO 8601 date text to parse. |
-| `Result` | Extracts the calendar date from a datetime, or parses ISO 8601 date text directly. A missing source yields a missing date. Other source types are an incompatible input error under this operation contract; text that is not a complete ISO date is invalid date text. |
+| `expressions.to_date.source` | Datetime whose calendar date is returned, or ISO 8601 date or datetime text to parse. |
+| `Result` | Extracts the calendar date from a datetime; ISO 8601 date or datetime text parses first, and a datetime's calendar date copies its fields and drops the time. A missing source yields a missing date. Other source types are an incompatible input error under this operation contract; text that is neither a complete ISO date nor a complete ISO datetime is invalid date text. |
 
 <a id="req-1108"></a>
 
@@ -379,8 +382,9 @@ source.
 
 <a id="req-0607"></a>
 
-**REQ-0607.** `to_date` given anything other than a `datetime` or ISO 8601 date
-text: fail as an incompatible input. Text that is not a complete ISO date fails
+**REQ-0607.** `to_date` given anything other than a `datetime`, ISO 8601 date
+text, or ISO 8601 datetime text: fail as an incompatible input. Text that is
+neither a complete ISO date nor a complete ISO datetime fails
 as invalid date text. A missing source yields a missing date instead.
 
 <a id="req-0608"></a>

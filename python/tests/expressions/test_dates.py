@@ -484,9 +484,29 @@ def test_to_date_parses_iso_date_text() -> None:
     assert value == date("2013-02-12")
 
 
-def test_to_date_rejects_text_that_is_not_a_complete_date() -> None:
-    # REQ-0607: partial or non-date text is invalid date text.
-    for text in ["2013-02", "not a date", ""]:
+def test_to_date_truncates_iso_datetime_text_to_its_date_part() -> None:
+    # Issue #995: ISO datetime text parses as a datetime, then to_date copies
+    # the calendar fields and drops the time, exactly as for a `datetime`
+    # value. The truncation is a field copy, never a timezone conversion.
+    for text in ["2013-12-26T14:45", "2025-01-12T14:30:05"]:
+        value = _value("to_date", {"source": "S"}, {"S": text})
+
+        assert value == date(text[:10])
+        # REQ-0546: `to_date` produces a value collected to the day.
+        assert value.collected_precision == "day"
+
+
+def test_to_date_rejects_text_that_is_not_a_complete_date_or_datetime() -> None:
+    # REQ-0607: partial, non-date, or malformed datetime text is invalid date
+    # text. The datetime lexical form is zone-free, so a zoned spelling fails.
+    for text in [
+        "2013-02",
+        "not a date",
+        "",
+        "2013-02-30T10:00",
+        "2013-12-26T25:00",
+        "2013-12-26T14:45+05:00",
+    ]:
         condition = _condition("to_date", {"source": "S"}, {"S": text})
 
         assert condition.condition.condition == "invalid_date_text"

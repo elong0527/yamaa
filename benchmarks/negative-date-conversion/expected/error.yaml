@@ -6,5 +6,5 @@ requirement: REQ-0607
 context:
   operation: to_date
   source: source
-  expected: datetime or ISO date text
+  expected: datetime, ISO date text, or ISO 8601 datetime text
   actual: date
