@@ -574,7 +574,7 @@ sources:
   R016-17: {"file": "R016-temporal-values.md", "targets": ["REQ-0555"]}
   R016-18: {"file": "R016-temporal-values.md", "targets": ["REQ-0556"]}
   R016-19: {"file": "R016-temporal-values.md", "targets": ["REQ-0557"]}
-  R016-20: {"file": "R016-temporal-values.md", "targets": ["REQ-0558"]}
+  R016-20: {"file": "R016-temporal-values.md", "targets": ["REQ-0559", "REQ-0560"]}
   R016-21: {"file": "R016-temporal-values.md", "targets": ["REQ-0559"]}
   R016-22: {"file": "R016-temporal-values.md", "targets": ["REQ-0560"]}
   R016-23: {"file": "R016-temporal-values.md", "targets": ["REQ-0561"]}
@@ -1631,9 +1631,8 @@ requirements:
   REQ-0555: {"file": "values/temporal.md", "sources": ["R016-17"]}
   REQ-0556: {"file": "values/temporal.md", "sources": ["R016-18"]}
   REQ-0557: {"file": "values/temporal.md", "sources": ["R016-19"]}
-  REQ-0558: {"file": "values/temporal.md", "sources": ["R016-20"]}
-  REQ-0559: {"file": "values/temporal.md", "sources": ["R016-21"]}
-  REQ-0560: {"file": "values/temporal.md", "sources": ["R016-22"]}
+  REQ-0559: {"file": "values/temporal.md", "sources": ["R016-20", "R016-21"]}
+  REQ-0560: {"file": "values/temporal.md", "sources": ["R016-20", "R016-22"]}
   REQ-0561: {"file": "values/temporal.md", "sources": ["R016-23"]}
   REQ-0562: {"file": "values/temporal.md", "sources": ["R016-24"]}
   REQ-0563: {"file": "values/temporal.md", "sources": ["R016-25"]}
