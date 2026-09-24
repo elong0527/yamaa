@@ -282,6 +282,78 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
 
 
+def test_key_base_expression_plans_with_synthetic_name() -> None:
+    # REQ-1259: a key_base expression entry takes a synthetic match name and
+    # contributes its read identifiers as dependencies.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"str_upper": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=("source", "literal", "mapping", "str_upper"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+    assert len(planned.match_expressions) == 1
+    keyed = planned.match_expressions[0]
+    assert keyed.name == "key_base[0]"
+    assert keyed.variables == ("A",)
+    assert planned.dependencies == ("A",)
+
+
+def test_key_base_expression_type_mismatch_fails() -> None:
+    # REQ-1259: a statically known expression result type checks against the
+    # donor key type with the existing comparability rules.
+    int_table = frame_from_values(
+        (TypedColumn(name="X", type="int"),),
+        [[1], [2]],
+    )
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"str_upper": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": int_table},
+            supported_operations=("source", "literal", "mapping", "str_upper"),
+        )
+
+    assert raised.value.diagnostics[0].condition == "incompatible_input_type"
+
+
 def test_a_lookup_defaults_to_missing_on_absence() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]

@@ -4,7 +4,8 @@ from yamaa.expressions import ResolvedValue, parse_predicate
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, DateValue, TypedColumn
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
-from yamaa.planning import PlannedIntermediate
+from yamaa.planning import KeyBaseExpression, PlannedIntermediate
+from yamaa.specification.models import Expression
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
     _select_eligible,
@@ -194,6 +195,56 @@ def test_a_missing_match_value_is_answered_before_a_record_is_looked_for() -> No
     assert fatal.condition is not None
     assert fatal.condition.condition.condition == "unmatched_key"
     assert fatal.condition.condition.requirement == "REQ-0124"
+    assert answered.condition is None
+    assert answered.record is None
+
+
+def test_key_base_expression_evaluates_against_current_row() -> None:
+    # REQ-1259: a key_base expression evaluates against the current row and
+    # supplies that key position's match value.
+    plan = PlannedIntermediate(
+        identifier="UPPER",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("key_base[0]",),
+        match_fields=("USUBJID",),
+        match_expressions=(
+            KeyBaseExpression(
+                name="key_base[0]",
+                expression=Expression.model_validate(
+                    {"str_upper": {"source": "SUBJECT"}}
+                ),
+                variables=("SUBJECT",),
+            ),
+        ),
+        order_terms=((OrderTerm(variable="EX.EXSEQ"), "EXSEQ"),),
+        keep="first",
+    )
+    chosen = selector(plan).select("UPPER", {"SUBJECT": "s1"})
+
+    assert chosen.record is not None
+    assert chosen.record.values["EXTRT"] == "VITAMIN D3"
+
+
+def test_key_base_expression_missing_result_matches_nothing() -> None:
+    # REQ-1259: a missing expression result matches nothing, like a missing
+    # variable.
+    plan = PlannedIntermediate(
+        identifier="UPPER",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("key_base[0]",),
+        match_fields=("USUBJID",),
+        match_expressions=(
+            KeyBaseExpression(
+                name="key_base[0]",
+                expression=Expression.model_validate({"literal": None}),
+                variables=(),
+            ),
+        ),
+    )
+    answered = selector(plan).select("UPPER", {"SUBJECT": "s1"})
+
     assert answered.condition is None
     assert answered.record is None
 

@@ -103,6 +103,22 @@ class MappingResolver:
         return self.resolve(variable)
 
 
+class CallableResolver:
+    """Adapt a ``Callable[[str], Resolution]`` to the Resolver protocol.
+
+    REQ-1259 evaluates key_base expressions through the caller's own
+    resolution (the derivation resolver for aggregates, the lookup's
+    resolve callable for inline intermediates), so a reference reads
+    exactly what the surrounding derivation would read.
+    """
+
+    def __init__(self, resolve: Callable[[str], Resolution]) -> None:
+        self._resolve = resolve
+
+    def resolve(self, variable: str) -> Resolution:
+        return self._resolve(variable)
+
+
 ExpressionHandler: TypeAlias = Callable[[object, Resolver], EvaluationResult]
 ExpressionInput: TypeAlias = Expression | Mapping[str, object]
 

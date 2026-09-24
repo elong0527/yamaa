@@ -33,7 +33,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.id` | `"intermediate_id"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.key` | `["identifier", "list[identifier]"]` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.key_base` | `["variable", "list[variable]"]` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
+| `intermediate_class.key_base` | `["key_base_entry", "list[key_base_entry]"]` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.between` | `"intermediate_between_class"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
@@ -67,6 +67,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `row_catalog_class.unique_columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1249](../execution/rows.md#req-1249) |
 | `row_catalog_type` | `"str"` | `false` | Absent | `{"values": ["str", "int", "float"]}` | [REQ-1249](../execution/rows.md#req-1249) |
 | `variable` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"}` | [REQ-1057](../specification/binding.md#req-1057) |
+| `key_base_entry` | `["variable", "expression"]` | `false` | Absent | -- | [REQ-1259](../operations/lookup.md#req-1259) |
 | `dataset_source` | `["project_path", "dataset_class"]` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
 | `dataset_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.types` | `"dict[identifier, column_type]"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
@@ -213,7 +214,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `aggregate_class.between` | `"aggregate_between_class"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key` | `["identifier", "list[identifier]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.key_base` | `["variable", "list[variable]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.key_base` | `["key_base_entry", "list[key_base_entry]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | [REQ-1189](../operations/aggregation.md#req-1189) |
 | `aggregate_class.expr` | `"aggregate_expression"` | `true` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `derive_binding_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
@@ -304,7 +305,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.mapping.strict` | `"bool"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.lookup.value` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.key_base` | `["variable", "list[variable]"]` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
+| `expressions.lookup.key_base` | `["key_base_entry", "list[key_base_entry]"]` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.key` | `["identifier", "list[identifier]"]` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.between` | `"intermediate_between_class"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |

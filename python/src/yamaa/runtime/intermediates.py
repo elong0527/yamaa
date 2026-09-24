@@ -18,7 +18,9 @@ from pydantic import JsonValue, ValidationError
 
 from yamaa.expressions.core import (
     AbsentValue,
+    CallableResolver,
     FailedResolution,
+    MappingResolver,
     Resolution,
     ResolvedValue,
     Resolver,
@@ -46,7 +48,7 @@ from yamaa.models import (
     ValueResult,
     runtime_type_name,
 )
-from yamaa.planning import PlannedIntermediate
+from yamaa.planning import KeyBaseExpression, PlannedIntermediate
 from yamaa.runtime.joins import (
     IndexedRecord,
     RelationIndex,
@@ -326,6 +328,21 @@ class IntermediateSelector:
                 condition=eligible.condition,
                 spec_path=f"{plan.path}.derivations.{eligible.name}",
             )
+        if plan.match_expressions:
+            # REQ-1259: a key_base expression evaluates against the current
+            # row and supplies that key position's match value. A missing
+            # result matches nothing, exactly like a missing variable.
+            resolved_current = dict(current)
+            resolver = MappingResolver(current)
+            for keyed in plan.match_expressions:
+                result = self._evaluate(keyed.expression, resolver)
+                if isinstance(result, ConditionResult):
+                    return IntermediateOutcome(
+                        condition=result,
+                        spec_path=f"{plan.path}.{keyed.name}",
+                    )
+                resolved_current[keyed.name] = result.value
+            current = resolved_current
         return _select_eligible(
             plan, eligible, current, index=self._match_index_for(plan, eligible)
         )
@@ -697,6 +714,28 @@ def _names(value: object) -> tuple[str, ...] | None:
     return None
 
 
+def _key_base_entries(
+    value: object,
+) -> tuple[str | Mapping[str, object], ...] | None:
+    """Parse an inline lookup's key_base into variables and expressions.
+
+    REQ-1259: an entry is a bare variable or an ordinary expression mapping.
+    """
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping) and len(value) == 1:
+        return (value,)
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        entries: list[str | Mapping[str, object]] = []
+        for item in value:
+            if isinstance(item, str) or isinstance(item, Mapping) and len(item) == 1:
+                entries.append(item)
+            else:
+                return None
+        return tuple(entries)
+    return None
+
+
 def _order_terms(
     payload: Mapping[str, object], dataset: str
 ) -> tuple[tuple[OrderTerm, str], ...] | None:
@@ -736,16 +775,16 @@ def evaluate_intermediate(
     does, so a source may name an output column or a driver-qualified
     dataset column exactly as the specification wrote it.
     """
-    sources = _names(payload.get("key_base"))
+    entries = _key_base_entries(payload.get("key_base"))
     keys = _names(payload.get("key"))
     value_field = payload.get("value")
     dataset = relation.dataset
     if (
-        sources is None
+        entries is None
         or keys is None
         or not isinstance(value_field, str)
-        or len(sources) != len(keys)
-        or not sources
+        or len(entries) != len(keys)
+        or not entries
     ):
         return ConditionResult(
             condition=RuntimeCondition(
@@ -768,7 +807,27 @@ def evaluate_intermediate(
         )
 
     current: dict[str, RuntimeValue] = {}
-    names = list(sources)
+    match_variables: list[str] = []
+    match_expressions: list[KeyBaseExpression] = []
+    key_resolver = CallableResolver(resolve)
+    for index, entry in enumerate(entries):
+        if isinstance(entry, str):
+            match_variables.append(entry)
+            continue
+        # REQ-1259: a key_base expression evaluates against the current row
+        # through the lookup's own resolver and supplies that key position's
+        # match value. A missing result matches nothing.
+        expression = Expression.model_validate(dict(entry))
+        result = evaluate_expression(expression, key_resolver)
+        if isinstance(result, ConditionResult):
+            return result
+        name = f"key_base[{index}]"
+        match_variables.append(name)
+        match_expressions.append(
+            KeyBaseExpression(name=name, expression=expression, variables=())
+        )
+        current[name] = result.value
+    names = [entry for entry in entries if isinstance(entry, str)]
     between = payload.get("between")
     between_value: str | None = None
     between_lower: str | None = None
@@ -832,7 +891,8 @@ def evaluate_intermediate(
         identifier=f"intermediate({dataset})",
         dataset=dataset,
         path="lookup",
-        match_variables=tuple(sources),
+        match_variables=tuple(match_variables),
+        match_expressions=tuple(match_expressions),
         match_fields=tuple(keys),
         filter_predicate=predicate,
         order_terms=terms or (),

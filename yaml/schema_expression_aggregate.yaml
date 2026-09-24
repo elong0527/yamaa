@@ -22,7 +22,7 @@ aggregate_class:
         required: false
         description: See REQ-1088 in rules/operations/aggregation.md.
     - key_base:
-        type: [variable, "list[variable]"]
+        type: [key_base_entry, "list[key_base_entry]"]
         required: false
         description: See REQ-1088 in rules/operations/aggregation.md.
     - derive:

@@ -38,7 +38,7 @@ expressions:
             required: true
             description: See REQ-1055 in rules/operations/lookup.md.
         - key_base:
-            type: [variable, "list[variable]"]
+            type: [key_base_entry, "list[key_base_entry]"]
             required: false
             description: See REQ-1055 in rules/operations/lookup.md.
         - key:
