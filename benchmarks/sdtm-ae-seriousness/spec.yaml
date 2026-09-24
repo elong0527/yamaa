@@ -36,6 +36,8 @@ columns:
     label: Reported Term for the Adverse Event
     derivation: AE_RAW.AETERM
 
+  # Serious when any criterion is Y. An empty flag is not Y (its comparison
+  # is unknown, not true), so an event with every flag empty gets N.
   - name: AESER
     type: str
     label: Serious Event
