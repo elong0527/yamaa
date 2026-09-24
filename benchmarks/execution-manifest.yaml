@@ -834,3 +834,6 @@ examples:
   negative-sdtm-lb-unit-conversion:
     status: executable
     runtimes: ['python']
+  sdtm-tr-tumor-measurements:
+    status: executable
+    runtimes: ['python']
