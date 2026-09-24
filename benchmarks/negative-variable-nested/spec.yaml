@@ -22,6 +22,8 @@ columns:
   - name: COUNTRY
     type: str
     label: Country
+    # str_upper reads one named variable; a nested first_available in its
+    # place is rejected before any data is read.
     derivation:
       str_upper:
         source:
