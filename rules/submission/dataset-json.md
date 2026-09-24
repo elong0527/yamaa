@@ -267,7 +267,7 @@ property of that container and are not a second spelling here.
 <a id="req-1214"></a>
 
 **REQ-1214.** A missing value is `null` and a collected empty string is `""`.
-The two stay apart, as they do in [Parquet profile](../storage/parquet.md) under [REQ-0736](../storage/parquet.md#req-0736). Which of them
+The two stay apart, as they do in [Parquet profile](../storage/parquet.md) under [REQ-1034](../storage/parquet.md#req-1034). Which of them
 reaches this file is decided by the artifact's own container and by nothing
 else: a `parquet` artifact's zero-length string arrives as a present empty
 string, and a `csv` artifact's empty field arrives as missing under
