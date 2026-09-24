@@ -8,22 +8,24 @@ carrying `IDVARVAL`, `QLABEL`, `QVAL`, `QORIG`, and `QEVAL`, with
 each record pointing back at its parent medical history (MH)
 record.
 
-**Input:** pre-derived medical-history slice with one record per
-history record, carrying the record sequence and the two collected
+**Input:** a medical history extract with one record per condition,
+carrying the parent record sequence and the two collected
 qualifiers.
 
 **Variables:**
 
-- `IDVARVAL` is the parent record sequence, written as text.
-- `QLABEL` is the qualifier label: `Family History` or
-  `Confirmed by Medical Records`.
+- `IDVARVAL` is the parent record sequence, written as text; a
+  parent record with no sequence number stops the run.
+- `QLABEL` is the qualifier label: `Family History` for `MHFAMHX`,
+  `Confirmed by Medical Records` for `MHCONF`.
 - `QVAL` is the collected qualifier value, `Y` or `N`.
 - `QORIG` records the case report form (CRF) origin as `CRF`.
 - `QEVAL` is blank, since a collected value is not an assessment.
 
 **Note:** each parent record contributes one supplemental record
 per qualifier actually collected, so a record with only one of the
-two collected contributes only one; records are ordered by study,
-then subject, then parent record, then qualifier name.
+two collected contributes only one. Records are ordered by study,
+then subject, then parent record sequence compared as text (so 10
+sorts before 2), then qualifier name.
 
 **Standard:** SDTM | **Domain:** SUPPMH
