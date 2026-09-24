@@ -39,8 +39,8 @@ study whose reference data outgrows that count is re-read against the data
 rather than left to fill the places it already has. A second value
 competing for one declared place is the ordinary multiple-match failure
 [Lookup and joins](../operations/lookup.md) defines, not a new place. The members of one family name their
-grouping by position: `SMQ02NAM`, `SMQ02CD`, and `SMQ02SC` belong together
-because each carries the `02`. Nothing in the schema links them beyond the
+grouping by position: `SMQ02NAM`, `SMQ02CD`, and `SMQ02SC` belong together.
+Each carries the `02`. Nothing in the schema links them beyond the
 `02`. A study that wants the grouping checkable records it in the columns'
 `metadata`; the schema does not.
 
@@ -105,7 +105,7 @@ may depend on an internal one.
 <a id="req-0207"></a>
 
 **REQ-0207.** `keys` must name output columns only. An internal column in
-`keys` is an error, because a key identifies rows in the artifact.
+`keys` is an error. A key identifies rows in the artifact.
 
 <a id="req-0208"></a>
 

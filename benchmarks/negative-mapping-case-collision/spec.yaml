@@ -19,6 +19,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # Case is ignored, so the keys Y and y both fold to Y: the dictionary
+  # has two entries for one key.
   - name: SMOKEFL
     type: str
     label: Smoker Flag

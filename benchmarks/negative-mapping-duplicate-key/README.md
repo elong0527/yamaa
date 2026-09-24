@@ -18,11 +18,12 @@ reference table carrying test code, sex, and upper limit
   sex, taken from the reference table row matching the collected
   test code and sex.
 
-The reference table lists the same test (`ALT`) and sex (`F`) on
-more than one line with different upper limits. Taking either
-limit, or the first the file happens to list, would make the
-result depend on file order rather than on the study's reference
-ranges, so the run is rejected with no artifact accepted.
+**Note:** a result whose test and sex match more than one line of
+the reference table has no single line to take its limit from.
+Taking either line, or the first the file happens to list, would
+make the result depend on file order rather than on the study's
+reference ranges, so the run is rejected with no artifact accepted,
+even when the lines agree.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -30,8 +31,17 @@ ranges, so the run is rejected with no artifact accepted.
 
 Make the lookup table unique on `[LBTESTCD, SEX]` by resolving the
 conflicting `ALT/F` reference limits under the study's governed
-reference-range rules. A lookup cannot choose one duplicate by file order. If
-both rows are valid for different conditions, add the distinguishing field to
-both the current-row `key_base` list and the lookup `key` list. For example,
-a method-specific table would use matching lists such as
-`key_base: [PARAMCD, SEX, METHOD]` and `key: [LBTESTCD, SEX, METHOD]`.
+reference-range rules. A lookup cannot choose one duplicate by file order.
+
+If both rows are valid for different conditions, such as different assay
+methods, carry that condition on both the collected records and the table,
+and add it to both lists in the same position. A collected field that is not
+an output column is named with its dataset prefix:
+
+```yaml
+lookup:
+  key_base: [PARAMCD, SEX, LB.METHOD]
+  dataset: LBREF
+  key: [LBTESTCD, SEX, METHOD]
+  value: ANRHI
+```

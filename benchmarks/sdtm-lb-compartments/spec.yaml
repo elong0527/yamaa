@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str
@@ -28,20 +27,17 @@ columns:
   - name: LBTESTCD
     type: str
     label: Lab Test or Examination Short Name
-    derivation:
-      literal: IL13
+    derivation: {literal: IL13}
 
   - name: LBTEST
     type: str
     label: Lab Test or Examination Name
-    derivation:
-      literal: Interleukin 13
+    derivation: {literal: Interleukin 13}
 
   - name: LBSPEC
     type: str
     label: Specimen Material Type
-    derivation:
-      literal: SKIN
+    derivation: {literal: SKIN}
 
   - name: LBLOC
     type: str
@@ -76,8 +72,7 @@ columns:
     derivation:
       case:
         - when: "LBORRES IS NULL"
-          then:
-            literal: NOT DONE
+          then: {literal: NOT DONE}
     verifications:
       allowed_values:
         values: [NOT DONE]
@@ -86,15 +81,13 @@ rows:
   - id: lesional
     filter: "BX_RAW.COHORT <> 'NONAD'"
     derivations:
-      LBLOC:
-        literal: LESIONAL
+      LBLOC: {literal: LESIONAL}
       LBORRES:
         source: BX_RAW.LESRES
 
   - id: non_lesional
     derivations:
-      LBLOC:
-        literal: NON-LESIONAL
+      LBLOC: {literal: NON-LESIONAL}
       LBORRES:
         source: BX_RAW.NLESRES
 

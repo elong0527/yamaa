@@ -36,14 +36,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: OS
+    derivation: {literal: OS}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Overall Survival
+    derivation: {literal: Overall Survival}
 
   - name: STARTDT
     type: date

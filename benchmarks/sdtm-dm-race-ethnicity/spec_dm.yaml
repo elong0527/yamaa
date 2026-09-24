@@ -13,8 +13,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: STUDYID
     type: str
@@ -67,8 +66,7 @@ columns:
     derivation:
       case:
         - when: "RACEMIN < RACESINGLE"
-          then:
-            literal: MULTIPLE
+          then: {literal: MULTIPLE}
         - otherwise:
             mapping:
               source: RACESINGLE

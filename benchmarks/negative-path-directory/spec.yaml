@@ -3,6 +3,7 @@ domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
   LB: input/lb.csv
+  # A folder, not a table file: rejected before any data is read.
   LBREF: input/lbref
 base: LB
 
@@ -39,6 +40,8 @@ columns:
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit
+    # The reference limit for the record's test code and sex; missing when
+    # the table has no row for that pair or the sex is missing.
     derivation:
       lookup:
         key_base: [PARAMCD, SEX]

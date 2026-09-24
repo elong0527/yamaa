@@ -40,7 +40,7 @@ type.
 <a id="req-0735"></a>
 
 **REQ-0735.** The schema's fields are the names in `output.columns`, in that
-order. Every field is optional, because every column type admits a missing
+order. Every field is optional. Every column type admits a missing
 value.
 
 #### Missing and the empty string
@@ -66,15 +66,15 @@ names.
 and no offset. Its Timestamp is not adjusted to UTC. An implementation must
 not attach a zone when writing or reading. A runtime whose
 native timestamp always carries a zone -- [Temporal values](../values/temporal.md) names R's `POSIXct` as such a
-type -- must still write and read this column so that the same wall clock
+type -- must still write and read this column. The same wall clock
 survives. Shifting a value into or out of a machine timezone changes the
 value. Two runtimes that each shift by their own offset do not agree.
 
 <a id="req-0739"></a>
 
 **REQ-0739.** A `datetime` has whole-second resolution, so its microsecond part
-is always zero. Microseconds are used because the format offers no second unit
-and because both ecosystems' readers agree on this one; the finer resolution is
+is always zero. Microseconds are used. The format offers no second unit,
+and both ecosystems' readers agree on this one. The finer resolution is
 never used.
 
 #### Determinism

@@ -69,7 +69,7 @@ would constrain nothing.
 **REQ-0932.** Each item declares `value`, the coded value itself. `decode` is
 the text the value stands for, and is optional: a list whose values are
 already the words a reader needs has no decode to add. Declaring `decode` for
-some items and not others within one codelist is an error, because lists with
+some items and not others within one codelist is an error. Lists with
 and without `decode` are different kinds of list rather than a list with gaps.
 
 <a id="req-0933"></a>
@@ -95,7 +95,7 @@ is a contradiction rather than an extension.
 
 **REQ-0936.** An `external` codelist names the `dictionary` and its `version`,
 with an optional `href`. Large or volatile dictionaries are referenced; the
-version is required because a reference without a version identifies nothing
+version is required. A reference without a version identifies nothing
 to check.
 
 ### What a binding enforces
@@ -171,7 +171,7 @@ terminology.
 
 **REQ-0946.** Every codelist the study document declares must be named by at
 least one binding among the datasets the study document represents. An
-unreferenced codelist is rejected rather than emitted, because the codelist
+unreferenced codelist is rejected rather than emitted. The codelist
 would put terminology into a submission that no column carries. The
 usual cause is a binding that misspells its identifier.
 

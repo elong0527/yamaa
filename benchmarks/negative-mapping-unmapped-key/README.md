@@ -15,15 +15,10 @@ reference table carrying test code, sex, and upper limit
 
 - `ANRHI` would be the upper limit of normal for that test and
   sex, read from the reference table where the collected test code
-  and sex match a table entry. The table has no entry for one
-  collected test and sex, and no answer is stated for that case.
-  Leaving the limit missing would present an out-of-range result
-  as unclassified rather than as unchecked, so the run is rejected
-  with no artifact accepted.
-
-**Note:** a test code or sex that was never collected is a
-different condition from a complete pair the reference table does
-not cover, and each is answered separately.
+  and sex match a table entry. A collected test and sex with no
+  table entry has no stated answer. Leaving the limit missing would
+  hide that the result was never checked against a range, so the
+  run is rejected with no artifact accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -31,7 +26,8 @@ not cover, and each is answered separately.
 
 Add the governed `AST/M` reference range to the reference table when one
 exists. If the analysis intentionally leaves the limit missing when a complete
-key is not in the table, state that policy explicitly:
+key is not in the table, replace `strict: true` with that missing-value
+answer:
 
 ```yaml
 lookup:
@@ -42,5 +38,5 @@ lookup:
   missing: null
 ```
 
-The missing-value answer does not apply to an incomplete key; an incomplete
-key has its own answer.
+The same answer also covers a result whose test code or sex is blank: both
+find no entry (REQ-0129, REQ-0131).

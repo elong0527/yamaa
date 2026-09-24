@@ -32,20 +32,17 @@ columns:
   - name: YAML_PINF
     type: float
     label: Positive Infinity YAML Literal
-    derivation:
-      literal: .inf
+    derivation: {literal: .inf}
 
   - name: YAML_NINF
     type: float
     label: Negative Infinity YAML Literal
-    derivation:
-      literal: -.Inf
+    derivation: {literal: -.Inf}
 
   - name: YAML_NAN
     type: float
     label: Not-a-Number YAML Literal
-    derivation:
-      literal: .NAN
+    derivation: {literal: .NAN}
 
   - name: SOURCE_PINF
     type: float

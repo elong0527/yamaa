@@ -27,6 +27,9 @@ columns:
     type: str
     label: Parameter
 
+  # The visit's height and weight, gathered for the formula. Every row
+  # template must set them, so the collected one sets them empty; neither
+  # is in the output.
   - name: HEIGHT_VAL
     type: float
     label: Height Value
@@ -49,6 +52,7 @@ columns:
     label: Derivation Type
 
 rows:
+  # Every collected record, unchanged.
   - id: collected
     derivations:
       PARAMCD: {source: ADVS_RAW.PARAMCD}
@@ -58,6 +62,8 @@ rows:
       AVAL: {source: ADVS_RAW.AVAL}
       DTYPE: {literal: null}
 
+  # One BSA record per subject and visit that has both a height and a
+  # weight result; ONLY() fails if the visit has more than one of either.
   - id: derived_bsa
     group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.VISIT]
     filter: "HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL"
@@ -72,6 +78,7 @@ rows:
         aggregate:
           filter: "ADVS_RAW.PARAMCD = 'WEIGHT'"
           expr: "ONLY(ADVS_RAW.AVAL)"
+      # Mosteller formula: square root of cm times kg over 3600.
       AVAL:
         compute:
           expr: "SQRT(WEIGHT_VAL * HEIGHT_VAL / 3600)"
@@ -80,9 +87,13 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VISIT, PARAMCD]
+  # A collected record never has a DTYPE, so this fails when the input
+  # already carries a BSA record.
   - assert:
       id: no-pre-existing-target
       expr: "NOT (PARAMCD = 'BSA' AND DTYPE IS NULL)"
+  # The formula assumes centimeters and kilograms, so each height and
+  # weight record's parameter label must name that unit.
   - assert:
       id: verify-height-unit
       expr: "PARAMCD <> 'HEIGHT' OR PARAM LIKE '%(cm)%'"

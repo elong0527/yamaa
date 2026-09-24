@@ -19,10 +19,11 @@ plus the reference table of upper limits by test code and sex.
   `LBSTRESN`.
 - `ANRHI` would be the upper limit of normal taken from the
   reference row whose test code matches the collected test code
-  and whose sex matches the subject's sex.
+  and whose sex matches the subject's sex; missing when no row
+  matches or the sex is missing.
 
-The reference table is absent from the study, so the run is
-rejected before any data is read and no artifact is accepted.
+**Note:** the reference table is absent from the study, so the run
+is rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -32,8 +33,8 @@ Decide first whether the study should carry reference limits: add the approved
 table when the limits exist, and state an explicit policy only when the study
 genuinely has none.
 
-Add the approved limit table to the study under the name it is read by, with
-one row per test and sex:
+Add the approved limit table to the study under the name it is read by,
+`input/lbref.csv`, with one row per test and sex:
 
 ```text
 LBTESTCD,SEX,ANRHI

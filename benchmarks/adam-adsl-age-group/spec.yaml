@@ -35,16 +35,12 @@ columns:
     derivation:
       case:
         - when: "AGE < 18"
-          then:
-            literal: "<18"
+          then: {literal: "<18"}
         - when: "AGE >= 18 AND AGE <= 64"
-          then:
-            literal: "18-64"
+          then: {literal: "18-64"}
         - when: "AGE > 64"
-          then:
-            literal: ">64"
-        - otherwise:
-            literal: "Missing"
+          then: {literal: ">64"}
+        - otherwise: {literal: "Missing"}
 
   - name: AGEGR1N
     type: int
@@ -52,18 +48,14 @@ columns:
     derivation:
       case:
         - when: "AGEGR1 = '<18'"
-          then:
-            literal: 1
+          then: {literal: 1}
         - when: "AGEGR1 = '18-64'"
-          then:
-            literal: 2
+          then: {literal: 2}
         - when: "AGEGR1 = '>64'"
-          then:
-            literal: 3
-        - otherwise:
-            literal: null
+          then: {literal: 3}
+        - otherwise: {literal: null}
 
 verifications:
   - row_count:
-      min: 6
-      max: 6
+      min: 10
+      max: 10

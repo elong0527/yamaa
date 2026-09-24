@@ -96,4 +96,4 @@ columns:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, ASEQ]
-  - row_count: {min: 15, max: 15}
+  - row_count: {min: 19, max: 19}

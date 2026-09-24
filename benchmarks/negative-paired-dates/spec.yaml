@@ -30,6 +30,8 @@ columns:
     derivation: DM.DTHDTC
 
 verifications:
+  # Every row must hold both dates or neither. A subject with a start date
+  # and no death date (not known to have died) fails this.
   - all_or_none:
       id: paired-death-dates
       columns: [RFSTD, DTHDT]

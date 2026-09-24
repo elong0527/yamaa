@@ -31,8 +31,8 @@ This contract owns the requirements below. Related contracts:
 <a id="req-0855"></a>
 
 **REQ-0855.** `root.submission` carries the dataset's metadata and
-`column.submission` carries one column's. Both are optional in the schema,
-because a specification that no submission document represents needs neither.
+`column.submission` carries one column's. Both are optional in the schema. A specification that no submission
+document represents needs neither.
 [Define-XML](define-xml.md) requires them from a specification that joins a document.
 
 <a id="req-0856"></a>
@@ -106,8 +106,8 @@ only when the dataset's implementation guide defines one for it.
 <a id="req-0864"></a>
 
 **REQ-0864.** `structure` states in prose the level of detail one record
-represents, such as `One record per subject`. `structure` is required,
-because keys alone do not fix a dataset's structure: one key list serves
+represents, such as `One record per subject`. `structure` is required.
+Keys alone do not fix a dataset's structure: one key list serves
 several structures.
 
 <a id="req-0865"></a>
@@ -122,7 +122,7 @@ data. A dataset declaring `reference_data: true` must declare
 
 **REQ-0866.** `domain` names the domain the dataset belongs to. It defaults to
 the specification's `domain`, so an ordinary dataset states the domain once.
-A split or supplemental dataset declares the domain, because the dataset's
+A split or supplemental dataset declares the domain. The dataset's
 own name is not its parent domain.
 
 <a id="req-0867"></a>
@@ -153,10 +153,10 @@ type admits a closed set:
 
 <a id="req-0869"></a>
 
-**REQ-0869.** A `str` column admits temporal submission types because a
+**REQ-0869.** A `str` column admits temporal submission types. A
 submission carries a partial or incomplete date as text. [Temporal values](../values/temporal.md) does not admit
 partial or incomplete dates as `date` or `datetime`. The two temporal column
-types admit only their matching submission type because [Temporal values](../values/temporal.md) defines each
+types admit only their matching submission type. [Temporal values](../values/temporal.md) defines each
 temporal type as a complete value, and the submission types of the same name
 mean the same thing. A number's submission type is fixed: [Types and conversion](../values/types.md) already
 decides integer or binary64.
@@ -336,7 +336,7 @@ not a last-wins merge.
 entry against the derivation that produces the column's value in that row
 template (the row template's derivation, or the column-level derivation
 when the row template inherits a uniform one): the refutation follows the
-entry, because the origin claim is per value.
+entry. The origin claim is per value.
 
 ### Origin
 
@@ -391,7 +391,7 @@ findings columns rather than through this attribute.
 **REQ-0892.** `origin.description` is required when `type` is `Predecessor`,
 and names the dataset and column the value was copied from in the form
 `<dataset>.<column>`. The description is also required when `type` is `Other`
-or `Not Available`, because neither states anything alone. The
+or `Not Available`. Neither states anything alone. The
 description is optional elsewhere.
 
 <a id="req-0893"></a>
@@ -403,7 +403,7 @@ collected on. A column with a `Collected` origin from `Investigator` or
 
 <a id="req-0894"></a>
 
-**REQ-0894.** The reference is derived when `documents` is omitted because the
+**REQ-0894.** The reference is derived when `documents` is omitted. The
 annotated case report form is the only document the reference can name. A
 column declares `documents` to say where in the form the value was collected.
 Omitting `documents` leaves the reference without a page.
@@ -445,7 +445,7 @@ and a value the specification states outright is available.
 
 **REQ-0899.** A column derived by a bare `source` copies one value of one
 declared dataset. The column's `origin.type` must not be `Derived`: nothing
-was computed. Every remaining type stays admissible, because whether that
+was computed. Every remaining type stays admissible. Whether that
 stored value was collected, assigned, fixed by the protocol, or copied from
 a predecessor dataset is a fact about the source and not about this
 specification.
@@ -533,7 +533,7 @@ a declared `Derived` origin.
 <a id="req-0908"></a>
 
 **REQ-0908.** Every family-dependent requirement is checked when [Define-XML](define-xml.md) composes
-the specification into a document, because only the study document says which
+the specification into a document. Only the study document says which
 standard the identifier names. A specification that is never composed carries
 declarations no family has judged. The specification is not yet part of
 a submission.

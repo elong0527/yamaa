@@ -13,8 +13,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: STUDYID
     type: str
@@ -71,5 +70,4 @@ columns:
     derivation:
       case:
         - when: "ARM IS NULL"
-          then:
-            literal: Not assigned to treatment arm
+          then: {literal: Not assigned to treatment arm}

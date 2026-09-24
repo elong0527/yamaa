@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: EX.EXSEQ
 
+  # S when the collected start carries a time, D when it is a complete date
+  # alone. Neither handler is declared, so a missing start, or one cut off
+  # before its day such as 2025-01, stops the run.
   - name: TRTSTPR
     type: str
     label: First Exposure Date/Time Collected Precision

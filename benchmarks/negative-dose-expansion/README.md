@@ -15,33 +15,21 @@ start and end dates, and a count of administrations: `EXTRT`,
 
 **Variables:**
 
-- `EXTRT` is the treatment given, carried through from `EXTRT`
-  in the exposure input.
-- `EXDOSE` is the amount given at each administration, carried
-  through from `EXDOSE` in the exposure input.
-- `EXDOSU` is the unit the amount is measured in, carried through
-  from `EXDOSU` in the exposure input.
+- `EXDOSE` is the amount given at each administration.
 - `ASTDT` is the first day the collected record covers, taken
-  from `EXSTDTC` in the exposure input and repeated on every
-  administration built from that record.
+  from `EXSTDTC`.
 - `AENDT` is the last day the collected record covers, taken from
-  `EXENDTC` in the exposure input and repeated on every
-  administration built from that record.
+  `EXENDTC`.
 - `ADOSEN` numbers the administrations built from one collected
-  record from one upward: the first takes value `1` when
-  `EXDOSCNT` is at least `1`, the second takes value `2` when
-  `EXDOSCNT` is at least `2`, and the third takes value `3` when
-  `EXDOSCNT` is at least `3`.
+  record, from `1` up to its count (`EXDOSCNT`). Only three
+  administrations are written out in advance, so a record standing
+  for more loses the ones past the third, and a record with a
+  missing or zero count builds none.
 - `NDOSE` is how many administrations the collected record stands
-  for, taken from `EXDOSCNT` in the exposure input.
-
-Only three administrations are written out in advance, so a
-collected record standing for more administrations loses the ones
-past the third. A declared check compares the largest built
-`ADOSEN` against `NDOSE`, and a record holding more
-administrations than were built rejects the run, so no artifact
-is accepted. The expected output records the completed dataset
-presented to the failing check.
+  for, taken from `EXDOSCNT`. A record whose `NDOSE` is larger than
+  the highest `ADOSEN` built from it rejects the run, so no artifact
+  is accepted. The expected output records the completed dataset
+  presented to that failing check.
 
 **Note:** administrations built from one collected record share
 that record's treatment, dose, unit, and dates; only `ADOSEN`
@@ -67,6 +55,6 @@ keys: [STUDYID, USUBJID, EXSEQ]
 
 Do not keep the administration level and widen the written-out
 administrations to whatever the current extract needs. It answers
-correctly only for data
-that has already been seen, and the next extract with a longer record
-loses administrations again without warning.
+correctly only for data that has already been seen, and the next
+extract with a longer record loses administrations again without
+warning.

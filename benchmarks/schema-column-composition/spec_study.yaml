@@ -10,8 +10,7 @@ columns:
     derivation:
       case:
         - when: "USUBJID = '01' AND PARAMCD = 'AST'"
-          then:
-            literal: 31.0
+          then: {literal: 31.0}
         - otherwise:
             source: LB.LBSTRESN
     verifications:
@@ -23,7 +22,6 @@ columns:
       mapping:
         missing: null
   - name: PARCAT1
-    derivation:
-      literal: CHEMISTRY
+    derivation: {literal: CHEMISTRY}
 metadata:
   scope: study

@@ -49,7 +49,9 @@ lookup would.
 
 <a id="req-0112"></a>
 
-**REQ-0112.** The lookup's dataset is the relation read. The current row is
+**REQ-0112.** The lookup's dataset is the relation read. For a named
+intermediate, `dataset: SELF` instead reads the spec's completed derived
+rows. The current row is
 the output row (or grouped-row candidate) the match runs for. Match fields
 are the `key` columns; match variables are the `key_base` values. Eligible
 records are the dataset records surviving `filter`.
@@ -64,8 +66,8 @@ other lookup ids, and the output `domain`. A collision fails as
 
 **REQ-0114.** A named lookup declares `id` and `dataset`; `key_base` and
 `key` are optional. The schema requires `id` and `dataset`: omitting
-either fails as `missing_required_field` with no requirement attached,
-because the contract is structural. An omitted `key` is inferred from
+either fails as `missing_required_field` with no requirement attached.
+An omitted `key` is inferred from
 the applicable output keys ([REQ-0153](lookup.md#req-0153)); an omitted `key_base` defaults to
 the key names ([REQ-0154](lookup.md#req-0154)). State both lists only when the intended match
 differs from the inferred match.
@@ -91,6 +93,35 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.ASTDT]
     keep: last
+```
+
+<a id="req-1248"></a>
+
+**REQ-1248.** A named intermediate must narrow, derive, or reshape its
+dataset. An intermediate that declares only `id` and `dataset` merely
+renames the dataset qualifier and fails as `rename_only_intermediate`:
+read the input dataset directly instead of aliasing it.
+
+```yaml
+# rejected: CODED adds nothing to CODING
+intermediates:
+  - id: CODED
+    dataset: CODING
+```
+
+Instead, qualify the dataset in the lookup derivation:
+
+```yaml
+columns:
+  - name: CMDECOD
+    type: str
+    label: Standardized Medication Name
+    derivation:
+      lookup:
+        dataset: WHODRUG
+        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
+        key: [DRUG_RECORD_NO, ATC_CODE]
+        value: PREFERRED_NAME
 ```
 
 <a id="req-0115"></a>
@@ -126,8 +157,23 @@ Declaring one without the other fails as `unpaired_fields`.
 
 <a id="req-0120"></a>
 
-**REQ-0120.** A lookup's `dataset` must be declared in `input`.
-Its `order_by` names qualified fields of that dataset only; `columns`
+**REQ-0120.** A lookup's `dataset` must be declared in `input`, except that a
+named intermediate may use `SELF` when the spec declares row templates. `SELF`
+is reserved for this purpose and cannot also name an input. It contains rows
+from completed earlier templates during row construction, and all completed
+rows during column derivation. The current template's unfinished rows are
+never eligible. A read from the first template fails as `phase_boundary`.
+The donor fields are output columns derived in every row template; a column
+derived only in the later column phase is unavailable to `SELF`. The order of
+donors follows row construction order. `SELF` may be read only through a named
+intermediate, not as a directly qualified source.
+
+For `SELF`, `filter` and `order_by` may name its donor fields either bare or
+as `SELF.field`. Bare donor fields in `filter` are not correlated current-row
+references. All other lookup rules, including matching, missing values,
+ordering, and `columns`, apply to `SELF` as they do to input datasets.
+
+For input datasets, `order_by` names qualified fields of that dataset only; `columns`
 lists bare field names. Every `filter` field is qualified. The lookup's
 own qualifier reads a candidate donor record. A different qualifier may
 read the current row's driver dataset: root `base` (or the sole input)
@@ -245,7 +291,7 @@ answers the same way.
 
 <a id="req-0132"></a>
 
-**REQ-0132.** A lookup `filter` identifier must name a stored field in
+**REQ-0132.** A lookup `filter` identifier must name an available field in
 one of the scopes admitted by [REQ-0120](lookup.md#req-0120), otherwise fail
 as `unknown_field`. A filtered scalar source remains donor-only; correlated
 predicates are supported by named intermediates and inline `lookup`.
@@ -273,8 +319,10 @@ chosen and remaining ties break by record order.
 
 <a id="req-0136"></a>
 
-**REQ-0136.** The lookup's dataset is read once per run. The per-row match
-selects among records already read; it never re-reads the dataset.
+**REQ-0136.** An input lookup's dataset is read once per run. The per-row match
+selects among records already read; it never re-reads the dataset. A `SELF`
+intermediate extends its donor pool after each completed row template and
+invalidates its cached selection index at that boundary.
 
 <a id="req-0137"></a>
 
@@ -362,7 +410,8 @@ combination is unique across the intermediate's filtered donor records:
 ```
 
 The check runs over the source-only filtered donor records with
-`derivations:` computed, before any row is built, so a lookup whose
+`derivations:` computed. Input-backed checks run before any row is built;
+`SELF` checks run after each completed template. A lookup whose
 key is verified unique needs neither `keep` nor `order_by`:
 [REQ-0127](lookup.md#req-0127) already rejects multiple surviving
 matches without a selection rule. A repeated combination fails the run
@@ -553,7 +602,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `intermediate_class.id` | Name through which the looked-up record is read. |
-| `intermediate_class.dataset` | Declared dataset the record is selected from. |
+| `intermediate_class.dataset` | Declared input dataset, or `SELF` for completed derived rows ([REQ-0120](lookup.md#req-0120)). |
 | `intermediate_class.key` | Dataset columns paired by position with key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
 | `intermediate_class.key_base` | Current-row values paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
 | `intermediate_class.between` | Current-row value matched inclusively against lower and upper dataset bounds. |

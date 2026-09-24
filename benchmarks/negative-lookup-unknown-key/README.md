@@ -15,11 +15,11 @@ table carrying the upper limit (`NRHI`) by test code and sex.
 - `LBSTNRHI` would contain the upper limit value from the
   reference-limit table for the test code and sex of the result.
 
-**Note:** the lookup omits `key`, so the planner tries the output
-keys (`STUDYID`, `USUBJID`, `LBSEQ`), but none of them names a
-column of the limit table. With no applicable key the match cannot
-be inferred, so the run is rejected before any data is read and no
-artifact is accepted.
+**Note:** the limit-table columns to match on are not stated, so
+the match falls back to the output identifiers (`STUDYID`,
+`USUBJID`, `LBSEQ`), and the limit table carries none of them. With
+nothing to match on, the run is rejected before any data is read and
+no artifact is accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
@@ -34,5 +34,7 @@ intermediates:
     key: [LBTESTCD, SEX]
 ```
 
-Omit `key_base` when it names the same columns as `key`; omit `key`
-only when the output keys name columns of the lookup table.
+This replaces `key_base`: both sides name the same columns, the
+current-row values default to the table's names, and writing the same list
+twice is rejected. Omit `key` only when the intended match is on the output
+keys that the lookup table also carries.

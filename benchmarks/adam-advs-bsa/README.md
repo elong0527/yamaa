@@ -16,9 +16,10 @@ new record is coded `BSA` and labeled `Body Surface Area (m^2)`.
 **Variables:**
 
 - `AVAL` retains each collected result. For body surface area, it
-  is the square root of (height in centimeters multiplied by
-  weight in kilograms, divided by 3600); no new record is added
-  when either contributor is absent or missing.
+  is the Mosteller formula: the square root of (height in
+  centimeters multiplied by weight in kilograms, divided by 3600).
+  No new record is added when the visit's height or weight is
+  absent or missing.
 - `DTYPE` is `CALCULATION` on a derived body surface area record
   and blank on a collected record.
 

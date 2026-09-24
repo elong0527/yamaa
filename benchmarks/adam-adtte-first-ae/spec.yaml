@@ -34,14 +34,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: TTAE
+    derivation: {literal: TTAE}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Time to First Adverse Event
+    derivation: {literal: Time to First Adverse Event}
 
   - name: STARTDT
     type: date

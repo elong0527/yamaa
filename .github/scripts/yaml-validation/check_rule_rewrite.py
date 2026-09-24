@@ -91,8 +91,8 @@ def check(root):
     references = set()
     paths = sorted(directory.glob("*/*.md"))
     for path in paths:
-        if path.name in {"schema-fields.md", "requirements.md"}:
-            continue  # Generated reference, not a normative contract.
+        if path.name in {"schema-fields.md", "requirements.md", "glossary.md"}:
+            continue  # Reference, not a normative contract.
         label = path.relative_to(directory).as_posix()
         try:
             body = path.read_text(encoding="ascii")

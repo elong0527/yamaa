@@ -8,7 +8,7 @@
 demographics carry.
 
 **Input:** collected demographics records carrying age (`AGE`) and
-sex (`SEX`); one subject was collected on two records.
+sex (`SEX`), where a subject may be collected on more than one record.
 
 **Variables:**
 
@@ -19,10 +19,11 @@ sex (`SEX`); one subject was collected on two records.
 
 **Note:** the subject decides how many records come out, so a subject
 collected twice is still one record and both collected records feed
-it. The two records report the same sex, which is one answer given
-twice and carries without complaint. They report different ages,
-which is two answers to a question the record has one place for, so
-the run fails where the age is read and no artifact is accepted.
+it. A value both records report the same way, or that only one of
+them reports, is one answer and carries without complaint. Two
+different ages are two answers to a question the record has one
+place for, so the run fails where the age is read and no artifact is
+accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
@@ -30,9 +31,22 @@ the run fails where the age is read and no artifact is accepted.
 
 Reconcile the two collected records and correct the governed demographics
 input so it holds one supported age for the subject. If both records are
-legitimate, declare which one answers: drive the specification from a unique
-subject inventory and read the demographics record through an ordered
-record-selection rule, rather than leaving the choice to source order.
+legitimate, declare which one answers, for example the one collected last,
+rather than leaving the choice to file order:
+
+```yaml
+- name: AGE
+  type: int
+  derivation:
+    source:
+      variable: DM.AGE
+      multiple_matches:
+        order_by: [DM.DMDTC]
+        keep: last
+```
+
+The sample records carry no collection date (`DMDTC` here), so the source has
+to supply one first.
 
 Do not reach for a row template to make the two records two rows. `keys`
 states one record per subject, so a second row for that subject would only
