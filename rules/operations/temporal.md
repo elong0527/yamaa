@@ -199,10 +199,7 @@ It is consumed by comparisons, `datetime_precision`, or `to_date`, which copies
 calendar fields and drops time fields. ISO 8601 datetime text parses as a
 `datetime` first, so `to_date` truncates it by the same field copy. The
 truncation is never a timezone conversion: the `datetime` value space is
-zone-free. A missing `to_date` source returns a
-missing date. Any other source type is the incompatible-input error
-[Types and conversion](../values/types.md) defines; in particular, a `date`
-value is not accepted as an identity spelling.
+zone-free.
 
 ### Whole calendar units
 
@@ -298,7 +295,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.to_date.source` | Datetime whose calendar date is returned, or ISO 8601 date or datetime text to parse. |
-| `Result` | Extracts the calendar date from a datetime; ISO 8601 date or datetime text parses first, and a datetime's calendar date copies its fields and drops the time. A missing source yields a missing date. Other source types are an incompatible input error under this operation contract; text that is neither a complete ISO date nor a complete ISO datetime is invalid date text. |
+| `Result` | Extracts the calendar date from a datetime, or parses ISO 8601 date text directly. Input acceptance, missing handling, and error conditions follow REQ-0607. |
 
 <a id="req-1108"></a>
 
