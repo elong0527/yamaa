@@ -69,9 +69,8 @@ columns:
     type: str
     label: New Anti-Cancer Therapy Flag
     derivation:
-      case:
-        - when: "NACTDT IS NOT NULL"
-          then: {literal: Y}
+      flag:
+        condition: "NACTDT IS NOT NULL"
     verifications:
       allowed_values:
         values: [Y]

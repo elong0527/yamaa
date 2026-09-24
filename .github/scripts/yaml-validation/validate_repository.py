@@ -1953,7 +1953,23 @@ def _check_single_type(data, t, env, path, fragment=False):
                 elif isinstance(reg_def, list): # it's a class inline
                     # Validate against an anonymous class
                     if not isinstance(val, dict):
-                        errors.append(f"ERROR: {path}.{key}: expected dict, got {type(val).__name__}")
+                        actual = (
+                            'mapping' if isinstance(val, dict)
+                            else 'sequence' if isinstance(val, list)
+                            else 'null' if val is None
+                            else type(val).__name__
+                        )
+                        errors.append(
+                            validation_diagnostic(
+                                f"{path}.{key}",
+                                'invalid_field_type',
+                                f"expected {key}, got {actual}",
+                                context={
+                                    'expected': key,
+                                    'actual': actual,
+                                },
+                            )
+                        )
                         continue
                     allowed_keys = set()
                     for field in reg_def:
@@ -6183,6 +6199,15 @@ def validate_expression_predicates(
                 )
             )
 
+    elif keyword == 'flag' and isinstance(payload, dict):
+        condition = payload.get('condition')
+        if isinstance(condition, str):
+            errors.extend(
+                validate_predicate_at(
+                    condition, f"{path}.flag.condition", resolver
+                )
+            )
+
     elif keyword == 'source' and isinstance(payload, dict):
         errors.extend(
             source_filter_errors(payload, f"{path}.source", datasets)
@@ -7134,6 +7159,13 @@ def derive_binding_reference_names(derivation):
                             )
                             visit(item.get('then'))
                     return
+                if operation == 'flag' and isinstance(payload, dict):
+                    # The values are literals and name nothing; only the
+                    # predicate names variables.
+                    names.extend(
+                        predicate_identifier_names(payload.get('condition'))
+                    )
+                    return
                 if operation == 'lookup' and isinstance(payload, dict):
                     key_base = payload.get('key_base')
                     entries = key_base if isinstance(key_base, list) else [key_base]
@@ -7709,6 +7741,10 @@ def validate_expression_reference_bindings(expression, path, context):
                     )
                 )
         return errors
+    if keyword == 'flag' and isinstance(payload, dict):
+        # The condition is a predicate owned by the predicate parser;
+        # the values are literals and name nothing.
+        return []
     if keyword == 'str_concat' and isinstance(payload, dict):
         errors = []
         sources = payload.get('sources')

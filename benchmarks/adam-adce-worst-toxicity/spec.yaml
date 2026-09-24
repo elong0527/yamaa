@@ -82,9 +82,8 @@ columns:
     type: str
     label: Worst Grade Occurrence Flag
     derivation:
-      case:
-        - when: "WGRSEQ = 1"
-          then: {literal: Y}
+      flag:
+        condition: "WGRSEQ = 1"
     verifications:
       allowed_values:
         values: [Y]

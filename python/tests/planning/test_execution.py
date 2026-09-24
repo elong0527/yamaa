@@ -2157,6 +2157,57 @@ def test_a_column_case_predicate_with_a_qualified_source_field_plans() -> None:
     assert [planned.column for planned in plan.columns] == ["K", "DTHFL"]
 
 
+def _flag_field(condition: str) -> HandledExpression:
+    return derivation({"flag": {"condition": condition, "false_value": "N"}})
+
+
+def test_a_column_flag_predicate_naming_a_source_field_suggests_the_qualified_spelling() -> (
+    None
+):
+    # REQ-0189 / REQ-1255: the flag condition names predicate identifiers
+    # like a case when does.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="DTHFL", type="str", derivation=_flag_field("DTHFL2 = 'Y'")),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _death_source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    [diagnostic] = [d for d in raised.value.diagnostics if d.requirement == "REQ-0189"]
+    assert diagnostic.condition == "unresolvable_name"
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.condition",)
+    assert diagnostic.context == {
+        "identifier": "DTHFL2",
+        "suggestion": "SRC.DTHFL2",
+    }
+
+
+def test_a_column_flag_with_a_qualified_source_field_plans() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="DTHFL", type="str", derivation=_flag_field("SRC.DTHFL2 = 'Y'")
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": _death_source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [planned.column for planned in plan.columns] == ["K", "DTHFL"]
+
+
 def test_a_row_case_predicate_naming_a_driver_field_suggests_the_qualified_spelling() -> (
     None
 ):

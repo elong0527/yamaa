@@ -118,9 +118,8 @@ columns:
     type: str
     label: Last Observation Before Exposure Flag
     derivation:
-      case:
-        - when: "LOBXRNK = 1"
-          then: {literal: Y}
+      flag:
+        condition: "LOBXRNK = 1"
 
 verifications:
   - unique:

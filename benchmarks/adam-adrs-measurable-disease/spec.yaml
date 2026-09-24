@@ -46,10 +46,9 @@ columns:
     type: str
     label: Analysis Value (C)
     derivation:
-      case:
-        - when: "TU_TARGET.TUSTRESC IS NOT NULL"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "TU_TARGET.TUSTRESC IS NOT NULL"
+        false_value: "N"
     verifications:
       - not_missing: {}
       - allowed_values:

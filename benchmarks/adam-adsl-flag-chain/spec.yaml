@@ -24,10 +24,9 @@ columns:
     type: str
     label: Safety Population Flag
     derivation:
-      case:
-        - when: "TRTSDT IS NOT NULL"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "TRTSDT IS NOT NULL"
+        false_value: "N"
 
   - name: RANDDT
     type: date
@@ -40,28 +39,25 @@ columns:
     type: str
     label: Randomized Population Flag
     derivation:
-      case:
-        - when: "RANDDT IS NOT NULL"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "RANDDT IS NOT NULL"
+        false_value: "N"
 
   - name: ITTFL
     type: str
     label: Intent-to-Treat Population Flag
     derivation:
-      case:
-        - when: "RANDFL = 'Y'"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "RANDFL = 'Y'"
+        false_value: "N"
 
   - name: POPFL
     type: str
     label: Analysis Population Flag
     derivation:
-      case:
-        - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "SAFFL = 'Y' AND ITTFL = 'Y'"
+        false_value: "N"
 
   - name: STUDYID
     type: str

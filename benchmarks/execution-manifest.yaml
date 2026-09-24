@@ -225,6 +225,12 @@ examples:
   negative-review-unknown-date:
     status: executable
     runtimes: ['python']
+  negative-flag-payload:
+    status: executable
+    runtimes: ['python']
+  negative-flag-condition:
+    status: executable
+    runtimes: ['python']
   negative-adeg-rrr:
     status: executable
     runtimes: ['python']

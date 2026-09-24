@@ -52,6 +52,5 @@ columns:
     type: str
     label: Dose Reduced Flag
     derivation:
-      case:
-        - when: "EXDOSE > 0 AND EXDOSE < PREVDOSE"
-          then: {literal: "Y"}
+      flag:
+        condition: "EXDOSE > 0 AND EXDOSE < PREVDOSE"

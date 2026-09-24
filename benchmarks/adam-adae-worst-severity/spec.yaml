@@ -91,9 +91,8 @@ columns:
     type: str
     label: Worst Severity Flag
     derivation:
-      case:
-        - when: "AWSRNK = 1"
-          then: {literal: Y}
+      flag:
+        condition: "AWSRNK = 1"
 
 verifications:
   - unique:

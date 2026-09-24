@@ -222,6 +222,71 @@ def _cut(**extra: object) -> dict[str, object]:
     }
 
 
+def _flag(**extra: object) -> dict[str, object]:
+    return {"flag": {"condition": "AGE >= 65", **extra}}
+
+
+def test_flag_returns_y_by_default_when_the_condition_is_true() -> None:
+    assert _evaluate(_flag(), {"AGE": 70}) == ValueResult(value="Y")
+
+
+def test_flag_without_false_value_is_missing_when_the_condition_is_false() -> None:
+    assert _evaluate(_flag(), {"AGE": 5}) == ValueResult(value=MISSING)
+
+
+def test_flag_returns_false_value_when_the_condition_is_false() -> None:
+    expression = _flag(false_value="N")
+
+    assert _evaluate(expression, {"AGE": 70}) == ValueResult(value="Y")
+    assert _evaluate(expression, {"AGE": 5}) == ValueResult(value="N")
+
+
+def test_an_unknown_condition_takes_missing_value_not_false_value() -> None:
+    # REQ-1256: unlike `case` with `otherwise`, an unknown condition never
+    # falls through to false_value.
+    expression = _flag(false_value="N", missing_value="U")
+
+    assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value="U")
+
+
+def test_an_unknown_condition_without_missing_value_is_missing() -> None:
+    expression = _flag(false_value="N")
+
+    assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value=MISSING)
+
+
+def test_flag_accepts_custom_true_and_missing_values() -> None:
+    expression = _flag(true_value="Yes", missing_value="Unknown")
+
+    assert _evaluate(expression, {"AGE": 70}) == ValueResult(value="Yes")
+    assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value="Unknown")
+
+
+def test_flag_rejects_a_non_mapping_payload() -> None:
+    result = _evaluate({"flag": "AGE >= 65"}, {"AGE": 70})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+
+
+def test_flag_rejects_a_missing_condition() -> None:
+    result = _evaluate({"flag": {}}, {"AGE": 70})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+
+
+def test_a_flag_condition_outside_the_grammar_names_its_field() -> None:
+    result = _evaluate({"flag": {"condition": "AE.AESEQ + 1 > 1"}}, {})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_predicate"
+    assert result.condition.requirement == "REQ-0188"
+    assert result.condition.path_suffix == "condition"
+
+
 @pytest.mark.parametrize(
     ("age", "expected"),
     [(0, "<18"), (17, "<18"), (18, "18-64"), (64, "18-64"), (65, ">=65"), (99, ">=65")],

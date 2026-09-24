@@ -95,9 +95,8 @@ columns:
     type: str
     label: Analysis Record Flag 01
     derivation:
-      case:
-        - when: "ARNK = 1"
-          then: {literal: Y}
+      flag:
+        condition: "ARNK = 1"
 
 verifications:
   - unique:

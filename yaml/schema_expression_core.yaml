@@ -28,6 +28,21 @@ expressions:
     case: # See REQ-1098 in rules/operations/expressions.md.
         type: "list[case_item_class]"
         description: See REQ-1098 in rules/operations/expressions.md.
+    flag: # See REQ-1255 in rules/operations/expressions.md.
+        - condition:
+            type: predicate
+            required: true
+            description: See REQ-1255 in rules/operations/expressions.md.
+        - true_value:
+            type: literal_value
+            default: "Y"
+            description: See REQ-1255 in rules/operations/expressions.md.
+        - false_value:
+            type: literal_value
+            description: See REQ-1256 in rules/operations/expressions.md.
+        - missing_value:
+            type: literal_value
+            description: See REQ-1256 in rules/operations/expressions.md.
 
 source_binding_class:
     - variable:

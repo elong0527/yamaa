@@ -35,7 +35,6 @@ columns:
     type: str
     label: Protocol Review Flag
     derivation:
-      case:
-        - when: "UNKNOWNDT >= DATE '2025-01-01'"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "UNKNOWNDT >= DATE '2025-01-01'"
+        false_value: "N"

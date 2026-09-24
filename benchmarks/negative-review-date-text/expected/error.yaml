@@ -1,7 +1,7 @@
 phase: validation
 condition: incompatible_input_type
 spec_paths:
-  - columns.REVIEWFL.derivation.case[0].when
+  - columns.REVIEWFL.derivation.flag.condition
 requirement: REQ-0190
 context:
   left_type: date

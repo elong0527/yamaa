@@ -1,0 +1,8 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.ELDFL.derivation.flag
+requirement: REQ-0287
+context:
+  expected: flag
+  actual: str

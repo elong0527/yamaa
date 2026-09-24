@@ -235,6 +235,10 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.greatest.sources` | `"list[variable]"` | `true` | Absent | -- | [REQ-1096](../operations/expressions.md#req-1096) |
 | `expressions.least.sources` | `"list[variable]"` | `true` | Absent | -- | [REQ-1097](../operations/expressions.md#req-1097) |
 | `expressions.case` | `"list[case_item_class]"` | `false` | Absent | -- | [REQ-1098](../operations/expressions.md#req-1098) |
+| `expressions.flag.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1255](../operations/expressions.md#req-1255) |
+| `expressions.flag.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1255](../operations/expressions.md#req-1255) |
+| `expressions.flag.false_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
+| `expressions.flag.missing_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `source_binding_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |

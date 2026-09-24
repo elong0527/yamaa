@@ -43,10 +43,9 @@ columns:
     type: str
     label: Completion Flag
     derivation:
-      case:
-        - when: "COMPREC IS NOT NULL"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+      flag:
+        condition: "COMPREC IS NOT NULL"
+        false_value: "N"
     verifications:
       allowed_values:
         values: [Y, N]

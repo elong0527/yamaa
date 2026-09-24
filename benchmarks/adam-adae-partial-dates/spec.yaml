@@ -87,9 +87,8 @@ columns:
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
-      case:
-        - when: "ASTDT >= TRTSDT"
-          then: {literal: Y}
+      flag:
+        condition: "ASTDT >= TRTSDT"
     verifications:
       allowed_values:
         values: [Y]

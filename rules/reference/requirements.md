@@ -1259,3 +1259,5 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1231](../submission/dataset-json.md#req-1231) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1232](../submission/dataset-json.md#req-1232) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1233](../storage/publication.md#req-1233) | `storage/publication.md` | Schema prose |
+| [REQ-1255](../operations/expressions.md#req-1255) | `operations/expressions.md` | Schema prose |
+| [REQ-1256](../operations/expressions.md#req-1256) | `operations/expressions.md` | Schema prose |

@@ -557,6 +557,21 @@ def _expression_info(
                         for name in predicate_identifiers(ast)
                     )
             nest(item.get("then"), f"{item_path}.then")
+    elif operation == "flag" and isinstance(payload, Mapping):
+        condition = payload.get("condition")
+        if isinstance(condition, str):
+            ast = _parse_predicate_at(
+                condition, f"{operation_path}.condition", diagnostics
+            )
+            if ast is not None:
+                references.extend(
+                    _Reference(
+                        name,
+                        f"{operation_path}.condition",
+                        requirement="REQ-0189",
+                    )
+                    for name in predicate_identifiers(ast)
+                )
 
     return _ExpressionInfo(
         references=_deduplicate_references(references),
@@ -1176,6 +1191,11 @@ def _derive_reference_names(derivation: object) -> list[str]:
                         else:
                             add_predicate_names(item.get("when"))
                             visit(item.get("then"))
+                    return
+                if operation == "flag" and isinstance(payload, Mapping):
+                    # The values are literals and name nothing; only the
+                    # predicate names variables.
+                    add_predicate_names(payload.get("condition"))
                     return
                 if operation == "lookup" and isinstance(payload, Mapping):
                     key_base = payload.get("key_base")

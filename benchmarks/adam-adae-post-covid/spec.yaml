@@ -50,11 +50,10 @@ columns:
     type: str
     label: After First COVID-19 Flag
     derivation:
-      case:
-        - when: >-
+      flag:
+        condition: >-
             ASTDT > FIRSTCOV.AESTDTC OR
             (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
-          then: {literal: Y}
 
 verifications:
   - unique:
