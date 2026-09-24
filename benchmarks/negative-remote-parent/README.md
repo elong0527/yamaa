@@ -12,10 +12,11 @@ identifier.
 **Variables:**
 
 The requested result names no variables. It would carry subject
-records prepared from the shared definitions, but no row is
-produced because the run is rejected before any data is read: a
-remote resource can change independently and cannot provide a
-reproducible local build.
+records prepared from the shared definitions.
+
+**Note:** the run is rejected before any data is read and no
+artifact is accepted: a remote resource can change independently
+and cannot provide a reproducible local build.
 
 **Standard:** ADaM | **Domain:** ADSL
 
