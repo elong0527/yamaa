@@ -182,9 +182,10 @@ example needs it.
 
 **REQ-0592.** `date_impute` requires its `month` and a numeric `day` to lie
 within its registered calendar ranges, and the completed value
-must be a real calendar date. The range checks still apply when a component is
-not used, so a specification cannot hide an invalid literal behind a precision
-policy. A `day` naming a position in its month is not a literal to range-check,
+must be a real calendar date. `month` is required when
+`minimum_source_precision` is `year` and must be absent when it is `month`:
+a specification carries no value the precision policy leaves unreachable.
+A `day` naming a position in its month is not a literal to range-check,
 and the calendar-date requirement cannot fail for one: it names whichever day
 the target month begins or ends with rather than a number that month might not
 have. Any other `day` token is neither a number nor a position, and is rejected
@@ -266,7 +267,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.date_impute.source` | ISO 8601 date text, complete or truncated to year or month. |
-| `expressions.date_impute.month` | Month used when the source carries only a year, 1 to 12. |
+| `expressions.date_impute.month` | Month used when the source carries only a year, 1 to 12; required when `minimum_source_precision` is `year`, absent when it is `month`. |
 | `expressions.date_impute.day` | Day used when the source carries no day: an integer from 1 to 31, or first or last resolved against the month the date lands in. |
 | `expressions.date_impute.minimum_source_precision` | Least precision the collected source must carry before imputation; month leaves a year-only source missing instead of supplying both month and day. |
 | `expressions.date_impute.not_before` | Date the completed value must not precede; it moves only the components imputation supplied, and never a collected date. |
