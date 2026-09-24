@@ -24,6 +24,8 @@ columns:
     label: Unique Subject Identifier
     derivation: EX_RAW.USUBJID
 
+  # Per subject, by start date and then by treatment name, so components
+  # given on the same day keep a fixed order.
   - name: EXSEQ
     type: int
     label: Sequence Number
