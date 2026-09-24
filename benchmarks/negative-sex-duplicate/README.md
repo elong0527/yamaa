@@ -6,16 +6,17 @@
 **Goal:** build one Demographics (DM) record per subject carrying sex
 (SEX) and age (AGE).
 
-**Input:** EDC output in long form, one row per collected item. The
-screening visit was entered twice for one subject, and the sex question
-was answered differently each time.
+**Input:** EDC output in long form, one row per collected item. A visit
+entered more than once repeats its items under a new visit repeat key
+(`StudyEventRepeatKey`), so one question can carry two answers.
 
 **Variables:**
 
-- **SEX** would be the recorded sex coded `M` (Male) or `F` (Female), but
-  a subject with two different answers has no single recorded sex and one
-  record cannot carry both, so the run is rejected and no artifact is
-  accepted.
+- **SEX** would be the recorded sex coded `M` (Male) or `F` (Female), and
+  `U` when no answer, a blank answer, or any other answer was collected.
+  The same answer entered twice is still one answer, but a subject with
+  two different answers has no single recorded sex and one record cannot
+  carry both, so the run is rejected and no artifact is accepted.
 - **AGE**: age in whole years as collected; blank when missing.
 
 **Standard:** SDTM | **Domain:** DM
@@ -49,6 +50,7 @@ working column the coded value then reads.
       dict:
         Male: M
         Female: F
+      missing: U
 ```
 
 When one entry is the record of the visit and the other is a duplicate to
