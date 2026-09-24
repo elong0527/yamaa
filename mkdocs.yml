@@ -15,10 +15,11 @@ site_dir: site
 exclude_docs: |
   requirements.txt
   articles/benchmark.md
-  # The rendered slide deck (docs/slides/yamma-intro/index.html, built by
-  # Quarto in CI) already occupies slides/yamma-intro/index.html; building
-  # the folder README as a page would conflict with it and fail --strict.
-  slides/yamma-intro/README.md
+  # The rendered slide deck (docs/slides/yamma-pilot7-2026-09-25/index.html,
+  # built by Quarto in CI) already occupies
+  # slides/yamma-pilot7-2026-09-25/index.html; building the folder README as a
+  # page would conflict with it and fail --strict.
+  slides/yamma-pilot7-2026-09-25/README.md
 
 theme:
   name: material

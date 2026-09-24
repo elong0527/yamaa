@@ -1,4 +1,4 @@
-# yamma-intro slides
+# yamma-pilot7-2026-09-25 slides
 
 "Pilot 7 Synthetic Data Update" -- yamaa and the pilot7 synthetic-data
 effort, for the open source community.

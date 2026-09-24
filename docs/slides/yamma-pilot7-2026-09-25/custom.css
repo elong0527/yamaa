@@ -1,4 +1,4 @@
-/* Single style file for the yamma-intro deck.
+/* Single style file for the yamma-pilot7-2026-09-25 deck.
    Plain CSS on purpose: this Quarto version silently drops theme files that
    use the scss:defaults / scss:rules layer markers, so all deck styling is
    spelled out here as CSS and loaded via the `css:` key. */
@@ -213,6 +213,26 @@
 }
 .reveal:has(section.present[data-state="no-corner-logo"]) .slide-logo {
   display: none;
+}
+
+/* vertically and horizontally centered slide bodies (disclaimer, contributors) */
+.center-body {
+  display: flex;
+  min-height: 55vh;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.center-body-left {
+  display: flex;
+  min-height: 55vh;
+  align-items: center;
+  justify-content: center;
+}
+
+.center-body-left ul {
+  text-align: left;
 }
 
 /* embedded benchmark dashboard: explorable without leaving the deck */
