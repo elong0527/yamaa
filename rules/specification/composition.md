@@ -323,12 +323,14 @@ record-lookup, and row order remains in that stable order.
 
 <a id="req-0643"></a>
 
-**REQ-0643.** After pruning, the resolver builds the column dependency graph
-under [Execution lifecycle](../execution/lifecycle.md) and topologically orders the remaining columns. When more than one
-column is ready, the column with the earliest initial collection position
+**REQ-0643.** After pruning, the resolver orders the remaining columns so
+each column comes after every column its derivation reads, following
+[Execution lifecycle](../execution/lifecycle.md). When more than one column
+can come next, the column with the earliest initial collection position
 comes first. This stable tie-break preserves `Common`, earlier-parent,
-and child order for independent columns. An unknown dependency or dependency
-cycle fails; sorting does not repair either one.
+and child order for independent columns. A derivation that reads a column
+that is not declared fails. A derivation that reads itself, directly or
+through other columns, fails; ordering does not repair either one.
 
 <a id="req-0644"></a>
 
