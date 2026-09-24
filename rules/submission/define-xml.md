@@ -179,7 +179,7 @@ rather than written empty.
       <ItemDef>*                   dataset order, then output.columns order
       <CodeList>*                  codelists, in declaration order
       <MethodDef>*                 dataset order, then output.columns order
-      <def:CommentDef>*            see R026-18
+      <def:CommentDef>*            see REQ-0976
       <def:leaf>*                  documents, in declaration order
     </MetaDataVersion>
   </Study>
