@@ -1,7 +1,8 @@
 STUDYID,USUBJID,CMNT,CMNTFL
-CTX,CTX-01,"Dose reduced, per protocol",Y
-CTX,CTX-02,"Subject said ""felt fine""",Y
-CTX,CTX-03,"Visit missed
+YAMAA-01,YAMAA-01-101,"Dose reduced, per protocol",Y
+YAMAA-01,YAMAA-01-102,"Subject said ""felt fine""",Y
+YAMAA-01,YAMAA-01-103,"Visit missed
 rescheduled",Y
-CTX,CTX-04,,N
-CTX,CTX-05,,N
+YAMAA-01,YAMAA-01-104,,N
+YAMAA-01,YAMAA-01-105,,N
+YAMAA-01,YAMAA-01-106,  ,Y

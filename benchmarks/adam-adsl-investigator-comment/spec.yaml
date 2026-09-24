@@ -22,7 +22,7 @@ columns:
 
   # Read as collected: the source file's quoting keeps a comma, a doubled
   # quote and a line break inside one comment. An empty field, quoted or
-  # not, is missing.
+  # not, is missing; a field holding only spaces is still a comment.
   - name: CMNT
     type: str
     label: Investigator Comment
@@ -41,8 +41,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 5
-      max: 5
+      min: 6
+      max: 6
   - implies:
       id: flag-follows-collection
       when: "CMNTFL = 'N'"
