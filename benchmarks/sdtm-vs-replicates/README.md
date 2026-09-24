@@ -21,8 +21,9 @@ visit rides in the study event.
 - `VSREPNUM` is the item-group repeat key: it numbers the readings
   of one test at one visit, and stays blank on the derived mean
   record.
-- `VSORRES` is the result exactly as collected on a reading record;
-  on the mean record it carries the mean.
+- `VSORRES` is the reading written as text from its numeric value, so
+  trailing zeros are dropped (a collected `82.50` reads `82.5`); on the
+  mean record it carries the mean.
 - `VSORRESU` is `mmHg` for every record.
 - `VSSTRESN` is the numeric result: the reading itself on a reading
   record, the mean of the readings actually taken on the mean record.
@@ -30,11 +31,12 @@ visit rides in the study event.
   with the numeric result.
 - `VSDRVFL` marks the mean record with `Y` and stays blank on the
   reading records.
-- `VSSEQ` numbers every record of a subject in one sequence:
-  readings first in replicate order, then the mean record, for each
-  test and visit.
+- `VSSEQ` numbers every record of a subject in one sequence, by
+  visit name, then test code (`DIABP` before `SYSBP`): each test's
+  readings in replicate order, then its mean record.
 
-**Note:** one subject's second visit has only two systolic readings;
-its mean is taken over the two readings present.
+**Note:** a reading that was not taken, whether its record is absent
+or its value is blank, gives no reading record, and the visit mean is
+taken over the readings present.
 
 **Standard:** SDTM | **Domain:** VS

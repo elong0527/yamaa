@@ -98,6 +98,8 @@ columns:
       allowed_values:
         values: [Y]
 
+  # Within a subject: by visit name, then test code (DIABP before SYSBP),
+  # with each test's readings in replicate order followed by its mean.
   - name: VSSEQ
     type: int
     label: Sequence Number
@@ -109,6 +111,9 @@ columns:
     verifications:
       not_missing: {}
 
+# One reading row per subject, visit, replicate and test. The aggregate
+# filter confines a template to its own test, so a group of the other test
+# has no value and is not emitted; neither is a blank reading.
 rows:
   - id: systolic
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
@@ -142,6 +147,8 @@ rows:
       VSORRESU: {literal: mmHg}
       VSDRVFL: {literal: null}
 
+  # One mean row per subject, visit and test, over the readings present:
+  # MEAN skips a blank value, and a reading never taken has no record.
   - id: means
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemOID]
     derivations:
