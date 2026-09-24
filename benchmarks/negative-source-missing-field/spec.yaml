@@ -26,6 +26,8 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
+  # The filter can name only qualified input fields. USUBJID is an output
+  # column; the collected rows carry the subject as ODM.SubjectKey.
   - name: AGE
     type: int
     label: Age
