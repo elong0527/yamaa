@@ -30,6 +30,9 @@ columns:
     label: Identifying Variable
     derivation: {literal: MHSEQ}
 
+  # The parent MH record for the same subject and condition term; its MHSEQ
+  # (read as text) is the link. A qualifier with no parent record leaves this
+  # missing, and the not_missing check fails the run.
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
@@ -71,6 +74,8 @@ columns:
     label: Evaluator
     derivation: {literal: null}
 
+# One row template per qualifier. Each writes a row only for a condition
+# record where that qualifier was collected; a blank answer writes none.
 rows:
   - id: family_history
     dataset: MH_SUPP_RAW

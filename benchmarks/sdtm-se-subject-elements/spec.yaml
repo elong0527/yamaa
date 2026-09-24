@@ -6,13 +6,13 @@ input:
   ODM: input/odm.csv
 base: ODM
 
-# One output row per key combination (REQ-0042): the ODM driver supplies one
-# row per subject per study event, and the subject's study events ARE the
-# elements they entered. The ODM extract carries each element's trial-design
-# attributes (IT.TE.*/IT.TA.*) and the dosing dates (IT.EX.*) on every event,
-# so each SE record derives from its own ODM context. DM is a subject-level
-# table; its columns join implicitly on the keys DM shares with the output
-# (REQ-0150: STUDYID, USUBJID).
+# One output row per key combination (REQ-0042): the ODM base has one record
+# per subject, study event and item, so each subject's study events -- the
+# elements they entered -- give the rows. The ODM extract carries each
+# element's trial-design attributes (IT.TE.*/IT.TA.*) and the dosing dates
+# (IT.EX.*) on every event, so each SE record derives from its own ODM
+# context. DM is a subject-level table; a DM.* read joins implicitly on the
+# keys DM shares with the output (REQ-0150: STUDYID, USUBJID).
 
 output:
   path: se.csv
@@ -40,14 +40,6 @@ columns:
     label: Element Code
     derivation: ODM.StudyEventOID
 
-  - name: SESEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      source:
-        filter: ODM.ItemOID = 'IT.TA.TAETORD'
-        variable: ODM.Value
-
   - name: ELEMENT
     type: str
     label: Description of Element
@@ -64,6 +56,12 @@ columns:
         filter: ODM.ItemOID = 'IT.TA.TAETORD'
         variable: ODM.Value
 
+  # Elements are numbered in their planned order within the arm.
+  - name: SESEQ
+    type: int
+    label: Sequence Number
+    derivation: TAETORD
+
   - name: EPOCH
     type: str
     label: Epoch
@@ -71,21 +69,6 @@ columns:
       source:
         filter: ODM.ItemOID = 'IT.TA.EPOCH'
         variable: ODM.Value
-
-  - name: RFICDTC
-    type: date
-    label: Informed Consent Date
-    derivation: DM.RFICDTC
-
-  - name: RFSTDTC
-    type: date
-    label: Reference Start Date
-    derivation: DM.RFSTDTC
-
-  - name: RFXENDTC
-    type: date
-    label: End of Study Participation Date
-    derivation: DM.RFXENDTC
 
   - name: FIRSTDTC
     type: date
@@ -103,13 +86,17 @@ columns:
         filter: ODM.ItemOID = 'IT.EX.LASTDTC'
         variable: ODM.Value
 
+  # Elements run back to back: screening from informed consent to first dose,
+  # treatment from first to last dose, follow-up from last dose to the end of
+  # participation. Any other epoch, or a missing one, gets the follow-up
+  # dates.
   - name: SESTDTC
     type: date
     label: Start Date/Time of Element
     derivation:
       case:
         - when: "EPOCH = 'SCREENING'"
-          then: RFICDTC
+          then: DM.RFICDTC
         - when: "EPOCH = 'TREATMENT'"
           then: FIRSTDTC
         - otherwise: LASTDTC
@@ -123,15 +110,16 @@ columns:
           then: FIRSTDTC
         - when: "EPOCH = 'TREATMENT'"
           then: LASTDTC
-        - otherwise: RFXENDTC
+        - otherwise: DM.RFXENDTC
 
+  # Study days count the DM reference start date as day 1, with no day 0.
   - name: SESTDY
     type: int
     label: Study Day of Start of Element
     derivation:
       study_day:
         date: SESTDTC
-        reference: RFSTDTC
+        reference: DM.RFSTDTC
 
   - name: SEENDY
     type: int
@@ -139,7 +127,7 @@ columns:
     derivation:
       study_day:
         date: SEENDTC
-        reference: RFSTDTC
+        reference: DM.RFSTDTC
 
   - name: SEUPDES
     type: str

@@ -15,8 +15,8 @@ two collected qualifiers.
 
 - `IDVARVAL` is the parent sequence number as text, matched on
   subject and condition term.
-- `QLABEL` is the qualifier label, `Family History` or `Confirmed
-  by Medical Records`.
+- `QLABEL` is the qualifier label: `Family History` for `MHFAMHX`,
+  `Confirmed by Medical Records` for `MHCONF`.
 - `QVAL` is the collected answer, `Y` or `N`.
 - `QORIG` is the origin, always case report form (`CRF`) for
   collected values.

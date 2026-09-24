@@ -10,9 +10,13 @@ input:
     types: {DYLO: int, DYHI: int}
 base: VS_RAW
 intermediates:
+  # The planned visit for the collected visit label; an unplanned label such
+  # as UNSCHEDULED matches none, leaving VISITNUM missing.
   - id: PLANNEDVISIT
     dataset: TV
     key: VISIT
+  # The study's epoch whose day range DYLO..DYHI (both ends included) holds
+  # VSDY; no study day, or no range holding it, leaves EPOCH missing.
   - id: EPOCHDEF
     dataset: TEPOCH
     key: STUDYID
@@ -73,10 +77,13 @@ columns:
     label: Visit Number
     derivation: PLANNEDVISIT.VISITNUM
 
+  # DM is read as text; this typed copy is the date study_day needs. A
+  # subject with no DM record has none, so VSDY and EPOCH stay missing.
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date/Time
     derivation: DM.RFSTDTC
+
   - name: VSDY
     type: int
     label: Study Day of Vital Signs
