@@ -38,7 +38,7 @@ fixtures:
   negative-flag-condition:
     rule: R004
     condition: invalid_predicate
-    spec_paths: ["columns.ELDFL.derivation.flag"]
+    spec_paths: ["columns.ELDFL.derivation.flag.condition"]
     validator: predicate
   negative-dose-intensity:
     rule: R013
