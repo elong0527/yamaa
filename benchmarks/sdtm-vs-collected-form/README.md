@@ -3,8 +3,8 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-collected-form.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** build one record per measurement from the wide vital
-signs form collected at each visit, carrying `VSTESTCD`,
+**Goal:** build one record per test from the wide vital signs
+form collected at each visit, carrying `VSTESTCD`,
 `VSTEST`, `VSORRES`, `VSORRESU`, `VSSTRESN`, `VSSTRESC`,
 `VSSTRESU`, `VSPOS`, `VSMETHOD`, `VSSTAT`, and `VSREASND`, plus
 the visit name in `VISIT` and the measurement date in `VSDTC`.

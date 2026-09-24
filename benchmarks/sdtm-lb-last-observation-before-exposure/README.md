@@ -32,7 +32,8 @@ demographics row per subject carries the reference start date
 they carry the latest date. A subject with no reference start date
 has the flag on the latest record with a result, since no record
 falls after exposure. Dates compare at day precision, so a record
-collected on the day of first exposure still qualifies; two results
-collected on the same date resolve to the later-recorded entry.
+collected on the day of first exposure still qualifies; of two results
+collected on the same date, the one with the higher sequence number
+(`LBSEQ`) is flagged.
 
 **Standard:** SDTM | **Domain:** LB

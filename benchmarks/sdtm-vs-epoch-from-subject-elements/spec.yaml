@@ -8,13 +8,12 @@ base: VS_RAW
 
 # EPOCH comes from the subject's own elements: the element in progress at
 # the collection date-time, i.e. the SE record whose start is on or before
-# it and whose next element has not yet started. The between narrows the
-# subject's elements to the ones containing the moment; on a boundary
-# shared by two elements (both endpoints are inclusive) order_by/keep: last
-# picks the later element, so a reading exactly at an element's start
-# belongs to that element. A reading before the first element start, or
-# one with no collection date-time, matches no element and EPOCH stays
-# missing.
+# it and whose end is on or after it. The between narrows the subject's
+# elements to the ones containing the moment; on a boundary shared by two
+# elements (both endpoints are inclusive) order_by/keep: last picks the
+# later element, so a reading exactly at an element's start belongs to
+# that element. A reading outside every element, or one with no usable
+# collection date-time, matches no element and EPOCH stays missing.
 intermediates:
   - id: ELEM
     dataset: SE
@@ -70,7 +69,8 @@ columns:
 
   # The element lookup compares moments, so the collected text becomes a
   # datetime: a full date-time passes through, a date-only collection is
-  # read as the start of that day, and a missing date stays missing.
+  # read as the start of that day, and a missing or partial date stays
+  # missing.
   - name: VSDTM
     type: datetime
     label: Date/Time of Measurements as a Moment
