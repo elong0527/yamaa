@@ -69,6 +69,9 @@ columns:
       allowed_values:
         values: [Y]
 
+  # Lowest complete (ANL01FL = Y) sum among the subject's assessments dated
+  # on or before this one, itself included. The key spans the whole subject,
+  # not only this visit; a record with no date has no cutoff and no nadir.
   - name: NADIR
     type: float
     label: Nadir Sum of Target Lesion Diameters
@@ -80,8 +83,8 @@ columns:
           lower: ADTR_RAW.ADT
         group_by: [ADTR_RAW.STUDYID, ADTR_RAW.USUBJID]
         expr: "MIN(ADTR_RAW.AVAL)"
-
         key: [STUDYID, USUBJID]
+
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT]

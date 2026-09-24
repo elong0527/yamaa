@@ -12,26 +12,24 @@ setting `STARTDT`, `ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `SRCDOM`,
 assessments for overall response (`RSTESTCD` of `OVRLRESP`) with
 result (`RSSTRESC`), assessment date (`RSDTC`), and adequacy flag
 (`ADEQFL` of `Y`); and disposition records with outcome
-(`DSDECOD` of `DEATH`) and date (`DSDTC`). Same-date response
-records order by sequence number, and same-date disposition
-records by sequence number.
+(`DSDECOD` of `DEATH`) and date (`DSDTC`). Records sharing a date
+are ordered by their sequence number.
 
 **Variables:**
 
 - `STARTDT` is the randomization date from `RANDDT`.
-- `CNSR` is derived first: `0` when an event occurred (a progression or
-  death date is present), `1` otherwise. The event takes priority, and that
-  rule lives here alone: a death after the last adequate assessment is still
-  an event, and a progression and a death on the same day count as
-  progression.
-- `ADT` follows `CNSR`: the event date when the record is an event, else the
-  last adequate assessment date. No separate time-to-event primitive is
-  needed - the event-vs-censor choice is already settled by `CNSR`.
+- `ADT` is the event date, the earlier of the progression and death
+  dates, when the subject has an event; else the last adequate
+  assessment date.
 - `AVAL` is the number of days from `STARTDT` through `ADT`,
   counting the randomization day as day one.
+- `CNSR` is `0` when an event occurred (a progression or death date is
+  present), `1` otherwise. The event always wins: a death after the last
+  adequate assessment is still an event.
 - `EVNTDESC` is `DISEASE PROGRESSION` for a progression event,
   `DEATH` for a death event, and `CENSORED` when both dates are
-  absent.
+  absent. A progression and a death on the same day count as
+  progression.
 - `SRCDOM`, `SRCVAR`, and `SRCSEQ` trace `ADT` to its source:
   `DS` with `DSDTC` and the disposition sequence number for a
   death event, or `RS` with `RSDTC` and the response sequence

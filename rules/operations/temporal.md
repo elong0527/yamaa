@@ -76,7 +76,7 @@ every other text this contract does not admit.
 **REQ-0583.** `minimum_source_precision` bounds how much `date_impute` may
 invent. Its default is `year`, allowing year-only and year-month sources.
 With `month`, a year-month source may receive the declared day. A valid
-year-only source produces missing because supplying month and day would
+year-only source produces missing. Supplying month and day would
 exceed the declared policy. A complete source date is always returned
 unchanged. Falling below the minimum is neither a missing source nor invalid
 text, so it does not invoke either [Local handlers](../execution/handlers.md) handler.
@@ -106,7 +106,7 @@ invalid text and invokes no handler. A missing bound is no bound.
 <a id="req-0586"></a>
 
 **REQ-0586.** A complete source date is returned unchanged whatever the bound
-says, because the date supplied nothing for the bound to move. This is what
+says. The date supplied nothing for the bound to move. This is what
 makes the bound a rule rather than a comparison a specification could write
 itself: the bound constrains an invented component and never a collected one.
 A specification constraining collected dates states a verification under [Verification](../execution/verification.md),
@@ -125,7 +125,7 @@ same two conditions about it, so one handler stage in [Local handlers](../execut
 missing source, and a non-missing source that is neither a complete date nor a
 date prefix. Text that is not a date is a different defect from an uncollected
 value, and a specification may answer them differently. A `date_precision`
-reading a value has only the first of the two to answer, because a value that
+reading a value has only the first of the two to answer. A value that
 exists is already a value of its type.
 
 <a id="req-0589"></a>
@@ -148,11 +148,11 @@ nests these operations. Their input and result types are:
 |---|---|---|
 | `date_diff` | `start` and `end` are `date` | `int` |
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
-| `date_impute` | inputs in [REQ-0578](temporal.md#req-0578)--53 | `date` |
+| `date_impute` | inputs in [REQ-0578](temporal.md#req-0578)--[REQ-0589](temporal.md#req-0589) | `date` |
 | `date_precision` | `source` is `str` or `date` | `str` |
 | `datetime_impute` | `source` is complete date or datetime text; `time` is `first` or `last` | `datetime` |
 | `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
-| `to_date` | `source` is `datetime` | `date` with collected precision `day` |
+| `to_date` | `source` is `datetime` or ISO 8601 date text | `date` with collected precision `day` |
 | `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
 
 <a id="req-1187"></a>
@@ -182,9 +182,10 @@ example needs it.
 
 **REQ-0592.** `date_impute` requires its `month` and a numeric `day` to lie
 within its registered calendar ranges, and the completed value
-must be a real calendar date. The range checks still apply when a component is
-not used, so a specification cannot hide an invalid literal behind a precision
-policy. A `day` naming a position in its month is not a literal to range-check,
+must be a real calendar date. `month` is required when
+`minimum_source_precision` is `year` and must be absent when it is `month`:
+a specification carries no value the precision policy leaves unreachable.
+A `day` naming a position in its month is not a literal to range-check,
 and the calendar-date requirement cannot fail for one: it names whichever day
 the target month begins or ends with rather than a number that month might not
 have. Any other `day` token is neither a number nor a position, and is rejected
@@ -218,13 +219,13 @@ to the length of that month. With `unit: year` it counts yearly
 anniversaries the same way. Three boundary cases pin the rule:
 `2025-01-31` to `2025-02-28` is one month, `2024-02-29` to `2025-02-28`
 is twelve months and one year, and `2025-01-31` to `2025-03-01` is one
-month, because the March anniversary of January 31 is March 31.
+month. The March anniversary of January 31 is March 31.
 
 <a id="req-0596"></a>
 
 **REQ-0596.** A February 29 anniversary in a common year falls on February
-28. This is the clamping the previous requirement already states, named
-here because it is the case an age computation meets every leap year.
+28. This names the clamping the previous requirement already states. It is
+the case an age computation meets every leap year.
 
 <a id="req-0597"></a>
 
@@ -266,13 +267,13 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.date_impute.source` | ISO 8601 date text, complete or truncated to year or month. |
-| `expressions.date_impute.month` | Month used when the source carries only a year, 1 to 12. |
+| `expressions.date_impute.month` | Month used when the source carries only a year, 1 to 12; required when `minimum_source_precision` is `year`, absent when it is `month`. |
 | `expressions.date_impute.day` | Day used when the source carries no day: an integer from 1 to 31, or first or last resolved against the month the date lands in. |
 | `expressions.date_impute.minimum_source_precision` | Least precision the collected source must carry before imputation; month leaves a year-only source missing instead of supplying both month and day. |
 | `expressions.date_impute.not_before` | Date the completed value must not precede; it moves only the components imputation supplied, and never a collected date. |
 | `expressions.date_impute.missing` | Result when the source value is missing. |
 | `expressions.date_impute.invalid` | Result when the source is not an ISO 8601 date or date prefix. |
-| `Result` | Completes a truncated ISO 8601 date and returns a date. A complete source date is returned unchanged; a source carrying only a year, or a year and month, is completed from month and day unless minimum_source_precision forbids supplying that much information. A day token is resolved after month is fixed, so it names a day in the month the completed date lands in. not_before is applied last, to the completed date alone: a date already on or after the bound stands, and otherwise the result is the earliest day the collected text still admits that satisfies the bound. When the collected text admits no such day the result is missing, invoking no handler. A source that is not an ISO 8601 date or an ISO 8601 date prefix is an invalid value, distinct from a missing one; both yield no date unless a handler is declared. [Temporal values](../values/temporal.md) governs the resulting date. |
+| `Result` | Completes a truncated ISO 8601 date and returns a date. A complete source date is returned unchanged; a source carrying only a year, or a year and month, is completed from month and day unless minimum_source_precision forbids supplying that much information. A day token is resolved after month is fixed, so it names a day in the month the completed date lands in. not_before is applied last, to the completed date alone: a date already on or after the bound stands, and otherwise the result is the earliest day the collected text still admits that satisfies the bound. When the collected text admits no such day the result is missing, invoking no handler. A source that is not an ISO 8601 date or an ISO 8601 date prefix is an invalid value, distinct from a missing one; omitting the `missing` or `invalid` handler makes its condition fatal per [REQ-0344](../execution/handlers.md#req-0344). [Temporal values](../values/temporal.md) governs the resulting date. |
 
 <a id="req-1106"></a>
 

@@ -1,5 +1,8 @@
 schema_version: "1.0"
 domain: ADSL
+# SITEID is part of the record identity but not an output column, so a
+# reader of the output could not check the identity: the specification is
+# rejected before any data is read.
 keys: [STUDYID, USUBJID, SITEID]
 input:
   DM: input/dm.csv

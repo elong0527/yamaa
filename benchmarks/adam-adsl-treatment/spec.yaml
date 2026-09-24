@@ -22,6 +22,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The treatment of the earliest study-drug exposure with a start, ties to
+  # the lower EXSEQ. The actual arm fills in when there is none, then
+  # NOT TREATED; TRT01A is the result in upper case.
   - name: TRT01RAW
     type: str
     label: First Actual Treatment from Exposure
@@ -32,6 +35,7 @@ columns:
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
+
   - name: TRT01SRC
     type: str
     label: Selected Actual Treatment for Period 01
@@ -50,6 +54,9 @@ columns:
       allowed_values:
         values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
+  # Earliest start and latest end as collected text. A date alone gets
+  # 00:00:00 (start) or 23:59:59 (end), and precision D marks that; a date
+  # missing its day gives no date/time at all.
   - name: TRTSDTC
     type: str
     label: Collected Date/Time of First Exposure to Treatment
@@ -90,8 +97,7 @@ columns:
     derivation:
       case:
         - when: "TRTSTPR = 'D'"
-          then:
-            literal: H
+          then: {literal: H}
     verifications:
       allowed_values:
         values: [H]
@@ -120,8 +126,7 @@ columns:
     derivation:
       case:
         - when: "TRTETPR = 'D'"
-          then:
-            literal: H
+          then: {literal: H}
     verifications:
       allowed_values:
         values: [H]
@@ -159,10 +164,8 @@ columns:
     derivation:
       case:
         - when: "TRTSDT IS NOT NULL"
-          then:
-            literal: Y
-        - otherwise:
-            literal: N
+          then: {literal: Y}
+        - otherwise: {literal: N}
     verifications:
       - not_missing: {}
       - allowed_values:

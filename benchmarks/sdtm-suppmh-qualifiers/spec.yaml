@@ -18,8 +18,7 @@ columns:
   - name: RDOMAIN
     type: str
     label: Related Domain Abbreviation
-    derivation:
-      literal: MH
+    derivation: {literal: MH}
 
   - name: USUBJID
     type: str
@@ -29,8 +28,7 @@ columns:
   - name: IDVAR
     type: str
     label: Identifying Variable
-    derivation:
-      literal: MHSEQ
+    derivation: {literal: MHSEQ}
 
   - name: IDVARVAL
     type: str
@@ -61,35 +59,27 @@ columns:
   - name: QORIG
     type: str
     label: Origin
-    derivation:
-      literal: CRF
+    derivation: {literal: CRF}
 
   - name: QEVAL
     type: str
     label: Evaluator
-    derivation:
-      literal: null
+    derivation: {literal: null}
 
 rows:
   - id: family_history
     filter: "MH_RAW.MHFAMHX IS NOT NULL"
     derivations:
-      QNAM:
-        literal: MHFAMHX
-      QLABEL:
-        literal: Family History
-      QVAL:
-        source: MH_RAW.MHFAMHX
+      QNAM: {literal: MHFAMHX}
+      QLABEL: {literal: Family History}
+      QVAL: MH_RAW.MHFAMHX
 
   - id: medical_record_confirmation
     filter: "MH_RAW.MHCONF IS NOT NULL"
     derivations:
-      QNAM:
-        literal: MHCONF
-      QLABEL:
-        literal: Confirmed by Medical Records
-      QVAL:
-        source: MH_RAW.MHCONF
+      QNAM: {literal: MHCONF}
+      QLABEL: {literal: Confirmed by Medical Records}
+      QVAL: MH_RAW.MHCONF
 
 verifications:
   - unique:

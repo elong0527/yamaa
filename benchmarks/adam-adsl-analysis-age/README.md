@@ -1,4 +1,4 @@
-# Analysis Age
+# Derive the Analysis Age at Randomization
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-analysis-age.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -8,7 +8,7 @@
 
 **Input:** demographics (DM) records carrying the birth date
 (`BRTHDT`) and the randomization date (`RANDDT`); both dates are
-carried through unchanged, and the unit is fixed to `YEARS`.
+carried through unchanged.
 
 **Variables:**
 

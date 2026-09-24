@@ -29,8 +29,7 @@ This contract owns the requirements below. Related contracts:
 
 <a id="req-0304"></a>
 
-**REQ-0304.** `mapping` requires a string source because dictionary keys are
-strings.
+**REQ-0304.** `mapping` requires a string source.
 
 <a id="req-0308"></a>
 
@@ -244,7 +243,7 @@ consumer.
 <a id="req-0801"></a>
 
 **REQ-0801.** Every pattern uses the Unicode flag `u`. All other flags are
-clear. A pattern cannot select flags because ECMA-262 has no inline flag
+clear. A pattern cannot select flags. ECMA-262 has no inline flag
 syntax. `(?i)` is a syntax error. A consumer must not expose `i`, `m`, `s`,
 `g`, `y`, `d`, or `v` through a field, environment, or host default.
 
@@ -260,7 +259,7 @@ escape such as `\\a` a syntax error rather than a silent literal.
 <a id="req-0803"></a>
 
 **REQ-0803.** Without `i`, matching is case-sensitive. No Unicode case
-table applies, because [Text values](../values/text.md) confines casing to ASCII.
+table applies. [Text values](../values/text.md) confines casing to ASCII.
 
 <a id="req-0804"></a>
 
@@ -284,7 +283,7 @@ class uses set notation.
 
 <a id="req-0808"></a>
 
-**REQ-0808.** Because `u` is set, `\\d` is exactly `U+0030` through `U+0039`
+**REQ-0808.** `u` is set. `\\d` is exactly `U+0030` through `U+0039`
 and `\\w` is exactly those, `A-Z`, `a-z`, and `U+005F`. Neither widens to a
 Unicode category. `\\p{...}` is not part of the grammar. A pattern that uses
 it is invalid.
@@ -351,8 +350,8 @@ A `group` above the number of capturing groups in its pattern, or a negative
 <a id="req-0817"></a>
 
 **REQ-0817.** A group that the pattern declares but the match does not enter
-has no value. `str_extract` then produces missing. `no_match` does not apply,
-because the pattern did match; `no_match` applies only when the pattern
+has no value. `str_extract` then produces missing. `no_match` does not apply.
+The pattern did match; `no_match` applies only when the pattern
 matched nowhere in the subject.
 
 ### Regular expressions: Empty matches
@@ -442,8 +441,9 @@ structural constraints come from its schema declaration.
 | `expressions.mapping.dict` | Source-value to result-value dictionary. Exactly one of `dict` and `dict_yaml` is present. |
 | `expressions.mapping.dict_yaml` | Path to a YAML file holding the source-value to result-value dictionary. The file is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the `dict` contract. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
-| `expressions.mapping.missing` | Value returned when the source is missing or has no dictionary entry. |
-| `expressions.mapping.strict` | When true, a missing source or a source with no dictionary entry is an error instead of returning `missing`. Defaults to false. |
+| `expressions.mapping.missing` | Value returned when the source is missing. Also covers a source with no dictionary entry when `unmapped` is absent and `strict` is not true. |
+| `expressions.mapping.unmapped` | Value returned when the source is present but has no dictionary entry. |
+| `expressions.mapping.strict` | When true, a missing source with no `missing` handler, or a source with no dictionary entry and no `unmapped` handler, is an error instead of returning missing; `missing` no longer covers a source with no dictionary entry. Defaults to false. |
 | `Result` | Looks up a string source in a dictionary, given inline or loaded from a YAML file. Case-insensitive lookup folds ASCII a-z to A-Z under [Text values](../values/text.md); folded keys must be unique. |
 
 <a id="req-1111"></a>

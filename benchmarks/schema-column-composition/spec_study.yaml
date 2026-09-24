@@ -2,28 +2,37 @@ schema_version: "1.0"
 parents: [spec_organization.yaml, spec_compound.yaml]
 domain: ADLB
 keys: [USUBJID, PARAMCD]
+
 output:
   path: adlb.csv
   columns: [USUBJID, PARAMCD, AVAL, ANRIND, PARCAT1]
+
 columns:
+  # A case is a different operation from the inherited plain source, so it
+  # replaces it whole. The verification list replaces the organization's
+  # range check (lists never merge); the metadata entry joins the other two.
   - name: AVAL
     derivation:
       case:
         - when: "USUBJID = '01' AND PARAMCD = 'AST'"
-          then:
-            literal: 31.0
-        - otherwise:
-            source: LB.LBSTRESN
+          then: {literal: 31.0}
+        - otherwise: LB.LBSTRESN
     verifications:
       - not_missing: {}
     metadata:
       review_status: adjudicated
+
+  # Adds only a missing handler to the inherited mapping. The mapping is
+  # not strict, so an indicator with no dict entry (such as x) is also
+  # answered by it and comes out missing.
   - name: ANRIND
     derivation:
       mapping:
         missing: null
+
+  # A literal replaces the inherited mapping whole.
   - name: PARCAT1
-    derivation:
-      literal: CHEMISTRY
+    derivation: {literal: CHEMISTRY}
+
 metadata:
   scope: study

@@ -24,19 +24,21 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # The approved correction reassigns event 2 of subject CATH-01-001 to
+  # SEVERE. Every other event keeps its reported severity in upper case; a
+  # missing severity stays empty.
   - name: ASEV
     type: str
     label: Analysis Severity/Intensity
     derivation:
       case:
         - when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
-          then:
-            literal: SEVERE
+          then: {literal: SEVERE}
         - otherwise:
             str_upper:
               source: AE.AESEV
+              missing: null
     verifications:
-      - not_missing: {}
       - allowed_values:
           values: [MILD, MODERATE, SEVERE, LIFE-THREATENING]
 
@@ -46,13 +48,13 @@ columns:
     derivation:
       mapping:
         source: ASEV
+        missing: null
         dict:
           MILD: 1
           MODERATE: 2
           SEVERE: 3
           LIFE-THREATENING: 4
     verifications:
-      - not_missing: {}
       - range:
           min: 1
           max: 4
@@ -61,8 +63,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 3
-      max: 3
+      min: 5
+      max: 5
   - implies:
       id: approved-correction-is-applied
       when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"

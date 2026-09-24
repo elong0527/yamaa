@@ -38,7 +38,9 @@ columns:
     derivation: CM.CMDECOD
 
   # The ATC code at each level, read off the medication's FACM path
-  # records: one FACM row per ATC level, linked to the CM record.
+  # records: one FACM row per ATC level, linked to the CM record. The keys
+  # are spelled out because they compare CM's collected text with FACM's;
+  # the output CMSEQ is an int and would not match FACM's text CMSEQ.
   - name: ATC1CD
     type: str
     label: ATC Level 1 Code

@@ -29,6 +29,8 @@ columns:
     label: Last Visit Study Day
     derivation: DM.LSTVSDY
 
+  # DTHDT is a date and LSTVSDY a count of days, which have no common
+  # order, so the specification is rejected before any data is read.
   - name: FSTALVDT
     type: date
     label: First Known Alive Date

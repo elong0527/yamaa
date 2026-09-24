@@ -79,9 +79,10 @@ derivation:
     missing: U      # "if not collected, or not in codelist, set to U"
 ```
 
-**Omit both knobs and the value is missing at runtime.** "Not collected" and
-"collected but unrecognised" are two conditions answered by the one
-`missing` knob; add `strict: true` to make either one fail instead.
+**Omit the handlers and the value is missing at runtime.** "Not collected"
+and "collected but unrecognised" are two conditions. `missing` answers both
+unless `unmapped` gives the second its own answer; add `strict: true` to make
+a condition with no handler of its own fail instead.
 
 ## Where to go next
 

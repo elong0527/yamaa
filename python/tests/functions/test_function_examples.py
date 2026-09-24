@@ -79,8 +79,8 @@ def test_the_pinned_code_decides_the_values_and_not_the_declaration(
         .read_text("utf-8")
         .splitlines()
     )
-    assert produced[1] == "CATH,CATH-001,180,81,25,0"
-    assert committed[1] == "CATH,CATH-001,180,81,25,25"
+    assert produced[1] == "YAMAA-01,YAMAA-01-101,180,81,25,0"
+    assert committed[1] == "YAMAA-01,YAMAA-01-101,180,81,25,25"
     assert produced[2:] == committed[2:]
 
 

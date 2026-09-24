@@ -24,6 +24,9 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # month completes a year-only start (a year alone is accepted here), but
+  # 15 is not a calendar month, so the specification is rejected before any
+  # data is read.
   - name: ASTDT
     type: date
     label: Analysis Start Date
@@ -32,4 +35,4 @@ columns:
         source: AE.AESTDTC
         month: 15
         day: 1
-        minimum_source_precision: month
+        minimum_source_precision: year

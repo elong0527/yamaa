@@ -29,6 +29,8 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # LN of zero or a negative value fails the run while values are computed;
+  # a missing AVAL gives a missing result instead.
   - name: AVALLN
     type: float
     label: Natural Log of Analysis Value

@@ -7,6 +7,8 @@ input:
 output:
   path: vs.csv
   columns: [STUDYID, USUBJID, VSSEQ, VSTESTCD, VSSTRESN]
+  # VISITNUM is an input field, not a declared column, so it cannot
+  # order the output rows.
   order_by: [USUBJID, VISITNUM]
 
 columns:

@@ -4,20 +4,23 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** flag each exposure administration whose dose was reduced
-from the previous administration, adding `DOSREDFL`.
+from the previous administration, adding `DOSREDFL` (Dose Reduced
+Flag).
 
-**Input:** exposure (EX) records carrying sequence number (`EXSEQ`),
-treatment start (`EXSTDTM`), and collected dose (`EXDOSE`).
+**Input:** exposure (EX) records carrying a sequence number
+(`EXSEQ`), treatment start date/time (`EXSTDTM`), and collected dose
+(`EXDOSE`).
 
 **Variables:**
 
-- `DOSREDFL`: `Y` when the current dose is lower than the
-  immediately preceding dose in time for the same subject and both
-  doses are positive; blank otherwise.
+- `DOSREDFL` is `Y` when the current dose is lower than the previous
+  dose for the same subject; empty otherwise, for the first record
+  and whenever the current or the previous dose is zero or missing.
 
-**Note:** the comparison runs in chronological treatment-start
-order within each subject, so the first administration has no
-predecessor and stays blank; a pause in dosing (a zero dose)
-neither flags a reduction nor counts as a reduced-from dose.
+**Note:** the comparison runs in chronological treatment-start order
+within each subject, breaking timestamp ties by sequence number. The
+previous dose is always the administration just before, never an
+earlier nonzero dose, so a pause in dosing (a zero dose) is not
+flagged and neither is the administration after it.
 
 **Standard:** ADaM | **Domain:** ADEX

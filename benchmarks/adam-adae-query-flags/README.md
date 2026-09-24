@@ -14,8 +14,7 @@ term under its query groupings.
 
 **Variables:**
 
-The first and second groupings use parallel columns; each query
-always fills the same place.
+Each query grouping has its own fixed set of columns.
 
 - `SMQ01NAM`: name of the first standardized query grouping the
   coded term belongs to; empty when the term is not in it.

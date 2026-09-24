@@ -6,5 +6,7 @@ output:
   path: adsl.csv
   columns: [USUBJID]
 columns:
+  # null clears the type inherited from layers/parent.yaml, but a column
+  # must have a type, so it cannot be cleared.
   - name: USUBJID
     type: null

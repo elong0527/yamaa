@@ -5,6 +5,11 @@ version: "1.0"
 # registered condition at every declared path. Blocked entries name the open
 # issue that owns the missing diagnostic.
 fixtures:
+  negative-unknown-window:
+    rule: R007
+    condition: unknown_window
+    spec_paths: ['columns[2].derivation.row_number.window']
+    validator: window_contract
   negative-output-transport:
     rule: R020
     condition: unknown_artifact_profile
@@ -144,6 +149,16 @@ fixtures:
     condition: month_out_of_range
     spec_paths: [columns.ASTDT.derivation.date_impute.month]
     validator: temporal_contract
+  negative-impute-missing-month:
+    rule: R016
+    condition: month_required
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
+  negative-impute-unreachable-month:
+    rule: R016
+    condition: month_not_permitted
+    spec_paths: [columns.ASTDT.derivation.date_impute.month]
+    validator: temporal_contract
   negative-impute-day-rule:
     rule: R016
     condition: value_not_permitted
@@ -243,6 +258,11 @@ fixtures:
   negative-lookup-unknown-key:
     rule: R003
     condition: no_applicable_keys
+    spec_paths: ["intermediates[0]"]
+    validator: spec_contract
+  negative-lookup-rename-intermediate:
+    rule: R003
+    condition: rename_only_intermediate
     spec_paths: ["intermediates[0]"]
     validator: spec_contract
   negative-previous-fixed:

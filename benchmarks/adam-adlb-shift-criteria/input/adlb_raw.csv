@@ -1,11 +1,16 @@
 STUDYID,USUBJID,PARAMCD,PARAM,ASEQ,AVISIT,AVAL,ANRLO,ANRHI,ABLFL
-PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),1,BASELINE,30,0,40,Y
-PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,60,0,40,
-PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,150,0,40,
-PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),1,BASELINE,45,0,40,Y
-PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,18,0,40,
-PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,,0,40,
-PILOT7,P7-203,EOS,Eosinophils (%),1,BASELINE,0,1,6,Y
-PILOT7,P7-203,EOS,Eosinophils (%),2,WEEK 2,4,1,6,
-PILOT7,P7-203,LDH,Lactate Dehydrogenase (U/L),3,BASELINE,200,,,Y
-PILOT7,P7-203,LDH,Lactate Dehydrogenase (U/L),4,WEEK 2,260,,,
+YAMAA-01,YAMAA-01-201,ALT,Alanine Aminotransferase (U/L),1,BASELINE,30,0,40,Y
+YAMAA-01,YAMAA-01-201,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,60,0,40,
+YAMAA-01,YAMAA-01-201,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,150,0,40,
+YAMAA-01,YAMAA-01-201,ALT,Alanine Aminotransferase (U/L),4,WEEK 8,40,0,40,
+YAMAA-01,YAMAA-01-202,ALT,Alanine Aminotransferase (U/L),1,BASELINE,45,0,40,Y
+YAMAA-01,YAMAA-01-202,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,18,0,40,
+YAMAA-01,YAMAA-01-202,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,,0,40,
+YAMAA-01,YAMAA-01-202,ALT,Alanine Aminotransferase (U/L),4,WEEK 8,120,0,40,
+YAMAA-01,YAMAA-01-203,EOS,Eosinophils (%),1,BASELINE,0,1,6,Y
+YAMAA-01,YAMAA-01-203,EOS,Eosinophils (%),2,WEEK 2,4,1,6,
+YAMAA-01,YAMAA-01-203,EOS,Eosinophils (%),3,WEEK 4,1,1,6,
+YAMAA-01,YAMAA-01-203,LDH,Lactate Dehydrogenase (U/L),3,BASELINE,200,,,Y
+YAMAA-01,YAMAA-01-203,LDH,Lactate Dehydrogenase (U/L),4,WEEK 2,260,,,
+YAMAA-01,YAMAA-01-203,GGT,Gamma Glutamyl Transferase (U/L),5,BASELINE,55,10,,Y
+YAMAA-01,YAMAA-01-203,GGT,Gamma Glutamyl Transferase (U/L),6,WEEK 2,70,10,,

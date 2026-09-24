@@ -41,6 +41,9 @@ columns:
     label: Analysis Value (C)
     derivation: VS.AVALC
 
+  # The closest earlier non-missing AVALC for the same subject and series,
+  # never the row's own. Rows are ordered by visit number, missing numbers
+  # last; rows tied on it keep their input order.
   - name: PREVAVALC
     type: str
     label: Previous Non-Missing Analysis Value (C)
@@ -49,9 +52,7 @@ columns:
         source: AVALC
         window:
           group_by: [STUDYID, USUBJID, SERIES]
-          order_by:
-            - variable: AVISITN
-              nulls: last
+          order_by: [AVISITN]
 
 verifications:
   - unique:

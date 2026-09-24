@@ -1,0 +1,132 @@
+schema_version: '1.0'
+domain: CM
+keys:
+  - STUDYID
+  - USUBJID
+  - CMSEQ
+input:
+  ODM:
+    path: input/odm.csv
+    types:
+      StudyEventRepeatKey: int
+      ItemGroupRepeatKey: int
+output:
+  path: cm.csv
+  columns:
+    - DOMAIN
+    - STUDYID
+    - USUBJID
+    - CMSEQ
+    - CMTRT
+    - CMSTDTC
+    - CMENDTC
+    - CMROUTE
+    - CMINDC
+  order_by:
+    - USUBJID
+    - CMSEQ
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: CM}
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+  - name: FORM
+    type: str
+    label: Source Item Group
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+    verifications:
+      not_missing: {}
+  - name: CMSTDTC
+    type: str
+    label: Start Date/Time of Medication
+  - name: CMENDTC
+    type: str
+    label: End Date/Time of Medication
+  - name: CMROUTE
+    type: str
+    label: Route of Administration
+  - name: CMINDC
+    type: str
+    label: Indication
+  - name: EVENTORD
+    type: int
+    label: Visit order
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SCREENING: 1
+          BASELINE: 2
+        strict: true
+  - name: EVENTREPEAT
+    type: int
+    label: Visit repeat
+    derivation: ODM.StudyEventRepeatKey
+  - name: REPEATKEY
+    type: int
+    label: Form repeat
+    derivation: ODM.ItemGroupRepeatKey
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by:
+            - STUDYID
+            - USUBJID
+          order_by:
+            - EVENTORD
+            - EVENTREPEAT
+            - REPEATKEY
+rows:
+  - id: collected-occurrence
+    group_by:
+      - ODM.StudyOID
+      - ODM.SubjectKey
+      - ODM.StudyEventOID
+      - ODM.StudyEventRepeatKey
+      - ODM.ItemGroupOID
+      - ODM.ItemGroupRepeatKey
+    filter: FORM = 'IG.CM' AND CMTRT IS NOT NULL
+    derivations:
+      FORM: ODM.ItemGroupOID
+      CMTRT:
+        aggregate:
+          filter: ODM.ItemOID = 'IT.CM.CMTRT'
+          expr: ONLY(ODM.Value)
+      CMSTDTC:
+        aggregate:
+          filter: ODM.ItemOID = 'IT.CM.CMSTDTC'
+          expr: ONLY(ODM.Value)
+      CMENDTC:
+        aggregate:
+          filter: ODM.ItemOID = 'IT.CM.CMENDTC'
+          expr: ONLY(ODM.Value)
+      CMROUTE:
+        aggregate:
+          filter: ODM.ItemOID = 'IT.CM.CMROUTE'
+          expr: ONLY(ODM.Value)
+      CMINDC:
+        aggregate:
+          filter: ODM.ItemOID = 'IT.CM.CMINDC'
+          expr: ONLY(ODM.Value)
+verifications:
+  - unique:
+      columns:
+        - STUDYID
+        - USUBJID
+        - CMSEQ
+  - row_count:
+      min: 4
+      max: 4

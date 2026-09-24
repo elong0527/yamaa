@@ -1,0 +1,46 @@
+schema_version: "1.0"
+domain: CM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM_RAW: input/cm_raw.csv
+  CODING: input/coding.csv
+  WHODRUG: input/whodrug.csv
+base: CM_RAW
+intermediates:
+  - id: CODED
+    dataset: CODING
+
+output:
+  path: cm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM_RAW.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM_RAW.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+    derivation: CM_RAW.CMTRT
+
+  - name: CMDECOD
+    type: str
+    label: Standardized Medication Name
+    derivation:
+      lookup:
+        dataset: WHODRUG
+        key_base: [CODED.DRUG_RECORD_NO, CODED.ATC_CODE]
+        key: [DRUG_RECORD_NO, ATC_CODE]
+        value: PREFERRED_NAME

@@ -17,13 +17,14 @@ sex (`SEX`).
 - `SEX` would be the sex collected in the demographics records,
   carried into the result unchanged.
 
-**Note:** the result is built one row per collected record, and one
-subject was entered twice with different ages, so that subject
-reaches the result twice and the two records disagree on the age it
-should carry. Keeping either record, or merging the two, would
-report an age the collected data does not support. The expected file
-records the completed rows presented to that check, but the repeated
-subject still rejects the run and no artifact is accepted.
+**Note:** the result is built one row per collected record, so a
+subject entered twice reaches the result twice. That rejects the
+run even when the two records agree; here they also disagree on the
+age, and keeping either record, or merging the two, would report an
+age the collected data does not support. The expected file shows
+the completed rows as they reach the one-row-per-subject check, but
+the repeated subject still rejects the run and no artifact is
+accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
@@ -31,7 +32,7 @@ subject still rejects the run and no artifact is accepted.
 
 Reconcile the two source records and correct the governed demographics input
 so it contains one supported age for the subject. If multiple source records
-are legitimate, use a unique subject inventory as the row driver and declare an
-ordered record-selection rule for the demographics record; do not rely on
-source order to discard one. The completed output must contain exactly one row
-for each key.
+are legitimate, build the rows from a list holding each subject once and
+declare an ordered record-selection rule for the demographics record; do not
+rely on source order to discard one. The completed output must contain exactly
+one row for each key.

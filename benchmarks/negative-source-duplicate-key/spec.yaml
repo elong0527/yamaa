@@ -21,6 +21,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # Matched on the output keys, STUDYID and USUBJID. With no order_by/keep,
+  # nothing chooses between two ADSL_RAW records for the same subject.
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01

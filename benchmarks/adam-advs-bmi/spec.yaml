@@ -59,7 +59,7 @@ rows:
     derivations:
       PARAMCD: {literal: BMI}
       PARAM: {literal: Body Mass Index (kg/m^2)}
-      HEIGHTBL: {source: ADSL.HEIGHTBL}
+      HEIGHTBL: ADSL.HEIGHTBL
       AVAL:
         compute:
           expr: "VS.VSSTRESN / NULLIF(HEIGHTBL * HEIGHTBL / 10000, 0)"

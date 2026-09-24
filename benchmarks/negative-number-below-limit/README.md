@@ -12,10 +12,11 @@ carrying the numeric analysis result (`AVAL`).
 **Variables:**
 
 - `AVAL` would hold the reported number read from `LBSTRESC`
-  for the collected parameter. A result reported as a limit
-  instead of a number cannot be read as that number, as zero, or
-  as missing without a stated rule, so the run fails and no
-  artifact is accepted.
+  for the collected parameter, and is missing when no result is
+  reported. A result reported as a limit (such as `<50`) instead
+  of a number cannot be read as the limit, as zero, or as missing
+  without a stated rule, so the run fails and no artifact is
+  accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -23,13 +24,14 @@ carrying the numeric analysis result (`AVAL`).
 
 Retain the reported text in a string column and state what the numeric analysis
 value should be. If a result such as `<50` is intentionally represented as a
-missing numeric value, handle the failed conversion explicitly:
+missing numeric value, handle the failed conversion explicitly in place of
+`strict: true`:
 
 ```yaml
 derivation:
   value:
     source: LB.LBSTRESC
-  missing:
+  missing: null
 ```
 
 If the study uses a numeric substitution for values below the assay limit,

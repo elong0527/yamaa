@@ -1,0 +1,120 @@
+schema_version: "1.0"
+domain: EC
+keys: [STUDYID, USUBJID, ECSEQ]
+input:
+  LOG: {path: input/dosing_log.csv, types: {TABLETS: int, LOGDATE: date}}
+
+output:
+  path: ec.csv
+  columns: [DOMAIN, STUDYID, USUBJID, ECSEQ, ECTRT, ECMOOD, ECOCCUR, ECREASND, ECDOSE, ECDOSU, ECDOSFRM, ECDOSFRQ, ECROUTE, ECSTDTC, ECENDTC, ECADJ]
+  order_by: [STUDYID, USUBJID, ECSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: EC}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LOG.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LOG.USUBJID
+
+  - name: ECTRT
+    type: str
+    label: Name of Treatment
+    derivation: {literal: Study Drug}
+
+  - name: ECMOOD
+    type: str
+    label: Mood
+    derivation: {literal: PERFORMED}
+
+  - name: ECOCCUR
+    type: str
+    label: EC Occurrence
+    derivation: LOG.DOSE_TAKEN
+
+  - name: ECREASND
+    type: str
+    label: Reason Not Dosed
+    derivation: LOG.MISSREAS
+
+  - name: ECDOSE
+    type: int
+    label: Dose
+    derivation:
+      case:
+        - when: "ECOCCUR = 'Y'"
+          then: LOG.TABLETS
+
+  - name: ECDOSU
+    type: str
+    label: Dose Units
+    derivation: {literal: tablet}
+
+  - name: ECDOSFRM
+    type: str
+    label: Dose Form
+    derivation: {literal: TABLET}
+
+  - name: ECDOSFRQ
+    type: str
+    label: Dosing Frequency per Interval
+    derivation: {literal: QD}
+
+  - name: ECROUTE
+    type: str
+    label: Route of Administration
+    derivation: {literal: ORAL}
+
+  - name: ECSTDTC
+    type: date
+    label: Start Date/Time of Treatment
+    derivation: LOG.LOGDATE
+
+  - name: ECENDTC
+    type: date
+    label: End Date/Time of Treatment
+    derivation: LOG.LOGDATE
+
+  - name: ECADJ
+    type: str
+    label: Reason for Dose Adjustment
+    derivation: LOG.DOSE_ADJ
+
+  - name: ECSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [LOG.LOGDATE]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ECSEQ]
+  - row_count:
+      min: 10
+      max: 10
+  - assert:
+      id: occurrence-flags-valid
+      expr: "ECOCCUR IN ('Y', 'N')"
+  - implies:
+      id: missed-day-has-no-dose
+      when: "ECOCCUR = 'N'"
+      then: "ECDOSE IS NULL"
+  - implies:
+      id: missed-day-carries-reason
+      when: "ECOCCUR = 'N'"
+      then: "ECREASND IS NOT NULL"
+  - implies:
+      id: taken-day-has-dose
+      when: "ECOCCUR = 'Y'"
+      then: "ECDOSE IS NOT NULL"

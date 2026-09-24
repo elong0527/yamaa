@@ -368,6 +368,7 @@ def plan_workflow(
             canonical,
             schema_bundle,
             entry_document=supplied_document,
+            resources=resources,
         )
         active.append(canonical)
         producer_paths: list[Path] = []

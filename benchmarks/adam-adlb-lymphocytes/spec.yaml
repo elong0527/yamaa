@@ -27,6 +27,9 @@ columns:
     type: str
     label: Parameter
 
+  # The visit's WBC count and LYMLE fraction, and how many LYMPH records it
+  # already has, gathered to decide whether to add a LYMPH record. Every row
+  # template must set them, so collected rows set them empty; none is output.
   - name: WBCVAL
     type: float
     label: White Blood Cell Count
@@ -48,16 +51,20 @@ columns:
     label: Derivation Type
 
 rows:
+  # Every collected record, unchanged.
   - id: collected
     derivations:
-      PARAMCD: {source: ADLB_RAW.PARAMCD}
-      PARAM: {source: ADLB_RAW.PARAM}
+      PARAMCD: ADLB_RAW.PARAMCD
+      PARAM: ADLB_RAW.PARAM
       WBCVAL: {literal: null}
       LYMLEVAL: {literal: null}
       EXISTING_ABS_COUNT: {literal: null}
-      AVAL: {source: ADLB_RAW.AVAL}
+      AVAL: ADLB_RAW.AVAL
       DTYPE: {literal: null}
 
+  # One LYMPH record per subject and visit that has a WBC and a LYMLE result
+  # and no LYMPH record yet. ONLY() stops the run if the visit has more than
+  # one of either; COUNT() of no LYMPH records is empty, not 0.
   - id: derived_lymph
     group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
     filter: >-
@@ -88,5 +95,5 @@ verifications:
   - unique:
       columns: [USUBJID, VISIT, PARAMCD]
   - row_count:
-      min: 11
-      max: 11
+      min: 15
+      max: 15

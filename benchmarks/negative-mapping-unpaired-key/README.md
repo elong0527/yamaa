@@ -3,9 +3,9 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-mapping-unpaired-key.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** carry sex and the numeric result into the output and
-choose the upper limit of normal (`ANRHI`) from a reference table
-by test and sex.
+**Goal:** carry sex (`SEX`) and the numeric result (`AVAL`) into
+the output and choose the upper limit of normal (`ANRHI`) from a
+reference table by test and sex.
 
 **Input:** collected laboratory results carrying test code
 (`LBTESTCD`), sex (`SEX`), and numeric result (`LBSTRESN`), plus a
@@ -19,8 +19,9 @@ reference table carrying test code, sex, and upper limit
 
 **Note:** the lookup lists two current-row values, the test code
 and the sex, but pairs them with only one reference-table column,
-the test code. Dropping the unpaired value, or pairing it by name,
-would each choose a different limit, so the run is rejected before
+the test code. Ignoring the unpaired sex would match the limits for
+both sexes, while pairing it by name would match only the subject's
+sex; the two readings can disagree, so the run is rejected before
 any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB

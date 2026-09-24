@@ -252,6 +252,7 @@ def test_an_undeclared_cut_missing_handler_is_fatal() -> None:
     result = _evaluate(_cut(), {"AGE": MISSING})
 
     assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "cut"
     assert result.condition.condition == "missing_input"
     assert result.condition.applicable_handler == "missing"
 

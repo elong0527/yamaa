@@ -1,0 +1,209 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
+    VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: VS}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: ODM.StudyEventOID
+
+  - name: VSDTC
+    type: date
+    label: Date/Time of Measurements
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+
+  - name: VSTEST
+    type: str
+    label: Vital Signs Test Name
+
+  - name: TESTORD
+    type: int
+    label: Test Order Within Visit
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation:
+      value:
+        source: VSORRES
+      missing:
+
+  - name: VSSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: VSSTRESN
+
+  - name: VSSTRESU
+    type: str
+    label: Standard Units
+    derivation: VSORRESU
+
+  - name: POSITION
+    type: str
+    label: Body Position Collected on the Form
+
+  - name: TEMPMETHOD
+    type: str
+    label: Temperature Method Collected on the Form
+
+  - name: BPNOTDONE
+    type: str
+    label: Blood Pressure Not-Done Flag Collected on the Form
+
+  - name: BPREASND
+    type: str
+    label: Blood Pressure Not-Done Reason Collected on the Form
+
+  - name: HAS_POSITION
+    type: int
+    label: Test Uses Collected Body Position
+
+  - name: HAS_METHOD
+    type: int
+    label: Test Uses Collected Method
+
+  - name: HAS_NOTDONE
+    type: int
+    label: Test Uses Blood Pressure Not-Done Flag
+
+  - name: VSPOS
+    type: str
+    label: Position of Subject
+    derivation:
+      case:
+        - when: "HAS_POSITION = 1 AND VSORRES IS NOT NULL"
+          then: POSITION
+
+  - name: VSMETHOD
+    type: str
+    label: Method of Test or Examination
+    derivation:
+      case:
+        - when: "HAS_METHOD = 1 AND VSORRES IS NOT NULL"
+          then: TEMPMETHOD
+
+  - name: VSSTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
+          then: {literal: NOT DONE}
+
+  - name: VSREASND
+    type: str
+    label: Reason Not Done
+    derivation:
+      case:
+        - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
+          then: BPREASND
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VSDTC, TESTORD]
+    verifications:
+      not_missing: {}
+
+
+rows:
+  - id: vs
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    catalog:
+      path: input/vs_tests.csv
+      id_column: ID
+      types: {TESTORD: int, HAS_POSITION: int, HAS_METHOD: int, HAS_NOTDONE: int}
+      unique_columns: [VSTESTCD, TESTORD, RESULT_ITEM]
+    derivations:
+      VSTESTCD: {literal: "${VSTESTCD}"}
+      VSTEST: {literal: "${VSTEST}"}
+      TESTORD: {literal: "${TESTORD}"}
+      HAS_POSITION: {literal: "${HAS_POSITION}"}
+      HAS_METHOD: {literal: "${HAS_METHOD}"}
+      HAS_NOTDONE: {literal: "${HAS_NOTDONE}"}
+      VSORRES:
+        aggregate:
+          filter: "ODM.ItemOID = ${RESULT_ITEM}"
+          expr: "ONLY(ODM.Value)"
+      VSORRESU:
+        aggregate:
+          filter: "ODM.ItemOID = ${UNIT_ITEM}"
+          expr: "ONLY(ODM.Value)"
+      VSDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+          expr: "ONLY(ODM.Value)"
+      POSITION:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
+          expr: "ONLY(ODM.Value)"
+      TEMPMETHOD:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
+          expr: "ONLY(ODM.Value)"
+      BPNOTDONE:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
+          expr: "ONLY(ODM.Value)"
+      BPREASND:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 24
+      max: 24
+  - all_or_none:
+      id: standardized-result-completeness
+      columns: [VSSTRESN, VSSTRESC, VSSTRESU]
+  - implies:
+      id: not-done-record-has-no-result
+      when: "VSSTAT = 'NOT DONE'"
+      then: "VSORRES IS NULL AND VSSTRESN IS NULL"
+  - implies:
+      id: collected-result-is-not-flagged
+      when: "VSORRES IS NOT NULL"
+      then: "VSSTAT IS NULL"

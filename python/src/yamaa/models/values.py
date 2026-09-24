@@ -27,6 +27,7 @@ ConditionPhase: TypeAlias = Literal[
     "row_construction",
     "derivation",
     "mapping",
+    "cut",
     "join",
     "impute",
     "convert",
@@ -38,6 +39,7 @@ HandlerName: TypeAlias = Literal[
     "multiple_matches",
     "no_match",
     "invalid",
+    "unmapped",
 ]
 
 INT64_MIN = -(2**63)

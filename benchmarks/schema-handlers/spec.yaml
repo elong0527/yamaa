@@ -43,18 +43,20 @@ columns:
   # The collected result is entered as text. "ND" and the fractional
   # "98.6" cannot be read as whole numbers, so the stated fallback
   # leaves them blank; a record with no collected result is blank
-  # because there is nothing to read.
+  # because there is nothing to read. This `missing` sits beside `value`
+  # and answers only a failed conversion to int.
   - name: AVAL
     type: int
     label: Analysis Value
     derivation:
       value:
         source: VS.VSSTRESN
-      missing:
+      missing: null
 
   # A dosing record with no dose never qualifies; among the dosed
   # records the later start date wins. A subject with no dosing
-  # record keeps the dose blank.
+  # record keeps the dose blank. Without multiple_matches, a subject
+  # with two different doses would stop the run.
   - name: LASTDOSE
     type: float
     label: Latest Dose

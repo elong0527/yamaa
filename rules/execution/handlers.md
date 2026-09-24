@@ -38,7 +38,8 @@ unless its behavior says otherwise:
 |---|---|---|
 | bind | `source.missing` | Absent source variable or ODM item |
 | join | `source.multiple_matches` | Choose one `source.filter` result |
-| mapping | `missing` | Missing input, or non-missing value with no mapping |
+| mapping | `missing` | Missing input; also covers a non-missing value with no mapping when `unmapped` is absent and `strict` is not true |
+| mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
 | extract | `missing` | Missing string input |
 | extract | `no_match` | Non-missing string does not match |
@@ -71,13 +72,14 @@ when the variable exists and holds a missing value.
 
 **REQ-0346.** On every other expression, `missing` applies when the named
 **input value is missing**. On `mapping` it additionally applies when a
-non-missing input has no dictionary entry; see [REQ-1110](../operations/text.md#req-1110).
+non-missing input has no dictionary entry, no `unmapped` handler is
+declared, and `strict` is not true; see [REQ-1110](../operations/text.md#req-1110).
 
 ### Present but unusable
 
 <a id="req-0347"></a>
 
-**REQ-0347.** `no_match` and `invalid` fire only when every
+**REQ-0347.** `no_match`, `invalid`, and `unmapped` fire only when every
 input is present.
 
 <a id="req-0348"></a>
@@ -193,7 +195,8 @@ schema failure.
 
 <a id="req-0363"></a>
 
-**REQ-0363.** A result wrapper with no `missing` and without `strict: true`: fail.
+**REQ-0363.** A result wrapper with no `missing` and without `strict: true`:
+a failed output conversion is fatal under [Execution lifecycle](lifecycle.md).
 
 <a id="req-0364"></a>
 
@@ -213,6 +216,7 @@ failure.
 
 Representative specifications, input data, and expected outcomes:
 
+- [schema-text-mapping-unmapped](../../benchmarks/schema-text-mapping-unmapped/README.md).
 - [negative-mapping-unmapped-value](../../benchmarks/negative-mapping-unmapped-value/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records

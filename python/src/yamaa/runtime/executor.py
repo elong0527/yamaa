@@ -301,7 +301,7 @@ def _evaluate_row_filter(
 # The phases whose failures name the record they happened on. A failure
 # decided before any row exists reports no key.
 _ROW_PHASES = frozenset(
-    {"derivation", "impute", "join", "mapping", "row_construction", "convert"}
+    {"derivation", "impute", "join", "mapping", "cut", "row_construction", "convert"}
 )
 
 
@@ -524,6 +524,25 @@ def _key_space(
     return key_values, groups, order
 
 
+def _publish_self_rows(
+    context: RelationalContext,
+    candidates: Sequence[CandidateRow],
+    fields: Sequence[str],
+) -> None:
+    """Make a completed template visible to SELF before the next begins."""
+    if not context.intermediates.uses_self:
+        return
+    context.intermediates.add_self_records(
+        [
+            {name: candidate.values.get(name, MISSING) for name in fields}
+            for candidate in candidates
+        ]
+    )
+    failures = context.intermediates.verify_uniqueness(self_only=True)
+    if failures:
+        raise _ExecutionAbort(_verification_diagnostics(failures))
+
+
 def _construct_rows(
     plan,
     context: RelationalContext,
@@ -549,6 +568,7 @@ def _construct_rows(
                 candidate.output_position = position
                 position += 1
             constructed.extend(new_rows)
+            _publish_self_rows(context, new_rows, plan.row_derived_columns)
             continue
         if planned.grouped:
             candidates = group_candidates(planned, relation)
@@ -635,12 +655,15 @@ def _construct_rows(
                         plan.specification.keys,
                         row_phase=True,
                     )
+        completed_template: list[CandidateRow] = []
         for candidate in staged:
             if planned.grouped and not _grouped_filter(planned, candidate):
                 continue
             candidate.output_position = position
             position += 1
             constructed.append(candidate)
+            completed_template.append(candidate)
+        _publish_self_rows(context, completed_template, plan.row_derived_columns)
     context.rows.extend(constructed)
     return constructed
 
@@ -892,9 +915,8 @@ def execute_specification(
             ),
             output_keys=tuple(specification.keys),
         )
-        # REQ-1245: intermediate uniqueness is asserted over the filtered
-        # donor records before any row is built, so duplicates fail loudly
-        # here instead of resolving ambiguously downstream.
+        # REQ-1245: input-backed intermediate uniqueness is asserted before
+        # any row is built; SELF uniqueness is checked at template boundaries.
         unique_failures = context.intermediates.verify_uniqueness()
         if unique_failures:
             raise _ExecutionAbort(_verification_diagnostics(unique_failures))

@@ -29,6 +29,8 @@ columns:
     label: Systolic Blood Pressure
     derivation: VS.SYSBP
 
+  # Meant as the closest earlier non-missing SYSBP for the subject, in
+  # sequence-number order; the search is handed the fixed number 120.
   - name: PRIORBP
     type: int
     label: Prior Systolic Blood Pressure
@@ -37,5 +39,4 @@ columns:
         source: {literal: 120}
         window:
           group_by: [STUDYID, USUBJID]
-          order_by:
-            - {variable: VSSEQ, direction: asc}
+          order_by: [VSSEQ]

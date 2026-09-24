@@ -36,17 +36,16 @@ columns:
     label: Cumulative Dose
     derivation:
       aggregate:
-
-        key:
-          - STUDYID
-          - USUBJID
+        key: [STUDYID, USUBJID]
         expr: "SUM(EX.EXDOSE)"
+
+  # EX.EXPLDOS stands outside any reduction. The plan is recorded on every
+  # administration record, so nothing says which record's plan divides the
+  # total, and the specification is rejected before any data is read.
   - name: RDI
     type: float
     label: Relative Dose Intensity
     derivation:
       aggregate:
-        key:
-          - STUDYID
-          - USUBJID
+        key: [STUDYID, USUBJID]
         expr: "100 * SUM(EX.EXDOSE) / EX.EXPLDOS"

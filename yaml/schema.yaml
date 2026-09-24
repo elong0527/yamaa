@@ -33,6 +33,10 @@ root_class:
         type: [path, "list[path]"]
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
+    - windows:
+        type: "dict[identifier, window_spec]"
+        required: false
+        description: See REQ-1251 in rules/operations/windows.md.
     - intermediates:
         type: "list[intermediate_class]"
         required: false
@@ -219,10 +223,37 @@ row_class:
         type: "dict[identifier, derivation]"
         required: true
         description: See REQ-1056 in rules/execution/rows.md.
+    - catalog:
+        type: row_catalog_class
+        required: false
+        description: See REQ-1249 in rules/execution/rows.md.
     - submission:
         type: "dict[identifier, submission_column_class]"
         required: false
         description: See REQ-1056 in rules/execution/rows.md.
+
+row_catalog_class:
+    - path:
+        type: project_path
+        required: true
+        description: See REQ-1249 in rules/execution/rows.md.
+    - id_column:
+        type: identifier
+        required: true
+        description: See REQ-1249 in rules/execution/rows.md.
+    - types:
+        type: "dict[identifier, row_catalog_type]"
+        required: false
+        description: See REQ-1249 in rules/execution/rows.md.
+    - unique_columns:
+        type: "list[identifier]"
+        required: false
+        description: See REQ-1249 in rules/execution/rows.md.
+
+row_catalog_type:
+    type: str
+    values: [str, int, float]
+    description: See REQ-1249 in rules/execution/rows.md.
 
 variable:
     type: str

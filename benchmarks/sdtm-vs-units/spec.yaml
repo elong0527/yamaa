@@ -12,8 +12,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: VS
+    derivation: {literal: VS}
 
   - name: STUDYID
     type: str
@@ -83,13 +82,11 @@ rows:
   - id: height
     filter: "VS_RAW.VSTESTCD = 'HEIGHT'"
     derivations:
-      VSSTRESN:
-        source: VS_RAW.VSORRES
+      VSSTRESN: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL"
-            then:
-              literal: cm
+            then: {literal: cm}
 
   - id: weight
     filter: "VS_RAW.VSTESTCD = 'WEIGHT'"
@@ -100,13 +97,11 @@ rows:
             then:
               compute:
                 expr: "VS_RAW.VSORRES * 0.45359237"
-          - otherwise:
-              source: VS_RAW.VSORRES
+          - otherwise: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL"
-            then:
-              literal: kg
+            then: {literal: kg}
 
   - id: temp
     filter: "VS_RAW.VSTESTCD = 'TEMP'"
@@ -117,13 +112,11 @@ rows:
             then:
               compute:
                 expr: "(VS_RAW.VSORRES - 32) * 5 / 9"
-          - otherwise:
-              source: VS_RAW.VSORRES
+          - otherwise: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL"
-            then:
-              literal: C
+            then: {literal: C}
 
 verifications:
   - unique:

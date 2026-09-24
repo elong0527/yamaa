@@ -21,6 +21,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # All three read the subject's last dated DISPOSITION EVENT record: latest
+  # DSSTDTC, then higher DSSEQ on the same day. The date guard matters for
+  # the term and reason: an undated record would sort last and be kept.
   - name: EOSDT
     type: date
     label: End of Study Date
@@ -39,6 +42,7 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: last
+
   - name: EOSREAS
     type: str
     label: End of Study Reason
@@ -49,19 +53,19 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: last
+
+  # Any coded term but COMPLETED is a discontinuation; no coded term, as
+  # with no dated disposition event, is ONGOING.
   - name: EOSSTT
     type: str
     label: End of Study Status
     derivation:
       case:
         - when: "EOSDECOD = 'COMPLETED'"
-          then:
-            literal: COMPLETED
+          then: {literal: COMPLETED}
         - when: "EOSDECOD IS NOT NULL"
-          then:
-            literal: DISCONTINUED
-        - otherwise:
-            literal: ONGOING
+          then: {literal: DISCONTINUED}
+        - otherwise: {literal: ONGOING}
     verifications:
       allowed_values:
         values: [COMPLETED, DISCONTINUED, ONGOING]
@@ -72,8 +76,7 @@ columns:
     derivation:
       case:
         - when: "EOSSTT = 'DISCONTINUED'"
-          then:
-            source: EOSREAS
+          then: EOSREAS
 
 verifications:
   - unique:

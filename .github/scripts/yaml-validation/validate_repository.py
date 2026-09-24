@@ -40,7 +40,9 @@ from editorial import (  # noqa: E402
     validate_examples_badges,
     validate_examples_index,
     validate_examples_readme_presence,
+    validate_literal_canonical_form,
     validate_rule_metadata,
+    validate_source_canonical_form,
     validate_unicode_scalars,
 )
 
@@ -63,7 +65,9 @@ __all__ = [
     'validate_examples_badges',
     'validate_examples_index',
     'validate_examples_readme_presence',
+    'validate_literal_canonical_form',
     'validate_rule_metadata',
+    'validate_source_canonical_form',
     'validate_unicode_scalars',
 ]
 
@@ -78,17 +82,18 @@ __all__ = [
 REGEX_CONTRACT = 'regex'
 REGEX_CONTRACT_VERSION = '2.0.0'
 
-try:
-    from yamaa.regex import (
-        RegexError as _PortableRegexError,
-        capture_group_count as _portable_group_count,
-        compile_pattern as _portable_compile,
-        full_match as _portable_full_match,
-    )
-except ImportError:
-    _portable_binding = None
-else:
-    _portable_binding = True
+# The portable regex binding is imported lazily on first use. Importing the
+# yamaa package eagerly pulls in its runtime dependencies (polars), which
+# repository validation only needs when it actually compiles a pattern;
+# keeping the import lazy drops this module's import cost from ~90MB to
+# ~20MB for consumers that never touch regular expressions.
+# _portable_binding is None until the first require_regex_binding() call
+# attempts the import, then True (loaded) or False (unavailable).
+_portable_binding = None
+_PortableRegexError = None
+_portable_group_count = None
+_portable_compile = None
+_portable_full_match = None
 
 
 class RegexBindingUnavailable(Exception):
@@ -116,8 +121,26 @@ def regex_contract_requirement():
 
 
 def require_regex_binding():
-    """Return the portable binding, or fail rather than substitute another."""
+    """Import the portable binding on first use, or fail rather than substitute another."""
+    global _portable_binding, _PortableRegexError
+    global _portable_group_count, _portable_compile, _portable_full_match
     if _portable_binding is None:
+        try:
+            from yamaa.regex import (
+                RegexError as binding_error,
+                capture_group_count as binding_group_count,
+                compile_pattern as binding_compile,
+                full_match as binding_full_match,
+            )
+        except ImportError:
+            _portable_binding = False
+        else:
+            _PortableRegexError = binding_error
+            _portable_group_count = binding_group_count
+            _portable_compile = binding_compile
+            _portable_full_match = binding_full_match
+            _portable_binding = True
+    if not _portable_binding:
         raise RegexBindingUnavailable(
             "unsupported_regex_engine under R022: this validator requires "
             f"{regex_contract_requirement()} and does not fall back to "
@@ -306,6 +329,7 @@ VALIDATION_CONTEXT_FIELDS = {
     },
     ('R007', 'zero_offset'): {'offset'},
     ('R007', 'window_on_window_result'): {'column', 'depends_on'},
+    ('R007', 'unknown_window'): {'window'},
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R009', 'missing_verification_id'): set(),
@@ -349,8 +373,13 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R003', 'unpaired_fields'): {
         'declared', 'intermediate', 'missing',
     },
+    ('R003', 'rename_only_intermediate'): {
+        'intermediate', 'dataset',
+    },
     ('R006', 'missing_required_field'): {'class', 'field'},
     ('R016', 'month_out_of_range'): {'month'},
+    ('R016', 'month_not_permitted'): {'month'},
+    ('R016', 'month_required'): {'minimum_source_precision'},
     ('R016', 'day_out_of_range'): {'day'},
     ('R016', 'incompatible_input_type'): {'actual', 'expected', 'source'},
     ('R016', 'value_not_permitted'): {'permitted', 'value'},
@@ -477,18 +506,36 @@ class PredicateSemanticIssue(str):
 # source, and validate_grammar_contracts fails when the two drift apart.
 # The parser itself is the runtime's: `yamaa.expressions.predicates` already
 # returns this validator's AST shape, so this file owns no second grammar.
-try:
-    from yamaa.expressions.predicates import (
-        COMPARISON_OPERATORS as PREDICATE_COMPARISON_OPERATORS,
-        RESERVED_NAMES as PREDICATE_RESERVED_NAMES,
-        PredicateError,
-        parse_predicate,
-    )
-except ImportError as error:
-    raise SystemExit(
-        "validate_repository.py requires the yamaa package "
-        "(run: uv sync --project python --locked)"
-    ) from error
+# The import is lazy (see the regex binding note above): importing the yamaa
+# package pulls in polars, which this module only needs when it actually
+# parses a predicate.
+PREDICATE_COMPARISON_OPERATORS = None
+PREDICATE_RESERVED_NAMES = None
+PredicateError = None
+parse_predicate = None
+
+
+def _ensure_predicate_binding():
+    """Import yamaa.expressions.predicates on first use, or exit when unavailable."""
+    global PREDICATE_COMPARISON_OPERATORS, PREDICATE_RESERVED_NAMES
+    global PredicateError, parse_predicate
+    if parse_predicate is None:
+        try:
+            from yamaa.expressions.predicates import (
+                COMPARISON_OPERATORS as comparison_operators,
+                RESERVED_NAMES as reserved_names,
+                PredicateError as predicate_error,
+                parse_predicate as parse,
+            )
+        except ImportError as error:
+            raise SystemExit(
+                "validate_repository.py requires the yamaa package "
+                "(run: uv sync --project python --locked)"
+            ) from error
+        PREDICATE_COMPARISON_OPERATORS = comparison_operators
+        PREDICATE_RESERVED_NAMES = reserved_names
+        PredicateError = predicate_error
+        parse_predicate = parse
 
 
 def predicate_operand_type(operand, resolver, errors):
@@ -2386,7 +2433,7 @@ def _rebase_local_path(value, layer_path, entry_path):
 
 
 def rebase_layer_paths(layer, layer_path, entry_path):
-    """Rebase current path-valued dataset and output fields to the entry file."""
+    """Rebase layer-owned resource paths to the entry file."""
     rebased = copy.deepcopy(layer)
     datasets = rebased.get('input')
     if isinstance(datasets, dict):
@@ -2405,6 +2452,16 @@ def rebase_layer_paths(layer, layer_path, entry_path):
             if isinstance(output.get(field), str):
                 output[field] = _rebase_local_path(
                     output[field], layer_path, entry_path
+                )
+    rows = rebased.get('rows')
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            catalog = row.get('catalog')
+            if isinstance(catalog, dict) and isinstance(catalog.get('path'), str):
+                catalog['path'] = _rebase_local_path(
+                    catalog['path'], layer_path, entry_path
                 )
     return rebased
 
@@ -2632,6 +2689,15 @@ def merge_inheritance_layers(contributions, env):
                 _clear_provenance(provenance, name)
                 continue
 
+            if name == 'windows':
+                target = resolved.setdefault(name, {})
+                for window, definition in value.items():
+                    target[window] = _replace_value(
+                        definition, f"windows.{window}", provenance_source,
+                        provenance,
+                    )
+                continue
+
             if collection is None:
                 resolved[name] = copy.deepcopy(value)
                 _clear_provenance(provenance, name)
@@ -2789,7 +2855,7 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
     if errors:
         return None, errors, provenance
     resolved, final_errors = finalize_resolved_inheritance(
-        resolved, env
+        resolved, env, provenance, spec_label
     )
     errors.extend(final_errors)
     if errors:
@@ -2798,6 +2864,7 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
 
 
 def predicate_identifier_names(text):
+    _ensure_predicate_binding()
     try:
         ast = parse_predicate(text)
     except PredicateError:
@@ -3622,8 +3689,41 @@ def order_resolved_spec_fields(spec, env):
     return ordered
 
 
-def finalize_resolved_inheritance(spec, env):
-    resolved = prune_inheritance_collections(spec, env)
+def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
+    from yamaa.schema.windows import expand_named_windows
+    from yamaa.specification.diagnostics import SpecificationError
+    from yamaa.specification.schema import SchemaBundle
+
+    bundle = SchemaBundle(
+        version=env.get('version', '1.0'),
+        path=Path(env.get('root', '.')) / 'yaml' / 'schema.yaml',
+        classes=env.get('classes', {}),
+        aliases=env.get('aliases', {}),
+        registries=env.get('registries', {}),
+    )
+    try:
+        return expand_named_windows(
+            spec, bundle, strict=strict, provenance=provenance
+        ), []
+    except SpecificationError as error:
+        return spec, [
+            validation_diagnostic(
+                f"{label}.{item.spec_paths[0]}" if label else item.spec_paths[0],
+                item.condition, item.condition,
+                context=item.context,
+            )
+            for item in error.diagnostics
+        ]
+
+
+def finalize_resolved_inheritance(spec, env, provenance=None, label=""):
+    resolved, errors = expand_spec_windows(spec, env, False, provenance, label)
+    if errors:
+        return resolved, errors
+    resolved = prune_inheritance_collections(resolved, env)
+    resolved, errors = expand_spec_windows(resolved, env, label=label)
+    if errors:
+        return resolved, errors
     resolved, errors = order_inherited_columns(resolved, env)
     if errors:
         return resolved, errors
@@ -3639,7 +3739,7 @@ def validate_schemas(root: Path):
 
 def example_entry_specs(example_dir: Path):
     paths = example_spec_paths(example_dir)
-    parented = set()
+    named = set()
     for path in paths:
         try:
             with open(path, 'r', encoding='utf-8') as handle:
@@ -3653,8 +3753,53 @@ def example_entry_specs(example_dir: Path):
             parents = [parents]
         for parent in parents:
             if isinstance(parent, str) and parent:
-                parented.add(Path(parent).name)
-    return [path for path in paths if path.name not in parented]
+                named.add(Path(parent).name)
+        inputs = spec.get('input', {})
+        if isinstance(inputs, dict):
+            for source in inputs.values():
+                if (
+                    isinstance(source, dict)
+                    and isinstance(source.get('schema'), str)
+                    and source['schema']
+                ):
+                    named.add(Path(source['schema']).name)
+    return [path for path in paths if path.name not in named]
+
+
+def example_artifact_owners(example_dir: Path):
+    """Map each artifact an example's specs declare to the files declaring it.
+
+    Only an entry and a producer kept beside it own a golden: a spec another
+    reads through `input.*.schema` is part of the example, so the artifact it
+    produces sits in `expected/` next to the entry's. An inheritance level
+    owns nothing of its own; the entry that resolves it does.
+    """
+    documents = {}
+    for path in example_spec_paths(example_dir):
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                documents[path.name] = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+    owners_of = {path.name for path in example_entry_specs(example_dir)}
+    for spec in documents.values():
+        inputs = spec.get('input') if isinstance(spec, dict) else None
+        if not isinstance(inputs, dict):
+            continue
+        for source in inputs.values():
+            if isinstance(source, dict) and isinstance(source.get('schema'), str):
+                owners_of.add(Path(source['schema']).name)
+    artifacts = {}
+    for name in sorted(owners_of):
+        spec = documents.get(name)
+        output = spec.get('output') if isinstance(spec, dict) else None
+        if not isinstance(output, dict):
+            continue
+        for field in ('path', 'warning_log', 'verification_log'):
+            if isinstance(output.get(field), str):
+                artifact = PurePosixPath(output[field]).name
+                artifacts.setdefault(artifact, set()).add(name)
+    return artifacts
 
 
 def valid_temporal_literal(kind, text):
@@ -3668,6 +3813,7 @@ def valid_temporal_literal(kind, text):
     for ``date``, ``YYYY-MM-DDThh:mm[:ss]`` for ``datetime``, and both a
     real date on the calendar.
     """
+    _ensure_csv_binding()
     if not isinstance(text, str):
         return False
     if kind == 'date':
@@ -5496,6 +5642,15 @@ def validate_spec_contracts(
                 written, base_dir, project_root,
                 project_data_roots(project_root),
             )
+            if (
+                condition == 'resource_path_missing'
+                and isinstance(source, dict)
+                and isinstance(source.get('schema'), str)
+            ):
+                # REQ-0521: the producing specification writes this artifact
+                # before the consumer reads it, so it need not exist yet;
+                # validate_producing_specs checks its header when it does.
+                continue
             if condition is not None:
                 errors.append(
                     resource_path_error(f"{path}.path", source_path, condition)
@@ -5962,6 +6117,7 @@ def predicate_resolver(unqualified=None, qualified=None):
 
 
 def validate_predicate_at(text, path, resolver):
+    _ensure_predicate_binding()
     try:
         ast = parse_predicate(text)
     except PredicateError as exc:
@@ -7946,9 +8102,34 @@ def validate_expression_static_semantics(expression, path, context):
 
     if keyword == 'date_impute' and isinstance(payload, dict):
         operation_path = f"{path}.date_impute"
+        minimum = payload.get('minimum_source_precision', 'year')
         month = payload.get('month')
         day = payload.get('day')
-        if type(month) is int and not 1 <= month <= 12:
+        if minimum == 'month' and 'month' in payload:
+            # REQ-0592: no specification carries a value the policy leaves
+            # unreachable; the value itself is never read.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.month",
+                    'month_not_permitted',
+                    f"month {month!r} is unreachable with "
+                    "minimum_source_precision 'month'",
+                    context={
+                        'month': month if type(month) is int else str(month)
+                    },
+                )
+            )
+        elif minimum == 'year' and 'month' not in payload:
+            # REQ-0592: the month is required where the policy can use it.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.month",
+                    'month_required',
+                    "month is required with minimum_source_precision 'year'",
+                    context={'minimum_source_precision': minimum},
+                )
+            )
+        elif type(month) is int and not 1 <= month <= 12:
             errors.append(
                 validation_diagnostic(
                     f"{operation_path}.month",
@@ -8144,6 +8325,30 @@ def validate_intermediate_static_semantics(
             continue
         operation_path = f"{spec_label}.intermediates[{index}]"
         dataset = intermediate.get('dataset')
+        if (
+            intermediate.get('key') is None
+            and intermediate.get('key_base') is None
+            and intermediate.get('between') is None
+            and intermediate.get('filter') is None
+            and intermediate.get('order_by') is None
+            and intermediate.get('keep') is None
+            and intermediate.get('columns') is None
+            and intermediate.get('derivations') is None
+            and intermediate.get('verification') is None
+            and intermediate.get('missing') is None
+            and not intermediate.get('strict', False)
+        ):
+            errors.append(
+                validation_diagnostic(
+                    operation_path,
+                    'rename_only_intermediate',
+                    'named intermediate only renames its dataset',
+                    context={
+                        'intermediate': intermediate.get('id'),
+                        'dataset': dataset,
+                    },
+                )
+            )
         fields = datasets.get(dataset, {})
         sources = intermediate.get('source')
         keys = intermediate.get('key')
@@ -8605,11 +8810,25 @@ def prepare_spec_document(spec, spec_label, spec_path, env):
     else:
         resolved, errors, provenance = copy.deepcopy(spec), [], {}
     if isinstance(resolved, dict):
+        from yamaa.schema.row_catalog import expand_row_catalogs
+        from yamaa.specification.diagnostics import SpecificationError
+
+        try:
+            resolved = expand_row_catalogs(resolved, spec_path)
+        except SpecificationError as error:
+            errors.extend(
+                f"ERROR: {spec_label}.{diagnostic.spec_paths[0]}: "
+                f"{diagnostic.condition}"
+                for diagnostic in error.diagnostics
+            )
+            return resolved, errors, provenance
         # REQ-0319: the engine desugars a bare-string derivation to
         # {source: string} before anything else runs. The repository
         # validator works on the same normalized shape so its paths and
         # reference walkers agree with engine diagnostics.
         resolved = _desugar_bare_derivations(resolved)
+        resolved, window_errors = expand_spec_windows(resolved, env, label=spec_label)
+        errors.extend(window_errors)
     return resolved, errors, provenance
 
 
@@ -9550,7 +9769,7 @@ def validate_expected_error_contracts(root: Path):
                 continue
             spec = _desugar_bare_derivations(spec)
             for path in paths:
-                if condition == 'missing_required_field':
+                if condition in {'missing_required_field', 'month_required'}:
                     # The diagnostic points at the field that should exist.
                     continue
                 if not spec_path_exists(spec, path):
@@ -9569,19 +9788,46 @@ CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 # `scan_records` reads records of text-or-missing under the unified
 # missing rule, and `render_records` writes the exact quoting condition.
 # This file owns no second dialect.
-try:
-    from yamaa.io.csv import (
-        CsvProfileFailure,
-        fixed_point,
-        render_records,
-        scan_records,
-    )
-    from yamaa.models import DateTimeValue, DateValue, convert_value
-except ImportError as error:
-    raise SystemExit(
-        "validate_repository.py requires the yamaa package "
-        "(run: uv sync --project python --locked)"
-    ) from error
+# The import is lazy (see the regex binding note above): importing the yamaa
+# package pulls in polars, which this module only needs for csv-profile checks.
+CsvProfileFailure = None
+fixed_point = None
+render_records = None
+scan_records = None
+DateTimeValue = None
+DateValue = None
+convert_value = None
+
+
+def _ensure_csv_binding():
+    """Import yamaa.io.csv and yamaa.models on first use, or exit when unavailable."""
+    global CsvProfileFailure, fixed_point, render_records, scan_records
+    global DateTimeValue, DateValue, convert_value
+    if scan_records is None:
+        try:
+            from yamaa.io.csv import (
+                CsvProfileFailure as csv_failure,
+                fixed_point as profile_fixed_point,
+                render_records as profile_render_records,
+                scan_records as profile_scan_records,
+            )
+            from yamaa.models import (
+                DateTimeValue as model_datetime_value,
+                DateValue as model_date_value,
+                convert_value as model_convert_value,
+            )
+        except ImportError as error:
+            raise SystemExit(
+                "validate_repository.py requires the yamaa package "
+                "(run: uv sync --project python --locked)"
+            ) from error
+        CsvProfileFailure = csv_failure
+        fixed_point = profile_fixed_point
+        render_records = profile_render_records
+        scan_records = profile_scan_records
+        DateTimeValue = model_datetime_value
+        DateValue = model_date_value
+        convert_value = model_convert_value
 
 
 def canonical_float_text(value: str, decimals=None):
@@ -9592,6 +9838,7 @@ def canonical_float_text(value: str, decimals=None):
     itself comes from the runtime: R011's shortest text with no declared
     precision, R020's exact display rounding with one.
     """
+    _ensure_csv_binding()
     try:
         number = float(value)
     except ValueError:
@@ -9626,6 +9873,7 @@ def canonical_temporal_text(value: str, declared: str):
     from the runtime's strict parsers; the shape patterns below only route
     the message, telling a misspelled field from a date no calendar admits.
     """
+    _ensure_csv_binding()
     if declared == 'date':
         parsed_type = DateValue
         pattern = CANONICAL_DATE
@@ -9648,6 +9896,7 @@ def canonical_temporal_text(value: str, declared: str):
 
 def validate_csv_artifact(csv_path: Path, label: str, spec):
     """Check one expected artifact against R020's csv profile."""
+    _ensure_csv_binding()
     errors = []
     try:
         raw = csv_path.read_bytes()
@@ -9920,6 +10169,94 @@ def validate_csv_shapes(root: Path):
     return errors
 
 
+KEY_COLUMN_ORDER = ('DOMAIN', 'STUDYID', 'USUBJID')
+
+
+def _key_column_order_errors(names, label):
+    """Check populated key columns keep DOMAIN, STUDYID, USUBJID in order.
+
+    Only key columns present in `names` constrain the order; an absent key
+    column imposes nothing.
+    """
+    present = [column for column in KEY_COLUMN_ORDER if column in names]
+    actual = [column for column in names if column in present]
+    if actual != present:
+        return [
+            f"ERROR: {label}: key columns out of order: "
+            f"{', '.join(actual)}; populated key columns keep the order "
+            f"{', '.join(present)}"
+        ]
+    return []
+
+
+def validate_key_column_order(root: Path):
+    """Keep DOMAIN, STUDYID, USUBJID in that order across benchmark artifacts.
+
+    Checks each entry spec's declared `columns`, its `output.columns`
+    artifact order, and the golden CSV header, so the column order the
+    GitHub Action verifies stays consistent everywhere a benchmark's
+    columns are populated.
+    """
+    errors = []
+    examples_dir = root / 'benchmarks'
+    if not examples_dir.exists():
+        return errors
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+        for spec_path in example_entry_specs(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as handle:
+                    spec = yaml.load(handle, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            if not isinstance(spec, dict):
+                continue
+            declared = spec.get('columns')
+            if isinstance(declared, list):
+                names = [
+                    column.get('name') if isinstance(column, dict) else column
+                    for column in declared
+                ]
+                names = [name for name in names if isinstance(name, str)]
+                errors.extend(_key_column_order_errors(
+                    names, f"{ex_dir.name}/{spec_path.name}: declared columns",
+                ))
+            artifact_name = None
+            output = spec.get('output')
+            if isinstance(output, dict):
+                artifact_columns = output.get('columns')
+                if (
+                    isinstance(artifact_columns, list)
+                    and all(isinstance(c, str) for c in artifact_columns)
+                ):
+                    errors.extend(_key_column_order_errors(
+                        artifact_columns,
+                        f"{ex_dir.name}/{spec_path.name}: output columns",
+                    ))
+                artifact_path = output.get('path')
+                if isinstance(artifact_path, str) and artifact_path:
+                    artifact_name = PurePosixPath(artifact_path).name
+            if artifact_name:
+                golden = ex_dir / 'expected' / artifact_name
+                # Parquet goldens carry no header contract; only CSV
+                # goldens pin the column order.
+                if golden.suffix.lower() != '.csv' or not golden.is_file():
+                    continue
+                try:
+                    with open(golden, 'r', encoding='utf-8', newline='') as f:
+                        header = next(csv.reader(f))
+                except (StopIteration, UnicodeDecodeError, OSError):
+                    # Empty, non-UTF-8, or unreadable goldens are
+                    # reported by the CSV shape checks; skip them here.
+                    continue
+                errors.extend(_key_column_order_errors(
+                    header,
+                    f"{ex_dir.name}/expected/{artifact_name}: header",
+                ))
+    return errors
+
+
 # One machine-readable grammar per closed language. Each file is the single
 # source for its rule's grammar block, for this validator's parser, and for
 # the R parser, so a copy that drifts from it fails validation instead of
@@ -10107,6 +10444,7 @@ def string_template_shape(parts):
 
 
 def decide_predicate(text):
+    _ensure_predicate_binding()
     try:
         ast = parse_predicate(text)
     except PredicateError:
@@ -10222,6 +10560,7 @@ def grammar_defined_symbols(document):
 
 def grammar_vocabulary_errors(contract, document, label):
     """Compare a contract's closed vocabulary with this validator's."""
+    _ensure_predicate_binding()
     errors = []
     vocabulary = document.get('vocabulary')
     if not isinstance(vocabulary, dict):
@@ -10830,6 +11169,8 @@ def check_yaml_files(root: Path):
     errors = []
     warnings = []
     errors.extend(validate_ascii_sources(root))
+    errors.extend(validate_literal_canonical_form(root))
+    errors.extend(validate_source_canonical_form(root))
     for yaml_file in sorted(root.rglob('*.yaml')):
         if '.github' in yaml_file.parts:
             continue
@@ -10888,6 +11229,7 @@ def check_yaml_files(root: Path):
     errors.extend(validate_examples_define_documents(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
+    errors.extend(validate_key_column_order(root))
     errors.extend(validate_grammar_contracts(root))
     errors.extend(validate_regex_conformance(root))
 
@@ -10912,6 +11254,7 @@ def validate_examples_csv(root: Path, env=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
+        owners = example_artifact_owners(ex_dir)
         for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
@@ -10987,6 +11330,10 @@ def validate_examples_csv(root: Path, env=None):
                             for name, column_type in VERIFICATION_LOG_TYPES.items()
                         ],
                     }
+                elif owners.get(csv_file.name, set()) - {spec_path.name}:
+                    # Another spec of this example produces this golden, and
+                    # its own pass checks the header.
+                    continue
                 else:
                     permitted = [
                         name

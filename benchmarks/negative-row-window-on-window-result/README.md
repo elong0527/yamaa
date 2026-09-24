@@ -1,33 +1,53 @@
 # Window on a Window-Derived Value
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-row-window-on-window-result.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** reject a window expression whose source depends on a value
-that only exists because of another window, even inside the same row
-template.
+**Goal:** attempt the previous albumin result (`PREV_AVAL`), the change
+from it (`CHG`), and the previous visit's change (`PREV2`), where the
+last reads a neighboring visit's value that was itself computed from a
+neighboring visit.
 
 **Input:** laboratory (LB) records carrying a test code (`LBTESTCD`),
 a numeric result (`LBSTRESN`), and a visit number (`VISITNUM`).
 
 **Variables:**
 
-- `PREV_AVAL` would lag `AVAL` across visits within each subject.
-- `CHG` would be derived after the window pass as `AVAL - PREV_AVAL`.
-- `PREV2` would lag `CHG`, a value computed from a window result.
+- `PREV_AVAL` would be the subject's albumin result (`AVAL`) at the
+  previous visit.
+- `CHG` would be `AVAL - PREV_AVAL`, the change since that visit.
+- `PREV2` would be `CHG` at the previous visit.
 
-A window reads the rows its template constructed, in one pass with no
-declared evaluation order between window expressions. A second window
-depending on the first window's result -- directly, or through a value
-derived from one like `CHG` -- would read values whose computation order
-is unspecified, so the run is rejected before any data is read and no
-artifact is accepted.
+Every value that reads a neighboring visit is computed in one pass over
+the rows being built, with no stated order among those values. `PREV2`
+reads a neighboring visit's `CHG`, which depends on `PREV_AVAL`, so it
+would read values whose computation order is unspecified, and the run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLBC
 
 ## How to fix
 
-Restructure the derivation so each window reads only values the row
-template constructed directly, and each scalar reads window results
-after the window pass. Here, drop `PREV2`: `CHG` already carries the
-change from the previous visit, and no second window is needed.
+Decide whether the previous visit's change is needed. If it is not, drop
+`PREV2`: `CHG` already gives each visit's change.
+
+If it is, have every window read the result `AVAL` itself, never a value
+computed from another window, and subtract afterwards: the previous
+visit's change is the previous result minus the result two visits back.
+
+```yaml
+derivations:
+  # USUBJID, PARAMCD, AVISITN, AVAL, PREV_AVAL and CHG as before
+  PREV2_AVAL:
+    row_value:
+      source: AVAL
+      offset: -2
+      window:
+        group_by: [USUBJID, PARAMCD]
+        order_by: [AVISITN]
+  PREV2:
+    compute:
+      expr: "PREV_AVAL - PREV2_AVAL"
+```
+
+Declare `PREV2_AVAL` as a float column and leave it out of the output.

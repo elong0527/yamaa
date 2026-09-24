@@ -35,8 +35,7 @@ columns:
     derivation:
       case:
         - when: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]
@@ -47,5 +46,4 @@ columns:
     derivation:
       case:
         - when: "str_contains(AE.AEDECOD, 'DERM|ERYTHEMA')"
-          then:
-            literal: Y
+          then: {literal: Y}

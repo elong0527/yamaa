@@ -21,6 +21,7 @@ from yamaa.adapters.conformance import (
     ExampleReport,
     HandlerObservation,
     compare_example,
+    entry_specification,
     execute_example,
     expected_kind,
     main,
@@ -38,6 +39,11 @@ SCHEMA_PARQUET = "schema-parquet"
 # A specification that calls a project function; with the project root it
 # carries removed, the call is a logical one no implementation answers.
 PORTABLE = "adam-adsl-bmi"
+# An entry that reads DM through `schema: spec_dm.yaml`, a producer kept
+# beside it, so the example commits both artifacts.
+WORKFLOW = "sdtm-dm-race-ethnicity"
+# An entry whose producer sits under `input/` as the provenance of an input.
+INPUT_PRODUCER = "adam-adsl-randomization"
 
 # What the engine reports for every handler path sdtm-dm-basic declares.
 # The one `missing` handler answers both the missing and the unlisted input.
@@ -216,6 +222,49 @@ class TestArtifactMutations:
 
         assert not verdict.passed
         assert kinds(verdict) == {"artifact.missing", "artifact.unexpected"}
+
+
+class TestProducerWorkflow:
+    """A producer kept beside the entry is part of the example it runs in."""
+
+    def test_the_spec_no_other_reads_is_the_entry(self) -> None:
+        assert entry_specification(EXAMPLES / WORKFLOW).name == "spec_suppdm.yaml"
+
+    def test_a_sibling_producer_publishes_its_artifact_first(
+        self, tmp_path: Path
+    ) -> None:
+        report = run(EXAMPLES / WORKFLOW, tmp_path)
+
+        assert report.outcome == "success"
+        assert [item.name for item in report.artifacts] == ["dm", "suppdm"]
+        assert compare_example(report, EXAMPLES / WORKFLOW).passed
+
+    def test_a_changed_producer_cell_fails(self, tmp_path: Path) -> None:
+        example = copy_example(WORKFLOW, tmp_path)
+        golden = example / "expected/dm.csv"
+        golden.write_bytes(
+            golden.read_bytes().replace(b",008,008,WHITE,", b",008,008,ASIAN,")
+        )
+
+        verdict = verdict_of(WORKFLOW, tmp_path, example)
+
+        assert not verdict.passed
+        assert kinds(verdict) == {"artifact.record"}
+
+    def test_an_uncommitted_producer_golden_fails(self, tmp_path: Path) -> None:
+        example = copy_example(WORKFLOW, tmp_path)
+        (example / "expected/dm.csv").unlink()
+
+        verdict = verdict_of(WORKFLOW, tmp_path, example)
+
+        assert not verdict.passed
+        assert kinds(verdict) == {"artifact.unexpected"}
+
+    def test_a_producer_under_input_stays_an_input(self, tmp_path: Path) -> None:
+        report = run(EXAMPLES / INPUT_PRODUCER, tmp_path)
+
+        assert report.outcome == "success"
+        assert [item.name for item in report.artifacts] == ["adsl"]
 
 
 class TestParquetGolden:

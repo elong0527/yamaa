@@ -18,8 +18,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: LB
+    derivation: {literal: LB}
 
   - name: STUDYID
     type: str
@@ -61,13 +60,16 @@ columns:
     label: Reference Range Upper Limit in Orig Unit
     derivation: LB_RAW.LBORNRHI
 
+  # RESN, LO_RESN and HI_RESN hold the reported result and limits as
+  # numbers for the arithmetic below; the columns above keep them as text.
   - name: RESN
     type: float
     label: Numeric Result as Reported
-    derivation:
-      value:
-        source: LB_RAW.LBORRES
+    derivation: LB_RAW.LBORRES
 
+  # The factor for the record's test and reported unit; missing when the
+  # conversion table has no such row, which leaves every standardized value
+  # except the unit missing.
   - name: FACTOR
     type: float
     label: Conversion Factor to the Standard Unit
@@ -82,16 +84,12 @@ columns:
   - name: LO_RESN
     type: float
     label: Numeric Reference Lower Limit as Reported
-    derivation:
-      value:
-        source: LB_RAW.LBORNRLO
+    derivation: LB_RAW.LBORNRLO
 
   - name: HI_RESN
     type: float
     label: Numeric Reference Upper Limit as Reported
-    derivation:
-      value:
-        source: LB_RAW.LBORNRHI
+    derivation: LB_RAW.LBORNRHI
 
   - name: LBSTRESN
     type: float
@@ -108,8 +106,7 @@ columns:
   - name: LBSTRESU
     type: str
     label: Standard Units
-    derivation:
-      literal: g/dL
+    derivation: {literal: g/dL}
 
   - name: LBSTNRLO
     type: float
@@ -126,6 +123,8 @@ columns:
         expr: "HI_RESN * FACTOR"
 
 verifications:
+  # A result with no factor keeps its standard unit while its standardized
+  # result and limits are missing, so this check fails for that record.
   - all_or_none:
       id: standardized-result-completeness
       columns: [LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI]

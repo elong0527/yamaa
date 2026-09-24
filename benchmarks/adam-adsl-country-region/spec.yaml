@@ -19,6 +19,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # Upper case, so 'usa' and 'USA' are one country; an empty country is
+  # UNKNOWN. Any country outside the list below stops the run.
   - name: COUNTRY
     type: str
     label: Country
@@ -30,6 +32,8 @@ columns:
       allowed_values:
         values: [USA, CAN, DEU, UNKNOWN]
 
+  # The fallback answers both an empty and an unlisted country, but COUNTRY
+  # is never empty and admits no other country, so only UNKNOWN reaches it.
   - name: REGION1
     type: str
     label: Geographic Region 1
@@ -49,5 +53,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 8
+      max: 8

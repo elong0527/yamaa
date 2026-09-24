@@ -352,6 +352,22 @@ intermediates:
     keep: last
 ```
 
+A named intermediate can use `dataset: SELF` to select rows completed by
+earlier row templates. Its donor fields are row-derived output columns, so a
+later LOCF template can filter and order on a window-derived flag without
+staging a second input file. During column derivation, `SELF` contains all
+completed row templates.
+
+```yaml
+intermediates:
+  - id: DONOR8
+    dataset: SELF
+    key: [STUDYID, USUBJID]
+    filter: "ANL01FL = 'Y' AND AVISITN <= 8"
+    order_by: [{variable: AVISITN, direction: desc}]
+    keep: first
+```
+
 An incomplete match value is answered before a record is looked for and an
 unmatched key after, and the two stay disjoint. Omitting `unmatched` keeps
 the behavior of the match the lookup performs: missing when it matches on

@@ -9,6 +9,8 @@ input:
       ASEQ: int
 base: ADSL
 intermediates:
+  # The subject's earliest qualifying death, the earlier input record on a
+  # tied date. ADRS also carries PARAMCD, so key names only the subject.
   - id: DEATH_REC
     dataset: ADRS
     filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'"
@@ -34,14 +36,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      literal: OS
+    derivation: {literal: OS}
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      literal: Overall Survival
+    derivation: {literal: Overall Survival}
 
   - name: STARTDT
     type: date
@@ -53,37 +53,27 @@ columns:
     label: Death Date
     derivation: DEATH_REC.ADT
 
-  - name: DEATHSEQ
-    type: int
-    label: Death Source Sequence Number
-    derivation: DEATH_REC.ASEQ
-
+  # The last-alive date as a date: ADSL is read as text, and the
+  # comparisons below need a date.
   - name: CENSORDT1
     type: date
     label: Last Known Alive Date
     derivation: ADSL.LSTALVDT
 
-  - name: CENSORDT2
-    type: date
-    label: Randomization Date
-    derivation: ADSL.RANDDT
-
+  # A death before randomization is moved up to it. With no death, the
+  # last-alive date when it is after randomization, else randomization.
   - name: ADT
     type: date
     label: Analysis Date
     derivation:
       case:
-        - when: "DEATHDT IS NOT NULL AND DEATHDT >= STARTDT"
-          then:
-            source: DEATHDT
+        - when: "DEATHDT >= STARTDT"
+          then: DEATHDT
         - when: "DEATHDT IS NOT NULL"
-          then:
-            source: STARTDT
-        - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-          then:
-            source: CENSORDT1
-        - otherwise:
-            source: CENSORDT2
+          then: STARTDT
+        - when: "CENSORDT1 > STARTDT"
+          then: CENSORDT1
+        - otherwise: STARTDT
 
   - name: AVAL
     type: int
@@ -101,10 +91,8 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then:
-            literal: 0
-        - otherwise:
-            literal: 1
+          then: {literal: 0}
+        - otherwise: {literal: 1}
 
   - name: EVNTDESC
     type: str
@@ -112,25 +100,20 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then:
-            literal: Death
-        - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-          then:
-            literal: Alive
-        - otherwise:
-            literal: Randomization
+          then: {literal: Death}
+        - when: "CENSORDT1 > STARTDT"
+          then: {literal: Alive}
+        - otherwise: {literal: Randomization}
 
   - name: CNSDTDSC
     type: str
     label: Censoring Date Description
     derivation:
       case:
-        - when: "DEATHDT IS NULL AND CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-          then:
-            literal: Alive During Study
+        - when: "DEATHDT IS NULL AND CENSORDT1 > STARTDT"
+          then: {literal: Alive During Study}
         - when: "DEATHDT IS NULL"
-          then:
-            literal: Randomization
+          then: {literal: Randomization}
 
   - name: SRCDOM
     type: str
@@ -138,10 +121,8 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then:
-            literal: ADRS
-        - otherwise:
-            literal: ADSL
+          then: {literal: ADRS}
+        - otherwise: {literal: ADSL}
 
   - name: SRCVAR
     type: str
@@ -149,13 +130,10 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then:
-            literal: ADT
-        - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-          then:
-            literal: LSTALVDT
-        - otherwise:
-            literal: RANDDT
+          then: {literal: ADT}
+        - when: "CENSORDT1 > STARTDT"
+          then: {literal: LSTALVDT}
+        - otherwise: {literal: RANDDT}
 
   - name: SRCSEQ
     type: int
@@ -163,5 +141,4 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then:
-            source: DEATHSEQ
+          then: DEATH_REC.ASEQ

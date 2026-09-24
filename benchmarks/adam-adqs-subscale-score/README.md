@@ -11,7 +11,11 @@ by 25 (mean divided by four, times 100).
 **Input:** collected questionnaire responses for the physical
 functioning scale, with study, subject, and visit (`STUDYID`,
 `USUBJID`, `VISIT`), category (`QSCAT`), test code and test name
-(`QSTESTCD`, `QSTEST`), and numeric result (`QSSTRESN`).
+(`QSTESTCD`, `QSTEST`), and numeric result (`QSSTRESN`) on the
+zero to four answer scale. One record on the emotional
+functioning scale is included and excluded from the output,
+showing that only the physical functioning records feed the
+dataset.
 
 **Variables:**
 
@@ -19,16 +23,15 @@ functioning scale, with study, subject, and visit (`STUDYID`,
   record, or `PFSCORE` on the added score record.
 - `PARAM`: the test name on an item record, or the subscale name
   on the added score record.
-- `AVAL`: the numeric result on an item record, on the zero to
-  four answer scale, or, on the score record, the mean of the
-  answered items at that visit multiplied by 25; empty on the
-  score record when fewer than three of the four items were
-  answered.
+- `AVAL`: on an item record, the numeric result on the zero to
+  four answer scale, empty when the item was not answered; on the
+  score record, the mean of the answered items at that visit
+  multiplied by 25, empty when fewer than three of the four items
+  were answered.
 
-**Note:** in this benchmark each administered visit carries a score
-record, even when too few items were answered to score it, so an
-empty score stays apart from a visit with no records at all. Item
-responses are expected within zero to four, and only `PF01`
-through `PF04` plus `PFSCORE` appear as parameter codes.
+**Note:** every visit with a `PF01` item record, answered or not,
+carries a score record, so a visit with too few answers to score
+keeps an empty score and stays apart from a visit with no records
+at all.
 
 **Standard:** ADaM | **Domain:** ADQS

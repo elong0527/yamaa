@@ -12,12 +12,11 @@ sequence number.
 
 **Variables:**
 
-- `RESCTRT` is the treatment name from `CMTRT` on the earliest
-  qualifying medication record, where qualifying means `CMCAT`
-  equals `RESCUE MEDICATION`; any other category does not qualify.
-  Earliest means the smallest `CMSTDTC`, and ties go to the
-  smallest `CMSEQ`. Left blank when the subject has no qualifying
-  record, whether the subject has other medications or none at all,
-  not filled with placeholder text.
+- `RESCTRT` is the treatment name (`CMTRT`) of the subject's
+  earliest rescue medication, a record whose category (`CMCAT`) is
+  `RESCUE MEDICATION`. Earliest means the smallest start date
+  (`CMSTDTC`), and ties go to the smallest `CMSEQ`. Left blank, not
+  filled with placeholder text, when the subject has no rescue
+  medication, whether the subject has other medications or none.
 
 **Standard:** ADaM | **Domain:** ADSL

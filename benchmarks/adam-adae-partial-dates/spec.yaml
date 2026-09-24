@@ -40,17 +40,21 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
+
+  # Complete a year-and-month start to the 15th, never before first
+  # exposure. A year alone, non-date text, or nothing gives no date.
+  # (Month precision is the minimum accepted, so no month is ever
+  # supplied, and none is written.)
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation:
       date_impute:
         source: AESTDTC
-        month: 6
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        missing: null
+        missing: null   # handlers are explicit: an omitted one is fatal
         invalid: null
 
   - name: ASTDTC
@@ -66,14 +70,15 @@ columns:
         source: ASTDT
         missing: null
 
+  # M means the collected start carried a year and month, so the day was
+  # supplied.
   - name: ASTDTF
     type: str
     label: Analysis Start Date Imputation Flag
     derivation:
       case:
-        - when: "ASTDT IS NOT NULL AND ASTDTPR = 'M'"
-          then:
-            literal: "D"
+        - when: "ASTDTPR = 'M'"
+          then: {literal: "D"}
     verifications:
       allowed_values:
         values: ["D"]
@@ -83,9 +88,8 @@ columns:
     label: Treatment Emergent Analysis Flag
     derivation:
       case:
-        - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND ASTDT >= TRTSDT"
-          then:
-            literal: Y
+        - when: "ASTDT >= TRTSDT"
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

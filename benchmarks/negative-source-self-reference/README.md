@@ -14,19 +14,17 @@ analysis values.
 
 **Variables:**
 
-- `ADT` would be the collection date from the collected date.
+- `ADT` would be the date the result was collected.
 - `AVAL` would be the collected result on each transaminase
-  record, and the aspartate value read from the dataset being
-  built divided by the alanine result on the ratio record, missing
-  when either result is absent.
+  record. On the ratio record it would be the aspartate value for
+  the same subject and date, read from the dataset being built,
+  divided by the alanine result; missing when either result is
+  absent or the alanine result is zero.
 
-The ratio read matches subject, date, and the code `AST` in the
-dataset being built; the denominator is the alanine result, with
-division by zero returning missing. The values the ratio reaches
-for are the values this run is producing under the same name.
-Nothing can distinguish the record being written from the record
-being read back, so the run is rejected before any data is read
-and no artifact is accepted.
+The aspartate values the ratio reaches for are the values this run
+is producing under the same name. Nothing can distinguish the
+record being written from the record being read back, so the run
+is rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -39,7 +37,7 @@ built for the dataset being built:
 
 ```yaml
 input:
-  LB: input/lb.csv
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
   ADLB_RAW: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
 ```
 

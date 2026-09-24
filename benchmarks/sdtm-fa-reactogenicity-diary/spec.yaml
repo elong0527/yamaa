@@ -18,8 +18,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: FA
+    derivation: {literal: FA}
 
   - name: STUDYID
     type: str
@@ -45,14 +44,11 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'OCCUR'"
-          then:
-            literal: 1
+          then: {literal: 1}
         - when: "FATESTCD = 'SEV'"
-          then:
-            literal: 2
+          then: {literal: 2}
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            literal: 3
+          then: {literal: 3}
 
   - name: FASEQ
     type: int
@@ -71,8 +67,7 @@ columns:
   - name: FACAT
     type: str
     label: Category for Findings About
-    derivation:
-      literal: REACTOGENICITY
+    derivation: {literal: REACTOGENICITY}
 
   - name: FASCAT
     type: str
@@ -80,10 +75,8 @@ columns:
     derivation:
       case:
         - when: "DIARY.CATSRC = 'LOCAL'"
-          then:
-            literal: ADMINISTRATION SITE
-        - otherwise:
-            literal: SYSTEMIC
+          then: {literal: ADMINISTRATION SITE}
+        - otherwise: {literal: SYSTEMIC}
 
   - name: FAORRES
     type: str
@@ -95,8 +88,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMUNIT
+          then: DIARY.DIAMUNIT
 
   - name: FASTRESC
     type: str
@@ -109,8 +101,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMETER
+          then: DIARY.DIAMETER
 
   - name: FASTRESU
     type: str
@@ -118,8 +109,7 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LDIAM'"
-          then:
-            source: DIARY.DIAMUNIT
+          then: DIARY.DIAMUNIT
 
   - name: FASTAT
     type: str
@@ -127,8 +117,7 @@ columns:
     derivation:
       case:
         - when: "DIARY.COMPLETED = 'N'"
-          then:
-            literal: NOT DONE
+          then: {literal: NOT DONE}
 
   - name: FATPT
     type: str
@@ -143,36 +132,27 @@ columns:
 rows:
   - id: occurrence
     derivations:
-      FATESTCD:
-        literal: OCCUR
-      FATEST:
-        literal: Occurrence Indicator
+      FATESTCD: {literal: OCCUR}
+      FATEST: {literal: Occurrence Indicator}
       FAORRES:
         case:
           - when: "DIARY.COMPLETED = 'Y'"
-            then:
-              source: DIARY.OCCUR
+            then: DIARY.OCCUR
 
   - id: severity
     filter: "DIARY.COMPLETED = 'Y'"
     derivations:
-      FATESTCD:
-        literal: SEV
-      FATEST:
-        literal: Severity/Intensity
+      FATESTCD: {literal: SEV}
+      FATEST: {literal: Severity/Intensity}
       FAORRES:
         case:
           - when: "DIARY.OCCUR = 'Y'"
-            then:
-              source: DIARY.SEV
-          - otherwise:
-              literal: NONE
+            then: DIARY.SEV
+          - otherwise: {literal: NONE}
 
   - id: longest-diameter
     filter: "DIARY.COMPLETED = 'Y' AND DIARY.OCCUR = 'Y' AND DIARY.REACTION IN ('REDNESS', 'SWELLING')"
     derivations:
-      FATESTCD:
-        literal: LDIAM
-      FATEST:
-        literal: Longest Diameter
+      FATESTCD: {literal: LDIAM}
+      FATEST: {literal: Longest Diameter}
       FAORRES: DIARY.DIAMETER

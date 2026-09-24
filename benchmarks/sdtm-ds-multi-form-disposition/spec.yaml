@@ -13,8 +13,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DS
+    derivation: {literal: DS}
     verifications:
       allowed_values:
         values: [DS]
@@ -101,14 +100,10 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DS.COMP'"
           expr: "ONLY(ODM.Value)"
-      DSTERM:
-        literal: INFORMED CONSENT OBTAINED
-      DSDECOD:
-        literal: INFORMED CONSENT OBTAINED
-      DSCAT:
-        literal: PROTOCOL MILESTONE
-      DSSCAT:
-        literal: INFORMED CONSENT
+      DSTERM: {literal: INFORMED CONSENT OBTAINED}
+      DSDECOD: {literal: INFORMED CONSENT OBTAINED}
+      DSCAT: {literal: PROTOCOL MILESTONE}
+      DSSCAT: {literal: INFORMED CONSENT}
       DSSTDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DS.DTC'"
@@ -123,14 +118,10 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DS.COMP'"
           expr: "ONLY(ODM.Value)"
-      DSTERM:
-        literal: RANDOMIZED
-      DSDECOD:
-        literal: RANDOMIZED
-      DSCAT:
-        literal: PROTOCOL MILESTONE
-      DSSCAT:
-        literal: RANDOMIZATION
+      DSTERM: {literal: RANDOMIZED}
+      DSDECOD: {literal: RANDOMIZED}
+      DSCAT: {literal: PROTOCOL MILESTONE}
+      DSSCAT: {literal: RANDOMIZATION}
       DSSTDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DS.DTC'"
@@ -148,8 +139,7 @@ rows:
       DSTERM:
         case:
           - when: "COMPSTAT = 'COMPLETED'"
-            then:
-              literal: COMPLETED
+            then: {literal: COMPLETED}
           - otherwise:
               aggregate:
                 filter: "ODM.ItemOID = 'IT.DS.REASON'"
@@ -157,16 +147,13 @@ rows:
       DSDECOD:
         case:
           - when: "COMPSTAT = 'COMPLETED'"
-            then:
-              literal: COMPLETED
+            then: {literal: COMPLETED}
           - otherwise:
               aggregate:
                 filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
                 expr: "ONLY(ODM.Value)"
-      DSCAT:
-        literal: DISPOSITION EVENT
-      DSSCAT:
-        literal: END OF TREATMENT
+      DSCAT: {literal: DISPOSITION EVENT}
+      DSSCAT: {literal: END OF TREATMENT}
       DSSTDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DS.DTC'"
@@ -184,11 +171,9 @@ rows:
       DSTERM:
         case:
           - when: "COMPSTAT = 'COMPLETED'"
-            then:
-              literal: COMPLETED
+            then: {literal: COMPLETED}
           - when: "COMPSTAT = 'SCREEN FAILURE'"
-            then:
-              literal: SCREEN FAILURE
+            then: {literal: SCREEN FAILURE}
           - otherwise:
               aggregate:
                 filter: "ODM.ItemOID = 'IT.DS.REASON'"
@@ -196,19 +181,15 @@ rows:
       DSDECOD:
         case:
           - when: "COMPSTAT = 'COMPLETED'"
-            then:
-              literal: COMPLETED
+            then: {literal: COMPLETED}
           - when: "COMPSTAT = 'SCREEN FAILURE'"
-            then:
-              literal: SCREEN FAILURE
+            then: {literal: SCREEN FAILURE}
           - otherwise:
               aggregate:
                 filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
                 expr: "ONLY(ODM.Value)"
-      DSCAT:
-        literal: DISPOSITION EVENT
-      DSSCAT:
-        literal: END OF STUDY
+      DSCAT: {literal: DISPOSITION EVENT}
+      DSSCAT: {literal: END OF STUDY}
       DSSTDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DS.DTC'"

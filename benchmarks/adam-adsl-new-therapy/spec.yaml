@@ -29,12 +29,15 @@ columns:
     verifications:
       not_missing: {}
 
+  # The first start of an on-treatment medication, and of an on-treatment
+  # cancer-related procedure. MIN skips a missing date, so either is empty
+  # when the subject has no dated qualifying record.
   - name: CMNACTDT
     type: date
     label: First New Anti-Cancer Medication Date
     derivation:
       aggregate:
-        filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
+        filter: "CM.CMCAT = 'ON TREATMENT'"
         expr: "MIN(CM.CMSTDTC)"
 
   - name: PRNACTDT
@@ -42,9 +45,10 @@ columns:
     label: First New Anti-Cancer Procedure Date
     derivation:
       aggregate:
-        filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
+        filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT'"
         expr: "MIN(PR.PRSTDTC)"
 
+  # The earlier of the two, skipping an empty one; empty when both are.
   - name: NACTDT
     type: date
     label: New Anti-Cancer Therapy Start Date
@@ -52,6 +56,7 @@ columns:
       least:
         sources: [CMNACTDT, PRNACTDT]
 
+  # Day 1 is TRTSDT itself.
   - name: NACTDY
     type: int
     label: New Anti-Cancer Therapy Start Relative Day
@@ -66,8 +71,7 @@ columns:
     derivation:
       case:
         - when: "NACTDT IS NOT NULL"
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]

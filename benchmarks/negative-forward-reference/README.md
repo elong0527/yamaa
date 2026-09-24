@@ -19,9 +19,8 @@ collected result in `AVAL`, identified by study and subject.
   when the collected result is missing.
 
 The doubled value is listed before the collected value it reads,
-so it has nothing to read when its turn comes. The run is
-rejected before any data is read, and no artifact is accepted, so
-no row is produced.
+and a value may read only values listed before it, so the run is
+rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 

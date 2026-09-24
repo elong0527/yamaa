@@ -42,7 +42,7 @@ columns:                       # this section (below) is the Variable sheet
   #   - name: STUDYID
   #     type: str
   #     label: Study Identifier
-  #     derivation: {source: SOURCE.STUDYID}
+  #     derivation: SOURCE.STUDYID
   - name: BMI                  #   Variable
     type: float                #   Type
     label: Body Mass Index (kg/m2)   # Label
@@ -120,7 +120,7 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Comments for Define` | `column.metadata` | Free key-value, never validated, for define generation |
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
 | "if not collected then U" | the `missing:` handler | |
-| "if not in codelist then 99" | the `missing:` handler (same knob) | |
+| "if not in codelist then 99" | the `unmapped:` handler | Without `unmapped:`, `missing:` answers this too |
 | "subject X was corrected to 99" | a `case` branch | |
 
 ### 2.3 Codelist splits into three constructs
@@ -202,8 +202,9 @@ What changed:
 
 - Excel packs "if not collected -> U" and "if unrecognised -> U" into one
   sentence. yamaa answers both with the one `missing` handler. Two
-  conditions stay two conditions, one knob answers both; `strict: true`
-  makes either one fail instead.
+  conditions stay two conditions: when the answers differ, `unmapped` gives
+  "unrecognised" its own, and `strict: true` makes a condition with no
+  handler of its own fail instead.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.
@@ -258,8 +259,7 @@ keys: [STUDYID, USUBJID, AESEQ]
 
   - name: TRTSDTM
     type: datetime
-    derivation:
-      source: ADSL.TRTSDTM          # <- no merge statement anywhere
+    derivation: ADSL.TRTSDTM         # <- no merge statement anywhere
 
   - name: TRTEMFL
     type: str
@@ -267,8 +267,7 @@ keys: [STUDYID, USUBJID, AESEQ]
       case:
         - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL
                  AND ASTDTM >= TRTSDTM"
-          then:
-            literal: Y
+          then: {literal: Y}
 ```
 
 What changed:

@@ -14,8 +14,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation:
-      literal: DM
+    derivation: {literal: DM}
 
   - name: STUDYID
     type: str
@@ -74,8 +73,7 @@ columns:
     derivation:
       case:
         - when: "EXTRT1 IS NOT NULL AND ACTARMCD IS NULL"
-          then:
-            source: EXTRT1
+          then: EXTRT1
 
   - name: ARMNRS
     type: str
@@ -83,14 +81,11 @@ columns:
     derivation:
       case:
         - when: "ARMCD IS NULL AND ACTARMCD IS NULL AND SCRNFL = 'Y'"
-          then:
-            literal: SCREEN FAILURE
+          then: {literal: SCREEN FAILURE}
         - when: "ARMCD IS NULL AND ACTARMCD IS NULL"
-          then:
-            literal: NOT ASSIGNED
+          then: {literal: NOT ASSIGNED}
         - when: "ARMCD IS NOT NULL AND ACTARMCD IS NULL AND ACTARMUD IS NULL"
-          then:
-            literal: NOT TREATED
+          then: {literal: NOT TREATED}
 
 verifications:
   - unique:

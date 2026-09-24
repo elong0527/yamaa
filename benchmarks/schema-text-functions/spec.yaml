@@ -92,8 +92,7 @@ columns:
     derivation:
       case:
         - when: "RAWTXT IS NULL"
-          then:
-            literal: MISSING
+          then: {literal: MISSING}
         - otherwise:
             mapping:
               source: RAWTXT

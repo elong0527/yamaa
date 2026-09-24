@@ -8,12 +8,13 @@ parameter code `OS` (`Overall Survival`), carrying `STARTDT`,
 `ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `CNSDTDSC`, `SRCDOM`,
 `SRCVAR`, and `SRCSEQ`.
 
-**Input:** subject-level dates (`RANDDT`, `LSTALVDT`) alongside
-response records holding death analysis dates (`ADT`). The death
-selection keeps response records where `PARAMCD` is `DEATH`,
-`AVALC` is `Y`, and `ANL01FL` is `Y`, takes the record with the
-earliest `ADT` (ties unspecified), and treats a subject with no
-such record as having no death.
+**Input:** subject-level randomization and last-known-alive dates
+(`RANDDT`, `LSTALVDT`) alongside response records holding death
+analysis dates (`ADT`). The death selection keeps response records
+where `PARAMCD` is `DEATH`, `AVALC` is `Y`, and `ANL01FL` is `Y`,
+takes the one with the earliest `ADT` (on a tied date, the one that
+comes first in the input), and treats a subject with no such dated
+record as having no death.
 
 **Variables:**
 
@@ -24,11 +25,11 @@ such record as having no death.
   the death falls before it. With no death, `ADT` is the
   last-alive date when that date falls after randomization, else
   the randomization date (including a tie).
-- `AVAL` is the inclusive number of days from `STARTDT` through
-  `ADT`, counting both endpoints.
-- `CNSR` is `0` when a qualifying death record exists and `1`
+- `AVAL` is the number of days from `STARTDT` through `ADT`,
+  counting both endpoints.
+- `CNSR` is `0` when the subject has a qualifying death and `1`
   otherwise.
-- `EVNTDESC` is `Death` when a qualifying death record exists,
+- `EVNTDESC` is `Death` when the subject has a qualifying death,
   `Alive` when censoring at a last-alive date after
   randomization, and `Randomization` otherwise.
 - `CNSDTDSC` is blank for a death, `Alive During Study` when

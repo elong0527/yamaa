@@ -1,0 +1,4 @@
+ItemOID,VSTESTCD,VSTEST,UNIT
+IT.VS.PULSE,PULSE,Pulse,beats/min
+IT.VS.SYSBP,SYSBP,Systolic Blood Pressure,mmHg
+IT.VS.DIABP,DIABP,Diastolic Blood Pressure,mmHg

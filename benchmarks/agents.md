@@ -19,6 +19,8 @@ tracker, one work item per root cause.
         spec_<variant>.yaml ...                     # alternative specifications, never mixed with spec.yaml
         spec_<level>.yaml ...                       # multi-level specifications only: no spec.yaml;
                                                     # the file no other file parents is the entry
+        spec_<domain>.yaml ...                      # domains built together: no spec.yaml; the entry
+                                                    # reads the others through input schema
         define.yaml                                 # when the entry generates a document
         input/*.csv
         expected/<domain>.csv
@@ -81,6 +83,23 @@ Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the benchmark intentionally demonstrates a runtime or design variant
 over shared inputs and an expected artifact. Do not mix the base filename with
 variants.
+
+Domains that are only meaningful together, such as DM and its SUPPDM, share
+one benchmark as `spec_<domain>.yaml` files. The entry reads each other one
+through `input.<id>.schema`, so the run builds the producer first and the
+entry consumes its artifact; the file no other file names as a parent or a
+producer is the entry. Each producer commits its own `expected/<domain>.csv`
+beside the entry's, and the runner binds every domain, the entry last:
+
+    import yamaa
+
+    dm = yamaa.yamaa_domain("spec_dm.yaml").output
+    suppdm = yamaa.yamaa_domain("spec_suppdm.yaml").output
+    dm, suppdm
+
+`sdtm-dm-race-ethnicity` is the worked example. A producer kept under
+`input/` instead only records where an input came from, and its artifact is
+not a golden.
 
 ## A benchmark that needs project code
 

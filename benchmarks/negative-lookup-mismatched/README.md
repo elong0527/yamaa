@@ -24,7 +24,10 @@ before any data is read; no artifact is accepted.
 
 ## How to fix
 
-Give each current-row value exactly one lookup-table column:
+If the limit table holds one unit per test code, match on test code and sex
+alone, since the collected results carry no unit. Both sides then name the
+same columns, so state the table columns once; the current-row values default
+to the same names:
 
 ```yaml
 intermediates:
@@ -33,4 +36,6 @@ intermediates:
     key: [LBTESTCD, SEX]
 ```
 
-The two lists pair by position and must have the same length.
+Keeping `key_base: [LBTESTCD, SEX]` beside it would only repeat `key`, which
+is also rejected. When the current-row names differ from the table's, state
+both lists, with one entry each in the same order.

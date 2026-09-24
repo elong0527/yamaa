@@ -6,26 +6,35 @@ input:
     path: input/vs.csv
     types: {AVISITN: int, AVALCOL: float}
 base: VS
+
 output:
   path: advs.csv
   columns: [USUBJID, PARAMCD, AVISITN, AVAL]
+
 columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: VS.USUBJID
+
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation: VS.PARAMCD
+
   - name: AVISITN
     type: int
     label: Analysis Visit Number
     derivation: VS.AVISITN
+
   - name: AVALCOL
     type: float
     label: Collected Analysis Value
     derivation: VS.AVALCOL
+
+  # Last observation carried forward: a missing AVALCOL takes the closest
+  # earlier non-missing value for the subject and parameter, in visit
+  # order. With no earlier value it stays missing; zero is a value.
   - name: AVAL
     type: float
     label: Analysis Value

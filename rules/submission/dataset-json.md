@@ -121,7 +121,7 @@ than reconciled.
 
 **REQ-1202.** A specification a document composes already declares
 `root.submission`, and every one of its output columns already declares a
-`label` and a `column.submission`, because [REQ-0967](define-xml.md#req-0967) requires both of a composed
+`label` and a `column.submission`. [REQ-0967](define-xml.md#req-0967) requires both of a composed
 specification and [REQ-1015](define-xml.md#req-1015) fails the document that lacks them. A specification
 with no submission metadata therefore produces no Dataset-JSON file, for the
 same reason it produces no Define-XML entry.
@@ -236,7 +236,7 @@ smaller than Define-XML's, so the eight collapsed types are carried as text
 here and keep their submission type in the `ItemDef` the column's `itemOID`
 points at; a reader that needs the finer type reads the document. `float` is
 written for a `float` column even though [Types and conversion](../values/types.md)'s value is binary64,
-because this member must equal the `DataType` that `ItemDef` carries and the
+This member must equal the `DataType` that `ItemDef` carries. The
 storage width of a number is not what it names. `boolean`, `decimal`, and
 `double` are never written: [Types and conversion](../values/types.md) declares no Boolean column type, and
 neither of the other two names a submission type [Submission metadata](metadata.md) resolves.

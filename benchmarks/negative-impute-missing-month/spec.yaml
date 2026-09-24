@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  # Complete a year-only start to the 15th of the stated month. Year
+  # precision is the minimum accepted, so a month is required wherever
+  # the policy can use it: omitting it is rejected before any data is
+  # read.
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      date_impute:
+        source: AE.AESTDTC
+        day: 15
+        minimum_source_precision: year

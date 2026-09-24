@@ -6,12 +6,14 @@ input:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
 intermediates:
+  # Each subject's first COVID-19 event: earliest start, then lowest AESEQ.
   - id: FIRSTCOV
     dataset: AE
     key: [STUDYID, USUBJID]
     filter: "AE.AEDECOD = 'COVID-19'"
     order_by: [AE.AESTDTC, AE.AESEQ]
     keep: first
+
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]
@@ -42,6 +44,8 @@ columns:
     label: Analysis Start Date
     derivation: AE.AESTDTC
 
+  # Strictly after the first COVID-19 event in (start date, AESEQ) order.
+  # A missing start compares as unknown, so the flag stays empty.
   - name: AFTCOVFL
     type: str
     label: After First COVID-19 Flag
@@ -50,8 +54,7 @@ columns:
         - when: >-
             ASTDT > FIRSTCOV.AESTDTC OR
             (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
-          then:
-            literal: Y
+          then: {literal: Y}
 
 verifications:
   - unique:

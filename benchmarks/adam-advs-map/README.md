@@ -22,7 +22,8 @@ pressure at each subject and visit.
 - `DTYPE`: `CALCULATION` on the added record and blank on
   collected records.
 
-**Note:** each subject and visit carries at most one `SYSBP`
-record and one `DIABP` record, and carries no `MAP` record.
+**Note:** a subject and visit with more than one `SYSBP` or
+`DIABP` record stops the run rather than choosing one, and so does
+a `MAP` record already present in the input.
 
 **Standard:** ADaM | **Domain:** ADVS

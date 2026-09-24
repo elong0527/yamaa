@@ -1,4 +1,7 @@
 STUDYID,USUBJID,PARAMCD,PARAM,AVALC,AVAL
-XX1234,1,MDIS,Measurable Disease at Baseline,Y,1
-XX1234,2,MDIS,Measurable Disease at Baseline,N,0
-XX1234,3,MDIS,Measurable Disease at Baseline,N,0
+YAMAA-01,YAMAA-01-101,MDIS,Measurable Disease at Baseline,Y,1
+YAMAA-01,YAMAA-01-102,MDIS,Measurable Disease at Baseline,N,0
+YAMAA-01,YAMAA-01-103,MDIS,Measurable Disease at Baseline,N,0
+YAMAA-01,YAMAA-01-104,MDIS,Measurable Disease at Baseline,N,0
+YAMAA-01,YAMAA-01-105,MDIS,Measurable Disease at Baseline,N,0
+YAMAA-01,YAMAA-01-106,MDIS,Measurable Disease at Baseline,N,0

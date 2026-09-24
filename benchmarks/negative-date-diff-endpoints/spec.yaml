@@ -29,6 +29,8 @@ columns:
     label: Date of Death
     derivation: DM.DTHDT
 
+  # Counts days from a date-time to a date; a day count needs two dates, so
+  # this is rejected before any data is read.
   - name: SURVDD
     type: int
     label: Survival Duration in Days

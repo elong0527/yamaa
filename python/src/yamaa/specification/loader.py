@@ -33,7 +33,11 @@ def load_specification(
     origin_path = written_path.resolve()
     bundle = load_schema_bundle(schema_root)
     document = read_yaml_document(origin_path)
-    if isinstance(document, dict) and "parents" in document:
+    rows = document.get("rows") if isinstance(document, dict) else None
+    has_catalog = isinstance(rows, list) and any(
+        isinstance(row, dict) and "catalog" in row for row in rows
+    )
+    if isinstance(document, dict) and ("parents" in document or has_catalog):
         # Imported lazily so the schema interpreter remains usable on its own.
         from yamaa.schema.inheritance import resolve_specification
 
@@ -58,6 +62,9 @@ def load_specification(
 
     assert isinstance(document, dict)
     normalized = normalize_specification(document, bundle)
+    from yamaa.schema.windows import expand_named_windows
+
+    normalized = expand_named_windows(normalized, bundle)
     try:
         specification = Specification.model_validate(normalized, strict=True)
     except ValidationError as error:

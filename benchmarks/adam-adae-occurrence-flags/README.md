@@ -19,7 +19,8 @@ treatment-emergent).
 - `AOCCSFL` is `Y` for the subject's first treatment-emergent event
   within each body system and missing otherwise.
 - `AOCCPFL` is `Y` for the subject's first treatment-emergent event
-  within each dictionary-derived term and missing otherwise.
+  within each dictionary-derived term (counted inside its body system)
+  and missing otherwise.
 
 **Note:** first means the earliest analysis start date, with the lower
 AE sequence number breaking ties on the same day. Only

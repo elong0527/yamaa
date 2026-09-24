@@ -44,6 +44,11 @@ columns:
     label: Analysis Value
     derivation: ADVS_RAW.AVAL
 
+  # AVISIT is a key, and with no row templates the rows are the distinct
+  # key values, settled before any other column. Reading the ADY column
+  # here is therefore rejected before any data is read. Windows: SCREENING
+  # before day 0, BASELINE days 0-1, WEEK 2 days 2-21, WEEK 4 days 22-42,
+  # POST-TREATMENT from day 43.
   - name: AVISIT
     type: str
     label: Analysis Visit

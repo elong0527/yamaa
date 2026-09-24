@@ -34,6 +34,8 @@ columns:
         date: DM.RANDDT
         reference: DM.RFSTDTC
 
+  # DM holds the moment as a datetime; written as text it always carries
+  # seconds, so a collected 14:30 becomes 14:30:00.
   - name: RANDDTC
     type: str
     label: Date and Time of Randomization

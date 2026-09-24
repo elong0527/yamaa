@@ -12,20 +12,15 @@ value (`AVAL`), and the baseline record flag (`ABLFL`).
 
 **Variables:**
 
-- `ADT` is the analysis date, carried over from the input
-  analysis date (`ADT`).
-- `AVAL` is the analysis value, carried over from the input
-  analysis value (`AVAL`).
-- `ABLFL` is `Y` on the record that serves as the baseline for
-  the subject and parameter, carried over from the input baseline
-  flag (`ABLFL`); blank on every other record.
+- `ABLFL` is the input baseline flag: `Y` on the record that serves as the
+  baseline for the subject and parameter, blank on every other record.
 
-Each subject and parameter combination has a single baseline. Two
-records flagged `Y` leave that comparison undefined, and neither
-record can be preferred without inventing a rule the study did not
-state. The run is rejected and no artifact is accepted. The
-expected output records the completed rows presented to that
-check.
+**Note:** each subject and parameter must have exactly one record flagged
+`Y`; a combination with none is rejected as well. Two flagged records leave
+the change from baseline undefined, and neither record can be preferred
+without inventing a rule the study did not state. The run is rejected and no
+artifact is accepted. The expected output records the completed rows
+presented to that check.
 
 **Standard:** ADaM | **Domain:** ADLB
 
@@ -43,7 +38,8 @@ derive it and let a tie be reported where it arises:
   label: Baseline Record Flag
   derivation:
     baseline_flag:
-      group_by: [STUDYID, USUBJID, PARAMCD]
+      window:
+        group_by: [STUDYID, USUBJID, PARAMCD]
       date: ADT
       reference_date: TRTSDT
 ```

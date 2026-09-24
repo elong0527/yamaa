@@ -57,8 +57,7 @@ the first:
   derivation:
     case:
       - when: "ABLRANK = 1"
-        then:
-          literal: Y
+        then: {literal: Y}
 ```
 
 Keep `ABLRANK` internal by omitting it from `output.columns`.

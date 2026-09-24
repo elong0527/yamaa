@@ -16,19 +16,19 @@ base: ODM
 
 output:
   path: se.csv
-  columns: [STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
+  columns: [DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
   order_by: [STUDYID, USUBJID, SESEQ]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: ODM.StudyOID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: {literal: SE}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
@@ -109,10 +109,10 @@ columns:
     derivation:
       case:
         - when: "EPOCH = 'SCREENING'"
-          then: {source: RFICDTC}
+          then: RFICDTC
         - when: "EPOCH = 'TREATMENT'"
-          then: {source: FIRSTDTC}
-        - otherwise: {source: LASTDTC}
+          then: FIRSTDTC
+        - otherwise: LASTDTC
 
   - name: SEENDTC
     type: date
@@ -120,10 +120,10 @@ columns:
     derivation:
       case:
         - when: "EPOCH = 'SCREENING'"
-          then: {source: FIRSTDTC}
+          then: FIRSTDTC
         - when: "EPOCH = 'TREATMENT'"
-          then: {source: LASTDTC}
-        - otherwise: {source: RFXENDTC}
+          then: LASTDTC
+        - otherwise: RFXENDTC
 
   - name: SESTDY
     type: int

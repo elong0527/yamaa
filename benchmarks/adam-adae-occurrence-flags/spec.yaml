@@ -47,6 +47,8 @@ columns:
       allowed_values:
         values: [Y]
 
+  # Number each subject's treatment-emergent events (earliest first, AESEQ
+  # breaking same-day ties) at three levels; each flag below marks number 1.
   - name: AOCCSEQ
     type: int
     label: Subject Occurrence Sequence Number
@@ -83,8 +85,7 @@ columns:
     derivation:
       case:
         - when: "AOCCSEQ = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
 
   - name: AOCCSFL
     type: str
@@ -92,8 +93,7 @@ columns:
     derivation:
       case:
         - when: "AOCCSSEQ = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
 
   - name: AOCCPFL
     type: str
@@ -101,8 +101,7 @@ columns:
     derivation:
       case:
         - when: "AOCCPSEQ = 1"
-          then:
-            literal: Y
+          then: {literal: Y}
 
 verifications:
   - unique:

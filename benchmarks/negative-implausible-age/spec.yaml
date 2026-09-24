@@ -23,6 +23,8 @@ columns:
     type: int
     label: Age
     derivation: DM.AGE
+    # Ages 18 to 100 inclusive pass, and so does a missing age; any other age
+    # fails the run once the dataset is complete.
     verifications:
       - range:
           min: 18

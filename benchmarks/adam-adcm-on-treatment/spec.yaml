@@ -45,21 +45,25 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
+
   - name: TRTEDT
     type: date
     label: Date of Last Exposure to Treatment
     derivation: ADSL.TRTEDT
+
+  # Overlap with the treatment period: the medication neither ends before
+  # treatment starts nor starts after it ends. A missing medication date or
+  # treatment end leaves that side open; no treatment start means no flag.
   - name: ONTRTFL
     type: str
-    label: On-Treatment Flag
+    label: On Treatment Record Flag
     derivation:
       case:
         - when: >
             TRTSDT IS NOT NULL AND
             (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
             (AENDT IS NULL OR AENDT >= TRTSDT)
-          then:
-            literal: Y
+          then: {literal: Y}
     verifications:
       allowed_values:
         values: [Y]
@@ -68,8 +72,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
-      min: 8
-      max: 8
+      min: 12
+      max: 12
   - implies:
       id: on-treatment-medication-has-treatment-start
       when: "ONTRTFL = 'Y'"

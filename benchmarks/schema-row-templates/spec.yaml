@@ -17,8 +17,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      literal: YAMAA-01
+    derivation: {literal: YAMAA-01}
 
   - name: USUBJID
     type: str
@@ -53,14 +52,10 @@ rows:
   - id: alt
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD:
-        literal: ALT
-      PARAM:
-        literal: Alanine Aminotransferase
-      AVAL:
-        source: LB.LBSTRESN
-      DTYPE:
-        literal: null
+      PARAMCD: {literal: ALT}
+      PARAM: {literal: Alanine Aminotransferase}
+      AVAL: LB.LBSTRESN
+      DTYPE: {literal: null}
 
   # Case split, second section: the AST records follow all ALT rows in
   # the output, even though the input interleaves the two tests. Row
@@ -68,14 +63,10 @@ rows:
   - id: ast
     filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD:
-        literal: AST
-      PARAM:
-        literal: Aspartate Aminotransferase
-      AVAL:
-        source: LB.LBSTRESN
-      DTYPE:
-        literal: null
+      PARAMCD: {literal: AST}
+      PARAM: {literal: Aspartate Aminotransferase}
+      AVAL: LB.LBSTRESN
+      DTYPE: {literal: null}
 
   # Grouped template: one candidate row per subject-visit in first
   # appearance order. The filter reads the completed candidate's
@@ -85,13 +76,10 @@ rows:
   - id: visit_total
     group_by: [LB.USUBJID, LB.VISIT]
     derivations:
-      PARAMCD:
-        literal: TOTAL
-      PARAM:
-        literal: Total of Components
+      PARAMCD: {literal: TOTAL}
+      PARAM: {literal: Total of Components}
       AVAL:
         aggregate:
           expr: "SUM(LB.LBSTRESN)"
-      DTYPE:
-        literal: CALCULATION
+      DTYPE: {literal: CALCULATION}
     filter: "AVAL > 100"

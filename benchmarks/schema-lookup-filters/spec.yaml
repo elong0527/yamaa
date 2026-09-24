@@ -12,10 +12,11 @@ output:
 
 # Last-observation-carried-forward: for each planned visit, the donor is
 # the latest lab record for the subject whose result is present and
-# whose visit number does not exceed the driver's. The filter correlates
-# with the driver row through PLAN.VISITN; donor fields stay qualified
-# with the lookup dataset. A planned visit earlier than every lab
-# record finds no donor and reads missing.
+# whose visit number does not exceed the planned visit's. The filter
+# correlates with the current PLAN record through PLAN.VISITN; donor
+# fields stay qualified with the lookup dataset. A planned visit earlier
+# than every lab record with a result finds no donor and reads missing.
+# `direction: asc` is the default, written out.
 intermediates:
   - id: DONOR
     dataset: LB
@@ -30,8 +31,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      literal: YAMAA-01
+    derivation: {literal: YAMAA-01}
 
   - name: USUBJID
     type: str
