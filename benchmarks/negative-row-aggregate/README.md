@@ -3,9 +3,8 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-row-aggregate.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** attempt the subject-level total result (`AVALTOT`)
-from the collected results for a subject, written as the row
-formula `SUM(AVAL)`.
+**Goal:** attempt the total of each subject's collected results
+(`AVALTOT`), written as the row formula `SUM(AVAL)`.
 
 **Input:** laboratory (LB) records carrying the study and
 subject identifiers, the test code (`LBTESTCD`) used for the
@@ -13,16 +12,15 @@ parameter code, and the collected numeric result (`LBSTRESN`).
 
 **Variables:**
 
-- `AVAL`: the collected numeric result copied from `LBSTRESN`;
+- `AVAL` would be the collected numeric result from `LBSTRESN`;
   missing when the collected result is missing.
-- `AVALTOT`: would be the total of `AVAL` across the subject's
-  records, repeated on each record for that subject, but no value
-  is produced.
+- `AVALTOT` would be the total of `AVAL` across the subject's
+  records, repeated on each record for that subject.
 
-The expression `SUM(AVAL)` is written as a row formula, but a row
-formula sees one record at a time and cannot reach the other
-records it would have to total, so the run is rejected before any
-data is read and no artifact is accepted.
+`SUM(AVAL)` is written as a row formula, but a row formula sees
+one record at a time and cannot reach the other records it would
+have to total, so the run is rejected before any data is read and
+no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
