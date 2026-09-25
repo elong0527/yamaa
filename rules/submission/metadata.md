@@ -264,9 +264,6 @@ between them is standard-specific:
 <a id="req-0884"></a>
 
 **REQ-0884.** For `adam`, `mandatory` is required and nothing derives it.
-  That family publishes no general one-to-one mapping from its core
-  designation, so inferring a mapping would be this design inventing a rule
-  the family's standard does not state.
 
 <a id="req-0885"></a>
 
