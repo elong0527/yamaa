@@ -54,10 +54,11 @@ fields to their named definition.
 <a id="req-0293"></a>
 
 **REQ-0293.** Scalar expressions return one value per row. Window expressions
-partition constructed output rows by their `window` specification's
-`group_by` and preserve row count. During row construction the partitioned
-rows are the enclosing row template's constructed rows (REQ-0326), not the
-specification's output rows. Omitting `group_by` creates one
+partition the rows of their evaluation context by their `window`
+specification's `group_by` and preserve row count. In row construction those
+rows are the enclosing row template's constructed rows (REQ-0326); in an
+intermediate derivation they are the donor records as augmented by every
+derivation declared before it (REQ-1185). Omitting `group_by` creates one
 partition. Within a declared group, missing values equal other missing
 values. Rows with equal present values and equal missing group positions
 share one partition. A window partition is a group of rows.
