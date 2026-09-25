@@ -102,8 +102,7 @@ change pass or fail. A `warning` violation records every offending key under
 
 **REQ-0374.** `all_or_none`, `implies`, `assert`, and a `row_count`
 declaring `group_by` require an `id`. These IDs must be unique across the
-dataset verifications that declare them and should describe the asserted
-business rule. Implementations must include the ID in failure reports in
+dataset verifications that declare them. Implementations must include the ID in failure reports in
 addition to the stable specification path.
 
 ### Column verifications
