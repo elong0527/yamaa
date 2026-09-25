@@ -303,13 +303,7 @@ argument intact.
 
 <a id="req-0574"></a>
 
-**REQ-0574.** This is a decision and not an omission, and the imputed value
-itself forces that decision. A completed date names a day: that is what
-completing it did. An imputed operand that lost a comparison would have to
-denote something else: the interval its collected components still admit, or a
-day carrying a rank against collected dates -- and either is a different value
-space with its own ordering, its own canonical text, and its own conversions.
-That is a type this design does not have, not a property of the two it does.
+**REQ-0574.** A completed date names a day.
 
 <a id="req-0575"></a>
 
