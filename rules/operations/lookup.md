@@ -390,8 +390,8 @@ name that shadows a stored column fails as `duplicate_derivation`.
 A derivation may use a window function. The window partitions the donor
 records as augmented by every derivation declared before it, so its
 `group_by`, `order_by`, and `filter` may read a stored field or an earlier
-derived name, bare or dataset-qualified. Record order within the dataset
-is the final tie-break.
+derived name, bare or dataset-qualified. Base-record order is the final
+tie-break.
 
 The derived values augment each donor record before `filter`, matching,
 `order_by` selection, and `columns` projection. A derived name may therefore
