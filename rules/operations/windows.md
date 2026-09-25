@@ -60,8 +60,7 @@ rows are the enclosing row template's constructed rows (REQ-0326), not the
 specification's output rows. Omitting `group_by` creates one
 partition. Within a declared group, missing values equal other missing
 values. Rows with equal present values and equal missing group positions
-share one partition. A window partition is the KRC
-section: a group of rows.
+share one partition. A window partition is a group of rows.
 
 <a id="req-0294"></a>
 
