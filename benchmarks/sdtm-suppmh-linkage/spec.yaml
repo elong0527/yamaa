@@ -67,7 +67,7 @@ columns:
   - name: QORIG
     type: str
     label: Origin
-    derivation: {literal: CRF}
+    derivation: {literal: Collected}
 
   - name: QEVAL
     type: str

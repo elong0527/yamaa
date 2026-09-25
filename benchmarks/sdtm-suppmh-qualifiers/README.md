@@ -19,7 +19,7 @@ qualifiers.
 - `QLABEL` is the qualifier label: `Family History` for `MHFAMHX`,
   `Confirmed by Medical Records` for `MHCONF`.
 - `QVAL` is the collected qualifier value, `Y` or `N`.
-- `QORIG` records the case report form (CRF) origin as `CRF`.
+- `QORIG` records the collected origin as `Collected` (Define-XML 2.1).
 - `QEVAL` is blank, since a collected value is not an assessment.
 
 **Note:** each parent record contributes one supplemental record
