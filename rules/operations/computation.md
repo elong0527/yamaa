@@ -171,9 +171,7 @@ vocabulary requires amending the table in [REQ-0415](computation.md#req-0415).
 **REQ-0418.** `round_half_away_from_zero` is the one rounding the language
 admits, and its tie behavior is fixed: a value exactly halfway between two
 candidates, or within `sqrt(2^-52) * 10^-digits` below such a tie, rounds
-half away from zero. The name states the mode so a specification can never
-silently mean banker's rounding; this is the SAS `ROUND` and metalite
-`round_half_away_from_zero` behavior that ADaM analysis values use. No other
+half away from zero. No other
 rounding exists: the `compute` grammar gains no `ROUND`, and a derivation
 must not round by any other spelling. The source must be numeric; a
 non-numeric source is an `incompatible_input_type` validation error. Missing
