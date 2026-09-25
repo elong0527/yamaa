@@ -43,7 +43,7 @@ columns:
 
   # The closest earlier non-missing AVALC for the same subject and series,
   # never the row's own. Rows are ordered by visit number, missing numbers
-  # last; rows tied on it keep their input order.
+  # last; rows tied on visit number keep their collected order (VSSEQ).
   - name: PREVAVALC
     type: str
     label: Previous Non-Missing Analysis Value (C)
@@ -52,11 +52,11 @@ columns:
         source: AVALC
         window:
           group_by: [STUDYID, USUBJID, SERIES]
-          order_by: [AVISITN]
+          order_by: [AVISITN, VSSEQ]
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 14
+      max: 14
