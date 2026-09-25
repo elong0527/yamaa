@@ -31,13 +31,16 @@ If the offset is real data, collect it as a field of its own and keep
 `AESTDTC` to the site clock. `ASTDTM` then holds the moment and a second text
 column holds the offset, where a later analysis can read it.
 
-To see the collected value rather than fail on it, declare `ASTDTM` as text.
-It keeps the collected characters, and a column that converts it later can
-answer for the failure:
+To inspect the collected characters without failing, carry them in an
+intermediate text column that is not `ASTDTM`:
 
 ```yaml
-- name: ASTDTM
+- name: AESTDTC_RAW
   type: str
-  derivation:
-    source: AE.AESTDTC
+  label: Collected Start Text
+  derivation: AE.AESTDTC
 ```
+
+The text keeps the collected characters but does not order
+chronologically across offsets, and it is not an analysis variable:
+`ASTDTM` stays a moment.
