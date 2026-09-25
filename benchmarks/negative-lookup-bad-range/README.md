@@ -22,8 +22,19 @@ with integer day bounds (`DYLO`, `DYHI`).
 
 ## How to fix
 
-Derive the integer study day from the date and the subject's reference start
-date (`RFSTDTC`, read from demographics into a date column):
+Prefer comparing the collected date with date bounds directly: match
+`VSDTC` between the subject's own element start and end dates
+(`SESTDTC`, `SEENDTC` from the subject-elements data), which is how
+SDTM assigns `EPOCH`:
+
+```yaml
+between: {value: VSDTC, lower: SESTDTC, upper: SEENDTC}
+```
+
+Only when the epoch table must stay study-day based, derive the
+integer study day from the date and the subject's reference start
+date (`RFSTDTC`, read from demographics into a date column), then
+compare that value with the integer bounds:
 
 ```yaml
 - name: VSDY
@@ -34,10 +45,11 @@ date (`RFSTDTC`, read from demographics into a date column):
       reference: RFSTDTC
 ```
 
-Then compare that value with the integer bounds:
-
 ```yaml
 between: {value: VSDY, lower: DYLO, upper: DYHI}
 ```
+
+The study-day route needs demographics as an extra input, and it gives
+every subject the same epoch boundaries.
 
 [`sdtm-vs-study-day`](../sdtm-vs-study-day/) attaches the epoch this way.
