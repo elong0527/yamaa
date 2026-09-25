@@ -1095,7 +1095,7 @@ def test_a_scalar_derivation_with_a_nested_window_partitions_once(monkeypatch) -
     # The review finding on PR #1072: a window operation nested inside a
     # scalar derivation must partition the donor records once per
     # derivation, not once per record.
-    import yamaa.runtime.intermediates as intermediates
+    from yamaa.runtime import intermediates
 
     builds: list[object] = []
     real_prepare = intermediates._prepare_window_partitions
