@@ -184,7 +184,7 @@ not by regular-expression matching.
   as the next section defines. `when` selects groups to check but does not
   change the denominator.
 
-For example, this warns when more than 5% of completed output rows have a
+For example, this warns when more than 5% of constructed output rows have a
 missing `VAL`:
 
 ```yaml
@@ -200,7 +200,7 @@ verifications:
 
 <a id="req-0386"></a>
 
-**REQ-0386.** `row_count` counts completed output rows. `group_by` names
+**REQ-0386.** `row_count` counts constructed output rows. `group_by` names
 declared columns and partitions **the artifact's rows** by each value type's
 equality, including [Text values](../values/text.md) for strings. Missing values group with
 other missing values as [Row construction](rows.md) partitions an input dataset. Both bounds then
@@ -208,7 +208,7 @@ apply to every group.
 
 <a id="req-0387"></a>
 
-**REQ-0387.** `filter` is an [Predicates](../operations/predicates.md) predicate over one completed output row, and
+**REQ-0387.** `filter` is an [Predicates](../operations/predicates.md) predicate over one constructed output row, and
 a group's count is how many of its rows the predicate admits. A row counts
 only when the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not
 count, as `filter` means everywhere else.
@@ -235,7 +235,7 @@ gives every expected group an input record under [Row construction](rows.md).
 <a id="req-1154"></a>
 
 **REQ-1154.** `row_count` may declare `when`, a [Predicates](../operations/predicates.md)
-predicate over one completed output row. A group is bound when at least one of
+predicate over one constructed output row. A group is bound when at least one of
 its rows evaluates `when` to `TRUE`; the bounds then apply to that group as
 [REQ-0386](verification.md#req-0386) and [REQ-0387](verification.md#req-0387) define. A group
 no row of which evaluates `when` to `TRUE` is exempt: the bounds do not apply
@@ -457,7 +457,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies each bound to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. Fraction bounds divide this count by all rows in the group. A grouped count requires id, which an ungrouped count does not. |
-| `dataset_verifications.row_count.when` | A predicate over one completed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt. |
+| `dataset_verifications.row_count.when` | A predicate over one constructed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt. |
 
 ## Error conditions
 

@@ -45,7 +45,7 @@ owns the sequence of a run.
 | [Numeric computation](https://github.com/elong0527/yamaa/blob/main/rules/operations/computation.md) | normative | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
 | [Aggregation](https://github.com/elong0527/yamaa/blob/main/rules/operations/aggregation.md) | normative | Reduce eligible records in one of the three permitted key scopes. |
 | [Lookup and joins](https://github.com/elong0527/yamaa/blob/main/rules/operations/lookup.md) | normative | Match declared keys, narrow records, select a result, and answer absence. |
-| [Windows](https://github.com/elong0527/yamaa/blob/main/rules/operations/windows.md) | normative | Partition completed output rows and compute ranks, neighbors, and baseline selections. |
+| [Windows](https://github.com/elong0527/yamaa/blob/main/rules/operations/windows.md) | normative | Partition constructed output rows and compute ranks, neighbors, and baseline selections. |
 | [Text operations](https://github.com/elong0527/yamaa/blob/main/rules/operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
 | [Temporal operations](https://github.com/elong0527/yamaa/blob/main/rules/operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
 | [Project functions](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |

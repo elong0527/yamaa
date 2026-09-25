@@ -8,7 +8,7 @@ status: normative
 
 ## Purpose
 
-Partition completed output rows and compute ranks, neighbors, and baseline selections.
+Partition constructed output rows and compute ranks, neighbors, and baseline selections.
 
 ## Scope and dependencies
 
