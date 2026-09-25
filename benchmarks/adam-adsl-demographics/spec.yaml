@@ -71,8 +71,8 @@ columns:
     label: Race
     derivation: DM.RACE
 
-  # Matched exactly as collected: a race in other case or wording is 99, as
-  # is an empty race.
+  # Matched exactly as collected: MULTIPLE has its own code, a race in
+  # other case or wording is 99, and an empty race leaves RACEN empty.
   - name: RACEN
     type: int
     label: Race (N)
@@ -83,7 +83,9 @@ columns:
           WHITE: 1
           BLACK OR AFRICAN AMERICAN: 2
           ASIAN: 3
-        missing: 99
+          MULTIPLE: 4
+        missing: null
+        unmapped: 99
 
   # A collected age that is not a whole number (text, or 34.5) cannot become
   # an int; the fallback makes it empty instead of stopping the run.
@@ -119,4 +121,4 @@ verifications:
       max: 11
   - assert:
       id: numeric-mappings-are-in-range
-      expr: "SEXN >= 0 AND RACEN >= 1"
+      expr: "SEXN >= 0 AND (RACEN IS NULL OR RACEN >= 1)"
