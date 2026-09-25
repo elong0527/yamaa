@@ -111,9 +111,9 @@ intermediates:
 
 Instead, qualify the dataset in the lookup derivation:
 
-`CODING.DRUG_RECORD_NO` and `WHODRUG.DRUG_RECORD_NO` must have matching
-key types; declare the input field types when the files do not already carry
-them.
+An implicit join to `CODING` also needs matching output-key types. When the
+output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
+`CODING.CMSEQ` as `int` on input before reading `CODING.DRUG_RECORD_NO`.
 
 ```yaml
 columns:
