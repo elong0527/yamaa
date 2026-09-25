@@ -360,6 +360,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'actual', 'expected', 'source',
     },
     ('R014', 'unknown_field'): {'dataset', 'field'},
+    ('R014', 'redundant_field_type'): {'dataset', 'field', 'type'},
     ('R003', 'duplicate_identifier'): {'identifier'},
     ('R003', 'incomparable_range_types'): {
         'lower_type', 'intermediate', 'upper_type', 'value_type',
@@ -387,7 +388,6 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R017', 'inheritance_cycle'): {'reason'},
     ('R017', 'invalid_clear'): {'field'},
     ('R017', 'invalid_parent_path'): {'reason'},
-    ('R017', 'redundant_field_type'): {'dataset', 'field', 'type'},
     ('R017', 'schema_version_mismatch'): {
         'entry_version', 'parent_version',
     },

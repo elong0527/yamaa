@@ -64,7 +64,7 @@ conditions:
   publication_failed: {rules: [R020], phases: [output]}
   qualified_identifier: {rules: [R010], phases: [validation]}
   range_failed: {rules: [R009], phases: [verification]}
-  redundant_field_type: {rules: [R014, R017], phases: [validation]}
+  redundant_field_type: {rules: [R014], phases: [validation]}
   regex_group_out_of_range: {rules: [R022], phases: [validation]}
   rename_only_intermediate: {rules: [R003], phases: [validation]}
   resource_path_missing: {rules: [R021], phases: [validation]}
