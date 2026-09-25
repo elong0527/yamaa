@@ -209,7 +209,6 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0200](../specification/structure.md#req-0200) | `specification/structure.md` | R005-8 |
 | [REQ-0201](../specification/structure.md#req-0201) | `specification/structure.md` | R005-9 |
 | [REQ-0202](../specification/structure.md#req-0202) | `specification/structure.md` | R005-10 |
-| [REQ-0203](../specification/structure.md#req-0203) | `specification/structure.md` | R005-11 |
 | [REQ-0204](../specification/structure.md#req-0204) | `specification/structure.md` | R005-12 |
 | [REQ-0205](../storage/publication.md#req-0205) | `storage/publication.md` | R005-13 |
 | [REQ-0206](../specification/structure.md#req-0206) | `specification/structure.md` | R005-14 |
@@ -1215,7 +1214,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1253](../operations/windows.md#req-1253) | `operations/windows.md` | Schema prose |
 | [REQ-1254](../specification/composition.md#req-1254) | `specification/composition.md` | Schema prose |
 | [REQ-1255](../operations/expressions.md#req-1255) | `operations/expressions.md` | Schema prose |
-| [REQ-1260](../specification/structure.md#req-1260) | `specification/structure.md` | Schema prose |
+| [REQ-1260](../specification/structure.md#req-1260) | `specification/structure.md` | R005-11 |
 | [REQ-1261](../operations/text.md#req-1261) | `operations/text.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
