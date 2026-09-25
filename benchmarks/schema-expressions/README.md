@@ -4,22 +4,26 @@
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** pin how each column's value is written and read: fixed
-values, copied values, age bands, first-available country selection,
-joining text, and the largest and smallest of several collected
-weights.
+values, values copied by naming their source column, age bands, a
+population flag chosen by a condition, first-available country
+selection, joining text, and the largest and smallest of several
+collected weights.
 
-**Input:** `DM` carries four subjects with sex, age, country, site
-country, and two collected weights, including a missing age, a
-missing country, and a subject with no weight at all.
+**Input:** one `spec.yaml`. `DM` carries one record per subject: sex,
+age, first-dose date, country, site country, and two collected
+weights, any of which may be blank.
 
 **Columns:**
 
 - `STUDYID` holds a fixed study code written directly in the column.
-- `USUBJID` copies the subject identifier.
-- `SEX` copies the collected sex.
-- `AGEGRP` places each age in one band: under 18, 18 to 64, or 65 and
-  over. The 70-year-old falls in the top band; the subject with no age
-  takes the fallback text.
+- `USUBJID` and `SEX` copy the collected values by naming the source
+  column alone.
+- `AGEGRP` places each age in a band: under 18, 18 to 64, or 65 and
+  over. Each band includes its lower edge, so an age of exactly 65 is
+  in the oldest band; a subject with no age carries the fallback text
+  `NOT REPORTED`.
+- `SAFFL` flags the safety population: `Y` for a subject with a
+  first-dose date, `N` for a subject without one.
 - `COUNTRY` takes the subject's own country, or the site country when
   the subject's own entry is blank. When both are blank it carries the
   declared fallback text.
@@ -29,4 +33,4 @@ missing country, and a subject with no weight at all.
 - `WTMIN` carries the smaller of the two collected weights, skipping a
   blank one; with both blank it stays blank.
 
-**Standard:** CDISC | **Domain:** ADSL
+**Standard:** ADaM | **Domain:** ADSL
