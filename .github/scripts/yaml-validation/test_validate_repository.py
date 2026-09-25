@@ -1433,23 +1433,96 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 spec = self.self_intermediate_spec(prior_filter)
                 self.assertEqual(self.self_intermediate_errors(spec), [])
 
+    def test_self_intermediate_reads_hoisted_template_columns(self):
+        # REQ-1260: a derivation every template shares is written once at
+        # column level. It is row-local and a SELF read names it, so each
+        # template inherits it as a row-phase default and it stays a donor
+        # field: in the filter, in order_by, and through the intermediate.
+        spec = self.self_intermediate_spec('SELF.AESEQ < AE.AESEQ')
+        for column in spec['columns']:
+            if column['name'] in ('USUBJID', 'AESEQ'):
+                column['derivation'] = f"AE.{column['name']}"
+        for row in spec['rows']:
+            del row['derivations']['USUBJID'], row['derivations']['AESEQ']
+
+        self.assertEqual(self.self_intermediate_errors(spec), [])
+
+    def test_self_intermediate_reads_row_local_column_defaults(self):
+        # REQ-1260: a row-local column-level derivation that a SELF read
+        # names is a donor field, bare or SELF-qualified. Reading another
+        # row-local column-level column keeps it row-local.
+        cases = {
+            'source': [
+                {'name': 'LATE', 'type': 'int', 'derivation': 'AE.AESEQ'},
+            ],
+            'chain': [
+                {'name': 'BASE', 'type': 'int', 'derivation': 'AE.AESEQ'},
+                {
+                    'name': 'LATE',
+                    'type': 'int',
+                    'derivation': {'compute': {'expr': 'BASE + 1'}},
+                },
+            ],
+        }
+        for label, columns in cases.items():
+            for late in ('SELF.LATE', 'LATE'):
+                with self.subTest(case=label, late=late):
+                    spec = self.self_intermediate_spec(
+                        f'SELF.AESEQ < AE.AESEQ AND {late} > 0'
+                    )
+                    spec['columns'].extend(columns)
+                    self.assertEqual(self.self_intermediate_errors(spec), [])
+
     def test_self_intermediate_excludes_column_phase_columns(self):
-        # REQ-0120: a column derived only in the column phase is not on the
-        # completed rows a SELF intermediate reads.
-        spec = self.self_intermediate_spec(
-            'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
-        )
-        spec['columns'].append(
-            {'name': 'LATE', 'type': 'int', 'derivation': 'AE.AESEQ'}
-        )
+        # REQ-0120/REQ-1260: a column-level derivation that is not row-local
+        # keeps its column phase, so it is not on the completed rows a SELF
+        # intermediate reads, whether it uses a window, reads a named
+        # intermediate, or reads a column that is not row-local.
+        window = {
+            'row_number': {
+                'window': {'group_by': ['USUBJID'], 'order_by': ['AESEQ']}
+            }
+        }
+        cases = {
+            'window': [
+                {'name': 'LATE', 'type': 'int', 'derivation': window},
+            ],
+            'intermediate': [
+                {'name': 'LATE', 'type': 'int', 'derivation': 'FIRST_AE.AESEQ'},
+            ],
+            'transitive': [
+                {'name': 'RANKED', 'type': 'int', 'derivation': window},
+                {
+                    'name': 'LATE',
+                    'type': 'int',
+                    'derivation': {'compute': {'expr': 'RANKED + 0'}},
+                },
+            ],
+        }
+        for label, columns in cases.items():
+            with self.subTest(case=label):
+                spec = self.self_intermediate_spec(
+                    'SELF.AESEQ < AE.AESEQ AND SELF.LATE > 0'
+                )
+                spec['intermediates'].append({
+                    'id': 'FIRST_AE',
+                    'dataset': 'AE',
+                    'key': ['USUBJID'],
+                    'order_by': ['AE.AESEQ'],
+                    'keep': 'first',
+                })
+                spec['columns'].extend(columns)
 
-        errors = self.self_intermediate_errors(spec)
+                errors = self.self_intermediate_errors(spec)
 
-        self.assertEqual(
-            [(error.path, error.condition) for error in errors],
-            [('example/spec.yaml.intermediates[0].filter', 'unknown_field')],
-        )
-        self.assertEqual(errors[0].context, {'identifier': 'SELF.LATE'})
+                self.assertEqual(
+                    [(error.path, error.condition) for error in errors],
+                    [(
+                        'example/spec.yaml.intermediates[0].filter',
+                        'unknown_field',
+                    )],
+                )
+                self.assertEqual(errors[0].context, {'identifier': 'SELF.LATE'})
 
     def test_self_intermediate_requires_row_templates(self):
         # REQ-0120: SELF names completed rows only when the spec declares
