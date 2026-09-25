@@ -2286,6 +2286,7 @@ requirements:
   REQ-1254: {"file": "specification/composition.md", "sources": ["yamaa:issue-882:window-composition"]}
   REQ-1255: {"file": "operations/expressions.md", "sources": ["yamaa:issue-953:source-canonical-form"]}
   REQ-1260: {"file": "specification/structure.md", "sources": ["yamaa:issue-991:column-default-derivations", "yamaa:issue-1005:row-phase-column-reads"]}
+  REQ-1261: {"file": "operations/text.md", "sources": ["yamaa:issue-994:str-pad", "schema_expression_str.yaml:expressions.str_pad.source.description", "schema_expression_str.yaml:expressions.str_pad.width.description"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2812,3 +2813,6 @@ provenance_addenda:
   - {"source": "yamaa:issue-881:flag-missing-value-required", "text": "A flag that declares false_value also declares missing_value; without it the flag fails as missing_value_required.", "owner": "operations/expressions", "group": "expressions.flag", "target": "REQ-1258"}
   - {"source": "schema.yaml:key_base_entry.description", "text": "A key_base entry is a variable or an expression; an expression is evaluated against the current row.", "owner": "operations/lookup", "group": "key-base-expressions", "target": "REQ-1259"}
   - {"source": "yamaa:issue-994:key-base-expressions", "text": "Issue #994: key_base accepts expressions, evaluated against the current row as the match operand.", "owner": "operations/lookup", "group": "key-base-expressions", "target": "REQ-1259"}
+  - {"source": "yamaa:issue-994:str-pad", "text": "Follow-up to issue #994: str_pad converts a scalar to canonical text and left-pads it with spaces to the declared width.", "owner": "operations/text", "group": "str_pad", "target": "REQ-1261"}
+  - {"source": "schema_expression_str.yaml:expressions.str_pad.source.description", "text": "See REQ-1261 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_pad", "target": "REQ-1261"}
+  - {"source": "schema_expression_str.yaml:expressions.str_pad.width.description", "text": "See REQ-1261 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_pad", "target": "REQ-1261"}

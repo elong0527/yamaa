@@ -27,6 +27,16 @@ This contract owns the requirements below. Related contracts:
 
 ### Type behavior
 
+<a id="req-1261"></a>
+
+**REQ-1261.** `str_pad` takes `source` and a positive integer `width`. It
+converts a present scalar source to its canonical text under
+[REQ-0010](../values/types.md#req-0010), then adds ASCII spaces to the left
+until the text has at least `width` characters. It does not truncate longer
+text. A missing source yields missing; an unknown source or failed conversion
+reports its existing condition. A width below one fails as
+`invalid_field_type`.
+
 <a id="req-0304"></a>
 
 **REQ-0304.** `mapping` requires a string source.

@@ -1,6 +1,15 @@
 version: "1.0"
 
 expressions:
+    str_pad: # See REQ-1261 in rules/operations/text.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1261 in rules/operations/text.md.
+        - width:
+            type: int
+            required: true
+            description: See REQ-1261 in rules/operations/text.md.
     str_extract: # See REQ-1111 in rules/operations/text.md.
         - source:
             type: variable
