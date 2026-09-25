@@ -88,8 +88,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
-      min: 10
-      max: 10
+      min: 12
+      max: 12
   # A collected record never has a DTYPE, so this fails when the input
   # already carries a MAP record.
   - assert:
