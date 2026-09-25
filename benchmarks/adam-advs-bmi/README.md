@@ -4,7 +4,7 @@
 [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** derive one body mass index (BMI) record for each
-collected weight record, holding the index in `AVAL`.
+collected weight record with a result, holding the index in `AVAL`.
 
 **Input:** collected vital signs with height and weight records
 per subject and visit, plus each subject's baseline height.
