@@ -393,10 +393,9 @@ would fit.
 
 <a id="req-0497"></a>
 
-**REQ-0497.** Evaluation must be deterministic and side-effect free. R and
-Python must produce identical results for every example. [Numeric computation](computation.md)'s determinism
-requirements apply unchanged, including that an implementation must not
-reassociate or algebraically simplify a written expression.
+**REQ-0497.** [Numeric computation](computation.md)'s determinism requirements
+apply unchanged, including that an implementation must not reassociate or
+algebraically simplify a written expression.
 
 <a id="req-0498"></a>
 
