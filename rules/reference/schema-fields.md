@@ -332,6 +332,8 @@ requirement link for behavior. It is not an additional semantic contract.
 
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
+| `expressions.str_pad.source` | `"variable"` | `true` | Absent | -- | [REQ-1261](../operations/text.md#req-1261) |
+| `expressions.str_pad.width` | `"int"` | `true` | Absent | -- | [REQ-1261](../operations/text.md#req-1261) |
 | `expressions.str_extract.source` | `"variable"` | `true` | Absent | -- | [REQ-1111](../operations/text.md#req-1111) |
 | `expressions.str_extract.pattern` | `"regex"` | `true` | Absent | -- | [REQ-1111](../operations/text.md#req-1111) |
 | `expressions.str_extract.group` | `"int"` | `false` | `0` | -- | [REQ-1111](../operations/text.md#req-1111) |

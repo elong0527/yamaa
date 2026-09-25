@@ -46,4 +46,5 @@ columns:
     label: Relative Dose Intensity
     derivation:
       aggregate:
+        key: [STUDYID, USUBJID, EXTRT]
         expr: "100 * SUM(EX.EXDOSE) / EX.EXPLDOS"

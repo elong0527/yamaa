@@ -1,0 +1,47 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB: {path: input/lb.csv, types: {LBSEQ: int}}
+  SUPPLB: input/supplb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, QVAL, QVAL_INLINE]
+
+intermediates:
+  - id: SUP_EP
+    dataset: SUPPLB
+    key: [STUDYID, USUBJID, IDVARVAL]
+    key_base:
+      - LB.STUDYID
+      - LB.USUBJID
+      - str_pad: {source: LBSEQ, width: 8}
+
+rows:
+  - id: low_sequence
+    dataset: LB
+    filter: "LB.LBSEQ < 200"
+    derivations: {QVAL: SUP_EP.QVAL}
+  - id: high_sequence
+    dataset: LB
+    filter: "LB.LBSEQ >= 200"
+    derivations: {QVAL: SUP_EP.QVAL}
+
+columns:
+  - {name: STUDYID, type: str, label: Study Identifier, derivation: LB.STUDYID}
+  - {name: USUBJID, type: str, label: Subject Identifier, derivation: LB.USUBJID}
+  - {name: LBSEQ, type: int, label: Sequence Number, derivation: LB.LBSEQ}
+  - {name: QVAL, type: str, label: Supplemental Value}
+  - name: QVAL_INLINE
+    type: str
+    label: Supplemental Value by Inline Lookup
+    derivation:
+      lookup:
+        dataset: SUPPLB
+        value: QVAL
+        key: [STUDYID, USUBJID, IDVARVAL]
+        key_base:
+          - LB.STUDYID
+          - LB.USUBJID
+          - str_pad: {source: LB.LBSEQ, width: 8}

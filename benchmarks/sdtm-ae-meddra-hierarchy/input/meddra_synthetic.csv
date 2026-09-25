@@ -1,0 +1,6 @@
+LLTCD,LLTNAME,PTCD,PTNAME,HLTCD,HLTNAME,HLGTCD,HLGTNAME,SOCCD,SOCNAME,PRIMARY_SOC
+99000101,Left fingertip prickling,99001001,Distal paresthesia,99010002,General sensory complaints,99100002,General symptom findings,99200002,General disorders and administration site conditions,N
+99000101,Left fingertip prickling,99001001,Distal paresthesia,99010001,Peripheral sensory changes,99100001,Nerve function findings,99200001,Nervous system disorders,Y
+99000102,Hand buzzing sensation,99001001,Distal paresthesia,99010002,General sensory complaints,99100002,General symptom findings,99200002,General disorders and administration site conditions,N
+99000102,Hand buzzing sensation,99001001,Distal paresthesia,99010001,Peripheral sensory changes,99100001,Nerve function findings,99200001,Nervous system disorders,Y
+99000201,After-meal queasiness,99001002,Postprandial nausea,99010003,Stomach discomfort symptoms,99100003,Digestive symptom findings,99200003,Gastrointestinal disorders,Y

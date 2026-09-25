@@ -392,6 +392,26 @@ def test_a_non_string_source_is_refused_rather_than_converted(
 
 
 @pytest.mark.parametrize(
+    ("value", "width", "expected"),
+    [
+        (12, 8, "      12"),
+        ("ABC", 5, "  ABC"),
+        ("TOO-LONG", 3, "TOO-LONG"),
+        (MISSING, 8, MISSING),
+    ],
+)
+def test_str_pad_uses_canonical_text_and_preserves_missing(
+    value: object, width: int, expected: object
+) -> None:
+    result = evaluate_expression(
+        {"str_pad": {"source": "VALUE", "width": width}},
+        MappingResolver({"VALUE": value}),
+    )
+
+    assert result == ValueResult(value=expected)
+
+
+@pytest.mark.parametrize(
     ("template", "expected"),
     [
         ("{SITE}:{SUBJ}", "UCSD:0001"),

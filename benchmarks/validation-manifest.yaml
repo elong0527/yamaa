@@ -357,6 +357,11 @@ fixtures:
     condition: incompatible_input_type
     spec_paths: [columns.SITE.derivation.str_lower.source]
     validator: expression_contract
+  negative-str-pad-width:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.IDVARVAL.derivation.str_pad.width]
+    validator: schema
   negative-str-sentence-number:
     rule: R007
     condition: incompatible_input_type

@@ -3,6 +3,8 @@
 "Pilot 7 Synthetic Data Update" -- yamaa and the pilot7 synthetic-data
 effort, for the open source community.
 
+[View the rendered slides](https://elong0527.github.io/yamaa/slides/yamaa-pilot7-2026-09-25/index.html)
+
 ## Files
 
 - `index.qmd` -- the deck (diagram-first: short bullets, figure placeholders)

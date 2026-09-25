@@ -39,6 +39,7 @@ coverage:
     negative-str-contains-bool-result]
   str_extract: [negative-str-uncaptured-group]
   str_lower: [negative-str-lowercase-number]
+  str_pad: [negative-str-pad-width]
   str_sentence: [negative-str-sentence-number]
   str_title: [negative-str-title-number]
   str_template: [negative-subject-reference]
