@@ -105,12 +105,9 @@ identically on every platform and reveals nothing about the host.
 
 <a id="req-0774"></a>
 
-**REQ-0774.** A rooted path can name a host location outright. Code and
-  data are commonly stored apart, and an absolute path is how a study
-  connects them. It is not allowed unconditionally: [REQ-0781](resources.md#req-0781) still
-  requires it to name an approved root, so the run reads no more than the
-  A submission package must be portable, and a packaging step
-  enforces this. An intermediate study layout need not be.
+**REQ-0774.** A rooted path can name a host location outright. [REQ-0781](resources.md#req-0781) still
+  requires a rooted path to name an approved root, so the run reads no more than the approved root
+  contains. A submission package must be portable. An intermediate study layout need not be portable.
 
 <a id="req-0775"></a>
 
