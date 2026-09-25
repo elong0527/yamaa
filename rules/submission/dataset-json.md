@@ -38,7 +38,7 @@ document that declares none produces its Define-XML document alone, and a
 document that declares one for some entries produces one for exactly those.
 The path is relative to the directory holding the generated document, is
 written with `/` separators, must not begin with a parent traversal, and ends
-in `.json`, matched without regard to case for the reason [REQ-0716](../storage/publication.md#req-0716) gives.
+in `.json`, matched without regard to case.
 
 <a id="req-1194"></a>
 
@@ -334,7 +334,7 @@ the one spelling two runtimes can both produce.
 
 **REQ-1220.** The bytes are fixed rather than the information. Two conforming
 implementations produce byte-identical files, and a golden file is compared
-byte for byte, for the reason [REQ-1008](define-xml.md#req-1008) gives for the document beside it. The
+byte for byte. The
 layout above keeps a file readable in a diff, which is what a reviewer
 compares, while leaving exactly one spelling of every part of it.
 

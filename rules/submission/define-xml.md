@@ -578,8 +578,7 @@ each is stated rather than silently dropped. An `Alias` carrying a transport
 name longer than eight characters is not generated, so [REQ-1002](define-xml.md#req-1002) omits the
 attribute and [REQ-1022](define-xml.md#req-1022) fails under `Submission` instead; a naming rule that owns
 transport names would supply it. A `FormalExpression` is generated only from a
-declared `method.expression` and never from a derivation, for the reason
-[REQ-0904](metadata.md#req-0904) gives.
+declared `method.expression` and never from a derivation.
 
 <a id="req-1013"></a>
 

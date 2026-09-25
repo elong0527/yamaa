@@ -76,7 +76,7 @@ and without `decode` are different kinds of list rather than a list with gaps.
 
 **REQ-0933.** `rank` states an item's ordering significance relative to the
 other items. Declaring `rank` for some items and not others within one
-codelist is an error, for the reason [REQ-0932](terminology.md#req-0932) gives.
+codelist is an error.
 
 <a id="req-0934"></a>
 
