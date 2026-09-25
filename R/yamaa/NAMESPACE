@@ -1,0 +1,6 @@
+# NAMESPACE for the yamaa clean-room R engine package.
+# The engine's public surface is deliberately tiny: run one specification
+# end to end, and raise/inspect the structured failure condition.
+# (Internal code reaches yaml/arrow via ::, satisfied by Imports.)
+export(run_spec)
+export(yamaa_error)

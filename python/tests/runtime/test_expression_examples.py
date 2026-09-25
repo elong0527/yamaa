@@ -183,8 +183,8 @@ def test_changing_a_referenced_source_changes_the_artifact(tmp_path: Path) -> No
     original = source.read_text(encoding="utf-8")
     source.write_text(
         original.replace(
-            "YAMAA-01,YAMAA-01-101,2,WEIGHT,Weight (kg),54,SCREENING",
-            "YAMAA-01,YAMAA-01-101,2,WEIGHT,Weight (kg),108,SCREENING",
+            "01-701,1015,2,WEIGHT,Weight (kg),54,SCREENING",
+            "01-701,1015,2,WEIGHT,Weight (kg),108,SCREENING",
         ),
         encoding="utf-8",
     )
@@ -197,7 +197,7 @@ def test_changing_a_referenced_source_changes_the_artifact(tmp_path: Path) -> No
         r
         for r in rows
         if r["PARAMCD"] == "BMI"
-        and r["USUBJID"] == "YAMAA-01-101"
+        and r["USUBJID"] == "1015"
         and r["AVISIT"] == "SCREENING"
     )
     assert bmi_row["AVAL"] == pytest.approx(2 * 24.989587671803417)
