@@ -10,11 +10,11 @@ parameter code `OS` (`Overall Survival`), carrying `STARTDT`,
 
 **Input:** subject-level randomization and last-known-alive dates
 (`RANDDT`, `LSTALVDT`) alongside response records holding death
-analysis dates (`ADT`). The death selection keeps response records
-where `PARAMCD` is `DEATH`, `AVALC` is `Y`, and `ANL01FL` is `Y`,
-takes the one with the earliest `ADT` (on a tied date, the one that
-comes first in the input), and treats a subject with no such dated
-record as having no death.
+analysis dates (`ADT`). The death selection keeps only dated
+response records where `PARAMCD` is `DEATH`, `AVALC` is `Y`, and
+`ANL01FL` is `Y`; it takes the one with the earliest `ADT` (on a
+tied date, the lower sequence number wins) and treats a subject
+with no such record as having no death.
 
 **Variables:**
 
