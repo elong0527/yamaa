@@ -61,6 +61,8 @@ def load_specification(
         raise SpecificationError(diagnostics)
 
     assert isinstance(document, dict)
+    # Imported lazily: importing yamaa.schema at module load would cycle
+    # through yamaa.expressions via yamaa/schema/__init__.py.
     from yamaa.schema.parameterized import expand_parameterized_definitions
 
     expanded = expand_parameterized_definitions(document)
