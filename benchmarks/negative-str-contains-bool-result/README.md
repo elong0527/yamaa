@@ -18,8 +18,9 @@ carrying the event term.
 The structured form returns true or false, and no column type accepts
 a boolean: the first record's match yields true, which has no text
 form, so the run fails and no artifact is accepted. The `missing`
-value is accepted but never reached, because a present term already
-stops the run.
+value is accepted; it fires whenever a missing-term row is evaluated
+before any matching row, but this run never gets that far, because
+the first record's match already stops it.
 
 **Standard:** ADaM | **Domain:** ADAE
 

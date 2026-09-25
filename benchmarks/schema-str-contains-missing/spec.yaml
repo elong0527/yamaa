@@ -24,11 +24,8 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
-  # The defect: the structured str_contains form returns a boolean, and
-  # no column type accepts one, so storing the result in SKIN_FLAG fails
-  # the run. The missing value is accepted by validation; this run never
-  # reaches it because the first record already yields a boolean, but a
-  # missing term is handled whenever no earlier row has matched.
+  # Every input term is missing here, so the missing handler fires on
+  # every row and no boolean result ever needs a text form.
   - name: SKIN_FLAG
     type: str
     label: Skin Event Flag

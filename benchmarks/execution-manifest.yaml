@@ -636,6 +636,9 @@ examples:
   schema-str-contains:
     status: executable
     runtimes: ['python']
+  schema-str-contains-missing:
+    status: executable
+    runtimes: ['python']
   sdtm-ae-coding:
     status: executable
     runtimes: ['python']
