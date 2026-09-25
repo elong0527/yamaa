@@ -1,0 +1,118 @@
+schema_version: "1.0"
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW: input/ae_raw.csv
+  MEDDRA: input/meddra_synthetic.csv
+base: AE_RAW
+metadata:
+  dictionary: MedDRA-shaped synthetic hierarchy
+  dictionary_version: synthetic
+
+intermediates:
+  - id: PRIMARY_PATH
+    dataset: MEDDRA
+    key_base: AE_RAW.AELLTCD
+    key: LLTCD
+    filter: "MEDDRA.PRIMARY_SOC = 'Y'"
+    verification:
+      unique: [LLTCD]
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD,
+    AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD,
+    AEBODSYS, AEBODSCD, AESOC, AESOCCD]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: AE}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM
+
+  - name: AELLTCD
+    type: str
+    label: Lowest Level Term Code
+    derivation: AE_RAW.AELLTCD
+
+  - name: AELLT
+    type: str
+    label: Lowest Level Term
+    derivation: PRIMARY_PATH.LLTNAME
+
+  - name: AEPTCD
+    type: str
+    label: Preferred Term Code
+    derivation: PRIMARY_PATH.PTCD
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: PRIMARY_PATH.PTNAME
+
+  - name: AEHLTCD
+    type: str
+    label: High Level Term Code
+    derivation: PRIMARY_PATH.HLTCD
+
+  - name: AEHLT
+    type: str
+    label: High Level Term
+    derivation: PRIMARY_PATH.HLTNAME
+
+  - name: AEHLGTCD
+    type: str
+    label: High Level Group Term Code
+    derivation: PRIMARY_PATH.HLGTCD
+
+  - name: AEHLGT
+    type: str
+    label: High Level Group Term
+    derivation: PRIMARY_PATH.HLGTNAME
+
+  - name: AEBODSCD
+    type: str
+    label: Body System or Organ Class Code
+    derivation: PRIMARY_PATH.SOCCD
+
+  - name: AEBODSYS
+    type: str
+    label: Body System or Organ Class
+    derivation: PRIMARY_PATH.SOCNAME
+
+  - name: AESOCCD
+    type: str
+    label: Primary System Organ Class Code
+    derivation: PRIMARY_PATH.SOCCD
+
+  - name: AESOC
+    type: str
+    label: Primary System Organ Class
+    derivation: PRIMARY_PATH.SOCNAME
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 5
+      max: 5

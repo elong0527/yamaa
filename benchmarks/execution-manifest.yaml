@@ -642,6 +642,9 @@ examples:
   sdtm-ae-coding:
     status: executable
     runtimes: ['python']
+  sdtm-ae-meddra-hierarchy:
+    status: executable
+    runtimes: ['python']
   sdtm-ae-odm-repeated:
     status: executable
     runtimes: ['python']
