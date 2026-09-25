@@ -203,7 +203,7 @@ def test_negative_nested_expression_matches_committed_diagnostic() -> None:
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": ["columns.COUNTRY.derivation.str_upper.source"],
-        "requirement": "REQ-0322",
+        "requirement": "REQ-0287",
         "context": {"expected": "variable", "actual": "mapping"},
     }
 

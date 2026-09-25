@@ -823,8 +823,10 @@ def _validate_single(
             and not has_matching_outer_type
             and all(item.condition == "invalid_field_type" for item in diagnostics)
         ):
-            requirement = "REQ-0322" if type_name == "variable" else "REQ-0287"
-            return [_invalid_type(path, type_name, value, requirement)]
+            # REQ-0287: a value that fails its schema type (including a
+            # variable-typed field given a non-reference) is a type failure,
+            # not an unsatisfied semantic constraint.
+            return [_invalid_type(path, type_name, value, "REQ-0287")]
         if diagnostics:
             return diagnostics
         requirement = {
