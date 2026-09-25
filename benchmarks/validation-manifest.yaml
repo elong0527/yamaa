@@ -226,7 +226,7 @@ fixtures:
     spec_paths: ["columns.AVISIT.derivation"]
     validator: dependency_graph
   negative-mapping-case-collision:
-    rule: R007
+    rule: R019
     condition: ambiguous_dictionary
     spec_paths: [columns.SMOKEFL.derivation.mapping.dict]
     validator: mapping_contract
