@@ -40,7 +40,7 @@ columns:
       case:
         - when: "RAWORRES = 'NOT DONE'"
           then: {literal: null}
-        - otherwise: {source: RAWORRES}
+        - otherwise: RAWORRES
 
   # Every record carries the same units in both the original and the
   # standard column, so the two literals live here, not in the rows below;
@@ -85,6 +85,9 @@ columns:
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
+    derivation:
+      value: {source: LBORRES}
+      missing: null
 
   - name: LBDTC
     type: date
@@ -119,9 +122,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBSTRESN:
-        value: {source: LBORRES}
-        missing: null
 
   # The same for the creatinine entry.
   - id: creatinine
@@ -138,9 +138,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBSTRESN:
-        value: {source: LBORRES}
-        missing: null
 
 verifications:
   - implies:
