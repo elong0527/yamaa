@@ -825,6 +825,9 @@ examples:
   schema-source-binding:
     status: executable
     runtimes: ['python']
+  schema-structure:
+    status: executable
+    runtimes: ['python']
   schema-text-functions:
     status: executable
     runtimes: ['python']

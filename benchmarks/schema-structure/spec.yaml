@@ -1,0 +1,113 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [USUBJID, VISIT, PARAMCD]
+input:
+  # RAWSEQ rides along in the source file but is never declared:
+  # the artifact carries only the columns the specification declares.
+  LB: {path: input/lb.csv, types: {VISIT: int, LBSTRESN: str}}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVISIT, AVAL, DTYPE, FLAG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {literal: YAMAA-01}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: VISIT
+    type: int
+    label: Visit Number
+    derivation: LB.VISIT
+
+  # Every row template below derives PARAMCD, PARAM, AVISIT, AVAL,
+  # and DTYPE while building its rows; none of them has a
+  # column-level derivation.
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  # No row carries a derivation type: each template still gives the
+  # column a value, an explicit blank, rather than leaving it without
+  # one.
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+
+  # A working value behind FLAG: it feeds another column, it is kept
+  # out of the artifact, and its own completeness check still runs.
+  - name: HIGH
+    type: int
+    label: High Result Working Flag
+    derivation:
+      case:
+        - when: "AVAL > 60"
+          then: {literal: 1}
+        - otherwise: {literal: 0}
+    verifications:
+      - not_missing: {}
+
+  - name: FLAG
+    type: str
+    label: High Value Flag
+    derivation:
+      case:
+        - when: "HIGH = 1"
+          then: {literal: H}
+        - otherwise: {literal: N}
+
+rows:
+  # One row per record that carries a result.
+  - id: components
+    filter: "LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD: LB.LBTESTCD
+      PARAM:
+        case:
+          - when: "LB.LBTESTCD = 'ALT'"
+            then: {literal: Alanine Aminotransferase}
+          - otherwise: {literal: Aspartate Aminotransferase}
+      AVISIT:
+        case:
+          - when: "LB.VISIT = 1"
+            then: {literal: WEEK 1 DAY 1}
+          - otherwise: {literal: WEEK 2 DAY 8}
+      AVAL: LB.LBSTRESN
+      DTYPE: {literal: null}
+
+  # One candidate row per subject-visit. The visit whose results are
+  # all missing is discarded after its summary is computed.
+  - id: visit_low
+    group_by: [LB.USUBJID, LB.VISIT]
+    derivations:
+      PARAMCD: {literal: LOW}
+      PARAM: {literal: Lowest Result of Visit}
+      AVISIT: {literal: OVERALL}
+      AVAL:
+        aggregate:
+          expr: "MIN(LB.LBSTRESN)"
+      DTYPE: {literal: LOWEST}
+    filter: "AVAL IS NOT NULL"
+
+verifications:
+  - unique:
+      columns: [USUBJID, VISIT, PARAMCD]
