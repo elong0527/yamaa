@@ -62,7 +62,7 @@ Business rules can differ from language defaults:
 - Leverage organization templates
 - Capture domain knowledge that agents can apply
 
-## yamaa: specification
+## yamaa: YAML specification
 
 ```yaml
 schema_version: "1.0"
