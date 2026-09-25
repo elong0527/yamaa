@@ -1,9 +1,10 @@
 STUDYID,USUBJID,VISIT,PARAMCD,PARAM,AVISIT,AVAL,DTYPE,FLAG
-YAMAA-01,S1,1,ALT,Alanine Aminotransferase,WEEK 1 DAY 1,32,,N
-YAMAA-01,S1,1,AST,Aspartate Aminotransferase,WEEK 1 DAY 1,45,,N
-YAMAA-01,S1,2,ALT,Alanine Aminotransferase,WEEK 2 DAY 8,28,,N
-YAMAA-01,S2,1,ALT,Alanine Aminotransferase,WEEK 1 DAY 1,90,,H
-YAMAA-01,S2,1,AST,Aspartate Aminotransferase,WEEK 1 DAY 1,70,,H
-YAMAA-01,S1,1,LOW,Lowest Result of Visit,OVERALL,32,LOWEST,N
-YAMAA-01,S1,2,LOW,Lowest Result of Visit,OVERALL,28,LOWEST,N
-YAMAA-01,S2,1,LOW,Lowest Result of Visit,OVERALL,70,LOWEST,H
+YAMAA-01,YAMAA-01-101,1,ALT,Alanine Aminotransferase,WEEK 1 DAY 1,32,,N
+YAMAA-01,YAMAA-01-101,1,AST,Aspartate Aminotransferase,WEEK 1 DAY 1,45,,N
+YAMAA-01,YAMAA-01-101,2,ALT,Alanine Aminotransferase,WEEK 2 DAY 8,28,,N
+YAMAA-01,YAMAA-01-101,2,AST,Aspartate Aminotransferase,WEEK 2 DAY 8,60,,N
+YAMAA-01,YAMAA-01-102,1,ALT,Alanine Aminotransferase,WEEK 1 DAY 1,90,,H
+YAMAA-01,YAMAA-01-102,1,AST,Aspartate Aminotransferase,WEEK 1 DAY 1,70,,H
+YAMAA-01,YAMAA-01-101,1,LOW,Lowest Result of Visit,OVERALL,32,LOWEST,N
+YAMAA-01,YAMAA-01-101,2,LOW,Lowest Result of Visit,OVERALL,28,LOWEST,N
+YAMAA-01,YAMAA-01-102,1,LOW,Lowest Result of Visit,OVERALL,70,LOWEST,H
