@@ -1289,7 +1289,7 @@ eval_date_impute <- function(payload, ctx) {
     yamaa_error("month_required", "month is required under minimum_source_precision: year")
   # REQ-0608: month must be 1..12 (validation phase)
   mo <- as.integer(payload$month)
-  if (!is.na(mo) && (mo < 1 || mo > 12))
+  if (length(mo) && !is.na(mo) && (mo < 1 || mo > 12))
     yamaa_error("month_out_of_range", paste0("month out of range: ", payload$month))
   n <- ctx$n
   month <- rep(as.integer(payload$month), n)
