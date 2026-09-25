@@ -1201,7 +1201,6 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1244](../operations/predicates.md#req-1244) | `operations/predicates.md` | Schema prose |
 | [REQ-1234](../storage/publication.md#req-1234) | `storage/publication.md` | Schema prose |
 | [REQ-1235](../storage/publication.md#req-1235) | `storage/publication.md` | Schema prose |
-| [REQ-1236](../storage/publication.md#req-1236) | `storage/publication.md` | Schema prose |
 | [REQ-1237](../storage/publication.md#req-1237) | `storage/publication.md` | Schema prose |
 | [REQ-1238](../storage/publication.md#req-1238) | `storage/publication.md` | Schema prose |
 | [REQ-1239](../operations/windows.md#req-1239) | `operations/windows.md` | Schema prose |

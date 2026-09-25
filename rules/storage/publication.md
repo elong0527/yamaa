@@ -177,18 +177,6 @@ number whose meaning lives in a format name beside the value rather than in the
 value. Each of those is a value the language carries and the container does
 not.
 
-<a id="req-1236"></a>
-
-**REQ-1236.** Admitting it would mean choosing, once and for every study,
-either to refuse a conforming specification whose column name is nine
-characters or whose value does not survive the container, or to write a value
-the language says is something else. The first is a second and stricter
-specification language wearing a profile's name, and the second is exactly the
-disagreement [REQ-0716](publication.md#req-0716) closes the mapping to prevent.
-The extension does not even name one container: `.xpt` is written for v5 and
-for v8 and v9, whose names are thirty-two characters, so two runtimes reading
-the same path would not agree on the limits before they disagreed on the bytes.
-
 <a id="req-1237"></a>
 
 **REQ-1237.** Converting a published artifact to a transport container is a

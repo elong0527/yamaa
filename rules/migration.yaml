@@ -2267,8 +2267,7 @@ requirements:
   REQ-1243: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_contains.source.description", "schema_expression_str.yaml:expressions.str_contains.pattern.description", "schema_expression_str.yaml:expressions.str_contains.missing.description"]}
   REQ-1244: {"file": "operations/predicates.md", "sources": ["yamaa:issue-778:str-contains-predicate-call"]}
   REQ-1234: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:profile-admission"]}
-  REQ-1235: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-value-model"]}
-  REQ-1236: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-one-container"]}
+  REQ-1235: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-value-model", "yamaa:issue-1051:req-1236-retired"]}
   REQ-1237: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-packaging"]}
   REQ-1238: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-extension-error"]}
   REQ-1239: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.locf.source.description", "schema_expression_window.yaml:expressions.locf.window.description"]}
@@ -2727,7 +2726,7 @@ provenance_addenda:
   - {"source": "schema_expression_aggregate.yaml:derive_binding_class.derivation.description", "text": "See REQ-1192 in rules/operations/aggregation.md.", "owner": "operations/aggregation", "group": "derive_binding_class", "target": "REQ-1192"}
   - {"source": "yamaa:issue-493:profile-admission", "text": "Issue #493: a container joins the artifact profile mapping only when it carries every admitted value unchanged, so no profile truncates, re-encodes, or rounds on the way out.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1234"}
   - {"source": "yamaa:issue-493:xpt-value-model", "text": "Issue #493: SAS Transport v5 bounds names, labels, and character values and has no integer or temporal type, so it cannot carry the language's values.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1235"}
-  - {"source": "yamaa:issue-493:xpt-one-container", "text": "Issue #493: admitting .xpt would either refuse conforming specifications or write changed values, and the extension names v5, v8, and v9 rather than one container.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1236"}
+  - {"source": "yamaa:issue-1051:req-1236-retired", "text": "Issue #1051: the rationale-only single-container requirement is retired; the transport-container contract is unchanged and REQ-1235 states the decision.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1235"}
   - {"source": "yamaa:issue-493:transport-packaging", "text": "Issue #493: converting a published artifact to a transport container is a packaging step outside this language, and a specification run publishes no file beyond its artifact and sidecars.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1237"}
   - {"source": "yamaa:issue-493:transport-extension-error", "text": "Issue #493: a transport extension fails under REQ-760 as any other unmapped extension does, with no condition naming it.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1238"}
   - {"source": "yamaa:issue-494:dataset-json-declaration", "text": "Issue #494: a datasets entry's dataset_json names the Dataset-JSON file the study document produces for that dataset, relative to the generated document.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1193"}
