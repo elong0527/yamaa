@@ -67,7 +67,7 @@ digits      := digit { digit }
 letter      := "A" ... "Z" | "a" ... "z"
 digit       := "0" ... "9"
 string      := "'" { non_quote | "''" } "'"
-non_quote   := any R019 string scalar other than "'"
+non_quote   := any REQ-0022 string scalar other than "'"
 temporal    := "DATE" string | "DATETIME" string
 ```
 
