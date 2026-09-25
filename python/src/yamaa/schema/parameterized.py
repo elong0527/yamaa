@@ -199,7 +199,11 @@ def expand_parameterized_definitions(
             if not isinstance(values, list) or not values:
                 diagnostics.append(
                     ValidationDiagnostic(
-                        condition="empty_for_list",
+                        condition=(
+                            "empty_for_list"
+                            if isinstance(values, list)
+                            else "invalid_for_list"
+                        ),
                         spec_paths=(f"{base_path}.for",),
                         requirement=_REQUIREMENT,
                         context={},

@@ -138,6 +138,14 @@ def test_empty_for_list_is_an_error():
     assert excinfo.value.diagnostics[0].condition == "empty_for_list"
 
 
+def test_non_list_for_is_an_error():
+    document = base_document()
+    document["intermediates"][0]["for"] = 5
+    with pytest.raises(SpecificationError) as excinfo:
+        expand_parameterized_definitions(document)
+    assert excinfo.value.diagnostics[0].condition == "invalid_for_list"
+
+
 def test_unknown_placeholder_is_an_error():
     document = base_document()
     document["intermediates"][0]["filter"] = "V = {w}"
