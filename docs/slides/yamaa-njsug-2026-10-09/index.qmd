@@ -1,6 +1,6 @@
 ---
 title: "yamaa: agentic workflow for CDISC data standardization"
-subtitle: "from ODM to SDTM / ADaM and define.xml"
+subtitle: "from ODM to SDTM / ADaM and define.xml<br>NJSUG & PhilaSUG Joint In-Person Meeting 2026"
 author: "Yilong Zhang"
 date: "2026-10-09"
 embed-resources: true
@@ -39,24 +39,30 @@ organizations or institutions.
 
 ## Motivation
 
-Two AI agents use the same specification to derive ADaM data.
-Both report completion, but their outputs differ.
-The specification leaves decisions for the agents to make during implementation.
-A human reviewer must find the gap, settle the rule, and rerun the derivation.
+* Two AI agents use the same specification to derive ADaM data.
+* Both report completion, but their outputs differ.
+* A reviewer must resolve the difference before signing off.
 
-Review takes longer, and confidence in the result falls.
+In a drug-manufacturing [warning letter](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/purolea-cosmetics-lab-722591-04022026), the FDA wrote:
+
+> "you must review the AI generated documents to ensure they were accurate and actually compliant with CGMP."
 
 ## Root cause
 
 The specification leaves business rules implicit, so agents must infer them.
 
+Business rules can differ from language defaults:
+
+- [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round exact ties to even.
+- [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than nonmissing values.
+
 ## Goal
 
 - Reduce human review work
-- Use organization and compound templates
-- Capture domain rules that agents can apply
+- Leverage organization templates
+- Capture domain knowledge that agents can apply
 
-## yamaa: specification
+## yamaa: YAML specification
 
 ```yaml
 schema_version: "1.0"
@@ -82,7 +88,7 @@ verifications:
 
 ::: {.columns}
 ::: {.column width="48%"}
-<div class="big-number">292</div>
+<div class="big-number">~ 300</div>
 <div class="metric-label">runnable benchmarks</div>
 :::
 
@@ -99,6 +105,17 @@ Each benchmark includes a specification, input data, and an expected output or e
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
 Scroll inside the frame to explore the spec, inputs, and golden output
+
+## yamaa: full studies
+
+* Build ground truth once. Reuse it to evaluate every agentic workflow
+  * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+* CDISC pilots (SDTM -> ADaM)
+  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
+* OpenClinica real sample data (ODM -> SDTM -> ADaM)
+  * Real sample data for testing the full data journey
+* Synthetic studies (ODM -> SDTM -> ADaM)
+  * KN564 and KN189 as scalable test beds
 
 ## yamaa: core principle
 
@@ -137,14 +154,14 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 
 ## Recommendations to work with AI agents
 
-- Start with plain text.
-- Produce the annotated CRF during planning.
-- Produce the Excel specification during planning.
-- Communicating requirements costs more than tokens.
+- Plain text is the input.
+- Annotated CRF is not an input but output.
+- Excel specification is not an input but output.
+- Communication costs more than tokens.
 
 ## Call for help
 
-### Building benchmarks
+* Building benchmarks
 - **Review a benchmark**: inspect the specification and golden output
 - **Add comments**: challenge assumptions, clarity, and conformance
 - **File issues**: record anything ambiguous or incorrect
