@@ -209,11 +209,7 @@ make two conforming runtimes disagree about the same bytes.
 
 <a id="req-0837"></a>
 
-**REQ-0837.** A byte-order mark is rejected rather than skipped. Readers that
-skip the mark and readers that keep it disagree about the first field's
-name, so a marked file has a header whose first name depends on the reader.
-Rejecting the mark names the defect for the producer to fix. Skipping the
-mark would accept a file whose header this design cannot state.
+**REQ-0837.** A byte-order mark is rejected rather than skipped.
 
 ### Reading: Records and fields
 
