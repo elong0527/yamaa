@@ -460,6 +460,167 @@ def test_a_read_through_self_promotes_the_donor_column() -> None:
     assert plan.row_derived_columns == ("K", "D", "P")
 
 
+def self_donor_specification(donor: Intermediate) -> Specification:
+    # K and P are template-derived; D is a row-local column-level derivation
+    # that only the SELF intermediate names.
+    return specification(
+        [
+            Column(name="K", type="str"),
+            Column(name="D", type="str", derivation=derivation({"source": "K"})),
+            Column(name="P", type="str"),
+        ],
+        [
+            Row(
+                id="first",
+                derivations={
+                    "K": derivation({"source": "SRC.X"}),
+                    "P": derivation({"literal": None}),
+                },
+            ),
+            Row(
+                id="second",
+                derivations={
+                    "K": derivation({"source": "SRC.X"}),
+                    "P": derivation({"source": "DONOR.K"}),
+                },
+            ),
+        ],
+    ).model_copy(update={"intermediates": [donor]})
+
+
+@pytest.mark.parametrize(
+    "donor",
+    [
+        Intermediate(
+            id="DONOR",
+            dataset="SELF",
+            key=["K"],
+            between={"value": "K", "lower": "D", "upper": "D"},
+        ),
+        Intermediate(
+            id="DONOR",
+            dataset="SELF",
+            key=["K"],
+            verification=IntermediateVerification(unique=["D"]),
+        ),
+        Intermediate(id="DONOR", dataset="SELF", key_base=["D"], key=["K"]),
+        Intermediate(
+            id="DONOR",
+            dataset="SELF",
+            key=["K"],
+            between={"value": "D", "lower": "K", "upper": "K"},
+        ),
+    ],
+    ids=["between-bounds", "unique-columns", "key-base", "between-value"],
+)
+def test_a_self_donor_field_or_row_phase_match_value_promotes_the_column(
+    donor: Intermediate,
+) -> None:
+    # REQ-1260: the between bounds (REQ-0121) and asserted-unique columns
+    # (REQ-1245) are donor fields, which are row-derived (REQ-0120); the
+    # key_base and between value are match values the second template's
+    # row-phase read needs from that template (REQ-0126).
+    spec = self_donor_specification(donor)
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert [column.column for column in plan.columns] == []
+    assert plan.row_derived_columns == ("K", "D", "P")
+
+
+def match_value_specification(
+    default: str,
+    lookup: dict[str, object],
+    *,
+    keys: list[str] | None = None,
+    read_in_row: bool = True,
+) -> Specification:
+    # K is template-derived; `default` is a row-local column-level derivation
+    # that only LOOK's match reads; W reads LOOK from a template or from the
+    # column phase.
+    read = derivation({"source": "LOOK.V"})
+    return two_dataset_specification(
+        [
+            Column(name="K", type="str"),
+            Column(name=default, type="str", derivation=derivation({"source": "K"})),
+            Column(name="W", type="float", derivation=None if read_in_row else read),
+        ]
+    ).model_copy(
+        update={
+            "keys": keys or ["K"],
+            "intermediates": [Intermediate(id="LOOK", dataset="RIGHT", **lookup)],
+            "rows": [
+                Row(
+                    id="row",
+                    dataset="SRC",
+                    derivations={
+                        "K": derivation({"source": "SRC.X"}),
+                        **({"W": read} if read_in_row else {}),
+                    },
+                )
+            ],
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("default", "lookup", "keys"),
+    [
+        ("M", {"key_base": ["M"], "key": ["X"]}, None),
+        ("X", {"key": ["X"]}, None),
+        ("X", {"filter": "RIGHT.V > 0"}, ["K", "X"]),
+        (
+            "M",
+            {
+                "key_base": ["K"],
+                "key": ["X"],
+                "between": {"value": "M", "lower": "X", "upper": "X"},
+            },
+            None,
+        ),
+    ],
+    ids=["key-base", "defaulted-key-base", "inferred-key", "between-value"],
+)
+def test_a_row_phase_intermediate_read_promotes_its_match_values(
+    default: str, lookup: dict[str, object], keys: list[str] | None
+) -> None:
+    # REQ-1260/REQ-0126: a template reading LOOK needs every value LOOK
+    # matches on from that template, so the column-level derivation of a
+    # match value becomes a row-phase default -- whether key_base names it,
+    # key_base defaults to a key naming it (REQ-0154), the key is inferred
+    # from the applicable keys (REQ-0153), or the between value names it.
+    spec = match_value_specification(default, lookup, keys=keys)
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [column.column for column in plan.columns] == []
+    assert plan.row_derived_columns == ("K", default, "W")
+    (row_plan,) = plan.rows
+    by_column = {planned.column: planned for planned in row_plan.derivations}
+    assert by_column[default].path == f"columns.{default}.derivation"
+
+
+def test_a_column_phase_intermediate_read_leaves_its_match_values_alone() -> None:
+    # REQ-1260: a column-level read of LOOK matches on the completed column,
+    # so M keeps its column-phase meaning.
+    spec = match_value_specification(
+        "M", {"key_base": ["M"], "key": ["X"]}, read_in_row=False
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [column.column for column in plan.columns] == ["M", "W"]
+    assert plan.row_derived_columns == ("K",)
+
+
 def test_an_undeclared_row_driver_fails_planning() -> None:
     spec = specification(
         [Column(name="A", type="str")],

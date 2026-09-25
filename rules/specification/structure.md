@@ -105,8 +105,10 @@ lookup, an aggregate, or a window, reads a named intermediate, or reads a
 column whose column-level derivation is not row-local. A row-local
 column-level derivation is that column's default derivation when at least
 one `rows` entry names the column, or when a row-phase context reads the
-column: a `rows` derivation (windows included), a grouped `rows` filter, or
-a donor field of a `SELF` intermediate. A default's own reads of
+column: a `rows` derivation (windows included), a grouped `rows` filter, a
+donor field of a `SELF` intermediate, or a match variable or `between`
+value of a named intermediate that a `rows` derivation reads
+([REQ-0126](../operations/lookup.md#req-0126)). A default's own reads of
 column-level columns make those derivations defaults too. A qualified field
 or a literal that only spells a column's name does not read that column. An
 inherited default is evaluated in the inheriting `rows` entry's scope,
