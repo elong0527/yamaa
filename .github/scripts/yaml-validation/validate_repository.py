@@ -388,7 +388,6 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R017', 'inheritance_cycle'): {'reason'},
     ('R017', 'invalid_clear'): {'field'},
     ('R017', 'invalid_parent_path'): {'reason'},
-    ('R017', 'redundant_field_type'): {'dataset', 'field', 'type'},
     ('R017', 'schema_version_mismatch'): {
         'entry_version', 'parent_version',
     },
