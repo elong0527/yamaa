@@ -48,10 +48,7 @@ Each carries the `02`. Nothing in the schema links them beyond the
 
 <a id="req-0197"></a>
 
-**REQ-0197.** A column-level derivation is the column's default derivation.
-The requirements below make that precise, and they apply to internal columns
-exactly as they apply to output ones. A `rows` entry may override the default
-for that entry's rows.
+**REQ-0197.** Retired. A column-level derivation is the column's default derivation, stated once in [REQ-0199](#req-0199). This identifier is never reused.
 
 <a id="req-0198"></a>
 
@@ -62,12 +59,13 @@ same-named source variable; [Name binding](binding.md) forbids that inference.
 <a id="req-0199"></a>
 
 **REQ-0199.** A column-level derivation is the column's default derivation.
-A `rows` entry naming the column in its `derivations` overrides the default
-for that entry's rows only; an entry not naming the column inherits the
-default. Pairing a column-level derivation with row-level derivations for
-the same column is therefore covered, not duplicated, unless
-[REQ-1260](structure.md#req-1260) keeps the column-level derivation in the
-column phase.
+The requirements below make that precise, and they apply to internal columns
+exactly as they apply to output ones. A `rows` entry naming the column in its
+`derivations` overrides the default for that entry's rows only; an entry not
+naming the column inherits the default. Pairing a column-level derivation with
+row-level derivations for the same column is therefore covered, not duplicated,
+unless [REQ-1260](structure.md#req-1260) keeps the column-level derivation in
+the column phase.
 
 <a id="req-0200"></a>
 
