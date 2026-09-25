@@ -9,13 +9,14 @@ input:
       ASEQ: int
 base: ADSL
 intermediates:
-  # The subject's earliest qualifying death, the earlier input record on a
-  # tied date. ADRS also carries PARAMCD, so key names only the subject.
+  # The subject's earliest dated qualifying death. A death record only
+  # qualifies when it carries a date; on a tied date the lower sequence
+  # number wins, whatever the input order.
   - id: DEATH_REC
     dataset: ADRS
-    filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'"
+    filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y' AND ADRS.ADT IS NOT NULL"
     key: [STUDYID, USUBJID]
-    order_by: [ADRS.ADT]
+    order_by: [ADRS.ADT, ADRS.ASEQ]
     keep: first
 
 output:
