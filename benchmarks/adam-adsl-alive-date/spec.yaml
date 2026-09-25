@@ -41,7 +41,7 @@ columns:
     label: Date of Last Contact
     derivation: ADSL_RAW.LSTCNTDC
 
-  # A year and month take the month's last day, a year alone 31 December;
+  # A year and month take the month's first day, a year alone 1 January;
   # blank or non-date text leaves the date empty.
   - name: LSTCNTDT
     type: date
@@ -49,8 +49,8 @@ columns:
     derivation:
       date_impute:
         source: LSTCNTDC
-        month: 12
-        day: last
+        month: 1
+        day: first
         missing: null
         invalid: null
 

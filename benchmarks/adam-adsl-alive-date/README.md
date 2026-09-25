@@ -13,18 +13,17 @@ ADAE) and vital signs dates (`ADATE` in ADVS).
 **Variables:**
 
 - `LSTCNTDT` is the contact text completed to a day: a year and month
-  take the last day of that month (February of a leap year counts as
-  the 29th), a year alone takes the last day of December, and missing
-  or unusable text leaves the date missing.
+  take the first day of that month, a year alone takes the first day of
+  January, and missing or unusable text leaves the date missing.
 - `LSTALVDT` is the latest of `TRTEDT`, `LSTCNTDT`, the subject's
   latest `AENDT`, and the subject's latest `ADATE`. A completed date
   competes on the day it names. When every source is missing the date
   stays missing; otherwise the latest available date is kept.
 
-**Note:** completing a partial contact to the end of its month or year
-can make it the latest date, ahead of dates collected in full within
-that period: `2025-02` counts as `2025-02-28` and `2025` as
-`2025-12-31`. Text that cannot be read as a date (for example
+**Note:** completing a partial contact to the start of its month or year
+never claims contact beyond what was collected: `2025-02` counts as
+`2025-02-01` and `2025` as `2025-01-01`, so a fully collected date within
+that period wins. Text that cannot be read as a date (for example
 `unknown`) leaves the completed date missing instead.
 
 **Standard:** ADaM | **Domain:** ADSL
