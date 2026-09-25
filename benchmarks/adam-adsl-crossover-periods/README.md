@@ -9,32 +9,32 @@ period and the washout between them, with one record per
 subject.
 
 **Input:** demographics listing each subject, plus exposure
-records carrying the analysis period (`APERIOD`), the treatment
+records carrying the epoch (`EPOCH`), the treatment
 given (`EXTRT`), start and end dates (`EXSTDTC`, `EXENDTC`), and
 a sequence number (`EXSEQ`).
 
 **Variables:**
 
 - `TR01SDT` is the earliest `EXSTDTC` among the subject's
-  exposure records with `APERIOD` of `1` and a recorded start
+  exposure records in the `TREATMENT 1` epoch and a recorded start
   date; empty when the subject has no such record.
 - `TR01EDT` is the latest `EXENDTC` among the subject's
-  exposure records with `APERIOD` of `1` and a recorded end
+  exposure records in the `TREATMENT 1` epoch and a recorded end
   date; empty when the subject has no such record.
 - `TR02SDT` is the earliest `EXSTDTC` among the subject's
-  exposure records with `APERIOD` of `2` and a recorded start
+  exposure records in the `TREATMENT 2` epoch and a recorded start
   date; empty when the subject has no such record.
 - `TR02EDT` is the latest `EXENDTC` among the subject's
-  exposure records with `APERIOD` of `2` and a recorded end
+  exposure records in the `TREATMENT 2` epoch and a recorded end
   date; empty when the subject has no such record.
 - `TRT01A` is the `EXTRT` from the subject's earliest
-  exposure record with `APERIOD` of `1`, earliest by `EXSTDTC`
+  exposure record in the `TREATMENT 1` epoch, earliest by `EXSTDTC`
   with the lower `EXSEQ` breaking ties on the same day and a
   record with no start date sorting last; either `VITAMIN D3`
   or `PLACEBO`, and empty when the subject has no period-one
   exposure.
 - `TRT02A` is the `EXTRT` from the subject's earliest
-  exposure record with `APERIOD` of `2`, chosen the same way;
+  exposure record in the `TREATMENT 2` epoch, chosen the same way;
   either `VITAMIN D3` or `PLACEBO`, and empty when the
   subject has no period-two exposure.
 - `WASHDUR` is the number of days strictly between `TR01EDT`

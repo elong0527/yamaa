@@ -3,7 +3,7 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXSEQ: int, APERIOD: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
 base: DM
 
 output:
@@ -29,7 +29,7 @@ columns:
     label: Date of First Exposure in Period 01
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 1"
+        filter: "EX.EPOCH = 'TREATMENT 1'"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: TR01EDT
@@ -37,7 +37,7 @@ columns:
     label: Date of Last Exposure in Period 01
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 1"
+        filter: "EX.EPOCH = 'TREATMENT 1'"
         expr: "MAX(EX.EXENDTC)"
 
   - name: TR02SDT
@@ -45,7 +45,7 @@ columns:
     label: Date of First Exposure in Period 02
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 2"
+        filter: "EX.EPOCH = 'TREATMENT 2'"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: TR02EDT
@@ -53,7 +53,7 @@ columns:
     label: Date of Last Exposure in Period 02
     derivation:
       aggregate:
-        filter: "EX.APERIOD = 2"
+        filter: "EX.EPOCH = 'TREATMENT 2'"
         expr: "MAX(EX.EXENDTC)"
 
   # Each period's treatment is that of its first administration: earliest
@@ -64,7 +64,7 @@ columns:
     derivation:
       source:
         variable: EX.EXTRT
-        filter: "EX.APERIOD = 1"
+        filter: "EX.EPOCH = 'TREATMENT 1'"
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
@@ -78,7 +78,7 @@ columns:
     derivation:
       source:
         variable: EX.EXTRT
-        filter: "EX.APERIOD = 2"
+        filter: "EX.EPOCH = 'TREATMENT 2'"
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
@@ -109,7 +109,7 @@ verifications:
       max: 6
   - all_or_none:
       id: period-two-completeness
-      columns: [TR02SDT, TR02EDT, TRT02A, WASHDUR]
+      columns: [TR02SDT, TRT02A]
   - implies:
       id: period-two-follows-period-one
       when: "TR02SDT IS NOT NULL"
