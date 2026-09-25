@@ -1,0 +1,214 @@
+---
+title: "yamaa: a language-agnostic YAML schema to map and derive CDISC data from ODM to SDTM and ADaM"
+subtitle: "NJSUG · 2026-10-09"
+author: "Yilong Zhang"
+date: "2026-10-09"
+embed-resources: true
+format:
+  revealjs:
+    theme: default
+    css: custom.css
+    mainfont: "Lato, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Liberation Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji"
+    monofont: "JetBrains Mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace"
+    smaller: true
+    slide-number: true
+    scrollable: true
+    transition: fade
+    background-transition: fade
+    logo: ../../assets/logo.jpeg
+title-slide-attributes:
+  data-background-color: "#385898"
+---
+
+## Disclaimer {.center}
+
+::: {.center-body}
+The views and opinions expressed in this presentation are those of the
+individual presenter. They do not represent those of their affiliated
+organizations or institutions.
+:::
+
+## Presenter {.center}
+
+::: {.center-body-left}
+- **Yilong Zhang** — BBSW AI Committee
+- Builds **yamaa**, a domain-specific language for clinical trial data
+  standardization: from ODM extraction through SDTM and ADaM to define.xml
+:::
+
+## The journey every submission takes
+
+::: {.flow}
+::: {.flow-step}
+ODM
+<span class="small">EDC extraction</span>
+:::
+::: {.flow-step}
+SDTM
+<span class="small">tabulation</span>
+:::
+::: {.flow-step}
+ADaM
+<span class="small">analysis</span>
+:::
+::: {.flow-step}
+define.xml
+<span class="small">metadata</span>
+:::
+:::
+
+The pipeline is the same everywhere. The way we describe it is not: an
+Excel mapping sheet here, a free-text derivation column there, and a SAS
+program that only its author fully understands.
+
+## Why two programs disagree
+
+An Excel specification has three layers, but only two of them are written down:
+
+| Layer | What it answers | Where an Excel spec keeps it |
+|---|---|---|
+| **Structure** | Which datasets, variables, types | Dataset and variable sheets |
+| **Algorithm** | What to compute | The free-text derivation column |
+| **Semantics** | What that computation means **when the data does not cooperate** | **Nowhere.** It lives in each programmer's experience |
+
+Two programmers read the same derivation column. Both are certain they
+understood it. Their programs disagree — not from misreading, but because
+the specification never reached the point they disagreed on: what missing
+means, what a duplicate means, how dates compare.
+
+## yamaa: four components
+
+| Component | Purpose | Links |
+| --- | --- | --- |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+
+## Language-agnostic
+
+<div class="kicker">One specification. Two engines. One dataset.</div>
+
+The specification is data — YAML — not code. It says nothing about how
+any language computes.
+
+- The **Python engine** and the **R engine** implement the same numbered
+  rules, so they cannot read the same spec in two ways.
+- `output_dataset = derive(input_datasets, spec)` holds in either engine:
+  same inputs, same spec, same dataset.
+- Validation runs before execution: anything the schema does not declare
+  fails early instead of being silently ignored.
+
+For a SAS shop this is the key property: the spec is reviewable by
+people who never write the engine.
+
+## yamaa: one principle
+
+<div class="kicker">Determinism is a design constraint</div>
+
+> A yamaa specification has exactly one execution. Where it would have two, yamaa fails instead of choosing.
+
+Ambiguity is surfaced during planning, before it becomes a silent
+difference in the output — rounding, missing value handling, duplicate
+records, date comparisons.
+
+* **For people:** the specification is readable.
+* **For agents:** the rules avoid ambiguity.
+
+## Anatomy of a specification
+
+A real excerpt — an ADSL body-mass-index derivation:
+
+```yaml
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+columns:
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+```
+
+No free-text derivation column. Every written item has a registered verb
+and a rule behind it.
+
+## ODM comes in as data, not as luck
+
+Extraction from ODM XML is part of the contract, not a preamble:
+
+- **Record order is part of the input** — readers return records in stored
+  order; no engine plan may reorder them.
+- **A field's type belongs to the dataset** — never inferred from one
+  extract's values.
+- Typed, profiled ingestion (ODM, CSV, Parquet) with explicit missing and
+  verification rules before derivation begins.
+
+What the EDC gave you is what the spec sees — in the order it arrived.
+
+## Rules own the semantics
+
+The `rules/` directory is normative: 35 contract files, about 1,250
+numbered requirements (`REQ-####`), each fixing what one written item
+means.
+
+| Requirement | What it settles |
+|---|---|
+| REQ-0514 | Stored record order survives every read |
+| REQ-0516 | A field's type is a property of the dataset |
+| R016 family | Datetime comparisons need no timezone |
+
+A yamaa spec is written to be **executed the same way twice**; an Excel
+spec is written to be understood — by whoever happens to read it.
+
+## Proven by benchmarks
+
+::: {.columns}
+::: {.column width="48%"}
+<div class="big-number">297</div>
+<div class="metric-label">runnable benchmarks with byte-exact golden outputs</div>
+:::
+
+::: {.column width="48%"}
+<div class="big-number">2</div>
+<div class="metric-label">engines (Python, R) checked against the same goldens</div>
+:::
+:::
+
+Each benchmark is a complete specification: inputs, the spec, and the
+expected output — a worked proof the rules can be reviewed.
+
+<iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+Scroll inside the frame to explore the spec, inputs, and golden output
+
+**[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
+
+## Who builds the specification
+
+A person who finds something unclear can ask a colleague. An AI agent
+cannot — it writes code through the gaps instead.
+
+yamaa moves agreement to the **planning stage**: people and agents build
+the specification together, and questions get answered while they are
+still cheap to answer.
+
+- The spec leaves nothing for the coding stage to guess.
+- The reviewer checks one artifact — the spec — not the program.
+
+## Reference
+
+<div class="pull-quote">An Excel spec is written to be understood; a yamaa spec is written to be executed the same way twice.</div>
+
+- **Repository:** [github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)
+- **Documentation:** [elong0527.github.io/yamaa](https://elong0527.github.io/yamaa/)
+- **Benchmarks:** [elong0527.github.io/yamaa/benchmark](https://elong0527.github.io/yamaa/benchmark/)
