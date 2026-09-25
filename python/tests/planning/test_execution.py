@@ -3063,19 +3063,92 @@ def test_an_intermediate_derivation_rejects_another_dataset_reference() -> None:
     assert diagnostic.requirement == "REQ-1185"
 
 
-def test_an_intermediate_derivation_rejects_a_sibling_derivation() -> None:
-    # REQ-1185: derivations read stored columns only, not each other.
-    diagnostic = _derivation_diagnostic(
+def test_an_intermediate_derivation_reads_an_earlier_sibling() -> None:
+    # REQ-1185: derivations evaluate in declaration order, so a derivation
+    # may read a sibling declared before it.
+    spec = _intermediate_spec(
         {
             "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
             "SECOND_N": {"str_upper": {"source": "FIRST_N"}},
+        },
+        key=["STUDYID"],
+    )
+    plan = plan_execution(
+        spec,
+        {"SRC": _src_table(), "SUPP": _supp_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+    derived = dict(plan.intermediates[0].derived)
+    assert list(derived) == ["FIRST_N", "SECOND_N"]
+
+
+def test_an_intermediate_derivation_reads_a_qualified_earlier_sibling() -> None:
+    # REQ-1185: a qualified name must name the intermediate's own dataset,
+    # and an earlier derived name qualifies there too.
+    spec = _intermediate_spec(
+        {
+            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "SECOND_N": {"str_upper": {"source": "SUPP.FIRST_N"}},
+        },
+        key=["STUDYID"],
+    )
+    plan = plan_execution(
+        spec,
+        {"SRC": _src_table(), "SUPP": _supp_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+    derived = dict(plan.intermediates[0].derived)
+    assert list(derived) == ["FIRST_N", "SECOND_N"]
+
+
+def test_a_window_derivation_reads_earlier_derived_window_fields() -> None:
+    # REQ-1185: a window's group_by, order_by, and filter read stored
+    # fields and earlier derived names of the intermediate's dataset.
+    spec = _intermediate_spec(
+        {
+            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "_RN": {
+                "row_number": {
+                    "window": {
+                        "group_by": ["STUDYID"],
+                        "order_by": [{"variable": "SUPP.FIRST_N"}],
+                        "filter": "FIRST_N IS NOT NULL",
+                    }
+                }
+            },
+        },
+        key=["STUDYID"],
+    )
+    plan = plan_execution(
+        spec,
+        {"SRC": _src_table(), "SUPP": _supp_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+    derived = dict(plan.intermediates[0].derived)
+    assert list(derived) == ["FIRST_N", "_RN"]
+
+
+def test_a_window_derivation_rejects_a_later_derived_window_field() -> None:
+    # REQ-1185: a window field naming a derivation declared after the
+    # window fails as unknown_field.
+    diagnostic = _derivation_diagnostic(
+        {
+            "_RN": {
+                "row_number": {
+                    "window": {
+                        "group_by": ["STUDYID"],
+                        "order_by": [{"variable": "FIRST_N"}],
+                    }
+                }
+            },
+            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
         },
         "unknown_field",
     )
 
     assert diagnostic.requirement == "REQ-1185"
     assert diagnostic.spec_paths == (
-        "intermediates[0].derivations.SECOND_N.str_upper.source",
+        "intermediates[0].derivations._RN.row_number.window.order_by[0]",
     )
 
 

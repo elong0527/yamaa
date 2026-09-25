@@ -378,12 +378,20 @@ surviving records counts one `multiple_matches` handling, and a declared
 
 **REQ-1185.** An intermediate may declare `derivations:`, a map of names to
 derivations written in the same expression language as row-template
-`derivations:`. Each derivation is computed once per record of the
-intermediate's dataset and reads only that dataset: a bare name reads the
-dataset's stored field, and a qualified name must name the dataset. A
-reference to a driver field, another intermediate, another derivation in the
-same map, or anything the dataset does not store fails as `unknown_field`; a
-derived name that shadows a stored column fails as `duplicate_derivation`.
+`derivations:`. The derivations evaluate in declaration order: each is
+computed once per record of the intermediate's dataset, and a derivation
+may read the dataset's stored fields plus the derivations declared before
+it. A bare name reads the dataset's stored field or an earlier derived
+name, and a qualified name must name the dataset. A reference to a driver
+field, another intermediate, a derivation declared later in the same map,
+or anything the dataset does not store fails as `unknown_field`; a derived
+name that shadows a stored column fails as `duplicate_derivation`.
+
+A derivation may use a window function. The window partitions the donor
+records as augmented by every derivation declared before it, so its
+`group_by`, `order_by`, and `filter` may read a stored field or an earlier
+derived name, bare or dataset-qualified. Record order within the dataset
+is the final tie-break.
 
 The derived values augment each donor record before `filter`, matching,
 `order_by` selection, and `columns` projection. A derived name may therefore

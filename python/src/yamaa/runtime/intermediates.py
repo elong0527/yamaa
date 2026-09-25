@@ -24,6 +24,7 @@ from yamaa.expressions.core import (
     Resolution,
     ResolvedValue,
     Resolver,
+    expression_condition,
     normalize_runtime_value,
 )
 from yamaa.expressions.dispatch import evaluate_expression
@@ -34,6 +35,12 @@ from yamaa.expressions.predicates import (
     evaluate_predicate,
     parse_predicate_cached,
     predicate_identifiers,
+)
+from yamaa.expressions.windows import (
+    WINDOW_OPERATIONS,
+    Partition,
+    evaluate_window,
+    window_spec,
 )
 from yamaa.models import (
     MISSING,
@@ -51,13 +58,18 @@ from yamaa.models import (
 from yamaa.planning import KeyBaseExpression, PlannedIntermediate
 from yamaa.runtime.joins import (
     IndexedRecord,
+    OrderError,
+    PartitionKey,
     RelationIndex,
     compare_values,
     eligible_records,
     json_value,
+    order_records,
+    partition_key,
+    partition_records,
     select_record,
 )
-from yamaa.specification.models import Expression, OrderTerm
+from yamaa.specification.models import Expression, HandledExpression, OrderTerm
 from yamaa.verification.diagnostics import VerificationFailure
 
 
@@ -126,6 +138,268 @@ class _DerivedRecordResolver:
         if name is None or name not in self._values:
             return AbsentValue(variable=variable)
         return ResolvedValue(value=self._values[name])
+
+
+def _window_order_terms(declared: object) -> list[tuple[OrderTerm, str]]:
+    """Bind each declared window order term to the readable name it sorts by.
+
+    Mirrors rows._order_terms: the readable record view carries both the
+    bare and the dataset-qualified spelling, so a term binds to the
+    variable exactly as the window declared it.
+    """
+    if not isinstance(declared, Sequence) or isinstance(declared, str):
+        return []
+    terms: list[tuple[OrderTerm, str]] = []
+    for entry in declared:
+        if isinstance(entry, str):
+            term = OrderTerm(variable=entry)
+        elif isinstance(entry, Mapping):
+            try:
+                term = OrderTerm.model_validate(dict(entry), strict=True)
+            except ValidationError:
+                continue
+        else:
+            continue
+        terms.append((term, term.variable))
+    return terms
+
+
+def _readable_window_record(
+    dataset: str, values: Mapping[str, RuntimeValue]
+) -> dict[str, RuntimeValue]:
+    """Return every name one donor record answers to inside a window.
+
+    REQ-1185 lets a window field read a stored field or an earlier derived
+    name, bare or dataset-qualified, so the view carries both spellings of
+    each value.
+    """
+    readable = dict(values)
+    for name, value in values.items():
+        readable[f"{dataset}.{name}"] = value
+    return readable
+
+
+_PreparedPartitions = tuple[
+    dict[PartitionKey, tuple[IndexedRecord, ...]],
+    dict[PartitionKey, tuple[bool, ...]],
+    list[dict[str, RuntimeValue]],
+]
+"""One built window partition: grouped records, per-row eligibility, readable views."""
+
+
+def _freeze(value: object) -> object:
+    """Freeze a parsed payload into a hashable cache key.
+
+    The payloads are parsed spec mappings (strings, numbers, booleans,
+    None, lists, dicts); freezing compares the canonical form directly.
+    """
+    if isinstance(value, Mapping):
+        return tuple(sorted((name, _freeze(item)) for name, item in value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _prepare_window_partitions(
+    dataset: str,
+    values_list: Sequence[Mapping[str, RuntimeValue]],
+    window: Mapping[str, object],
+    exclude: tuple[str, ...] = (),
+) -> _PreparedPartitions | ConditionResult:
+    """Partition the donor records once for a window derivation.
+
+    Mirrors RowResolver._locate: group the readable records by the window's
+    group_by, order each group by its order_by, and mark the rows its
+    filter keeps eligible (REQ-0294). The records carry every derivation
+    declared before the window; `exclude` strips the in-progress
+    derivation's name so a nested window never sees a partially computed
+    column.
+    """
+    excluded = frozenset(exclude)
+    views = [
+        _readable_window_record(
+            dataset,
+            {name: value for name, value in values.items() if name not in excluded},
+        )
+        for values in values_list
+    ]
+    fields = _names(window.get("group_by")) or ()
+    if views:
+        unavailable = [name for name in fields if name not in views[0]]
+        if unavailable:
+            return _condition(
+                "unknown_field",
+                "REQ-1185",
+                {"identifier": unavailable[0]},
+                phase="validation",
+            )
+    indexed = [
+        IndexedRecord(position=index, values=view) for index, view in enumerate(views)
+    ]
+    grouped = partition_records(indexed, fields)
+    terms = _window_order_terms(window.get("order_by"))
+    ordered: dict[PartitionKey, tuple[IndexedRecord, ...]] = {}
+    for key, members in grouped.items():
+        if terms:
+            try:
+                members = tuple(order_records(members, terms))
+            except OrderError as error:
+                return _condition(
+                    "incompatible_input_type",
+                    "REQ-0324",
+                    {"source": error.variable, "types": sorted(set(error.types))},
+                    phase="validation",
+                )
+        ordered[key] = members
+    eligibilities: dict[PartitionKey, tuple[bool, ...]] = {}
+    for key, members in ordered.items():
+        eligible = _window_eligibility(window, members)
+        if isinstance(eligible, ConditionResult):
+            return eligible
+        eligibilities[key] = eligible
+    return ordered, eligibilities, views
+
+
+def _window_eligibility(
+    window: Mapping[str, object], members: Sequence[IndexedRecord]
+) -> tuple[bool, ...] | ConditionResult:
+    """Say which partition rows the window's filter retained (REQ-0294)."""
+    predicate_text = window.get("filter")
+    if predicate_text is None:
+        return tuple(True for _ in members)
+    if not isinstance(predicate_text, str):
+        return _condition(
+            "invalid_predicate",
+            "REQ-0188",
+            {"predicate": predicate_text},
+            phase="validation",
+        )
+    try:
+        ast = parse_predicate_cached(predicate_text)
+    except PredicateError as error:
+        return _condition(
+            "invalid_predicate",
+            "REQ-0188",
+            {"predicate": predicate_text, "position": error.position},
+            phase="validation",
+        )
+    kept: list[bool] = []
+    for member in members:
+        result = evaluate_predicate(ast, MappingResolver(member.values))
+        if isinstance(result, ConditionResult):
+            return result
+        assert isinstance(result, PredicateValue)
+        kept.append(result.value is TruthValue.TRUE)
+    return tuple(kept)
+
+
+def _window_value_for(
+    operation: str,
+    payload: Mapping[str, object],
+    window: Mapping[str, object],
+    grouped: Mapping[PartitionKey, tuple[IndexedRecord, ...]],
+    eligibilities: Mapping[PartitionKey, tuple[bool, ...]],
+    views: Sequence[Mapping[str, RuntimeValue]],
+    index: int,
+) -> EvaluationResult:
+    """Answer one window derivation for the record at `index`."""
+    fields = _names(window.get("group_by")) or ()
+    key = partition_key(views[index], fields)
+    members = grouped.get(key)
+    if members is None:
+        return _condition(
+            "unknown_field",
+            "REQ-1185",
+            {"identifier": "the current row is absent from its partition"},
+            phase="validation",
+        )
+    current = next(
+        (
+            position
+            for position, member in enumerate(members)
+            if member.position == index
+        ),
+        None,
+    )
+    if current is None:
+        return _condition(
+            "unknown_field",
+            "REQ-1185",
+            {"identifier": "the current row is absent from its partition"},
+            phase="validation",
+        )
+    partition = Partition(
+        rows=tuple(member.values for member in members),
+        current=current,
+        eligible=eligibilities[key],
+    )
+    return evaluate_window(operation, payload, partition)
+
+
+class _IntermediateDerivationResolver(_DerivedRecordResolver):
+    """Resolve derivation references across the intermediate's donor records.
+
+    Scalar reads answer from the current record's values. The window
+    operations partition the donor records the way RowResolver._window
+    partitions constructed rows: the records carry every derivation
+    declared before the window, so a window field may read a stored field
+    or an earlier derived name, bare or dataset-qualified. Any other
+    relational operation keeps the historical `resolver unsupported`
+    answer.
+
+    A window operation nested in a scalar derivation reuses one prepared
+    partition per window spec for the derivation's whole per-record loop:
+    the readable records (stored fields plus earlier derived names) are
+    identical for every record, so rebuilding per record is pure waste.
+    `exclude` names the in-progress derivation, which the planner keeps
+    out of its own scope.
+    """
+
+    def __init__(
+        self,
+        dataset: str,
+        values_list: list[dict[str, RuntimeValue]],
+        index: int,
+        partition_cache: dict[tuple[str, object], _PreparedPartitions] | None = None,
+        exclude: str | None = None,
+    ) -> None:
+        super().__init__(dataset, values_list[index])
+        self._values_list = values_list
+        self._index = index
+        self._partition_cache = partition_cache
+        self._exclude = (exclude,) if exclude is not None else ()
+
+    def resolve_relation(
+        self, operation: str, payload: Mapping[str, object]
+    ) -> EvaluationResult:
+        if operation not in WINDOW_OPERATIONS:
+            return expression_condition(
+                "validation",
+                "invalid_field_type",
+                {"operation": operation, "reason": "resolver unsupported"},
+            )
+        window = window_spec(payload)
+        # Dispatch hands us a fresh dict copy per call, so the cache key
+        # freezes the payload's canonical form instead of its identity.
+        key = (operation, _freeze(payload))
+        prepared = (
+            self._partition_cache.get(key)
+            if self._partition_cache is not None
+            else None
+        )
+        if prepared is None:
+            built = _prepare_window_partitions(
+                self._dataset, self._values_list, window, exclude=self._exclude
+            )
+            if isinstance(built, ConditionResult):
+                return built
+            prepared = built
+            if self._partition_cache is not None:
+                self._partition_cache[key] = prepared
+        grouped, eligibilities, views = prepared
+        return _window_value_for(
+            operation, payload, window, grouped, eligibilities, views, self._index
+        )
 
 
 class _LookupPredicateResolver(_DerivedRecordResolver):
@@ -270,6 +544,10 @@ class IntermediateSelector:
 
         REQ-1185 computes each derivation once per record and caches the
         augmented records before filtering, matching, and selection.
+        Derivations evaluate in declaration order: a window derivation
+        partitions the donor records as augmented by every derivation
+        declared before it, so later derivations read its per-record
+        result.
         """
         source = (
             self._self_records
@@ -280,36 +558,101 @@ class IntermediateSelector:
             return tuple(source)
         cached = self._derived.get(plan.identifier)
         if cached is None:
-            augmented: list[IndexedRecord] = []
-            for record in source:
-                outcome = self._augment(plan, record)
-                if isinstance(outcome, _DerivationFailure):
-                    cached = outcome
-                    break
-                augmented.append(outcome)
-            else:
-                cached = tuple(augmented)
+            cached = self._augment_all(plan, source)
             self._derived[plan.identifier] = cached
         return cached
 
-    def _augment(
-        self, plan: PlannedIntermediate, record: IndexedRecord
-    ) -> IndexedRecord | _DerivationFailure:
-        """Compute one record's derivations.
+    def _augment_all(
+        self,
+        plan: PlannedIntermediate,
+        source: Sequence[IndexedRecord],
+    ) -> tuple[IndexedRecord, ...] | _DerivationFailure:
+        """Compute every derivation in declaration order.
 
         REQ-1185 surfaces a derivation's expression condition: a record the
         derivation cannot compute is a data error, not a miss. A derivation
         that yields missing leaves the record augmented with missing, which
         simply does not match.
         """
-        values = dict(record.values)
-        resolver = _DerivedRecordResolver(plan.dataset, values)
+        values_list = [dict(record.values) for record in source]
         for name, declaration in plan.derived:
+            if declaration.value.operation in WINDOW_OPERATIONS:
+                failure = self._augment_window(plan, name, declaration, values_list)
+            else:
+                failure = self._augment_scalar(plan, name, declaration, values_list)
+            if failure is not None:
+                return failure
+        return tuple(
+            IndexedRecord(position=record.position, values=values)
+            for record, values in zip(source, values_list, strict=True)
+        )
+
+    def _augment_scalar(
+        self,
+        plan: PlannedIntermediate,
+        name: str,
+        declaration: HandledExpression,
+        values_list: list[dict[str, RuntimeValue]],
+    ) -> _DerivationFailure | None:
+        """Compute one scalar derivation for every donor record.
+
+        A window operation nested in the derivation partitions the donor
+        records once for the whole loop: the planner rejects references to
+        the derivation itself and to later ones, so the readable records
+        are identical for every record.
+        """
+        partition_cache: dict[tuple[str, object], _PreparedPartitions] = {}
+        for index, values in enumerate(values_list):
+            resolver = _IntermediateDerivationResolver(
+                plan.dataset,
+                values_list,
+                index,
+                partition_cache=partition_cache,
+                exclude=name,
+            )
             result = self._evaluate(declaration.value, resolver)
             if isinstance(result, ConditionResult):
                 return _DerivationFailure(name, result)
             values[name] = result.value
-        return IndexedRecord(position=record.position, values=values)
+        return None
+
+    def _augment_window(
+        self,
+        plan: PlannedIntermediate,
+        name: str,
+        declaration: HandledExpression,
+        values_list: list[dict[str, RuntimeValue]],
+    ) -> _DerivationFailure | None:
+        """Compute one window derivation across the donor records.
+
+        The partition is built once at the derivation's declaration
+        position; every record then reads its own answer from it.
+        """
+        operation = declaration.value.operation
+        payload = declaration.value.root[operation]
+        if not isinstance(payload, Mapping):
+            return _DerivationFailure(
+                name,
+                expression_condition(
+                    "validation",
+                    "invalid_field_type",
+                    {"operation": operation, "expected": "a mapping"},
+                    requirement="REQ-0321",
+                ),
+            )
+        window = window_spec(payload)
+        prepared = _prepare_window_partitions(plan.dataset, values_list, window)
+        if isinstance(prepared, ConditionResult):
+            return _DerivationFailure(name, prepared)
+        grouped, eligibilities, views = prepared
+        for index in range(len(values_list)):
+            result = _window_value_for(
+                operation, payload, window, grouped, eligibilities, views, index
+            )
+            if isinstance(result, ConditionResult):
+                return _DerivationFailure(name, result)
+            values_list[index][name] = result.value
+        return None
 
     def select(
         self,
