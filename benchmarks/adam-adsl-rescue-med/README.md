@@ -19,6 +19,8 @@ medication records carrying a treatment name (`CMTRT`), a category
   the subject took no rescue medication, whether the subject took
   other medications or has no medication records at all. A rescue
   record with no recorded start date still counts; a duplicated
-  record does not change the answer.
+  record does not change the answer. A start date with only year
+  and month compares as written, so it falls before any full date
+  in the same month.
 
 **Standard:** ADaM | **Domain:** ADSL
