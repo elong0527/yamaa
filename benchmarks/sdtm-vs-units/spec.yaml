@@ -6,7 +6,7 @@ input:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT]
 
 columns:
   - name: DOMAIN
@@ -57,7 +57,12 @@ columns:
   - name: VSORRESU
     type: str
     label: Original Units
-    derivation: VS_RAW.VSORRESU
+    # Blank when no result was collected; a unit without a result fails
+    # conformance checks.
+    derivation:
+      case:
+        - when: "VS_RAW.VSORRES IS NOT NULL"
+          then: VS_RAW.VSORRESU
     verifications:
       allowed_values:
         values: [cm, kg, C, LB, F]
@@ -78,6 +83,15 @@ columns:
       allowed_values:
         values: [cm, kg, C]
 
+  - name: VSSTAT
+    type: str
+    label: Completion Status
+    # NOT DONE when no result was collected.
+    derivation:
+      case:
+        - when: "VS_RAW.VSORRES IS NULL"
+          then: {literal: 'NOT DONE'}
+
 # One row template per test, so the output holds all HEIGHT records, then
 # WEIGHT, then TEMP, each in input order. Each template sets its test's
 # standard unit only when a result was collected; a missing result stays
@@ -86,44 +100,51 @@ rows:
   - id: height
     filter: "VS_RAW.VSTESTCD = 'HEIGHT'"
     derivations:
-      VSSTRESN: VS_RAW.VSORRES
+      # Centimeters pass through; any other height unit fails the unit
+      # check below.
+      VSSTRESN:
+        case:
+          - when: "VS_RAW.VSORRESU = 'cm'"
+            then: VS_RAW.VSORRES
       VSSTRESU:
         case:
-          - when: "VS_RAW.VSORRES IS NOT NULL"
+          - when: "VS_RAW.VSORRES IS NOT NULL AND VS_RAW.VSORRESU = 'cm'"
             then: {literal: cm}
 
   - id: weight
     filter: "VS_RAW.VSTESTCD = 'WEIGHT'"
     derivations:
-      # Pounds become kilograms; any other weight (kg, or no unit) passes
-      # through.
+      # Pounds become kilograms; kilograms pass through; any other weight
+      # unit fails the unit check below.
       VSSTRESN:
         case:
           - when: "VS_RAW.VSORRESU = 'LB'"
             then:
               compute:
                 expr: "VS_RAW.VSORRES * 0.45359237"
-          - otherwise: VS_RAW.VSORRES
+          - when: "VS_RAW.VSORRESU = 'kg'"
+            then: VS_RAW.VSORRES
       VSSTRESU:
         case:
-          - when: "VS_RAW.VSORRES IS NOT NULL"
+          - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'kg' OR VS_RAW.VSORRESU = 'LB')"
             then: {literal: kg}
 
   - id: temp
     filter: "VS_RAW.VSTESTCD = 'TEMP'"
     derivations:
-      # Fahrenheit becomes Celsius; any other temperature (C, or no unit)
-      # passes through.
+      # Fahrenheit becomes Celsius; Celsius passes through; any other
+      # temperature unit fails the unit check below.
       VSSTRESN:
         case:
           - when: "VS_RAW.VSORRESU = 'F'"
             then:
               compute:
                 expr: "(VS_RAW.VSORRES - 32) * 5 / 9"
-          - otherwise: VS_RAW.VSORRES
+          - when: "VS_RAW.VSORRESU = 'C'"
+            then: VS_RAW.VSORRES
       VSSTRESU:
         case:
-          - when: "VS_RAW.VSORRES IS NOT NULL"
+          - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'C' OR VS_RAW.VSORRESU = 'F')"
             then: {literal: C}
 
 verifications:
@@ -139,3 +160,7 @@ verifications:
       id: unconverted-result-is-unchanged
       when: "VSORRESU = VSSTRESU"
       then: "VSSTRESC = VSORRES"
+  - implies:
+      id: unit-checked-against-test
+      when: "VSORRES IS NOT NULL"
+      then: "(VSTESTCD = 'HEIGHT' AND VSORRESU = 'cm') OR (VSTESTCD = 'WEIGHT' AND (VSORRESU = 'kg' OR VSORRESU = 'LB')) OR (VSTESTCD = 'TEMP' AND (VSORRESU = 'C' OR VSORRESU = 'F'))"
