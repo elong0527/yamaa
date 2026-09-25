@@ -1,5 +1,5 @@
 # test-benchmark-baseline.R -- unit tests for classify_benchmark_outcomes()
-# (packaging/tests/testthat/helper-benchmark.R). Synthetic fail/skip
+# (R/yamaa/tests/testthat/helper-benchmark.R). Synthetic fail/skip
 # vectors only; the real baseline constants ship as the function's default
 # arguments, so these tests pin the classification logic, not the content.
 
