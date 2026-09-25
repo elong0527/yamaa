@@ -365,11 +365,13 @@ def test_grouped_row_count_failure_reproduces_the_committed_error_contract() -> 
             ("ABLFL", "str"),
         ],
         [
-            ["CATH", "CATH-UCSD-0001", "ALT", DateValue.parse("2025-01-01"), "Y"],
-            ["CATH", "CATH-UCSD-0001", "ALT", DateValue.parse("2025-01-02"), "Y"],
-            ["CATH", "CATH-UCSD-0001", "ALT", DateValue.parse("2025-01-08"), None],
-            ["CATH", "CATH-UCSD-0002", "ALT", DateValue.parse("2025-01-01"), "Y"],
-            ["CATH", "CATH-UCSD-0002", "ALT", DateValue.parse("2025-01-08"), None],
+            ["YAMAA-01", "YAMAA-01-101", "ALT", DateValue.parse("2025-01-01"), "Y"],
+            ["YAMAA-01", "YAMAA-01-101", "ALT", DateValue.parse("2025-01-02"), "Y"],
+            ["YAMAA-01", "YAMAA-01-101", "ALT", DateValue.parse("2025-01-08"), None],
+            ["YAMAA-01", "YAMAA-01-102", "ALT", DateValue.parse("2025-01-01"), "Y"],
+            ["YAMAA-01", "YAMAA-01-102", "ALT", DateValue.parse("2025-01-08"), None],
+            ["YAMAA-01", "YAMAA-01-103", "ALT", DateValue.parse("2025-01-01"), None],
+            ["YAMAA-01", "YAMAA-01-103", "ALT", DateValue.parse("2025-01-08"), None],
         ],
     )
 
