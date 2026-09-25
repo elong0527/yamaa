@@ -572,8 +572,8 @@ sources:
   R016-15: {"file": "R016-temporal-values.md", "targets": ["REQ-0553"]}
   R016-16: {"file": "R016-temporal-values.md", "targets": ["REQ-0554"]}
   R016-17: {"file": "R016-temporal-values.md", "targets": ["REQ-0555"]}
-  R016-18: {"file": "R016-temporal-values.md", "targets": ["REQ-0556"]}
-  R016-19: {"file": "R016-temporal-values.md", "targets": ["REQ-0557"]}
+  R016-18: {"file": "R016-temporal-values.md", "targets": ["REQ-0555"]}
+  R016-19: {"file": "R016-temporal-values.md", "targets": ["REQ-0555"]}
   R016-20: {"file": "R016-temporal-values.md", "targets": ["REQ-0559", "REQ-0560"]}
   R016-21: {"file": "R016-temporal-values.md", "targets": ["REQ-0559"]}
   R016-22: {"file": "R016-temporal-values.md", "targets": ["REQ-0560"]}
@@ -1628,9 +1628,7 @@ requirements:
   REQ-0552: {"file": "values/temporal.md", "sources": ["R016-14"]}
   REQ-0553: {"file": "values/temporal.md", "sources": ["R016-15"]}
   REQ-0554: {"file": "values/temporal.md", "sources": ["R016-16"]}
-  REQ-0555: {"file": "values/temporal.md", "sources": ["R016-17"]}
-  REQ-0556: {"file": "values/temporal.md", "sources": ["R016-18"]}
-  REQ-0557: {"file": "values/temporal.md", "sources": ["R016-19"]}
+  REQ-0555: {"file": "values/temporal.md", "sources": ["R016-17", "R016-18", "R016-19", "yamaa:issue-1070:req-0556-retired", "yamaa:issue-1070:req-0557-retired"]}
   REQ-0559: {"file": "values/temporal.md", "sources": ["R016-20", "R016-21"]}
   REQ-0560: {"file": "values/temporal.md", "sources": ["R016-20", "R016-22"]}
   REQ-0561: {"file": "values/temporal.md", "sources": ["R016-23"]}
@@ -2816,3 +2814,5 @@ provenance_addenda:
   - {"source": "yamaa:issue-994:str-pad", "text": "Follow-up to issue #994: str_pad converts a scalar to canonical text and left-pads it with spaces to the declared width.", "owner": "operations/text", "group": "str_pad", "target": "REQ-1261"}
   - {"source": "schema_expression_str.yaml:expressions.str_pad.source.description", "text": "See REQ-1261 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_pad", "target": "REQ-1261"}
   - {"source": "schema_expression_str.yaml:expressions.str_pad.width.description", "text": "See REQ-1261 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_pad", "target": "REQ-1261"}
+  - {"source": "yamaa:issue-1070:req-0556-retired", "text": "Issue #1070: the rationale-only requirement on admitting both local and offset-aware datetimes is retired; the no-zone-no-offset decision stands as REQ-0555 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "no-zone-no-offset", "target": "REQ-0555"}
+  - {"source": "yamaa:issue-1070:req-0557-retired", "text": "Issue #1070: the rationale-only requirement on prohibiting the zone is retired; the no-zone-no-offset decision stands as REQ-0555 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "no-zone-no-offset", "target": "REQ-0555"}
