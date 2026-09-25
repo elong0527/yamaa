@@ -534,9 +534,7 @@ that does not survive parsing is not a contract.
 
 **REQ-1008.** The bytes are fixed rather than the information. Two conforming
 implementations produce byte-identical files, and a golden document is
-compared byte for byte. Canonical-XML equivalence was the alternative and is
-weaker where it matters: a document is reviewed as a diff and submitted as a
-file, and two files that differ only in whitespace still differ in review.
+compared byte for byte.
 
 <a id="req-1009"></a>
 
