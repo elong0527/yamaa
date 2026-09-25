@@ -154,14 +154,14 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 
 ## Recommendations to work with AI agents
 
-- Start with plain text.
+- Plain text is the input.
 - Annotated CRF is not an input but output.
 - Excel specification is not an input but output.
 - Communication costs more than tokens.
 
 ## Call for help
 
-### Building benchmarks
+* Building benchmarks
 - **Review a benchmark**: inspect the specification and golden output
 - **Add comments**: challenge assumptions, clarity, and conformance
 - **File issues**: record anything ambiguous or incorrect
