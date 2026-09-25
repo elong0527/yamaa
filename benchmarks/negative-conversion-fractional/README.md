@@ -6,7 +6,7 @@
 **Goal:** derive `AVAL` from the collected pulse rate.
 
 **Input:** collected vital signs (VS) records carrying `VSTESTCD`
-and `VSSTRESN`.
+and `VSSTRESN`; one record carries a fractional pulse rate.
 
 **Variables:**
 
