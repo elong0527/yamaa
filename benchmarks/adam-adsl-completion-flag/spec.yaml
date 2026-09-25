@@ -5,16 +5,18 @@ input:
   ADSL_RAW: input/adsl_raw.csv
   DS: input/ds.csv
 base: ADSL_RAW
-# The subject's COMPLETED disposition record, if any. A subject with two
-# COMPLETED records stops the run: nothing here chooses between them.
+# The subject's end-of-study COMPLETED disposition record, if any: a
+# DISPOSITION EVENT in the FOLLOW-UP epoch. A treatment-epoch completion
+# does not count. A subject with two such records stops the run: nothing
+# here chooses between them.
 intermediates:
   - id: COMPLT
     dataset: DS
-    filter: "DS.DSDECOD = 'COMPLETED'"
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP' AND DS.DSDECOD = 'COMPLETED'"
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TRTSDT, COMPFL]
+  columns: [STUDYID, USUBJID, TRTSDT, COMPLFL]
 
 columns:
   - name: STUDYID
@@ -39,9 +41,9 @@ columns:
 
   # COMPREC is the matched record's outcome, always COMPLETED, so it is empty
   # only when the subject has no completion record; such a subject is N.
-  - name: COMPFL
+  - name: COMPLFL
     type: str
-    label: Completion Flag
+    label: Completers Population Flag
     derivation:
       flag:
         condition: "COMPREC IS NOT NULL"
@@ -59,5 +61,5 @@ verifications:
       max: 8
   - implies:
       id: completer-received-treatment
-      when: "COMPFL = 'Y'"
+      when: "COMPLFL = 'Y'"
       then: "TRTSDT IS NOT NULL"
