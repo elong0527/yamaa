@@ -5,9 +5,10 @@
 
 **Goal:** build one record per collected vital-signs measurement,
 carrying the collected test, result, and unit through and adding
-the standardized numeric result, text result, and standard unit:
+the standardized numeric result, text result, standard unit, and
+completion status:
 `VSTESTCD`, `VSTEST`, `VSORRES`, `VSORRESU`, `VSSTRESN`,
-`VSSTRESC`, and `VSSTRESU`.
+`VSSTRESC`, `VSSTRESU`, and `VSSTAT`.
 
 **Input:** collected vital-signs rows with test code and name,
 collected result and unit, plus study, subject, sequence, and
