@@ -468,6 +468,9 @@ examples:
   negative-query-overflow:
     status: executable
     runtimes: ['python']
+  negative-relrec-unmatched-ae-reference:
+    status: executable
+    runtimes: ['python']
   negative-rank-bad-method:
     status: executable
     runtimes: ['python']
@@ -757,6 +760,9 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-qs-questionnaire-items:
+    status: executable
+    runtimes: ['python']
+  sdtm-relrec-cm-ae-reference:
     status: executable
     runtimes: ['python']
   sdtm-relrec-dataset-level:

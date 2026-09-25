@@ -1,0 +1,110 @@
+schema_version: "1.0"
+domain: RELREC
+keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, RELID]
+input:
+  AE: input/ae.csv
+  CM: input/cm.csv
+
+output:
+  path: relrec.csv
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, RELTYPE, RELID]
+  order_by: [STUDYID, USUBJID, RELID, RDOMAIN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: RDOMAIN
+    type: str
+    label: Related Domain Abbreviation
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: IDVAR
+    type: str
+    label: Identifying Variable
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
+
+  - name: RELTYPE
+    type: str
+    label: Relationship Type
+    derivation: {literal: null}
+
+  - name: RELID
+    type: str
+    label: Relationship Identifier
+
+rows:
+  - id: cm_reference_1
+    dataset: CM
+    filter: "CM.CMAENO1 IS NOT NULL"
+    derivations:
+      STUDYID: CM.STUDYID
+      RDOMAIN: {literal: CM}
+      USUBJID: CM.USUBJID
+      IDVAR: {literal: CMSEQ}
+      IDVARVAL: CM.CMSEQ
+      RELID:
+        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO1}"
+
+  - id: ae_reference_1
+    dataset: CM
+    filter: "CM.CMAENO1 IS NOT NULL"
+    derivations:
+      STUDYID: CM.STUDYID
+      RDOMAIN: {literal: AE}
+      USUBJID: CM.USUBJID
+      IDVAR: {literal: AESEQ}
+      IDVARVAL:
+        lookup:
+          dataset: AE
+          key_base: [CM.STUDYID, CM.USUBJID, CM.CMAENO1]
+          key: [STUDYID, USUBJID, AESPID]
+          value: AESEQ
+          strict: true
+      RELID:
+        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO1}"
+
+  - id: cm_reference_2
+    dataset: CM
+    filter: "CM.CMAENO2 IS NOT NULL"
+    derivations:
+      STUDYID: CM.STUDYID
+      RDOMAIN: {literal: CM}
+      USUBJID: CM.USUBJID
+      IDVAR: {literal: CMSEQ}
+      IDVARVAL: CM.CMSEQ
+      RELID:
+        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO2}"
+
+  - id: ae_reference_2
+    dataset: CM
+    filter: "CM.CMAENO2 IS NOT NULL"
+    derivations:
+      STUDYID: CM.STUDYID
+      RDOMAIN: {literal: AE}
+      USUBJID: CM.USUBJID
+      IDVAR: {literal: AESEQ}
+      IDVARVAL:
+        lookup:
+          dataset: AE
+          key_base: [CM.STUDYID, CM.USUBJID, CM.CMAENO2]
+          key: [STUDYID, USUBJID, AESPID]
+          value: AESEQ
+          strict: true
+      RELID:
+        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO2}"
+
+verifications:
+  - unique:
+      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, RELID]
+  - implies:
+      id: relationship-row-identifies-a-record
+      when: "RELID IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"

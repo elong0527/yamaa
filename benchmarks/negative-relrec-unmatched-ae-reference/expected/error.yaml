@@ -1,0 +1,13 @@
+phase: join
+condition: unmatched_key
+spec_paths:
+  - rows[1].derivations.IDVARVAL.lookup
+requirement: REQ-0124
+context:
+  intermediate: intermediate(AE)
+  dataset: AE
+  key: [STUDYID, USUBJID, AESPID]
+  intermediate_key:
+    STUDYID: PILOT7
+    USUBJID: P7-002
+    AESPID: "99"
