@@ -41,10 +41,14 @@ output:
 columns:
   # ... the existing columns, then:
   - name: VISITNUM
-    type: int
+    type: float
     label: Visit Number
     derivation: VS_RAW.VISITNUM
 ```
+
+An unplanned visit takes a sponsor-assigned decimal number (for
+example `2.01` after the planned visit it follows), which would fail
+`int` conversion, so the declared type is `float`.
 
 When the visit number is not wanted at all, order by a variable the dataset
 already declares, such as the sequence number.
