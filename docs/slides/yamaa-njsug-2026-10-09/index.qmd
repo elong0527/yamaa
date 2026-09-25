@@ -162,19 +162,19 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 ## Call for help
 
 * Building benchmarks
-- **Review a benchmark**: inspect the specification and golden output
-- **Add comments**: challenge assumptions, clarity, and conformance
-- **File issues**: record anything ambiguous or incorrect
-- **Open pull requests**: contribute fixes and new benchmarks
+  - **Review a benchmark**: inspect the specification and golden output
+  - **Add comments**: challenge assumptions, clarity, and conformance
+  - **File issues**: record anything ambiguous or incorrect
+  - **Open pull requests**: contribute fixes and new benchmarks
 
-### Testing yamaa
-* **Assess privately**: Run yamaa against a proprietary submission package inside your own environment.
-* **Share safely**: Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
+* Testing yamaa
+  - **Assess privately**: Run yamaa against a proprietary submission package inside your own environment.
+  - **Share safely**: Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
 
 ## Benchmark to deployment
 
-- Benchmarks help assess an AI agent before adoption.
-- Deployment also requires onboarding the agent to your environment.
+- **Benchmarks** help assess an AI agent before adoption.
+- **Deployment** also requires onboarding the agent to your environment.
 
 Collaborating with [keiji.ai](https://keiji.ai/) to test synthetic clinical trial data.
 
