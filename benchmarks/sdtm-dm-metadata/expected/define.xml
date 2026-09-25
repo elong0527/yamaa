@@ -21,8 +21,8 @@
         <Description>
           <TranslatedText xml:lang="en">Demographics</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
-        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
         <ItemRef ItemOID="IT.DM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier" MethodOID="MT.DM.USUBJID"/>
         <ItemRef ItemOID="IT.DM.SUBJID" OrderNumber="4" Mandatory="Yes" Role="Topic"/>
         <ItemRef ItemOID="IT.DM.SITEID" OrderNumber="5" Mandatory="Yes" Role="Record Qualifier"/>
@@ -35,18 +35,18 @@
           <def:title>dm.json</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="20" SASFieldName="STUDYID">
-        <Description>
-          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
-        </Description>
-        <def:Origin Type="Protocol" Source="Sponsor"/>
-      </ItemDef>
       <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
         <Description>
           <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="CL.DOMAIN"/>
         <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="20" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
       <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="30" SASFieldName="USUBJID">
         <Description>
