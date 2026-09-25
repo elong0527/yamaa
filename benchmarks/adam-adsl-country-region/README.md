@@ -7,17 +7,18 @@
 and its region in `REGION1`.
 
 **Input:** demographics (`DM`) rows carrying the collected country
-(`COUNTRY`) as reported, in mixed case or empty.
+(`COUNTRY`) as reported, in mixed case or empty, including a country
+outside the three listed below.
 
 **Variables:**
 
 - `COUNTRY` is the collected country from demographics in upper
-  case; a subject with no collected country is `UNKNOWN`. A
-  collected country other than the United States (`USA`), Canada
-  (`CAN`) or Germany (`DEU`) stops the run.
+  case; a subject with no collected country is `UNKNOWN`. Every
+  collected country passes through: there is no allowed-countries
+  check, so the run never stops on a new country.
 - `REGION1` is the region for that country: `USA` and `CAN` give
-  `North America`, `DEU` gives `Europe`, and `UNKNOWN` gives
-  `Rest of World`.
+  `North America`, `DEU` gives `Europe`, and any other country
+  (including `UNKNOWN`) gives `Rest of World`.
 
 **Note:** case differences never split a country (`usa` and `USA`
 are one), and the fallback values mean every subject has both a
