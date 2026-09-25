@@ -73,10 +73,10 @@ fixtures:
     spec_paths: [parents]
     validator: inheritance
   negative-redefined-date:
-    rule: R017
+    rule: R014
     condition: redundant_field_type
     spec_paths: [input.DM.types.RANDDT]
-    validator: inheritance
+    validator: source_contract
   negative-remote-parent:
     rule: R017
     condition: invalid_parent_path

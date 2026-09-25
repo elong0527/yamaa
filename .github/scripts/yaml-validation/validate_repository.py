@@ -360,6 +360,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'actual', 'expected', 'source',
     },
     ('R014', 'unknown_field'): {'dataset', 'field'},
+    ('R014', 'redundant_field_type'): {'dataset', 'field', 'type'},
     ('R003', 'duplicate_identifier'): {'identifier'},
     ('R003', 'incomparable_range_types'): {
         'lower_type', 'intermediate', 'upper_type', 'value_type',
