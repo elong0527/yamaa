@@ -197,8 +197,7 @@ and refuses every other difference rather than silently repairing it.
 
 **REQ-0835.** Refused: a byte-order mark, a `U+000D` anywhere else, and every
 reader option in *Nothing here is configuration*. Each refusal prevents a
-change to the records or values the file delivers. Admitting any change would
-make two conforming runtimes disagree about the same bytes.
+change to the records or values the file delivers.
 
 ### Reading: Encoding
 
