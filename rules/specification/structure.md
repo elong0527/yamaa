@@ -87,12 +87,6 @@ column level. [REQ-0200](structure.md#req-0200) is vacuous when there are no ent
 **REQ-0202.** A `rows` derivation must target a declared column. A key in
 `derivations` that names no declared column is an error.
 
-<a id="req-0203"></a>
-
-**REQ-0203.** Mixing placements across columns is normal: a specification
-with `rows` typically derives the columns that distinguish its row
-templates at row level and all other columns at column level.
-
 <a id="req-0204"></a>
 
 **REQ-0204.** A column whose value is intentionally absent is still derived.
