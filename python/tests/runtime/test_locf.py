@@ -133,7 +133,23 @@ def test_strictly_prior_filter_excludes_current_and_future_observations(inline):
     )
     result = execute_specification(spec, sources)
     assert isinstance(result, ExecutionSuccess), result
-    assert result.artifact.frame["AVAL"].to_list() == [None, None, 5, 5, 5, None, None]
+    assert result.artifact.frame["AVAL"].to_list() == [
+        None,
+        None,
+        118,
+        118,
+        118,
+        None,
+        None,
+        128,
+        0,
+        None,
+        140,
+        136,
+        None,
+        None,
+        None,
+    ]
 
 
 @pytest.mark.parametrize("inline", [False, True])
@@ -188,7 +204,7 @@ def test_missing_target_comparison_yields_no_donor(inline):
         replace_filter(spec, "OBS.AVISITN < PLAN.CUTOFF"), sources
     )
     assert isinstance(result, ExecutionSuccess), result
-    assert result.artifact.frame["AVAL"].to_list() == [None] * 7
+    assert result.artifact.frame["AVAL"].to_list() == [None] * 15
 
 
 @pytest.mark.parametrize("inline", [False, True])
