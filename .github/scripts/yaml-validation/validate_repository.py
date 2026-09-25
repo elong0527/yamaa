@@ -318,7 +318,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R005', 'internal_column_in_keys'): {'column'},
     ('R005', 'undeclared_column'): {'column'},
     ('R006', 'invalid_field_type'): {'actual', 'expected'},
-    ('R007', 'ambiguous_dictionary'): {'entries', 'folded_key'},
+    ('R019', 'ambiguous_dictionary'): {'entries', 'folded_key'},
     ('R007', 'incompatible_input_type'): {
         'actual', 'expected', 'source',
     },
