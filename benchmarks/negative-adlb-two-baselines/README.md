@@ -8,7 +8,8 @@ record flag (`ABLFL`) for each laboratory record.
 
 **Input:** pre-derived laboratory records carrying study, subject,
 and parameter identifiers, the analysis date (`ADT`), the analysis
-value (`AVAL`), and the baseline record flag (`ABLFL`).
+value (`AVAL`), and the baseline record flag (`ABLFL`). One subject
+carries two `Y` flags for a parameter; another subject carries none.
 
 **Variables:**
 

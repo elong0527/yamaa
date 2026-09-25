@@ -5,9 +5,14 @@ spec_paths:
 requirement: REQ-0385
 context:
   verification_id: one-baseline-record-per-subject-and-parameter
-  failure_count: 1
+  failure_count: 2
   keys:
-    - STUDYID: CATH
-      USUBJID: CATH-UCSD-0001
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
       PARAMCD: ALT
-  count: 2
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-103
+      PARAMCD: ALT
+  counts:
+    - 2
+    - 0
