@@ -1,0 +1,36 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, SKIN_FLAG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  # Every input term is missing here, so the missing handler fires on
+  # every row and no boolean result ever needs a text form.
+  - name: SKIN_FLAG
+    type: str
+    label: Skin Event Flag
+    derivation:
+      str_contains:
+        source: AE.AEDECOD
+        pattern: "DERMATITIS|ERYTHEMA"
+        missing: "UNKNOWN"
