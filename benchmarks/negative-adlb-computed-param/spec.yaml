@@ -100,5 +100,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, ADT, PARAMCD]
   - row_count:
-      min: 11
-      max: 11
+      min: 15
+      max: 15
