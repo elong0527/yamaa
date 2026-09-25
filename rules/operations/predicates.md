@@ -261,8 +261,9 @@ predicate as dependency-free.
 
 <a id="req-0187"></a>
 
-**REQ-0187.** Evaluation is deterministic and side-effect free. A conforming
-implementation must use [Text values](../values/text.md) for string comparison.
+**REQ-0187.** [Numeric computation](computation.md#req-0436)'s determinism
+requirement applies unchanged. A conforming implementation must use
+[Text values](../values/text.md) for string comparison.
 The implementation must not inherit implicit coercion, collation, `LIKE`
 escape, or missing-value behavior from a host SQL engine. The implementation
 must either configure and override those behaviors to match these rules or
