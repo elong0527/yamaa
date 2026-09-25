@@ -27,6 +27,10 @@ columns:
     type: str
     label: Identifying Variable
 
+  - name: AEREF
+    type: str
+    label: Collected Adverse Event Number
+
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
@@ -40,66 +44,67 @@ columns:
     type: str
     label: Relationship Identifier
 
+# Each catalog record names one collected reference field. The two templates
+# build the CM and AE sides of every present reference without new YAML rows.
+# Grouping by CM identity lets the filter run after AEREF is selected.
 rows:
-  - id: cm_reference_1
+  - id: cm_reference
     dataset: CM
-    filter: "CM.CMAENO1 IS NOT NULL"
+    group_by: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
+    catalog:
+      path: input/ae_reference_fields.csv
+      id_column: ID
+      unique_columns: [REFERENCE_EXPR]
+    filter: "AEREF IS NOT NULL"
     derivations:
       STUDYID: CM.STUDYID
       RDOMAIN: {literal: CM}
       USUBJID: CM.USUBJID
       IDVAR: {literal: CMSEQ}
+      AEREF:
+        aggregate:
+          expr: "${REFERENCE_EXPR}"
       IDVARVAL: CM.CMSEQ
       RELID:
-        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO1}"
+        case:
+          - when: "AEREF IS NULL"
+            then: {literal: null}
+          - otherwise:
+              str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{AEREF}"
 
-  - id: ae_reference_1
+  - id: ae_reference
     dataset: CM
-    filter: "CM.CMAENO1 IS NOT NULL"
+    group_by: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
+    catalog:
+      path: input/ae_reference_fields.csv
+      id_column: ID
+      unique_columns: [REFERENCE_EXPR]
+    filter: "AEREF IS NOT NULL"
     derivations:
       STUDYID: CM.STUDYID
       RDOMAIN: {literal: AE}
       USUBJID: CM.USUBJID
       IDVAR: {literal: AESEQ}
+      AEREF:
+        aggregate:
+          expr: "${REFERENCE_EXPR}"
       IDVARVAL:
-        lookup:
-          dataset: AE
-          key_base: [CM.STUDYID, CM.USUBJID, CM.CMAENO1]
-          key: [STUDYID, USUBJID, AESPID]
-          value: AESEQ
-          strict: true
+        case:
+          - when: "AEREF IS NULL"
+            then: {literal: null}
+          - otherwise:
+              lookup:
+                dataset: AE
+                key_base: [CM.STUDYID, CM.USUBJID, AEREF]
+                key: [STUDYID, USUBJID, AESPID]
+                value: AESEQ
+                strict: true
       RELID:
-        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO1}"
-
-  - id: cm_reference_2
-    dataset: CM
-    filter: "CM.CMAENO2 IS NOT NULL"
-    derivations:
-      STUDYID: CM.STUDYID
-      RDOMAIN: {literal: CM}
-      USUBJID: CM.USUBJID
-      IDVAR: {literal: CMSEQ}
-      IDVARVAL: CM.CMSEQ
-      RELID:
-        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO2}"
-
-  - id: ae_reference_2
-    dataset: CM
-    filter: "CM.CMAENO2 IS NOT NULL"
-    derivations:
-      STUDYID: CM.STUDYID
-      RDOMAIN: {literal: AE}
-      USUBJID: CM.USUBJID
-      IDVAR: {literal: AESEQ}
-      IDVARVAL:
-        lookup:
-          dataset: AE
-          key_base: [CM.STUDYID, CM.USUBJID, CM.CMAENO2]
-          key: [STUDYID, USUBJID, AESPID]
-          value: AESEQ
-          strict: true
-      RELID:
-        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO2}"
+        case:
+          - when: "AEREF IS NULL"
+            then: {literal: null}
+          - otherwise:
+              str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{AEREF}"
 
 verifications:
   - unique:

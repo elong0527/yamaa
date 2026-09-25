@@ -71,36 +71,6 @@ rows:
       RELID:
         str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO1}"
 
-  - id: cm_reference_2
-    dataset: CM
-    filter: "CM.CMAENO2 IS NOT NULL"
-    derivations:
-      STUDYID: CM.STUDYID
-      RDOMAIN: {literal: CM}
-      USUBJID: CM.USUBJID
-      IDVAR: {literal: CMSEQ}
-      IDVARVAL: CM.CMSEQ
-      RELID:
-        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO2}"
-
-  - id: ae_reference_2
-    dataset: CM
-    filter: "CM.CMAENO2 IS NOT NULL"
-    derivations:
-      STUDYID: CM.STUDYID
-      RDOMAIN: {literal: AE}
-      USUBJID: CM.USUBJID
-      IDVAR: {literal: AESEQ}
-      IDVARVAL:
-        lookup:
-          dataset: AE
-          key_base: [CM.STUDYID, CM.USUBJID, CM.CMAENO2]
-          key: [STUDYID, USUBJID, AESPID]
-          value: AESEQ
-          strict: true
-      RELID:
-        str_template: "{CM.USUBJID}-CM{CM.CMSEQ}-AE{CM.CMAENO2}"
-
 verifications:
   - unique:
       columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, RELID]

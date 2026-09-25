@@ -8,8 +8,8 @@
 adverse event records.
 
 **Input:** adverse events (AE) with collected event numbers and delivered
-sequence numbers, plus concomitant medications (CM) with up to two event
-numbers entered as treatment reasons.
+sequence numbers, plus a concomitant medication (CM) with an event number
+entered as its treatment reason.
 
 **Variables:**
 
