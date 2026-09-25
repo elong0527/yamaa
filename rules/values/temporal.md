@@ -197,15 +197,6 @@ zone, so the held value carries the fields of the parsed text.
 **REQ-0561.** A `datetime` resolves to a whole second, and text carrying a
 fractional second is rejected.
 
-<a id="req-0562"></a>
-
-**REQ-0562.** The runtimes cannot agree on a fraction. Python's
-`datetime.datetime` records whole microseconds as integers. R's `POSIXct` is a
-binary64 count of seconds, which represents most fractions only approximately
-and prints them under its own rounding. Admitting one would mean two
-implementations that store, compare, and render the same collected value
-differently, and the design requires them to agree.
-
 <a id="req-0563"></a>
 
 **REQ-0563.** Whole seconds are exact in both, which fixes the
@@ -424,3 +415,11 @@ and carries no offset. A study that records an offset keeps the offset in its
 own column, where a specification can read the offset as data, and an
 instant-typed value can be added later without invalidating any specification
 written under this contract.
+
+The whole-second decision ([REQ-0561](#req-0561)) keeps the two runtimes
+agreeing. The runtimes cannot agree on a fraction. Python's
+`datetime.datetime` records whole microseconds as integers. R's `POSIXct` is a
+binary64 count of seconds, which represents most fractions only approximately
+and prints them under its own rounding. Admitting one would mean two
+implementations that store, compare, and render the same collected value
+differently, and the design requires them to agree.
