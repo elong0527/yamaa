@@ -109,9 +109,11 @@ columns:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+  # Pins the 14-row fixture: 9 original rows plus the day-2, day-22, and
+  # day-43 boundary records and the same-day tie pair.
   - row_count:
-      min: 9
-      max: 9
+      min: 14
+      max: 14
   - all_or_none:
       id: analysis-visit-completeness
       columns: [AVISIT, AVISITN]
