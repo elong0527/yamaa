@@ -18,7 +18,7 @@ two collected qualifiers.
 - `QLABEL` is the qualifier label: `Family History` for `MHFAMHX`,
   `Confirmed by Medical Records` for `MHCONF`.
 - `QVAL` is the collected answer, `Y` or `N`.
-- `QORIG` is the origin, always case report form (`CRF`) for
+- `QORIG` is the origin, always `Collected` (Define-XML 2.1) for
   collected values.
 - `QEVAL` is blank, since a collected value is not an assessment.
 
