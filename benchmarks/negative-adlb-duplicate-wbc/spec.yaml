@@ -1,14 +1,19 @@
 schema_version: "1.0"
 domain: ADLB
-keys: [USUBJID, VISIT, PARAMCD]
+keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
   ADLB_RAW: {path: input/adlb.csv, types: {AVAL: float}}
 
 output:
   path: adlb.csv
-  columns: [USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE]
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE]
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADLB_RAW.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
@@ -61,7 +66,7 @@ rows:
   # One new LYMPH record per subject and visit, kept only when both a WBC
   # count and a LYMLE fraction are present and no LYMPH record was collected.
   - id: derived_lymph
-    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    group_by: [ADLB_RAW.STUDYID, ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND LYMLEVAL IS NOT NULL

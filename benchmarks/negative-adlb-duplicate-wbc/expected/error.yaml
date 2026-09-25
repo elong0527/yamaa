@@ -4,9 +4,11 @@ spec_paths:
   - rows[1].derivations.WBCVAL.aggregate
 requirement: REQ-0501
 context:
+  expr: ONLY(ADLB_RAW.AVAL)
   reducer: ONLY
   row: derived_lymph
   group:
-    USUBJID: P01
+    STUDYID: YAMAA-01
+    USUBJID: YAMAA-01-101
     VISIT: CYCLE 1 DAY 1
   record_count: 2
