@@ -11,7 +11,9 @@ output:
 # Named intermediates reading completed records (dataset SELF): during
 # row construction, the records of earlier row templates; during column
 # derivation, every record. Their donor fields are the columns every row
-# template below derives; a column derived later is not on the records.
+# template derives, including a column-level derivation each template
+# inherits because a read through SELF names it; a column derived only
+# later is not on the records.
 intermediates:
   # The subject's serious events before the current record's event,
   # most recent first. The filter correlates with the current record's
@@ -50,21 +52,29 @@ intermediates:
     keep: first
 
 columns:
+  # Each is copied from the event record the same way in both row
+  # templates, so it is written once here. The intermediates read these
+  # through SELF, so each template derives them as it builds its records.
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: AE.STUDYID
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: AE.USUBJID
   - name: AESEQ
     type: int
     label: Sequence Number
+    derivation: AE.AESEQ
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
   - name: AESER
     type: str
     label: Serious Event
+    derivation: AE.AESER
   - name: PRIOR_SAEFL
     type: str
     label: Prior Serious Event Flag
@@ -92,11 +102,6 @@ rows:
   - id: serious
     filter: "AE.AESER = 'Y'"
     derivations:
-      STUDYID: AE.STUDYID
-      USUBJID: AE.USUBJID
-      AESEQ: AE.AESEQ
-      AEDECOD: AE.AEDECOD
-      AESER: AE.AESER
       PRIOR_SAEFL: {literal: null}
       PRIOR_SAEDECOD: {literal: null}
       PRIOR_SAESEQ: {literal: null}
@@ -111,11 +116,6 @@ rows:
   - id: nonserious
     filter: "AE.AESER = 'N'"
     derivations:
-      STUDYID: AE.STUDYID
-      USUBJID: AE.USUBJID
-      AESEQ: AE.AESEQ
-      AEDECOD: AE.AEDECOD
-      AESER: AE.AESER
       PRIOR_SAEFL:
         case:
           - when: "PRIOR_SAE.AESEQ IS NOT NULL"

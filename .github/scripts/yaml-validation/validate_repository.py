@@ -6104,12 +6104,152 @@ def _intermediate_derived_field_types(intermediate, donor_fields, operation_path
     return typed
 
 
+def derivation_operations(derivation):
+    """Yield the operation at each expression position of a derivation.
+
+    Expressions nest only in a handled expression's `value`, a `case`
+    result, and `str_concat` sources; every other payload field holds
+    variables, literals, or settings, so a field that happens to spell an
+    operation's name is not one.
+    """
+    if not isinstance(derivation, dict):
+        return
+    if 'value' in derivation and set(derivation) <= {'value', 'missing', 'strict'}:
+        yield from derivation_operations(derivation['value'])
+        return
+    if len(derivation) != 1:
+        return
+    operation, payload = next(iter(derivation.items()))
+    yield operation
+    if operation == 'case' and isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                for result in ('then', 'otherwise'):
+                    if result in item:
+                        yield from derivation_operations(item[result])
+    elif operation == 'str_concat' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        for source in sources if isinstance(sources, list) else ():
+            yield from derivation_operations(source)
+
+
+def row_local_column_derivations(spec):
+    """Return the columns whose column-level derivation is row-local.
+
+    REQ-1260: a column-level derivation is row-local unless it uses a
+    lookup, an aggregate, or a window, reads a named intermediate, or reads
+    a column whose column-level derivation is not row-local.
+    """
+    columns = spec.get('columns')
+    intermediates = spec.get('intermediates')
+    intermediate_ids = {
+        intermediate.get('id') for intermediate in intermediates
+        if isinstance(intermediate, dict)
+    } if isinstance(intermediates, list) else set()
+    reads = {}
+    blocked = set()
+    for column in columns if isinstance(columns, list) else ():
+        if not isinstance(column, dict) or 'derivation' not in column:
+            continue
+        name = column.get('name')
+        if not isinstance(name, str):
+            continue
+        derivation = column['derivation']
+        names = derive_binding_reference_names(derivation)
+        if any(
+            operation in ('lookup', 'aggregate')
+            or operation in ROW_WINDOW_OPERATIONS
+            for operation in derivation_operations(derivation)
+        ) or any(
+            reference.partition('.')[0] in intermediate_ids
+            for reference in names
+            if '.' in reference
+        ):
+            blocked.add(name)
+        reads[name] = {reference for reference in names if '.' not in reference}
+    changed = True
+    while changed:
+        changed = False
+        for name, names in reads.items():
+            if name not in blocked and names & blocked:
+                blocked.add(name)
+                changed = True
+    return set(reads) - blocked
+
+
+def self_read_field_names(spec):
+    """Return the field names that reads through SELF spell.
+
+    REQ-0120: a SELF intermediate names its donor fields bare or as
+    `SELF.field` in its own clauses, and a column or row derivation reads
+    one through the intermediate's id.
+    """
+    def identifiers(value):
+        values = value if isinstance(value, list) else [value]
+        return [entry for entry in values if isinstance(entry, str)]
+
+    intermediates = spec.get('intermediates')
+    self_intermediates = [
+        intermediate for intermediate in intermediates
+        if isinstance(intermediate, dict) and intermediate.get('dataset') == 'SELF'
+    ] if isinstance(intermediates, list) else []
+    self_ids = {intermediate.get('id') for intermediate in self_intermediates}
+    names = set()
+    for intermediate in self_intermediates:
+        spelled = identifiers(intermediate.get('key'))
+        spelled += identifiers(intermediate.get('columns'))
+        order_by = intermediate.get('order_by')
+        for term in order_by if isinstance(order_by, list) else ():
+            spelled += identifiers(
+                term.get('variable') if isinstance(term, dict) else term
+            )
+        between = intermediate.get('between')
+        if isinstance(between, dict):
+            # REQ-0121: the bounds are donor fields; the value is the
+            # current row's.
+            spelled += identifiers([between.get('lower'), between.get('upper')])
+        verification = intermediate.get('verification')
+        if isinstance(verification, dict):
+            spelled += identifiers(verification.get('unique'))
+        spelled += predicate_identifier_names(intermediate.get('filter'))
+        derivations = intermediate.get('derivations')
+        if isinstance(derivations, dict):
+            for derivation in derivations.values():
+                spelled += derive_binding_reference_names(derivation)
+        for name in spelled:
+            qualifier, separator, field = name.partition('.')
+            if not separator:
+                names.add(name)
+            elif qualifier == 'SELF':
+                names.add(field)
+    columns = spec.get('columns')
+    expressions = [
+        column['derivation'] for column in columns
+        if isinstance(column, dict) and 'derivation' in column
+    ] if isinstance(columns, list) else []
+    rows = spec.get('rows')
+    for row in rows if isinstance(rows, list) else ():
+        derivations = row.get('derivations') if isinstance(row, dict) else None
+        if isinstance(derivations, dict):
+            expressions.extend(derivations.values())
+    for derivation in expressions:
+        for name in derive_binding_reference_names(derivation):
+            qualifier, separator, field = name.partition('.')
+            if separator and qualifier in self_ids:
+                names.add(field)
+    return names
+
+
 def intermediate_donor_fields(spec, datasets, dataset_id):
     """Return the stored fields of a named intermediate's donor records.
 
     REQ-0120: a SELF intermediate reads completed rows, so its donor fields
     are the columns the row templates derive; a column derived only in the
-    later column phase is unavailable to it.
+    later column phase is unavailable to it. REQ-1260: a row-local
+    column-level derivation that a SELF read names is a row-phase default,
+    derived in every row template, so it is a donor field. Only a SELF read
+    can name a donor field, and that read is itself what promotes the
+    column, so REQ-1260's other row-phase reads never change this set.
     """
     if dataset_id == 'SELF' and dataset_id not in datasets:
         columns = spec.get('columns')
@@ -6117,6 +6257,9 @@ def intermediate_donor_fields(spec, datasets, dataset_id):
             column.get('name') for column in columns
             if isinstance(column, dict) and 'derivation' in column
         } if isinstance(columns, list) else set()
+        column_phase -= (
+            row_local_column_derivations(spec) & self_read_field_names(spec)
+        )
         return {
             name: column_type
             for name, column_type in specification_column_types(spec).items()
