@@ -87,6 +87,11 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VISIT, PARAMCD]
+  # 13 collected records plus one BSA record for each of the 4
+  # subject-visits that have both a height and a weight result.
+  - row_count:
+      min: 17
+      max: 17
   # A collected record never has a DTYPE, so this fails when the input
   # already carries a BSA record.
   - assert:
