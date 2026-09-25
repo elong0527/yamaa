@@ -828,3 +828,264 @@ def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> 
     assert failure.requirement == "REQ-0103"
     assert failure.spec_paths == ("intermediates[0].derivations.QVAL_U",)
     assert failure.context["intermediate"] == "SUP_EP"
+
+
+def _window_handled(root: dict[str, object]) -> HandledExpression:
+    return HandledExpression(value=Expression(root=root))
+
+
+def _dosing_plan(**extra: object) -> PlannedIntermediate:
+    return PlannedIntermediate(
+        identifier="DOSING",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("STUDYID", "USUBJID"),
+        match_fields=("STUDYID", "USUBJID"),
+        **extra,
+    )
+
+
+def test_a_window_derivation_partitions_and_orders_donor_records() -> None:
+    # REQ-1185: a window derivation partitions the donor records and
+    # numbers them along its order; the augmented records carry the
+    # per-record result into selection.
+    plan = _dosing_plan(
+        derived=(
+            (
+                "_RN",
+                _window_handled(
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["STUDYID", "USUBJID"],
+                                "order_by": [{"variable": "EX.EXSEQ"}],
+                            }
+                        }
+                    }
+                ),
+            ),
+        ),
+        order_terms=((OrderTerm(variable="EX._RN", direction="desc"), "_RN"),),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("DOSING", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # S1 has three records (EXSEQ 1, 2, 3); descending _RN picks EXSEQ 3.
+    assert outcome.record.values["EXSEQ"] == 3
+    assert outcome.record.values["_RN"] == 3
+
+
+def test_a_window_derivation_partitions_each_subject_separately() -> None:
+    # REQ-1185: the partition restarts numbering for each subject.
+    plan = _dosing_plan(
+        derived=(
+            (
+                "_RN",
+                _window_handled(
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["STUDYID", "USUBJID"],
+                                "order_by": [{"variable": "EX.EXSEQ"}],
+                            }
+                        }
+                    }
+                ),
+            ),
+        ),
+        order_terms=((OrderTerm(variable="EX._RN", direction="desc"), "_RN"),),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("DOSING", {"STUDYID": "CATH", "USUBJID": "S2"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # S2 has a single record, so it numbers 1 within its own partition.
+    assert outcome.record.values["EXSEQ"] == 1
+    assert outcome.record.values["_RN"] == 1
+
+
+def test_a_window_derivation_reads_an_earlier_derived_name() -> None:
+    # REQ-1185: derivations evaluate in declaration order, so the window's
+    # order reads the derived name the earlier derivation computed.
+    plan = _dosing_plan(
+        derived=(
+            (
+                "_TRT_U",
+                _window_handled({"str_upper": {"source": "EXTRT"}}),
+            ),
+            (
+                "_RN",
+                _window_handled(
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["STUDYID", "USUBJID"],
+                                "order_by": [{"variable": "EX._TRT_U"}],
+                            }
+                        }
+                    }
+                ),
+            ),
+        ),
+        order_terms=((OrderTerm(variable="EX._RN"), "_RN"),),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("DOSING", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # PLACEBO < RESCUE < VITAMIN D3, so the PLACEBO record (EXSEQ 2)
+    # numbers 1.
+    assert outcome.record.values["EXSEQ"] == 2
+    assert outcome.record.values["_RN"] == 1
+
+
+def test_a_window_filter_excludes_records_before_numbering() -> None:
+    # REQ-1185/REQ-0294: the window's filter marks rows ineligible before
+    # the operation runs; an ineligible row's result is missing.
+    plan = _dosing_plan(
+        derived=(
+            (
+                "_RN",
+                _window_handled(
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["STUDYID", "USUBJID"],
+                                "order_by": [{"variable": "EX.EXSEQ"}],
+                                "filter": "EX.EXENDTC IS NOT NULL",
+                            }
+                        }
+                    }
+                ),
+            ),
+        ),
+        order_terms=((OrderTerm(variable="EX._RN", direction="desc"), "_RN"),),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("DOSING", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # EXSEQ 3 has a missing EXENDTC, so only EXSEQ 1 and 2 are numbered.
+    assert outcome.record.values["EXSEQ"] == 2
+    assert outcome.record.values["_RN"] == 2
+
+
+def test_a_window_derivation_error_surfaces_at_the_derivation_path() -> None:
+    # REQ-1185: a window the records cannot compute is a data error at
+    # the derivation's own path, not a miss.
+    plan = _dosing_plan(
+        derived=(
+            (
+                "_RN",
+                _window_handled(
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["STUDYID", "USUBJID"],
+                                "order_by": [{"variable": "EX.EXSEQ"}],
+                                "filter": "EX.EXSEQ =",
+                            }
+                        }
+                    }
+                ),
+            ),
+        ),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("DOSING", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.record is None
+    assert outcome.condition is not None
+    assert outcome.condition.condition.condition == "invalid_predicate"
+    assert outcome.condition.condition.requirement == "REQ-0188"
+    assert outcome.spec_path == "intermediates[0].derivations._RN"
+
+
+def test_an_intermediate_rank_then_filter_matches_issue_964() -> None:
+    # Issue #964: derive a flag, rank the augmented donor records with a
+    # window, then filter on the rank and the flag.
+    lb = relation(
+        "LB",
+        [
+            ("STUDYID", "str"),
+            ("USUBJID", "str"),
+            ("LBTESTCD", "str"),
+            ("VISITNUM", "int"),
+            ("LBSTRESN", "float"),
+        ],
+        [
+            ["CATH", "S1", "CHOL", 1, 5.0],
+            ["CATH", "S1", "CHOL", 13, 9.0],
+            ["CATH", "S1", "GLUC", 2, 4.0],
+            ["CATH", "S2", "CHOL", 3, 6.0],
+        ],
+    )
+    plan = PlannedIntermediate(
+        identifier="EOT",
+        dataset="LB",
+        path="intermediates[0]",
+        match_variables=("STUDYID", "USUBJID", "LBTESTCD"),
+        match_fields=("STUDYID", "USUBJID", "LBTESTCD"),
+        derived=(
+            (
+                "_EOT_AWARE",
+                _window_handled(
+                    {
+                        "case": [
+                            {
+                                "when": "LB.LBSTRESN > 8",
+                                "then": {"literal": 99},
+                            },
+                            {"otherwise": {"literal": 1}},
+                        ]
+                    }
+                ),
+            ),
+            (
+                "_RN",
+                _window_handled(
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["STUDYID", "USUBJID", "LBTESTCD"],
+                                "order_by": [
+                                    {
+                                        "variable": "LB._EOT_AWARE",
+                                        "direction": "desc",
+                                    },
+                                    {"variable": "LB.VISITNUM"},
+                                ],
+                                "filter": (
+                                    "LB.VISITNUM <> 13 AND LB._EOT_AWARE IS NOT NULL"
+                                ),
+                            }
+                        }
+                    }
+                ),
+            ),
+        ),
+        filter_predicate=parse_predicate("LB._RN = 1 AND LB._EOT_AWARE <> 99"),
+        order_terms=((OrderTerm(variable="LB._RN"), "_RN"),),
+        keep="first",
+    )
+    outcome = IntermediateSelector([plan], {"LB": lb}).select(
+        "EOT", {"STUDYID": "CATH", "USUBJID": "S1", "LBTESTCD": "CHOL"}
+    )
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # VISITNUM 13 is window-filtered out; the remaining CHOL record ranks
+    # first and is not EOT-aware.
+    assert outcome.record.values["VISITNUM"] == 1
+    assert outcome.record.values["_RN"] == 1
+    assert outcome.record.values["_EOT_AWARE"] == 1

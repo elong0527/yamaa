@@ -3508,12 +3508,13 @@ def _validate_intermediate_derivations(
 ) -> dict[str, HandledExpression]:
     """Validate one intermediate's REQ-1185 derivations.
 
-    A derivation reads only the intermediate's own stored dataset fields: a
-    bare name means the dataset's field, and a qualified name must name the
-    dataset. Anything else - a driver field, another intermediate, another
-    derivation in the same map, or a name the dataset does not store - fails
-    as `unknown_field`. A derived name must not shadow a stored column.
-    Returns the valid declarations in author order.
+    A derivation reads the intermediate's own stored dataset fields plus the
+    derivations declared before it in the same map: a bare name means the
+    dataset's field or an earlier derived name, and a qualified name must
+    name the dataset. Anything else - a driver field, another intermediate,
+    a later derivation in the same map, or a name the dataset does not store
+    - fails as `unknown_field`. A derived name must not shadow a stored
+    column. Returns the valid declarations in author order.
     """
     dataset = intermediate.dataset
     derived: dict[str, HandledExpression] = {}
@@ -3548,11 +3549,12 @@ def _validate_intermediate_derivations(
             identifier = reference.name
             if "." in identifier:
                 qualifier, _, field = identifier.partition(".")
-                allowed = qualifier == dataset and field in fields
+                # REQ-1185: derivations evaluate in declaration order, so a
+                # reference may read an earlier derived name as well as a
+                # stored field; a later one is not in scope yet.
+                allowed = qualifier == dataset and (field in fields or field in derived)
             else:
-                # REQ-1185: a bare name reads only the dataset's stored
-                # field; another derivation in the same map is not in scope.
-                allowed = identifier in fields
+                allowed = identifier in fields or identifier in derived
             if allowed:
                 continue
             diagnostics.append(
