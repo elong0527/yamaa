@@ -15,8 +15,6 @@ file reuses `layers/parent.yaml`, which points back to the entry
 file, so no stable set of definitions can be reached, and the run
 is rejected before any data is read.
 
-**Standard:** ADaM | **Domain:** ADSL
-
 ## How to fix
 
 Remove the backward `parents` reference so that every path
