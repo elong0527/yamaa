@@ -1250,7 +1250,6 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1221](../submission/dataset-json.md#req-1221) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1222](../submission/dataset-json.md#req-1222) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1223](../submission/dataset-json.md#req-1223) | `submission/dataset-json.md` | Schema prose |
-| [REQ-1224](../submission/dataset-json.md#req-1224) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1225](../submission/dataset-json.md#req-1225) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1226](../submission/dataset-json.md#req-1226) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1227](../submission/dataset-json.md#req-1227) | `submission/dataset-json.md` | Schema prose |

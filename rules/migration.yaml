@@ -2317,7 +2317,6 @@ requirements:
   REQ-1221: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-order"]}
   REQ-1222: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-failure"]}
   REQ-1223: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-not-a-source"]}
-  REQ-1224: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-not-a-source-rationale"]}
   REQ-1225: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-interface", "schema_define.yaml:dataset_json_path.description"]}
   REQ-1226: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-collision"]}
   REQ-1227: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-without-data"]}
@@ -2760,7 +2759,6 @@ provenance_addenda:
   - {"source": "yamaa:issue-494:dataset-json-publication-order", "text": "Issue #494: every file is rendered and validated before any target is touched; data files publish first, in entry order, and the document last.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1221"}
   - {"source": "yamaa:issue-494:dataset-json-publication-failure", "text": "Issue #494: a failure publishes nothing further and leaves every untouched target as it was.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1222"}
   - {"source": "yamaa:issue-494:dataset-json-not-a-source", "text": "Issue #494: the container is not a source and R014's extension mapping stays closed.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1223"}
-  - {"source": "yamaa:issue-494:dataset-json-not-a-source-rationale", "text": "Issue #494: the dataType mapping is not a function backwards and the file's types are the study document's, so admitting it as a source would give one dataset two type authorities.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1224"}
   - {"source": "yamaa:issue-494:dataset-json-path-interface", "text": "Issue #494: dataset_json_path is the relative file a dataset's data is written to, named with a json extension.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1225"}
   - {"source": "yamaa:issue-494:dataset-json-path-collision", "text": "Issue #494: a dataset_json path colliding with another declared path fails validation.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1226"}
   - {"source": "yamaa:issue-494:dataset-json-without-data", "text": "Issue #494: a dataset_json on a has_no_data entry fails validation.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1227"}
