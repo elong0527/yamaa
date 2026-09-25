@@ -4,9 +4,11 @@ keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE:
     path: input/ae.csv
-    types: {AESEQ: int, AESTDTC: date}
+    types: {AESEQ: int, AESTDTC: date, TRTEDT: date}
 
-output: {path: adae.csv, columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTEDT, REVIEWFL]
 
 columns:
   - name: STUDYID
@@ -24,13 +26,23 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.AESTDTC
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation: AE.TRTEDT
+
   # Intentionally invalid: a condition compares named values and cannot
-  # do arithmetic, so AESEQ + 1 is refused.
+  # do date arithmetic, so TRTEDT + 30 is refused.
   - name: REVIEWFL
     type: str
     label: Protocol Review Flag
     derivation:
       flag:
-        condition: "AE.AESEQ + 1 > 1"
+        condition: "ASTDT <= TRTEDT + 30"
         false_value: "N"
         missing_value: "N"

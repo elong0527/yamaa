@@ -4,4 +4,4 @@ spec_paths:
   - columns.REVIEWFL.derivation.flag.condition
 requirement: REQ-0188
 context:
-  predicate: "AE.AESEQ + 1 > 1"
+  predicate: "ASTDT <= TRTEDT + 30"
