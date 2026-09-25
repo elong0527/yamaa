@@ -117,8 +117,9 @@ must parse under [Temporal values](../values/temporal.md) for the named type. Th
 
 <a id="req-0166"></a>
 
-**REQ-0166.** `NULL` is missing and has no runtime type. A comparison with it is
-`UNKNOWN`; `IS NULL` and `IS NOT NULL` are the tests for missingness.
+**REQ-0166.** `NULL` is missing and has no runtime type. A comparison with a missing
+operand is `UNKNOWN`; `IS NULL` and `IS NOT NULL` are the tests for missingness
+and are never `UNKNOWN`.
 
 ### Comparison
 
@@ -147,8 +148,8 @@ comparable to text, and a `date` is not comparable to a `datetime`.
 
 <a id="req-0170"></a>
 
-**REQ-0170.** A comparison with a missing operand is `UNKNOWN`. `IS NULL` and
-`IS NOT NULL` are never `UNKNOWN`.
+**REQ-0170.** Retired. The missing-operand comparison rule is stated once in
+[REQ-0166](#req-0166). This identifier is never reused.
 
 <a id="req-0171"></a>
 
