@@ -39,22 +39,28 @@ organizations or institutions.
 
 ## Motivation
 
-Two AI agents use the same specification to derive ADaM data.
-Both report completion, but their outputs differ.
-The specification leaves decisions for the agents to make during implementation.
-A human reviewer must find the gap, settle the rule, and rerun the derivation.
+* Two AI agents use the same specification to derive ADaM data.
+* Both report completion, but their outputs differ.
+* A reviewer must resolve the difference before signing off.
 
-Review takes longer, and confidence in the result falls.
+In a drug-manufacturing [warning letter](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/purolea-cosmetics-lab-722591-04022026), the FDA wrote:
+
+> "you must review the AI generated documents to ensure they were accurate and actually compliant with CGMP."
 
 ## Root cause
 
 The specification leaves business rules implicit, so agents must infer them.
 
+Business rules can differ from language defaults:
+
+- [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round exact ties to even.
+- [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than nonmissing values.
+
 ## Goal
 
 - Reduce human review work
-- Use organization and compound templates
-- Capture domain rules that agents can apply
+- Leverage organization templates
+- Capture domain knowledge that agents can apply
 
 ## yamaa: specification
 
