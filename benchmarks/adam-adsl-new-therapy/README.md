@@ -31,8 +31,8 @@ category (`PRCAT`), subcategory (`PRSCAT`), and start date (`PRSTDTC`).
   otherwise.
 
 **Note:** a qualifying therapy must start on or after the treatment start
-date: the derivation narrows each aggregate to records with
-`CMSTDTC >= TRTSDT` (or `PRSTDTC >= TRTSDT`), so a flagged therapy start
-always falls on or after the treatment start date by construction.
+date: each aggregate only considers records with `CMSTDTC >= TRTSDT` (or
+`PRSTDTC >= TRTSDT`), so a flagged therapy start always falls on or after
+the treatment start date by construction.
 
 **Standard:** ADaM | **Domain:** ADSL
