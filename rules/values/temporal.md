@@ -152,13 +152,10 @@ whitespace is accepted, and no other separator or field order is recognised.
 
 <a id="req-0553"></a>
 
-**REQ-0553.** `24:00` and `23:59:60` are rejected for the same reason as the rows above, and not only
-for being unusual. `2025-01-12T24:00` names the moment
-`2025-01-13T00:00` already names, and the two spellings disagree about the day,
-so admitting the first would leave the carried date dependent on the
-spelling that arrived. A leap second is not a value either runtime holds.
-Neither R's nor Python's representation has a sixty-first second, so none
-can be stored.
+**REQ-0553.** `24:00` and `23:59:60` are rejected for the same reason as the rows above.
+`2025-01-12T24:00` names the moment `2025-01-13T00:00` already names, and the
+two spellings disagree about the day. A leap second is not a value either
+runtime holds.
 
 <a id="req-0554"></a>
 
