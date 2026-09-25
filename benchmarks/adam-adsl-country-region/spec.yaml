@@ -20,7 +20,7 @@ columns:
     derivation: DM.USUBJID
 
   # Upper case, so 'usa' and 'USA' are one country; an empty country is
-  # UNKNOWN. Any country outside the list below stops the run.
+  # UNKNOWN. Any other country passes through to the region mapping.
   - name: COUNTRY
     type: str
     label: Country
@@ -28,12 +28,9 @@ columns:
       str_upper:
         source: DM.COUNTRY
         missing: UNKNOWN
-    verifications:
-      allowed_values:
-        values: [USA, CAN, DEU, UNKNOWN]
 
-  # The fallback answers both an empty and an unlisted country, but COUNTRY
-  # is never empty and admits no other country, so only UNKNOWN reaches it.
+  # The fallback answers an unlisted country as well as an empty one, so
+  # UNKNOWN and countries outside the three listed below reach it.
   - name: REGION1
     type: str
     label: Geographic Region 1
@@ -53,5 +50,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 8
-      max: 8
+      min: 9
+      max: 9
