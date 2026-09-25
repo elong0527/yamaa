@@ -236,3 +236,40 @@ run_one_benchmark <- function(nm, wt, man_entry) {
   }
   list(status = "PASS", detail = "")
 }
+
+# Tolerated baseline: pre-existing clean-room parity gaps, identical in the
+# unpackaged tree (FINDINGS.md, daily parity entries, 284/292). When a gap
+# closes, delete its name here so the suite keeps shrinking toward zero.
+benchmark_known_failures <- c(
+  "adam-adae-partial-dates",
+  "adam-advs-windows",
+  "negative-output-missing-key",
+  "negative-str-contains-bool-result",
+  "schema-text-mapping-unmapped",
+  "sdtm-tr-tumor-measurements",
+  "sdtm-vs-collected-form"
+)
+benchmark_known_skips <- c(
+  "sdtm-dm-race-ethnicity"  # no spec.yaml in the corpus
+)
+
+# Classify benchmark fail/skip entries against the tolerated baseline.
+# fails/skips are "name: detail" strings. The baseline ships as default
+# arguments so unit tests can inject synthetic baselines. Returns a list:
+#   new_fails, new_skips       -- entries outside the baseline (must be empty)
+#   recovered_fails, recovered_skips -- baseline names absent from this run
+classify_benchmark_outcomes <- function(fails, skips,
+                                        known_failures = benchmark_known_failures,
+                                        known_skips = benchmark_known_skips) {
+  fail_names <- sub(":.*$", "", fails)
+  skip_names <- sub(":.*$", "", skips)
+  # the only acceptable skips are the Stage-2 function-runtime benchmarks
+  # (runner_language_mismatch) plus the known-skip baseline
+  acceptable <- grepl("runner_language_mismatch", skips, fixed = TRUE)
+  list(
+    new_fails = fails[!fail_names %in% known_failures],
+    new_skips = skips[!acceptable & !skip_names %in% known_skips],
+    recovered_fails = setdiff(known_failures, fail_names),
+    recovered_skips = setdiff(known_skips, skip_names)
+  )
+}
