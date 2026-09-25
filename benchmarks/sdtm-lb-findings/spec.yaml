@@ -6,7 +6,7 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -24,17 +24,55 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
+  # The collected entry, exactly as reported; the text 'NOT DONE' marks a
+  # test that was not done. The result columns below read this raw value so
+  # the sentinel never lands in the delivered result or units.
+  - name: RAWORRES
+    type: str
+    label: Collected entry (raw)
+
+  # A test not done has no result: LBORRES, LBORRESU, LBSTRESN and LBSTRESU
+  # stay empty and LBSTAT carries 'NOT DONE'.
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation:
+      case:
+        - when: "RAWORRES = 'NOT DONE'"
+          then: {literal: null}
+        - otherwise: RAWORRES
+
   # Every record carries the same units in both the original and the
-  # standard column, so the two literals live here, not in the rows below.
+  # standard column, so the two literals live here, not in the rows below;
+  # a test not done has no units either.
   - name: LBORRESU
     type: str
     label: Original Units
-    derivation: {literal: mg/dL}
+    derivation:
+      case:
+        - when: "RAWORRES = 'NOT DONE'"
+          then: {literal: null}
+        - otherwise: {literal: mg/dL}
 
   - name: LBSTRESU
     type: str
     label: Standard Units
-    derivation: {literal: mg/dL}
+    derivation:
+      case:
+        - when: "RAWORRES = 'NOT DONE'"
+          then: {literal: null}
+        - otherwise: {literal: mg/dL}
+
+  - name: LBSTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: "RAWORRES = 'NOT DONE'"
+          then: {literal: NOT DONE}
+    verifications:
+      allowed_values:
+        values: [NOT DONE]
 
   - name: LBTESTCD
     type: str
@@ -44,13 +82,12 @@ columns:
     type: str
     label: Lab Test or Examination Name
 
-  - name: LBORRES
-    type: str
-    label: Result or Finding in Original Units
-
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
+    derivation:
+      value: {source: LBORRES}
+      missing: null
 
   - name: LBDTC
     type: date
@@ -69,15 +106,15 @@ columns:
 rows:
   # One record per subject and visit with a calcium entry, dated by the
   # visit's collection date item; ONLY() fails if the visit carries either
-  # item more than once. An entry that is not a number, such as NOT DONE,
-  # gives a missing LBSTRESN.
+  # item more than once. An entry of 'NOT DONE' gives a record with empty
+  # result columns and LBSTAT 'NOT DONE'.
   - id: calcium
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CA}
       LBTEST: {literal: Calcium}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CALCIUM'"
           expr: "ONLY(ODM.Value)"
@@ -85,18 +122,15 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBSTRESN:
-        value: {source: LBORRES}
-        missing: null
 
   # The same for the creatinine entry.
   - id: creatinine
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CREAT}
       LBTEST: {literal: Creatinine}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CREAT'"
           expr: "ONLY(ODM.Value)"
@@ -104,6 +138,13 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBSTRESN:
-        value: {source: LBORRES}
-        missing: null
+
+verifications:
+  - implies:
+      id: not-done-record-has-no-result
+      when: "LBSTAT = 'NOT DONE'"
+      then: "LBORRES IS NULL AND LBORRESU IS NULL AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
+  - implies:
+      id: completed-result-is-not-flagged
+      when: "LBSTAT IS NULL"
+      then: "LBORRES IS NOT NULL"
