@@ -4,8 +4,9 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** derive `ADT`, `AVAL`, `TRTSDT`, and `HEIGHTBL` for each
-planned measurement: height is planned once under the code
-`HEIGHT` and weight is planned repeatedly under the code
+planned measurement: height is planned under the code
+`HEIGHT` (one subject plans it twice to exercise baseline-height
+selection) and weight is planned repeatedly under the code
 `WEIGHT`.
 
 **Input:** a planned-measurement spine per subject carrying the
