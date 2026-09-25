@@ -20,7 +20,9 @@ names.
 
 **Note:** a reported term codes only when it equals a lowest-level term
 exactly, including letter case; a term with no exact match, or a blank
-term, gives `NOT CODED` in both coded variables. The coded terms follow
+term, gives `NOT CODED` in both coded variables. `NOT CODED` is not a
+MedDRA term: it marks an event whose coding must be resolved before
+delivery. The coded terms follow
 the recorded dictionary, MedDRA version `26.1`, since the same reported
 term can code differently between releases.
 
