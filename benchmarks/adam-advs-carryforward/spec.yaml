@@ -121,8 +121,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
-      min: 12
-      max: 12
+      min: 21
+      max: 21
   - all_or_none:
       id: collected-record-carries-sequence-and-value
       columns: [VSSEQ, AVALCOL]
