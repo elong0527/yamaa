@@ -3865,16 +3865,18 @@ def _column_level_reads(
 def _row_phase_default_columns(
     specification: Specification,
     supported_operations: Collection[str],
+    dataset_fields: Mapping[str, Mapping[str, ColumnType]],
 ) -> frozenset[str]:
     """Column names whose column-level derivations are row-phase defaults.
 
     REQ-1260: a row-local column-level derivation is a default when a row
     template names its column, or when a row-phase context reads the column:
-    a template derivation (windows included), a grouped template filter, or a
-    `SELF` intermediate's donor field. A default's own reads of column-level
-    columns are defaults in turn. The references come from the planner's own
-    expression walk, so a qualified field or a string literal that happens to
-    spell a column name promotes nothing.
+    a template derivation (windows included), a grouped template filter, a
+    `SELF` intermediate's donor field, or a match value of a named
+    intermediate a template derivation reads. A default's own reads of
+    column-level columns are defaults in turn. The references come from the
+    planner's own expression walk, so a qualified field or a string literal
+    that happens to spell a column name promotes nothing.
     """
     rows = specification.rows or ()
     if not rows:
@@ -3913,6 +3915,38 @@ def _row_phase_default_columns(
             if separator and qualifier in self_ids
         }
 
+    def match_values(intermediate: Intermediate) -> tuple[str, ...]:
+        # REQ-0112: the match variables are the key_base values, defaulted
+        # to the key names (REQ-0154), which an omitted key infers from the
+        # applicable keys (REQ-0153). SELF's applicable keys are its donor
+        # fields, which this promotion decides, so an omitted SELF key
+        # promotes nothing. A qualified driver field names no column.
+        key = intermediate.key
+        if key is None and intermediate.dataset != "SELF":
+            fields = dataset_fields.get(intermediate.dataset, {})
+            key = [name for name in specification.keys if name in fields]
+        base = intermediate.key_base if intermediate.key_base is not None else key
+        names = list(base or ())
+        if intermediate.between is not None:
+            names.append(intermediate.between.value)
+        return tuple(name for name in names if "." not in name)
+
+    matches = {
+        intermediate.id: match_values(intermediate) for intermediate in intermediates
+    }
+
+    def match_reads(found: Sequence[_Reference]) -> set[str]:
+        # REQ-0126: a row-phase read of a named intermediate needs every
+        # value it matches on from the reading template.
+        return {
+            name
+            for qualifier, separator, _ in (
+                reference.name.partition(".") for reference in found
+            )
+            if separator
+            for name in matches.get(qualifier, ())
+        }
+
     for index, row in enumerate(rows):
         driver = row.dataset
         if driver is None and len(specification.input) == 1:
@@ -3924,6 +3958,7 @@ def _row_phase_default_columns(
                 reference.name for reference in found if "." not in reference.name
             )
             referenced.update(donor_reads(found))
+            referenced.update(match_reads(found))
         if row.group_by is not None and row.filter is not None:
             # REQ-0068: a grouped filter reads the candidate's completed
             # columns; an ungrouped filter reads no output column at all.
@@ -3955,6 +3990,13 @@ def _row_phase_default_columns(
         # `SELF.field`.
         names = [*(intermediate.key or ()), *(intermediate.columns or ())]
         names.extend(term.variable for term in intermediate.order_by or ())
+        if intermediate.between is not None:
+            # REQ-0121: the bounds are donor fields; the value is the current
+            # row's, promoted only by a row-phase read (see `match_reads`).
+            names.extend((intermediate.between.lower, intermediate.between.upper))
+        if intermediate.verification is not None:
+            # REQ-1245: the asserted-unique columns are donor fields.
+            names.extend(intermediate.verification.unique)
         if intermediate.filter is not None:
             try:
                 names.extend(
@@ -4036,21 +4078,23 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
+    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # spelling, so the lookup datasets' columns ride along for suggestions.
+    dataset_fields = {
+        name: _dataset_types(bindings, name) for name in bindings.datasets
+    }
     # REQ-1260: templates naming a default's column override it; the rest
     # inherit it, planned in each template's own row scope. Computed before
     # the intermediates, since a default is a SELF donor field.
-    default_columns = _row_phase_default_columns(specification, supported_operations)
+    default_columns = _row_phase_default_columns(
+        specification, supported_operations, dataset_fields
+    )
     default_derivations = {
         column.name: column.derivation
         for column in specification.columns
         if column.name in default_columns
     }
     resolved_joins: list[ResolvedJoin] = []
-    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
-    # spelling, so the lookup datasets' columns ride along for suggestions.
-    dataset_fields = {
-        name: _dataset_types(bindings, name) for name in bindings.datasets
-    }
 
     def infer_lookup_keys(
         dataset: str, path: str, deferred: list[ExecutionDiagnostic]
