@@ -14,10 +14,10 @@ analysis or not.
 
 - `AVISITN` identifies the planned analysis visit.
 - `AVAL` is the latest non-missing result selected for analysis at or
-  before that visit, within the same subject and parameter. With no such
-  result it is missing.
-- `ADT` and `QSSEQ` are the date and sequence number of that same
-  observation. A missing date stays missing even when an earlier
+  before that visit, within the same subject and parameter. A result of
+  zero counts as a collected result. With no such result it is missing.
+- `ADT` and `QSSEQ` are the date and the source sequence number of that
+  same observation. A missing date stays missing even when an earlier
   observation has a date.
 
 **Note:** the latest observation is the one with the highest visit
