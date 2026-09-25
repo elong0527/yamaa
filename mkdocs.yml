@@ -19,7 +19,7 @@ exclude_docs: |
   # CI) already occupy slides/<deck>/index.html; building each folder README
   # as a page would conflict with it and fail --strict.
   slides/yamaa-pilot7-2026-09-25/README.md
-  slides/yamaa-intro-njsug-2026-10-09/README.md
+  slides/yamaa-njsug-2026-10-09/README.md
 
 theme:
   name: material

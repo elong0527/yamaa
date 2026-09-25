@@ -1,4 +1,4 @@
-/* Single style file for the yamaa-intro-njsug-2026-10-09 deck. Copied from the
+/* Single style file for the yamaa-njsug-2026-10-09 deck. Copied from the
    yamaa-pilot7-2026-09-25 deck. Plain CSS on purpose: this Quarto version
    silently drops theme files that use the scss:defaults / scss:rules layer
    markers, so all deck styling is spelled out here as CSS and loaded via

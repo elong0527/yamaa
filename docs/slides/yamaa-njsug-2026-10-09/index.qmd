@@ -1,0 +1,171 @@
+---
+title: "yamaa: agentic workflow for CDISC data standardization"
+subtitle: "NJSUG: from ODM to SDTM / ADaM and define.xml"
+author: "Yilong Zhang"
+date: "2026-10-09"
+embed-resources: true
+format:
+  revealjs:
+    theme: default
+    css: custom.css
+    mainfont: "Lato, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Liberation Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji"
+    monofont: "JetBrains Mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace"
+    smaller: true
+    slide-number: true
+    scrollable: true
+    transition: fade
+    background-transition: fade
+    logo: ../../assets/logo.jpeg
+title-slide-attributes:
+  data-background-color: "#385898"
+---
+
+## Disclaimer {.center}
+
+::: {.center-body}
+The views and opinions expressed in this presentation are those of the
+individual presenter. They do not represent those of their affiliated
+organizations or institutions.
+:::
+
+## Contributors {.center}
+
+::: {.center-body-left}
+- **Peng Zhang** CIMS Global
+- **Bingjun Wang** Genentech
+- **Ming-chun Chen** Summit Therapeutics
+- **Yilong Zhang** BBSW AI Committee
+:::
+
+## Motivation
+
+Two AI agents use the same specification to derive ADaM data.
+Both report completion, but their outputs differ.
+The specification leaves decisions for the agents to make during implementation.
+A human reviewer must find the gap, settle the rule, and rerun the derivation.
+
+Review takes longer, and confidence in the result falls.
+
+## Root cause
+
+The specification leaves business rules implicit, so agents must infer them.
+
+## Goal
+
+- Reduce human review work
+- Use organization and compound templates
+- Capture domain rules that agents can apply
+
+## yamaa: specification
+
+```yaml
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+columns:
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+```
+
+## yamaa: benchmarks
+
+::: {.columns}
+::: {.column width="48%"}
+<div class="big-number">292</div>
+<div class="metric-label">runnable benchmarks</div>
+:::
+
+::: {.column width="48%"}
+<div class="big-number">2</div>
+<div class="metric-label">engines (Python, R)</div>
+:::
+:::
+
+Each benchmark includes a specification, input data, and an expected output or error.
+
+**[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
+
+<iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+Scroll inside the frame to explore the spec, inputs, and golden output
+
+## yamaa: core principle
+
+> **A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.**
+
+*`output_dataset = derive(input_datasets, spec)`*
+
+The design of yamaa is a contract between people and AI agents.
+
+- **spec**: the closed vocabulary.
+- **derive**: the derivation semantics.
+
+## yamaa: inheritance
+
+![](../../diagrams/design.svg)
+
+Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
+
+## yamaa: four components
+
+| Component | Purpose | Links |
+| --- | --- | --- |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+
+## ODM XML
+
+- [CDISC ODM](https://www.cdisc.org/standards/data-exchange/odm) is an XML standard for clinical research data.
+- EDC systems can export study data in ODM XML.
+- Teams familiar with define.xml will recognize the ODM structure.
+
+Learn with AI: [https://arena.ai/](https://arena.ai/)
+
+## Recommendations to work with AI agents
+
+- Start with plain text.
+- Produce the annotated CRF during planning.
+- Produce the Excel specification during planning.
+- Communicating requirements costs more than tokens.
+
+## Call for help
+
+### Building benchmarks
+- **Review a benchmark**: inspect the specification and golden output
+- **Add comments**: challenge assumptions, clarity, and conformance
+- **File issues**: record anything ambiguous or incorrect
+- **Open pull requests**: contribute fixes and new benchmarks
+
+### Testing yamaa
+* **Assess privately**: Run yamaa against a proprietary submission package inside your own environment.
+* **Share safely**: Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
+
+## Benchmark to deployment
+
+- Benchmarks help assess an AI agent before adoption.
+- Deployment also requires onboarding the agent to your environment.
+
+Collaborating with [keiji.ai](https://keiji.ai/) to test synthetic clinical trial data.
+
+[https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+
+
+## Reference
+
+- **Repository:** [github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)
+- **Documentation:** [elong0527.github.io/yamaa](https://elong0527.github.io/yamaa/)
+- **Benchmarks:** [elong0527.github.io/yamaa/benchmark](https://elong0527.github.io/yamaa/benchmark/)
