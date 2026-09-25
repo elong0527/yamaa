@@ -248,10 +248,7 @@ property of the stored field rather than of its value:
 
 **REQ-0843.** `U+000D` occurs only as the first character of a record
 terminator. Inside a quoted field the character fails rather than joining
-the value. Without this refusal, a file with `U+000D U+000A` terminators
-would deliver a different value than the same file with `U+000A` terminators.
-Admitting both terminators is meant to remove exactly that
-disagreement.
+the value.
 
 <a id="req-0844"></a>
 
