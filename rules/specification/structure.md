@@ -117,6 +117,26 @@ derivation overrides the default for that entry's rows only. Every other
 column-level derivation keeps its column-phase meaning, and a `rows` entry
 naming its column fails as `duplicate_derivation`.
 
+<a id="req-1262"></a>
+
+**REQ-1262.** An intermediate or a `rows` entry may declare `for:` with a
+non-empty list of values to write one parameterized definition instead of
+one copy per value. Each list item is either a scalar, which binds the
+variable `v`, or a mapping of variable names to scalars. Before validation,
+the definition is instantiated once per item, in list order, each instance
+keeping the definition's position with the `for` key removed. Every
+`{name}` placeholder in the definition's scalar strings is replaced: a
+string that is exactly `{name}` takes the bound value with its type
+preserved, and any other occurrence is replaced with the value's textual
+form (strings as written, integers in decimal, integral floats without the
+fractional part, booleans as `true`/`false`). A `{name}` with no bound
+variable is an error, so a variable name must not collide with a
+`str_template` column placeholder used in the same definition. An
+intermediate id may carry `{name}` placeholders (row ids already admit
+them); a placeholder in an id without a `for:` declaration is an error.
+Instances are validated exactly as if written out, and expanded ids must
+be unique within their list.
+
 ### Output and internal columns
 
 <a id="req-0206"></a>

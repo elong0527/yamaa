@@ -34,6 +34,7 @@ from yamaa.expressions.strings import (
     template_identifiers,
 )
 from yamaa.io.project import ProjectResources
+from yamaa.schema.parameterized import expand_parameterized_definitions
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError, ValidationDiagnostic
 from yamaa.specification.models import Specification
@@ -305,6 +306,11 @@ def _validate_layer(
                 {"expected": "root_class", "actual": type(document).__name__},
             )
         ]
+
+    try:
+        document = expand_parameterized_definitions(document)
+    except SpecificationError as error:
+        return None, list(error.diagnostics)
 
     fields = class_fields(bundle, "root_class")
     diagnostics: list[ValidationDiagnostic] = []

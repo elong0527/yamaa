@@ -101,6 +101,10 @@ intermediate_class:
         type: intermediate_id
         required: true
         description: See REQ-1048 in rules/operations/lookup.md.
+    - for:
+        type: "list[for_item]"
+        required: false
+        description: See REQ-1262 in rules/specification/structure.md.
     - dataset:
         type: identifier
         required: true
@@ -207,6 +211,10 @@ row_class:
         type: row_id
         required: true
         description: See REQ-1056 in rules/execution/rows.md.
+    - for:
+        type: "list[for_item]"
+        required: false
+        description: See REQ-1262 in rules/specification/structure.md.
     - dataset:
         type: identifier
         required: false
@@ -290,7 +298,7 @@ dataset_class:
 
 intermediate_id:
     type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    pattern: '^(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})+$'
     description: See REQ-1050 in rules/operations/lookup.md.
 
 row_id:

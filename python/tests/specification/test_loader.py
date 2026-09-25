@@ -319,7 +319,7 @@ def test_loads_row_count_fraction_bound(tmp_path: Path) -> None:
 def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
     schema_root = _mutate_schema(
         tmp_path,
-        "schema.yaml",
+        "schema_shared.yaml",
         "pattern: '^[A-Za-z_][A-Za-z0-9_]*$'",
         "pattern: '['",
     )
@@ -336,7 +336,7 @@ def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
     ("filename", "old", "new", "reason"),
     [
         (
-            "schema.yaml",
+            "schema_shared.yaml",
             "pattern: '^[A-Za-z_][A-Za-z0-9_]*$'",
             "patern: '^[A-Za-z_][A-Za-z0-9_]*$'",
             "invalid descriptor keyword 'patern'",

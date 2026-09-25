@@ -61,7 +61,10 @@ def load_specification(
         raise SpecificationError(diagnostics)
 
     assert isinstance(document, dict)
-    normalized = normalize_specification(document, bundle)
+    from yamaa.schema.parameterized import expand_parameterized_definitions
+
+    expanded = expand_parameterized_definitions(document)
+    normalized = normalize_specification(expanded, bundle)
     from yamaa.schema.windows import expand_named_windows
 
     normalized = expand_named_windows(normalized, bundle)

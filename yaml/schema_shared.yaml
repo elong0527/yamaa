@@ -10,6 +10,14 @@ literal_value:
     type: [str, int, float, bool, "null"]
     description: See REQ-1149 in rules/values/types.md.
 
+for_value:
+    type: [str, int, float, bool]
+    description: See REQ-1262 in rules/specification/structure.md.
+
+for_item:
+    type: [for_value, "dict[identifier, for_value]"]
+    description: See REQ-1262 in rules/specification/structure.md.
+
 path:
     type: str
     min_length: 1
