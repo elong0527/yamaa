@@ -363,17 +363,6 @@ and its log.
 stays closed at `.csv` and `.parquet`, and a `dataset_class.path` ending in
 `.json` names no profile.
 
-<a id="req-1224"></a>
-
-**REQ-1224.** Two reasons, and each is enough. [REQ-1210](dataset-json.md#req-1210)'s mapping is not a
-function backwards: `string` is the written type of a `text` column and of
-eight others, so a reader cannot recover the column's type from the file.
-And the types in this file are the study document's, while [REQ-0517](../storage/ingestion.md#req-0517) makes a
-stored artifact's producing specification the type authority; admitting the
-file as a source would give one dataset two of them. A specification that
-consumes a produced dataset reads the artifact, which [REQ-0719](../storage/publication.md#req-0719) already names
-as the container for that purpose.
-
 ### Interface behavior
 
 <a id="req-1225"></a>
