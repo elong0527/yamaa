@@ -103,8 +103,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
-      min: 5
-      max: 5
+      min: 8
+      max: 8
   - implies:
       id: percentile-requires-a-growth-reference
       when: "AVAL IS NOT NULL"
