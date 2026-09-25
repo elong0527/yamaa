@@ -6,7 +6,7 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, ATOXGR]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR]
 
 columns:
   - name: DOMAIN
@@ -34,19 +34,14 @@ columns:
     label: Lab Test or Examination Short Name
     derivation: LB_RAW.LBTESTCD
 
-  - name: SEX
-    type: str
-    label: Sex
-    derivation: LB_RAW.SEX
-
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation: LB_RAW.LBSTRESN
 
-  - name: ATOXGR
+  - name: LBTOXGR
     type: str
-    label: Analysis Toxicity Grade
+    label: Standard Toxicity Grade
 
   # The independently recorded grade, read only by the agreement check
   # below; not in the output.
@@ -65,7 +60,7 @@ rows:
   - id: neutrophils
     filter: "LB_RAW.LBTESTCD = 'ANC'"
     derivations:
-      ATOXGR:
+      LBTOXGR:
         cut:
           source: LB_RAW.LBSTRESN
           breaks: [0.5, 1.0, 1.5, 1.8]
@@ -77,7 +72,7 @@ rows:
   - id: haemoglobin-male
     filter: "LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'M'"
     derivations:
-      ATOXGR:
+      LBTOXGR:
         cut:
           source: LB_RAW.LBSTRESN
           breaks: [8.0, 10.0, 13.5]
@@ -88,7 +83,7 @@ rows:
   - id: haemoglobin-female
     filter: "LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'F'"
     derivations:
-      ATOXGR:
+      LBTOXGR:
         cut:
           source: LB_RAW.LBSTRESN
           breaks: [8.0, 10.0, 12.0]
@@ -102,4 +97,4 @@ verifications:
   # A grade that differs from the recorded one stops the run.
   - assert:
       id: reproduced-grade-agrees
-      expr: "ATOXGR = REPROGRADE"
+      expr: "LBTOXGR = REPROGRADE"
