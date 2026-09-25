@@ -1089,3 +1089,58 @@ def test_an_intermediate_rank_then_filter_matches_issue_964() -> None:
     assert outcome.record.values["VISITNUM"] == 1
     assert outcome.record.values["_RN"] == 1
     assert outcome.record.values["_EOT_AWARE"] == 1
+
+
+def test_a_scalar_derivation_with_a_nested_window_partitions_once(monkeypatch) -> None:
+    # The review finding on PR #1072: a window operation nested inside a
+    # scalar derivation must partition the donor records once per
+    # derivation, not once per record.
+    import yamaa.runtime.intermediates as intermediates
+
+    builds: list[object] = []
+    real_prepare = intermediates._prepare_window_partitions
+
+    def counting_prepare(dataset, values_list, window, exclude=()):
+        builds.append(window)
+        return real_prepare(dataset, values_list, window, exclude=exclude)
+
+    monkeypatch.setattr(intermediates, "_prepare_window_partitions", counting_prepare)
+    plan = _dosing_plan(
+        derived=(
+            (
+                "_SHIFTED",
+                _window_handled(
+                    {
+                        "case": [
+                            {
+                                "when": "EX.EXSEQ > 0",
+                                "then": {
+                                    "row_number": {
+                                        "window": {
+                                            "group_by": ["STUDYID", "USUBJID"],
+                                            "order_by": [{"variable": "EX.EXSEQ"}],
+                                        }
+                                    }
+                                },
+                            },
+                            {"otherwise": 0},
+                        ]
+                    }
+                ),
+            ),
+        ),
+        order_terms=(
+            (OrderTerm(variable="EX._SHIFTED", direction="desc"), "_SHIFTED"),
+        ),
+        keep="first",
+    )
+
+    outcome = selector(plan).select("DOSING", {"STUDYID": "CATH", "USUBJID": "S1"})
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    # S1's EXSEQ 3 record numbers 3 within its partition.
+    assert outcome.record.values["EXSEQ"] == 3
+    assert outcome.record.values["_SHIFTED"] == 3
+    # Four donor records, one partition build for the nested window.
+    assert len(builds) == 1

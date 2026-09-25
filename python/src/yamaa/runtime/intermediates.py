@@ -179,26 +179,50 @@ def _readable_window_record(
     return readable
 
 
+_PreparedPartitions = tuple[
+    dict[PartitionKey, tuple[IndexedRecord, ...]],
+    dict[PartitionKey, tuple[bool, ...]],
+    list[dict[str, RuntimeValue]],
+]
+"""One built window partition: grouped records, per-row eligibility, readable views."""
+
+
+def _freeze(value: object) -> object:
+    """Freeze a parsed payload into a hashable cache key.
+
+    The payloads are parsed spec mappings (strings, numbers, booleans,
+    None, lists, dicts); freezing compares the canonical form directly.
+    """
+    if isinstance(value, Mapping):
+        return tuple(sorted((name, _freeze(item)) for name, item in value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
 def _prepare_window_partitions(
     dataset: str,
     values_list: Sequence[Mapping[str, RuntimeValue]],
     window: Mapping[str, object],
-) -> (
-    tuple[
-        dict[PartitionKey, tuple[IndexedRecord, ...]],
-        dict[PartitionKey, tuple[bool, ...]],
-        list[dict[str, RuntimeValue]],
-    ]
-    | ConditionResult
-):
+    exclude: tuple[str, ...] = (),
+) -> _PreparedPartitions | ConditionResult:
     """Partition the donor records once for a window derivation.
 
     Mirrors RowResolver._locate: group the readable records by the window's
     group_by, order each group by its order_by, and mark the rows its
     filter keeps eligible (REQ-0294). The records carry every derivation
-    declared before the window.
+    declared before the window; `exclude` strips the in-progress
+    derivation's name so a nested window never sees a partially computed
+    column.
     """
-    views = [_readable_window_record(dataset, values) for values in values_list]
+    excluded = frozenset(exclude)
+    views = [
+        _readable_window_record(
+            dataset,
+            {name: value for name, value in values.items() if name not in excluded},
+        )
+        for values in values_list
+    ]
     fields = _names(window.get("group_by")) or ()
     if views:
         unavailable = [name for name in fields if name not in views[0]]
@@ -322,6 +346,13 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
     or an earlier derived name, bare or dataset-qualified. Any other
     relational operation keeps the historical `resolver unsupported`
     answer.
+
+    A window operation nested in a scalar derivation reuses one prepared
+    partition per window spec for the derivation's whole per-record loop:
+    the readable records (stored fields plus earlier derived names) are
+    identical for every record, so rebuilding per record is pure waste.
+    `exclude` names the in-progress derivation, which the planner keeps
+    out of its own scope.
     """
 
     def __init__(
@@ -329,10 +360,14 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
         dataset: str,
         values_list: list[dict[str, RuntimeValue]],
         index: int,
+        partition_cache: dict[tuple[str, object], _PreparedPartitions] | None = None,
+        exclude: str | None = None,
     ) -> None:
         super().__init__(dataset, values_list[index])
         self._values_list = values_list
         self._index = index
+        self._partition_cache = partition_cache
+        self._exclude = (exclude,) if exclude is not None else ()
 
     def resolve_relation(
         self, operation: str, payload: Mapping[str, object]
@@ -344,9 +379,23 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
                 {"operation": operation, "reason": "resolver unsupported"},
             )
         window = window_spec(payload)
-        prepared = _prepare_window_partitions(self._dataset, self._values_list, window)
-        if isinstance(prepared, ConditionResult):
-            return prepared
+        # Dispatch hands us a fresh dict copy per call, so the cache key
+        # freezes the payload's canonical form instead of its identity.
+        key = (operation, _freeze(payload))
+        prepared = (
+            self._partition_cache.get(key)
+            if self._partition_cache is not None
+            else None
+        )
+        if prepared is None:
+            built = _prepare_window_partitions(
+                self._dataset, self._values_list, window, exclude=self._exclude
+            )
+            if isinstance(built, ConditionResult):
+                return built
+            prepared = built
+            if self._partition_cache is not None:
+                self._partition_cache[key] = prepared
         grouped, eligibilities, views = prepared
         return _window_value_for(
             operation, payload, window, grouped, eligibilities, views, self._index
@@ -545,9 +594,22 @@ class IntermediateSelector:
         declaration: HandledExpression,
         values_list: list[dict[str, RuntimeValue]],
     ) -> _DerivationFailure | None:
-        """Compute one scalar derivation for every donor record."""
+        """Compute one scalar derivation for every donor record.
+
+        A window operation nested in the derivation partitions the donor
+        records once for the whole loop: the planner rejects references to
+        the derivation itself and to later ones, so the readable records
+        are identical for every record.
+        """
+        partition_cache: dict[tuple[str, object], _PreparedPartitions] = {}
         for index, values in enumerate(values_list):
-            resolver = _IntermediateDerivationResolver(plan.dataset, values_list, index)
+            resolver = _IntermediateDerivationResolver(
+                plan.dataset,
+                values_list,
+                index,
+                partition_cache=partition_cache,
+                exclude=name,
+            )
             result = self._evaluate(declaration.value, resolver)
             if isinstance(result, ConditionResult):
                 return _DerivationFailure(name, result)
