@@ -1,0 +1,13 @@
+phase: convert
+condition: conversion_failed
+spec_paths:
+  - columns.SKIN_FLAG
+requirement: REQ-0013
+context:
+  from: bool
+  to: str
+  value: true
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-001
+      AESEQ: 1

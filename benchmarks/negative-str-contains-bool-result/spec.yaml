@@ -1,0 +1,38 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, SKIN_FLAG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  # The defect: the structured str_contains form returns a boolean, and
+  # no column type accepts one, so storing the result in SKIN_FLAG fails
+  # the run. The missing value is accepted by validation but never
+  # reached: the first record already yields a boolean.
+  - name: SKIN_FLAG
+    type: str
+    label: Skin Event Flag
+    derivation:
+      str_contains:
+        source: AE.AEDECOD
+        pattern: "DERMATITIS|ERYTHEMA"
+        missing: "UNKNOWN"
