@@ -1,11 +1,13 @@
-# Prior Serious Event
+# Name Each Event's Prior Serious Event
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-prior-serious-event.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** for each non-serious adverse event, name the subject's most
-recent earlier serious event and the subject's first serious event; for
-every event, name the subject's immediately preceding event.
+**Goal:** for each adverse event, name the subject's most recent
+earlier serious event (`PRIOR_SAEFL`, `PRIOR_SAEDECOD`,
+`PRIOR_SAESEQ`), the subject's first serious event
+(`FIRST_SAEDECOD`, `FIRST_SAESEQ`), and the subject's immediately
+preceding event (`PREV_AEDECOD`).
 
 **Input:** adverse event records with study, subject, and sequence
 (`STUDYID`, `USUBJID`, `AESEQ`), the dictionary term (`AEDECOD`),
@@ -18,15 +20,18 @@ and whether the event was serious (`AESER`).
 - `PRIOR_SAEDECOD` / `PRIOR_SAESEQ`: the term and sequence number of
   that most recent earlier serious event, empty when there is none.
 - `FIRST_SAEDECOD` / `FIRST_SAESEQ`: the term and sequence number of
-  the subject's first serious event, empty when the subject had none.
-- `PREV_AEDECOD`: the term of the subject's event with the next smaller
-  sequence number, serious or not, empty on the subject's first event.
+  the subject's first serious event, empty when the subject had no
+  serious event.
+- `PREV_AEDECOD`: the term of the subject's event with the next
+  smaller sequence number, serious or not; empty on the subject's
+  first event, and empty when the preceding event has no coded term.
 
-**Note:** the serious events are recorded first, and the non-serious
-events then look back at those completed records. A serious event's
-own prior and first serious event fields stay empty, because the
-first pass cannot read the records it is still writing. The preceding
-event is filled in only once both passes are complete, so it can name
-an event of either kind.
+**Note:** a serious event with no coded term still counts: the prior
+flag is `Y` and its sequence number is named, while the term fields
+stay empty. The serious events are laid down first, so a serious
+event's own prior and first serious event fields stay empty, because
+they cannot look back at records that are still being written. The
+preceding event is named only after every event is in place, so it
+can name an event of either kind.
 
 **Standard:** ADaM | **Domain:** ADAE
