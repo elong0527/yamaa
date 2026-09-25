@@ -1,18 +1,30 @@
 from __future__ import annotations
 
 from yamaa.expressions import ResolvedValue, parse_predicate
+from yamaa.expressions.dispatch import ExpressionDispatcher
 from yamaa.io.polars import frame_from_values
-from yamaa.models import MISSING, DateValue, TypedColumn
+from yamaa.models import MISSING, ConditionResult, DateValue, TypedColumn, ValueResult
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
-from yamaa.planning import PlannedIntermediate
+from yamaa.planning import KeyBaseExpression, PlannedIntermediate
+from yamaa.runtime import ExecutionSuccess, execute_specification
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
     _select_eligible,
+    evaluate_intermediate,
     types_comparable,
 )
 from yamaa.runtime.joins import RelationIndex
 from yamaa.runtime.rows import CandidateRow, RelationalContext, RowResolver
-from yamaa.specification.models import OrderTerm
+from yamaa.specification.models import (
+    Column,
+    DatasetSource,
+    Expression,
+    HandledExpression,
+    Intermediate,
+    OrderTerm,
+    Output,
+    Specification,
+)
 
 
 def relation(
@@ -196,6 +208,179 @@ def test_a_missing_match_value_is_answered_before_a_record_is_looked_for() -> No
     assert fatal.condition.condition.requirement == "REQ-0124"
     assert answered.condition is None
     assert answered.record is None
+
+
+def test_key_base_expression_evaluates_against_current_row() -> None:
+    # REQ-1259: a key_base expression evaluates against the current row and
+    # supplies that key position's match value.
+    plan = PlannedIntermediate(
+        identifier="UPPER",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("key_base[0]",),
+        match_fields=("USUBJID",),
+        match_expressions=(
+            KeyBaseExpression(
+                name="key_base[0]",
+                expression=Expression.model_validate(
+                    {"str_upper": {"source": "SUBJECT"}}
+                ),
+                variables=("SUBJECT",),
+            ),
+        ),
+        order_terms=((OrderTerm(variable="EX.EXSEQ"), "EXSEQ"),),
+        keep="first",
+    )
+    chosen = selector(plan).select("UPPER", {"SUBJECT": "s1"})
+
+    assert chosen.record is not None
+    assert chosen.record.values["EXTRT"] == "VITAMIN D3"
+
+
+def test_key_base_expression_missing_result_matches_nothing() -> None:
+    # REQ-1259: a missing expression result matches nothing, like a missing
+    # variable.
+    plan = PlannedIntermediate(
+        identifier="UPPER",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("key_base[0]",),
+        match_fields=("USUBJID",),
+        match_expressions=(
+            KeyBaseExpression(
+                name="key_base[0]",
+                expression=Expression.model_validate({"literal": None}),
+                variables=(),
+            ),
+        ),
+    )
+    answered = selector(plan).select("UPPER", {"SUBJECT": "s1"})
+
+    assert answered.condition is None
+    assert answered.record is None
+
+
+def inline_payload() -> dict[str, object]:
+    return {
+        "dataset": "EX",
+        "key_base": [{"double": {"source": "SUBJECT"}}],
+        "key": ["USUBJID"],
+        "value": "EXTRT",
+        "order_by": ["EX.EXSEQ"],
+        "keep": "first",
+    }
+
+
+def test_an_inline_key_base_expression_uses_the_configured_dispatcher() -> None:
+    # REQ-1189/REQ-1259: an inline lookup key_base expression evaluates
+    # through the caller's configured dispatcher, so an R018 function
+    # operation resolves there instead of failing as unsupported.
+
+    def double(payload, resolver):
+        return ValueResult(value="S1")
+
+    dispatcher = ExpressionDispatcher(extensions={"double": double})
+    result = evaluate_intermediate(
+        inline_payload(),
+        ex(),
+        lambda name: ResolvedValue(value="s1"),
+        evaluate=dispatcher.evaluate,
+    )
+
+    assert isinstance(result, ValueResult)
+    assert result.value == "VITAMIN D3"
+
+
+def test_an_inline_key_base_expression_without_a_dispatcher_is_a_condition() -> None:
+    # REQ-1259: without a configured dispatcher an unsupported operation
+    # yields a clean condition, never an AttributeError on the result.
+    result = evaluate_intermediate(
+        inline_payload(), ex(), lambda name: ResolvedValue(value="s1")
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+
+
+def test_a_select_key_base_expression_without_a_dispatcher_is_a_condition() -> None:
+    # REQ-1259: in select, a key_base expression that does not evaluate to
+    # a value yields a clean condition, never an AttributeError on .value.
+    plan = PlannedIntermediate(
+        identifier="UPPER",
+        dataset="EX",
+        path="intermediates[0]",
+        match_variables=("key_base[0]",),
+        match_fields=("USUBJID",),
+        match_expressions=(
+            KeyBaseExpression(
+                name="key_base[0]",
+                expression=Expression.model_validate({"double": {"source": "SUBJECT"}}),
+                variables=("SUBJECT",),
+            ),
+        ),
+    )
+    answered = selector(plan).select("UPPER", {"SUBJECT": "s1"})
+
+    assert answered.record is None
+    assert answered.condition is not None
+    assert answered.condition.condition.condition == "invalid_field_type"
+    assert answered.condition.condition.requirement == "REQ-0321"
+
+
+def test_a_named_key_base_expression_reads_its_source_when_selecting() -> None:
+    # REQ-1259: selection evaluates the key_base expression over the row's
+    # recorded reads, so the source an operation names must be among them.
+    def read(variable: str) -> HandledExpression:
+        return HandledExpression(value=Expression(root={"source": variable}))
+
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "DM": DatasetSource(path="dm.csv"),
+            "TAB": DatasetSource(path="tab.csv"),
+        },
+        base="DM",
+        keys=["USUBJID"],
+        intermediates=[
+            Intermediate(
+                id="T",
+                dataset="TAB",
+                key_base=[
+                    {"round_half_away_from_zero": {"source": "SCORE", "digits": 0}}
+                ],
+                key=["K"],
+            )
+        ],
+        columns=[
+            Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+            Column(name="SCORE", type="float", derivation=read("DM.SCORE")),
+            Column(name="VAL", type="str", derivation=read("T.VAL")),
+        ],
+        output=Output(path="out.csv", columns=["USUBJID", "SCORE", "VAL"]),
+    )
+    sources = {
+        "DM": frame_from_values(
+            (
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="SCORE", type="float"),
+            ),
+            [["s1", 1.4], ["s2", 2.6]],
+        ),
+        "TAB": frame_from_values(
+            (TypedColumn(name="K", type="float"), TypedColumn(name="VAL", type="str")),
+            [[1.0, "one"], [3.0, "three"]],
+        ),
+    }
+
+    result = execute_specification(spec, sources)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert [row["VAL"] for row in result.artifact.frame.to_dicts()] == [
+        "one",
+        "three",
+    ]
 
 
 def epochs() -> RelationIndex:

@@ -110,7 +110,7 @@ intermediate_class:
         required: false
         description: See REQ-1048 in rules/operations/lookup.md.
     - key_base:
-        type: [variable, "list[variable]"]
+        type: [key_base_entry, "list[key_base_entry]"]
         required: false
         description: See REQ-1048 in rules/operations/lookup.md.
     - between:
@@ -259,6 +259,10 @@ variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
     description: See REQ-1057 in rules/specification/binding.md.
+
+key_base_entry:
+    type: [variable, expression]
+    description: See REQ-1259 in rules/operations/lookup.md.
 
 dataset_source:
     type: [project_path, dataset_class]

@@ -138,8 +138,9 @@ Otherwise fail as `unknown_field`.
 
 <a id="req-0117"></a>
 
-**REQ-0117.** Every `key_base` variable must be a known current-row value.
-Otherwise fail as `unknown_field`.
+**REQ-0117.** Every `key_base` entry must read a known current-row value: a
+variable entry must name one, and every identifier an expression entry reads
+must be one. Otherwise fail as `unknown_field`.
 
 <a id="req-0118"></a>
 
@@ -149,6 +150,17 @@ as `incompatible_input_type` under [REQ-0323](../values/types.md#req-0323), repo
 types. [REQ-0517](../storage/ingestion.md#req-0517) gives an undeclared field of a typeless container the type
 `str`; a key typed on one side and defaulted on the other needs repair,
 not a wider comparison.
+
+<a id="req-1259"></a>
+
+**REQ-1259.** A `key_base` entry may be an expression instead of a variable.
+The expression is evaluated against the current row and its value is the
+match operand for that position; a result that is missing matches nothing,
+exactly as a missing variable does ([REQ-0131](lookup.md#req-0131)). The
+pair's [REQ-0118](lookup.md#req-0118) comparison uses the expression's
+statically known result type as the source side. An operation whose result
+type depends on its inputs states no static type, and the pair is then
+judged only by whether the match values compare at run time.
 
 <a id="req-0119"></a>
 
@@ -556,7 +568,8 @@ current-row `TESTCD` that does not exist.
 the same columns on both sides states the [REQ-0154](lookup.md#req-0154) default twice, and the
 two statements can then drift apart under edit. A `key_base` equal to
 its `key` fails as `redundant_key_base`; the author omits it instead.
-The requirement is on what the author wrote: the `key_base` [REQ-0154](lookup.md#req-0154)
+An expression entry never repeats a key name. The requirement is on what
+the author wrote: the `key_base` [REQ-0154](lookup.md#req-0154)
 supplies is never redundant.
 
 ### Row construction reads through the same join
@@ -604,7 +617,7 @@ structural constraints come from its schema declaration.
 | `intermediate_class.id` | Name through which the looked-up record is read. |
 | `intermediate_class.dataset` | Declared input dataset, or `SELF` for completed derived rows ([REQ-0120](lookup.md#req-0120)). |
 | `intermediate_class.key` | Dataset columns paired by position with key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
-| `intermediate_class.key_base` | Current-row values paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `intermediate_class.key_base` | Current-row variables or expressions ([REQ-1259](lookup.md#req-1259)) paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
 | `intermediate_class.between` | Current-row value matched inclusively against lower and upper dataset bounds. |
 | `intermediate_class.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
@@ -685,7 +698,7 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `expressions.lookup.value` | Dataset column returned by the lookup. |
 | `expressions.lookup.dataset` | Declared dataset containing the lookup table. |
-| `expressions.lookup.key_base` | One or more current-row lookup values; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `expressions.lookup.key_base` | One or more current-row lookup variables or expressions ([REQ-1259](lookup.md#req-1259)); omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
 | `expressions.lookup.key` | Dataset columns paired by position with key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
 | `expressions.lookup.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `expressions.lookup.between` | Current-row value matched inclusively against lower and upper dataset bounds. |
@@ -693,7 +706,7 @@ structural constraints come from its schema declaration.
 | `expressions.lookup.keep` | Ordered record to retain; declared with order_by. |
 | `expressions.lookup.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `expressions.lookup.strict` | Fail when the lookup yields nothing. |
-| `Result` | Looks up one value in a declared dataset by explicit key pairs. Key_base and key lists pair by position, have equal length, and form a unique combined dataset key. Pair order does not change the result. Either list may be omitted: an omitted key is inferred from the applicable output keys ([REQ-0150](lookup.md#req-0150)), and an omitted key_base defaults to the key names. Key_base must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `Result` | Looks up one value in a declared dataset by explicit key pairs. Key_base entries (variables or expressions, [REQ-1259](lookup.md#req-1259)) and key lists pair by position, have equal length, and form a unique combined dataset key. Pair order does not change the result. Either list may be omitted: an omitted key is inferred from the applicable output keys ([REQ-0150](lookup.md#req-0150)), and an omitted key_base defaults to the key names. Key_base must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
 
 ## Error conditions
 

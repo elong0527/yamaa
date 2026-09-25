@@ -36,6 +36,7 @@ from yamaa.expressions import (
     parse_numeric_cached,
     parse_predicate_cached,
 )
+from yamaa.expressions.core import CallableResolver
 from yamaa.expressions.windows import (
     WINDOW_OPERATIONS,
     Partition,
@@ -62,6 +63,7 @@ from yamaa.planning import (
 from yamaa.runtime.intermediates import (
     IntermediateOutcome,
     IntermediateSelector,
+    _key_base_entries,
     absent_value,
     evaluate_intermediate,
 )
@@ -375,7 +377,14 @@ class RowResolver:
             keep = multiple_matches.get("keep")
             if keep is not None:
                 payload["keep"] = keep
-        result = evaluate_intermediate(payload, relation, self.resolve)
+        result = evaluate_intermediate(
+            payload,
+            relation,
+            self.resolve,
+            evaluate=self._dispatcher.evaluate
+            if self._dispatcher is not None
+            else None,
+        )
         if isinstance(result, ValueResult):
             return ResolvedValue(value=result.value, handled_by=result.handled_by)
         return FailedResolution(condition=result.condition)
@@ -589,7 +598,12 @@ class RowResolver:
         if not isinstance(dataset, str) or dataset not in self._context.relations:
             return _invalid("lookup", "an undeclared dataset")
         return evaluate_intermediate(
-            payload, self._context.relations[dataset], self.resolve
+            payload,
+            self._context.relations[dataset],
+            self.resolve,
+            evaluate=self._dispatcher.evaluate
+            if self._dispatcher is not None
+            else None,
         )
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:
@@ -636,15 +650,39 @@ class RowResolver:
             selected = self._driver_group(relation_name, identifiers, predicate)
         else:
             key_fields = _names(payload.get("key"))
-            key_variables = _names(payload.get("key_base"))
-            if (
-                not key_fields
-                or not key_variables
-                or len(key_fields) != len(key_variables)
-            ):
+            key_entries = _key_base_entries(payload.get("key_base"))
+            if not key_fields or not key_entries or len(key_fields) != len(key_entries):
                 # REQ-0140: the planner requires the declared pairs, so this
                 # is only reachable on an unplanned path.
                 return _invalid("aggregate", "declared key and source pairs")
+            key_values: list[RuntimeValue] = []
+            key_resolver = CallableResolver(self.resolve)
+            # REQ-1189: the key_base expressions evaluate through the
+            # configured dispatcher, like the derive bindings below.
+            dispatcher = self._dispatcher or ExpressionDispatcher()
+            for index, entry in enumerate(key_entries):
+                if isinstance(entry, str):
+                    resolved = self.resolve(entry)
+                    if isinstance(resolved, ResolvedValue):
+                        key_values.append(resolved.value)
+                    elif isinstance(resolved, FailedResolution):
+                        return ConditionResult(condition=resolved.condition)
+                    else:
+                        key_values.append(MISSING)
+                    continue
+                # REQ-1259: a key_base expression evaluates against the
+                # current row and supplies that key position's match value.
+                # A missing result matches nothing.
+                expression = Expression.model_validate(dict(entry))
+                evaluated = dispatcher.evaluate(expression, key_resolver)
+                if isinstance(evaluated, ConditionResult):
+                    return evaluated
+                if not isinstance(evaluated, ValueResult):
+                    return _invalid(
+                        "aggregate",
+                        "a key_base expression that did not evaluate to a value",
+                    )
+                key_values.append(evaluated.value)
             selected = self._right_side(
                 relation_name,
                 identifiers,
@@ -652,7 +690,7 @@ class RowResolver:
                 predicate,
                 payload.get("between"),
                 key_fields,
-                key_variables,
+                key_values,
                 derive,
             )
         if isinstance(selected, ConditionResult):
@@ -696,20 +734,12 @@ class RowResolver:
         predicate: PredicateAst | None,
         between: object,
         key_fields: Sequence[str],
-        key_variables: Sequence[str],
+        key_values: Sequence[RuntimeValue],
         derive: object = None,
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
         """Reduce the partition REQ-0140 selects for the current row."""
         relation = self._context.relations[dataset]
-        values: list[RuntimeValue] = []
-        for name in key_variables:
-            resolved = self.resolve(name)
-            if isinstance(resolved, ResolvedValue):
-                values.append(resolved.value)
-            elif isinstance(resolved, FailedResolution):
-                return ConditionResult(condition=resolved.condition)
-            else:
-                values.append(MISSING)
+        values: list[RuntimeValue] = list(key_values)
         # `matching` keeps right records with a missing key out of every
         # match, and a current row carrying a missing key reaches nothing
         # for the same reason: an uncollected identifier is not an identity

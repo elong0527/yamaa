@@ -1262,3 +1262,4 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1256](../operations/expressions.md#req-1256) | `operations/expressions.md` | Schema prose |
 | [REQ-1257](../operations/expressions.md#req-1257) | `operations/expressions.md` | Schema prose |
 | [REQ-1258](../operations/expressions.md#req-1258) | `operations/expressions.md` | Schema prose |
+| [REQ-1259](../operations/lookup.md#req-1259) | `operations/lookup.md` | Schema prose |

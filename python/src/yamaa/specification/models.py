@@ -131,7 +131,10 @@ class IntermediateVerification(_StrictModel):
 class Intermediate(_StrictModel):
     id: str
     dataset: str
-    key_base: list[str] | None = None
+    # REQ-1259: a key_base entry is a bare variable or an expression the
+    # current row evaluates; the planner turns expressions into synthetic
+    # match names paired with their KeyBaseExpression.
+    key_base: list[str | Expression] | None = None
     key: list[str] | None = None
     between: IntermediateBetween | None = None
     filter: str | None = None

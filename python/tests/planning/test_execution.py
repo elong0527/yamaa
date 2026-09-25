@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
+
 import pytest
 
 from yamaa.expressions import DEFAULT_EXPRESSION_OPERATIONS
@@ -610,6 +612,460 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     # A declared source and key with strict: true makes an unmatched key fatal.
     assert plan.intermediates[0].strict is True
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
+
+
+def test_key_base_expression_plans_with_synthetic_name() -> None:
+    # REQ-1259: a key_base expression entry takes a synthetic match name and
+    # contributes its read identifiers as dependencies.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"str_upper": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=("source", "literal", "mapping", "str_upper"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+    assert len(planned.match_expressions) == 1
+    keyed = planned.match_expressions[0]
+    assert keyed.name == "key_base[0]"
+    assert keyed.variables == ("A",)
+    assert planned.dependencies == ("A",)
+
+
+def test_key_base_expression_type_mismatch_fails() -> None:
+    # REQ-1259: a statically known expression result type checks against the
+    # donor key type with the existing comparability rules.
+    int_table = frame_from_values(
+        (TypedColumn(name="X", type="int"),),
+        [[1], [2]],
+    )
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"str_upper": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": int_table},
+            supported_operations=("source", "literal", "mapping", "str_upper"),
+        )
+
+    assert raised.value.diagnostics[0].condition == "incompatible_input_type"
+
+
+def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:
+    # REQ-1259: mapping's result type depends on its dict values, so it
+    # states no static type; a mapping returning ints pairs with an int
+    # donor key and the pair is judged at run time, not planning time.
+    int_table = frame_from_values(
+        (TypedColumn(name="X", type="int"),),
+        [[1], [2]],
+    )
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="int", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"mapping": {"source": "A", "dict": {"x": 1, "y": 2}}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": int_table},
+        supported_operations=("source", "literal", "mapping"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+
+
+def test_a_date_precision_key_base_expression_pairs_with_a_str_key() -> None:
+    # REQ-1259: date_precision returns a str precision code ("Y"/"M"/"D"),
+    # so it pairs with a str donor key.
+    src_table = frame_from_values(
+        (TypedColumn(name="D", type="date"), TypedColumn(name="X", type="str")),
+        [[date(2024, 1, 15), "Y"], [date(2024, 3, 20), "M"]],
+    )
+    spec = specification(
+        [
+            Column(name="A", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"date_precision": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": src_table},
+        supported_operations=("source", "literal", "date_precision"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+
+
+def test_a_datetime_precision_key_base_expression_pairs_with_a_str_key() -> None:
+    # REQ-1259: datetime_precision returns a str precision code ("D"/"S"),
+    # so it pairs with a str donor key.
+    src_table = frame_from_values(
+        (
+            TypedColumn(name="D", type="datetime"),
+            TypedColumn(name="X", type="str"),
+        ),
+        [
+            [datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC), "D"],
+            [datetime(2024, 3, 20, 8, 30, 0, tzinfo=UTC), "S"],
+        ],
+    )
+    spec = specification(
+        [
+            Column(
+                name="A",
+                type="datetime",
+                derivation=derivation({"source": "SRC.D"}),
+            ),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"datetime_precision": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": src_table},
+        supported_operations=("source", "literal", "datetime_precision"),
+    )
+
+    planned = plan.intermediates[0]
+    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_fields == ("X",)
+
+
+def test_an_inline_lookup_key_base_expression_plans() -> None:
+    # REQ-1259: an inline lookup accepts a key_base expression; the planner
+    # validates it as an expression model, not a raw mapping.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="str",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "SRC",
+                            "key_base": [{"str_upper": {"source": "A"}}],
+                            "key": ["X"],
+                            "value": "X",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    # A clean return means no diagnostics: plan_execution raises otherwise.
+    assert plan.columns[-1].column == "V"
+
+
+def test_a_qualified_aggregate_key_base_expression_plans() -> None:
+    # REQ-1259: a qualified aggregate accepts a key_base expression; the
+    # planner normalizes it to an expression model before rendering.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="N",
+                type="int",
+                derivation=derivation(
+                    {
+                        "aggregate": {
+                            "dataset": "SRC",
+                            "key_base": [{"str_upper": {"source": "A"}}],
+                            "key": ["X"],
+                            "expr": "COUNT(SRC.*)",
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert plan.columns[-1].column == "N"
+
+
+def test_a_key_base_expression_collects_only_real_references() -> None:
+    # REQ-1259: the expression's dependencies are its references, not every
+    # string leaf, so a literal string contributes no dependency.
+    spec = specification(
+        [
+            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"literal": "A"}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=("source", "literal", "mapping"),
+    )
+
+    keyed = plan.intermediates[0].match_expressions[0]
+    assert keyed.variables == ()
+    assert plan.intermediates[0].dependencies == ()
+
+
+@pytest.mark.parametrize(
+    ("operation", "payload", "source_type", "key_type"),
+    [
+        ("round_half_away_from_zero", {"source": "A", "digits": 0}, "float", "float"),
+        ("to_epoch_day", {"source": "A"}, "date", "int"),
+    ],
+)
+def test_a_key_base_expression_depends_on_the_source_it_reads(
+    operation: str, payload: dict[str, object], source_type: str, key_type: str
+) -> None:
+    # REQ-1259: selection evaluates a named intermediate's key_base
+    # expression over exactly its recorded reads, so an operation's `source`
+    # must be one of them.
+    table = frame_from_values(
+        (
+            TypedColumn(name="S", type=source_type),
+            TypedColumn(name="X", type=key_type),
+        ),
+        [],
+    )
+    spec = specification(
+        [
+            Column(
+                name="A", type=source_type, derivation=derivation({"source": "SRC.S"})
+            ),
+            Column(
+                name="B", type=key_type, derivation=derivation({"source": "LOOK.X"})
+            ),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{operation: payload}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec, {"SRC": table}, supported_operations=DEFAULT_EXPRESSION_OPERATIONS
+    )
+
+    assert plan.intermediates[0].match_expressions[0].variables == ("A",)
+    assert plan.intermediates[0].dependencies == ("A",)
+
+
+@pytest.mark.parametrize("operation", ["greatest", "least"])
+def test_a_greatest_or_least_key_base_expression_pairs_with_a_date_key(
+    operation: str,
+) -> None:
+    # REQ-1259/REQ-0425: greatest and least return the extreme of any
+    # comparable type, so their result type depends on their inputs and a
+    # date extreme pairs with a date donor key.
+    table = frame_from_values(
+        (TypedColumn(name="D", type="date"), TypedColumn(name="X", type="str")),
+        [[date(2024, 1, 15), "a"]],
+    )
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="A", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="B", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="V", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{operation: {"sources": ["A", "B"]}}],
+                    key=["D"],
+                )
+            ]
+        }
+    )
+
+    plan = plan_execution(
+        spec, {"SRC": table}, supported_operations=DEFAULT_EXPRESSION_OPERATIONS
+    )
+
+    assert plan.intermediates[0].match_fields == ("D",)
+
+
+def test_a_named_key_base_expression_checks_its_input_types() -> None:
+    # REQ-1259: a named intermediate's key_base expression is held to the
+    # same input types as the expression written inline.
+    table = frame_from_values(
+        (TypedColumn(name="N", type="int"), TypedColumn(name="X", type="str")),
+        [[1, "a"]],
+    )
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="A", type="int", derivation=derivation({"source": "SRC.N"})),
+            Column(name="V", type="str", derivation=derivation({"source": "LOOK.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"str_upper": {"source": "A"}}],
+                    key=["X"],
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec, {"SRC": table}, supported_operations=DEFAULT_EXPRESSION_OPERATIONS
+        )
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "incompatible_input_type"
+    assert diagnostic.requirement == "REQ-0308"
+    assert diagnostic.spec_paths == ("intermediates[0].key_base[0].str_upper.source",)
+    assert diagnostic.context == {"source": "A", "expected": "str", "actual": "int"}
+
+
+@pytest.mark.parametrize(
+    ("operation", "payload", "condition"),
+    [
+        (
+            "lookup",
+            {"dataset": "SRC", "key": ["X"], "value": "X"},
+            "invalid_field_type",
+        ),
+        ("aggregate", {"key": ["X"], "expr": "COUNT(SRC.*)"}, "missing_aggregate_keys"),
+    ],
+)
+def test_a_key_base_entry_of_two_operations_is_a_diagnostic(
+    operation: str, payload: dict[str, object], condition: str
+) -> None:
+    # REQ-1259: an expression entry names exactly one operation; a malformed
+    # entry is reported, never raised out of the planner.
+    malformed = {"str_upper": {"source": "X"}, "literal": "A"}
+    spec = specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="str" if operation == "lookup" else "int",
+                derivation=derivation(
+                    {operation: {**payload, "key_base": [malformed]}}
+                ),
+            ),
+        ]
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    assert [item.condition for item in raised.value.diagnostics] == [condition]
 
 
 def test_a_lookup_defaults_to_missing_on_absence() -> None:

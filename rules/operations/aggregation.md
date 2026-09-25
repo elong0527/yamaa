@@ -419,7 +419,7 @@ structural constraints come from its schema declaration.
 | `aggregate_class.between` | Current-row value matched inclusively against one or two columns of a qualified right-side relation. |
 | `aggregate_class.group_by` | Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys. |
 | `aggregate_class.key` | Dataset columns matched against key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)) when the expression reads a qualified dataset relation. |
-| `aggregate_class.key_base` | Current-row variables paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `aggregate_class.key_base` | Current-row variables or expressions ([REQ-1259](lookup.md#req-1259)) paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
 | `aggregate_class.derive` | Per-record intermediate variable bindings evaluated before reduction ([REQ-1189](aggregation.md#req-1189)). |
 | `aggregate_class.expr` | Closed reducer expression over the records of one relation. |
 

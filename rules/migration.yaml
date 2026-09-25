@@ -2329,6 +2329,7 @@ requirements:
   REQ-1256: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:expressions.flag.description", "schema_expression_core.yaml:flag_class.condition.description", "schema_expression_core.yaml:flag_class.true_value.description", "yamaa:issue-881:flag-shorthand"]}
   REQ-1257: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:flag_class.false_value.description", "schema_expression_core.yaml:flag_class.missing_value.description", "yamaa:issue-881:flag-semantics"]}
   REQ-1258: {"file": "operations/expressions.md", "sources": ["yamaa:issue-881:flag-missing-value-required"]}
+  REQ-1259: {"file": "operations/lookup.md", "sources": ["schema.yaml:key_base_entry.description", "yamaa:issue-994:key-base-expressions"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2808,3 +2809,5 @@ provenance_addenda:
   - {"source": "yamaa:issue-881:flag-shorthand", "text": "flag is the shorthand for the common one-branch case that returns a flag value.", "owner": "operations/expressions", "group": "expressions.flag", "target": "REQ-1256"}
   - {"source": "yamaa:issue-881:flag-semantics", "text": "TRUE, FALSE, and UNKNOWN select true_value, false_value, and missing_value respectively; an unknown condition never falls through to false_value.", "owner": "operations/expressions", "group": "expressions.flag", "target": "REQ-1257"}
   - {"source": "yamaa:issue-881:flag-missing-value-required", "text": "A flag that declares false_value also declares missing_value; without it the flag fails as missing_value_required.", "owner": "operations/expressions", "group": "expressions.flag", "target": "REQ-1258"}
+  - {"source": "schema.yaml:key_base_entry.description", "text": "A key_base entry is a variable or an expression; an expression is evaluated against the current row.", "owner": "operations/lookup", "group": "key-base-expressions", "target": "REQ-1259"}
+  - {"source": "yamaa:issue-994:key-base-expressions", "text": "Issue #994: key_base accepts expressions, evaluated against the current row as the match operand.", "owner": "operations/lookup", "group": "key-base-expressions", "target": "REQ-1259"}

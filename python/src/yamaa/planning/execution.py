@@ -91,6 +91,20 @@ class PlannedDerivation(_FrozenModel):
         return f"{self.expression_path}.{self.declaration.value.operation}"
 
 
+class KeyBaseExpression(_FrozenModel):
+    """One key_base expression entry REQ-1259 plans.
+
+    `name` is the synthetic match name (`key_base[<index>]`) the entry takes
+    in `match_variables`; `expression` is evaluated against the current row
+    at match time; `variables` are the current-row identifiers the
+    expression reads, which `dependencies` reports.
+    """
+
+    name: str = Field(min_length=1)
+    expression: Expression
+    variables: tuple[str, ...] = ()
+
+
 class PlannedIntermediate(_FrozenModel):
     """One validated `intermediates` entry, ready to select a record.
 
@@ -98,7 +112,10 @@ class PlannedIntermediate(_FrozenModel):
     what the current row reads, the second the right-side column it must
     equal. Both come from the entry's declared `source` and `key`, with
     REQ-0153 inferring an omitted key from the applicable output keys and
-    REQ-0154 defaulting an omitted source to the key names.
+    REQ-0154 defaulting an omitted source to the key names. A `key_base`
+    entry that is an expression (REQ-1259) takes the synthetic name
+    `key_base[<index>]` in `match_variables`, and its `KeyBaseExpression`
+    lives in `match_expressions`.
     """
 
     identifier: str = Field(min_length=1)
@@ -107,6 +124,7 @@ class PlannedIntermediate(_FrozenModel):
     path: str = Field(min_length=1)
     match_variables: tuple[str, ...]
     match_fields: tuple[str, ...]
+    match_expressions: tuple[KeyBaseExpression, ...] = ()
     filter_predicate: dict[str, Any] | None = None
     order_terms: tuple[tuple[OrderTerm, str], ...] = ()
     keep: Literal["first", "last"] | None = None
@@ -142,9 +160,15 @@ class PlannedIntermediate(_FrozenModel):
 
         Donor fields contribute no current-row dependency. Matching values,
         range values and correlated filter fields must be available before
-        selecting the shared record.
+        selecting the shared record. REQ-1259: a key_base expression entry
+        contributes the identifiers its expression reads, not its synthetic
+        match name.
         """
-        names = [*self.match_variables, *self.filter_variables]
+        synthetic = {keyed.name for keyed in self.match_expressions}
+        names = [name for name in self.match_variables if name not in synthetic]
+        names.extend(self.filter_variables)
+        for keyed in self.match_expressions:
+            names.extend(keyed.variables)
         if self.between_value is not None:
             names.append(self.between_value)
         return tuple(dict.fromkeys(names))
@@ -276,6 +300,16 @@ class _Reference:
     # The other name this reference's runtime type must be comparable with,
     # which is how REQ-0305 pairs a `intermediate` source with its key column.
     same_type_as: str | None = None
+    # REQ-1259: a key_base expression entry's planned expression. `name` is
+    # the synthetic match name (`key_base[i]`), which is not a real variable:
+    # ordinary name validation and dependency recording skip it, and only the
+    # paired-type check applies (against `same_type_as`).
+    key_expression: KeyBaseExpression | None = None
+    # REQ-1259: parallel to `join_key_base`; the planned expression for each
+    # declared key_base entry, or None when the entry is a bare variable.
+    # Lets _validate_aggregate_keys type-check expression results instead of
+    # resolving synthetic names.
+    join_key_expressions: tuple[KeyBaseExpression | None, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,6 +414,15 @@ _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] =
     "to_date": (("source", None, "REQ-0607"),),
 }
 
+# The operations whose `source` names one variable their handler types at
+# evaluation. The read is still a dependency, and REQ-1259 evaluates a named
+# intermediate's key_base expression over exactly the reads collected here.
+_EVALUATED_SOURCES: tuple[str, ...] = (
+    "round_half_away_from_zero",
+    "str_contains",
+    "to_epoch_day",
+)
+
 
 def _expression_info(
     expression: Expression,
@@ -470,6 +513,10 @@ def _expression_info(
             for field, expected, requirement in _TEMPORAL_VARIABLES[operation]
             if isinstance(payload.get(field), str)
         )
+    elif operation in _EVALUATED_SOURCES and isinstance(payload, Mapping):
+        variable = payload.get("source")
+        if isinstance(variable, str):
+            references.append(_Reference(variable, f"{operation_path}.source"))
     elif operation == "function" and isinstance(payload, Mapping):
         arguments = payload.get("args")
         if isinstance(arguments, Mapping):
@@ -513,11 +560,25 @@ def _expression_info(
         )
     elif operation == "aggregate":
         diagnostics.extend(
-            _aggregate_references(payload, operation_path, references, scope)
+            _aggregate_references(
+                payload,
+                operation_path,
+                references,
+                scope,
+                supported_operations,
+                unsupported,
+            )
         )
     elif operation == "lookup" and isinstance(payload, Mapping):
         _lookup_references(
-            payload, operation_path, references, diagnostics, dataset_fields
+            payload,
+            operation_path,
+            references,
+            diagnostics,
+            supported_operations,
+            unsupported,
+            scope=scope,
+            dataset_fields=dataset_fields,
         )
     elif operation == "str_template":
         template = payload if isinstance(payload, str) else None
@@ -707,11 +768,107 @@ def _as_names(value: object) -> tuple[str, ...] | None:
     return None
 
 
+def _key_base_entries(
+    value: object,
+) -> tuple[str | Mapping[str, object], ...] | None:
+    """Normalize a written `key_base` to its entries.
+
+    REQ-1259: each entry is a bare variable or an expression mapping of
+    exactly one operation, as the runtime reads it. Returns None when the
+    value is not a variable, such a mapping, or a list of those, so a
+    malformed entry is reported rather than failing expression validation.
+    """
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping) and len(value) == 1:
+        return (value,)
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        entries: list[str | Mapping[str, object]] = []
+        for item in value:
+            if isinstance(item, str) or (isinstance(item, Mapping) and len(item) == 1):
+                entries.append(item)
+            else:
+                return None
+        return tuple(entries)
+    return None
+
+
+# REQ-1259: operations whose result type is statically known, for the
+# REQ-0118 comparability check on key_base expressions. Operations absent
+# here (or whose result depends on their inputs) defer the check to the
+# runtime, which compares values, not declared types.
+_KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
+    "cut": "str",
+    "date_diff": "int",
+    "date_impute": "date",
+    "date_precision": "str",
+    "datetime_impute": "datetime",
+    "datetime_precision": "str",
+    "rank": "int",
+    "row_number": "int",
+    "str_concat": "str",
+    "str_contains": "bool",
+    "str_extract": "str",
+    "str_lower": "str",
+    "str_sentence": "str",
+    "str_template": "str",
+    "str_title": "str",
+    "str_upper": "str",
+    "study_day": "int",
+    "to_date": "date",
+    "to_epoch_day": "int",
+    # compute and round_half_away_from_zero are numeric; int and float compare
+    # mutually under REQ-0005, so "float" covers both. The greatest and least
+    # registry expressions return the extreme of any comparable type
+    # (REQ-0425), so their result type depends on their inputs.
+    "compute": "float",
+    "round_half_away_from_zero": "float",
+}
+
+
+def _key_base_result_type(
+    expression: Expression,
+    bindings: BindingPlan,
+    column_types: Mapping[str, ColumnType],
+) -> ColumnType | None:
+    """Infer a key_base expression's static result type, if it is known.
+
+    `source` takes its variable's type, `literal` takes its value's type,
+    and the fixed-result operations above take their table type. Anything
+    else returns None, deferring comparability to the runtime (REQ-1259).
+    """
+    operation = expression.operation
+    payload = expression.root[operation]
+    if operation == "source":
+        variable: object = payload
+        if isinstance(payload, Mapping):
+            variable = payload.get("variable")
+        if isinstance(variable, str):
+            return _reference_type(variable, bindings, column_types)
+        return None
+    if operation == "literal":
+        value = payload.get("value") if isinstance(payload, Mapping) else payload
+        if isinstance(value, bool):
+            return "bool"
+        if isinstance(value, int):
+            return "int"
+        if isinstance(value, float):
+            return "float"
+        if isinstance(value, str):
+            return "str"
+        return None
+    return _KEY_BASE_RESULT_TYPES.get(operation)
+
+
 def _lookup_references(
     payload: Mapping[str, object],
     operation_path: str,
     references: list[_Reference],
     diagnostics: list[ExecutionDiagnostic],
+    supported_operations: Collection[str],
+    unsupported: list[UnsupportedFeature],
+    *,
+    scope: _Scope,
     dataset_fields: Mapping[str, Collection[str]] | None = None,
 ) -> None:
     """Collect the declared key pairs R007 makes this intermediate match on.
@@ -724,33 +881,45 @@ def _lookup_references(
     between's type comparability is checked when the intermediate runs, as with
     an unplanned path.
     """
-    sources = _as_names(payload.get("key_base"))
+    entries = _key_base_entries(payload.get("key_base"))
     keys = _as_names(payload.get("key"))
     dataset = payload.get("dataset")
     value = payload.get("value")
-    for name, declared in (("key_base", sources), ("key", keys)):
-        if payload.get(name) is not None and declared is None:
-            # The fill leaves a written-but-malformed list alone, so a `key`
-            # or `key_base` that names no identifiers is reported here rather
-            # than reaching the runtime as an unvalidated payload.
-            diagnostics.append(
-                _diagnostic(
-                    "invalid_field_type",
-                    operation_path,
-                    {
-                        "operation": "lookup",
-                        "expected": f"{name} as an identifier or a list of them",
-                    },
-                    requirement="REQ-0321",
-                )
+    if payload.get("key_base") is not None and entries is None:
+        # The fill leaves a written-but-malformed list alone, so a `key_base`
+        # that holds no variable or expression is reported here rather than
+        # reaching the runtime as an unvalidated payload.
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                operation_path,
+                {
+                    "operation": "lookup",
+                    "expected": "key_base as a variable, an expression, or a list of them",
+                },
+                requirement="REQ-0321",
             )
-            return
+        )
+        return
+    if payload.get("key") is not None and keys is None:
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                operation_path,
+                {
+                    "operation": "lookup",
+                    "expected": "key as an identifier or a list of them",
+                },
+                requirement="REQ-0321",
+            )
+        )
+        return
     if payload.get("key_base") is None or payload.get("key") is None:
         # REQ-0153/REQ-0154: the planner fills omitted pairs before reference
         # collection, or records no_applicable_keys when no key applies.
         # Either way there is nothing left to collect here.
         return
-    if sources is None or keys is None or not isinstance(dataset, str):
+    if entries is None or keys is None or not isinstance(dataset, str):
         diagnostics.append(
             _diagnostic(
                 "invalid_field_type",
@@ -760,22 +929,36 @@ def _lookup_references(
             )
         )
         return
-    if list(sources) == list(keys) and not payload.get("_key_base_defaulted"):
+    # REQ-1259: key_base expressions arrive as raw mappings on this path;
+    # validate each once so every use below sees an Expression model.
+    entries = tuple(
+        entry if isinstance(entry, str) else Expression.model_validate(dict(entry))
+        for entry in entries
+    )
+    rendered = [
+        entry if isinstance(entry, str) else entry.model_dump() for entry in entries
+    ]
+    if (
+        not payload.get("_key_base_defaulted")
+        and all(isinstance(entry, str) for entry in entries)
+        and list(entries) == list(keys)
+    ):
         # REQ-0155: an explicitly written key_base must not repeat the key
-        # names; omit it instead. (A defaulted key_base is not redundant.)
+        # names; omit it instead. (A defaulted key_base is not redundant, and
+        # an expression entry is never a repeated key name.)
         diagnostics.append(
             _diagnostic(
                 "redundant_key_base",
                 operation_path,
                 {
-                    "key_base": list(sources),
+                    "key_base": rendered,
                     "key": list(keys),
                 },
                 requirement="REQ-0155",
             )
         )
         return
-    if len(sources) != len(keys) or not sources:
+    if len(entries) != len(keys) or not entries:
         # REQ-0333: the lists pair by position, so unequal lengths name no
         # key, and an empty pairing matches nothing.
         diagnostics.append(
@@ -783,26 +966,60 @@ def _lookup_references(
                 "source_key_length_mismatch",
                 operation_path,
                 {
-                    "key_base": list(sources),
+                    "key_base": rendered,
                     "key": list(keys),
-                    "key_base_count": len(sources),
+                    "key_base_count": len(entries),
                     "key_count": len(keys),
                 },
                 requirement="REQ-0333",
             )
         )
         return
-    for index, (name, key) in enumerate(zip(sources, keys, strict=True)):
-        references.append(
-            _Reference(
-                name,
-                f"{operation_path}.key_base[{index}]",
-                # REQ-0305: each source and its key column must have the same
-                # comparable type, so the pair is checked rather than coerced.
-                same_type_as=f"{dataset}.{key}",
-                requirement="REQ-0305",
+    for index, (entry, key) in enumerate(zip(entries, keys, strict=True)):
+        entry_path = f"{operation_path}.key_base[{index}]"
+        if isinstance(entry, str):
+            references.append(
+                _Reference(
+                    entry,
+                    entry_path,
+                    # REQ-0305: each source and its key column must have the
+                    # same comparable type, so the pair is checked rather
+                    # than coerced.
+                    same_type_as=f"{dataset}.{key}",
+                    requirement="REQ-0305",
+                )
             )
-        )
+        else:
+            # REQ-1259: a key_base expression evaluates against the current
+            # row and supplies that key position's match value. The inner
+            # references validate as ordinary reads; the synthetic match name
+            # only carries the paired-type check.
+            info = _expression_info(
+                entry,
+                entry_path,
+                supported_operations,
+                scope=scope,
+                dataset_fields=dataset_fields,
+            )
+            keyed = KeyBaseExpression(
+                name=f"key_base[{index}]",
+                expression=entry,
+                # The expression's current-row dependencies are exactly the
+                # identifiers its references read -- not every string leaf.
+                variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
+            )
+            references.extend(info.references)
+            unsupported.extend(info.unsupported)
+            diagnostics.extend(info.diagnostics)
+            references.append(
+                _Reference(
+                    keyed.name,
+                    entry_path,
+                    same_type_as=f"{dataset}.{key}",
+                    requirement="REQ-0305",
+                    key_expression=keyed,
+                )
+            )
         references.append(
             _Reference(
                 f"{dataset}.{key}",
@@ -1223,7 +1440,13 @@ def _derive_reference_names(derivation: object) -> list[str]:
                 if operation == "lookup" and isinstance(payload, Mapping):
                     key_base = payload.get("key_base")
                     entries = key_base if isinstance(key_base, list) else [key_base]
-                    names.extend(entry for entry in entries if isinstance(entry, str))
+                    for entry in entries:
+                        if isinstance(entry, str):
+                            names.append(entry)
+                        elif isinstance(entry, Mapping):
+                            # REQ-1259: a key_base expression reads what its
+                            # own derivation names.
+                            visit(entry)
                     add_predicate_names(payload.get("filter"))
                     add_order_by_names(payload.get("order_by"))
                     between = payload.get("between")
@@ -1285,6 +1508,8 @@ def _aggregate_references(
     operation_path: str,
     references: list[_Reference],
     scope: _Scope,
+    supported_operations: Collection[str],
+    unsupported: list[UnsupportedFeature],
 ) -> list[ExecutionDiagnostic]:
     """Read one R013 reduction and report the context R007 does not permit."""
     if isinstance(payload, str):
@@ -1493,15 +1718,27 @@ def _aggregate_references(
     joined = relation if scope.grouped_driver is None and relation else None
     key_fields: tuple[str, ...] | None = None
     key_variables: tuple[str, ...] | None = None
+    key_expressions: tuple[KeyBaseExpression | None, ...] | None = None
     if joined is not None:
         keys = _as_names(payload.get("key"))
-        source_vars = _as_names(payload.get("key_base"))
+        entries = _key_base_entries(payload.get("key_base"))
+        if entries is not None:
+            # REQ-1259: key_base expressions arrive as raw mappings on this
+            # path; validate each once so every use below sees an
+            # Expression model.
+            entries = tuple(
+                entry
+                if isinstance(entry, str)
+                else Expression.model_validate(dict(entry))
+                for entry in entries
+            )
         if (payload.get("key") is not None and keys is None) or (
-            payload.get("key_base") is not None and source_vars is None
+            payload.get("key_base") is not None and entries is None
         ):
             # REQ-0140: the fill leaves a written-but-malformed list alone, so
-            # a `key` or `key_base` that names no identifiers is reported here
-            # rather than reducing over the whole relation unkeyed.
+            # a `key` or `key_base` that holds no variable or expression is
+            # reported here rather than reducing over the whole relation
+            # unkeyed.
             diagnostics.append(
                 _diagnostic(
                     "missing_aggregate_keys",
@@ -1509,7 +1746,10 @@ def _aggregate_references(
                     {
                         "dataset": joined,
                         "key": list(keys or ()),
-                        "key_base": list(source_vars or ()),
+                        "key_base": [
+                            e if isinstance(e, str) else e.model_dump()
+                            for e in (entries or ())
+                        ],
                     },
                     requirement="REQ-0140",
                 )
@@ -1519,24 +1759,27 @@ def _aggregate_references(
             # reference collection, or records no_applicable_keys when no
             # key applies. Either way there is nothing left to check here.
             pass
-        elif list(source_vars or ()) == list(keys or ()) and not payload.get(
-            "_key_base_defaulted"
+        elif (
+            not payload.get("_key_base_defaulted")
+            and all(isinstance(e, str) for e in (entries or ()))
+            and list(entries or ()) == list(keys or ())
         ):
             # REQ-0155: an explicitly written key_base must not repeat the
-            # key names. (A defaulted key_base is not redundant.)
+            # key names. (A defaulted key_base is not redundant, and an
+            # expression entry is never a repeated key name.)
             diagnostics.append(
                 _diagnostic(
                     "redundant_key_base",
                     operation_path,
                     {
                         "dataset": joined,
-                        "key_base": list(source_vars or ()),
+                        "key_base": list(entries or ()),
                         "key": list(keys or ()),
                     },
                     requirement="REQ-0155",
                 )
             )
-        elif not keys or not source_vars or len(keys) != len(source_vars):
+        elif not keys or not entries or len(keys) != len(entries):
             diagnostics.append(
                 _diagnostic(
                     "missing_aggregate_keys",
@@ -1544,14 +1787,46 @@ def _aggregate_references(
                     {
                         "dataset": joined,
                         "key": list(keys or ()),
-                        "key_base": list(source_vars or ()),
+                        "key_base": [
+                            e if isinstance(e, str) else e.model_dump()
+                            for e in (entries or ())
+                        ],
                     },
                     requirement="REQ-0140",
                 )
             )
         else:
             key_fields = tuple(keys)
-            key_variables = tuple(source_vars)
+            keyed: list[KeyBaseExpression | None] = []
+            variables: list[str] = []
+            for index, entry in enumerate(entries):
+                if isinstance(entry, str):
+                    keyed.append(None)
+                    variables.append(entry)
+                    continue
+                # REQ-1259: a key_base expression evaluates against the
+                # current row and supplies that key position's match value.
+                info = _expression_info(
+                    entry,
+                    f"{operation_path}.key_base[{index}]",
+                    supported_operations,
+                    scope=scope,
+                )
+                planned = KeyBaseExpression(
+                    name=f"key_base[{index}]",
+                    expression=entry,
+                    # The expression's current-row dependencies are exactly
+                    # the identifiers its references read -- not every
+                    # string leaf.
+                    variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
+                )
+                keyed.append(planned)
+                variables.append(planned.name)
+                references.extend(info.references)
+                unsupported.extend(info.unsupported)
+                diagnostics.extend(info.diagnostics)
+            key_variables = tuple(variables)
+            key_expressions = tuple(keyed)
 
     def relational(name: str, path: str) -> _Reference:
         qualified = "." in name
@@ -1561,6 +1836,7 @@ def _aggregate_references(
             join_relation=joined if qualified else None,
             join_key=key_fields if qualified and joined else None,
             join_key_base=key_variables if qualified and joined else None,
+            join_key_expressions=key_expressions if qualified and joined else None,
             reach="relation" if qualified else "scalar",
         )
 
@@ -1938,6 +2214,9 @@ def _plan_derivation(
             reference.name
             for reference in ordered_references
             if "." not in reference.name
+            # REQ-1259: a key_base expression's synthetic match name is not a
+            # real variable; its inner references already carry the true deps.
+            and reference.key_expression is None
             and not (reference.current_value_available and reference.name == column)
         )
     )
@@ -2254,7 +2533,16 @@ def _validate_paired_type(
     """Check the two halves of a declared key pair against REQ-0305."""
     if reference.same_type_as is None:
         return
-    actual = _reference_type(reference.name, bindings, column_types)
+    if reference.key_expression is not None:
+        # REQ-1259: a key_base expression entry compares its statically known
+        # result type; an unknown static type defers the check to the runtime.
+        actual = _key_base_result_type(
+            reference.key_expression.expression, bindings, column_types
+        )
+        if actual is None:
+            return
+    else:
+        actual = _reference_type(reference.name, bindings, column_types)
     expected = _reference_type(reference.same_type_as, bindings, column_types)
     if actual is None or expected is None or _comparable_types(actual, expected):
         return
@@ -2635,8 +2923,9 @@ def _validate_aggregate_keys(
     assert reference.join_key_base is not None
     dataset = reference.join_relation
     fields = _dataset_types(bindings, dataset)
-    for variable, field in zip(
-        reference.join_key_base, reference.join_key, strict=True
+    expressions = reference.join_key_expressions or ()
+    for index, (variable, field) in enumerate(
+        zip(reference.join_key_base, reference.join_key, strict=True)
     ):
         if field not in fields:
             diagnostics.append(
@@ -2648,17 +2937,26 @@ def _validate_aggregate_keys(
                 )
             )
             continue
-        left = _reference_type(variable, bindings, column_types)
-        if left is None:
-            diagnostics.append(
-                _diagnostic(
-                    "unknown_field",
-                    reference.path,
-                    {"identifier": variable},
-                    requirement="REQ-0141",
+        keyed = expressions[index] if index < len(expressions) else None
+        if keyed is not None:
+            # REQ-1259: a key_base expression entry compares its statically
+            # known result type; an unknown static type defers to the runtime.
+            # The inner references were validated separately.
+            left = _key_base_result_type(keyed.expression, bindings, column_types)
+            if left is None:
+                continue
+        else:
+            left = _reference_type(variable, bindings, column_types)
+            if left is None:
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        reference.path,
+                        {"identifier": variable},
+                        requirement="REQ-0141",
+                    )
                 )
-            )
-            continue
+                continue
         right = fields[field]
         if _comparable_types(left, right):
             continue
@@ -2810,8 +3108,37 @@ def _plan_lookups(
             # REQ-0154: an omitted key_base defaults to the key names.
             variables = match_fields
             source_defaulted = True
+            match_expressions: tuple[KeyBaseExpression, ...] = ()
         else:
-            variables = tuple(intermediate.key_base)
+            # REQ-1259: a key_base entry is a bare variable or an ordinary
+            # expression; an expression evaluates against the current row and
+            # supplies that key position's match value.
+            variables_list: list[str] = []
+            keyed_list: list[KeyBaseExpression] = []
+            keyed_infos: dict[str, _ExpressionInfo] = {}
+            for index, entry in enumerate(intermediate.key_base):
+                if isinstance(entry, str):
+                    variables_list.append(entry)
+                    continue
+                info = _expression_info(
+                    entry,
+                    f"{path}.key_base[{index}]",
+                    supported_operations,
+                    dataset_fields=dataset_fields,
+                )
+                keyed = KeyBaseExpression(
+                    name=f"key_base[{index}]",
+                    expression=entry,
+                    # The expression's current-row dependencies are exactly
+                    # the identifiers its references read -- not every
+                    # string leaf.
+                    variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
+                )
+                variables_list.append(keyed.name)
+                keyed_list.append(keyed)
+                keyed_infos[keyed.name] = info
+            variables = tuple(variables_list)
+            match_expressions = tuple(keyed_list)
         if len(variables) != len(match_fields) or not variables:
             if intermediate.key_base is None or intermediate.key is None:
                 # REQ-0115: _lookup_declarations only sees the pairs the author
@@ -2850,8 +3177,18 @@ def _plan_lookups(
         # failure, but a key naming such a name cannot be satisfied.
         failed_derivations = set(intermediate.derivations or {}) - set(derived)
         available_fields = fields.keys() | derived.keys()
+        keyed_by_name = {keyed.name: keyed for keyed in match_expressions}
         for variable, field in zip(variables, match_fields, strict=True):
-            left = _reference_type(variable, bindings, column_types)
+            keyed = keyed_by_name.get(variable)
+            if keyed is not None:
+                # REQ-1259: a key_base expression entry compares its
+                # statically known result type; an unknown static type defers
+                # the check to the runtime.
+                left = _key_base_result_type(keyed.expression, bindings, column_types)
+                if left is None:
+                    continue
+            else:
+                left = _reference_type(variable, bindings, column_types)
             right = fields.get(field)
             if right is None and field in derived:
                 right = _DERIVED_RESULT_TYPES.get(derived[field].value.operation)
@@ -2892,7 +3229,49 @@ def _plan_lookups(
                     )
                 )
                 failed = True
-        for variable in variables:
+        for index, variable in enumerate(variables):
+            keyed = keyed_by_name.get(variable)
+            if keyed is not None:
+                # REQ-1259: every identifier a key_base expression reads must
+                # be known, and must have the input type its operation
+                # states, exactly as the same expression inline in a
+                # derivation would be checked.
+                info = keyed_infos[keyed.name]
+                unsupported.extend(info.unsupported)
+                diagnostics.extend(info.diagnostics)
+                for reference in info.references:
+                    actual = _reference_type(reference.name, bindings, column_types)
+                    if actual is None:
+                        diagnostics.append(
+                            _diagnostic(
+                                "unknown_field",
+                                f"{path}.key_base[{index}]",
+                                {
+                                    "intermediate": intermediate.id,
+                                    "identifier": reference.name,
+                                },
+                                requirement="REQ-0117",
+                            )
+                        )
+                        failed = True
+                    elif (
+                        reference.expected_type is not None
+                        and actual != reference.expected_type
+                    ):
+                        diagnostics.append(
+                            _diagnostic(
+                                "incompatible_input_type",
+                                reference.path,
+                                {
+                                    "source": reference.name,
+                                    "expected": reference.expected_type,
+                                    "actual": actual,
+                                },
+                                requirement=reference.requirement,
+                            )
+                        )
+                        failed = True
+                continue
             if _reference_type(variable, bindings, column_types) is None:
                 diagnostics.append(
                     _diagnostic(
@@ -3073,6 +3452,7 @@ def _plan_lookups(
             self_fields=tuple(self_fields) if intermediate.dataset == "SELF" else (),
             path=path,
             match_variables=variables,
+            match_expressions=match_expressions,
             match_fields=match_fields,
             filter_predicate=predicate,
             order_terms=tuple(terms),
@@ -4309,6 +4689,12 @@ def plan_execution(
                                 match, row=row, driver=driver, bindings=bindings
                             )
                         )
+                    elif reference.key_expression is not None:
+                        # REQ-1259: a key_base expression's synthetic match
+                        # name is not a real variable; the inner references
+                        # were validated separately, so only the paired-type
+                        # check below applies.
+                        pass
                     elif reference.name not in column_types:
                         # REQ-0106: an unqualified name only ever binds to an
                         # output column; when the bare name is a driver field
@@ -4496,6 +4882,11 @@ def plan_execution(
                     intermediates=intermediates,
                     grouped_by_driver=grouped_by_driver,
                 )
+            elif reference.key_expression is not None:
+                # REQ-1259: a key_base expression's synthetic match name is
+                # not a real variable; the inner references were validated
+                # separately, so only the paired-type check below applies.
+                pass
             elif reference.name not in column_types:
                 # REQ-0106: an unqualified name only ever binds to an output
                 # column; when the bare name is a field of a row driver the
