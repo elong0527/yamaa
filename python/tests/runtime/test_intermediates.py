@@ -6,6 +6,7 @@ from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, ConditionResult, DateValue, TypedColumn, ValueResult
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
 from yamaa.planning import KeyBaseExpression, PlannedIntermediate
+from yamaa.runtime import ExecutionSuccess, execute_specification
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
     _select_eligible,
@@ -14,7 +15,16 @@ from yamaa.runtime.intermediates import (
 )
 from yamaa.runtime.joins import RelationIndex
 from yamaa.runtime.rows import CandidateRow, RelationalContext, RowResolver
-from yamaa.specification.models import Expression, OrderTerm
+from yamaa.specification.models import (
+    Column,
+    DatasetSource,
+    Expression,
+    HandledExpression,
+    Intermediate,
+    OrderTerm,
+    Output,
+    Specification,
+)
 
 
 def relation(
@@ -316,6 +326,61 @@ def test_a_select_key_base_expression_without_a_dispatcher_is_a_condition() -> N
     assert answered.condition is not None
     assert answered.condition.condition.condition == "invalid_field_type"
     assert answered.condition.condition.requirement == "REQ-0321"
+
+
+def test_a_named_key_base_expression_reads_its_source_when_selecting() -> None:
+    # REQ-1259: selection evaluates the key_base expression over the row's
+    # recorded reads, so the source an operation names must be among them.
+    def read(variable: str) -> HandledExpression:
+        return HandledExpression(value=Expression(root={"source": variable}))
+
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "DM": DatasetSource(path="dm.csv"),
+            "TAB": DatasetSource(path="tab.csv"),
+        },
+        base="DM",
+        keys=["USUBJID"],
+        intermediates=[
+            Intermediate(
+                id="T",
+                dataset="TAB",
+                key_base=[
+                    {"round_half_away_from_zero": {"source": "SCORE", "digits": 0}}
+                ],
+                key=["K"],
+            )
+        ],
+        columns=[
+            Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+            Column(name="SCORE", type="float", derivation=read("DM.SCORE")),
+            Column(name="VAL", type="str", derivation=read("T.VAL")),
+        ],
+        output=Output(path="out.csv", columns=["USUBJID", "SCORE", "VAL"]),
+    )
+    sources = {
+        "DM": frame_from_values(
+            (
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="SCORE", type="float"),
+            ),
+            [["s1", 1.4], ["s2", 2.6]],
+        ),
+        "TAB": frame_from_values(
+            (TypedColumn(name="K", type="float"), TypedColumn(name="VAL", type="str")),
+            [[1.0, "one"], [3.0, "three"]],
+        ),
+    }
+
+    result = execute_specification(spec, sources)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert [row["VAL"] for row in result.artifact.frame.to_dicts()] == [
+        "one",
+        "three",
+    ]
 
 
 def epochs() -> RelationIndex:

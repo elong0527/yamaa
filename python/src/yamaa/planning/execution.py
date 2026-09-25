@@ -414,6 +414,15 @@ _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] =
     "to_date": (("source", None, "REQ-0607"),),
 }
 
+# The operations whose `source` names one variable their handler types at
+# evaluation. The read is still a dependency, and REQ-1259 evaluates a named
+# intermediate's key_base expression over exactly the reads collected here.
+_EVALUATED_SOURCES: tuple[str, ...] = (
+    "round_half_away_from_zero",
+    "str_contains",
+    "to_epoch_day",
+)
+
 
 def _expression_info(
     expression: Expression,
@@ -504,6 +513,10 @@ def _expression_info(
             for field, expected, requirement in _TEMPORAL_VARIABLES[operation]
             if isinstance(payload.get(field), str)
         )
+    elif operation in _EVALUATED_SOURCES and isinstance(payload, Mapping):
+        variable = payload.get("source")
+        if isinstance(variable, str):
+            references.append(_Reference(variable, f"{operation_path}.source"))
     elif operation == "function" and isinstance(payload, Mapping):
         arguments = payload.get("args")
         if isinstance(arguments, Mapping):
@@ -760,18 +773,19 @@ def _key_base_entries(
 ) -> tuple[str | Mapping[str, object], ...] | None:
     """Normalize a written `key_base` to its entries.
 
-    REQ-1259: each entry is a bare variable or an expression mapping.
-    Returns None when the value is not a variable, a mapping, or a list
-    of those.
+    REQ-1259: each entry is a bare variable or an expression mapping of
+    exactly one operation, as the runtime reads it. Returns None when the
+    value is not a variable, such a mapping, or a list of those, so a
+    malformed entry is reported rather than failing expression validation.
     """
     if isinstance(value, str):
         return (value,)
-    if isinstance(value, Mapping):
+    if isinstance(value, Mapping) and len(value) == 1:
         return (value,)
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         entries: list[str | Mapping[str, object]] = []
         for item in value:
-            if isinstance(item, (str, Mapping)):
+            if isinstance(item, str) or (isinstance(item, Mapping) and len(item) == 1):
                 entries.append(item)
             else:
                 return None
@@ -803,11 +817,11 @@ _KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
     "study_day": "int",
     "to_date": "date",
     "to_epoch_day": "int",
-    # compute, greatest, least, and round_half_away_from_zero are numeric;
-    # int and float compare mutually under REQ-0005, so "float" covers both.
+    # compute and round_half_away_from_zero are numeric; int and float compare
+    # mutually under REQ-0005, so "float" covers both. The greatest and least
+    # registry expressions return the extreme of any comparable type
+    # (REQ-0425), so their result type depends on their inputs.
     "compute": "float",
-    "greatest": "float",
-    "least": "float",
     "round_half_away_from_zero": "float",
 }
 
@@ -1425,7 +1439,13 @@ def _derive_reference_names(derivation: object) -> list[str]:
                 if operation == "lookup" and isinstance(payload, Mapping):
                     key_base = payload.get("key_base")
                     entries = key_base if isinstance(key_base, list) else [key_base]
-                    names.extend(entry for entry in entries if isinstance(entry, str))
+                    for entry in entries:
+                        if isinstance(entry, str):
+                            names.append(entry)
+                        elif isinstance(entry, Mapping):
+                            # REQ-1259: a key_base expression reads what its
+                            # own derivation names.
+                            visit(entry)
                     add_predicate_names(payload.get("filter"))
                     add_order_by_names(payload.get("order_by"))
                     between = payload.get("between")
@@ -3211,13 +3231,15 @@ def _plan_lookups(
             keyed = keyed_by_name.get(variable)
             if keyed is not None:
                 # REQ-1259: every identifier a key_base expression reads must
-                # be known; the inner references validate as ordinary reads
-                # at the entry's exact spec path.
+                # be known, and must have the input type its operation
+                # states, exactly as the same expression inline in a
+                # derivation would be checked.
                 info = keyed_infos[keyed.name]
                 unsupported.extend(info.unsupported)
                 diagnostics.extend(info.diagnostics)
                 for reference in info.references:
-                    if _reference_type(reference.name, bindings, column_types) is None:
+                    actual = _reference_type(reference.name, bindings, column_types)
+                    if actual is None:
                         diagnostics.append(
                             _diagnostic(
                                 "unknown_field",
@@ -3227,6 +3249,23 @@ def _plan_lookups(
                                     "identifier": reference.name,
                                 },
                                 requirement="REQ-0117",
+                            )
+                        )
+                        failed = True
+                    elif (
+                        reference.expected_type is not None
+                        and actual != reference.expected_type
+                    ):
+                        diagnostics.append(
+                            _diagnostic(
+                                "incompatible_input_type",
+                                reference.path,
+                                {
+                                    "source": reference.name,
+                                    "expected": reference.expected_type,
+                                    "actual": actual,
+                                },
+                                requirement=reference.requirement,
                             )
                         )
                         failed = True

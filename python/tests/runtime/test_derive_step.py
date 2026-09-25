@@ -548,6 +548,56 @@ def test_plan_rejects_derive_step_naming_two_relations() -> None:
     )
 
 
+def test_plan_reads_a_key_base_expression_in_a_binding_lookup() -> None:
+    """REQ-1259: a binding lookup's key_base expression names its relation."""
+    derive = [
+        {
+            "name": "QSNUM",
+            "type": "float",
+            "derivation": {
+                "lookup": {
+                    "dataset": "QS",
+                    "key_base": [{"str_upper": {"source": "QS.QSTESTCD"}}],
+                    "key": ["QSTESTCD"],
+                    "value": "QSORRES",
+                }
+            },
+        },
+    ]
+    spec = _planned_spec(derive)
+    # Without the filter, only the key_base expression names the relation.
+    del spec.columns[2].derivation.value.root["aggregate"]["filter"]
+
+    assert _plan_no_filter(spec) is None
+
+
+def test_plan_rejects_an_unknown_name_in_a_binding_key_base_expression() -> None:
+    """REQ-1189/REQ-1259: a key_base expression's reads are binding reads."""
+    derive = [
+        {"name": "QSNUM", "type": "float", "derivation": "QS.QSORRES"},
+        {
+            "name": "LOOKED",
+            "type": "float",
+            "derivation": {
+                "lookup": {
+                    "dataset": "QS",
+                    "key_base": [{"str_upper": {"source": "NOPE"}}],
+                    "key": ["QSTESTCD"],
+                    "value": "QSORRES",
+                }
+            },
+        },
+    ]
+
+    error = _plan(derive)
+
+    assert error is not None
+    assert [
+        (diagnostic.condition, diagnostic.context["variable"])
+        for diagnostic in error.diagnostics
+    ] == [("unknown_derive_variable", "NOPE")]
+
+
 # ---------------------------------------------------------------------------
 # REQ-1242: derive bindings may read keep-declared named intermediates.
 # ---------------------------------------------------------------------------
