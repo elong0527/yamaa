@@ -14,7 +14,7 @@ outside the three listed below.
 
 - `COUNTRY` is the collected country from demographics in upper
   case; a subject with no collected country is `UNKNOWN`. Every
-  collected country passes through — there is no allowed-countries
+  collected country passes through: there is no allowed-countries
   check, so the run never stops on a new country.
 - `REGION1` is the region for that country: `USA` and `CAN` give
   `North America`, `DEU` gives `Europe`, and any other country
