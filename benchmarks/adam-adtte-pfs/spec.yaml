@@ -9,7 +9,9 @@ base: ADSL
 intermediates:
   # Per subject: the first adequate progression (PD), the first death, and
   # the last adequate assessment, which sets the censoring date. Records
-  # sharing a date are ordered by sequence number.
+  # sharing a date are ordered by sequence number. An undated record can
+  # never supply a date: the date picks (MIN/MAX) skip blank dates, so
+  # the filters exclude undated records outright (issue #1008).
   - id: PROGRESSION
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
@@ -53,7 +55,7 @@ columns:
 
   - name: STARTDT
     type: date
-    label: Time-to-Event Origin Date
+    label: Time to Event Origin Date for Subject
     derivation: ADSL.RANDDT
 
   # The chosen records' dates as dates: RS and DS hold them as text.
@@ -151,8 +153,8 @@ columns:
 
 verifications:
   - row_count:
-      min: 5
-      max: 5
+      min: 9
+      max: 9
   - all_or_none:
       id: traceability-triplet-is-complete
       columns: [SRCDOM, SRCVAR, SRCSEQ]
