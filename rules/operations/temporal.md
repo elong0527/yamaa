@@ -60,13 +60,8 @@ a temporal value it reports that value's collected precision.
 
 <a id="req-0582"></a>
 
-**REQ-0582.** A known day in an unknown month has no representation, and this
-rule does not invent one. The collected text admitted above is prefix
-truncation only: a year, or a year and a month. A day known without its month
-cannot be collected in the first place, so there is no value for a precision to
-describe, and the ladder is a prefix ladder for exactly that reason. A study
-that records such a value keeps the collected text as `str`, as it does for
-every other text this contract does not admit.
+**REQ-0582.** A known day in an unknown month has no representation. A study
+that records such a value keeps the collected text as `str`.
 
 <a id="req-0583"></a>
 
