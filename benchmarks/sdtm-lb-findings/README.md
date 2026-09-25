@@ -1,4 +1,4 @@
-# Lab Findings
+# Build One Record per Collected Lab Result
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-findings.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -8,12 +8,14 @@ result with `LBTESTCD`, `LBTEST`, `LBORRES`, `LBORRESU`,
 `LBSTRESN`, `LBSTRESU` and `LBDTC`.
 
 **Input:** long-form Operational Data Model (ODM) rows, one row
-per collected item, with the collected entry in the value field.
-Calcium rows carry one item, creatinine rows carry another, and
-the collection date rides along in the same visit group.
+per collected item, grouped by study, subject and visit. Each
+visit group carries a collection-date item plus one calcium item
+and one creatinine item, whichever were collected.
 
 **Variables:**
 
+- `LBSEQ` numbers the records within a subject by collection
+  date, then test code.
 - `LBTESTCD` is `CA` for calcium rows and `CREAT` for creatinine
   rows.
 - `LBTEST` is `Calcium` when the test code is `CA` and
@@ -26,7 +28,7 @@ the collection date rides along in the same visit group.
 - `LBSTRESU` is `mg/dL` for every record.
 - `LBDTC` is the collection date from the same visit group.
 
-**Note:** a test with no collected entry produces no record, so the
-records are only results actually reported.
+**Note:** a test with no collected entry produces no record, so
+the records are only results actually reported.
 
 **Standard:** SDTM | **Domain:** LB
