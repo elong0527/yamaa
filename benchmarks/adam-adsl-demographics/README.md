@@ -23,8 +23,9 @@ and `AGE` as reported.
   gives `Female`, and `U` gives `Unknown`; a missing source and any
   other reported value both give `Unknown`.
 - `RACEN` is the numeric race code: `WHITE` gives `1`,
-  `BLACK OR AFRICAN AMERICAN` gives `2`, and `ASIAN` gives `3`; a
-  missing source and any other reported value both give `99`.
+  `BLACK OR AFRICAN AMERICAN` gives `2`, `ASIAN` gives `3`, and
+  `MULTIPLE` gives `4`; a missing source leaves `RACEN` empty while
+  any other reported value gives `99`.
 - `AGE` is the collected `AGE` as a whole number; it is missing when
   no age was collected and when the reported value is not a whole
   number.
