@@ -6,9 +6,12 @@
 **Goal:** emit one related-records row per relationship
 participation, carrying `IDVARVAL`, `RELTYPE`, and `RELID`.
 
-**Input:** collected adverse events (AE) each carrying two link
-identifiers, plus collected concomitant medications (CM) each
-carrying two link identifiers.
+**Input:** the finished AE and CM datasets: each record already
+carries an assigned sequence number (AESEQ on AE, CMSEQ on CM) and
+up to two link identifiers (AELNKID1/AELNKID2 on AE,
+CMLNKID1/CMLNKID2 on CM). A second subject reuses link number 1,
+showing that link numbers are per-subject: the USUBJID key keeps
+the two relationships apart.
 
 **Variables:**
 
@@ -22,7 +25,19 @@ carrying two link identifiers.
 
 **Note:** a record with no link identifier contributes no row,
 while a record naming two link identifiers contributes one row per
-identifier; carrying a third relationship would need another link
-field on the collected record.
+identifier - only when the two identifiers differ. A record
+repeating its link number in both fields produces two identical
+rows, which fails the run on the duplicate key; carrying a third
+relationship would need another link field on the collected
+record.
+
+**Negative case:** a link number carried by only one record is a
+dangling relationship and fails the run. Adding the collected row
+`CATH,CATH-UCSD-0001,4,COUGH,3,` to ae.csv (AELNKID1=3, no other
+record carrying link 3) emits one RELREC row, and the
+`each-relationship-has-two-or-more-rows` check then fails: the
+group (STUDYID=CATH, USUBJID=CATH-UCSD-0001, RELID=3) holds 1 row,
+below the minimum of 2. That is why the passing input above
+carries no such row.
 
 **Standard:** SDTM | **Domain:** RELREC
