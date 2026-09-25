@@ -343,7 +343,7 @@ can observe: neither is an implementation option.
 **REQ-0851.** A failure names the input dataset, the path exactly as the
 specification wrote it, and the record and field where it was decided.
 Records and fields are counted from one, and the header is record one. A
-message carries no host path, for the reason [Resource resolution](resources.md) gives.
+message carries no host path.
 
 | Condition | Rejects |
 |---|---|
