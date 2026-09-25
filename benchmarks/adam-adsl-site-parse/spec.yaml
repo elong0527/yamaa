@@ -24,7 +24,7 @@ columns:
     label: Subject Identifier for the Study
     derivation: DM.SUBJID
 
-  # The site part of a USUBJID shaped CATH-<site>-<four digits>; any other
+  # The site part of a USUBJID shaped YAMAA-<site>-<four digits>; any other
   # shape leaves it empty.
   - name: SITEIDP
     type: str
@@ -32,7 +32,7 @@ columns:
     derivation:
       str_extract:
         source: USUBJID
-        pattern: '^CATH-([^-]+)-[0-9]{4}$'
+        pattern: '^YAMAA-([^-]+)-[0-9]{4}$'
         group: 1
         missing: null
         no_match: null
@@ -62,5 +62,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 8
+      max: 8
