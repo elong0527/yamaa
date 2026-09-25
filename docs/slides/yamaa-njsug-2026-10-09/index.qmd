@@ -82,7 +82,7 @@ verifications:
 
 ::: {.columns}
 ::: {.column width="48%"}
-<div class="big-number">292</div>
+<div class="big-number">~ 300</div>
 <div class="metric-label">runnable benchmarks</div>
 :::
 
@@ -99,6 +99,17 @@ Each benchmark includes a specification, input data, and an expected output or e
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
 Scroll inside the frame to explore the spec, inputs, and golden output
+
+## yamaa: full studies
+
+* Build ground truth once. Reuse it to evaluate every agentic workflow
+  * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+* CDISC pilots (SDTM -> ADaM)
+  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
+* OpenClinica real sample data (ODM -> SDTM -> ADaM)
+  * Real sample data for testing the full data journey
+* Synthetic studies (ODM -> SDTM -> ADaM)
+  * KN564 and KN189 as scalable test beds
 
 ## yamaa: core principle
 
@@ -138,9 +149,9 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 ## Recommendations to work with AI agents
 
 - Start with plain text.
-- Produce the annotated CRF during planning.
-- Produce the Excel specification during planning.
-- Communicating requirements costs more than tokens.
+- Annotated CRF is not an input but output.
+- Excel specification is not an input but output.
+- Communication costs more than tokens.
 
 ## Call for help
 
