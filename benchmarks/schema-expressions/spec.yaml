@@ -7,7 +7,7 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, SEX, AGEGRP, COUNTRY, SUBJLBL, WTMAX, WTMIN]
+  columns: [STUDYID, USUBJID, SEX, AGEGRP, SAFFL, COUNTRY, SUBJLBL, WTMAX, WTMIN]
 
 columns:
   # A literal returns its declared value unchanged.
@@ -28,8 +28,9 @@ columns:
     label: Sex
     derivation: DM.SEX
 
-  # Cut assigns each age to one left-closed band; a missing age takes the
-  # declared missing value.
+  # Cut assigns a numeric source to one labeled band. Bands are closed on
+  # the left, so an age of exactly 65 lands in 65+; a missing age takes
+  # the declared missing value.
   - name: AGEGRP
     type: str
     label: Age Group
@@ -39,6 +40,18 @@ columns:
         breaks: [18, 65]
         labels: ['<18', '18-64', '65+']
         missing: NOT REPORTED
+
+  # Each then and the trailing otherwise nests an expression. The first
+  # true branch wins; a subject with no first-dose date falls through to
+  # otherwise.
+  - name: SAFFL
+    type: str
+    label: Safety Population Flag
+    derivation:
+      case:
+        - when: "DM.RFXSTDTC IS NOT NULL"
+          then: {literal: Y}
+        - otherwise: {literal: N}
 
   # First_available returns the first non-missing source, or the declared
   # missing value when every source is missing.
