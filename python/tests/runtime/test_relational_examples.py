@@ -37,6 +37,7 @@ EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 ARTIFACT_EXAMPLES = [
     "sdtm-dm-dates",
     "adam-adlb-mean",
+    "adam-adlb-supplb-padded-key",
     # REQ-0119 matches on the applicable keys as the two sides declare them, so
     # a sequence number joins once both sides say it is one.
     "adam-adae-severity",

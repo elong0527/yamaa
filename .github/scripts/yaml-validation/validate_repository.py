@@ -7148,6 +7148,7 @@ _DERIVE_VARIABLE_FIELDS = {
     'round_half_away_from_zero': ('source',),
     'row_value': ('source',),
     'str_extract': ('source',),
+    'str_pad': ('source',),
     'str_lower': ('source',),
     'str_upper': ('source',),
     'str_sentence': ('source',),
@@ -8299,6 +8300,19 @@ def validate_expression_static_semantics(expression, path, context):
                 resolver,
             )
         )
+        return errors
+
+    if keyword == 'str_pad' and isinstance(payload, dict):
+        width = payload.get('width')
+        if type(width) is int and width < 1:
+            errors.append(
+                validation_diagnostic(
+                    f"{path}.str_pad.width",
+                    'invalid_field_type',
+                    'padding width must be a positive integer',
+                    context={'expected': 'a positive integer width'},
+                )
+            )
         return errors
 
     if keyword in {'str_extract', 'str_upper', 'str_lower', 'str_sentence', 'str_title'}:

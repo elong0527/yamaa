@@ -420,6 +420,7 @@ _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] =
 _EVALUATED_SOURCES: tuple[str, ...] = (
     "round_half_away_from_zero",
     "str_contains",
+    "str_pad",
     "to_epoch_day",
 )
 
@@ -517,6 +518,17 @@ def _expression_info(
         variable = payload.get("source")
         if isinstance(variable, str):
             references.append(_Reference(variable, f"{operation_path}.source"))
+        if operation == "str_pad" and (
+            type(payload.get("width")) is not int or payload["width"] < 1
+        ):
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_field_type",
+                    f"{operation_path}.width",
+                    {"expected": "a positive integer width"},
+                    requirement="REQ-1261",
+                )
+            )
     elif operation == "function" and isinstance(payload, Mapping):
         arguments = payload.get("args")
         if isinstance(arguments, Mapping):
@@ -809,6 +821,7 @@ _KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
     "str_concat": "str",
     "str_contains": "bool",
     "str_extract": "str",
+    "str_pad": "str",
     "str_lower": "str",
     "str_sentence": "str",
     "str_template": "str",
@@ -1293,6 +1306,7 @@ _DERIVE_VARIABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "round_half_away_from_zero": ("source",),
     "row_value": ("source",),
     "str_extract": ("source",),
+    "str_pad": ("source",),
     "str_lower": ("source",),
     "str_upper": ("source",),
     "str_sentence": ("source",),
@@ -4295,7 +4309,7 @@ def _row_phase_default_columns(
             if separator and qualifier in self_ids
         }
 
-    def match_values(intermediate: Intermediate) -> tuple[str, ...]:
+    def match_values(intermediate: Intermediate, index: int) -> tuple[str, ...]:
         # REQ-0112: the match variables are the key_base values, defaulted
         # to the key names (REQ-0154), which an omitted key infers from the
         # applicable keys (REQ-0153). SELF's applicable keys are its donor
@@ -4306,13 +4320,24 @@ def _row_phase_default_columns(
             fields = dataset_fields.get(intermediate.dataset, {})
             key = [name for name in specification.keys if name in fields]
         base = intermediate.key_base if intermediate.key_base is not None else key
-        names = list(base or ())
+        names: list[str] = []
+        for entry_index, entry in enumerate(base or ()):
+            if isinstance(entry, str):
+                names.append(entry)
+            else:
+                info = _expression_info(
+                    entry,
+                    f"intermediates[{index}].key_base[{entry_index}]",
+                    supported_operations,
+                )
+                names.extend(reference.name for reference in info.references)
         if intermediate.between is not None:
             names.append(intermediate.between.value)
         return tuple(name for name in names if "." not in name)
 
     matches = {
-        intermediate.id: match_values(intermediate) for intermediate in intermediates
+        intermediate.id: match_values(intermediate, index)
+        for index, intermediate in enumerate(intermediates)
     }
 
     def match_reads(found: Sequence[_Reference]) -> set[str]:

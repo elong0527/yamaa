@@ -39,6 +39,7 @@ from yamaa.models import (
     normalize_runtime_value,
     runtime_type_name,
 )
+from yamaa.models.values import convert_value
 from yamaa.regex import (
     NO_MATCH,
     RegexError,
@@ -192,6 +193,29 @@ def _missing_input(payload: Mapping[object, object], variable: str) -> Evaluatio
         applicable_handler="missing",
         requirement="REQ-0334",
     )
+
+
+def _str_pad(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return _invalid_payload("str_pad", "a mapping")
+    variable, width = payload.get("source"), payload.get("width")
+    if not isinstance(variable, str) or type(width) is not int or width < 1:
+        return _invalid_payload("str_pad", "a source and a positive width")
+    resolved = resolver.resolve(variable)
+    if isinstance(resolved, FailedResolution):
+        return ConditionResult(condition=resolved.condition)
+    if isinstance(resolved, AbsentValue):
+        return expression_condition(
+            "validation",
+            "unknown_field",
+            {"identifier": variable},
+            requirement="REQ-0103",
+            field="source",
+        )
+    converted = convert_value(resolved.value, "str")
+    if not isinstance(converted, ValueResult) or converted.value is MISSING:
+        return converted
+    return ValueResult(value=converted.value.rjust(width))
 
 
 def _cased(operation: str, transform: object) -> ExpressionHandler:
@@ -379,6 +403,7 @@ def _concat(dispatcher: NestedDispatcher) -> ExpressionHandler:
 def string_handlers(dispatcher: NestedDispatcher) -> dict[str, ExpressionHandler]:
     """Return the R007 string operations this component registers."""
     return {
+        "str_pad": _str_pad,
         "str_extract": _str_extract,
         "str_contains": _str_contains,
         "str_concat": _concat(dispatcher),
