@@ -12,17 +12,17 @@ intermediates:
   # sharing a date are ordered by sequence number.
   - id: PROGRESSION
     dataset: RS
-    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: first
   - id: DEATH
     dataset: DS
-    filter: "DS.DSDECOD = 'DEATH'"
+    filter: "DS.DSDECOD = 'DEATH' AND DS.DSDTC IS NOT NULL"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
   - id: LASTASSESS
     dataset: RS
-    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
 

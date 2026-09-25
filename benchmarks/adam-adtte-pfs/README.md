@@ -38,6 +38,7 @@ are ordered by their sequence number.
 **Note:** only assessments flagged adequate can supply a
 progression event or a censoring date, so an inadequate
 progression assessment leaves the subject censored at the last
-adequate assessment.
+adequate dated assessment. An assessment without a date cannot
+be the last dated assessment.
 
 **Standard:** ADaM | **Domain:** ADTTE

@@ -450,6 +450,9 @@ examples:
   negative-output-duplicate:
     status: executable
     runtimes: ['python']
+  negative-output-missing-key:
+    status: executable
+    runtimes: ['python']
   negative-output-transport:
     status: executable
     runtimes: ['python']

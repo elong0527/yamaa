@@ -8,16 +8,15 @@ input:
 base: DM_RAW
 intermediates:
   # Per subject: the latest death disposition record and the latest fatal
-  # adverse event. An undated record sorts after every dated one, so it is
-  # the one kept, and that source then gives no death date.
+  # adverse event. An undated record cannot supply a death date.
   - id: DTHDS
     dataset: DS
-    filter: "DS.DSDECOD = 'DEATH'"
+    filter: "DS.DSDECOD = 'DEATH' AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC]
     keep: last
   - id: DTHAE
     dataset: AE
-    filter: "AE.AEOUT = 'FATAL'"
+    filter: "AE.AEOUT = 'FATAL' AND AE.AEENDTC IS NOT NULL"
     order_by: [AE.AEENDTC]
     keep: last
 

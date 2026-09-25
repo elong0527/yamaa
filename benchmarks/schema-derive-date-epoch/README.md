@@ -16,8 +16,7 @@ an output row.
 - `EXSEQ`: the exposure sequence number, carried through.
 - `EXSTDY`: the exposure start date as a count of days since
   1970-01-01 (zero on that day, negative before it), blank when the
-  start date is missing. Despite its label it is not a day counted
-  from a reference start.
+  start date is missing. It is not a day counted from a reference start.
 
 **Note:** each matching exposure record's date is turned into its day
 count first, so the summary works on plain integers and never on dates.

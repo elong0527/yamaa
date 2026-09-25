@@ -36,7 +36,6 @@ columns:
     label: Cumulative Dose
     derivation:
       aggregate:
-        key: [STUDYID, USUBJID]
         expr: "SUM(EX.EXDOSE)"
 
   # EX.EXPLDOS stands outside any reduction. The plan is recorded on every
@@ -47,5 +46,4 @@ columns:
     label: Relative Dose Intensity
     derivation:
       aggregate:
-        key: [STUDYID, USUBJID]
         expr: "100 * SUM(EX.EXDOSE) / EX.EXPLDOS"

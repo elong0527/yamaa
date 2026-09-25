@@ -29,10 +29,8 @@ needed.
   the form has no record.
 - `FATEST` is `Location`, `Size`, and `Biopsied` respectively.
 - `FAOBJ` is the event term of the linked adverse event, read from the
-  `IT.AE.AETERM` item on the same event occurrence. Every event occurrence
-  must carry that term: one without it, such as a findings form with no
-  matching event, fails the run instead of writing a record with no event
-  term.
+  `IT.AE.AETERM` item on the same event occurrence. Every emitted finding
+  must carry that term; an event with no findings needs none.
 - `FACAT` is always `AE`.
 - `FAORRES` is the answer as recorded on the form.
 - `FAORRESU` is the size unit, on `SIZE` records only.
@@ -46,6 +44,7 @@ needed.
 
 **Note:** an adverse event with no findings form has no FA records. Two
 events can share the same term, so `FAOBJ` alone does not distinguish them;
-`FALNKID` is what ties each finding to its specific event record.
+`FALNKID` is what ties each finding to its specific event record. A finding
+whose event term is absent stops the run.
 
 **Standard:** SDTM | **Domain:** FA

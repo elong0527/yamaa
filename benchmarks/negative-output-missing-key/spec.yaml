@@ -1,0 +1,59 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  ADVS_RAW: {path: input/advs_raw.csv, types: {ADY: int}}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADT, ADY, AVAL, AVISIT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADVS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADVS_RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: ADVS_RAW.PARAMCD
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: ADVS_RAW.VSSEQ
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: ADVS_RAW.ADT
+
+  - name: ADY
+    type: int
+    label: Analysis Relative Day
+    derivation: ADVS_RAW.ADY
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: ADVS_RAW.AVAL
+
+  # Reading the input's typed ADY directly avoids the key dependency error.
+  # The last record has no ADY, so its AVISIT is missing when the completed
+  # dataset reaches the output key check.
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation:
+      cut:
+        source: ADVS_RAW.ADY
+        breaks: [0, 2, 22, 43]
+        labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+        right: false
+        missing: null

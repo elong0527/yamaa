@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: SE
 keys: [STUDYID, USUBJID, ETCD]
 input:
-  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFXENDTC: date}}
+  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFPENDTC: date}}
   ODM: input/odm.csv
 base: ODM
 
@@ -110,7 +110,7 @@ columns:
           then: FIRSTDTC
         - when: "EPOCH = 'TREATMENT'"
           then: LASTDTC
-        - otherwise: DM.RFXENDTC
+        - otherwise: DM.RFPENDTC
 
   # Study days count the DM reference start date as day 1, with no day 0.
   - name: SESTDY

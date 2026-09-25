@@ -23,9 +23,6 @@ flag (`TRTEMFL`).
 
 **Note:** only a treatment-emergent event with a graded severity is
 eligible, so a preferred term (`AEDECOD`) whose events are all
-ineligible has no flagged event. The data exercises both tie-breaks
-(a same-day, same-severity tie broken by lowest `AESEQ`, and a
-same-severity tie broken by earliest `ASTDT`) as well as a
-multi-record term with no eligible event.
+ineligible has no flagged event.
 
 **Standard:** ADaM | **Domain:** ADAE

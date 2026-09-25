@@ -173,11 +173,11 @@ study-data words. Write:
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
 
-A `schema-*` benchmark explains spec behavior rather than deriving data, so it
-carries no `Variables:` list: its `Input:` names the spec files and how they
-compose, and its `Note:` states the behavior rule. It still names every
-non-key golden column somewhere in the contract so the coverage check below
-stays silent.
+A `schema-*` benchmark explains spec behavior rather than deriving data. Its
+`Input:` names the spec files and how they compose, and its `Note:` states the
+behavior rule. It may include a `Variables:` list when output values make the
+behavior concrete. It still names every non-key golden column somewhere in the
+contract so the coverage check below stays silent.
 
 Every benchmark README also carries a lifecycle badge (`draft`, `reviewed`,
 or `finalized` as defined in `README.md`); new benchmarks start at `draft`.

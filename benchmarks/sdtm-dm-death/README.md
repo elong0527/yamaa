@@ -17,6 +17,6 @@ date, and adverse events with outcome and end date.
 - `DTHFL` is `Y` when either source supplies a death date; empty otherwise.
 
 **Note:** when the sources record different death dates, the disposition date
-wins.
+wins. An undated death or fatal event cannot displace a dated one.
 
 **Standard:** SDTM | **Domain:** DM

@@ -16,10 +16,10 @@ feed any output column.
 **Variables:**
 
 - `DSSEQ` numbers the subject's records from the earliest
-  collection date as entered, not as completed: a partial entry
-  such as `2024-01` comes before every full date in that month,
-  a year alone before every full date in that year, and a
-  record with no date at all is numbered after dated records.
+  completed collection date. A partial entry such as `2024-01`
+  takes its position at the imputed 15th, after an earlier full
+  date in that month. A record with no date is numbered after
+  dated records.
 - `DSDECOD` copies the recorded outcome: `COMPLETED`, `RANDOMIZED`,
   `ADVERSE EVENT` or `SCREEN FAILURE`.
 - `DSCAT` is `PROTOCOL MILESTONE` when the outcome is `RANDOMIZED`,

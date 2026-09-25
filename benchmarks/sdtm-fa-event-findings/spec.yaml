@@ -101,8 +101,8 @@ rows:
   # One row template per test, each grouping the items by event occurrence:
   # an occurrence gives one record per answered test, and none when the test
   # has no answer. FAOBJ is the adverse event term on the same occurrence. It
-  # is sought before the answer is checked, so any occurrence with no term,
-  # even one with no findings, stops the run.
+  # is checked on emitted rows. An occurrence with no findings and no term
+  # contributes no row and needs no event term.
   - id: location
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
@@ -117,7 +117,6 @@ rows:
           key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
           key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
           value: Value
-          strict: true
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
@@ -149,7 +148,6 @@ rows:
           key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
           key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
           value: Value
-          strict: true
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.SIZE'"
@@ -184,7 +182,6 @@ rows:
           key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
           key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
           value: Value
-          strict: true
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"

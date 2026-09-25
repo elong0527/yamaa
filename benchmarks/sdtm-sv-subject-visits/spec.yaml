@@ -26,8 +26,7 @@ rows:
     dataset: ODM
     # One row per study-event occurrence: the repeat key keeps repeated
     # unscheduled visits as separate rows instead of silently merging them.
-    # Both carry VISITNUM 99, so a subject's second one then stops the run on
-    # a duplicate key.
+    # Distinct decimal visit numbers identify repeated unscheduled visits.
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.StudyEventRepeatKey]
     derivations:
@@ -89,7 +88,7 @@ columns:
     label: Visit Name
 
   - name: VISITNUM
-    type: int
+    type: float
     label: Visit Number
 
   - name: VISITDY
@@ -168,14 +167,14 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, VISITNUM]
   - row_count:
-      min: 7
-      max: 7
+      min: 8
+      max: 8
   - assert:
       id: visits-span-their-form-dates
       expr: "SVSTDTC IS NOT NULL AND SVENDTC IS NOT NULL AND SVSTDTC <= SVENDTC"
   - assert:
       id: planned-visits-carry-their-plan
-      expr: "NOT (VISITNUM <> 99 AND (VISITDY IS NULL OR TAETORD IS NULL))"
+      expr: "NOT (VISITNUM < 99 AND (VISITDY IS NULL OR TAETORD IS NULL))"
   - assert:
       id: unplanned-visits-carry-a-description
-      expr: "NOT (VISITNUM = 99 AND SVUPDES IS NULL)"
+      expr: "NOT (VISITNUM >= 99 AND SVUPDES IS NULL)"
