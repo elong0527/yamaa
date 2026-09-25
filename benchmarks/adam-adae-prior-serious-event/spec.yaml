@@ -105,7 +105,9 @@ rows:
 
   # One record per non-serious event, carrying the subject's most
   # recent earlier serious event and first serious event, read through
-  # SELF from the records the first template completed.
+  # SELF from the records the first template completed. The flag tests
+  # the donor's sequence number, not its term: a serious event with no
+  # coded term still counts as a prior serious event.
   - id: nonserious
     filter: "AE.AESER = 'N'"
     derivations:
@@ -116,7 +118,7 @@ rows:
       AESER: AE.AESER
       PRIOR_SAEFL:
         case:
-          - when: "PRIOR_SAE.AEDECOD IS NOT NULL"
+          - when: "PRIOR_SAE.AESEQ IS NOT NULL"
             then: {literal: "Y"}
           - otherwise: {literal: null}
       PRIOR_SAEDECOD: PRIOR_SAE.AEDECOD
@@ -128,9 +130,9 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 10
-      max: 10
+      min: 14
+      max: 14
   - implies:
-      id: prior-serious-flag-names-a-term
+      id: prior-serious-flag-names-a-sequence
       when: "PRIOR_SAEFL = 'Y'"
-      then: "PRIOR_SAEDECOD IS NOT NULL"
+      then: "PRIOR_SAESEQ IS NOT NULL"
