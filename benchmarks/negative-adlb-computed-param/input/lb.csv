@@ -1,8 +1,11 @@
 STUDYID,USUBJID,LBSEQ,LBDTC,LBTESTCD,LBTEST,LBSTRESN
-PILOT7,P7-401,1,2025-03-03,ALT,Alanine Aminotransferase,40
-PILOT7,P7-401,2,2025-03-03,AST,Aspartate Aminotransferase,60
-PILOT7,P7-401,3,2025-03-17,ALT,Alanine Aminotransferase,25
-PILOT7,P7-401,4,2025-03-17,AST,Aspartate Aminotransferase,20
-PILOT7,P7-402,1,2025-03-04,ALT,Alanine Aminotransferase,30
-PILOT7,P7-403,1,2025-03-05,ALT,Alanine Aminotransferase,50
-PILOT7,P7-403,2,2025-03-05,AST,Aspartate Aminotransferase,
+YAMAA-01,YAMAA-01-101,1,2025-03-03,ALT,Alanine Aminotransferase,40
+YAMAA-01,YAMAA-01-101,2,2025-03-03,AST,Aspartate Aminotransferase,60
+YAMAA-01,YAMAA-01-101,3,2025-03-17,ALT,Alanine Aminotransferase,25
+YAMAA-01,YAMAA-01-101,4,2025-03-17,AST,Aspartate Aminotransferase,20
+YAMAA-01,YAMAA-01-102,1,2025-03-04,ALT,Alanine Aminotransferase,30
+YAMAA-01,YAMAA-01-103,1,2025-03-05,ALT,Alanine Aminotransferase,50
+YAMAA-01,YAMAA-01-103,2,2025-03-05,AST,Aspartate Aminotransferase,
+YAMAA-01,YAMAA-01-104,1,2025-03-06,AST,Aspartate Aminotransferase,45
+YAMAA-01,YAMAA-01-105,1,2025-03-07,ALT,Alanine Aminotransferase,0
+YAMAA-01,YAMAA-01-105,2,2025-03-07,AST,Aspartate Aminotransferase,40

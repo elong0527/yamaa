@@ -14,7 +14,8 @@ the day's aspartate result by its alanine result.
 carrying its study, subject, and sequence number alongside
 `LBDTC`, the date the sample was collected; `LBTESTCD`, the test
 code; `LBTEST`, the test name; and `LBSTRESN`, the numeric result,
-which is missing when no numeric value was returned.
+which is missing when no numeric value was returned. One subject's
+only record is an aspartate result, and one alanine result is zero.
 
 **Variables:**
 
@@ -23,7 +24,8 @@ which is missing when no numeric value was returned.
   `LBSTRESN`. On the ratio record it divides the day's aspartate
   result by the alanine result. A ratio record exists for each
   alanine record, and its value is missing when that day has no
-  aspartate record or either result has no value.
+  aspartate record or either result has no value; a zero alanine
+  result likewise leaves the ratio missing.
 
 The ratio reads its two values from other records of the result
 being built, but those values are themselves the `AVAL` under
@@ -31,9 +33,6 @@ definition, so no value can be assembled. The run is rejected
 before any data is read, and no artifact is accepted. The expected
 file shows what the completed records would contain, but no row
 is produced.
-
-**Note:** an alanine result of zero would likewise leave the ratio
-missing, since division by zero is not defined.
 
 **Standard:** ADaM | **Domain:** ADLB
 
