@@ -174,13 +174,13 @@ spec is written to be understood — by whoever happens to read it.
 
 ::: {.columns}
 ::: {.column width="48%"}
-<div class="big-number">297</div>
+<div class="big-number">292</div>
 <div class="metric-label">runnable benchmarks with byte-exact golden outputs</div>
 :::
 
 ::: {.column width="48%"}
 <div class="big-number">2</div>
-<div class="metric-label">engines (Python, R) checked against the same goldens</div>
+<div class="metric-label">engines (Python, R) implementing the same numbered rules</div>
 :::
 :::
 
