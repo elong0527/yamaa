@@ -30,6 +30,15 @@ record by amount or position or adding both values.
 ## How to fix
 
 Resolve the duplicate WBC records according to the study's data conventions
-before calculating the absolute differential. Do not replace `ONLY` with
-`MIN`, `MAX`, or file-order selection unless that choice is a documented
-clinical rule; those alternatives answer a different question.
+before calculating the absolute differential. The run then sees one WBC
+record per subject and visit, for example:
+
+```csv
+STUDYID,USUBJID,PARAMCD,AVAL,PARAM,VISIT
+YAMAA-01,YAMAA-01-101,WBC,34,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+YAMAA-01,YAMAA-01-101,LYMLE,0.90,Lymphocytes (fraction of 1),CYCLE 1 DAY 1
+```
+
+Do not replace `ONLY` with `MIN`, `MAX`, or file-order selection unless that
+choice is a documented clinical rule; those alternatives answer a different
+question.
