@@ -30,8 +30,9 @@ category (`PRCAT`), subcategory (`PRSCAT`), and start date (`PRSTDTC`).
 - `NACTFL` holds `Y` when `NACTDT` is present and is absent
   otherwise.
 
-**Note:** a qualifying therapy that starts before the treatment start
-date stops the run, so a flagged therapy start always falls on or
-after the treatment start date.
+**Note:** a qualifying therapy must start on or after the treatment start
+date: the derivation narrows each aggregate to records with
+`CMSTDTC >= TRTSDT` (or `PRSTDTC >= TRTSDT`), so a flagged therapy start
+always falls on or after the treatment start date by construction.
 
 **Standard:** ADaM | **Domain:** ADSL

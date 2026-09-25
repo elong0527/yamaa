@@ -3,8 +3,12 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   ADSL_RAW: input/adsl.csv
-  CM: input/cm.csv
-  PR: input/pr.csv
+  CM:
+    path: input/cm.csv
+    types: {CMSTDTC: date}
+  PR:
+    path: input/pr.csv
+    types: {PRSTDTC: date}
 base: ADSL_RAW
 
 output:
@@ -30,14 +34,19 @@ columns:
       not_missing: {}
 
   # The first start of an on-treatment medication, and of an on-treatment
-  # cancer-related procedure. MIN skips a missing date, so either is empty
-  # when the subject has no dated qualifying record.
+  # cancer-related procedure, on or after the treatment start date. A record
+  # dated before TRTSDT does not qualify; a record with no start date is
+  # ineligible under the range narrowing. MIN skips a missing date, so either
+  # is empty when the subject has no dated qualifying record.
   - name: CMNACTDT
     type: date
     label: First New Anti-Cancer Medication Date
     derivation:
       aggregate:
         filter: "CM.CMCAT = 'ON TREATMENT'"
+        between:
+          value: TRTSDT
+          upper: CM.CMSTDTC
         expr: "MIN(CM.CMSTDTC)"
 
   - name: PRNACTDT
@@ -46,6 +55,9 @@ columns:
     derivation:
       aggregate:
         filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT'"
+        between:
+          value: TRTSDT
+          upper: PR.PRSTDTC
         expr: "MIN(PR.PRSTDTC)"
 
   # The earlier of the two, skipping an empty one; empty when both are.
@@ -83,7 +95,3 @@ verifications:
   - all_or_none:
       id: therapy-date-day-and-flag-agree
       columns: [NACTDT, NACTDY, NACTFL]
-  - implies:
-      id: new-therapy-starts-on-or-after-treatment-start
-      when: "NACTFL = 'Y'"
-      then: "NACTDT >= TRTSDT"
