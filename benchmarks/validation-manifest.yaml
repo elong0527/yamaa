@@ -182,7 +182,7 @@ fixtures:
   negative-date-diff-units:
     rule: R016
     condition: value_not_permitted
-    spec_paths: [columns.DURM.derivation.date_diff.bounds]
+    spec_paths: [columns.TRTDURM.derivation.date_diff.bounds]
     validator: temporal_contract
   negative-date-diff-endpoints:
     rule: R016
