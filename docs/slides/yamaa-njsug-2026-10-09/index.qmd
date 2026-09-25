@@ -1,6 +1,6 @@
 ---
 title: "yamaa: agentic workflow for CDISC data standardization"
-subtitle: "NJSUG: from ODM to SDTM / ADaM and define.xml"
+subtitle: "from ODM to SDTM / ADaM and define.xml"
 author: "Yilong Zhang"
 date: "2026-10-09"
 embed-resources: true
