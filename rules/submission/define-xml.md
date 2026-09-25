@@ -555,11 +555,10 @@ regardless of which requirement above it satisfied.
 
 <a id="req-1011"></a>
 
-**REQ-1011.** The following are deliberately outside this first contract. None
-has a field in the schema [Submission metadata](metadata.md), [Controlled terminology](terminology.md), and `schema_define.yaml` close, so a
+**REQ-1011.** The following are outside this contract. None has a field in
+the schema [Submission metadata](metadata.md), [Controlled terminology](terminology.md), and `schema_define.yaml` close, so a
 specification that tries to declare one is rejected as an unknown field rather
-than generating a document that quietly omits it. That closure is the refusal:
-a construct is either declared and generated, or has nowhere to be written.
+than generating a document that quietly omits it.
 
 - `arm:AnalysisResultDisplays`: an analysis-results metadata design
 - Split datasets and their `Alias` domain description: a specification that
