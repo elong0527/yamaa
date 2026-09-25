@@ -24,6 +24,18 @@ columns:
     label: Unique Subject Identifier
     derivation: ODM.SubjectKey
 
+  # Every record carries the same units in both the original and the
+  # standard column, so the two literals live here, not in the rows below.
+  - name: LBORRESU
+    type: str
+    label: Original Units
+    derivation: {literal: mg/dL}
+
+  - name: LBSTRESU
+    type: str
+    label: Standard Units
+    derivation: {literal: mg/dL}
+
   - name: LBTESTCD
     type: str
     label: Lab Test or Examination Short Name
@@ -36,17 +48,9 @@ columns:
     type: str
     label: Result or Finding in Original Units
 
-  - name: LBORRESU
-    type: str
-    label: Original Units
-
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
-
-  - name: LBSTRESU
-    type: str
-    label: Standard Units
 
   - name: LBDTC
     type: date
@@ -81,11 +85,9 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: mg/dL}
       LBSTRESN:
         value: {source: LBORRES}
         missing: null
-      LBSTRESU: {literal: mg/dL}
 
   # The same for the creatinine entry.
   - id: creatinine
@@ -102,8 +104,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: mg/dL}
       LBSTRESN:
         value: {source: LBORRES}
         missing: null
-      LBSTRESU: {literal: mg/dL}
