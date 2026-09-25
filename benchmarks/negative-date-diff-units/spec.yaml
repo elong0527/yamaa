@@ -6,7 +6,7 @@ input:
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, STDT, ENDT, DURM]
+  columns: [STUDYID, USUBJID, TRTSDT, TRTEDT, TRTDURM]
 
 columns:
   - name: STUDYID
@@ -19,24 +19,24 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  - name: STDT
+  - name: TRTSDT
     type: date
-    label: Start Date
-    derivation: DM.STDT
+    label: Date/Time of First Exposure to Treatment
+    derivation: DM.TRTSDT
 
-  - name: ENDT
+  - name: TRTEDT
     type: date
-    label: End Date
-    derivation: DM.ENDT
+    label: Date/Time of Last Exposure to Treatment
+    derivation: DM.TRTEDT
 
   # Counting both end dates is defined only for a day count, so inclusive
   # beside unit: month is rejected before any data is read.
-  - name: DURM
+  - name: TRTDURM
     type: int
-    label: Duration in Whole Months
+    label: Total Duration of Treatment (Months)
     derivation:
       date_diff:
-        start: STDT
-        end: ENDT
+        start: TRTSDT
+        end: TRTEDT
         unit: month
         bounds: inclusive
