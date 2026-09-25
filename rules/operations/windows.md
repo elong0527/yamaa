@@ -65,15 +65,14 @@ section: a group of rows.
 
 <a id="req-0294"></a>
 
-**REQ-0294.** A window whose `window` declares `filter` preserves row count.
+**REQ-0294.** A window's `filter` selects rows before partitioning and preserves row count.
 An excluded row receives missing rather than being dropped. A window that
 reads a nonexistent partition row returns missing, as does a window that
 reads a neighboring row with a missing value.
 
 <a id="req-0296"></a>
 
-**REQ-0296.** A window's `window.filter` narrows constructed output rows.
-Aggregate filter scope is defined by [REQ-0471](aggregation.md#req-0471), permitted contexts by
+**REQ-0296.** Aggregate filter scope is defined by [REQ-0471](aggregation.md#req-0471), permitted contexts by
 [REQ-0467](aggregation.md#req-0467), and `between` applicability by [REQ-0474](aggregation.md#req-0474).
 
 ### Ordering
@@ -115,7 +114,7 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `window_spec.group_by` | Variables defining partitions; omission uses one partition. |
 | `window_spec.order_by` | Terms ordering rows within each partition. |
-| `window_spec.filter` | Predicate selecting rows before partitioning; excluded rows receive missing. |
+| `window_spec.filter` | Predicate selecting rows. |
 
 <a id="req-1123"></a>
 
@@ -125,7 +124,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.row_number.window` | Partition, ordering, and row selection for the window. |
-| `Result` | Numbers eligible rows from 1 within each partition. Filtering happens before partitioning; excluded rows receive missing. Ordering ties preserve row-template order, then base-record order. |
+| `Result` | Numbers eligible rows from 1 within each partition. Ordering ties preserve row-template order, then base-record order. |
 
 <a id="req-1124"></a>
 
@@ -136,7 +135,7 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `expressions.rank.method` | Tie numbering; competition leaves position gaps and dense does not. |
 | `expressions.rank.window` | Partition, ordering, and row selection for the window. |
-| `Result` | Numbers eligible rows from 1 within each partition, sharing a number across ties. Rows equal on every order term take one number. With competition, they take the lowest position they occupy and the next distinct value takes its own position, so intervening numbers are skipped. With dense, the next distinct value takes the following number and no number is skipped. Two missing values are equal for this purpose, whatever nulls places them among. Filtering happens before partitioning; excluded rows receive missing. |
+| `Result` | Numbers eligible rows from 1 within each partition, sharing a number across ties. Rows equal on every order term take one number. With competition, they take the lowest position they occupy and the next distinct value takes its own position, so intervening numbers are skipped. With dense, the next distinct value takes the following number and no number is skipped. Two missing values are equal for this purpose, whatever nulls places them among. |
 
 <a id="req-1125"></a>
 
