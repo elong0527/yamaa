@@ -177,26 +177,6 @@ The type enters when an example needs a time of day with no date.
 **REQ-0555.** A `datetime` carries no timezone and no offset, and text carrying
 either is rejected rather than normalized.
 
-<a id="req-0556"></a>
-
-**REQ-0556.** Admitting both a local and an offset-aware value would put two
-kinds of datetime in one column type, and the target runtimes disagree about
-that pair. Python refuses to order a naive datetime against an aware one and
-raises instead. R has no naive datetime at all: a `POSIXct` always carries a
-`tzone`, and an empty one resolves against the machine's timezone, so the same
-specification would order the same column differently on two machines. Neither
-behavior is this design's to choose. Each is a property of that
-runtime's type.
-
-<a id="req-0557"></a>
-
-**REQ-0557.** Prohibiting the zone removes the disagreement rather than
-arbitrating, and costs studies nothing they collect: a CDISC `--DTC` value is
-local site time and carries no offset. A study that records an offset keeps
-the offset in its own column, where a specification can read the offset as
-data, and an instant-typed value can be added later without invalidating any
-specification written under this contract.
-
 <a id="req-0559"></a>
 
 **REQ-0559.** No civil time is nonexistent or ambiguous. A daylight-saving gap
@@ -429,3 +409,18 @@ vectors. Static validation does not establish runtime parity.
 
 Define dates, local civil datetimes, precision, canonical text, and order. Keeping this topic in one contract lets
 other owners refer to it without defining a second policy.
+
+The no-zone-no-offset decision ([REQ-0555](#req-0555)) keeps the two runtimes
+agreeing. Admitting both a local and an offset-aware value would put two kinds
+of datetime in one column type, and the target runtimes disagree about that
+pair: Python refuses to order a naive datetime against an aware one and raises
+instead, while R has no naive datetime at all: a `POSIXct` always carries a
+`tzone`, and an empty one resolves against the machine's timezone, so the same
+specification would order the same column differently on two machines. Neither
+behavior is this design's to choose. Each is a property of that runtime's type.
+Prohibiting the zone removes the disagreement rather than arbitrating it, and
+costs studies nothing they collect: a CDISC `--DTC` value is local site time
+and carries no offset. A study that records an offset keeps the offset in its
+own column, where a specification can read the offset as data, and an
+instant-typed value can be added later without invalidating any specification
+written under this contract.
