@@ -31,9 +31,8 @@ dates it was in effect, the unit and the lower and upper limits.
 - `LBSTNRHI` is the upper reference limit in standard units from that
   entry.
 - `LBNRIND` is `LOW` when the result is below the lower limit, `HIGH`
-  when it is above the upper limit, and `NORMAL` otherwise, including a
-  result with no matching reference entry; blank when the result itself is
-  missing.
+  when it is above the upper limit, and `NORMAL` otherwise; blank when
+  the result or either reference limit is missing.
 
 **Note:** when a lab revises a range, the entry in effect on the collection
 date wins -- a result collected on the first day of the new range is judged

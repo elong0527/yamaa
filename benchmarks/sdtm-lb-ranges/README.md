@@ -26,11 +26,11 @@ limits.
 - `LBSTNRHI` is the upper reference limit in standard units.
 - `LBNRIND` is `LOW` when the result is below the lower limit,
   `HIGH` when it is above the upper limit, and `NORMAL` otherwise;
-  blank when the result itself is missing.
+  blank when the result or either reference limit is missing.
 
 **Note:** a test-and-sex combination with two reference entries
 stops the run. One with no entry leaves the unit and both limits
-blank, and its result is flagged `NORMAL`. A record whose result is
+blank, and its range indicator stays blank. A record whose result is
 missing still carries its unit and limits.
 
 **Standard:** SDTM | **Domain:** LB

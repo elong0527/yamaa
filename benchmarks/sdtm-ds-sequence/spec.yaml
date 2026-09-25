@@ -27,9 +27,19 @@ columns:
     label: Unique Subject Identifier
     derivation: DS_RAW.PATNUM
 
-  # Numbered on the date text as collected, not on the completed DSDTC: a
-  # partial entry (2024-01, 2024) sorts before every full date that starts
-  # with it, and a record with no date comes last.
+  - name: DSDTC
+    type: date
+    label: Date/Time of Collection
+    derivation:
+      date_impute:
+        source: DS_RAW.DSDTCOL
+        month: 6
+        day: 15
+        missing: null
+        invalid: null
+
+  # Number on the completed collection date so a partial entry takes
+  # its chronological position among fully dated records.
   - name: DSSEQ
     type: int
     label: Sequence Number
@@ -37,7 +47,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [DS_RAW.DSDTCOL]
+          order_by: [DSDTC]
     verifications:
       not_missing: {}
 
@@ -62,16 +72,9 @@ columns:
       allowed_values:
         values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
-  - name: DSDTC
-    type: date
-    label: Date/Time of Collection
-    derivation:
-      date_impute:
-        source: DS_RAW.DSDTCOL
-        month: 6
-        day: 15
-        missing: null
-        invalid: null
+rows:
+  - id: disposition
+    derivations: {}
 
 verifications:
   - unique:

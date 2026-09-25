@@ -137,7 +137,7 @@ def test_sequence_keys_derive_from_base_before_unique_logic() -> None:
     expectations = {
         "sdtm-ds-sequence": (
             "DSSEQ",
-            [2, 1, 1, 1, 1, 1, 2],
+            [2, 1, 1, 1, 1, 2, 1],
         ),
         "sdtm-ex-combination": (
             "EXSEQ",

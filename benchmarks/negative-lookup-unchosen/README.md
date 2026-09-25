@@ -26,9 +26,13 @@ artifact accepted.
 ## How to fix
 
 State the full order and which end of that order to keep. To choose the
-earliest administration:
+earliest administration, read the sequence as an integer so ties on the
+date are broken numerically:
 
 ```yaml
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+
 intermediates:
   - id: DOSING
     dataset: EX

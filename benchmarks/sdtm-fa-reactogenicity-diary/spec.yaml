@@ -12,7 +12,7 @@ input:
 output:
   path: fa.csv
   columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FASCAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FASTAT, FATPT, FADTC]
-  order_by: [FASEQ]
+  order_by: [STUDYID, USUBJID, FASEQ]
 
 columns:
   - name: DOMAIN

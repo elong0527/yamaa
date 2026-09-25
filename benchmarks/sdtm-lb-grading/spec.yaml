@@ -59,15 +59,16 @@ columns:
 # or F, matches no row template and gets no record. Each band includes its
 # lower break; a missing result stops the run.
 rows:
-  # One band set for both sexes: below 0.1 grade 4, below 0.5 grade 3,
-  # below 1.0 grade 2, below 1.5 grade 1, 1.5 and above grade 0.
+  # CTCAE v5.0 neutrophil bands in 10^9/L, with a lab lower limit of
+  # normal of 1.8: below 0.5 grade 4, 0.5-<1.0 grade 3,
+  # 1.0-<1.5 grade 2, 1.5-<1.8 grade 1, and 1.8 or above grade 0.
   - id: neutrophils
     filter: "LB_RAW.LBTESTCD = 'ANC'"
     derivations:
       ATOXGR:
         cut:
           source: LB_RAW.LBSTRESN
-          breaks: [0.1, 0.5, 1.0, 1.5]
+          breaks: [0.5, 1.0, 1.5, 1.8]
           labels: ['4', '3', '2', '1', '0']
           right: false
 
@@ -96,8 +97,8 @@ rows:
 
 verifications:
   - row_count:
-      min: 6
-      max: 6
+      min: 10
+      max: 10
   # A grade that differs from the recorded one stops the run.
   - assert:
       id: reproduced-grade-agrees

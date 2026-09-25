@@ -29,7 +29,7 @@ columns:
   # data is read.
   - name: EXSTDY
     type: int
-    label: Study Day of Exposure Start
+    label: Epoch Day of Exposure Start
     derivation:
       to_epoch_day:
         source: EX.EXSTDT

@@ -97,7 +97,9 @@ verifications:
       id: worst-grade-flag-requires-a-graded-event
       when: "AOCCFL = 'Y'"
       then: "ASEV IS NOT NULL"
-  - implies:
+  - row_count:
       id: worst-grade-flag-is-unique-within-subject
-      when: "AOCCFL = 'Y'"
-      then: "WGRSEQ = 1"
+      group_by: [STUDYID, USUBJID]
+      filter: "AOCCFL = 'Y'"
+      min: 0
+      max: 1

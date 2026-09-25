@@ -41,7 +41,7 @@ columns:
   # through to otherwise.
   - name: SENIOR_M
     type: str
-    label: Senior Male Flag
+    label: Male Under 65 Flag
     derivation:
       case:
         - when: "NOT (DM.AGE >= 65) AND DM.SEX = 'M'"

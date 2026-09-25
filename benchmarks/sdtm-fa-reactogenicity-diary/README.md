@@ -17,7 +17,8 @@ and whether the diary day was completed.
 **Variables:**
 
 - `FASEQ` numbers the subject's records by diary day, reaction name,
-  and test order (`OCCUR`, `SEV`, `LDIAM`).
+  and test order (`OCCUR`, `SEV`, `LDIAM`). Output records are grouped
+  by subject, then ordered by that number.
 - `FATESTCD` is `OCCUR` for the occurrence record, one per reaction
   per diary day; `SEV` for the severity record, on completed days
   only; and `LDIAM` for the longest-diameter record, only for redness

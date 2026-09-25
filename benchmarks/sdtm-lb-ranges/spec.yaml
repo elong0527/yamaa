@@ -68,15 +68,14 @@ columns:
     label: Reference Range Upper Limit-Std Units
     derivation: REFRANGE.NRHI
 
-  # A result equal to a limit is NORMAL. The first branch keeps a missing
-  # result from falling through to NORMAL. A record with no reference entry
-  # has missing limits, so both comparisons are unknown and it gets NORMAL.
+  # A result equal to a limit is NORMAL. A missing result or reference
+  # limit has no supported range classification.
   - name: LBNRIND
     type: str
     label: Reference Range Indicator
     derivation:
       case:
-        - when: "LBSTRESN IS NULL"
+        - when: "LBSTRESN IS NULL OR LBSTNRLO IS NULL OR LBSTNRHI IS NULL"
           then: {literal: null}
         - when: "LBSTRESN < LBSTNRLO"
           then: {literal: LOW}
@@ -86,8 +85,8 @@ columns:
 
 verifications:
   - row_count:
-      min: 7
-      max: 7
+      min: 8
+      max: 8
   - all_or_none:
       id: reference-dictionary-entry-is-complete
       columns: [LBORRESU, LBSTNRLO, LBSTNRHI]

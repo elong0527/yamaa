@@ -19,7 +19,8 @@ forms carry their own collection dates.
 
 - `SVSEQ` numbers each subject's visits in date order.
 - `VISIT` is the visit name carried on the study event, e.g. Week 2.
-- `VISITNUM` is the planned visit number; 99 marks an unscheduled visit.
+- `VISITNUM` is the planned visit number. Distinct numbers starting at
+  99.1 identify a subject's unscheduled visits.
 - `VISITDY` is the planned study day of the visit; it stays empty for
   unscheduled visits, which carry no plan.
 - `SVSTDTC` is the start date of the visit, the earliest form date among
@@ -38,9 +39,8 @@ forms carry their own collection dates.
   for planned visits.
 
 **Note:** visits are numbered by their start date, so an unscheduled visit
-takes its place between the planned visits around it. Every unscheduled
-visit is visit number 99, so a subject's second unscheduled visit stops the
-run rather than repeating the visit number.
+takes its place between the planned visits around it. Repeated unscheduled
+visits retain separate identities.
 
 **Provenance:** the fixtures are hand-built from a realistic EDC visit
 flow with plausible ODM naming, not records from a real study.
