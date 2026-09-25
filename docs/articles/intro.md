@@ -1,3 +1,12 @@
+# Motivation
+
+Two AI agents use the same specification to derive ADaM data.
+Both report completion, but their outputs differ.
+The specification leaves decisions for the agents to make during implementation.
+A human reviewer must find the gap, settle the rule, and rerun the derivation.
+
+Review takes longer, and confidence in the result falls.
+
 # Introduction
 
 yamaa is a domain-specific language (DSL) for clinical trial data
@@ -20,11 +29,6 @@ An Excel specification has three layers, but only two of them are written down:
 | **Structure** | What exists -- which datasets, which variables, which types | Dataset sheet, Variable sheet |
 | **Algorithm** | What to compute | The free-text derivation column |
 | **Semantics** | What that computation means **when the data does not cooperate** | **Nowhere.** It lives in each programmer's experience |
-
-Two programmers read the same derivation column. Both are certain they
-understood it. Their programs disagree -- not from misreading, but because
-the specification never reached the point they disagreed on: what missing
-means, what a duplicate means, how dates compare.
 
 yamaa writes each layer into a different kind of file:
 
