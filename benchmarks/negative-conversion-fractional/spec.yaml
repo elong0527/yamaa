@@ -24,12 +24,11 @@ columns:
     label: Sequence Number
     derivation: VS.VSSEQ
 
-  # No rounding rule is stated, so a fractional result has no int form, and
-  # strict: true makes that failed conversion stop the run.
+  # No rounding rule is stated, so a fractional result has no int form.
+  # With no missing handler declared, the failed conversion is fatal.
   - name: AVAL
     type: int
     label: Analysis Value
     derivation:
       value:
         source: VS.VSSTRESN
-      strict: true

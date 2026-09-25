@@ -8,6 +8,6 @@ context:
   to: int
   value: 72.5
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-961
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
       VSSEQ: 2
