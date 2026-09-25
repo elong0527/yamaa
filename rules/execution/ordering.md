@@ -101,8 +101,7 @@ rather than the engine's default.
 <a id="req-0301"></a>
 
 **REQ-0301.** Terms apply in order. Each has its own direction and placement.
-Records equal on every term preserve row-template order and then base-record
-order. Ordering is total. It has no undefined case. A row's neighbours are
+Ties, totality, and tie-breaking follow [REQ-0225](#req-0225). A row's neighbours are
 determined.
 
 <a id="req-0302"></a>
