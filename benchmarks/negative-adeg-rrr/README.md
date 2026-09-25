@@ -12,14 +12,17 @@ non-missing, non-zero HR result, labeled `RR Duration Rederived
 
 **Input:** collected electrocardiogram (ECG) records with heart
 rate results under the code `HR` per subject and visit, carrying
-the record label, result, and result unit; one input record
-already carries the code `RRR`.
+the record label, result, and result unit; one subject
+contributes heart rate records at two visits, and other records
+cover a missing, a zero, and a negative heart rate. One input
+record already carries the code `RRR`.
 
 **Variables:**
 
 - `AVAL`: the collected result on a kept record, or 60000 divided
   by the heart rate (in beats/min) on an added `RRR` record. A
-  missing or zero heart rate adds no `RRR` record.
+  missing or zero heart rate adds no `RRR` record; any other
+  value, including a negative one, still derives.
 - `AVALU`: the collected unit on a kept record, or milliseconds
   (`ms`) on an added `RRR` record. A heart rate record that
   contributes a result must use `beats/min`.

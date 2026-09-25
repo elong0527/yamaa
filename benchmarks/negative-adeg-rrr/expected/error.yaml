@@ -7,7 +7,7 @@ context:
   verification_id: reject-pre-existing-rrr
   failure_count: 1
   keys:
-    - STUDYID: TEST01
-      USUBJID: SUBJ05
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-105
       PARAMCD: RRR
       AVISIT: VISIT 1
