@@ -6,7 +6,7 @@ conditions:
   all_or_none_failed: {rules: [R009], phases: [verification]}
   allowed_values_failed: {rules: [R009], phases: [verification]}
   ambiguous_baseline: {rules: [R007], phases: [derivation]}
-  ambiguous_dictionary: {rules: [R007], phases: [validation]}
+  ambiguous_dictionary: {rules: [R019], phases: [validation]}
   artifact_path_collision: {rules: [R020], phases: [validation]}
   assert_failed: {rules: [R009], phases: [verification]}
   conversion_failed: {rules: [R011], phases: [convert]}
