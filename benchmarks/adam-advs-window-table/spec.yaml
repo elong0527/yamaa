@@ -11,7 +11,8 @@ base: ADVS_RAW
 # The window whose first-to-last study day range, both ends inclusive,
 # holds the record's study day, matched on STUDYID (the one output key the
 # window table carries). A record with no study day, or a window with no
-# last day, gives no match.
+# last day, gives no match. Records on days 21 and 22 pin the shared edge:
+# the upper bound closes Week 2, the lower bound opens Week 4.
 intermediates:
   - id: AWIN
     dataset: AWINDOW
@@ -120,8 +121,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   - row_count:
-      min: 14
-      max: 14
+      min: 16
+      max: 16
   - all_or_none:
       id: an-assigned-window-carries-its-order-and-target
       columns: [AVISIT, AVISITN, AWTARGET]

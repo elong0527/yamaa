@@ -1,4 +1,4 @@
-# Window Table Mapping
+# Assign Analysis Windows from the Window Table
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-window-table.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
@@ -11,9 +11,9 @@ represents its window.
 
 **Input:** pre-derived measurement records carrying `ADT`
 (analysis date), `ADY` (relative study day), and `AVAL` (measured
-value) alongside the visit as collected, plus one study-wide
-window table shared by all parameters that gives, for each
-analysis visit, its order number, its first and last study day,
+value) alongside the visit as collected, plus each study's own
+window table, shared by all parameters, that gives for each
+analysis visit its order number, its first and last study day,
 and its target day.
 
 **Variables:**
@@ -38,6 +38,8 @@ order number, and target day together, so a record with no window
 has none of the three. A record has no window when it has no study
 day, when its day falls in a gap between stated ranges, or when its
 day sits on or past the first day of a window whose last day was
-never stated: an absent bound is not an open-ended one.
+never stated: an absent bound is not an open-ended one. Window
+edges are inclusive, so study day 21 closes Week 2 and day 22
+opens Week 4.
 
 **Standard:** ADaM | **Domain:** ADVS
