@@ -3,21 +3,22 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-supplb-padded-key.html)
 [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** carry a supplemental laboratory value onto the matching analysis row.
+**Goal:** carry the supplemental qualifier value onto each analysis
+laboratory row (`QVAL`, `QVAL_INLINE`).
 
-**Input:** laboratory records carry numeric `LBSEQ`; SUPPLB carries its
-eight-character, space-padded text form in `IDVARVAL`. Subjects may share a
-sequence number, so all three key parts must match.
+**Input:** laboratory records carry a numeric sequence number; supplemental
+records carry the same sequence as eight-character, space-padded text. Two
+subjects may share a sequence number.
 
 **Variables:**
 
-- `QVAL` is the supplemental value for the matching laboratory sequence;
-  empty when no supplemental record matches.
-- `QVAL_INLINE` holds the same supplemental value from a direct lookup;
-  empty when no supplemental record matches.
+- `QVAL` is the qualifier value from the supplemental record whose study,
+  subject, and padded sequence all match; empty when nothing matches.
+- `QVAL_INLINE` holds the same value from an independent inline match;
+  empty when nothing matches.
 
-**Note:** laboratory rows in different sequence ranges use the same
-supplemental match. The numeric sequence is padded to eight characters for
-comparison without a separate output column.
+**Note:** the padding must be exact: a zero-padded key does not match the
+space-padded form, and a supplemental record with no laboratory record
+changes nothing. Rows in both sequence ranges use the same match.
 
 **Standard:** ADaM | **Domain:** ADLB

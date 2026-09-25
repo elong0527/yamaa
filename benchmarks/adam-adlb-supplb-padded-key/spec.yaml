@@ -45,3 +45,8 @@ columns:
           - LB.STUDYID
           - LB.USUBJID
           - str_pad: {source: LB.LBSEQ, width: 8}
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6
