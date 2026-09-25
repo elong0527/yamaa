@@ -578,7 +578,7 @@ sources:
   R016-21: {"file": "R016-temporal-values.md", "targets": ["REQ-0559"]}
   R016-22: {"file": "R016-temporal-values.md", "targets": ["REQ-0560"]}
   R016-23: {"file": "R016-temporal-values.md", "targets": ["REQ-0561"]}
-  R016-24: {"file": "R016-temporal-values.md", "targets": ["REQ-0562"]}
+  R016-24: {"file": "R016-temporal-values.md", "targets": ["REQ-0561"]}
   R016-25: {"file": "R016-temporal-values.md", "targets": ["REQ-0563"]}
   R016-26: {"file": "R016-temporal-values.md", "targets": ["REQ-0564"]}
   R016-27: {"file": "R016-temporal-values.md", "targets": ["REQ-0565"]}
@@ -1630,8 +1630,7 @@ requirements:
   REQ-0555: {"file": "values/temporal.md", "sources": ["R016-17", "R016-18", "R016-19", "yamaa:issue-1070:req-0556-retired", "yamaa:issue-1070:req-0557-retired"]}
   REQ-0559: {"file": "values/temporal.md", "sources": ["R016-20", "R016-21"]}
   REQ-0560: {"file": "values/temporal.md", "sources": ["R016-20", "R016-22"]}
-  REQ-0561: {"file": "values/temporal.md", "sources": ["R016-23"]}
-  REQ-0562: {"file": "values/temporal.md", "sources": ["R016-24"]}
+  REQ-0561: {"file": "values/temporal.md", "sources": ["R016-23", "R016-24", "yamaa:issue-1091:req-0562-retired"]}
   REQ-0563: {"file": "values/temporal.md", "sources": ["R016-25"]}
   REQ-0564: {"file": "values/temporal.md", "sources": ["R016-26"]}
   REQ-0565: {"file": "values/temporal.md", "sources": ["R016-27"]}
@@ -2816,3 +2815,4 @@ provenance_addenda:
   - {"source": "yamaa:issue-1070:req-0556-retired", "text": "Issue #1070: the rationale-only requirement on admitting both local and offset-aware datetimes is retired; the no-zone-no-offset decision stands as REQ-0555 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "no-zone-no-offset", "target": "REQ-0555"}
   - {"source": "yamaa:issue-1070:req-0557-retired", "text": "Issue #1070: the rationale-only requirement on prohibiting the zone is retired; the no-zone-no-offset decision stands as REQ-0555 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "no-zone-no-offset", "target": "REQ-0555"}
   - {"source": "yamaa:issue-1081:req-0203-retired", "text": "Issue #1081: the placement-advice requirement is retired; numbered requirements are for testable behavior only. Where a column may be derived is stated testably by REQ-1260's row-phase hoisting rule and REQ-0204's literal-null rule.", "owner": "specification/structure", "group": "column-default-derivations", "target": "REQ-1260"}
+  - {"source": "yamaa:issue-1091:req-0562-retired", "text": "Issue #1091: the rationale-only requirement on fractional seconds is retired; the whole-second decision stands as REQ-0561 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "whole-second", "target": "REQ-0561"}
