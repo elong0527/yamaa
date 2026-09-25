@@ -33,5 +33,5 @@ date_precision:
   invalid: null
 ```
 
-The `invalid` outcome covers `ONGOING`; `missing` covers a source value that
+The `invalid` outcome covers `UNK`; `missing` covers a source value that
 was not collected.
