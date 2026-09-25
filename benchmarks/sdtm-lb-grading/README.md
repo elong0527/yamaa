@@ -4,8 +4,8 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** build one laboratory record per collected neutrophil or
-hemoglobin result, carrying `LBTESTCD`, `SEX`, `LBSTRESN`, and
-`ATOXGR` from the Common Terminology Criteria for Adverse Events
+hemoglobin result, carrying `LBTESTCD`, `LBSTRESN`, and `LBTOXGR`
+from the Common Terminology Criteria for Adverse Events
 (CTCAE) v5.0 bands for that test.
 
 **Input:** collected laboratory results with test, sex,
@@ -16,10 +16,8 @@ confirming the assigned grade.
 
 - `LBTESTCD` is the test short name as collected: `ANC` (absolute
   neutrophil count) or `HGB` (hemoglobin).
-- `SEX` is the subject's sex as collected, `M` or `F`; it selects
-  which hemoglobin band set applies to the record.
 - `LBSTRESN` is the standardized numeric result as collected.
-- `ATOXGR` is the toxicity grade for the result, one of `4`, `3`,
+- `LBTOXGR` is the standard toxicity grade for the result, one of `4`, `3`,
   `2`, `1`, or `0`, from the band set for that test and sex; each
   band includes its lower limit and excludes its upper one.
 
