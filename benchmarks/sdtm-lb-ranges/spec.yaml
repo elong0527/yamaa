@@ -4,18 +4,24 @@ keys: [STUDYID, USUBJID, LBSEQ]
 input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
+  DM: input/dm.csv
 base: LB_RAW
 
-# The reference entry for the record's test code and sex. Two entries for
-# one combination stop the run; none leaves UNIT, NRLO and NRHI missing.
+# Sex is not an LB variable: it is read from DM by subject and used only
+# to pick the reference entry. The reference entry for the record's test
+# code and DM sex; two entries for one combination stop the run; none
+# leaves UNIT, NRLO and NRHI missing.
 intermediates:
+  - id: DMSEX
+    dataset: DM
+    key: [USUBJID]
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBSTRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 columns:
   - name: DOMAIN
@@ -43,19 +49,21 @@ columns:
     label: Lab Test or Examination Short Name
     derivation: LB_RAW.LBTESTCD
 
+  # Read from DM by subject for the reference lookup; not an LB output
+  # variable, so it stays out of output.columns.
   - name: SEX
     type: str
     label: Sex
-    derivation: LB_RAW.SEX
+    derivation: DMSEX.SEX
 
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation: LB_RAW.LBSTRESN
 
-  - name: LBORRESU
+  - name: LBSTRESU
     type: str
-    label: Original Units
+    label: Standard Units
     derivation: REFRANGE.UNIT
 
   - name: LBSTNRLO
@@ -89,4 +97,4 @@ verifications:
       max: 8
   - all_or_none:
       id: reference-dictionary-entry-is-complete
-      columns: [LBORRESU, LBSTNRLO, LBSTNRHI]
+      columns: [LBSTRESU, LBSTNRLO, LBSTNRHI]
