@@ -120,6 +120,16 @@ def test_definitions_without_for_pass_through():
     assert expanded[0]["id"] == "PICK"
 
 
+def test_invalid_for_item_is_an_error():
+    document = base_document()
+    document["intermediates"][0]["for"] = [1, ["not", "a", "scalar"]]
+    with pytest.raises(SpecificationError) as excinfo:
+        expand_parameterized_definitions(document)
+    diagnostics = excinfo.value.diagnostics
+    assert len(diagnostics) == 1
+    assert diagnostics[0].condition == "invalid_for_item"
+
+
 def test_empty_for_list_is_an_error():
     document = base_document()
     document["intermediates"][0]["for"] = []

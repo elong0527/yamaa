@@ -44,8 +44,12 @@ def _textual(value: Any) -> str:
 
 def _environment(
     item: Any, path: str, diagnostics: list[ValidationDiagnostic]
-) -> dict[str, Any]:
-    """Build the placeholder bindings for one `for:` list item."""
+) -> dict[str, Any] | None:
+    """Build the placeholder bindings for one `for:` list item.
+
+    Returns None and records a diagnostic when the item is neither a scalar
+    nor a mapping; the caller skips instantiating that value.
+    """
     if isinstance(item, dict):
         return {key: item[key] for key in item}
     if _is_scalar(item):
@@ -58,7 +62,7 @@ def _environment(
             context={"item": str(item)},
         )
     )
-    return {}
+    return None
 
 
 # Sentinels protecting str_template `{{` / `}}` escapes during substitution.
@@ -226,6 +230,8 @@ def expand_parameterized_definitions(
                 environment = _environment(
                     for_item, f"{base_path}.for[{position}]", diagnostics
                 )
+                if environment is None:
+                    continue
                 instance = _substitute(template, environment, base_path, diagnostics)
                 from_expansion.add(len(expanded))
                 expanded.append(instance)
