@@ -192,9 +192,10 @@ follows dependency order.
 <a id="req-0068"></a>
 
 **REQ-0068.** An ungrouped `row.filter` reads the candidate row's derived
-  columns and lookup state. A filter naming a column whose derivation reads
-  a window result fails validation: the filter evaluates before the window
-  pass, so no window result is available to it. A grouped
+  columns and lookup state. An ungrouped `row.filter` naming a column the
+  row template does not derive: fail. A filter naming a column whose
+  derivation reads a window result fails validation: the filter evaluates
+  before the window pass, so no window result is available to it. A grouped
   `row.filter` naming a qualified variable or a column not derived by that
   row template: fail.
 
