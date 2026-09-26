@@ -6,8 +6,8 @@
 **Goal:** build `ELDFL` to mark each subject aged 65 or older with `Y` and
 every younger subject with `N`.
 
-**Input:** collected demographics carrying numeric age (`AGE`), with one
-subject whose age was not collected.
+**Input:** collected demographics carrying numeric age (`AGE`); some
+subjects have no recorded age.
 
 **Variables:**
 
@@ -15,9 +15,9 @@ subject whose age was not collected.
 - `ELDFL` would be `Y` for subjects aged 65 or older and `N` for younger
   subjects.
 
-**Note:** the flag names `N` for a false condition (`false_value`) but
-not what a subject with no recorded age receives (`missing_value`), so the
-run is rejected before any data is read and no artifact is accepted.
+**Note:** the flag names `N` for a false condition but not what a subject
+with no recorded age receives, so the run is rejected before any data is
+read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
