@@ -612,12 +612,22 @@ eval_mapping <- function(payload, ctx) {
     if (length(unmapped_idx) > 0) {
       if (strict)
         yamaa_error("unmapped_value", "mapping: unmapped value under strict:true")
-      if (!"missing" %in% names(payload))
-        yamaa_error("unmapped_value", "mapping: unmapped value without policy")
-      # explicit `missing: null` keeps the rt-typed NA already in out$v
-      if (!is.null(payload$missing)) {
-        lit <- literal_to_tv(payload$missing, rt, length(unmapped_idx))
-        out$v[unmapped_idx] <- lit$v
+      # REQ-1110: a present source with no dictionary entry takes `unmapped:`
+      # when the key is present (explicit null keeps the typed NA already in
+      # out$v); when `unmapped` is absent and strict is not true, `missing:`
+      # covers the unmapped case too, else the result stays missing.
+      if ("unmapped" %in% names(payload)) {
+        u <- payload$unmapped
+        if (!is.null(u)) {
+          lit <- literal_to_tv(u, rt, length(unmapped_idx))
+          out$v[unmapped_idx] <- lit$v
+        }
+      } else if ("missing" %in% names(payload)) {
+        m <- payload$missing
+        if (!is.null(m)) {
+          lit <- literal_to_tv(m, rt, length(unmapped_idx))
+          out$v[unmapped_idx] <- lit$v
+        }
       }
     }
   }
