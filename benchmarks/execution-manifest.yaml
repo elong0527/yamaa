@@ -870,6 +870,9 @@ examples:
   schema-window-intermediate-rank:
     status: executable
     runtimes: ['python']
+  schema-round-half-away-from-zero-ties:
+    status: executable
+    runtimes: ['python']
   schema-row-templates:
     status: executable
     runtimes: ['python']
