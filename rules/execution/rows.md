@@ -29,8 +29,8 @@ row template reads those fields through the intermediate's qualifier as its
 current driver record, not through a keyed lookup. Records retain source
 order. A driver intermediate must read an `input` dataset and may not declare
 `key`, `key_base`, `between`, `order_by`, `keep`, `missing`, or `strict: true`.
-Its filter may read only its own donor fields and earlier derived names;
-correlation to a current row is invalid because no current row exists yet.
+Its filter may read only its own donor fields and earlier derived names; it
+may not reference a current row.
 An exposed derived field must have a determinable type: `source` keeps its
 source type, a string/integer/float `literal` has that type, `row_number` and
 `rank` are integer, and `str_upper`, `str_lower`, `str_sentence`, and
