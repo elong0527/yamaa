@@ -46,10 +46,6 @@ Each carries the `02`. Nothing in the schema links them beyond the
 
 ### Column coverage
 
-<a id="req-0197"></a>
-
-**REQ-0197.** Retired. A column-level derivation is the column's default derivation, stated once in [REQ-0199](#req-0199). This identifier is never reused.
-
 <a id="req-0198"></a>
 
 **REQ-0198.** Every declared column must be derived. A column with no

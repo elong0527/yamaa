@@ -86,7 +86,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0077](../specification/binding.md#req-0077) | `specification/binding.md` | R002-2 |
 | [REQ-0078](../specification/binding.md#req-0078) | `specification/binding.md` | R002-3 |
 | [REQ-0079](../specification/binding.md#req-0079) | `specification/binding.md` | R002-4 |
-| [REQ-0080](../specification/binding.md#req-0080) | `specification/binding.md` | R002-5 |
+| [REQ-0080](../specification/binding.md#req-0080) | `specification/binding.md` | R002-5, R002-28 |
 | [REQ-0081](../specification/binding.md#req-0081) | `specification/binding.md` | R002-6 |
 | [REQ-0082](../specification/binding.md#req-0082) | `specification/binding.md` | R002-7 |
 | [REQ-0083](../specification/binding.md#req-0083) | `specification/binding.md` | R002-8 |
@@ -102,15 +102,13 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0093](../specification/binding.md#req-0093) | `specification/binding.md` | R002-18 |
 | [REQ-0094](../specification/binding.md#req-0094) | `specification/binding.md` | R002-19 |
 | [REQ-0095](../specification/binding.md#req-0095) | `specification/binding.md` | R002-19a |
-| [REQ-0096](../specification/binding.md#req-0096) | `specification/binding.md` | R002-20 |
 | [REQ-0097](../specification/binding.md#req-0097) | `specification/binding.md` | R002-21 |
-| [REQ-0098](../specification/binding.md#req-0098) | `specification/binding.md` | R002-22 |
+| [REQ-0098](../specification/binding.md#req-0098) | `specification/binding.md` | R002-22, R002-20 |
 | [REQ-0099](../specification/binding.md#req-0099) | `specification/binding.md` | R002-23 |
 | [REQ-0100](../specification/binding.md#req-0100) | `specification/binding.md` | R002-24 |
 | [REQ-0101](../specification/binding.md#req-0101) | `specification/binding.md` | R002-25 |
 | [REQ-0102](../specification/binding.md#req-0102) | `specification/binding.md` | R002-26 |
 | [REQ-0103](../specification/binding.md#req-0103) | `specification/binding.md` | R002-27 |
-| [REQ-0104](../specification/binding.md#req-0104) | `specification/binding.md` | R002-28 |
 | [REQ-0105](../specification/binding.md#req-0105) | `specification/binding.md` | R002-29 |
 | [REQ-0106](../specification/binding.md#req-0106) | `specification/binding.md` | R002-30 |
 | [REQ-0107](../specification/binding.md#req-0107) | `specification/binding.md` | R002-31 |
@@ -172,11 +170,10 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0163](../operations/predicates.md#req-0163) | `operations/predicates.md` | R004-6 |
 | [REQ-0164](../operations/predicates.md#req-0164) | `operations/predicates.md` | R004-7 |
 | [REQ-0165](../operations/predicates.md#req-0165) | `operations/predicates.md` | R004-8 |
-| [REQ-0166](../operations/predicates.md#req-0166) | `operations/predicates.md` | R004-9 |
+| [REQ-0166](../operations/predicates.md#req-0166) | `operations/predicates.md` | R004-9, R004-13 |
 | [REQ-0167](../operations/predicates.md#req-0167) | `operations/predicates.md` | R004-10 |
 | [REQ-0168](../operations/predicates.md#req-0168) | `operations/predicates.md` | R004-11 |
 | [REQ-0169](../operations/predicates.md#req-0169) | `operations/predicates.md` | R004-12 |
-| [REQ-0170](../operations/predicates.md#req-0170) | `operations/predicates.md` | R004-13 |
 | [REQ-0171](../operations/predicates.md#req-0171) | `operations/predicates.md` | R004-14 |
 | [REQ-0172](../operations/predicates.md#req-0172) | `operations/predicates.md` | R004-15 |
 | [REQ-0173](../operations/predicates.md#req-0173) | `operations/predicates.md` | R004-16 |
@@ -203,9 +200,8 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0194](../execution/ordering.md#req-0194) | `execution/ordering.md` | R005-2 |
 | [REQ-0195](../storage/publication.md#req-0195) | `storage/publication.md` | R005-3 |
 | [REQ-0196](../specification/structure.md#req-0196) | `specification/structure.md` | R005-4 |
-| [REQ-0197](../specification/structure.md#req-0197) | `specification/structure.md` | R005-5, R005-15 |
 | [REQ-0198](../specification/structure.md#req-0198) | `specification/structure.md` | R005-6 |
-| [REQ-0199](../specification/structure.md#req-0199) | `specification/structure.md` | R005-7 |
+| [REQ-0199](../specification/structure.md#req-0199) | `specification/structure.md` | R005-7, R005-5, R005-15 |
 | [REQ-0200](../specification/structure.md#req-0200) | `specification/structure.md` | R005-8 |
 | [REQ-0201](../specification/structure.md#req-0201) | `specification/structure.md` | R005-9 |
 | [REQ-0202](../specification/structure.md#req-0202) | `specification/structure.md` | R005-10 |
@@ -737,7 +733,6 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0733](../storage/csv.md#req-0733) | `storage/csv.md` | R020-19 |
 | [REQ-0734](../storage/parquet.md#req-0734) | `storage/parquet.md` | R020-20 |
 | [REQ-0735](../storage/parquet.md#req-0735) | `storage/parquet.md` | R020-21 |
-| [REQ-0736](../storage/parquet.md#req-0736) | `storage/parquet.md` | R020-22 |
 | [REQ-0737](../storage/parquet.md#req-0737) | `storage/parquet.md` | R020-23 |
 | [REQ-0738](../storage/parquet.md#req-0738) | `storage/parquet.md` | R020-24 |
 | [REQ-0739](../storage/parquet.md#req-0739) | `storage/parquet.md` | R020-25 |
@@ -1035,7 +1030,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1031](../storage/parquet.md#req-1031) | `storage/parquet.md` | R027-4 |
 | [REQ-1032](../storage/parquet.md#req-1032) | `storage/parquet.md` | R027-5 |
 | [REQ-1033](../storage/parquet.md#req-1033) | `storage/parquet.md` | R027-6 |
-| [REQ-1034](../storage/parquet.md#req-1034) | `storage/parquet.md` | R027-7 |
+| [REQ-1034](../storage/parquet.md#req-1034) | `storage/parquet.md` | R027-7, R020-22 |
 | [REQ-1035](../storage/parquet.md#req-1035) | `storage/parquet.md` | R027-8 |
 | [REQ-1036](../storage/parquet.md#req-1036) | `storage/parquet.md` | R027-9 |
 | [REQ-1037](../storage/parquet.md#req-1037) | `storage/parquet.md` | R027-10 |

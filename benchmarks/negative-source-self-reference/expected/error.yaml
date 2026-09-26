@@ -3,6 +3,6 @@ condition: duplicate_identifier
 spec_paths:
   - input.ADLB
   - domain
-requirement: REQ-0104
+requirement: REQ-0080
 context:
   identifier: ADLB

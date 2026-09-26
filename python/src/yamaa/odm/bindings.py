@@ -127,8 +127,8 @@ class BindingPlan(_FrozenModel):
             )
 
         # Dataset fields take precedence above. Every other suffix on a
-        # long-form ODM relation is a complete ItemOID; REQ-0096 permits, but
-        # does not require, periods inside that identifier.
+        # long-form ODM relation is a complete ItemOID; REQ-0098 matches it
+        # without splitting on periods inside that identifier.
         if dataset.is_long_form_odm:
             if not dataset.context_columns:
                 return _unknown(name)

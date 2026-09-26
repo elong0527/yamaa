@@ -3325,12 +3325,10 @@ def validate_retired_odm_item_references(
 ):
     """Reject an ODM contextual item reference.
 
-    A long-form ODM relation carries `ItemOID` and `Value`, and REQ-0096
-    reads any other suffix on it as a complete ItemOID resolved against the
-    row's ODM context. REQ-0131 states the replacement: read `Value` under a
-    source `filter` on `ItemOID`, so the record the source reaches is
-    written where a reviewer can see it. No specification in the repository
-    still uses the retired form, so this check carries no exemption.
+    A long-form ODM relation carries `ItemOID` and `Value`. Repository
+    specifications read `Value` under a source `filter` on `ItemOID`, so
+    the record the source reaches is written where a reviewer can see it.
+    This check carries no exemption for the retired variable-name form.
     """
     long_form = {
         dataset: fields
@@ -3354,8 +3352,8 @@ def validate_retired_odm_item_references(
             continue
         errors.append(
             f"ERROR: {path}: retired_construct: {name!r} addresses an ODM "
-            f"item through the variable name (REQ-0096); read {dataset}.Value "
-            "under a source filter on ItemOID instead (REQ-0131)"
+            f"item through the variable name; read {dataset}.Value "
+            "under a source filter on ItemOID instead"
         )
     return sorted(set(errors))
 

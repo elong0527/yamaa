@@ -9,6 +9,10 @@ from pathlib import Path
 import yaml
 
 DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
+RETIRED_DEFINITION = re.compile(
+    r"^\*\*(REQ-[0-9]{4,})\.\*\*\s*(?:this form is )?retired\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
 LEGACY = re.compile(r"R[0-9]{3}-[1-9][0-9]*[a-z]?\Z")
 SECTIONS = [
@@ -121,6 +125,8 @@ def check(root):
         definitions = DEFINITION.findall(body)
         if not definitions:
             errors.append(f"{label}: no requirements")
+        for identifier in RETIRED_DEFINITION.findall(body):
+            errors.append(f"{label}: retired requirement must be deleted: {identifier}")
         for identifier in definitions:
             if identifier in found:
                 errors.append(f"duplicate requirement: {identifier}")

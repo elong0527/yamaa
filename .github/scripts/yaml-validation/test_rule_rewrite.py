@@ -82,6 +82,18 @@ class RuleRewriteTests(unittest.TestCase):
         errors, _ = check(self.root)
         self.assertIn("duplicate requirement: REQ-0001", errors)
 
+    def test_retired_requirement_stub_fails(self):
+        self.replace(
+            self.rules / "values/text.md",
+            "**REQ-0022.**",
+            "**REQ-0022.** Retired.",
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "values/text.md: retired requirement must be deleted: REQ-0022",
+            errors,
+        )
+
     def test_duplicate_yaml_keys_fail(self):
         self.replace(
             self.rules / "migration.yaml", "version: 2", "version: 2\nversion: 2"
