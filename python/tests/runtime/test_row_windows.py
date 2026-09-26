@@ -193,9 +193,7 @@ def test_row_window_reads_another_completed_window_result() -> None:
     result = execute_specification(specification, visits_source())
 
     assert isinstance(result, ExecutionSuccess), result
-    assert result.artifact.frame["PREV2"].to_list() == [
-        None, None, 1.0, None, None
-    ]
+    assert result.artifact.frame["PREV2"].to_list() == [None, None, 1.0, None, None]
 
 
 def test_row_window_self_reference_is_a_cycle() -> None:
@@ -225,14 +223,10 @@ def test_row_window_scalar_chain_with_a_cycle_is_rejected() -> None:
             "GRP": derive({"source": "SRC.G"}),
             "SEQ": derive({"source": "SRC.S"}),
             "VAL": derive({"source": "SRC.X"}),
-            "PREV": derive(
-                lag_window({"group_by": ["GRP"], "order_by": ["SEQ"]})
-            ),
+            "PREV": derive(lag_window({"group_by": ["GRP"], "order_by": ["SEQ"]})),
             "CHG": derive({"compute": {"expr": "PREV2 * 2"}}),
             "PREV2": derive(
-                lag_window(
-                    {"group_by": ["GRP"], "order_by": ["SEQ"]}, source="CHG"
-                )
+                lag_window({"group_by": ["GRP"], "order_by": ["SEQ"]}, source="CHG")
             ),
         },
     )
@@ -326,9 +320,7 @@ def test_row_window_reads_a_scalar_derived_from_a_window() -> None:
     result = execute_specification(specification, visits_source())
 
     assert isinstance(result, ExecutionSuccess), result
-    assert result.artifact.frame["BAD"].to_list() == [
-        None, None, 2.0, None, None
-    ]
+    assert result.artifact.frame["BAD"].to_list() == [None, None, 2.0, None, None]
 
 
 def test_rank_selection_then_previous_non_missing_in_one_template() -> None:
@@ -372,9 +364,7 @@ def test_rank_selection_then_previous_non_missing_in_one_template() -> None:
     result = execute_specification(specification, visits_source())
 
     assert isinstance(result, ExecutionSuccess), result
-    assert result.artifact.frame["_CARRIED"].to_list() == [
-        None, 1.0, 1.0, None, 10.0
-    ]
+    assert result.artifact.frame["_CARRIED"].to_list() == [None, 1.0, 1.0, None, 10.0]
 
 
 def test_row_window_promotes_a_referenced_column_derivation() -> None:
