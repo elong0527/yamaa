@@ -258,12 +258,12 @@ division integral must be overridden.
 
 <a id="req-0438"></a>
 
-**REQ-0438.** Evaluation follows the written association.
-Implementations must not reassociate, redistribute, or algebraically
-simplify an expression, and must not enable fast-math or optimizer rewrites
-that do. `a / (b * b)` and `a / b / b` are different formulas and may return
-different doubles. Both are correct. An implementation must return the
-double for the written formula.
+**REQ-0438.** Evaluation follows the written association. An
+implementation must not reassociate, redistribute, or algebraically
+simplify an expression, and must not switch on a numeric performance
+option that does any of these. `a / (b * b)` and `a / b / b` are different
+formulas and may return different doubles. Both are correct. An
+implementation returns the double for the written formula.
 
 ### Interface behavior
 
