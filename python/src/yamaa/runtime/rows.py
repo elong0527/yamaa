@@ -384,6 +384,7 @@ class RowResolver:
             evaluate=self._dispatcher.evaluate
             if self._dispatcher is not None
             else None,
+            resolver=self,
         )
         if isinstance(result, ValueResult):
             return ResolvedValue(value=result.value, handled_by=result.handled_by)
@@ -408,7 +409,7 @@ class RowResolver:
         outcome = self._candidate.intermediates.get(identifier)
         if outcome is None:
             outcome = self._context.intermediates.select(
-                identifier, self._lookup_current(plan)
+                identifier, self._lookup_current(plan), resolver=self
             )
             self._candidate.intermediates[identifier] = outcome
         if outcome.condition is not None:
@@ -604,6 +605,7 @@ class RowResolver:
             evaluate=self._dispatcher.evaluate
             if self._dispatcher is not None
             else None,
+            resolver=self,
         )
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:

@@ -864,7 +864,7 @@ def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
             Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="D", type="date", derivation=derivation({"source": "SRC.D"})),
             Column(name="R", type="date", derivation=derivation({"source": "SRC.D"})),
-            Column(name="V", type="int", derivation=derivation({"source": "LOOK.N"})),
+            Column(name="V", type="int", derivation=derivation({"source": "SRC.N"})),
         ]
     ).model_copy(
         update={
@@ -882,12 +882,10 @@ def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, {"SRC": table})
 
-    assert any(
-        diagnostic.condition == "incompatible_input_type"
-        and diagnostic.context["expected"] == "str"
-        and diagnostic.context["actual"] == "int"
-        for diagnostic in raised.value.diagnostics
-    )
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "incompatible_input_type"
+    assert diagnostic.context["expected"] == "str"
+    assert diagnostic.context["actual"] == "int"
 
 
 def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:
