@@ -127,7 +127,7 @@ conforming artifact wrongly without failing, and neither is permitted.
 
 <a id="req-0719"></a>
 
-**REQ-0719.** The `parquet` profile carries its own types. The `csv` profile's bytes are fixed exactly.
+**REQ-0719.** The `parquet` profile carries its own types: an artifact read by another specification needs no declaration to be understood. The `csv` profile's bytes are fixed exactly.
 
 <a id="req-0720"></a>
 
