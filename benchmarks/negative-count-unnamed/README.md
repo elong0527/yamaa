@@ -12,7 +12,8 @@ each subject and parameter has exactly one flagged baseline result.
 
 **Variables:**
 
-- `ABLFL` would be `Y` on the baseline result and blank otherwise.
+- `ABLFL` is the input baseline flag: `Y` on the record that serves as the
+  baseline for the subject and parameter, blank on every other record.
 
 **Note:** the check counts the results flagged `Y` within each subject and
 parameter and expects exactly one, but it carries no name, so a report of a
