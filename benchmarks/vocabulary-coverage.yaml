@@ -30,7 +30,8 @@ coverage:
   locf: [negative-locf-no-order]
   previous_non_missing: [negative-previous-fixed]
   rank: [negative-rank-bad-method]
-  round_half_away_from_zero: [negative-round-half-away-from-zero-non-numeric-source]
+  round_half_away_from_zero: [negative-round-half-away-from-zero-non-numeric-source,
+    schema-round-half-away-from-zero-ties]
   row_number: [negative-row-number-filter]
   row_value: [negative-row-no-prior]
   source: [negative-source-undeclared-field]
