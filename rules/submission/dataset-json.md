@@ -395,6 +395,5 @@ exactly as [REQ-1026](define-xml.md#req-1026) requires of an invalid document.
 
 <a id="req-1232"></a>
 
-**REQ-1232.** A failed publication: fail and report the target, exactly as
-[Artifact publication](../storage/publication.md) does. Every file already published stays as it is, and every
-other target is unchanged.
+**REQ-1232.** A failed publication fails under [REQ-0764](../storage/publication.md#req-0764) and
+[REQ-1222](dataset-json.md#req-1222).
