@@ -298,6 +298,43 @@ def _evaluate_row_filter(
     return result.value is TruthValue.TRUE
 
 
+def _ungrouped_row_filter(
+    planned,
+    candidate: CandidateRow,
+    context: RelationalContext,
+    dispatcher: ExpressionDispatcher,
+) -> bool:
+    """Evaluate an ungrouped template's filter over its derived candidate.
+
+    REQ-0068: the filter reads the candidate's derived columns and lookup
+    state, so it runs after the immediate derivations, before the window
+    pass partitions the retained rows.
+    """
+    if planned.filter_predicate is None:
+        return True
+    resolver = RowResolver(
+        context,
+        candidate,
+        candidate.values,
+        row_phase=True,
+        dispatcher=dispatcher,
+    )
+    result = evaluate_predicate(planned.filter_predicate, resolver)
+    if isinstance(result, ConditionResult):
+        raise _ExecutionAbort(
+            [
+                ExecutionDiagnostic(
+                    phase=result.condition.phase,
+                    condition=result.condition.condition,
+                    spec_paths=(planned.filter_path or "rows.filter",),
+                    context=result.condition.context,
+                )
+            ]
+        )
+    assert isinstance(result, PredicateValue)
+    return result.value is TruthValue.TRUE
+
+
 # The phases whose failures name the record they happened on. A failure
 # decided before any row exists reports no key.
 _ROW_PHASES = frozenset(
@@ -390,9 +427,12 @@ def _register_handler_paths(plan, counter: HandlerCounter) -> None:
 def _record_candidates(
     planned,
     relation: RelationIndex,
-    index: BindingIndex,
 ) -> list[CandidateRow]:
-    """Build one candidate per retained driver record, in driver order."""
+    """Build one candidate per driver record, in driver order.
+
+    REQ-0068: an ungrouped row template's filter evaluates after the
+    record's derivations, so filtering happens in the main loop, not here.
+    """
     return [
         CandidateRow(
             source_rows={planned.driver: values},
@@ -401,7 +441,6 @@ def _record_candidates(
             row_id=planned.declaration.id if planned.declaration else None,
         )
         for values in (dict(record.values) for record in relation.records)
-        if _evaluate_row_filter(planned, index, values)
     ]
 
 
@@ -573,7 +612,7 @@ def _construct_rows(
         if planned.grouped:
             candidates = group_candidates(planned, relation)
         else:
-            candidates = _record_candidates(planned, relation, context.bindings)
+            candidates = _record_candidates(planned, relation)
         window_columns = {
             derivation.column
             for derivation in planned.derivations
@@ -622,6 +661,14 @@ def _construct_rows(
                     plan.specification.keys,
                     row_phase=True,
                 )
+            # REQ-0068: an ungrouped filter reads the candidate's derived
+            # columns and lookup state, so it runs after the immediate
+            # derivations, before the window pass partitions the retained
+            # rows.
+            if not planned.grouped and not _ungrouped_row_filter(
+                planned, candidate, context, dispatcher
+            ):
+                continue
             staged.append(candidate)
         if window_plans:
             # REQ-0326: a template's windows partition the rows the template
