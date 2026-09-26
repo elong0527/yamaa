@@ -894,10 +894,10 @@ def _filtered_row_spec(rows, intermediates=()) -> Specification:
         },
         base="SRC",
         keys=["K"],
-        output=Output(path="out.csv", columns=["K", "DOUBLED"]),
+        output=Output(path="out.csv", columns=["K", "XVAL"]),
         columns=[
             Column(name="K", type="str"),
-            Column(name="DOUBLED", type="float"),
+            Column(name="XVAL", type="float"),
         ],
         intermediates=list(intermediates),
         rows=[
@@ -907,7 +907,7 @@ def _filtered_row_spec(rows, intermediates=()) -> Specification:
                 filter=row_filter,
                 derivations={
                     "K": derive({"source": "SRC.K"}),
-                    "DOUBLED": derive({"source": "SRC.X"}),
+                    "XVAL": derive({"source": "SRC.X"}),
                 },
             )
             for row_filter in [rows]
@@ -917,8 +917,8 @@ def _filtered_row_spec(rows, intermediates=()) -> Specification:
 
 def test_an_ungrouped_filter_reads_a_derived_column() -> None:
     # REQ-0068 (relaxed): the filter evaluates after the record's
-    # derivations, so it reads the derived DOUBLED column.
-    specification = _filtered_row_spec("DOUBLED > 4.0")
+    # derivations, so it reads the derived XVAL column.
+    specification = _filtered_row_spec("XVAL > 4.0")
 
     result = execute_specification(specification, _filtered_row_sources())
 
@@ -957,21 +957,21 @@ def test_an_ungrouped_filter_still_scopes_the_window_pass() -> None:
         output=Output(path="out.csv", columns=["K", "PREV"]),
         columns=[
             Column(name="K", type="str"),
-            Column(name="DOUBLED", type="float"),
+            Column(name="XVAL", type="float"),
             Column(name="PREV", type="float"),
         ],
         rows=[
             Row(
                 id="row",
                 dataset="SRC",
-                filter="DOUBLED > 4.0",
+                filter="XVAL > 4.0",
                 derivations={
                     "K": derive({"source": "SRC.K"}),
-                    "DOUBLED": derive({"source": "SRC.X"}),
+                    "XVAL": derive({"source": "SRC.X"}),
                     "PREV": derive(
                         {
                             "row_value": {
-                                "source": "DOUBLED",
+                                "source": "XVAL",
                                 "offset": -1,
                                 "window": {"order_by": ["K"]},
                             }
