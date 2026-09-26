@@ -180,13 +180,6 @@ structural constraints come from its schema declaration.
 
 ## Error conditions
 
-<a id="req-0063"></a>
-
-**REQ-0063.** Retired. The requirement is stated once in
-[REQ-0034](#req-0034): when `root.input` declares more than one dataset,
-every row template must state `dataset`; a template omitting it fails. This
-identifier is never reused.
-
 <a id="req-0064"></a>
 
 **REQ-0064.** A specification with no `rows` entry and no default input
