@@ -200,7 +200,6 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0191](../operations/predicates.md#req-0191) | `operations/predicates.md` | R004-34 |
 | [REQ-0192](../operations/predicates.md#req-0192) | `operations/predicates.md` | R004-35 |
 | [REQ-0193](../storage/publication.md#req-0193) | `storage/publication.md` | R005-1 |
-| [REQ-0194](../execution/ordering.md#req-0194) | `execution/ordering.md` | R005-2 |
 | [REQ-0195](../storage/publication.md#req-0195) | `storage/publication.md` | R005-3 |
 | [REQ-0196](../specification/structure.md#req-0196) | `specification/structure.md` | R005-4 |
 | [REQ-0197](../specification/structure.md#req-0197) | `specification/structure.md` | R005-5, R005-15 |
@@ -227,7 +226,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0219](../execution/lifecycle.md#req-0219) | `execution/lifecycle.md` | R005-29 |
 | [REQ-0220](../storage/publication.md#req-0220) | `storage/publication.md` | R005-30 |
 | [REQ-0221](../storage/publication.md#req-0221) | `storage/publication.md` | R005-31 |
-| [REQ-0222](../execution/ordering.md#req-0222) | `execution/ordering.md` | R005-32 |
+| [REQ-0222](../execution/ordering.md#req-0222) | `execution/ordering.md` | R005-32, R005-2 |
 | [REQ-0223](../execution/ordering.md#req-0223) | `execution/ordering.md` | R005-34 |
 | [REQ-0224](../execution/ordering.md#req-0224) | `execution/ordering.md` | R005-35 |
 | [REQ-0225](../execution/ordering.md#req-0225) | `execution/ordering.md` | R005-36 |
