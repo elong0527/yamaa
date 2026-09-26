@@ -369,13 +369,8 @@ closed and neither is extended by a specification.
 **REQ-0890.** For `adam`, the admitted types are `Derived`, `Assigned`,
 `Predecessor`, and `Other`, and `source` is derived rather than declared:
 `Sponsor` for `Derived`, `Assigned`, and `Other`, and absent for
-`Predecessor`. The family fixes the source completely, so a declared `source`
-could only repeat or contradict the derivation, and declaring one is
-rejected. The standard describes `Collected` and `Protocol` as generally
-unused in that family rather than forbidden, and this design closes them
-out. A value that was neither computed, copied, nor assigned is the case
-`Other` exists for. The value carries the description that says what
-happened.
+`Predecessor`. A declared `source` is rejected. `Collected` and `Protocol`
+are not admitted.
 
 <a id="req-0891"></a>
 
