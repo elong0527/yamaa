@@ -9,8 +9,8 @@ treatment, adding `ONTRTFL`.
 **Input:** the subject's medication records (`input/cm.csv`) with the
 collected start and end dates, plus the subject-level records
 (`input/adsl.csv`) carrying each subject's first and last treatment dates.
-A subject without a subject-level record keeps their medications with both
-treatment dates empty.
+A subject whose subject-level record carries empty treatment dates keeps
+both treatment dates empty.
 
 **Variables:**
 
@@ -25,6 +25,8 @@ treatment dates empty.
 **Note:** a medication with a missing start or end date is assumed to
 overlap unless its known dates rule overlap out. A missing treatment end
 date leaves the period open-ended, while a subject with no treatment start
-date is never flagged.
+date is never flagged. The fixture also covers the negative side: a
+medication with a missing start date that ends before treatment starts is
+left unflagged.
 
 **Standard:** ADaM | **Domain:** ADCM
