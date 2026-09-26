@@ -34,7 +34,7 @@ columns:
   # before any data is read.
   - name: LSTALVDT
     type: date
-    label: Last Known Alive Date
+    label: Date Last Known Alive
     derivation:
       greatest:
         sources: [DTHDT, LSTVSDY]

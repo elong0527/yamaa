@@ -3,22 +3,24 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-greatest-mixed.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
-**Goal:** carry `DTHDT` and `LSTVSDY` through and take the later
-of the two in `LSTALVDT` as the last known alive date.
+**Goal:** carry `DTHDT` and `LSTVSDY` through and take the later of the two
+in `LSTALVDT` as the date the subject was last known alive.
 
-**Input:** collected demographics carrying the date of death
-(`DTHDTC`) and the last-visit study day (`LSTVSDY`).
+**Input:** collected demographics carrying the date of death (`DTHDTC`)
+and the last-visit study day (`LSTVSDY`), including one subject with no
+recorded death date and one with no recorded last-visit day.
 
 **Variables:**
 
-- `DTHDT` would be the date of death, carried over from `DTHDTC`,
-  and missing when no death date was collected.
-- `LSTVSDY` would be the study day of the last visit, counted
-  from the first dose and carried over from `LSTVSDY`.
-- `LSTALVDT` would be the later of `DTHDT` and `LSTVSDY` as the
-  last known alive date, but a calendar date and a day number
-  share no common order, so the run is rejected before any data
-  is read and no artifact is accepted.
+- `DTHDT` would be the date of death, carried over from `DTHDTC`, and
+  missing when no death date was collected.
+- `LSTVSDY` would be the study day of the last visit, counted from the
+  first dose, and missing when no last visit was recorded.
+- `LSTALVDT` would be the later of `DTHDT` and `LSTVSDY` as the date last
+  known alive.
+
+**Note:** a calendar date and a day number share no common order, so the
+run is rejected before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
