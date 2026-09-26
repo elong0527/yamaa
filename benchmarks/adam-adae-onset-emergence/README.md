@@ -10,7 +10,9 @@ event (`AOCCFL`) from onset and first-exposure moments.
 **Input:** adverse event records carrying the reported term
 (`AETERM`) and the collected onset moment (`ASTDTM`, empty when never
 collected), plus the moment of first exposure (`TRTSDTM`) from the
-subject-level analysis dataset (ADSL), empty with no subject record.
+subject-level analysis dataset (ADSL), which is empty for an untreated
+subject; an untreated subject appears in ADSL with an empty `TRTSDTM`
+and none of their events get flagged.
 
 **Variables:**
 
