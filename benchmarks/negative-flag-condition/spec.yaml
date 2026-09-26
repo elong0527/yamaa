@@ -19,7 +19,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The flag's condition is not a valid predicate.
+  # Not a valid rule: `>>` is not a comparison, so the flag rejects the
+  # spec before any data is read.
   - name: ELDFL
     type: str
     label: Elderly Flag
