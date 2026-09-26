@@ -189,9 +189,8 @@ rather than written empty.
 <a id="req-0975"></a>
 
 **REQ-0975.** The element order is the order the Define-XML 2.1 schema
-requires, so a document that departs from it is not merely different but
-invalid. Within each repeated element the order above is this contract's choice,
-and it is fixed. Two implementations agree.
+requires. Within each repeated element the order above is this contract's choice,
+and it is fixed.
 
 <a id="req-0976"></a>
 
