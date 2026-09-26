@@ -23,7 +23,7 @@ numeric.
 
 <a id="req-0407"></a>
 
-**REQ-0407.** `compute` evaluates a closed numeric grammar over current-output
+**REQ-0407.** `compute` evaluates a closed numeric grammar over constructed output
 columns, fields of a declared record lookup, and numeric literals.
 `compute` returns one numeric value per current row. The grammar is a
 subset of SQL. [Numeric values](../values/numbers.md)'s representation,
@@ -39,7 +39,7 @@ phase. A formula and a predicate never disagree about a name.
 <a id="req-0409"></a>
 
 **REQ-0409.** During column derivation an unqualified identifier is a
-current-output column. A qualified identifier is permitted only when its
+constructed output column. A qualified identifier is permitted only when its
 qualifier is a declared [Lookup and joins](lookup.md) record lookup `id`. The qualified identifier
 reads the named field of that lookup's selected record. An arbitrary
 `DATASET.VARIABLE` reference is not permitted: bind the source variable
