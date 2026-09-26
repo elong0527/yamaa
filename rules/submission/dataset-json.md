@@ -182,12 +182,9 @@ source system, and [REQ-0979](define-xml.md#req-0979) already refuses the revers
 <a id="req-1208"></a>
 
 **REQ-1208.** `dbLastModifiedDateTime` and `targetDataType` are never written.
-No declaration states when a source database was last modified, and writing
-the creation timestamp again in its place would assert something nobody
-declared. `targetDataType` asks a receiving system to convert a transmitted
+`targetDataType` asks a receiving system to convert a transmitted
 value into another logical type; every value here is written in the spelling
-its own type fixes, and asking a reader to convert a value the file already
-carries exactly would make the file say two things about one value.
+its own type fixes.
 
 ### The column block
 
