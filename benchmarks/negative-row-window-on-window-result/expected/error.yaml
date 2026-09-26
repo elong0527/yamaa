@@ -1,9 +1,0 @@
-phase: validation
-condition: window_on_window_result
-spec_paths:
-  - rows[0].derivations.PREV2.row_value
-requirement: REQ-0326
-context:
-  column: PREV2
-  depends_on:
-    - CHG

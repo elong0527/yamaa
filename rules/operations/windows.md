@@ -222,9 +222,11 @@ with `ref` or other undeclared window fields fail ordinary schema validation.
 **REQ-0326.** A window expression used during row construction partitions
 the rows its enclosing row template constructs; a window that reads rows
 from another template or from outside row construction: fail. Row
-construction evaluates a template's windows in one pass over those rows,
-so a window that depends on another window's result, directly or through
-a value computed from one: fail.
+derivations follow their dependency graph. Each derivation completes for all
+rows of the template before a dependent derivation starts, so a window may
+read a completed column derived from another window, directly or through
+scalar derivations. A dependency cycle still fails under REQ-0059 and
+REQ-0072.
 
 <a id="req-0327"></a>
 
@@ -255,6 +257,8 @@ Representative specifications, input data, and expected outcomes:
 
 - [adam-adae-severity-rank](../../benchmarks/adam-adae-severity-rank/README.md).
 - [adam-adrs-confirmed-response](../../benchmarks/adam-adrs-confirmed-response/README.md).
+- [adam-adlbc-window-chain](../../benchmarks/adam-adlbc-window-chain/README.md).
+- [adam-advs-first-observed-carry](../../benchmarks/adam-advs-first-observed-carry/README.md).
 - [schema-window-functions](../../benchmarks/schema-window-functions/README.md).
 - [adam-advs-locf](../../benchmarks/adam-advs-locf/README.md).
 - [negative-unknown-window](../../benchmarks/negative-unknown-window/README.md).

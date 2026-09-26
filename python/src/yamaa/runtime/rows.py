@@ -479,8 +479,8 @@ class RowResolver:
         REQ-0293 partitions the constructed output rows by the window's own
         `group_by` and preserves row count. REQ-0326 scopes a row-construction
         window to the rows its enclosing row template constructs: the caller
-        exposes exactly those rows, so the partitioned rows are always the
-        completed ones for that scope.
+        exposes exactly those rows, with every dependency of this window
+        already completed in that scope.
         """
         if self._row_phase:
             return _invalid(operation, "a window has no row-construction context")

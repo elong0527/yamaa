@@ -462,9 +462,11 @@ now pin it, so nothing in this family is blocked:
 A window reads the constructed output rows of its partition and preserves
 row count: a row its `filter` excludes receives missing rather than
 disappearing, and ties fall back to construction order, so every numbering
-is total. `previous_non_missing` searches a separate completed source column
-and never the column being derived, which is why reaching one's own value
-that way stays a cycle rather than an iteration.
+is total. A row template completes each derivation across its rows before a
+dependent derivation starts, so a later window can read a column derived from
+an earlier window. `previous_non_missing` searches a separate completed source
+column and never the column being derived, which is why reaching one's own
+value that way stays a cycle rather than an iteration.
 
 Run this component's focused tests from the repository root:
 
