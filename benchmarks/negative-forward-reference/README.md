@@ -18,13 +18,25 @@ collected result in `AVAL`, identified by study and subject.
 - `AVALDOUBLED` would contain `AVAL` multiplied by 2; missing
   when the collected result is missing.
 
-The doubled value is listed before the collected value it reads,
-and a value may read only values listed before it, so the run is
-rejected before any data is read and no artifact is accepted.
+**Note:** the doubled value is listed before the collected value
+it reads, and a value may read only values listed before it, so
+the run is rejected before any data is read and no artifact is
+accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-List `AVAL` before `AVALDOUBLED`, so every value reads only values already
-computed.
+List `AVAL` before `AVALDOUBLED`, so every value reads only values
+already computed:
+
+```yaml
+- name: AVAL
+  type: float
+  derivation: LB.AVAL
+- name: AVALDOUBLED
+  type: float
+  derivation:
+    compute:
+      expr: "AVAL * 2"
+```
