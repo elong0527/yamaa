@@ -166,7 +166,7 @@ sources:
   R004-34: {"file": "R004-predicate-language.md", "targets": ["REQ-0191"]}
   R004-35: {"file": "R004-predicate-language.md", "targets": ["REQ-0192"]}
   R005-1: {"file": "R005-output-contract.md", "targets": ["REQ-0193"]}
-  R005-2: {"file": "R005-output-contract.md", "targets": ["REQ-0194"]}
+  R005-2: {"file": "R005-output-contract.md", "targets": ["REQ-0222"]}
   R005-3: {"file": "R005-output-contract.md", "targets": ["REQ-0195"]}
   R005-4: {"file": "R005-output-contract.md", "targets": ["REQ-0196"]}
   R005-5: {"file": "R005-output-contract.md", "targets": ["REQ-0197"]}
@@ -1267,7 +1267,6 @@ requirements:
   REQ-0191: {"file": "operations/predicates.md", "sources": ["R004-34"]}
   REQ-0192: {"file": "operations/predicates.md", "sources": ["R004-35"]}
   REQ-0193: {"file": "storage/publication.md", "sources": ["R005-1"]}
-  REQ-0194: {"file": "execution/ordering.md", "sources": ["R005-2"]}
   REQ-0195: {"file": "storage/publication.md", "sources": ["R005-3"]}
   REQ-0196: {"file": "specification/structure.md", "sources": ["R005-4"]}
   REQ-0197: {"file": "specification/structure.md", "sources": ["R005-5", "R005-15"]}
@@ -1294,7 +1293,7 @@ requirements:
   REQ-0219: {"file": "execution/lifecycle.md", "sources": ["R005-29"]}
   REQ-0220: {"file": "storage/publication.md", "sources": ["R005-30"]}
   REQ-0221: {"file": "storage/publication.md", "sources": ["R005-31"]}
-  REQ-0222: {"file": "execution/ordering.md", "sources": ["R005-32"]}
+  REQ-0222: {"file": "execution/ordering.md", "sources": ["R005-32", "R005-2"]}
   REQ-0223: {"file": "execution/ordering.md", "sources": ["R005-34"]}
   REQ-0224: {"file": "execution/ordering.md", "sources": ["R005-35"]}
   REQ-0225: {"file": "execution/ordering.md", "sources": ["R005-36"]}

@@ -27,13 +27,6 @@ This contract owns the requirements below. Related contracts:
 
 ## Requirements
 
-### The artifact
-
-<a id="req-0194"></a>
-
-**REQ-0194.** Rows leave in the order `output.order_by` declares. Without
-`output.order_by`, rows keep [Execution lifecycle](lifecycle.md)'s construction order.
-
 ### Artifact row order
 
 <a id="req-0222"></a>
