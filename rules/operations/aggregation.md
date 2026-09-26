@@ -108,7 +108,7 @@ expression declares qualified right-side columns. Each column must also be an
 output key. The reduction stays coarser than or equal to the
 applicable keys [Lookup and joins](lookup.md) joins on. An unqualified expression declares
 current-output columns and must declare at least one. A reduction over the
-whole output is not registered: no example needs one. A grouped-row aggregate
+whole output is not registered. A grouped-row aggregate
 declares no local `group_by`. The enclosing
 `row.group_by` already fixes its current relation and keys.
 
