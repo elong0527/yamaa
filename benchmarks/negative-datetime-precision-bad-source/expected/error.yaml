@@ -7,6 +7,6 @@ context:
   source: EX.EXSTDTC
   value: 2025-01
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-901
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
       EXSEQ: 1
