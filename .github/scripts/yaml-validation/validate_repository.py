@@ -126,12 +126,12 @@ def require_regex_binding():
     global _portable_group_count, _portable_compile, _portable_full_match
     if _portable_binding is None:
         try:
-            from yamaa.regex import (
-                RegexError as binding_error,
-                capture_group_count as binding_group_count,
-                compile_pattern as binding_compile,
-                full_match as binding_full_match,
-            )
+            from yamaa_compat import regex as _regex_compat
+
+            binding_error = _regex_compat.RegexError
+            binding_group_count = _regex_compat.capture_group_count
+            binding_compile = _regex_compat.compile_pattern
+            binding_full_match = _regex_compat.full_match
         except ImportError:
             _portable_binding = False
         else:
@@ -505,8 +505,9 @@ class PredicateSemanticIssue(str):
 
 # R004's closed vocabulary. `yaml/grammar/predicate.yaml` is its single
 # source, and validate_grammar_contracts fails when the two drift apart.
-# The parser itself is the runtime's: `yamaa.expressions.predicates` already
-# returns this validator's AST shape, so this file owns no second grammar.
+# The parser itself is the runtime's: `yamaa.pred` (via yamaa_compat)
+# already returns this validator's AST shape, so this file owns no second
+# grammar.
 # The import is lazy (see the regex binding note above): importing the yamaa
 # package pulls in polars, which this module only needs when it actually
 # parses a predicate.
@@ -517,17 +518,17 @@ parse_predicate = None
 
 
 def _ensure_predicate_binding():
-    """Import yamaa.expressions.predicates on first use, or exit when unavailable."""
+    """Import yamaa.pred on first use, or exit when unavailable."""
     global PREDICATE_COMPARISON_OPERATORS, PREDICATE_RESERVED_NAMES
     global PredicateError, parse_predicate
     if parse_predicate is None:
         try:
-            from yamaa.expressions.predicates import (
-                COMPARISON_OPERATORS as comparison_operators,
-                RESERVED_NAMES as reserved_names,
-                PredicateError as predicate_error,
-                parse_predicate as parse,
-            )
+            from yamaa_compat import predicates as _predicates_compat
+
+            comparison_operators = _predicates_compat.COMPARISON_OPERATORS
+            reserved_names = _predicates_compat.RESERVED_NAMES
+            predicate_error = _predicates_compat.PredicateError
+            parse = _predicates_compat.parse_predicate
         except ImportError as error:
             raise SystemExit(
                 "validate_repository.py requires the yamaa package "
@@ -654,6 +655,39 @@ def validate_predicate_types(ast, resolver):
                             ),
                         )
                     )
+        elif kind == 'call':
+            # REQ-0162/REQ-1241: str_contains is the one Boolean function
+            # call the predicate grammar admits. Check the name so a future
+            # second call form fails loudly instead of being mis-checked as
+            # str_contains. The pattern is a pre-validated regex string;
+            # only the source operand needs a type check.
+            if node.get('name') != 'str_contains':
+                errors.append(
+                    PredicateSemanticIssue(
+                        f"unknown predicate function {node.get('name')!r}",
+                        'invalid_predicate',
+                        {'predicate': node.get('name')},
+                        (
+                            node['source']['position'],
+                            node['source']['position'] + 1,
+                        ),
+                    )
+                )
+                return
+            source_type = operand_type(node['source'])
+            if source_type is not None and source_type != 'str':
+                errors.append(
+                    PredicateSemanticIssue(
+                        'str_contains requires a str source; '
+                        f'found {source_type!r}',
+                        'incompatible_input_type',
+                        {'expected': 'str', 'actual': source_type},
+                        (
+                            node['source']['position'],
+                            node['source']['position'] + 1,
+                        ),
+                    )
+                )
 
     visit(ast)
     return errors
@@ -3707,9 +3741,16 @@ def order_resolved_spec_fields(spec, env):
 
 
 def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
-    from yamaa.schema.windows import expand_named_windows
-    from yamaa.specification.diagnostics import SpecificationError
-    from yamaa.specification.schema import SchemaBundle
+    # The window expansion now runs on the clean-room engine via
+    # yamaa_compat; the old SchemaBundle carried the schema file path the
+    # old runtime validated against, which the clean-room does not need.
+    from yamaa_compat import diagnostics as _diagnostics_compat
+    from yamaa_compat import schema as _schema_compat
+    from yamaa_compat import windows as _windows_compat
+
+    SpecificationError = _diagnostics_compat.SpecificationError
+    SchemaBundle = _schema_compat.SchemaBundle
+    expand_named_windows = _windows_compat.expand_named_windows
 
     bundle = SchemaBundle(
         version=env.get('version', '1.0'),
@@ -9083,8 +9124,14 @@ def prepare_spec_document(spec, spec_label, spec_path, env):
     else:
         resolved, errors, provenance = copy.deepcopy(spec), [], {}
     if isinstance(resolved, dict):
-        from yamaa.schema.row_catalog import expand_row_catalogs
-        from yamaa.specification.diagnostics import SpecificationError
+        # Row-catalog expansion runs on the clean-room engine via
+        # yamaa_compat; the spec_paths it reports keep the validator's
+        # reference walkers aligned with engine diagnostics.
+        from yamaa_compat import diagnostics as _diagnostics_compat
+        from yamaa_compat import row_catalog as _row_catalog_compat
+
+        SpecificationError = _diagnostics_compat.SpecificationError
+        expand_row_catalogs = _row_catalog_compat.expand_row_catalogs
 
         try:
             resolved = expand_row_catalogs(resolved, spec_path)
@@ -10061,7 +10108,8 @@ BOM_UTF8 = '\ufeff'
 CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 
 
-# R020's csv profile text. The runtime's `yamaa.io.csv` owns the profile:
+# R020's csv profile text. The runtime's `yamaa.csv_io` owns the profile
+# (via yamaa_compat):
 # `scan_records` reads records of text-or-missing under the unified
 # missing rule, and `render_records` writes the exact quoting condition.
 # This file owns no second dialect.
@@ -10077,22 +10125,21 @@ convert_value = None
 
 
 def _ensure_csv_binding():
-    """Import yamaa.io.csv and yamaa.models on first use, or exit when unavailable."""
+    """Import yamaa.csv_io and yamaa.values on first use, or exit when unavailable."""
     global CsvProfileFailure, fixed_point, render_records, scan_records
     global DateTimeValue, DateValue, convert_value
     if scan_records is None:
         try:
-            from yamaa.io.csv import (
-                CsvProfileFailure as csv_failure,
-                fixed_point as profile_fixed_point,
-                render_records as profile_render_records,
-                scan_records as profile_scan_records,
-            )
-            from yamaa.models import (
-                DateTimeValue as model_datetime_value,
-                DateValue as model_date_value,
-                convert_value as model_convert_value,
-            )
+            from yamaa_compat import csv as _csv_compat
+            from yamaa_compat import models as _models_compat
+
+            csv_failure = _csv_compat.CsvProfileFailure
+            profile_fixed_point = _csv_compat.fixed_point
+            profile_render_records = _csv_compat.render_records
+            profile_scan_records = _csv_compat.scan_records
+            model_datetime_value = _models_compat.DateTimeValue
+            model_date_value = _models_compat.DateValue
+            model_convert_value = _models_compat.convert_value
         except ImportError as error:
             raise SystemExit(
                 "validate_repository.py requires the yamaa package "
@@ -10290,15 +10337,20 @@ def artifact_profile(output):
 # this script can load it by path without installing anything. What a
 # repository check adds stays below: fixture wording, and reporting every
 # departure in one pass where a runtime stops at the first.
-_CSV_PROFILE_PATH = (
-    Path(__file__).resolve().parents[3]
-    / 'python' / 'src' / 'yamaa' / 'io' / 'csv.py'
-)
-_CSV_PROFILE_SPEC = importlib.util.spec_from_file_location(
-    'yamaa_io_csv', _CSV_PROFILE_PATH
-)
-CSV_PROFILE = importlib.util.module_from_spec(_CSV_PROFILE_SPEC)
-_CSV_PROFILE_SPEC.loader.exec_module(CSV_PROFILE)
+# The csv profile now lives in the clean-room engine; yamaa_compat.csv
+# exposes it under the names this script reads. The import stays eager
+# here (as on the old-engine branch): the clean-room engine pulls in no
+# heavy runtime dependencies, so the lazy-binding concern above does not
+# apply to this binding.
+try:
+    from yamaa_compat import csv as _csv_compat
+except ImportError as error:
+    raise SystemExit(
+        "validate_repository.py requires the yamaa package "
+        "(run: uv sync --project python --locked)"
+    ) from error
+
+CSV_PROFILE = _csv_compat
 
 SourceProfileError = CSV_PROFILE.CsvProfileFailure
 parse_source_profile = CSV_PROFILE.scan_records

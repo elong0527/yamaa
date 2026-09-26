@@ -5122,7 +5122,7 @@ class TestRegularExpressionContract(unittest.TestCase):
 
     def test_the_replay_reads_through_the_shared_package_binding(self):
         VALIDATOR.require_regex_binding()
-        from yamaa import regex as package_binding
+        from yamaa_compat import regex as package_binding
 
         self.assertIs(
             VALIDATOR._portable_compile, package_binding.compile_pattern
