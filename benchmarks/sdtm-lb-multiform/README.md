@@ -16,7 +16,9 @@ item record.
 **Variables:**
 
 - `VISITNUM` is the visit number: `1` screening, `2` baseline, `3`
-  day 21, and `99` unscheduled; `VISIT` is the matching visit name.
+  day 21; each unscheduled visit is numbered after the baseline visit
+  per occurrence (`2.01`, `2.02`), so repeated unscheduled visits stay
+  distinct. `VISIT` is the matching visit name.
 - `LBTESTCD` is the short test code for the collected item:
   `VITD25OH`, `IL13`, or `CAMPPRO`.
 - `LBTEST` is the full test name for that code: `25-Hydroxyvitamin
@@ -28,23 +30,26 @@ item record.
 - `LBLOC` is the sampled site where the form distinguishes one:
   `LESIONAL` or `NON-LESIONAL` for biopsy and tape-strip results;
   blank for serum and saliva results.
-- `LBORRES` is the collected result, exactly as reported,
-  including text such as `NOT DONE`.
+- `LBORRES` is the collected result, exactly as reported; blank
+  when the test was not done.
 - `LBORRESU` is the unit fixed for each form: `CYCLE` for biopsy
-  results and `ng/mL` otherwise.
-- `LBSTRESC` repeats the reported result in standard form,
-  including `NOT DONE`.
+  results and `ng/mL` otherwise; blank when the test was not done.
+- `LBSTRESC` repeats the reported result in standard form; blank
+  when the test was not done.
 - `LBSTRESN` is the numeric form of the reported result; missing
-  when the result is `NOT DONE`.
-- `LBSTRESU` is the standard unit, the same as `LBORRESU`.
-- `LBSTAT` is `NOT DONE` when the reported result is `NOT DONE`;
-  blank otherwise.
+  when the test was not done.
+- `LBSTRESU` is the standard unit, the same as `LBORRESU`; blank
+  when the test was not done.
+- `LBSTAT` is `NOT DONE` when the test was not done; blank
+  otherwise.
 - `LBDTC` is the collection date from the date item on the same
   form.
 
 **Note:** an item with no reported value produces no record, while
-a collected zero is kept as a real result; each record keeps the
-date of the form it came from, so a form collected twice at one
-visit keeps each occurrence's own date.
+a collected zero is kept as a real result; an entry of `NOT DONE`
+still produces a record, with the result and unit fields left blank
+and the status recorded. Each record keeps the date of the form it
+came from, so a form collected twice at one visit keeps each
+occurrence's own date.
 
 **Standard:** SDTM | **Domain:** LB

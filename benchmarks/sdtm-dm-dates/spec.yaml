@@ -20,7 +20,7 @@ intermediates:
 output:
   path: dm.csv
   columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
-            RFENDTC]
+            RFPENDTC, RFENDTC]
 
 columns:
   - name: DOMAIN
@@ -63,12 +63,6 @@ columns:
     label: Subject Reference Start Date/Time
     derivation: RFXSTDTC
 
-  # Not in the output: read only by the exposure completeness check.
-  - name: EXDOSE0
-    type: float
-    label: Last Exposure Dose
-    derivation: LASTEX.EXDOSE
-
   - name: DSDT0
     type: date
     label: Latest Disposition Date
@@ -84,24 +78,36 @@ columns:
       aggregate:
         expr: "MAX(AE.AEENDTC)"
 
-  # The latest of the three dates; a missing one is skipped, and all three
-  # missing gives no date.
+  # The last date the subject is known to have participated: the latest of
+  # the three dates; a missing one is skipped, and all three missing gives
+  # no date.
+  - name: RFPENDTC
+    type: date
+    label: Date/Time of Last Study Participation
+    derivation:
+      greatest:
+        sources: [RFXENDTC, DSDT0, AEDT0]
+
+  # The reference period ends when the subject never started one: a subject
+  # with no reference start date gets no reference end date either.
   - name: RFENDTC
     type: date
     label: Subject Reference End Date/Time
     derivation:
-      greatest:
-        sources: [RFXENDTC, DSDT0, AEDT0]
+      case:
+        - when: "RFSTDTC IS NULL"
+          then: {literal: null}
+        - otherwise: RFPENDTC
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 5
-      max: 5
+      min: 6
+      max: 6
   - all_or_none:
       id: exposure-reference-completeness
-      columns: [RFXSTDTC, RFXENDTC, RFSTDTC, EXDOSE0]
+      columns: [RFXSTDTC, RFXENDTC, RFSTDTC]
   - implies:
       id: exposure-window-is-ordered
       when: "RFXSTDTC IS NOT NULL AND RFXENDTC IS NOT NULL"

@@ -1786,7 +1786,7 @@ requirements:
   REQ-0716: {"file": "storage/publication.md", "sources": ["R020-2"]}
   REQ-0717: {"file": "storage/publication.md", "sources": ["R020-3"], "retired": true, "replacement": ["REQ-0716"]}
   REQ-0718: {"file": "storage/publication.md", "sources": ["R020-4"], "retired": true, "replacement": ["REQ-0716"]}
-  REQ-0719: {"file": "storage/publication.md", "sources": ["R020-5"], "retired": true, "replacement": ["REQ-0716"]}
+  REQ-0719: {"file": "storage/publication.md", "sources": ["R020-5"]}
   REQ-0720: {"file": "storage/publication.md", "sources": ["R020-6"]}
   REQ-0721: {"file": "storage/publication.md", "sources": ["R020-7"]}
   REQ-0722: {"file": "storage/csv.md", "sources": ["R020-8"]}

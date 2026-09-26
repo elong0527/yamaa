@@ -101,8 +101,7 @@ collected empty string. The first row's is missing.
 grouping, and without a leading zero. Zero is `0`. A `float` that takes no
 display precision is written by [Types and conversion](../values/types.md)'s conversion to `str`: the shortest round-
 tripping digits in positional notation, with a trailing `.0` omitted. That
-conversion has no exponent, which lets this profile promise bytes: two
-admissible spellings would leave two conforming runtimes different.
+conversion has no exponent.
 
 ### Writing: Display precision
 
@@ -201,8 +200,7 @@ change to the records or values the file delivers.
 <a id="req-0838"></a>
 
 **REQ-0838.** A **record terminator** is `U+000A`, optionally preceded by
-`U+000D`. The final record may omit its terminator. A file's records are the
-same under either terminator, which is why both are admitted.
+`U+000D`. The final record may omit its terminator.
 
 <a id="req-0839"></a>
 

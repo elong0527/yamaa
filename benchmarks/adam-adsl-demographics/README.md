@@ -4,24 +4,18 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** produce standard sex, race code, age, and age group
-values from collected demographics, carrying `RACE` through
-unchanged and producing `SEX`, `SEXN`, `SEXDECOD`, `RACEN`, `AGE`,
-and `AGEGR1`.
+values from collected demographics, carrying `SEX` and `RACE`
+through and producing `SEXN`, `RACEN`, `AGE`, and `AGEGR1`.
 
 **Input:** one record per subject carrying collected `SEX`, `RACE`,
 and `AGE` as reported.
 
 **Variables:**
 
-- `SEX` is the standard sex code: `M` gives `M`, `F` gives `F`,
-  and `U` gives `U`; a missing source and any other reported value
-  both give `U`.
+- `SEX` is the collected sex carried through unchanged; a missing
+  collected value gives `U`.
 - `SEXN` is the numeric sex code: `M` gives `1`, `F` gives `2`, and
-  `U` gives `0`; a missing source and any other reported value both
-  give `0`.
-- `SEXDECOD` is the display form of sex: `M` gives `Male`, `F`
-  gives `Female`, and `U` gives `Unknown`; a missing source and any
-  other reported value both give `Unknown`.
+  `U` gives `0`.
 - `RACEN` is the numeric race code: `WHITE` gives `1`,
   `BLACK OR AFRICAN AMERICAN` gives `2`, `ASIAN` gives `3`, and
   `MULTIPLE` gives `4`; a missing source leaves `RACEN` empty while
@@ -33,8 +27,7 @@ and `AGE` as reported.
   when age is at least 18 and below 65, and `>=65` when age is at
   least 65; it is `UNKNOWN` when age is missing.
 
-**Note:** sex matching ignores case while race matching is exact, so
-a lowercase sex code still maps to its standard form but a race
-value with different case or extra wording does not.
+**Note:** the numeric mappings match exactly: a race value with
+different case or extra wording gives `99`.
 
 **Standard:** ADaM | **Domain:** ADSL

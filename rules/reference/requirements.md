@@ -697,7 +697,8 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0712](../operations/text.md#req-0712) | `operations/text.md` | R019-17 |
 | [REQ-0714](../operations/text.md#req-0714) | `operations/text.md` | R019-22 |
 | [REQ-0715](../storage/publication.md#req-0715) | `storage/publication.md` | R020-1 |
-| [REQ-0716](../storage/publication.md#req-0716) | `storage/publication.md` | R020-2, R020-3, R020-4, R020-5 |
+| [REQ-0716](../storage/publication.md#req-0716) | `storage/publication.md` | R020-2, R020-3, R020-4 |
+| [REQ-0719](../storage/publication.md#req-0719) | `storage/publication.md` | R020-5 |
 | [REQ-0720](../storage/publication.md#req-0720) | `storage/publication.md` | R020-6 |
 | [REQ-0721](../storage/publication.md#req-0721) | `storage/publication.md` | R020-7 |
 | [REQ-0722](../storage/csv.md#req-0722) | `storage/csv.md` | R020-8 |

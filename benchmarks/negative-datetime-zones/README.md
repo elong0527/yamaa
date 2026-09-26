@@ -24,7 +24,7 @@ Decide whether the study collects an offset at all. If the site clock is what
 was recorded, correct the collected value so every start reads the same way:
 
 ```
-PILOT7,P7-971,2,HEADACHE,2025-03-04T09:00:00
+YAMAA-01,YAMAA-01-101,2,HEADACHE,2025-03-04T09:00:00
 ```
 
 If the offset is real data, collect it as a field of its own and keep

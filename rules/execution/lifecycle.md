@@ -37,9 +37,8 @@ of one key combination carrying different present values are two values; that
 outcome fails under [REQ-0075](lifecycle.md#req-0075). A source `filter` decides which of those
 records the derivation reads before that count, which [REQ-0131](../operations/lookup.md#req-0131) defines. A
 missing result is still the row's one value but never creates a second
-value for the [REQ-0075](lifecycle.md#req-0075) count. In a specification without `rows`, a key
-column derivation must not depend on a non-key output column ([REQ-0074](lifecycle.md#req-0074));
-keys are derived before any row logic runs.
+value for the [REQ-0075](lifecycle.md#req-0075) count. In a specification without `rows`,
+key-column derivation must satisfy [REQ-0074](lifecycle.md#req-0074).
 
 ### Dependency execution
 

@@ -5,25 +5,28 @@ input:
   VS_RAW: input/vs_raw.csv
   DM: input/dm.csv
   TV: input/tv.csv
-  TEPOCH:
-    path: input/tepoch.csv
-    types: {DYLO: int, DYHI: int}
+  SE:
+    path: input/se.csv
+    types: {SESTDTC: date, SEENDTC: date}
 base: VS_RAW
 intermediates:
   # The planned visit for the collected visit label; an unplanned label such
-  # as UNSCHEDULED matches none, leaving VISITNUM missing.
+  # as UNSCHEDULED matches none, leaving the planned number missing.
   - id: PLANNEDVISIT
     dataset: TV
     key: VISIT
-  # The study's epoch whose day range DYLO..DYHI (both ends included) holds
-  # VSDY; no study day, or no range holding it, leaves EPOCH missing.
-  - id: EPOCHDEF
-    dataset: TEPOCH
-    key: STUDYID
+  # The subject's element whose dates SESTDTC..SEENDTC (both ends included)
+  # hold the collection date; a day shared by two elements keeps the later
+  # one, so the kept row is the element with the latest start.
+  - id: SEHIT
+    dataset: SE
+    key: USUBJID
     between:
-      value: VSDY
-      lower: DYLO
-      upper: DYHI
+      value: VSDTC
+      lower: SESTDTC
+      upper: SEENDTC
+    order_by: [SE.SESTDTC]
+    keep: last
 
 output:
   path: vs.csv
@@ -72,13 +75,46 @@ columns:
     label: Visit Name
     derivation: VS_RAW.VISIT
 
+  # The planned number for the collected visit label; missing for an
+  # unplanned label such as UNSCHEDULED, which names no planned visit.
+  - name: PLANNEDNUM
+    type: float
+    label: Planned Visit Number
+    derivation: PLANNEDVISIT.VISITNUM
+
+  # The latest planned number collected for the subject before this row's
+  # date, in collection-date order; the current row is never a candidate.
+  - name: PREVPLANNED
+    type: float
+    label: Latest Earlier Planned Visit Number
+    derivation:
+      previous_non_missing:
+        source: PLANNEDNUM
+        window:
+          group_by: [USUBJID]
+          order_by: [VSDTC]
+
+  # The sponsor-assigned number for an unplanned visit: the latest planned
+  # number before the collection date plus 0.01, so an unscheduled visit
+  # after visit 2 reads 2.01.
+  - name: SPONSORNUM
+    type: float
+    label: Sponsor-Assigned Visit Number
+    derivation:
+      compute:
+        expr: "PREVPLANNED + 0.01"
+
+  # The planned number when the label names a planned visit, otherwise the
+  # sponsor-assigned number for the unplanned visit.
   - name: VISITNUM
     type: float
     label: Visit Number
-    derivation: PLANNEDVISIT.VISITNUM
+    derivation:
+      first_available:
+        sources: [PLANNEDNUM, SPONSORNUM]
 
   # DM is read as text; this typed copy is the date study_day needs. A
-  # subject with no DM record has none, so VSDY and EPOCH stay missing.
+  # subject with no DM record has none, so VSDY stays missing for its rows.
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date/Time
@@ -95,7 +131,7 @@ columns:
   - name: EPOCH
     type: str
     label: Epoch
-    derivation: EPOCHDEF.EPOCH
+    derivation: SEHIT.EPOCH
     verifications:
       allowed_values:
         values: [SCREENING, TREATMENT, FOLLOW-UP]

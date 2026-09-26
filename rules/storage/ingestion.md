@@ -222,11 +222,9 @@ another name is still read under the profile its producer wrote it with.
 <a id="req-0830"></a>
 
 **REQ-0830.** `dataset_class.path` names the file a specification reads, and its
-extension selects the profile that reads it. The mapping is closed, so an
-extension outside it names no profile and fails validation rather than
-falling back to one. The extension is matched without regard to case. A
-study that stores `DM.CSV` names the same container as one that stores
-`dm.csv`.
+extension selects the profile that reads it, under
+[REQ-0716](publication.md#req-0716). A study that stores `DM.CSV` names the
+same container as one that stores `dm.csv`.
 
 | Extension | Profile | Container | Source-profile owner |
 |---|---|---|---|

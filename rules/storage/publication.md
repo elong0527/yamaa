@@ -88,6 +88,12 @@ the run must not infer a profile from file contents or use a default.
 | `.csv` | `csv` | delimited text | the bytes |
 | `.parquet` | `parquet` | Parquet | schema, column/row order, values |
 
+<a id="req-0719"></a>
+
+**REQ-0719.** The `parquet` profile carries its own types: an artifact read
+by another specification needs no declaration to be understood. The `csv`
+profile's bytes are fixed exactly.
+
 <a id="req-0720"></a>
 
 **REQ-0720.** A profile and the specification's `schema_version` identify the

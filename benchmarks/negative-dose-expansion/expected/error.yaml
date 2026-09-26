@@ -7,15 +7,15 @@ context:
   verification_id: a-record-is-expanded-into-every-administration-it-holds
   failure_count: 3
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-502
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
       EXSEQ: 1
       ADOSEN: 1
-    - STUDYID: PILOT7
-      USUBJID: P7-502
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
       EXSEQ: 1
       ADOSEN: 2
-    - STUDYID: PILOT7
-      USUBJID: P7-502
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
       EXSEQ: 1
       ADOSEN: 3

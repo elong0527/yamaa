@@ -104,7 +104,7 @@ schema or owning contract and regenerate the table; do not edit the table.
 The [glossary](reference/glossary.md) pins one meaning per shared clinical
 term used across the contracts. It is informative, not normative: it states
 what the terms mean and adds no requirements.
-Closed syntax remains defined in [grammar/](yaml/grammar/README.md), with
+Closed syntax remains defined in [grammar/](../yaml/grammar/README.md), with
 rendered blocks in the owning contracts and shared R/Python parser vectors.
 
 ## Admission and maintenance
