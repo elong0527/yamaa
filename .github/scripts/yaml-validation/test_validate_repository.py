@@ -7303,7 +7303,7 @@ ODM_HEADER = (
 
 
 class TestRetiredOdmItemReferences(unittest.TestCase):
-    """#506 retires REQ-0096: an ODM item is addressed by a source filter."""
+    """An ODM item is addressed by a source filter."""
 
     def env(self):
         env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])

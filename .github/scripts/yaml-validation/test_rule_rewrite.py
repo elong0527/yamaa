@@ -39,6 +39,9 @@ class RuleRewriteTests(unittest.TestCase):
         self.assertEqual(resolve_requirement("REQ-0005", migration), ["REQ-0005"])
         self.assertEqual(resolve_requirement("R001-42", migration), ["REQ-0033"])
         self.assertEqual(resolve_requirement("REQ-0073", migration), ["REQ-0033"])
+        self.assertEqual(resolve_requirement("R002-28", migration), ["REQ-0080"])
+        self.assertEqual(resolve_requirement("REQ-0104", migration), ["REQ-0080"])
+        self.assertEqual(resolve_requirement("REQ-0096", migration), ["REQ-0098"])
         self.assertEqual(resolve_requirement("REQ-0332", migration), [])
         self.assertGreater(len(resolve_requirement("R007-9", migration)), 1)
         self.assertEqual(resolve_requirement("R999-1", migration), [])
@@ -99,6 +102,26 @@ class RuleRewriteTests(unittest.TestCase):
         )
         errors, _ = check(self.root)
         self.assertIn("invalid retired requirement replacement: REQ-0073", errors)
+
+    def test_redirected_legacy_alias_must_match_retired_replacement(self):
+        self.replace(
+            self.rules / "migration.yaml",
+            'R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0080"]}',
+            'R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0081"]}',
+        )
+        errors, _ = check(self.root)
+        self.assertIn("invalid reverse legacy alias: REQ-0104 -> R002-28", errors)
+    def test_retired_requirement_stub_fails(self):
+        self.replace(
+            self.rules / "values/text.md",
+            "**REQ-0022.**",
+            "**REQ-0022.** Retired.",
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "values/text.md: retired requirement must be deleted: REQ-0022",
+            errors,
+        )
 
     def test_duplicate_yaml_keys_fail(self):
         self.replace(

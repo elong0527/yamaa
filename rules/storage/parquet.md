@@ -29,8 +29,6 @@ type.
 order. Every field is optional. Every column type admits a missing
 value.
 
-#### Missing and the empty string
-
 #### Temporal values
 
 <a id="req-0737"></a>
@@ -51,10 +49,8 @@ value. Two runtimes that each shift by their own offset do not agree.
 
 <a id="req-0739"></a>
 
-**REQ-0739.** A `datetime` has whole-second resolution, so its microsecond part
-is always zero. Microseconds are used. The format offers no second unit,
-and both ecosystems' readers agree on this one. The finer resolution is
-never used.
+**REQ-0739.** A `datetime` has whole-second resolution. It is written with the
+microsecond unit, and its microsecond part is always zero.
 
 #### Determinism
 
@@ -72,13 +68,8 @@ metadata of its own beyond what the format requires.
 
 <a id="req-0742"></a>
 
-**REQ-0742.** The bytes are not fixed. A Parquet writer stamps its own
-identity and version into the file, and the row-group and page sizing, the
-encodings it selects, and the statistics it records are properties of the
-library rather than of this design. Requiring identical bytes would require
-every conforming implementation to abandon its ecosystem's writer, which buys
-less than it costs. An artifact needing direct byte comparison is written
-under `csv`, whose byte guarantee is exactly that.
+**REQ-0742.** Conforming Parquet artifacts are not required to have identical
+bytes. Artifacts requiring byte-identical output must use the `csv` profile.
 
 #### Floats are stored, not rendered
 

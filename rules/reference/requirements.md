@@ -100,9 +100,8 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0093](../specification/binding.md#req-0093) | `specification/binding.md` | R002-18 |
 | [REQ-0094](../specification/binding.md#req-0094) | `specification/binding.md` | R002-19 |
 | [REQ-0095](../specification/binding.md#req-0095) | `specification/binding.md` | R002-19a |
-| [REQ-0096](../specification/binding.md#req-0096) | `specification/binding.md` | R002-20 |
 | [REQ-0097](../specification/binding.md#req-0097) | `specification/binding.md` | R002-21 |
-| [REQ-0098](../specification/binding.md#req-0098) | `specification/binding.md` | R002-22 |
+| [REQ-0098](../specification/binding.md#req-0098) | `specification/binding.md` | R002-22, R002-20 |
 | [REQ-0099](../specification/binding.md#req-0099) | `specification/binding.md` | R002-23 |
 | [REQ-0100](../specification/binding.md#req-0100) | `specification/binding.md` | R002-24 |
 | [REQ-0101](../specification/binding.md#req-0101) | `specification/binding.md` | R002-25 |

@@ -9,6 +9,10 @@ from pathlib import Path
 import yaml
 
 DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
+RETIRED_DEFINITION = re.compile(
+    r"^\*\*(REQ-[0-9]{4,})\.\*\*\s*(?:this form is )?retired\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
 LEGACY = re.compile(r"R[0-9]{3}-[1-9][0-9]*[a-z]?\Z")
 SECTIONS = [
@@ -129,6 +133,8 @@ def check(root):
         definitions = DEFINITION.findall(body)
         if not definitions:
             errors.append(f"{label}: no requirements")
+        for identifier in RETIRED_DEFINITION.findall(body):
+            errors.append(f"{label}: retired requirement must be deleted: {identifier}")
         for identifier in definitions:
             if identifier in found:
                 errors.append(f"duplicate requirement: {identifier}")
@@ -213,7 +219,15 @@ def check(root):
             errors.append(f"missing or duplicate provenance: {target}")
         for source in provenance:
             if source in sources:
-                if target not in sources[source].get("targets", []):
+                aliases = sources[source].get("targets", [])
+                replacements = entry.get("replacement", []) if isinstance(entry, dict) else []
+                redirected = (
+                    isinstance(entry, dict)
+                    and entry.get("retired") is True
+                    and bool(replacements)
+                    and set(replacements).issubset(resolve_requirement(source, migration))
+                )
+                if target not in aliases and not redirected:
                     errors.append(f"invalid reverse legacy alias: {target} -> {source}")
             elif prose_by_source.get(source) != target:
                 errors.append(f"unknown provenance: {target} -> {source}")

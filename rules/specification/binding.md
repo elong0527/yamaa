@@ -160,20 +160,6 @@ absent match rather than a handled condition.
 
 ### ODM contextual references
 
-<a id="req-0096"></a>
-
-**REQ-0096.** This form is retired. A source states which records it reads through
-`filter`, which [REQ-0131](../operations/lookup.md#req-0131) owns, so an ODM item is addressed by a predicate
-over `ItemOID` rather than by hiding that identifier in the variable name.
-No specification in the repository still uses this form, and the
-repository validator rejects it without exemption. The requirements below
-describe only what the engine still executes, and leave the language when
-that code does.
-
-ODM item identifiers may contain periods.
-`ODM.IT.LB.LBDTC` means the `Value` whose `ItemOID` is `IT.LB.LBDTC`,
-resolved within the current ODM context.
-
 <a id="req-0097"></a>
 
 **REQ-0097.** An ODM context is the current row's values for the

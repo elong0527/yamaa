@@ -4103,7 +4103,7 @@ def _preflight_findings(
                 "duplicate_identifier",
                 (f"input.{specification.domain}", "domain"),
                 {"identifier": specification.domain},
-                requirement="REQ-0104",
+                requirement="REQ-0080",
             )
         )
     if specification.parents:

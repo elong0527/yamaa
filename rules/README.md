@@ -79,13 +79,14 @@ owns the sequence of a run.
 
 ## Requirement identity
 
-Requirements are defined once as `**REQ-0001.**`. IDs remain valid across file
-moves and section reordering. Allocate the next unused number, never renumber
-an existing requirement, and never reuse a retired identifier. Normative
-`must`, `must not`, `should`, and `may` have their usual requirement meanings.
+Requirements are defined once as `**REQ-0001.**`. IDs remain stable across
+file moves and section reordering. Allocate new IDs above the largest assigned
+number; never renumber or reuse a retired ID. Delete retired rule blocks and
+record their IDs in `migration.yaml`, with a replacement where one exists.
+Normative `must`, `must not`, `should`, and `may` have their usual requirement
+meanings.
 Every contract has Requirements; contracts with distinct failure rules also
-have Error conditions. Topic subsections group related rules. Retired IDs have
-no rule blocks and are never reused.
+have Error conditions. Topic subsections group related rules.
 
 [migration.yaml](migration.yaml) tracks former `RNNN-n` citations, retired
 IDs and their replacements where one exists, and schema-prose provenance. It
