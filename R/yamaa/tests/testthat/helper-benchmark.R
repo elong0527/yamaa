@@ -238,14 +238,12 @@ run_one_benchmark <- function(nm, wt, man_entry) {
 }
 
 # Tolerated baseline: pre-existing clean-room parity gaps, identical in the
-# unpackaged tree (FINDINGS.md, daily parity entries, 284/292). When a gap
+# unpackaged tree (FINDINGS.md, daily parity entries, 287/293). When a gap
 # closes, delete its name here so the suite keeps shrinking toward zero.
 benchmark_known_failures <- c(
-  "adam-adae-partial-dates",
   "adam-advs-windows",
   "negative-output-missing-key",
   "negative-str-contains-bool-result",
-  "schema-text-mapping-unmapped",
   "sdtm-tr-tumor-measurements",
   "sdtm-vs-collected-form"
 )

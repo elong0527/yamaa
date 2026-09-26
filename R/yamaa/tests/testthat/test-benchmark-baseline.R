@@ -55,7 +55,7 @@ test_that("classify_benchmark_outcomes handles entries without a detail suffix",
 
 test_that("default baseline wires through the real parity-gap constants", {
   cls <- classify_benchmark_outcomes(
-    fails = "adam-adae-partial-dates: synthetic detail",
+    fails = "adam-advs-windows: synthetic detail",
     skips = "sdtm-dm-race-ethnicity: synthetic detail")
   expect_equal(cls$new_fails, character(0))
   expect_equal(cls$new_skips, character(0))
