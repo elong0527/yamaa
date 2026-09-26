@@ -183,13 +183,7 @@ once either way.
 
 <a id="req-0876"></a>
 
-**REQ-0876.** A `length` declared on any other column type is not enforced.
-[Verification](../execution/verification.md) states why: rendered text is a property of [Types and conversion](../values/types.md)'s and [CSV profile](../storage/csv.md)'s rendering
-rather than of the value, so a length over rendered text would assert
-something this language does not decide. The declaration
-is carried into the document unchecked, and this contract states that openly.
-Enforcing a rendered width changes both [Verification](../execution/verification.md)'s `max_length` and this
-requirement.
+**REQ-0876.** A `length` declared on any other column type is not enforced. The declaration is carried into the document unchecked.
 
 #### Display format and role
 
