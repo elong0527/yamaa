@@ -99,6 +99,9 @@ examples:
   adam-adlbc-row-window:
     status: executable
     runtimes: ['python']
+  adam-adlbc-window-chain:
+    status: executable
+    runtimes: ['python']
   adam-adoe-study-eye:
     status: executable
     runtimes: ['python']
@@ -220,6 +223,9 @@ examples:
     status: executable
     runtimes: ['python']
   adam-advs-prior-result:
+    status: executable
+    runtimes: ['python']
+  adam-advs-first-observed-carry:
     status: executable
     runtimes: ['python']
   negative-review-arithmetic:
@@ -517,9 +523,6 @@ examples:
     status: executable
     runtimes: ['python']
   negative-unknown-window:
-    status: executable
-    runtimes: ['python']
-  negative-row-window-on-window-result:
     status: executable
     runtimes: ['python']
   negative-sex-code:

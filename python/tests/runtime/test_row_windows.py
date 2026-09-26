@@ -1,9 +1,8 @@
 """Row-construction windows: issue #659.
 
-Each row template evaluates its own window expressions in a post-emission
-pass scoped to the rows that template constructed. These tests cover the
-template scoping, the tie-break, the window-on-window rules, and the
-unchanged validation guards, at the runtime level.
+Each row template evaluates its own window expressions over the rows it
+constructed. These tests cover template scoping, the tie-break, dependency
+chains, cycles, and the validation guards at the runtime level.
 """
 
 from __future__ import annotations
@@ -146,7 +145,7 @@ def test_row_window_breaks_order_ties_by_construction_order() -> None:
 
 def test_row_window_sees_only_its_own_templates_rows() -> None:
     # Both templates derive the same columns and lag with one global
-    # partition. If template B's window pass saw template A's staged rows,
+    # partition. If template B's windows saw template A's staged rows,
     # B's first row would lag A's last row instead of yielding missing.
     template_a = lag_template(
         {"order_by": ["SEQ"]}, row_id="a_only", row_filter="SRC.G = 'a'"
@@ -172,9 +171,7 @@ def test_row_window_sees_only_its_own_templates_rows() -> None:
     ]
 
 
-def test_row_window_on_another_window_result_fails() -> None:
-    # REQ-0326: windows evaluate in one pass with no declared order, so a
-    # window must not depend on another window's result, even directly.
+def test_row_window_reads_another_completed_window_result() -> None:
     specification = make_spec(
         [
             lag_template(
@@ -195,10 +192,8 @@ def test_row_window_on_another_window_result_fails() -> None:
 
     result = execute_specification(specification, visits_source())
 
-    assert isinstance(result, ExecutionFailure)
-    diagnostic = result.diagnostics[0]
-    assert diagnostic.condition == "window_on_window_result"
-    assert diagnostic.requirement == "REQ-0326"
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame["PREV2"].to_list() == [None, None, 1.0, None, None]
 
 
 def test_row_window_self_reference_is_a_cycle() -> None:
@@ -214,6 +209,32 @@ def test_row_window_self_reference_is_a_cycle() -> None:
         },
     )
     specification = make_spec([row], COLUMNS, ["GRP", "SEQ", "VAL", "PREV"])
+
+    result = execute_specification(specification, visits_source())
+
+    assert isinstance(result, ExecutionFailure)
+    assert any(d.condition == "dependency_cycle" for d in result.diagnostics)
+
+
+def test_row_window_scalar_chain_with_a_cycle_is_rejected() -> None:
+    row = Row(
+        id="visits",
+        derivations={
+            "GRP": derive({"source": "SRC.G"}),
+            "SEQ": derive({"source": "SRC.S"}),
+            "VAL": derive({"source": "SRC.X"}),
+            "PREV": derive(lag_window({"group_by": ["GRP"], "order_by": ["SEQ"]})),
+            "CHG": derive({"compute": {"expr": "PREV2 * 2"}}),
+            "PREV2": derive(
+                lag_window({"group_by": ["GRP"], "order_by": ["SEQ"]}, source="CHG")
+            ),
+        },
+    )
+    specification = make_spec(
+        [row],
+        COLUMNS + [("CHG", "float"), ("PREV2", "float")],
+        ["GRP", "SEQ", "VAL", "PREV", "CHG", "PREV2"],
+    )
 
     result = execute_specification(specification, visits_source())
 
@@ -276,7 +297,7 @@ def test_two_hop_scalar_chain_after_window_pass() -> None:
     ]
 
 
-def test_row_window_on_window_derived_value_fails() -> None:
+def test_row_window_reads_a_scalar_derived_from_a_window() -> None:
     specification = make_spec(
         [
             lag_template(
@@ -298,10 +319,52 @@ def test_row_window_on_window_derived_value_fails() -> None:
 
     result = execute_specification(specification, visits_source())
 
-    assert isinstance(result, ExecutionFailure)
-    diagnostic = result.diagnostics[0]
-    assert diagnostic.condition == "window_on_window_result"
-    assert diagnostic.requirement == "REQ-0326"
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame["BAD"].to_list() == [None, None, 2.0, None, None]
+
+
+def test_rank_selection_then_previous_non_missing_in_one_template() -> None:
+    row = Row(
+        id="visits",
+        derivations={
+            "GRP": derive({"source": "SRC.G"}),
+            "SEQ": derive({"source": "SRC.S"}),
+            "VAL": derive({"source": "SRC.X"}),
+            "_RANK": derive(
+                {"rank": {"window": {"group_by": ["GRP"], "order_by": ["SEQ"]}}}
+            ),
+            "_IS_SEL": derive(
+                {"case": [{"when": "_RANK = 1", "then": {"literal": "Y"}}]}
+            ),
+            "_SEL_AVAL": derive(
+                {"case": [{"when": "_IS_SEL = 'Y'", "then": {"source": "VAL"}}]}
+            ),
+            "_CARRIED": derive(
+                {
+                    "previous_non_missing": {
+                        "source": "_SEL_AVAL",
+                        "window": {"group_by": ["GRP"], "order_by": ["SEQ"]},
+                    }
+                }
+            ),
+        },
+    )
+    specification = make_spec(
+        [row],
+        COLUMNS[:3]
+        + [
+            ("_RANK", "int"),
+            ("_IS_SEL", "str"),
+            ("_SEL_AVAL", "float"),
+            ("_CARRIED", "float"),
+        ],
+        ["GRP", "SEQ", "VAL", "_CARRIED"],
+    )
+
+    result = execute_specification(specification, visits_source())
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame["_CARRIED"].to_list() == [None, 1.0, 1.0, None, 10.0]
 
 
 def test_row_window_promotes_a_referenced_column_derivation() -> None:
