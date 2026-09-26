@@ -77,9 +77,11 @@ owns the sequence of a run.
 
 ## Requirement identity
 
-Requirements are defined once as `**REQ-0001.**`. IDs remain valid across file
-moves and section reordering. Allocate the next unused number, never renumber
-an existing requirement, and never reuse a retired identifier. Normative
+Requirements are defined once as `**REQ-0001.**`. Active IDs remain stable across
+file moves and section reordering. Allocate IDs above the largest assigned number,
+never renumber an existing requirement, and never fill a retired gap. Delete a
+retired requirement block and redirect its historical aliases in
+`migration.yaml` to the surviving requirement. Normative
 `must`, `must not`, `should`, and `may` have their usual requirement meanings.
 Every contract begins with Purpose and Scope and dependencies, then states
 Requirements, Error conditions, Conformance examples, and Rationale. Topic
@@ -89,7 +91,7 @@ subsections live within these sections. Rationale adds no requirements.
 one or more canonical requirements. It also records schema-prose provenance
 and legacy source hashes for audit; it is not a second semantic contract.
 
-The generated [requirement index](reference/requirements.md) links each ID
+The generated [requirement index](reference/requirements.md) links each active ID
 and its historical aliases to the current owner.
 
 Old diagnostic families (`R001`, etc.) in the validation-condition registry

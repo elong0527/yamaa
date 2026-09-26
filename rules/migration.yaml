@@ -68,7 +68,7 @@ sources:
   R002-18: {"file": "R002-source-binding.md", "targets": ["REQ-0093"]}
   R002-19: {"file": "R002-source-binding.md", "targets": ["REQ-0094"]}
   R002-19a: {"file": "R002-source-binding.md", "targets": ["REQ-0095"]}
-  R002-20: {"file": "R002-source-binding.md", "targets": ["REQ-0096"]}
+  R002-20: {"file": "R002-source-binding.md", "targets": ["REQ-0098"]}
   R002-21: {"file": "R002-source-binding.md", "targets": ["REQ-0097"]}
   R002-22: {"file": "R002-source-binding.md", "targets": ["REQ-0098"]}
   R002-23: {"file": "R002-source-binding.md", "targets": ["REQ-0099"]}
@@ -76,7 +76,7 @@ sources:
   R002-25: {"file": "R002-source-binding.md", "targets": ["REQ-0101"]}
   R002-26: {"file": "R002-source-binding.md", "targets": ["REQ-0102"]}
   R002-27: {"file": "R002-source-binding.md", "targets": ["REQ-0103"]}
-  R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0104"]}
+  R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0080"]}
   R002-29: {"file": "R002-source-binding.md", "targets": ["REQ-0105"]}
   R002-30: {"file": "R002-source-binding.md", "targets": ["REQ-0106"]}
   R002-31: {"file": "R002-source-binding.md", "targets": ["REQ-0107"]}
@@ -142,7 +142,7 @@ sources:
   R004-10: {"file": "R004-predicate-language.md", "targets": ["REQ-0167"]}
   R004-11: {"file": "R004-predicate-language.md", "targets": ["REQ-0168"]}
   R004-12: {"file": "R004-predicate-language.md", "targets": ["REQ-0169"]}
-  R004-13: {"file": "R004-predicate-language.md", "targets": ["REQ-0170"]}
+  R004-13: {"file": "R004-predicate-language.md", "targets": ["REQ-0166"]}
   R004-14: {"file": "R004-predicate-language.md", "targets": ["REQ-0171"]}
   R004-15: {"file": "R004-predicate-language.md", "targets": ["REQ-0172"]}
   R004-16: {"file": "R004-predicate-language.md", "targets": ["REQ-0173"]}
@@ -169,7 +169,7 @@ sources:
   R005-2: {"file": "R005-output-contract.md", "targets": ["REQ-0222"]}
   R005-3: {"file": "R005-output-contract.md", "targets": ["REQ-0195"]}
   R005-4: {"file": "R005-output-contract.md", "targets": ["REQ-0196"]}
-  R005-5: {"file": "R005-output-contract.md", "targets": ["REQ-0197"]}
+  R005-5: {"file": "R005-output-contract.md", "targets": ["REQ-0199"]}
   R005-6: {"file": "R005-output-contract.md", "targets": ["REQ-0198"]}
   R005-7: {"file": "R005-output-contract.md", "targets": ["REQ-0199"]}
   R005-8: {"file": "R005-output-contract.md", "targets": ["REQ-0200"]}
@@ -179,7 +179,7 @@ sources:
   R005-12: {"file": "R005-output-contract.md", "targets": ["REQ-0204"]}
   R005-13: {"file": "R005-output-contract.md", "targets": ["REQ-0205"]}
   R005-14: {"file": "R005-output-contract.md", "targets": ["REQ-0206"]}
-  R005-15: {"file": "R005-output-contract.md", "targets": ["REQ-0197"]}
+  R005-15: {"file": "R005-output-contract.md", "targets": ["REQ-0199"]}
   R005-16: {"file": "R005-output-contract.md", "targets": ["REQ-0207"]}
   R005-17: {"file": "R005-output-contract.md", "targets": ["REQ-0208"]}
   R005-18: {"file": "R005-output-contract.md", "targets": ["REQ-0209"]}
@@ -767,7 +767,7 @@ sources:
   R020-19: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0733"]}
   R020-20: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0734"]}
   R020-21: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0735"]}
-  R020-22: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0736"]}
+  R020-22: {"file": "R020-artifact-serialization.md", "targets": ["REQ-1034"]}
   R020-23: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0737"]}
   R020-24: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0738"]}
   R020-25: {"file": "R020-artifact-serialization.md", "targets": ["REQ-0739"]}
@@ -1153,7 +1153,7 @@ requirements:
   REQ-0077: {"file": "specification/binding.md", "sources": ["R002-2"]}
   REQ-0078: {"file": "specification/binding.md", "sources": ["R002-3"]}
   REQ-0079: {"file": "specification/binding.md", "sources": ["R002-4"]}
-  REQ-0080: {"file": "specification/binding.md", "sources": ["R002-5"]}
+  REQ-0080: {"file": "specification/binding.md", "sources": ["R002-5", "R002-28"]}
   REQ-0081: {"file": "specification/binding.md", "sources": ["R002-6"]}
   REQ-0082: {"file": "specification/binding.md", "sources": ["R002-7"]}
   REQ-0083: {"file": "specification/binding.md", "sources": ["R002-8"]}
@@ -1169,15 +1169,13 @@ requirements:
   REQ-0093: {"file": "specification/binding.md", "sources": ["R002-18"]}
   REQ-0094: {"file": "specification/binding.md", "sources": ["R002-19"]}
   REQ-0095: {"file": "specification/binding.md", "sources": ["R002-19a"]}
-  REQ-0096: {"file": "specification/binding.md", "sources": ["R002-20"]}
   REQ-0097: {"file": "specification/binding.md", "sources": ["R002-21"]}
-  REQ-0098: {"file": "specification/binding.md", "sources": ["R002-22"]}
+  REQ-0098: {"file": "specification/binding.md", "sources": ["R002-22", "R002-20"]}
   REQ-0099: {"file": "specification/binding.md", "sources": ["R002-23"]}
   REQ-0100: {"file": "specification/binding.md", "sources": ["R002-24"]}
   REQ-0101: {"file": "specification/binding.md", "sources": ["R002-25"]}
   REQ-0102: {"file": "specification/binding.md", "sources": ["R002-26"]}
   REQ-0103: {"file": "specification/binding.md", "sources": ["R002-27"]}
-  REQ-0104: {"file": "specification/binding.md", "sources": ["R002-28"]}
   REQ-0105: {"file": "specification/binding.md", "sources": ["R002-29"]}
   REQ-0106: {"file": "specification/binding.md", "sources": ["R002-30"]}
   REQ-0107: {"file": "specification/binding.md", "sources": ["R002-31"]}
@@ -1239,11 +1237,10 @@ requirements:
   REQ-0163: {"file": "operations/predicates.md", "sources": ["R004-6"]}
   REQ-0164: {"file": "operations/predicates.md", "sources": ["R004-7"]}
   REQ-0165: {"file": "operations/predicates.md", "sources": ["R004-8"]}
-  REQ-0166: {"file": "operations/predicates.md", "sources": ["R004-9"]}
+  REQ-0166: {"file": "operations/predicates.md", "sources": ["R004-9", "R004-13"]}
   REQ-0167: {"file": "operations/predicates.md", "sources": ["R004-10"]}
   REQ-0168: {"file": "operations/predicates.md", "sources": ["R004-11"]}
   REQ-0169: {"file": "operations/predicates.md", "sources": ["R004-12"]}
-  REQ-0170: {"file": "operations/predicates.md", "sources": ["R004-13"]}
   REQ-0171: {"file": "operations/predicates.md", "sources": ["R004-14"]}
   REQ-0172: {"file": "operations/predicates.md", "sources": ["R004-15"]}
   REQ-0173: {"file": "operations/predicates.md", "sources": ["R004-16"]}
@@ -1269,9 +1266,8 @@ requirements:
   REQ-0193: {"file": "storage/publication.md", "sources": ["R005-1"]}
   REQ-0195: {"file": "storage/publication.md", "sources": ["R005-3"]}
   REQ-0196: {"file": "specification/structure.md", "sources": ["R005-4"]}
-  REQ-0197: {"file": "specification/structure.md", "sources": ["R005-5", "R005-15"]}
   REQ-0198: {"file": "specification/structure.md", "sources": ["R005-6"]}
-  REQ-0199: {"file": "specification/structure.md", "sources": ["R005-7"]}
+  REQ-0199: {"file": "specification/structure.md", "sources": ["R005-7", "R005-5", "R005-15"]}
   REQ-0200: {"file": "specification/structure.md", "sources": ["R005-8"]}
   REQ-0201: {"file": "specification/structure.md", "sources": ["R005-9"]}
   REQ-0202: {"file": "specification/structure.md", "sources": ["R005-10"]}
@@ -1803,7 +1799,6 @@ requirements:
   REQ-0733: {"file": "storage/csv.md", "sources": ["R020-19"]}
   REQ-0734: {"file": "storage/parquet.md", "sources": ["R020-20"]}
   REQ-0735: {"file": "storage/parquet.md", "sources": ["R020-21"]}
-  REQ-0736: {"file": "storage/parquet.md", "sources": ["R020-22"]}
   REQ-0737: {"file": "storage/parquet.md", "sources": ["R020-23"]}
   REQ-0738: {"file": "storage/parquet.md", "sources": ["R020-24"]}
   REQ-0739: {"file": "storage/parquet.md", "sources": ["R020-25"]}
@@ -2101,7 +2096,7 @@ requirements:
   REQ-1031: {"file": "storage/parquet.md", "sources": ["R027-4"]}
   REQ-1032: {"file": "storage/parquet.md", "sources": ["R027-5"]}
   REQ-1033: {"file": "storage/parquet.md", "sources": ["R027-6"]}
-  REQ-1034: {"file": "storage/parquet.md", "sources": ["R027-7"]}
+  REQ-1034: {"file": "storage/parquet.md", "sources": ["R027-7", "R020-22"]}
   REQ-1035: {"file": "storage/parquet.md", "sources": ["R027-8"]}
   REQ-1036: {"file": "storage/parquet.md", "sources": ["R027-9"]}
   REQ-1037: {"file": "storage/parquet.md", "sources": ["R027-10"]}

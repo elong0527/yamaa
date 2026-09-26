@@ -43,15 +43,6 @@ type.
 order. Every field is optional. Every column type admits a missing
 value.
 
-#### Missing and the empty string
-
-<a id="req-0736"></a>
-
-**REQ-0736.** Retired. The missing-vs-empty distinction is stated once in
-[REQ-1034](#req-1034): a Parquet null is the missing value and a present
-zero-length string is the collected empty string, in both directions. This
-identifier is never reused.
-
 #### Temporal values
 
 <a id="req-0737"></a>
