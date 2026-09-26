@@ -73,11 +73,11 @@ are omitted, under [Lookup and joins](../operations/lookup.md);
 
 <a id="req-0054"></a>
 
-**REQ-0054.** current-output identifiers used by a `predicate` field;
+**REQ-0054.** constructed output identifiers used by a `predicate` field;
 
 <a id="req-0055"></a>
 
-**REQ-0055.** current-output identifiers used by a `numeric_expression`;
+**REQ-0055.** constructed output identifiers used by a `numeric_expression`;
 
 <a id="req-0056"></a>
 

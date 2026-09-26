@@ -518,6 +518,23 @@ class IntermediateSelector:
     def declares(self, identifier: str) -> bool:
         return identifier in self.plans
 
+    def driver_records(
+        self, identifier: str
+    ) -> tuple[IndexedRecord, ...] | IntermediateOutcome:
+        """Return a source-only intermediate's records for row construction."""
+        plan = self.plans[identifier]
+        eligible = self._filtered(plan)
+        if isinstance(eligible, ConditionResult):
+            return IntermediateOutcome(
+                condition=eligible, spec_path=f"{plan.path}.filter"
+            )
+        if isinstance(eligible, _DerivationFailure):
+            return IntermediateOutcome(
+                condition=eligible.condition,
+                spec_path=f"{plan.path}.derivations.{eligible.name}",
+            )
+        return eligible
+
     def _filtered(
         self, plan: PlannedIntermediate
     ) -> tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure:
@@ -658,8 +675,10 @@ class IntermediateSelector:
         self,
         identifier: str,
         current: Mapping[str, RuntimeValue],
+        *,
+        resolver: Resolver | None = None,
     ) -> IntermediateOutcome:
-        """Choose this row's record, in the order R003 lays the steps out."""
+        """Choose this row's record, using its resolver for relational key expressions."""
         plan = self.plans[identifier]
         eligible = self._filtered(plan)
         if isinstance(eligible, ConditionResult):
@@ -676,9 +695,11 @@ class IntermediateSelector:
             # row and supplies that key position's match value. A missing
             # result matches nothing, exactly like a missing variable.
             resolved_current = dict(current)
-            resolver = MappingResolver(current)
+            expression_resolver = (
+                resolver if resolver is not None else MappingResolver(current)
+            )
             for keyed in plan.match_expressions:
-                result = self._evaluate(keyed.expression, resolver)
+                result = self._evaluate(keyed.expression, expression_resolver)
                 if isinstance(result, ConditionResult):
                     return IntermediateOutcome(
                         condition=result,
@@ -1127,14 +1148,17 @@ def evaluate_intermediate(
     relation: RelationIndex,
     resolve: Callable[[str], Resolution],
     evaluate: Callable[[Expression, Resolver], EvaluationResult] | None = None,
+    *,
+    resolver: Resolver | None = None,
 ) -> EvaluationResult:
     """Evaluate one inline `lookup:` operation against its dataset.
 
     The planner validates the declaration; this answers the row. `resolve`
     reads one current-row variable the way the derivation's own resolver
     does, so a source may name an output column or a driver-qualified
-    dataset column exactly as the specification wrote it. `evaluate` is the
-    configured expression dispatcher; it defaults to the module-level one.
+    dataset column exactly as the specification wrote it. `resolver` also
+    supplies the row's relation when a key expression is relational. `evaluate`
+    is the configured expression dispatcher; it defaults to the module-level one.
     """
     entries = _key_base_entries(payload.get("key_base"))
     keys = _names(payload.get("key"))
@@ -1170,7 +1194,7 @@ def evaluate_intermediate(
     current: dict[str, RuntimeValue] = {}
     match_variables: list[str] = []
     match_expressions: list[KeyBaseExpression] = []
-    key_resolver = CallableResolver(resolve)
+    key_resolver = resolver if resolver is not None else CallableResolver(resolve)
     evaluate_expression_with = evaluate or evaluate_expression
     for index, entry in enumerate(entries):
         if isinstance(entry, str):

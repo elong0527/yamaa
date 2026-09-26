@@ -304,6 +304,8 @@ class RowResolver:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
         if qualifier is None:
             return self._base.resolve(variable)
+        if qualifier in self._candidate.source_rows:
+            return self._base.resolve(variable)
         if self._context.intermediates.declares(qualifier):
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
         implicit = self._implicit_joins.get(qualifier)
@@ -322,6 +324,10 @@ class RowResolver:
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
+        if qualifier in self._candidate.source_rows:
+            return self._base.resolve_selected(
+                variable, selector=selector, multiple_matches=multiple_matches
+            )
         if qualifier is not None and self._context.intermediates.declares(qualifier):
             # R003 already chose the record; the source reads a column of it.
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
@@ -384,6 +390,7 @@ class RowResolver:
             evaluate=self._dispatcher.evaluate
             if self._dispatcher is not None
             else None,
+            resolver=self,
         )
         if isinstance(result, ValueResult):
             return ResolvedValue(value=result.value, handled_by=result.handled_by)
@@ -408,7 +415,7 @@ class RowResolver:
         outcome = self._candidate.intermediates.get(identifier)
         if outcome is None:
             outcome = self._context.intermediates.select(
-                identifier, self._lookup_current(plan)
+                identifier, self._lookup_current(plan), resolver=self
             )
             self._candidate.intermediates[identifier] = outcome
         if outcome.condition is not None:
@@ -479,8 +486,8 @@ class RowResolver:
         REQ-0293 partitions the constructed output rows by the window's own
         `group_by` and preserves row count. REQ-0326 scopes a row-construction
         window to the rows its enclosing row template constructs: the caller
-        exposes exactly those rows, so the partitioned rows are always the
-        completed ones for that scope.
+        exposes exactly those rows, with every dependency of this window
+        already completed in that scope.
         """
         if self._row_phase:
             return _invalid(operation, "a window has no row-construction context")
@@ -604,6 +611,7 @@ class RowResolver:
             evaluate=self._dispatcher.evaluate
             if self._dispatcher is not None
             else None,
+            resolver=self,
         )
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:

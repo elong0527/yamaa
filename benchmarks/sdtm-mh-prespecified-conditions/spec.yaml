@@ -155,7 +155,8 @@ rows:
       REPEATKEY: ODM.ItemGroupRepeatKey
 
   # One record per non-blank free-text condition. SORTORD 4 places these
-  # after the three checklist items.
+  # after the three checklist items; a visit other than SCREENING or
+  # BASELINE stops the run.
   - id: volunteered
     dataset: ODM
     filter: >-
@@ -170,7 +171,12 @@ rows:
       SORTORD: {literal: 4}
       EVENTORD:
         case:
-          - when: "ODM.StudyEventOID IN ('SCREENING', 'BASELINE')"
+          # Guard the strict mapping with this template's filter. A retained
+          # free-text condition at an unknown visit still fails loudly.
+          - when: >-
+              ODM.ItemGroupOID = 'IG.MH.FREETEXT'
+              AND ODM.ItemOID = 'IT.MH.MHTERM'
+              AND ODM.Value IS NOT NULL
             then:
               mapping:
                 source: ODM.StudyEventOID
@@ -178,9 +184,6 @@ rows:
                   SCREENING: 1
                   BASELINE: 2
                 strict: true
-          # Derivations run before the row filter, so the mapping cannot
-          # stay strict over every ODM record. A free-text condition at
-          # another visit now sorts last instead of stopping the run.
           - otherwise: {literal: 99}
       EVENTREPEAT: ODM.StudyEventRepeatKey
       REPEATKEY: ODM.ItemGroupRepeatKey

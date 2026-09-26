@@ -201,14 +201,16 @@ with `ref` or other undeclared window fields fail ordinary schema validation.
 **REQ-0326.** A window expression used during row construction partitions
 the rows its enclosing row template constructs; a window that reads rows
 from another template or from outside row construction: fail. Row
-construction evaluates a template's windows in one pass over those rows,
-so a window that depends on another window's result, directly or through
-a value computed from one: fail.
+derivations follow their dependency graph. Each derivation completes for all
+rows of the template before a dependent derivation starts, so a window may
+read a completed column derived from another window, directly or through
+scalar derivations. A dependency cycle still fails under REQ-0059 and
+REQ-0072.
 
 <a id="req-0327"></a>
 
-**REQ-0327.** A `window.filter` that is not a Boolean predicate over
-current-output columns: fail.
+**REQ-0327.** A `window.filter` in row construction that is not a Boolean
+predicate over constructed output columns: fail.
 
 <a id="req-0328"></a>
 

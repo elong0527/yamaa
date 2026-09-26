@@ -40,6 +40,45 @@ def test_committed_inheritance_example_matches_resolved_artifact() -> None:
     )
 
 
+def test_composition_retains_an_intermediate_used_as_a_row_driver(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input: {LB: input/lb.csv, UNUSED: input/unused.csv}
+intermediates:
+  - id: EOTFB
+    dataset: LB
+    filter: "LB.X <> ''"
+    columns: [X]
+columns:
+  - {name: X, type: str}
+rows:
+  - id: eot2
+    dataset: EOTFB
+    derivations: {X: {source: EOTFB.X}}
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+domain: OUT
+keys: [X]
+output: {path: out.csv, columns: [X]}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+
+    assert list(resolved.document["input"]) == ["LB"]
+    assert resolved.document["intermediates"][0]["id"] == "EOTFB"
+    assert resolved.document["rows"][0]["dataset"] == "EOTFB"
+
+
 def test_committed_column_composition_example_matches_resolved_artifact() -> None:
     example = EXAMPLES / "schema-column-composition"
     resolved = resolve_specification(

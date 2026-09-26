@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cmp_to_key
 from typing import Literal
@@ -347,8 +347,9 @@ class BindingIndex:
         sources: Mapping[str, LoadedDataset | TypedTable],
         *,
         batch_size: int | None = None,
+        virtual_datasets: Collection[str] = (),
     ) -> None:
-        if set(plan.datasets) != set(sources):
+        if set(plan.datasets) - set(virtual_datasets) != set(sources):
             raise ValueError("indexed source names must exactly match the binding plan")
         self.plan = plan
         for dataset, source in sources.items():

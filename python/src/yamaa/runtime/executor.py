@@ -40,7 +40,7 @@ from yamaa.planning import (
     plan_execution,
     preflight_execution,
 )
-from yamaa.runtime.intermediates import IntermediateSelector
+from yamaa.runtime.intermediates import IntermediateOutcome, IntermediateSelector
 from yamaa.runtime.joins import RelationIndex, build_relation_indexes
 from yamaa.runtime.lifecycle import (
     HandlerCount,
@@ -593,10 +593,31 @@ def _construct_rows(
     constructed: list[CandidateRow] = []
     # REQ-0039 fixes where each row was appended, which is the order a
     # window falls back to when its own terms tie. Positions are assigned as
-    # rows are appended, so a template's window pass (REQ-0326) sees them
+    # rows are appended, so each template's windows (REQ-0326) see them
     # before its grouped filter drops rows.
     position = 0
     for planned in plan.rows:
+        if planned.driver not in context.relations:
+            outcome = context.intermediates.driver_records(planned.driver)
+            if isinstance(outcome, IntermediateOutcome):
+                assert outcome.condition is not None
+                condition = outcome.condition.condition
+                raise _ExecutionAbort(
+                    [
+                        ExecutionDiagnostic(
+                            phase=condition.phase,
+                            condition=condition.condition,
+                            spec_paths=(outcome.spec_path or "rows.dataset",),
+                            requirement=condition.requirement,
+                            context=condition.context,
+                        )
+                    ]
+                )
+            context.relations[planned.driver] = RelationIndex.from_records(
+                planned.driver,
+                plan.bindings.datasets[planned.driver].columns,
+                outcome,
+            )
         relation = context.relations[planned.driver]
         if planned.declaration is None:
             # REQ-0042: with no template the key table is the output row set.
@@ -613,14 +634,14 @@ def _construct_rows(
             candidates = group_candidates(planned, relation)
         else:
             candidates = _record_candidates(planned, relation)
+        # An ungrouped filter runs after every derivation that can complete
+        # without a window result. The remaining derivations keep their
+        # topological order so window -> scalar -> window chains still work.
         window_columns = {
             derivation.column
             for derivation in planned.derivations
             if derivation.declaration.value.operation in WINDOW_OPERATIONS
         }
-        # A derivation that transitively reads a window result evaluates
-        # after the window pass; planning (REQ-0326) already rejected a
-        # window that reads one.
         deferred_columns = set(window_columns)
         changed = True
         while changed:
@@ -637,16 +658,10 @@ def _construct_rows(
             for derivation in planned.derivations
             if derivation.column not in deferred_columns
         ]
-        window_plans = [
-            derivation
-            for derivation in planned.derivations
-            if derivation.column in window_columns
-        ]
-        tail = [
+        post_filter = [
             derivation
             for derivation in planned.derivations
             if derivation.column in deferred_columns
-            and derivation.column not in window_columns
         ]
         staged: list[CandidateRow] = []
         for candidate in candidates:
@@ -670,16 +685,16 @@ def _construct_rows(
             ):
                 continue
             staged.append(candidate)
-        if window_plans:
-            # REQ-0326: a template's windows partition the rows the template
-            # constructs. Positions are fixed first so the REQ-0301
-            # tie-break sees construction order, then the partition scope
-            # exposes exactly this template's rows to the window resolver --
-            # the same shape _key_space uses for windows over keys.
+        if post_filter:
+            # Complete one derivation across all retained rows before the
+            # next. Each window sees only this template's retained rows.
             for index, candidate in enumerate(staged):
                 candidate.output_position = position + index
             with _partition_scope(context, staged):
-                for derivation in window_plans:
+                for derivation in post_filter:
+                    row_phase = (
+                        derivation.declaration.value.operation not in WINDOW_OPERATIONS
+                    )
                     for candidate in staged:
                         candidate.values[derivation.column] = _evaluate_one(
                             derivation,
@@ -689,19 +704,8 @@ def _construct_rows(
                             dispatcher,
                             counter,
                             plan.specification.keys,
+                            row_phase=row_phase,
                         )
-            for candidate in staged:
-                for derivation in tail:
-                    candidate.values[derivation.column] = _evaluate_one(
-                        derivation,
-                        column_types,
-                        candidate,
-                        context,
-                        dispatcher,
-                        counter,
-                        plan.specification.keys,
-                        row_phase=True,
-                    )
         completed_template: list[CandidateRow] = []
         for candidate in staged:
             if planned.grouped and not _grouped_filter(planned, candidate):
@@ -955,7 +959,11 @@ def execute_specification(
     try:
         relations = build_relation_indexes(sources)
         context = RelationalContext(
-            bindings=BindingIndex(plan.bindings, sources),
+            bindings=BindingIndex(
+                plan.bindings,
+                sources,
+                virtual_datasets=set(plan.bindings.datasets) - set(sources),
+            ),
             relations=relations,
             intermediates=IntermediateSelector(
                 plan.intermediates, relations, selected_dispatcher.evaluate

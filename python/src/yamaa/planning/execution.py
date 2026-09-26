@@ -6,7 +6,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from yamaa.expressions import (
     WINDOW_OPERATIONS,
@@ -30,8 +30,14 @@ from yamaa.expressions import (
 )
 from yamaa.io.artifact import profile_of
 from yamaa.io.source import LoadedDataset
-from yamaa.models import ColumnType, ConditionPhase, TypedTable
-from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding_plan
+from yamaa.models import ColumnType, ConditionPhase, TypedColumn, TypedTable
+from yamaa.odm import (
+    BindingFailure,
+    BindingPlan,
+    BoundReference,
+    DatasetBinding,
+    build_binding_plan,
+)
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
@@ -805,11 +811,12 @@ def _key_base_entries(
     return None
 
 
-# REQ-1259: operations whose result type is statically known, for the
-# REQ-0118 comparability check on key_base expressions. Operations absent
-# here (or whose result depends on their inputs) defer the check to the
-# runtime, which compares values, not declared types.
+# REQ-1259: fixed-result operations in the rule's closed static-type table,
+# for the REQ-0118 comparability check on key_base expressions. `source` and
+# `literal` take their types from their payloads below. Operations absent
+# here defer the check to runtime comparison of values.
 _KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
+    "baseline_flag": "str",
     "cut": "str",
     "date_diff": "int",
     "date_impute": "date",
@@ -2289,7 +2296,7 @@ def _validate_qualified_reference(
     of lookups and source filters directly.
     """
     qualifier = reference.name.split(".", 1)[0]
-    if qualifier in intermediates:
+    if qualifier in intermediates and qualifier not in drivers:
         intermediate = intermediates[qualifier]
         _validate_intermediate_reference(reference, intermediate, bindings, diagnostics)
         for name in intermediate.filter_variables:
@@ -2809,7 +2816,7 @@ def _with_relation_dependencies(
         if "." not in reference.name:
             continue
         qualifier = reference.name.split(".", 1)[0]
-        if qualifier in intermediates:
+        if qualifier in intermediates and qualifier not in drivers:
             extra.extend(intermediates[qualifier].dependencies)
             continue
         if reference.reach in {"declared", "record"}:
@@ -3057,6 +3064,7 @@ def _plan_lookups(
     }
     if specification.rows:
         dataset_fields["SELF"] = self_fields
+    row_drivers = {row.dataset for row in specification.rows or ()}
     for index, intermediate in enumerate(specification.intermediates or ()):
         path = f"intermediates[{index}]"
         if intermediate.dataset not in dataset_fields:
@@ -3099,7 +3107,12 @@ def _plan_lookups(
         fields = dataset_fields[intermediate.dataset]
         key_inferred = False
         source_defaulted = False
-        if intermediate.key is None:
+        if intermediate.key is None and intermediate.id in row_drivers:
+            # A row driver exposes every surviving record. It does not match
+            # on output keys, which may not even be present on its source.
+            # Retain any applicable keys for ordinary lookup reads elsewhere.
+            match_fields = tuple(key for key in specification.keys if key in fields)
+        elif intermediate.key is None:
             # REQ-0153: an omitted key is inferred from the applicable keys.
             inferred = _infer_applicable_keys(
                 specification,
@@ -3153,7 +3166,9 @@ def _plan_lookups(
                 keyed_infos[keyed.name] = info
             variables = tuple(variables_list)
             match_expressions = tuple(keyed_list)
-        if len(variables) != len(match_fields) or not variables:
+        if len(variables) != len(match_fields) or (
+            not variables and intermediate.id not in row_drivers
+        ):
             if intermediate.key_base is None or intermediate.key is None:
                 # REQ-0115: _lookup_declarations only sees the pairs the author
                 # wrote on both sides, so a pairing that fails after REQ-0153
@@ -3451,15 +3466,16 @@ def _plan_lookups(
         if failed:
             continue
 
-        resolved.append(
-            ResolvedJoin(
-                spec_path=path,
-                dataset=intermediate.dataset,
-                source=variables,
-                key=match_fields,
-                inferred=key_inferred or source_defaulted,
+        if match_fields:
+            resolved.append(
+                ResolvedJoin(
+                    spec_path=path,
+                    dataset=intermediate.dataset,
+                    source=variables,
+                    key=match_fields,
+                    inferred=key_inferred or source_defaulted,
+                )
             )
-        )
         planned[intermediate.id] = PlannedIntermediate(
             identifier=intermediate.id,
             dataset=intermediate.dataset,
@@ -4143,7 +4159,9 @@ def _preflight_findings(
             driver = row.dataset
             if driver is None and len(specification.input) == 1:
                 driver = next(iter(specification.input))
-            if driver not in specification.input:
+            if driver not in specification.input and driver not in _intermediate_ids(
+                specification
+            ):
                 diagnostics.append(
                     _diagnostic(
                         "driver_unavailable",
@@ -4369,18 +4387,23 @@ def _row_phase_default_columns(
         if row.filter is not None:
             # REQ-0068: a row template filter reads the candidate's columns:
             # completed columns for a grouped template, derived columns and
-            # lookup state for an ungrouped one. Bare identifiers are
-            # row-phase reads either way.
+            # lookup state for an ungrouped one. A lookup read also promotes
+            # the column-level values it matches on into the row phase.
             try:
                 filter_ast = parse_predicate(row.filter)
             except PredicateError:
                 pass
             else:
-                referenced.update(
-                    name
-                    for name in predicate_identifiers(filter_ast)
-                    if "." not in name
-                )
+                filter_names = predicate_identifiers(filter_ast)
+                referenced.update(name for name in filter_names if "." not in name)
+                if row.group_by is None:
+                    referenced.update(
+                        match
+                        for name in filter_names
+                        for qualifier, separator, _ in (name.partition("."),)
+                        if separator and qualifier != driver
+                        for match in matches.get(qualifier, ())
+                    )
     for column in specification.columns:
         if column.derivation is not None:
             referenced.update(
@@ -4441,6 +4464,137 @@ def _row_phase_default_columns(
     return frozenset(promoted)
 
 
+def _intermediate_driver_type(
+    expression: Expression,
+    fields: Mapping[str, ColumnType],
+) -> ColumnType | None:
+    """Find a stable type for a projected intermediate derivation."""
+    operation = expression.operation
+    value = expression.root[operation]
+    if operation in ("row_number", "rank"):
+        return "int"
+    if operation in _DERIVED_RESULT_TYPES:
+        return _DERIVED_RESULT_TYPES[operation]
+    if operation == "source":
+        variable = value.get("variable") if isinstance(value, Mapping) else value
+        if isinstance(variable, str):
+            if variable in fields:
+                return fields[variable]
+            return fields.get(variable.partition(".")[2])
+    if operation == "literal":
+        if isinstance(value, str):
+            return "str"
+        if isinstance(value, int) and not isinstance(value, bool):
+            return "int"
+        if isinstance(value, float):
+            return "float"
+    if (
+        operation == "case"
+        and isinstance(value, Sequence)
+        and not isinstance(value, str)
+    ):
+        branch_types: set[ColumnType] = set()
+        for branch in value:
+            if not isinstance(branch, Mapping):
+                return None
+            result = branch.get("then", branch.get("otherwise"))
+            if not isinstance(result, Mapping):
+                return None
+            try:
+                nested = Expression.model_validate(result)
+            except ValidationError:
+                return None
+            branch_type = _intermediate_driver_type(nested, fields)
+            if branch_type is None:
+                if result != {"literal": None}:
+                    return None
+                continue
+            branch_types.add(branch_type)
+        if len(branch_types) == 1:
+            return next(iter(branch_types))
+    return None
+
+
+def _bind_intermediate_drivers(
+    specification: Specification,
+    bindings: BindingPlan,
+    diagnostics: list[ExecutionDiagnostic],
+) -> BindingPlan:
+    """Expose source-only intermediate records as typed row drivers."""
+    declared = {item.id: item for item in specification.intermediates or ()}
+    datasets = dict(bindings.datasets)
+    for index, row in enumerate(specification.rows or ()):
+        identifier = row.dataset
+        if (
+            identifier is None
+            or identifier not in declared
+            or identifier in specification.input
+        ):
+            continue
+        item = declared[identifier]
+        prohibited = [
+            field
+            for field in ("key", "key_base", "between", "order_by", "keep")
+            if getattr(item, field) is not None
+        ]
+        if item.dataset not in specification.input:
+            prohibited.append("dataset")
+        if item.filter is not None:
+            try:
+                filter_names = predicate_identifiers(parse_predicate(item.filter))
+            except PredicateError:
+                filter_names = ()
+            if any(name.partition(".")[0] != item.dataset for name in filter_names):
+                prohibited.append("filter")
+        if item.strict or "missing" in item.model_fields_set:
+            prohibited.append("absence_policy")
+        if prohibited:
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_intermediate_driver",
+                    f"rows[{index}].dataset",
+                    {"intermediate": identifier, "fields": prohibited},
+                    requirement="REQ-1262",
+                )
+            )
+            continue
+        if item.dataset not in bindings.datasets:
+            continue
+        source = bindings.datasets[item.dataset]
+        types: dict[str, ColumnType] = {
+            column.name: column.type for column in source.columns
+        }
+        for name, derivation in (item.derivations or {}).items():
+            inferred = _intermediate_driver_type(derivation.value, types)
+            if inferred is not None:
+                types[name] = inferred
+        visible = (
+            item.columns
+            if item.columns is not None
+            else [
+                *source.field_names,
+                *(item.derivations or {}),
+            ]
+        )
+        unknown = [name for name in visible if name not in types]
+        if unknown:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_intermediate_driver_type",
+                    f"rows[{index}].dataset",
+                    {"intermediate": identifier, "columns": unknown},
+                    requirement="REQ-1262",
+                )
+            )
+            continue
+        datasets[identifier] = DatasetBinding(
+            dataset=identifier,
+            columns=tuple(TypedColumn(name=name, type=types[name]) for name in visible),
+            context_columns=(),
+        )
+    return bindings.model_copy(update={"datasets": datasets})
+
+
 def plan_execution(
     specification: Specification,
     sources: Mapping[str, LoadedDataset | TypedTable],
@@ -4483,6 +4637,7 @@ def plan_execution(
             )
         )
         raise ExecutionPlanningError(diagnostics) from error
+    bindings = _bind_intermediate_drivers(specification, bindings, diagnostics)
 
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
@@ -4539,8 +4694,7 @@ def plan_execution(
             and specification.default_driver in specification.input
         ):
             driver = specification.default_driver
-            # REQ-1170: a root filter is the filter-only row template lifted
-            # to root; it reads the base driver like an ungrouped row.filter.
+            # REQ-1170: a root filter reads the base driver before derivation.
             filter_ast = None
             if specification.filter is not None:
                 filter_ast = _parse_predicate_at(
@@ -4583,7 +4737,7 @@ def plan_execution(
             driver = row.dataset
             if driver is None and len(specification.input) == 1:
                 driver = next(iter(specification.input))
-            if driver is None or driver not in specification.input:
+            if driver is None or driver not in bindings.datasets:
                 continue
             row_scope = _row_scope(specification, row, driver)
             grouped = row.group_by is not None
@@ -4735,10 +4889,43 @@ def plan_execution(
                     if "." not in identifier
                     and (identifier not in row_names or identifier in deferred_columns)
                 )
+                # A qualified lookup read also consumes its match values.
+                # They must be available before the window pass just like
+                # bare identifiers named directly by the filter.
+                diagnostics.extend(
+                    _diagnostic(
+                        "phase_boundary",
+                        filter_path or f"rows[{index}].filter",
+                        {
+                            "identifier": match,
+                            "row": row.id,
+                            "intermediate": qualifier,
+                            "available_phase": (
+                                "window_derivation"
+                                if match in deferred_columns
+                                else "column_derivation"
+                            ),
+                            "required_phase": "row_filter",
+                        },
+                    )
+                    for identifier in filter_names
+                    for qualifier, separator, _ in (identifier.partition("."),)
+                    if separator and qualifier != driver and qualifier in intermediates
+                    for match in intermediates[qualifier].dependencies
+                    if match in deferred_columns
+                    or (
+                        match not in row_names
+                        and not _lookup_match_available_at_row_construction(
+                            match, row=row, driver=driver, bindings=bindings
+                        )
+                    )
+                )
             for name, planned in derivations.items():
                 for reference in row_references[(index, name)]:
                     if "." in reference.name:
                         lookup = intermediates.get(reference.name.split(".", 1)[0])
+                        if lookup is not None and lookup.identifier == driver:
+                            lookup = None
                         if (
                             index == 0
                             and lookup is not None
@@ -4783,7 +4970,11 @@ def plan_execution(
                             # Group keys and ungrouped driver fields are known
                             # at construction, so they need no derivation
                             # (issue #711).
-                            for match in _lookup_dependencies(reference, intermediates)
+                            for match in (
+                                _lookup_dependencies(reference, intermediates)
+                                if lookup is not None
+                                else ()
+                            )
                             if match not in row_names
                             and not _lookup_match_available_at_row_construction(
                                 match, row=row, driver=driver, bindings=bindings
@@ -4845,46 +5036,6 @@ def plan_execution(
                 )
                 for name, planned in derivations.items()
             }
-            window_columns = {
-                name
-                for name, planned in derivations.items()
-                if planned.declaration.value.operation in WINDOW_OPERATIONS
-            }
-            if window_columns:
-                # REQ-0326 evaluates a template's windows in one pass over
-                # its constructed rows, so a window must not depend on
-                # another window's result, directly or through a value
-                # computed from one: window results have no declared
-                # evaluation order within the pass, and scalars derived
-                # from window results evaluate after it. A window reading
-                # its own column is a cycle and is left to the cycle
-                # detector below.
-                deferred: set[str] = set(window_columns)
-                changed = True
-                while changed:
-                    changed = False
-                    for name, planned in derivations.items():
-                        if name not in deferred and any(
-                            dependency in deferred
-                            for dependency in planned.dependencies
-                        ):
-                            deferred.add(name)
-                            changed = True
-                for name in sorted(window_columns):
-                    blocked = sorted(
-                        dependency
-                        for dependency in derivations[name].dependencies
-                        if dependency in deferred and dependency != name
-                    )
-                    if blocked:
-                        diagnostics.append(
-                            _diagnostic(
-                                "window_on_window_result",
-                                derivations[name].operation_path,
-                                {"column": name, "depends_on": blocked},
-                                requirement="REQ-0326",
-                            )
-                        )
             cycle = _find_cycle(
                 [name for name in column_order if name in derivations], graph
             )

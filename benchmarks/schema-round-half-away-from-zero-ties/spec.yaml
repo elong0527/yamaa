@@ -1,0 +1,47 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, VAL1, VAL0, RND1, RND0]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: VAL1
+    type: float
+    label: Source Value for One-Decimal Rounding
+    derivation: SOURCE.VAL1
+
+  - name: VAL0
+    type: float
+    label: Source Value for Whole-Number Rounding
+    derivation: SOURCE.VAL0
+
+  # REQ-0418: exact ties and near ties below them move away from zero.
+  - name: RND1
+    type: float
+    label: Value Rounded to One Decimal Place
+    derivation:
+      round_half_away_from_zero:
+        source: VAL1
+        digits: 1
+
+  - name: RND0
+    type: float
+    label: Value Rounded to a Whole Number
+    derivation:
+      round_half_away_from_zero:
+        source: VAL0
+        digits: 0

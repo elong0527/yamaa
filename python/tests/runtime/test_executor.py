@@ -942,6 +942,34 @@ def test_an_ungrouped_filter_reads_lookup_state() -> None:
     assert result.artifact.frame.rows() == [("r1", 1.0)]
 
 
+def test_an_ungrouped_filter_lookup_matches_a_derived_column() -> None:
+    specification = _filtered_row_spec(
+        "LOOK.FLAG = 'Y'",
+        intermediates=[
+            Intermediate(id="LOOK", dataset="RIGHT", key_base=["MATCH"], key=["K"])
+        ],
+    )
+    specification = specification.model_copy(
+        update={
+            "columns": [
+                *specification.columns,
+                Column(
+                    name="MATCH",
+                    type="str",
+                    derivation=HandledExpression(
+                        value=Expression(root={"source": "SRC.K"})
+                    ),
+                ),
+            ]
+        }
+    )
+
+    result = execute_specification(specification, _filtered_row_sources())
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame.rows() == [("r1", 1.0)]
+
+
 def test_an_ungrouped_filter_still_scopes_the_window_pass() -> None:
     # REQ-0036: the filter gates each record's candidate before the window
     # pass, so windows partition only the retained rows.
@@ -999,3 +1027,89 @@ def test_an_ungrouped_filter_still_scopes_the_window_pass() -> None:
     assert isinstance(result, ExecutionSuccess)
     # r1 is filtered out, so r2's lag sees no retained predecessor.
     assert result.artifact.frame.rows() == [("r2", None), ("r3", 5.0)]
+
+
+def test_an_ungrouped_filter_scopes_a_window_chain() -> None:
+    # The filter retains r2 and r3. Each later derivation completes across
+    # those rows before the next window in the chain reads it.
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["K"],
+        output=Output(path="out.csv", columns=["K", "RN", "CARRIED"]),
+        columns=[
+            Column(name="K", type="str"),
+            Column(name="XVAL", type="float"),
+            Column(name="RN", type="int"),
+            Column(name="SELECTED", type="float"),
+            Column(name="CARRIED", type="float"),
+        ],
+        rows=[
+            Row(
+                id="row",
+                dataset="SRC",
+                filter="XVAL > 4.0",
+                derivations={
+                    "K": derive({"source": "SRC.K"}),
+                    "XVAL": derive({"source": "SRC.X"}),
+                    "RN": derive({"row_number": {"window": {"order_by": ["K"]}}}),
+                    "SELECTED": derive(
+                        {"case": [{"when": "RN = 1", "then": {"source": "XVAL"}}]}
+                    ),
+                    "CARRIED": derive(
+                        {
+                            "previous_non_missing": {
+                                "source": "SELECTED",
+                                "window": {"order_by": ["K"]},
+                            }
+                        }
+                    ),
+                },
+            )
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="K", type="str"),
+                TypedColumn(name="X", type="float"),
+            ),
+            frame=pl.DataFrame(
+                {"K": ["r1", "r2", "r3"], "X": [1.0, 5.0, 10.0]},
+                schema={"K": pl.String, "X": pl.Float64},
+            ),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame.rows() == [("r2", 1, None), ("r3", 2, 5.0)]
+
+
+def test_mh_volunteered_condition_at_unknown_visit_still_fails() -> None:
+    example = EXAMPLES / "sdtm-mh-prespecified-conditions"
+    specification = load_specification(example / "spec.yaml", SCHEMA_ROOT).specification
+    loaded = load_source_tables(specification.input, ProjectResources(example))
+    odm = loaded["ODM"].table
+    unexpected = (
+        odm.frame.filter(pl.col("ItemGroupOID") == "IG.MH.FREETEXT")
+        .head(1)
+        .with_columns(pl.lit("FOLLOWUP").alias("StudyEventOID"))
+    )
+    sources = {name: dataset.table for name, dataset in loaded.items()}
+    sources["ODM"] = TypedTable(
+        columns=odm.columns,
+        frame=pl.concat([odm.frame, unexpected], how="vertical"),
+    )
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionFailure)
+    assert result.diagnostics[0].condition == "unmapped_value"
+    assert result.diagnostics[0].spec_paths == ("rows[1].derivations.EVENTORD.case",)

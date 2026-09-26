@@ -555,8 +555,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0571](../values/temporal.md#req-0571) | `values/temporal.md` | R016-33 |
 | [REQ-0572](../values/temporal.md#req-0572) | `values/temporal.md` | R016-34 |
 | [REQ-0573](../values/temporal.md#req-0573) | `values/temporal.md` | R016-35 |
-| [REQ-0574](../values/temporal.md#req-0574) | `values/temporal.md` | R016-36 |
-| [REQ-0575](../values/temporal.md#req-0575) | `values/temporal.md` | R016-37 |
+| [REQ-0574](../values/temporal.md#req-0574) | `values/temporal.md` | R016-36, R016-37 |
 | [REQ-0576](../values/temporal.md#req-0576) | `values/temporal.md` | R016-40 |
 | [REQ-0577](../values/temporal.md#req-0577) | `values/temporal.md` | R016-41 |
 | [REQ-0578](../operations/temporal.md#req-0578) | `operations/temporal.md` | R016-42 |
@@ -1188,6 +1187,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1255](../operations/expressions.md#req-1255) | `operations/expressions.md` | Schema prose |
 | [REQ-1260](../specification/structure.md#req-1260) | `specification/structure.md` | R005-11, R005-41 |
 | [REQ-1261](../operations/text.md#req-1261) | `operations/text.md` | Schema prose |
+| [REQ-1262](../execution/rows.md#req-1262) | `execution/rows.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

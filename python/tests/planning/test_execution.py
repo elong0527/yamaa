@@ -823,6 +823,41 @@ def test_an_ungrouped_filter_promotes_the_named_column_to_row_phase() -> None:
     assert by_column["D"].path == "columns.D.derivation"
 
 
+def test_an_ungrouped_filter_promotes_a_lookups_match_column() -> None:
+    # A filter's lookup needs its match column before the window pass, even
+    # when the filter does not name that column directly.
+    spec = two_dataset_specification(
+        [
+            Column(name="K", type="str"),
+            Column(name="D", type="str", derivation=derivation({"source": "SRC.X"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["D"], key=["X"])
+            ],
+            "rows": [
+                Row(
+                    id="row",
+                    dataset="SRC",
+                    filter="LOOK.V = 1.0",
+                    derivations={"K": derivation({"source": "SRC.X"})},
+                )
+            ],
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert {item.column: item.path for item in plan.rows[0].derivations}["D"] == (
+        "columns.D.derivation"
+    )
+
+
 def test_an_ungrouped_filter_naming_an_underived_column_is_rejected() -> None:
     # REQ-0068: a bare identifier the template does not derive is still a
     # phase boundary for an ungrouped filter.
@@ -923,6 +958,54 @@ def test_an_ungrouped_filter_naming_a_window_dependent_column_is_rejected() -> N
     assert diagnostic.context["required_phase"] == "row_filter"
 
 
+def test_an_ungrouped_filter_lookup_cannot_match_on_a_window_column() -> None:
+    spec = two_dataset_specification(
+        [Column(name="K", type="str"), Column(name="W", type="str")]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["W"], key=["X"])
+            ],
+            "rows": [
+                Row(
+                    id="row",
+                    dataset="SRC",
+                    filter="LOOK.V = 1.0",
+                    derivations={
+                        "K": derivation({"source": "SRC.X"}),
+                        "W": derivation(
+                            {
+                                "row_value": {
+                                    "source": "K",
+                                    "offset": -1,
+                                    "window": {"order_by": ["K"]},
+                                }
+                            }
+                        ),
+                    },
+                )
+            ],
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    diagnostic = next(
+        item
+        for item in raised.value.diagnostics
+        if item.condition == "phase_boundary"
+        and item.context.get("intermediate") == "LOOK"
+    )
+    assert diagnostic.context["identifier"] == "W"
+    assert diagnostic.context["available_phase"] == "window_derivation"
+    assert diagnostic.context["required_phase"] == "row_filter"
+
+
 def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     spec = specification(
         [
@@ -985,7 +1068,8 @@ def test_key_base_expression_plans_with_synthetic_name() -> None:
     assert planned.dependencies == ("A",)
 
 
-def test_key_base_expression_type_mismatch_fails() -> None:
+@pytest.mark.parametrize("operation", ["str_upper", "to_date"])
+def test_key_base_expression_type_mismatch_fails(operation: str) -> None:
     # REQ-1259: a statically known expression result type checks against the
     # donor key type with the existing comparability rules.
     int_table = frame_from_values(
@@ -1003,7 +1087,7 @@ def test_key_base_expression_type_mismatch_fails() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"str_upper": {"source": "A"}}],
+                    key_base=[{operation: {"source": "A"}}],
                     key=["X"],
                 )
             ]
@@ -1014,10 +1098,50 @@ def test_key_base_expression_type_mismatch_fails() -> None:
         plan_execution(
             spec,
             {"SRC": int_table},
-            supported_operations=("source", "literal", "mapping", "str_upper"),
+            supported_operations=("source", "literal", "mapping", operation),
         )
 
     assert raised.value.diagnostics[0].condition == "incompatible_input_type"
+
+
+def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
+    # REQ-0316 fixes baseline_flag's result as str, so REQ-1259 must reject
+    # its pairing with a numeric donor key during planning.
+    table = frame_from_values(
+        (
+            TypedColumn(name="X", type="str"),
+            TypedColumn(name="D", type="date"),
+            TypedColumn(name="N", type="int"),
+        ),
+        [["one", date(2024, 1, 15), 1]],
+    )
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="R", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="V", type="int", derivation=derivation({"source": "SRC.N"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"baseline_flag": {"date": "D", "reference_date": "R"}}],
+                    key=["N"],
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": table})
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "incompatible_input_type"
+    assert diagnostic.context["expected"] == "str"
+    assert diagnostic.context["actual"] == "int"
 
 
 def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:

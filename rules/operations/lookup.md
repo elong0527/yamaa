@@ -15,8 +15,8 @@ status: normative
 **REQ-0111.** A dataset-qualified scalar source reads that dataset through
 the implicit join: one value per current row, matched on the applicable
 keys ([REQ-0150](lookup.md#req-0150)), answering absence as a missing
-result. The qualifier for this row template's input dataset is not a
-join. That qualifier reads the input record that built the row.
+result. The qualifier for this row template's driver is not a join. That
+qualifier reads the input or intermediate record that built the row.
 
 ```yaml
 derivation:
@@ -145,9 +145,34 @@ The expression is evaluated against the current row and its value is the
 match operand for that position; a result that is missing matches nothing,
 exactly as a missing variable does ([REQ-0131](lookup.md#req-0131)). The
 pair's [REQ-0118](lookup.md#req-0118) comparison uses the expression's
-statically known result type as the source side. An operation whose result
-type depends on its inputs states no static type, and the pair is then
-judged only by whether the match values compare at run time.
+statically known result type as the source side. For this comparison, the
+following table is the complete set of operations with a static type. The
+type is the operation's ordinary non-missing result, before any local
+`missing`, `invalid`, or `no_match` replacement. The operation contracts
+define those results; this table fixes which of them are checked before
+matching, independent of the runtime implementation.
+
+| Static comparison type | Operations |
+| --- | --- |
+| Referenced variable's type | `source` |
+| Declared YAML scalar's type (`str`, `int`, `float`, or `bool`); a missing literal has no static type | `literal` |
+| `date` | `date_impute`, `to_date` |
+| `datetime` | `datetime_impute` |
+| `int` | `date_diff`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
+| `float` | `round_half_away_from_zero` |
+| `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_concat`, `str_extract`, `str_lower`, `str_pad`, `str_sentence`, `str_template`, `str_title`, `str_upper` |
+| `bool` | `str_contains` |
+| Numeric (`int` or `float`) | `compute` |
+
+For `compute`, either possible result type compares with `int` and `float`
+under [REQ-0005](../values/types.md#req-0005); `float` represents that
+numeric comparison class in a validation diagnostic, without changing the
+computed value. Every other expression operation states no static type for
+this check, even when a particular invocation's inputs could reveal one.
+For example, `mapping`, `case`, `greatest`, and `least` select values whose
+types depend on their inputs. Such pairs are judged by whether their match
+values compare at run time. A non-missing local replacement is likewise
+subject to run-time comparability when it is used as a match operand.
 
 <a id="req-0119"></a>
 
@@ -175,11 +200,13 @@ ordering, and `columns`, apply to `SELF` as they do to input datasets.
 For input datasets, `order_by` names qualified fields of that dataset only; `columns`
 lists bare field names. Every `filter` field is qualified. The lookup's
 own qualifier reads a candidate donor record. A different qualifier may
-read the current row's driver dataset: root `base` (or the sole input)
+read the current row's driver: root `base` (or the sole input)
 without explicit rows, or the enclosing `rows[].dataset` during row
 construction. During column derivation it must be the driver of every
-row template that the expression can evaluate on. Other datasets,
-intermediates and unqualified output names are not filter scopes.
+row template that the expression can evaluate on. The row driver may be an
+eligible named intermediate under [REQ-1262](../execution/rows.md#req-1262).
+Other datasets, intermediates that are not the current driver, and
+unqualified output names are not filter scopes.
 
 The current-driver references are dependencies of each lookup read and
 obey the existing phase and group-key rules. In a grouped template, the

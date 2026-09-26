@@ -17,19 +17,23 @@ reference range.
 - `AVAL` would be the collected result, taken from `LBSTRESN`.
 - `ANRHI` would be the upper limit of the reference range, taken
   from `LBSTNRHI`.
-- `HIFL` would mark a result above that limit by answering
-  whether `AVAL` exceeds `ANRHI`. A formula produces a number, and
-  a comparison answers yes or no; turning that answer into `1` or
-  `0`, or into text, would each be a different result from the same
-  specification, so the run is rejected before any data is read and
-  no artifact is accepted. A comparison belongs where the
-  specification asks a question rather than calculates a value.
+- `HIFL` would be `1` for a result above that limit and `0`
+  otherwise.
+
+**Note:** the flag is written as the comparison `AVAL > ANRHI`
+inside a formula. A formula produces a number, while a comparison
+answers yes or no; turning that answer into `1` or `0`, or into
+text, would each be a different result from the same comparison,
+so the run is rejected before any data is read and no artifact
+is accepted. `HIFL` is this benchmark's own invention, documented
+here; `AVAL` and `ANRHI` follow ADaMIG-1.3.
 
 **Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-Use `case` to ask the comparison and return the intended numeric flag:
+Ask the comparison where the flag is decided, so the conversion
+from a yes-or-no answer to `1` or `0` is explicit:
 
 ```yaml
 - name: HIFL
@@ -41,7 +45,6 @@ Use `case` to ask the comparison and return the intended numeric flag:
       - otherwise: {literal: 0}
 ```
 
-This makes the conversion from a yes-or-no answer to `1` or `0` explicit. A
-missing result or limit answers neither yes nor no, so it falls to `otherwise`
-and gets `0`; to leave such a flag empty instead, replace the `otherwise` with
-`when: "AVAL <= ANRHI"` returning `0`.
+A missing result or limit answers neither yes nor no, so it falls
+to `otherwise` and gets `0`; to leave such a flag empty instead,
+replace the `otherwise` with `when: "AVAL <= ANRHI"` returning `0`.

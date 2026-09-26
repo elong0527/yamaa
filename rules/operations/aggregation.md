@@ -58,7 +58,7 @@ must not be mixed; every other context is an error:
   template's input dataset. A scalar source qualified to the row
   template's input dataset reads one record. The aggregate keyword makes
   the same qualifier relational.
-- **Unqualified.** Every identifier names a current-output column. The
+- **Unqualified.** Every identifier names a constructed output column. The
   expression reduces constructed output rows within its `group_by` partition
   and broadcasts the result to every row in the partition.
 - **Grouped input.** Every identifier is qualified
@@ -88,7 +88,7 @@ item identifiers carry further periods. Bind the reference with a structured
 expression declares qualified right-side columns. Each column must also be an
 output key. The reduction stays coarser than or equal to the
 applicable keys [Lookup and joins](lookup.md) joins on. An unqualified expression declares
-current-output columns and must declare at least one. A reduction over the
+constructed output columns and must declare at least one. A reduction over the
 whole output is not registered. A grouped-row aggregate
 declares no local `group_by`. The enclosing
 `row.group_by` already fixes its current relation and keys.

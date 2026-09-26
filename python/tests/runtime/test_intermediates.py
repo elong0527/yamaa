@@ -383,6 +383,72 @@ def test_a_named_key_base_expression_reads_its_source_when_selecting() -> None:
     ]
 
 
+def test_key_base_window_expression_uses_the_current_row_partition() -> None:
+    # REQ-1259: a window expression in key_base needs the row's relational
+    # resolver, for both a named intermediate and an inline lookup.
+    def read(variable: str) -> HandledExpression:
+        return HandledExpression(value=Expression(root={"source": variable}))
+
+    key_base = [{"baseline_flag": {"date": "ADT", "reference_date": "TRTSDT"}}]
+    sources = {
+        "DM": frame_from_values(
+            (
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="ADT", type="date"),
+            ),
+            [["s1", DateValue.parse("2024-01-15")]],
+        ),
+        "TAB": frame_from_values(
+            (TypedColumn(name="K", type="str"), TypedColumn(name="VAL", type="str")),
+            [["Y", "baseline"]],
+        ),
+    }
+    for named in (True, False):
+        value = (
+            read("T.VAL")
+            if named
+            else HandledExpression(
+                value=Expression(
+                    root={
+                        "lookup": {
+                            "dataset": "TAB",
+                            "key_base": key_base,
+                            "key": ["K"],
+                            "value": "VAL",
+                        }
+                    }
+                )
+            )
+        )
+        spec = Specification(
+            schema_version="1.0",
+            domain="OUT",
+            input={
+                "DM": DatasetSource(path="dm.csv"),
+                "TAB": DatasetSource(path="tab.csv"),
+            },
+            base="DM",
+            keys=["USUBJID"],
+            intermediates=(
+                [Intermediate(id="T", dataset="TAB", key_base=key_base, key=["K"])]
+                if named
+                else None
+            ),
+            columns=[
+                Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+                Column(name="ADT", type="date", derivation=read("DM.ADT")),
+                Column(name="TRTSDT", type="date", derivation=read("DM.ADT")),
+                Column(name="VAL", type="str", derivation=value),
+            ],
+            output=Output(path="out.csv", columns=["USUBJID", "VAL"]),
+        )
+
+        result = execute_specification(spec, sources)
+
+        assert isinstance(result, ExecutionSuccess), (named, result)
+        assert result.artifact.frame.to_dicts()[0]["VAL"] == "baseline"
+
+
 def epochs() -> RelationIndex:
     return relation(
         "EPOCHS",
