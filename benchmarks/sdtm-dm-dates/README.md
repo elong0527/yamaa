@@ -5,8 +5,8 @@
 
 **Goal:** build one record per enrolled subject carrying informed
 consent date (`RFICDTC`), first and last exposure dates (`RFXSTDTC`,
-`RFXENDTC`), reference start date (`RFSTDTC`), and reference end
-date (`RFENDTC`).
+`RFXENDTC`), reference start date (`RFSTDTC`), last participation
+date (`RFPENDTC`), and reference end date (`RFENDTC`).
 
 **Input:** collected demographics rows with consent date, exposure
 rows with start and end dates and sequence number, disposition rows
@@ -22,15 +22,18 @@ with category and start date, and adverse event rows with end date.
   row carries an end date.
 - `RFSTDTC` is the reference start date, taken here as the first
   exposure date, so it is missing whenever `RFXSTDTC` is.
-- `RFENDTC` is the latest of three dates: the last exposure end date,
-  the latest start date of a disposition row whose category is
-  `DISPOSITION EVENT`, and the latest adverse event end date. A missing
-  one is skipped; it is missing only when all three are.
+- `RFPENDTC` is the last date the subject is known to have
+  participated: the latest of the last exposure end date, the latest
+  disposition event date, and the latest adverse event end date. A
+  missing one is skipped; it is missing only when all three are.
+- `RFENDTC` is the reference end date, the end of the subject's
+  reference period. It is missing whenever `RFSTDTC` is missing, so
+  a subject who never entered the reference period has no end date.
 
 **Note:** exposure, disposition, and adverse event rows count only for
 the subject with the same study and subject identifiers, so the same
 subject identifier in two studies gives two independent records, and a
-subject with no exposure has missing exposure and reference start
-dates.
+subject with no exposure has missing exposure, reference start, and
+reference end dates.
 
 **Standard:** SDTM | **Domain:** DM
