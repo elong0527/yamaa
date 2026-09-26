@@ -4,7 +4,7 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** carry the collected adverse event (AE) start text
-(`AESTDTC`) into `ASTDT`.
+(`AESTDTC`) toward `ASTDT`.
 
 **Input:** adverse event records, each identified by study,
 subject, and sequence, carrying reported term (`AETERM`) and
