@@ -53,10 +53,7 @@ fallback.
 
 **REQ-0858.** The map must not carry a key this contract governs. Root `metadata`
 rejects all dataset metadata field names above. A column's `metadata` rejects
-all column metadata field names below. This makes [REQ-0857](metadata.md#req-0857) checkable: without
-it, a study could write `metadata` with an `origin` key beside a governed
-`origin`, leaving two provenance claims in one specification and no rule for
-which claim the document reports.
+all column metadata field names below.
 
 ### Standard families
 
