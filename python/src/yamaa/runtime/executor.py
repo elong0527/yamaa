@@ -298,6 +298,43 @@ def _evaluate_row_filter(
     return result.value is TruthValue.TRUE
 
 
+def _ungrouped_row_filter(
+    planned,
+    candidate: CandidateRow,
+    context: RelationalContext,
+    dispatcher: ExpressionDispatcher,
+) -> bool:
+    """Evaluate an ungrouped template's filter over its derived candidate.
+
+    REQ-0068: the filter reads the candidate's derived columns and lookup
+    state, so it runs after the immediate derivations, before the window
+    pass partitions the retained rows.
+    """
+    if planned.filter_predicate is None:
+        return True
+    resolver = RowResolver(
+        context,
+        candidate,
+        candidate.values,
+        row_phase=True,
+        dispatcher=dispatcher,
+    )
+    result = evaluate_predicate(planned.filter_predicate, resolver)
+    if isinstance(result, ConditionResult):
+        raise _ExecutionAbort(
+            [
+                ExecutionDiagnostic(
+                    phase=result.condition.phase,
+                    condition=result.condition.condition,
+                    spec_paths=(planned.filter_path or "rows.filter",),
+                    context=result.condition.context,
+                )
+            ]
+        )
+    assert isinstance(result, PredicateValue)
+    return result.value is TruthValue.TRUE
+
+
 # The phases whose failures name the record they happened on. A failure
 # decided before any row exists reports no key.
 _ROW_PHASES = frozenset(
@@ -390,9 +427,12 @@ def _register_handler_paths(plan, counter: HandlerCounter) -> None:
 def _record_candidates(
     planned,
     relation: RelationIndex,
-    index: BindingIndex,
 ) -> list[CandidateRow]:
-    """Build one candidate per retained driver record, in driver order."""
+    """Build one candidate per driver record, in driver order.
+
+    REQ-0068: an ungrouped row template's filter evaluates after the
+    record's derivations, so filtering happens in the main loop, not here.
+    """
     return [
         CandidateRow(
             source_rows={planned.driver: values},
@@ -401,7 +441,6 @@ def _record_candidates(
             row_id=planned.declaration.id if planned.declaration else None,
         )
         for values in (dict(record.values) for record in relation.records)
-        if _evaluate_row_filter(planned, index, values)
     ]
 
 
@@ -594,30 +633,79 @@ def _construct_rows(
         if planned.grouped:
             candidates = group_candidates(planned, relation)
         else:
-            candidates = _record_candidates(planned, relation, context.bindings)
-        staged = list(candidates)
-        # REQ-0326: finish each derivation for every constructed row before
-        # the next derivation reads it. The planner's topological order makes
-        # window -> scalar -> window chains use completed source columns.
-        # Positions and partition scope still belong to this template alone.
-        for index, candidate in enumerate(staged):
-            candidate.output_position = position + index
-        with _partition_scope(context, staged):
+            candidates = _record_candidates(planned, relation)
+        # An ungrouped filter runs after every derivation that can complete
+        # without a window result. The remaining derivations keep their
+        # topological order so window -> scalar -> window chains still work.
+        window_columns = {
+            derivation.column
+            for derivation in planned.derivations
+            if derivation.declaration.value.operation in WINDOW_OPERATIONS
+        }
+        deferred_columns = set(window_columns)
+        changed = True
+        while changed:
+            changed = False
             for derivation in planned.derivations:
-                row_phase = (
-                    derivation.declaration.value.operation not in WINDOW_OPERATIONS
+                if derivation.column not in deferred_columns and any(
+                    dependency in deferred_columns
+                    for dependency in derivation.dependencies
+                ):
+                    deferred_columns.add(derivation.column)
+                    changed = True
+        immediate = [
+            derivation
+            for derivation in planned.derivations
+            if derivation.column not in deferred_columns
+        ]
+        post_filter = [
+            derivation
+            for derivation in planned.derivations
+            if derivation.column in deferred_columns
+        ]
+        staged: list[CandidateRow] = []
+        for candidate in candidates:
+            for derivation in immediate:
+                candidate.values[derivation.column] = _evaluate_one(
+                    derivation,
+                    column_types,
+                    candidate,
+                    context,
+                    dispatcher,
+                    counter,
+                    plan.specification.keys,
+                    row_phase=True,
                 )
-                for candidate in staged:
-                    candidate.values[derivation.column] = _evaluate_one(
-                        derivation,
-                        column_types,
-                        candidate,
-                        context,
-                        dispatcher,
-                        counter,
-                        plan.specification.keys,
-                        row_phase=row_phase,
+            # REQ-0068: an ungrouped filter reads the candidate's derived
+            # columns and lookup state, so it runs after the immediate
+            # derivations, before the window pass partitions the retained
+            # rows.
+            if not planned.grouped and not _ungrouped_row_filter(
+                planned, candidate, context, dispatcher
+            ):
+                continue
+            staged.append(candidate)
+        if post_filter:
+            # Complete one derivation across all retained rows before the
+            # next. Each window sees only this template's retained rows.
+            for index, candidate in enumerate(staged):
+                candidate.output_position = position + index
+            with _partition_scope(context, staged):
+                for derivation in post_filter:
+                    row_phase = (
+                        derivation.declaration.value.operation not in WINDOW_OPERATIONS
                     )
+                    for candidate in staged:
+                        candidate.values[derivation.column] = _evaluate_one(
+                            derivation,
+                            column_types,
+                            candidate,
+                            context,
+                            dispatcher,
+                            counter,
+                            plan.specification.keys,
+                            row_phase=row_phase,
+                        )
         completed_template: list[CandidateRow] = []
         for candidate in staged:
             if planned.grouped and not _grouped_filter(planned, candidate):

@@ -4384,19 +4384,26 @@ def _row_phase_default_columns(
             )
             referenced.update(donor_reads(found))
             referenced.update(match_reads(found))
-        if row.group_by is not None and row.filter is not None:
-            # REQ-0068: a grouped filter reads the candidate's completed
-            # columns; an ungrouped filter reads no output column at all.
+        if row.filter is not None:
+            # REQ-0068: a row template filter reads the candidate's columns:
+            # completed columns for a grouped template, derived columns and
+            # lookup state for an ungrouped one. A lookup read also promotes
+            # the column-level values it matches on into the row phase.
             try:
                 filter_ast = parse_predicate(row.filter)
             except PredicateError:
                 pass
             else:
-                referenced.update(
-                    name
-                    for name in predicate_identifiers(filter_ast)
-                    if "." not in name
-                )
+                filter_names = predicate_identifiers(filter_ast)
+                referenced.update(name for name in filter_names if "." not in name)
+                if row.group_by is None:
+                    referenced.update(
+                        match
+                        for name in filter_names
+                        for qualifier, separator, _ in (name.partition("."),)
+                        if separator and qualifier != driver
+                        for match in matches.get(qualifier, ())
+                    )
     for column in specification.columns:
         if column.derivation is not None:
             referenced.update(
@@ -4687,8 +4694,7 @@ def plan_execution(
             and specification.default_driver in specification.input
         ):
             driver = specification.default_driver
-            # REQ-1170: a root filter is the filter-only row template lifted
-            # to root; it reads the base driver like an ungrouped row.filter.
+            # REQ-1170: a root filter reads the base driver before derivation.
             filter_ast = None
             if specification.filter is not None:
                 filter_ast = _parse_predicate_at(
@@ -4771,19 +4777,6 @@ def plan_execution(
                                 diagnostics,
                                 intermediates=intermediates,
                             )
-                    elif not grouped:
-                        diagnostics.append(
-                            _diagnostic(
-                                "phase_boundary",
-                                path,
-                                {
-                                    "identifier": identifier,
-                                    "row": row.id,
-                                    "available_phase": "column_derivation",
-                                    "required_phase": "row_filter",
-                                },
-                            )
-                        )
 
             derivations: dict[str, PlannedDerivation] = {}
             for name in column_order:
@@ -4855,6 +4848,77 @@ def plan_execution(
                     )
                     for identifier in filter_names
                     if "." not in identifier and identifier not in row_names
+                )
+            else:
+                # REQ-0068: an ungrouped filter evaluates before the window
+                # pass, so a bare identifier must name a column this row
+                # template derives without reading a window result.
+                deferred_columns: set[str] = set()
+                if filter_names:
+                    deferred_columns = {
+                        name
+                        for name, planned in derivations.items()
+                        if planned.declaration.value.operation in WINDOW_OPERATIONS
+                    }
+                    changed = True
+                    while changed:
+                        changed = False
+                        for name, planned in derivations.items():
+                            if (
+                                name not in deferred_columns
+                                and set(planned.dependencies) & deferred_columns
+                            ):
+                                deferred_columns.add(name)
+                                changed = True
+                diagnostics.extend(
+                    _diagnostic(
+                        "phase_boundary",
+                        filter_path or f"rows[{index}].filter",
+                        {
+                            "identifier": identifier,
+                            "row": row.id,
+                            "available_phase": (
+                                "window_derivation"
+                                if identifier in deferred_columns
+                                else "column_derivation"
+                            ),
+                            "required_phase": "row_filter",
+                        },
+                    )
+                    for identifier in filter_names
+                    if "." not in identifier
+                    and (identifier not in row_names or identifier in deferred_columns)
+                )
+                # A qualified lookup read also consumes its match values.
+                # They must be available before the window pass just like
+                # bare identifiers named directly by the filter.
+                diagnostics.extend(
+                    _diagnostic(
+                        "phase_boundary",
+                        filter_path or f"rows[{index}].filter",
+                        {
+                            "identifier": match,
+                            "row": row.id,
+                            "intermediate": qualifier,
+                            "available_phase": (
+                                "window_derivation"
+                                if match in deferred_columns
+                                else "column_derivation"
+                            ),
+                            "required_phase": "row_filter",
+                        },
+                    )
+                    for identifier in filter_names
+                    for qualifier, separator, _ in (identifier.partition("."),)
+                    if separator and qualifier != driver and qualifier in intermediates
+                    for match in intermediates[qualifier].dependencies
+                    if match in deferred_columns
+                    or (
+                        match not in row_names
+                        and not _lookup_match_available_at_row_construction(
+                            match, row=row, driver=driver, bindings=bindings
+                        )
+                    )
                 )
             for name, planned in derivations.items():
                 for reference in row_references[(index, name)]:

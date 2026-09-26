@@ -117,7 +117,7 @@ rows:
       RRVAL: {literal: null}
       AVAL:
         compute:
-          expr: "60000 / ADEG_RAW.AVAL"
+          expr: "60000 / NULLIF(ADEG_RAW.AVAL, 0)"
       AVALU: {literal: ms}
 
 verifications:

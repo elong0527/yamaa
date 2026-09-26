@@ -200,7 +200,9 @@ columns:
             - TESTORD
 rows:
   # One record per collected result item; a test with no item on the form
-  # gives no record.
+  # gives no record. Derivations run before the row filter, so the mappings
+  # below stay total over every ODM record; the filter discards the
+  # placeholder rows.
   - id: reported-finding
     dataset: ODM
     filter: ODM.ItemGroupOID = 'IG.FA' AND ODM.ItemOID IN ('IT.FA.OCCUR', 'IT.FA.SEV', 'IT.FA.LDIAM')
@@ -212,7 +214,8 @@ rows:
             IT.FA.OCCUR: OCCUR
             IT.FA.SEV: SEV
             IT.FA.LDIAM: LDIAM
-          strict: true
+          unmapped: UNMAPPED
+          missing: UNMAPPED
       FATEST:
         mapping:
           source: ODM.ItemOID
@@ -220,7 +223,8 @@ rows:
             IT.FA.OCCUR: Occurrence Indicator
             IT.FA.SEV: Severity/Intensity
             IT.FA.LDIAM: Longest Diameter
-          strict: true
+          unmapped: Unmapped
+          missing: Unmapped
       TESTORD:
         mapping:
           source: ODM.ItemOID
@@ -228,7 +232,8 @@ rows:
             IT.FA.OCCUR: 1
             IT.FA.SEV: 2
             IT.FA.LDIAM: 3
-          strict: true
+          unmapped: 99
+          missing: 99
 verifications:
   - unique:
       columns:

@@ -174,10 +174,12 @@ consuming a row-derived column must rely on the column's declared type.
 
 <a id="req-0218"></a>
 
-**REQ-0218.** For a grouped row template, [Execution lifecycle](lifecycle.md) evaluates its `filter` after
-stages 1 to 3 complete for every value on the candidate row. A discarded
-candidate never enters the completed dataset, so stage 4 column
-verifications do not include it. An error reached while deriving the
+**REQ-0218.** A row template's `filter` evaluates after stages 1 to 3
+complete for every value the filter may read on the candidate row: for a
+grouped template every row derivation; for an ungrouped template every
+derivation that does not read a window result, evaluated before the window
+pass. A discarded candidate never enters the completed dataset, so stage 4
+column verifications do not include it. An error reached while deriving the
 candidate still fails the run; the filter does not retroactively hide a
 failed derivation.
 
