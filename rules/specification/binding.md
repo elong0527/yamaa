@@ -244,10 +244,6 @@ declaration defines shape, defaults, and structural constraints.
 
 **REQ-0103.** An unknown dataset identifier or variable: fail.
 
-<a id="req-0104"></a>
-
-**REQ-0104.** Retired; see [REQ-0080](#req-0080).
-
 <a id="req-0105"></a>
 
 **REQ-0105.** A source path that [Resource resolution](../storage/resources.md) does not accept: fail, under [Resource resolution](../storage/resources.md)'s

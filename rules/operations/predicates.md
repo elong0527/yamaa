@@ -128,11 +128,6 @@ comparable to text, and a `date` is not comparable to a `datetime`.
 
 ### Three-valued logic
 
-<a id="req-0170"></a>
-
-**REQ-0170.** Retired. The missing-operand comparison rule is stated once in
-[REQ-0166](#req-0166). This identifier is never reused.
-
 <a id="req-0171"></a>
 
 **REQ-0171.** The connectives follow the tables below. `NOT TRUE` is `FALSE`,

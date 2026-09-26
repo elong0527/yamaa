@@ -213,10 +213,6 @@ derivation:
 
 **REQ-0072.** A dependency cycle: fail and report the cycle path.
 
-<a id="req-0073"></a>
-
-**REQ-0073.** Retired; see [REQ-0033](#req-0033).
-
 <a id="req-0074"></a>
 
 **REQ-0074.** In a specification without `rows`, a key column derivation

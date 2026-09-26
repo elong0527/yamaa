@@ -88,18 +88,6 @@ the run must not infer a profile from file contents or use a default.
 | `.csv` | `csv` | delimited text | the bytes |
 | `.parquet` | `parquet` | Parquet | schema, column/row order, values |
 
-<a id="req-0717"></a>
-
-**REQ-0717.** Retired; [REQ-0716](#req-0716) governs profile selection.
-
-<a id="req-0718"></a>
-
-**REQ-0718.** Retired; see [REQ-0716](#req-0716).
-
-<a id="req-0719"></a>
-
-**REQ-0719.** Retired; [REQ-0716](#req-0716) defines the two profiles.
-
 <a id="req-0720"></a>
 
 **REQ-0720.** A profile and the specification's `schema_version` identify the
@@ -134,11 +122,6 @@ re-encoding, and rounding are prohibited.
 **REQ-1237.** A derivation run publishes only the primary artifact and the
 declared sidecars of [REQ-0193](#req-0193). Conversion to a transport container
 is a separate packaging step outside this language.
-
-<a id="req-1238"></a>
-
-**REQ-1238.** Retired; [REQ-0716](#req-0716) and
-[REQ-0760](#req-0760) govern unmapped extensions.
 
 <a id="req-1233"></a>
 
@@ -248,10 +231,6 @@ target untouched.
 | `output_class.order_by` | Terms ordering artifact rows after every verification; omission keeps [Execution lifecycle](../execution/lifecycle.md) construction order. |
 
 ## Error conditions
-
-<a id="req-0233"></a>
-
-**REQ-0233.** Retired; see [REQ-0220](#req-0220).
 
 <a id="req-0234"></a>
 

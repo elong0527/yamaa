@@ -164,10 +164,6 @@ follows dependency order.
 
 ## Error conditions
 
-<a id="req-0063"></a>
-
-**REQ-0063.** Retired; see [REQ-0034](#req-0034).
-
 <a id="req-0064"></a>
 
 **REQ-0064.** A specification with no `rows` entry and no default input

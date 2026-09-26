@@ -111,18 +111,3 @@ each term. [Source ingestion](../storage/ingestion.md) fixes source-field types;
 | `order_term_class.variable` | Variable used as an ordering term. |
 | `order_term_class.direction` | Sort direction for non-missing values. |
 | `order_term_class.nulls` | Placement of missing values, independent of direction. |
-
-## Error conditions
-
-<a id="req-0235"></a>
-
-**REQ-0235.** Retired; [REQ-0220](../storage/publication.md#req-0220)
-governs output keys.
-
-<a id="req-0236"></a>
-
-**REQ-0236.** Retired; see [REQ-0224](#req-0224).
-
-<a id="req-0237"></a>
-
-**REQ-0237.** Retired; see [REQ-0224](#req-0224).

@@ -300,11 +300,6 @@ double for the written formula.
 
 ## Error conditions
 
-<a id="req-0335"></a>
-
-**REQ-0335.** Retired; the applicable failure conditions in this contract
-govern an invalid `compute` expression.
-
 <a id="req-0439"></a>
 
 **REQ-0439.** A `numeric_expression` that does not parse under the grammar:

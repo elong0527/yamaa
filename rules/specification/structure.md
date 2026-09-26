@@ -24,10 +24,6 @@ may declare that relationship.
 
 ### Column coverage
 
-<a id="req-0197"></a>
-
-**REQ-0197.** Retired. A column-level derivation is the column's default derivation, stated once in [REQ-0199](#req-0199). This identifier is never reused.
-
 <a id="req-0198"></a>
 
 **REQ-0198.** Every declared column must be derived. A column with no
@@ -92,11 +88,6 @@ naming its column fails as `duplicate_derivation`.
 does not publish. They do not change evaluation. [Execution lifecycle](../execution/lifecycle.md) builds one dependency
 graph over all declared columns regardless of `output`, and an output column
 may depend on an internal one.
-
-<a id="req-0207"></a>
-
-**REQ-0207.** Retired; [REQ-0220](../storage/publication.md#req-0220)
-governs output keys.
 
 <a id="req-0208"></a>
 
@@ -198,26 +189,3 @@ under this contract. A non-ASCII source byte fails validation with
 | Field | Meaning |
 | --- | --- |
 | `identifier` | Single-token identifier; the field's own description states which naming list it belongs to (a declared dataset, a declared column, a standard, a document, a function, or similar). |
-
-## Error conditions
-
-<a id="req-0229"></a>
-
-**REQ-0229.** Retired; see [REQ-0198](#req-0198).
-
-<a id="req-0230"></a>
-
-**REQ-0230.** Retired; [REQ-1260](#req-1260) governs column and row phase
-derivation overlap.
-
-<a id="req-0231"></a>
-
-**REQ-0231.** Retired; see [REQ-0200](#req-0200).
-
-<a id="req-0232"></a>
-
-**REQ-0232.** Retired; see [REQ-0202](#req-0202).
-
-<a id="req-0713"></a>
-
-**REQ-0713.** Retired; see [REQ-0705](#req-0705).

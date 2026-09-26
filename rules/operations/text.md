@@ -557,14 +557,6 @@ or unmatched brace.
 
 **REQ-0462.** A placeholder that does not bind: fail under [Execution lifecycle](../execution/lifecycle.md) and [Name binding](../specification/binding.md).
 
-<a id="req-0463"></a>
-
-**REQ-0463.** Retired; see [REQ-0458](#req-0458).
-
-<a id="req-0464"></a>
-
-**REQ-0464.** Retired; see [REQ-0459](#req-0459).
-
 ### Errors
 
 <a id="req-0714"></a>
@@ -580,10 +572,6 @@ validation with `ambiguous_dictionary`.
   the three consumers: fail validation with `invalid_regex` and report the
   declaring path and the rejection. A pattern is rejected the same way
   whether its syntax is malformed or merely outside the portable grammar.
-
-<a id="req-0828"></a>
-
-**REQ-0828.** Retired; see [REQ-0816](#req-0816).
 
 <a id="req-0829"></a>
 

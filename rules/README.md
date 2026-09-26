@@ -83,19 +83,19 @@ Requirements are defined once as `**REQ-0001.**`. IDs remain valid across file
 moves and section reordering. Allocate the next unused number, never renumber
 an existing requirement, and never reuse a retired identifier. Normative
 `must`, `must not`, `should`, and `may` have their usual requirement meanings.
-Every contract has Requirements and Error conditions. Topic subsections group
-related rules. A retired ID remains as a short pointer to its governing rule
-so historical citations continue to resolve without repeating the policy.
+Every contract has Requirements; contracts with distinct failure rules also
+have Error conditions. Topic subsections group related rules. Retired IDs have
+no rule blocks and are never reused.
 
-[migration.yaml](migration.yaml) resolves every former `RNNN-n` citation to
-one or more canonical requirements and records schema-prose provenance. It is
-not a second semantic contract.
+[migration.yaml](migration.yaml) tracks former `RNNN-n` citations, retired
+IDs and their replacements where one exists, and schema-prose provenance. It
+is not a second semantic contract.
 
-The generated [requirement index](reference/requirements.md) links each ID
+The generated [requirement index](reference/requirements.md) links each active ID
 and its historical aliases to the current owner.
 
 Old diagnostic families (`R001`, etc.) in the validation-condition registry
-remain compatibility names for their registered conditions. Their requirement
+remain compatibility names for their registered conditions. Active requirement
 citations resolve through the same map. New author-facing citations use REQ IDs.
 
 [Schema fields](reference/schema-fields.md) is generated from the current

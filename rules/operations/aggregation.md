@@ -462,11 +462,6 @@ context: fail.
 **REQ-0331.** A grouped-row aggregate naming a dataset other than its
 row template's input dataset or declaring its own `group_by`: fail.
 
-<a id="req-0332"></a>
-
-**REQ-0332.** Retired; the applicable failure conditions in this contract
-govern an invalid `aggregate` expression.
-
 <a id="req-0499"></a>
 
 **REQ-0499.** An `aggregate_expression` that does not parse under this grammar:

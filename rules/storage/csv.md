@@ -290,10 +290,6 @@ delivers, not of which library produced it.
 
 ### Writing: Errors
 
-<a id="req-0761"></a>
-
-**REQ-0761.** Retired; see [REQ-0744](#req-0744).
-
 <a id="req-0762"></a>
 
 **REQ-0762.** An `output.decimals` declared on a path the mapping resolves to

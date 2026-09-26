@@ -1136,7 +1136,7 @@ requirements:
   REQ-0060: {"file": "execution/lifecycle.md", "sources": ["R001-28"]}
   REQ-0061: {"file": "execution/lifecycle.md", "sources": ["R001-29"]}
   REQ-0062: {"file": "storage/publication.md", "sources": ["R001-31"]}
-  REQ-0063: {"file": "execution/rows.md", "sources": ["R001-32"]}
+  REQ-0063: {"file": "execution/rows.md", "sources": ["R001-32"], "retired": true, "replacement": ["REQ-0034"]}
   REQ-0064: {"file": "execution/rows.md", "sources": ["R001-33"]}
   REQ-0065: {"file": "execution/rows.md", "sources": ["R001-34"]}
   REQ-0066: {"file": "execution/rows.md", "sources": ["R001-35"]}
@@ -1146,7 +1146,7 @@ requirements:
   REQ-0070: {"file": "execution/lifecycle.md", "sources": ["R001-39"]}
   REQ-0071: {"file": "execution/lifecycle.md", "sources": ["R001-40"]}
   REQ-0072: {"file": "execution/lifecycle.md", "sources": ["R001-41"]}
-  REQ-0073: {"file": "execution/lifecycle.md", "sources": ["R001-42"]}
+  REQ-0073: {"file": "execution/lifecycle.md", "sources": ["R001-42"], "retired": true, "replacement": ["REQ-0033"]}
   REQ-0074: {"file": "execution/lifecycle.md", "sources": ["R001-43"]}
   REQ-0075: {"file": "execution/lifecycle.md", "sources": ["R001-44"]}
   REQ-0076: {"file": "specification/binding.md", "sources": ["R002-1"]}
@@ -1177,7 +1177,7 @@ requirements:
   REQ-0101: {"file": "specification/binding.md", "sources": ["R002-25"]}
   REQ-0102: {"file": "specification/binding.md", "sources": ["R002-26"]}
   REQ-0103: {"file": "specification/binding.md", "sources": ["R002-27"]}
-  REQ-0104: {"file": "specification/binding.md", "sources": ["R002-28"]}
+  REQ-0104: {"file": "specification/binding.md", "sources": ["R002-28"], "retired": true, "replacement": ["REQ-0080"]}
   REQ-0105: {"file": "specification/binding.md", "sources": ["R002-29"]}
   REQ-0106: {"file": "specification/binding.md", "sources": ["R002-30"]}
   REQ-0107: {"file": "specification/binding.md", "sources": ["R002-31"]}
@@ -1243,7 +1243,7 @@ requirements:
   REQ-0167: {"file": "operations/predicates.md", "sources": ["R004-10"]}
   REQ-0168: {"file": "operations/predicates.md", "sources": ["R004-11"]}
   REQ-0169: {"file": "operations/predicates.md", "sources": ["R004-12"]}
-  REQ-0170: {"file": "operations/predicates.md", "sources": ["R004-13"]}
+  REQ-0170: {"file": "operations/predicates.md", "sources": ["R004-13"], "retired": true, "replacement": ["REQ-0166"]}
   REQ-0171: {"file": "operations/predicates.md", "sources": ["R004-14"]}
   REQ-0172: {"file": "operations/predicates.md", "sources": ["R004-15"]}
   REQ-0173: {"file": "operations/predicates.md", "sources": ["R004-16"]}
@@ -1269,7 +1269,7 @@ requirements:
   REQ-0193: {"file": "storage/publication.md", "sources": ["R005-1"]}
   REQ-0195: {"file": "storage/publication.md", "sources": ["R005-3"]}
   REQ-0196: {"file": "specification/structure.md", "sources": ["R005-4"]}
-  REQ-0197: {"file": "specification/structure.md", "sources": ["R005-5", "R005-15"]}
+  REQ-0197: {"file": "specification/structure.md", "sources": ["R005-5", "R005-15"], "retired": true, "replacement": ["REQ-0199"]}
   REQ-0198: {"file": "specification/structure.md", "sources": ["R005-6"]}
   REQ-0199: {"file": "specification/structure.md", "sources": ["R005-7"]}
   REQ-0200: {"file": "specification/structure.md", "sources": ["R005-8"]}
@@ -1278,7 +1278,7 @@ requirements:
   REQ-0204: {"file": "specification/structure.md", "sources": ["R005-12"]}
   REQ-0205: {"file": "storage/publication.md", "sources": ["R005-13"]}
   REQ-0206: {"file": "specification/structure.md", "sources": ["R005-14"]}
-  REQ-0207: {"file": "specification/structure.md", "sources": ["R005-16"]}
+  REQ-0207: {"file": "specification/structure.md", "sources": ["R005-16"], "retired": true, "replacement": ["REQ-0220"]}
   REQ-0208: {"file": "specification/structure.md", "sources": ["R005-17"]}
   REQ-0209: {"file": "specification/structure.md", "sources": ["R005-18"]}
   REQ-0210: {"file": "storage/publication.md", "sources": ["R005-19"]}
@@ -1300,15 +1300,15 @@ requirements:
   REQ-0226: {"file": "execution/ordering.md", "sources": ["R005-37"]}
   REQ-0227: {"file": "specification/structure.md", "sources": ["R005-38"]}
   REQ-0228: {"file": "specification/structure.md", "sources": ["R005-39"]}
-  REQ-0229: {"file": "specification/structure.md", "sources": ["R005-40"]}
-  REQ-0230: {"file": "specification/structure.md", "sources": ["R005-41"]}
-  REQ-0231: {"file": "specification/structure.md", "sources": ["R005-42"]}
-  REQ-0232: {"file": "specification/structure.md", "sources": ["R005-43"]}
-  REQ-0233: {"file": "storage/publication.md", "sources": ["R005-44"]}
+  REQ-0229: {"file": "specification/structure.md", "sources": ["R005-40"], "retired": true, "replacement": ["REQ-0198"]}
+  REQ-0230: {"file": "specification/structure.md", "sources": ["R005-41"], "retired": true, "replacement": ["REQ-1260"]}
+  REQ-0231: {"file": "specification/structure.md", "sources": ["R005-42"], "retired": true, "replacement": ["REQ-0200"]}
+  REQ-0232: {"file": "specification/structure.md", "sources": ["R005-43"], "retired": true, "replacement": ["REQ-0202"]}
+  REQ-0233: {"file": "storage/publication.md", "sources": ["R005-44"], "retired": true, "replacement": ["REQ-0220"]}
   REQ-0234: {"file": "storage/publication.md", "sources": ["R005-45"]}
-  REQ-0235: {"file": "execution/ordering.md", "sources": ["R005-46"]}
-  REQ-0236: {"file": "execution/ordering.md", "sources": ["R005-47"]}
-  REQ-0237: {"file": "execution/ordering.md", "sources": ["R005-48"]}
+  REQ-0235: {"file": "execution/ordering.md", "sources": ["R005-46"], "retired": true, "replacement": ["REQ-0220"]}
+  REQ-0236: {"file": "execution/ordering.md", "sources": ["R005-47"], "retired": true, "replacement": ["REQ-0224"]}
+  REQ-0237: {"file": "execution/ordering.md", "sources": ["R005-48"], "retired": true, "replacement": ["REQ-0224"]}
   REQ-0238: {"file": "storage/publication.md", "sources": ["R005-49"]}
   REQ-0239: {"file": "storage/publication.md", "sources": ["R005-50"]}
   REQ-0240: {"file": "storage/publication.md", "sources": ["R005-51"]}
@@ -1403,10 +1403,10 @@ requirements:
   REQ-0329: {"file": "operations/aggregation.md", "sources": ["R007-44"]}
   REQ-0330: {"file": "operations/aggregation.md", "sources": ["R007-45"]}
   REQ-0331: {"file": "operations/aggregation.md", "sources": ["R007-46"]}
-  REQ-0332: {"file": "operations/aggregation.md", "sources": ["R007-47"]}
+  REQ-0332: {"file": "operations/aggregation.md", "sources": ["R007-47"], "retired": true, "replacement": []}
   REQ-0333: {"file": "operations/lookup.md", "sources": ["R007-48"]}
   REQ-0334: {"file": "execution/handlers.md", "sources": ["R007-49"]}
-  REQ-0335: {"file": "operations/computation.md", "sources": ["R007-50"]}
+  REQ-0335: {"file": "operations/computation.md", "sources": ["R007-50"], "retired": true, "replacement": []}
   REQ-0336: {"file": "operations/text.md", "sources": ["R007-51"]}
   REQ-0337: {"file": "operations/temporal.md", "sources": ["R007-52"]}
   REQ-0338: {"file": "operations/functions.md", "sources": ["R007-53"]}
@@ -1534,8 +1534,8 @@ requirements:
   REQ-0460: {"file": "operations/text.md", "sources": ["R012-15"]}
   REQ-0461: {"file": "operations/text.md", "sources": ["R012-16"]}
   REQ-0462: {"file": "operations/text.md", "sources": ["R012-17"]}
-  REQ-0463: {"file": "operations/text.md", "sources": ["R012-18"]}
-  REQ-0464: {"file": "operations/text.md", "sources": ["R012-19"]}
+  REQ-0463: {"file": "operations/text.md", "sources": ["R012-18"], "retired": true, "replacement": ["REQ-0458"]}
+  REQ-0464: {"file": "operations/text.md", "sources": ["R012-19"], "retired": true, "replacement": ["REQ-0459"]}
   REQ-0465: {"file": "operations/aggregation.md", "sources": ["R013-1"]}
   REQ-0466: {"file": "operations/aggregation.md", "sources": ["R013-2"]}
   REQ-0467: {"file": "operations/aggregation.md", "sources": ["R013-3", "R007-9", "R007-10"]}
@@ -1780,13 +1780,13 @@ requirements:
   REQ-0710: {"file": "operations/text.md", "sources": ["R019-15"]}
   REQ-0711: {"file": "operations/text.md", "sources": ["R019-16"]}
   REQ-0712: {"file": "operations/text.md", "sources": ["R019-17"]}
-  REQ-0713: {"file": "specification/structure.md", "sources": ["R019-20"]}
+  REQ-0713: {"file": "specification/structure.md", "sources": ["R019-20"], "retired": true, "replacement": ["REQ-0705"]}
   REQ-0714: {"file": "operations/text.md", "sources": ["R019-22"]}
   REQ-0715: {"file": "storage/publication.md", "sources": ["R020-1"]}
   REQ-0716: {"file": "storage/publication.md", "sources": ["R020-2"]}
-  REQ-0717: {"file": "storage/publication.md", "sources": ["R020-3"]}
-  REQ-0718: {"file": "storage/publication.md", "sources": ["R020-4"]}
-  REQ-0719: {"file": "storage/publication.md", "sources": ["R020-5"]}
+  REQ-0717: {"file": "storage/publication.md", "sources": ["R020-3"], "retired": true, "replacement": ["REQ-0716"]}
+  REQ-0718: {"file": "storage/publication.md", "sources": ["R020-4"], "retired": true, "replacement": ["REQ-0716"]}
+  REQ-0719: {"file": "storage/publication.md", "sources": ["R020-5"], "retired": true, "replacement": ["REQ-0716"]}
   REQ-0720: {"file": "storage/publication.md", "sources": ["R020-6"]}
   REQ-0721: {"file": "storage/publication.md", "sources": ["R020-7"]}
   REQ-0722: {"file": "storage/csv.md", "sources": ["R020-8"]}
@@ -1803,7 +1803,7 @@ requirements:
   REQ-0733: {"file": "storage/csv.md", "sources": ["R020-19"]}
   REQ-0734: {"file": "storage/parquet.md", "sources": ["R020-20"]}
   REQ-0735: {"file": "storage/parquet.md", "sources": ["R020-21"]}
-  REQ-0736: {"file": "storage/parquet.md", "sources": ["R020-22"]}
+  REQ-0736: {"file": "storage/parquet.md", "sources": ["R020-22"], "retired": true, "replacement": ["REQ-1034"]}
   REQ-0737: {"file": "storage/parquet.md", "sources": ["R020-23"]}
   REQ-0738: {"file": "storage/parquet.md", "sources": ["R020-24"]}
   REQ-0739: {"file": "storage/parquet.md", "sources": ["R020-25"]}
@@ -1828,7 +1828,7 @@ requirements:
   REQ-0758: {"file": "storage/publication.md", "sources": ["R020-52"]}
   REQ-0759: {"file": "storage/publication.md", "sources": ["R020-42"]}
   REQ-0760: {"file": "storage/publication.md", "sources": ["R020-43"]}
-  REQ-0761: {"file": "storage/csv.md", "sources": ["R020-44"]}
+  REQ-0761: {"file": "storage/csv.md", "sources": ["R020-44"], "retired": true, "replacement": ["REQ-0744"]}
   REQ-0762: {"file": "storage/csv.md", "sources": ["R020-45"]}
   REQ-0763: {"file": "storage/publication.md", "sources": ["R020-46"]}
   REQ-0764: {"file": "storage/publication.md", "sources": ["R020-47"]}
@@ -1895,7 +1895,7 @@ requirements:
   REQ-0825: {"file": "operations/text.md", "sources": ["R022-33"]}
   REQ-0826: {"file": "operations/text.md", "sources": ["R022-34"]}
   REQ-0827: {"file": "operations/text.md", "sources": ["R022-27"]}
-  REQ-0828: {"file": "operations/text.md", "sources": ["R022-28"]}
+  REQ-0828: {"file": "operations/text.md", "sources": ["R022-28"], "retired": true, "replacement": ["REQ-0816"]}
   REQ-0829: {"file": "operations/text.md", "sources": ["R022-29"]}
   REQ-0830: {"file": "storage/ingestion.md", "sources": ["R023-1"]}
   REQ-0831: {"file": "storage/ingestion.md", "sources": ["R023-2"]}
@@ -2264,7 +2264,7 @@ requirements:
   REQ-1234: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:profile-admission"]}
   REQ-1235: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-value-model", "yamaa:issue-1051:req-1236-retired"]}
   REQ-1237: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-packaging"]}
-  REQ-1238: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-extension-error"]}
+  REQ-1238: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-extension-error"], "retired": true, "replacement": ["REQ-0760"]}
   REQ-1239: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.locf.source.description", "schema_expression_window.yaml:expressions.locf.window.description"]}
   REQ-1240: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_sentence.source.description", "schema_expression_str.yaml:expressions.str_sentence.missing.description"]}
   REQ-1241: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_title.source.description", "schema_expression_str.yaml:expressions.str_title.missing.description"]}
