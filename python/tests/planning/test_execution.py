@@ -750,6 +750,179 @@ def test_a_grouped_filter_naming_a_qualified_variable_is_rejected() -> None:
     assert raised.value.diagnostics[0].condition == "phase_boundary"
 
 
+def test_an_ungrouped_filter_reads_the_columns_that_template_derives() -> None:
+    # REQ-0068 (relaxed): an ungrouped filter evaluates after the record's
+    # derivations and reads derived columns.
+    spec = specification(
+        [Column(name="A", type="str")],
+        [
+            Row(
+                id="row",
+                filter="A = 'one'",
+                derivations={"A": derivation({"source": "SRC.X"})},
+            )
+        ],
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    assert plan.rows[0].filter_path == "rows[0].filter"
+    assert plan.rows[0].filter_predicate is not None
+
+
+def test_an_ungrouped_filter_reads_a_named_intermediate() -> None:
+    # REQ-0068 (relaxed): an ungrouped filter reads named-intermediate
+    # lookup state through a qualified name.
+    spec = two_dataset_specification([Column(name="K", type="str")]).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.X"], key=["X"])
+            ],
+            "rows": [
+                Row(
+                    id="row",
+                    dataset="SRC",
+                    filter="LOOK.V = 1.0",
+                    derivations={"K": derivation({"source": "SRC.X"})},
+                )
+            ],
+        }
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert plan.rows[0].filter_path == "rows[0].filter"
+    assert plan.rows[0].filter_predicate is not None
+
+
+def test_an_ungrouped_filter_promotes_the_named_column_to_row_phase() -> None:
+    # REQ-0068 (relaxed): a filter-named column with a column-level
+    # derivation becomes a row-phase default of the template.
+    spec = specification(
+        [
+            Column(name="K", type="str"),
+            Column(name="D", type="str", derivation=derivation({"source": "SRC.X"})),
+        ],
+        [
+            Row(
+                id="row",
+                filter="D = 'one'",
+                derivations={"K": derivation({"source": "SRC.X"})},
+            )
+        ],
+    )
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    (row_plan,) = plan.rows
+    by_column = {planned.column: planned for planned in row_plan.derivations}
+    assert by_column["D"].path == "columns.D.derivation"
+
+
+def test_an_ungrouped_filter_naming_an_underived_column_is_rejected() -> None:
+    # REQ-0068: a bare identifier the template does not derive is still a
+    # phase boundary for an ungrouped filter.
+    spec = specification(
+        [Column(name="A", type="str"), Column(name="B", type="str")],
+        [
+            Row(
+                id="row",
+                filter="B = 'one'",
+                derivations={"A": derivation({"source": "SRC.X"})},
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    diagnostic = next(
+        diagnostic
+        for diagnostic in raised.value.diagnostics
+        if diagnostic.condition == "phase_boundary"
+    )
+    assert diagnostic.context["identifier"] == "B"
+    assert diagnostic.context["required_phase"] == "row_filter"
+
+
+def test_an_ungrouped_filter_naming_a_window_column_is_rejected() -> None:
+    # REQ-0068: an ungrouped filter evaluates before the window pass, so it
+    # cannot name a window-derived column.
+    spec = specification(
+        [Column(name="A", type="str"), Column(name="W", type="str")],
+        [
+            Row(
+                id="row",
+                filter="W = 'one'",
+                derivations={
+                    "A": derivation({"source": "SRC.X"}),
+                    "W": derivation(
+                        {
+                            "row_value": {
+                                "source": "A",
+                                "offset": -1,
+                                "window": {"order_by": ["A"]},
+                            }
+                        }
+                    ),
+                },
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "phase_boundary"
+    assert diagnostic.context["identifier"] == "W"
+    assert diagnostic.context["available_phase"] == "window_derivation"
+    assert diagnostic.context["required_phase"] == "row_filter"
+
+
+def test_an_ungrouped_filter_naming_a_window_dependent_column_is_rejected() -> None:
+    # REQ-0068: ... nor a column whose derivation reads a window result.
+    spec = specification(
+        [
+            Column(name="A", type="str"),
+            Column(name="W", type="str"),
+            Column(name="T", type="str"),
+        ],
+        [
+            Row(
+                id="row",
+                filter="T = 'one'",
+                derivations={
+                    "A": derivation({"source": "SRC.X"}),
+                    "W": derivation(
+                        {
+                            "row_value": {
+                                "source": "A",
+                                "offset": -1,
+                                "window": {"order_by": ["A"]},
+                            }
+                        }
+                    ),
+                    "T": derivation({"source": "W"}),
+                },
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "phase_boundary"
+    assert diagnostic.context["identifier"] == "T"
+    assert diagnostic.context["available_phase"] == "window_derivation"
+    assert diagnostic.context["required_phase"] == "row_filter"
+
+
 def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     spec = specification(
         [

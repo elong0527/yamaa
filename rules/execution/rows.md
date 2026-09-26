@@ -25,8 +25,11 @@ fails validation.
 <a id="req-0036"></a>
 
 **REQ-0036.** A row template without `group_by` is record-driven. Its
-   `filter`, when present, evaluates against each input record before any
-   row derivation. Every retained input record produces one candidate row.
+   `filter`, when present, evaluates against each input record's candidate
+   row after that record's derivations that do not read a window result.
+   The `filter` reads the candidate's derived columns and lookup state.
+   Every input record whose `filter` is `TRUE` produces one candidate row;
+   `FALSE` or `UNKNOWN` discards the record before the window pass.
 
 <a id="req-0037"></a>
 
@@ -44,7 +47,8 @@ once and complete stages 1 to 3 of the [Execution lifecycle](lifecycle.md).
 Then evaluate the row template's `filter`, when present, over the candidate's
 completed unqualified columns. Append the candidate only when the `filter` is
 `TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter`
-filters after a group reduction. An ungrouped `filter` filters input records.
+filters after a group reduction. An ungrouped `filter` gates each input
+record's candidate row after its derivations.
 
 <a id="req-0039"></a>
 
@@ -85,7 +89,7 @@ supplies the input records.
 <a id="req-0043"></a>
 
 **REQ-0043.** When `rows` is present, row templates construct the rows.
-Each row template is one section. A row template's `filter` keeps input records
+Each row template is one section. A row template's `filter` keeps candidate rows
 or candidate groups. Each retained input record or group yields one row.
 The sections concatenate in specification order. Row templates build rows
 finer than input records only as [REQ-0040](rows.md#req-0040) permits. The built rows must
@@ -101,7 +105,8 @@ per key combination. The specification omits `rows` instead.
 root: it selects base input records for row construction when `rows` is
 absent, before the [REQ-0042](rows.md#req-0042) distinct-keys step. It reads
 the base driver: the declared `base`, or the single declared dataset when
-`base` is omitted. Its scope matches an ungrouped row template's `filter`.
+`base` is omitted. Unlike an ungrouped row template's `filter`, it reads
+only the base driver's fields: it evaluates before any derivation.
 Like any row template filter, it states which rows the artifact carries,
 never which input the column derivations read.
 
@@ -157,7 +162,7 @@ follows dependency order.
 | `row_class.id` | Identifier of this row template, unique within rows. |
 | `row_class.dataset` | Input dataset whose records build this entry's output rows; required when more than one dataset is declared. |
 | `row_class.group_by` | Grouping keys over input records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
-| `row_class.filter` | Predicate selecting input records for an ungrouped row template or completed candidate groups for a grouped row template. |
+| `row_class.filter` | Predicate gating each input record's candidate row for an ungrouped row template, or completed candidate groups for a grouped row template. |
 | `row_class.derivations` | Columns this row template derives; [Specification structure](../specification/structure.md) owns coverage across row templates. |
 | `row_class.catalog` | Fixed CSV catalog expanded into ordinary row templates under [REQ-1249](rows.md#req-1249). |
 | `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
@@ -186,7 +191,11 @@ follows dependency order.
 
 <a id="req-0068"></a>
 
-**REQ-0068.** An ungrouped `row.filter` naming an output column, or a grouped
+**REQ-0068.** An ungrouped `row.filter` reads the candidate row's derived
+  columns and lookup state. An ungrouped `row.filter` naming a column the
+  row template does not derive: fail. A filter naming a column whose
+  derivation reads a window result fails validation: the filter evaluates
+  before the window pass, so no window result is available to it. A grouped
   `row.filter` naming a qualified variable or a column not derived by that
   row template: fail.
 

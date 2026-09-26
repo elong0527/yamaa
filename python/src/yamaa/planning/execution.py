@@ -4366,9 +4366,11 @@ def _row_phase_default_columns(
             )
             referenced.update(donor_reads(found))
             referenced.update(match_reads(found))
-        if row.group_by is not None and row.filter is not None:
-            # REQ-0068: a grouped filter reads the candidate's completed
-            # columns; an ungrouped filter reads no output column at all.
+        if row.filter is not None:
+            # REQ-0068: a row template filter reads the candidate's columns:
+            # completed columns for a grouped template, derived columns and
+            # lookup state for an ungrouped one. Bare identifiers are
+            # row-phase reads either way.
             try:
                 filter_ast = parse_predicate(row.filter)
             except PredicateError:
@@ -4621,19 +4623,6 @@ def plan_execution(
                                 diagnostics,
                                 intermediates=intermediates,
                             )
-                    elif not grouped:
-                        diagnostics.append(
-                            _diagnostic(
-                                "phase_boundary",
-                                path,
-                                {
-                                    "identifier": identifier,
-                                    "row": row.id,
-                                    "available_phase": "column_derivation",
-                                    "required_phase": "row_filter",
-                                },
-                            )
-                        )
 
             derivations: dict[str, PlannedDerivation] = {}
             for name in column_order:
@@ -4705,6 +4694,46 @@ def plan_execution(
                     )
                     for identifier in filter_names
                     if "." not in identifier and identifier not in row_names
+                )
+            else:
+                # REQ-0068: an ungrouped filter evaluates before the window
+                # pass, so a bare identifier must name a column this row
+                # template derives without reading a window result.
+                deferred_columns: set[str] = set()
+                if filter_names:
+                    deferred_columns = {
+                        name
+                        for name, planned in derivations.items()
+                        if planned.declaration.value.operation in WINDOW_OPERATIONS
+                    }
+                    changed = True
+                    while changed:
+                        changed = False
+                        for name, planned in derivations.items():
+                            if (
+                                name not in deferred_columns
+                                and set(planned.dependencies) & deferred_columns
+                            ):
+                                deferred_columns.add(name)
+                                changed = True
+                diagnostics.extend(
+                    _diagnostic(
+                        "phase_boundary",
+                        filter_path or f"rows[{index}].filter",
+                        {
+                            "identifier": identifier,
+                            "row": row.id,
+                            "available_phase": (
+                                "window_derivation"
+                                if identifier in deferred_columns
+                                else "column_derivation"
+                            ),
+                            "required_phase": "row_filter",
+                        },
+                    )
+                    for identifier in filter_names
+                    if "." not in identifier
+                    and (identifier not in row_names or identifier in deferred_columns)
                 )
             for name, planned in derivations.items():
                 for reference in row_references[(index, name)]:
