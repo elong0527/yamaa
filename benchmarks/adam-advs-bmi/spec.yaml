@@ -67,6 +67,13 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
+  - row_count:
+      min: 24
+      max: 24
+  - implies:
+      id: bmi-empty-only-without-usable-height
+      when: "PARAMCD = 'BMI' AND AVAL IS NULL"
+      then: "HEIGHTBL IS NULL OR HEIGHTBL = 0"
   - assert:
       id: check-height-unit
       expr: "PARAMCD <> 'HEIGHT' OR PARAM = 'Height (cm)'"
