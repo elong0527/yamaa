@@ -812,7 +812,8 @@ def test_key_base_expression_plans_with_synthetic_name() -> None:
     assert planned.dependencies == ("A",)
 
 
-def test_key_base_expression_type_mismatch_fails() -> None:
+@pytest.mark.parametrize("operation", ["str_upper", "to_date"])
+def test_key_base_expression_type_mismatch_fails(operation: str) -> None:
     # REQ-1259: a statically known expression result type checks against the
     # donor key type with the existing comparability rules.
     int_table = frame_from_values(
@@ -830,7 +831,7 @@ def test_key_base_expression_type_mismatch_fails() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"str_upper": {"source": "A"}}],
+                    key_base=[{operation: {"source": "A"}}],
                     key=["X"],
                 )
             ]
@@ -841,10 +842,52 @@ def test_key_base_expression_type_mismatch_fails() -> None:
         plan_execution(
             spec,
             {"SRC": int_table},
-            supported_operations=("source", "literal", "mapping", "str_upper"),
+            supported_operations=("source", "literal", "mapping", operation),
         )
 
     assert raised.value.diagnostics[0].condition == "incompatible_input_type"
+
+
+def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
+    # REQ-0316 fixes baseline_flag's result as str, so REQ-1259 must reject
+    # its pairing with a numeric donor key during planning.
+    table = frame_from_values(
+        (
+            TypedColumn(name="X", type="str"),
+            TypedColumn(name="D", type="date"),
+            TypedColumn(name="N", type="int"),
+        ),
+        [["one", date(2024, 1, 15), 1]],
+    )
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="D", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="R", type="date", derivation=derivation({"source": "SRC.D"})),
+            Column(name="V", type="int", derivation=derivation({"source": "LOOK.N"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(
+                    id="LOOK",
+                    dataset="SRC",
+                    key_base=[{"baseline_flag": {"date": "D", "reference_date": "R"}}],
+                    key=["N"],
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": table})
+
+    assert any(
+        diagnostic.condition == "incompatible_input_type"
+        and diagnostic.context["expected"] == "str"
+        and diagnostic.context["actual"] == "int"
+        for diagnostic in raised.value.diagnostics
+    )
 
 
 def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:

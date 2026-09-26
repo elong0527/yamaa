@@ -805,11 +805,12 @@ def _key_base_entries(
     return None
 
 
-# REQ-1259: operations whose result type is statically known, for the
-# REQ-0118 comparability check on key_base expressions. Operations absent
-# here (or whose result depends on their inputs) defer the check to the
-# runtime, which compares values, not declared types.
+# REQ-1259: fixed-result operations in the rule's closed static-type table,
+# for the REQ-0118 comparability check on key_base expressions. `source` and
+# `literal` take their types from their payloads below. Operations absent
+# here defer the check to runtime comparison of values.
 _KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
+    "baseline_flag": "str",
     "cut": "str",
     "date_diff": "int",
     "date_impute": "date",
