@@ -6,22 +6,6 @@ status: normative
 
 # Define-XML
 
-## Purpose
-
-Compose study metadata into deterministic Define-XML 2.1 documents.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Schema language](../reference/schema-language.md).
-- [Specification structure](../specification/structure.md).
-- [Artifact publication](../storage/publication.md).
-- [Dataset-JSON](dataset-json.md).
-- [Submission metadata](metadata.md).
-- [Controlled terminology](terminology.md).
-- [Temporal values](../values/temporal.md).
-
 ## Requirements
 
 ### The study document
@@ -604,8 +588,7 @@ has no generated form.
 
 <a id="req-1061"></a>
 
-**REQ-1061.** The `define_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1061.** The `define_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -629,8 +612,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1062"></a>
 
-**REQ-1062.** The `study_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1062.** The `study_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -641,8 +623,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1063"></a>
 
-**REQ-1063.** The `metadata_version_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1063.** The `metadata_version_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -652,8 +633,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1064"></a>
 
-**REQ-1064.** The `standard_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1064.** The `standard_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -666,8 +646,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1065"></a>
 
-**REQ-1065.** The `document_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1065.** The `document_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -678,8 +657,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1066"></a>
 
-**REQ-1066.** The `define_dataset_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1066.** The `define_dataset_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -691,8 +669,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1067"></a>
 
-**REQ-1067.** The `define_output_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1067.** The `define_output_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -700,8 +677,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1068"></a>
 
-**REQ-1068.** The `define_id` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1068.** The `define_id` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -709,8 +685,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1069"></a>
 
-**REQ-1069.** The `define_version` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1069.** The `define_version` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -718,8 +693,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1070"></a>
 
-**REQ-1070.** The `relative_href` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1070.** The `relative_href` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -727,8 +701,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1071"></a>
 
-**REQ-1071.** The `define_path` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1071.** The `define_path` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -736,8 +709,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1072"></a>
 
-**REQ-1072.** The `creation_datetime` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1072.** The `creation_datetime` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -745,8 +717,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1073"></a>
 
-**REQ-1073.** The `language_tag` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1073.** The `language_tag` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -754,8 +725,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1074"></a>
 
-**REQ-1074.** The `standard_name` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1074.** The `standard_name` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -763,8 +733,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1075"></a>
 
-**REQ-1075.** The `module` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1075.** The `module` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -846,14 +815,3 @@ schema: fail and report the schema violation. The run publishes nothing.
 
 **REQ-1027.** A failed publication: fail and report the target, exactly as
 [Artifact publication](../storage/publication.md) does. The previous document is unchanged.
-
-## Conformance examples
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Compose study metadata into deterministic Define-XML 2.1 documents. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

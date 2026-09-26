@@ -6,24 +6,6 @@ status: normative
 
 # Predicates
 
-## Purpose
-
-Evaluate the closed Boolean language using three-valued logic.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Verification](../execution/verification.md).
-- [Numeric computation](computation.md).
-- [Lookup and joins](lookup.md).
-- [Name binding](../specification/binding.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
-
 ## Requirements
 
 ### Predicate sites and results
@@ -313,20 +295,3 @@ evaluate the grammar itself.
 
 **REQ-0192.** A temporal literal that [Temporal values](../values/temporal.md) rejects: fail with [Temporal values](../values/temporal.md)'s
   applicable temporal condition.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-review-arithmetic](../../benchmarks/negative-review-arithmetic/README.md).
-- [negative-review-date-text](../../benchmarks/negative-review-date-text/README.md).
-- [negative-review-unknown-date](../../benchmarks/negative-review-unknown-date/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Evaluate the closed Boolean language using three-valued logic. This topic lets
-other owners refer to one policy.

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Tests for check_rationale_phrases.py.
 
-Rationale phrases (because, in order to, the reason is, this ensures,
-so that, to ensure) belong in contract Rationale sections only. Everywhere
-else the rules must state what is expected, not why.
+Rules state expected behavior without rationale phrases (because, in order to,
+the reason is, this ensures, so that, to ensure).
 """
 
 import tempfile
@@ -62,7 +61,7 @@ class RationalePhraseTests(unittest.TestCase):
         )
         self.assertEqual(self.errors(), [])
 
-    def test_rationale_section_is_excluded(self):
+    def test_every_prose_section_is_checked(self):
         self.write(
             "values/one.md",
             "# One\n\n"
@@ -74,9 +73,10 @@ class RationalePhraseTests(unittest.TestCase):
             "A column fails so that the failure is recorded.\n",
         )
         found = self.errors()
-        self.assertEqual(len(found), 2)
+        self.assertEqual(len(found), 3)
         self.assertTrue(all("values/one.md:5" in e for e in found[:1]))
-        self.assertTrue(all("values/one.md:13" in e for e in found[1:]))
+        self.assertIn("values/one.md:9", found[1])
+        self.assertIn("values/one.md:13", found[2])
 
     def test_fenced_code_is_excluded(self):
         self.write(

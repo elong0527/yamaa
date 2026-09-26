@@ -6,24 +6,6 @@ status: normative
 
 # Artifact publication
 
-## Purpose
-
-Select artifact columns and profiles and publish complete files atomically.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Verification](../execution/verification.md).
-- [Lookup and joins](../operations/lookup.md).
-- [Specification structure](../specification/structure.md).
-- [Source ingestion](ingestion.md).
-- [Text values](../values/text.md).
-- [Numeric values](../values/numbers.md).
-- [Temporal values](../values/temporal.md).
-- [Define-XML](../submission/define-xml.md).
-
 ## Requirements
 
 ### Dependency execution
@@ -74,7 +56,8 @@ column. Its entries select the artifact columns and control their order.
 
 **REQ-0220.** `keys` is an ordered list of columns named in
 `output.columns` and must name at least one. A column must not be listed
-twice.
+twice. Validation fails for an empty list, unknown or internal column, or
+repeated column, and reports the invalid name when present.
 
 <a id="req-0221"></a>
 
@@ -89,19 +72,16 @@ keys are used for enrichment and do not change the identity asserted here.
 
 <a id="req-0715"></a>
 
-**REQ-0715.** `output.path` names the primary file the specification produces. It
-is required: a specification that derives an artifact says what it produces,
-and there is no default name for one. `output.warning_log` and
+**REQ-0715.** `output.path` is required and names the primary file; it has no
+default. `output.warning_log` and
 `output.verification_log` name [Verification](../execution/verification.md)'s
 sidecars when the specification declares them.
 
 <a id="req-0716"></a>
 
-**REQ-0716.** The path's extension selects the profile. The mapping is closed, so
-an extension outside it names no profile and fails validation rather than
-falling back to one. The extension is matched without regard to case. A
-study that stores `ADSL.CSV` names the same container as one that stores
-`adsl.csv`. Two runtimes must not disagree about which.
+**REQ-0716.** The case-insensitive extension of `output.path` selects the
+profile from the closed mapping below. An unmapped extension fails validation;
+the run must not infer a profile from file contents or use a default.
 
 | Extension | Profile | Container | What two runtimes must agree on |
 |---|---|---|---|
@@ -110,29 +90,15 @@ study that stores `ADSL.CSV` names the same container as one that stores
 
 <a id="req-0717"></a>
 
-**REQ-0717.** One field carries both facts: a specification that produces
-an artifact needs a path regardless. A separate profile beside it could
-disagree with the name it writes -- an `adsl.csv` declared `parquet` is a file
-whose name lies about its contents. The cost is stated rather than hidden:
-renaming the artifact changes the container, so a rename is a change to the
-contract and not only to a filename.
+**REQ-0717.** Retired; [REQ-0716](#req-0716) governs profile selection.
 
 <a id="req-0718"></a>
 
-**REQ-0718.** Deriving is not guessing. The extension is read from the
-specification, where a reviewer sees it, against a closed mapping this contract
-fixes; an unrecognized extension stops the run. A reader that instead sniffed a
-file's contents, or accepted an unknown extension under a default, could read a
-conforming artifact wrongly without failing, and neither is permitted.
+**REQ-0718.** Retired; see [REQ-0716](#req-0716).
 
 <a id="req-0719"></a>
 
-**REQ-0719.** The two profiles exist for different readers. `parquet` is the
-production container: it carries its own types, so an artifact read by another
-specification needs no declaration to be understood, and a large one does not
-pay for decimal text. `csv` is the reviewable container: a human can read it, a
-diff can show what moved in it, and its bytes are fixed exactly, which is what
-makes it usable as a golden contract.
+**REQ-0719.** Retired; [REQ-0716](#req-0716) defines the two profiles.
 
 <a id="req-0720"></a>
 
@@ -142,11 +108,9 @@ link carries the whole producer document, not only the profile.
 
 <a id="req-0721"></a>
 
-**REQ-0721.** A later release that changes any byte-level or mapping decision
-below therefore changes what a profile means at that schema version, and an
-artifact keeps the meaning its producer's version gives it. A profile that ever
-has to diverge from the schema version is added as a name rather than by
-redefining one of these two.
+**REQ-0721.** A profile's byte and value mapping is fixed by its producer's
+`schema_version`. A mapping that diverges at the same schema version must use
+a new profile name.
 
 ### Containers the mapping does not admit
 
@@ -158,66 +122,29 @@ A profile must write [Text values](../values/text.md)'s
 Unicode scalar sequences, [Numeric values](../values/numbers.md)'s binary64
 floats and signed 64-bit integers, and [Temporal values](../values/temporal.md)'s
 dates and local civil datetimes, under the declared names
-[Specification structure](../specification/structure.md) admits. A container
-narrower than that is not admitted under a rule that truncates, re-encodes, or
-rounds on the way out: the same specification would then derive one dataset and
-publish another.
+[Specification structure](../specification/structure.md) admits. Truncation,
+re-encoding, and rounding are prohibited.
 
 <a id="req-1235"></a>
 
-**REQ-1235.** SAS Transport v5 (`.xpt`) is such a container, and this contract
-does not grow a profile for it. Its dataset and column names are eight
-uppercase ASCII characters and its labels forty, against declared names and
-labels this language does not bound; its character values are two hundred bytes
-of a single-byte encoding, against [REQ-0022](../values/text.md#req-0022)'s
-unbounded Unicode scalar sequence; it has no integer type, so a signed 64-bit
-integer past the exact range of the one 8-byte IBM hexadecimal float it stores
-every number in is changed; and it has no temporal type at all, so a date is a
-number whose meaning lives in a format name beside the value rather than in the
-value. Each of those is a value the language carries and the container does
-not.
+**REQ-1235.** SAS Transport v5 (`.xpt`) is not an output profile.
 
 <a id="req-1237"></a>
 
-**REQ-1237.** Converting a published artifact to a transport container is a
-packaging step outside this language, as
-[REQ-0988](../submission/define-xml.md#req-0988) already states for the
-document's `def:leaf`. A packaging tool reads an artifact under the profile
-that wrote it and answers the questions above against the submission it is
-assembling, which is where the answers belong and where a truncated name or a
-rejected value is a packaging failure rather than a derivation one. A run that
-executes a specification therefore publishes the primary artifact and the
-sidecars [REQ-0193](publication.md#req-0193) names and no other file. A run
-that also wrote a transport file would be publishing bytes no contract
-describes, and a reader could not tell whether a run that reported success had
-written it.
+**REQ-1237.** A derivation run publishes only the primary artifact and the
+declared sidecars of [REQ-0193](#req-0193). Conversion to a transport container
+is a separate packaging step outside this language.
 
 <a id="req-1238"></a>
 
-**REQ-1238.** A transport extension fails as any other unmapped extension does,
-under [REQ-0760](publication.md#req-0760), and [Source ingestion](ingestion.md)'s
-[REQ-0831](ingestion.md#req-0831) carries the same closure to the reading side.
-No condition names `.xpt` in particular: a diagnostic that told an author the
-container was recognized but declined would be reporting a profile that does
-not exist, and the author's next step is the same either way.
+**REQ-1238.** Retired; [REQ-0716](#req-0716) and
+[REQ-0760](#req-0760) govern unmapped extensions.
 
 <a id="req-1233"></a>
 
-**REQ-1233.** CDISC Dataset-JSON is outside the mapping on the other ground.
-It passes [REQ-1234](publication.md#req-1234): the container is not lossy, and
-[Dataset-JSON](../submission/dataset-json.md) writes every value this language
-admits without changing one. What a specification cannot supply is the file's
-identity. Its `studyOID`, `metaDataVersionOID`, `itemGroupOID`, and per-column
-`itemOID` are the identifiers
-[REQ-0970](../submission/define-xml.md#req-0970) builds from a study document's
-declarations, and its creation timestamp is the one
-[REQ-0962](../submission/define-xml.md#req-0962) has that document declare. A
-specification holds none of them, so the file is written by the study document
-that holds them all, beside the Define-XML document it points into. An
-`output.path` ending in `.json` therefore names no profile and fails under
-[REQ-0760](publication.md#req-0760) like any other unmapped extension, and
-[REQ-1237](publication.md#req-1237)'s rule that a run publishes its artifact
-and its sidecars and no other file is untouched.
+**REQ-1233.** Dataset-JSON is generated by a study document under
+[Dataset-JSON](../submission/dataset-json.md). `.json` is not a
+specification output profile and fails under [REQ-0760](#req-0760).
 
 ### Publication
 
@@ -309,8 +236,7 @@ target untouched.
 
 <a id="req-1047"></a>
 
-**REQ-1047.** The `output_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1047.** The `output_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -325,8 +251,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-0233"></a>
 
-**REQ-0233.** An internal column named in `keys`: fail and report the column
-name.
+**REQ-0233.** Retired; see [REQ-0220](#req-0220).
 
 <a id="req-0234"></a>
 
@@ -371,20 +296,3 @@ mapping: fail and report the column, the row's key, and the value.
 
 **REQ-0764.** A failed atomic replacement: fail and report the target. The run produces no
 artifact, and the previous one is unchanged.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-keys-internal](../../benchmarks/negative-keys-internal/README.md).
-- [negative-output-duplicate](../../benchmarks/negative-output-duplicate/README.md).
-- [negative-output-transport](../../benchmarks/negative-output-transport/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Select artifact columns and profiles and publish complete files atomically. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

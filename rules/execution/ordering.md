@@ -6,25 +6,6 @@ status: normative
 
 # Ordering
 
-## Purpose
-
-Apply ordering terms, missing placement, stable ties, and final artifact order.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](lifecycle.md).
-- [Verification](verification.md).
-- [Numeric computation](../operations/computation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Schema language](../reference/schema-language.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
-
 ## Requirements
 
 ### Artifact row order
@@ -45,17 +26,17 @@ ordinal beside the text it labels, or a rank.
 <a id="req-0224"></a>
 
 **REQ-0224.** Every term must name a declared column. No variable may be
-repeated. A qualified source variable is not a declared column and has no
+repeated. Validation reports an unknown or repeated term. A qualified source
+variable is not a declared column and has no
 value on a completed row to order by. A repeated term states nothing the
 first term did not.
 
 <a id="req-0225"></a>
 
 **REQ-0225.** Rows equal on every declared term keep their construction order.
-Window ordering uses the same tie-break. Thus, the order is total for every
-input. No tie is an error. No comparison is undefined. No specification
-declares a term merely to make the result deterministic. A specification
-wanting a tie broken declares the term that breaks it.
+Window ordering uses the same tie-break. Ties are valid and must not change
+between runs over the same input. A specification may declare an additional
+term to break a tie.
 
 <a id="req-0226"></a>
 
@@ -107,19 +88,15 @@ under [Numeric values](../values/numbers.md), text order under [Text values](../
 
 <a id="req-0312"></a>
 
-**REQ-0312.** Window ordering requires mutually comparable values. One order
-term names one variable, and a variable has exactly one type -- [Source ingestion](../storage/ingestion.md) gives
-it to a source field and [Types and conversion](../values/types.md) to a declared column -- so the values a term
-compares are of one type by construction and ordering has no incomparable
-case. An expression naming several variables, as `greatest` and `least` do,
-is where comparability is a requirement rather than a consequence.
+**REQ-0312.** Window ordering requires mutually comparable values for
+each term. [Source ingestion](../storage/ingestion.md) fixes source-field types;
+[Types and conversion](../values/types.md) fixes declared-column types.
 
 ### Interface behavior
 
 <a id="req-1102"></a>
 
-**REQ-1102.** The `order_by_term` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1102.** The `order_by_term` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -127,8 +104,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1103"></a>
 
-**REQ-1103.** The `order_term_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1103.** The `order_term_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -140,31 +116,13 @@ structural constraints come from its schema declaration.
 
 <a id="req-0235"></a>
 
-**REQ-0235.** An empty `keys`, an unknown key column, or a repeated key
-column: fail.
+**REQ-0235.** Retired; [REQ-0220](../storage/publication.md#req-0220)
+governs output keys.
 
 <a id="req-0236"></a>
 
-**REQ-0236.** An `output.order_by` term naming anything but a declared
-column: fail and report the term.
+**REQ-0236.** Retired; see [REQ-0224](#req-0224).
 
 <a id="req-0237"></a>
 
-**REQ-0237.** An `output.order_by` variable declared more than once: fail and
-report it.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-order-repeated](../../benchmarks/negative-order-repeated/README.md).
-- [negative-order-unknown-column](../../benchmarks/negative-order-unknown-column/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Apply ordering terms, missing placement, stable ties, and artifact order.
-One contract lets others refer to this topic without defining a second policy.
+**REQ-0237.** Retired; see [REQ-0224](#req-0224).

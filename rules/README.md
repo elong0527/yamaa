@@ -2,11 +2,13 @@
 
 Every contract indexed below is normative. Files have one semantic owner;
 requirements use permanent global IDs independent of that owner's filename.
-The schema owns shape, defaults, and structural constraints. Contracts own
-shared and operation-local behavior. Examples demonstrate the contracts.
+The schema owns shape, defaults, and structural constraints. Contracts state
+shared and operation-local behavior and failure conditions. The
+[benchmark manifest](../benchmarks/execution-manifest.yaml) identifies
+executable examples.
 
-Read the relevant block, then follow its dependencies. The blocks are reading
-order, not execution phases; [execution/lifecycle](execution/lifecycle.md)
+Read the relevant block, then follow its requirement links. The blocks are
+reading order, not execution phases; [execution/lifecycle](execution/lifecycle.md)
 owns the sequence of a run.
 
 ## Specification
@@ -81,13 +83,13 @@ Requirements are defined once as `**REQ-0001.**`. IDs remain valid across file
 moves and section reordering. Allocate the next unused number, never renumber
 an existing requirement, and never reuse a retired identifier. Normative
 `must`, `must not`, `should`, and `may` have their usual requirement meanings.
-Every contract begins with Purpose and Scope and dependencies, then states
-Requirements, Error conditions, Conformance examples, and Rationale. Topic
-subsections live within these sections. Rationale adds no requirements.
+Every contract has Requirements and Error conditions. Topic subsections group
+related rules. A retired ID remains as a short pointer to its governing rule
+so historical citations continue to resolve without repeating the policy.
 
 [migration.yaml](migration.yaml) resolves every former `RNNN-n` citation to
-one or more canonical requirements. It also records schema-prose provenance
-and legacy source hashes for audit; it is not a second semantic contract.
+one or more canonical requirements and records schema-prose provenance. It is
+not a second semantic contract.
 
 The generated [requirement index](reference/requirements.md) links each ID
 and its historical aliases to the current owner.

@@ -6,21 +6,6 @@ status: normative
 
 # Row construction
 
-## Purpose
-
-Construct output rows from declared input records or groups.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](lifecycle.md).
-- [Aggregation](../operations/aggregation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Specification structure](../specification/structure.md).
-- [Text values](../values/text.md).
-
-
 ## Requirements
 
 ### Phases
@@ -30,7 +15,8 @@ This contract owns the requirements below. Related contracts:
 **REQ-0034.** Each row template builds output rows from one input dataset,
 named by `row.dataset`. When `root.input` declares exactly one dataset, a
 row template omitting `dataset` builds from that dataset. When `root.input`
-declares more than one, every row template must state `dataset`.
+declares more than one, every row template must state `dataset`; omission
+fails validation.
 
 <a id="req-0035"></a>
 
@@ -164,8 +150,7 @@ follows dependency order.
 
 <a id="req-1056"></a>
 
-**REQ-1056.** The `row_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1056.** The `row_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -181,8 +166,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-0063"></a>
 
-**REQ-0063.** A `rows` entry omitting `dataset` when `root.input`
-  declares more than one: fail.
+**REQ-0063.** Retired; see [REQ-0034](#req-0034).
 
 <a id="req-0064"></a>
 
@@ -215,14 +199,3 @@ structural constraints come from its schema declaration.
 **REQ-1171.** A root `filter` declared together with `rows`: fail. The
   filter is the filter-only row template; explicit row templates and the
   lifted filter cannot both drive row construction.
-
-## Conformance examples
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Construct output rows from declared input records or groups. One contract lets
-other owners refer to this topic without defining a second policy.

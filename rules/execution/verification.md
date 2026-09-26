@@ -6,27 +6,6 @@ status: normative
 
 # Verification
 
-## Purpose
-
-Apply assertions, severity, and grouped counts to completed values.
-Record what ran in the warning and verification logs.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](lifecycle.md).
-- [Aggregation](../operations/aggregation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Predicates](../operations/predicates.md).
-- [Text operations](../operations/text.md).
-- [Schema language](../reference/schema-language.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Artifact publication](../storage/publication.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
-
 ## Requirements
 
 ### This contract has no ordered-frame assertion
@@ -450,8 +429,7 @@ execution defect, not a finding that can be recorded inside itself.
 
 <a id="req-1152"></a>
 
-**REQ-1152.** The `dataset_verifications.row_count` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1152.** The `dataset_verifications.row_count` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -509,22 +487,3 @@ fraction bound outside 0 through 1 also fails.
 **REQ-1179.** An `output.verification_log` whose path collides with
   `output.path` or `output.warning_log`, or whose extension names no
   profile: fail validation under [REQ-1180](../storage/publication.md#req-1180).
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-adeg-rrr](../../benchmarks/negative-adeg-rrr/README.md).
-- [negative-strata-mismatch](../../benchmarks/negative-strata-mismatch/README.md).
-- [negative-dose-expansion](../../benchmarks/negative-dose-expansion/README.md).
-- [negative-adlb-two-baselines](../../benchmarks/negative-adlb-two-baselines/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Apply assertions, severity, and grouped counts to completed values.
-Record what ran in the warning and verification logs.
-One contract avoids a second policy.

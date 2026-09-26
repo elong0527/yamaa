@@ -12,12 +12,8 @@ DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
 REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
 LEGACY = re.compile(r"R[0-9]{3}-[1-9][0-9]*[a-z]?\Z")
 SECTIONS = [
-    "Purpose",
-    "Scope and dependencies",
     "Requirements",
     "Error conditions",
-    "Conformance examples",
-    "Rationale",
 ]
 
 

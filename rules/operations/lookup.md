@@ -6,23 +6,6 @@ status: normative
 
 # Lookup and joins
 
-## Purpose
-
-Match declared keys, narrow records, select a result, and answer absence.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Numeric computation](computation.md).
-- [Expression evaluation](expressions.md).
-- [Name binding](../specification/binding.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Types and conversion](../values/types.md).
-
-
 ## Requirements
 
 ### Declaration
@@ -621,8 +604,7 @@ corresponding key column to have the same comparable type.
 
 <a id="req-1048"></a>
 
-**REQ-1048.** The `intermediate_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1048.** The `intermediate_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -642,8 +624,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1049"></a>
 
-**REQ-1049.** The `intermediate_between_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1049.** The `intermediate_between_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -653,8 +634,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1050"></a>
 
-**REQ-1050.** The `intermediate_id` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1050.** The `intermediate_id` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -662,8 +642,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1051"></a>
 
-**REQ-1051.** The `source_binding_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1051.** The `source_binding_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -674,8 +653,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1052"></a>
 
-**REQ-1052.** The `filtered_source` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1052.** The `filtered_source` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -683,8 +661,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1053"></a>
 
-**REQ-1053.** The `filtered_source_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1053.** The `filtered_source_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -693,8 +670,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1054"></a>
 
-**REQ-1054.** The `multiple_matches_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1054.** The `multiple_matches_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -703,8 +679,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1055"></a>
 
-**REQ-1055.** The `expressions.lookup` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1055.** The `expressions.lookup` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -725,22 +700,3 @@ structural constraints come from its schema declaration.
 <a id="req-0333"></a>
 
 **REQ-0333.** `lookup` whose `key_base` and `key` lists differ in length must fail.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-advs-locf-record](../../benchmarks/adam-advs-locf-record/README.md).
-- [negative-overlapping-windows](../../benchmarks/negative-overlapping-windows/README.md).
-- [negative-mapping-duplicate-key](../../benchmarks/negative-mapping-duplicate-key/README.md).
-- [negative-mapping-unpaired-key](../../benchmarks/negative-mapping-unpaired-key/README.md).
-- [negative-mapping-partial-key](../../benchmarks/negative-mapping-partial-key/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-This topic lives in one contract.
-Other owners refer to it without defining a second policy.

@@ -6,19 +6,6 @@ status: normative
 
 # Schema language
 
-## Purpose
-
-Defines schema notation, registries, constraints, and canonical shorthand.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Project functions](../operations/functions.md).
-- [Text operations](../operations/text.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Schema bundle
@@ -377,20 +364,3 @@ invalid YAML or a prohibited YAML feature;
 <a id="req-0287"></a>
 
 **REQ-0287.** a value that fails its type or constraints.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-literal-structure](../../benchmarks/negative-literal-structure/README.md).
-- [negative-rank-bad-method](../../benchmarks/negative-rank-bad-method/README.md).
-- [negative-row-number-filter](../../benchmarks/negative-row-number-filter/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Keeping this topic in one contract lets other owners refer to it without
-defining a second policy.

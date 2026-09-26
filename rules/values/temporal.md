@@ -6,24 +6,6 @@ status: normative
 
 # Temporal values
 
-## Purpose
-
-Define dates, local civil datetimes, precision, canonical text, and order.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Verification](../execution/verification.md).
-- [Aggregation](../operations/aggregation.md).
-- [Numeric computation](../operations/computation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Project functions](../operations/functions.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Types and conversion](types.md).
-
 ## Requirements
 
 ### The two values
@@ -373,44 +355,3 @@ fail under [REQ-0005](types.md#req-0005), reported as the [REQ-0323](types.md#re
 **REQ-0612.** Storing a value no implementation can hold exactly,
 such as a fractional or leap second, is never reached. Text is rejected
 first. An implementation must not round to reach such a value.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-adae-partial-dates](../../benchmarks/adam-adae-partial-dates/README.md).
-- [adam-adsl-treatment](../../benchmarks/adam-adsl-treatment/README.md).
-- [negative-date-incomplete](../../benchmarks/negative-date-incomplete/README.md).
-- [negative-datetime-zones](../../benchmarks/negative-datetime-zones/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Define dates, local civil datetimes, precision, canonical text, and order. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
-
-The no-zone-no-offset decision ([REQ-0555](#req-0555)) keeps the two runtimes
-agreeing. Admitting both a local and an offset-aware value would put two kinds
-of datetime in one column type, and the target runtimes disagree about that
-pair: Python refuses to order a naive datetime against an aware one and raises
-instead, while R has no naive datetime at all: a `POSIXct` always carries a
-`tzone`, and an empty one resolves against the machine's timezone, so the same
-specification would order the same column differently on two machines. Neither
-behavior is this design's to choose. Each is a property of that runtime's type.
-Prohibiting the zone removes the disagreement rather than arbitrating it, and
-costs studies nothing they collect: a CDISC `--DTC` value is local site time
-and carries no offset. A study that records an offset keeps the offset in its
-own column, where a specification can read the offset as data, and an
-instant-typed value can be added later without invalidating any specification
-written under this contract.
-
-The whole-second decision ([REQ-0561](#req-0561)) keeps the two runtimes
-agreeing. The runtimes cannot agree on a fraction. Python's
-`datetime.datetime` records whole microseconds as integers. R's `POSIXct` is a
-binary64 count of seconds, which represents most fractions only approximately
-and prints them under its own rounding. Admitting one would mean two
-implementations that store, compare, and render the same collected value
-differently, and the design requires them to agree.

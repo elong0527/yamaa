@@ -6,18 +6,6 @@ status: normative
 
 # Controlled terminology
 
-## Purpose
-
-Declare codelists once and validate their bindings and allowed values.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Verification](../execution/verification.md).
-- [Define-XML](define-xml.md).
-- [Text values](../values/text.md).
-
 ## Requirements
 
 ### One object, many bindings
@@ -195,8 +183,7 @@ values name the source SDTM domain or ADaM dataset, binds this vocabulary.
 
 <a id="req-1076"></a>
 
-**REQ-1076.** The `define_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1076.** The `define_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -204,8 +191,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1077"></a>
 
-**REQ-1077.** The `codelist_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1077.** The `codelist_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -221,8 +207,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1078"></a>
 
-**REQ-1078.** The `codelist_item_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1078.** The `codelist_item_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -234,8 +219,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1079"></a>
 
-**REQ-1079.** The `external_codelist_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1079.** The `external_codelist_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -305,14 +289,3 @@ and the value.
 
 **REQ-0958.** A `standard` naming a declared standard whose type is not `CT`:
 fail validation.
-
-## Conformance examples
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Declare codelists once and validate their bindings and allowed values. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

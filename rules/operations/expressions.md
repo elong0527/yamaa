@@ -6,22 +6,6 @@ status: normative
 
 # Expression evaluation
 
-## Purpose
-
-Register and dispatch expressions, restrict nesting, and define scalar selection.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Aggregation](aggregation.md).
-- [Numeric computation](computation.md).
-- [Project functions](functions.md).
-- [Text operations](text.md).
-- [Schema language](../reference/schema-language.md).
-- [Source ingestion](../storage/ingestion.md).
-
 ## Requirements
 
 ### Expression evaluation
@@ -152,8 +136,7 @@ the `value` of a handled expression, and filtered sources written
 
 <a id="req-1093"></a>
 
-**REQ-1093.** The `expressions.source` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1093.** The `expressions.source` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -162,8 +145,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1094"></a>
 
-**REQ-1094.** The `expressions.literal` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1094.** The `expressions.literal` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -172,8 +154,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1095"></a>
 
-**REQ-1095.** The `expressions.first_available` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1095.** The `expressions.first_available` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -183,8 +164,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1096"></a>
 
-**REQ-1096.** The `expressions.greatest` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1096.** The `expressions.greatest` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -193,8 +173,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1097"></a>
 
-**REQ-1097.** The `expressions.least` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1097.** The `expressions.least` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -203,8 +182,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1098"></a>
 
-**REQ-1098.** The `expressions.case` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1098.** The `expressions.case` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -213,8 +191,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1099"></a>
 
-**REQ-1099.** The `case_item_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1099.** The `case_item_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -222,8 +199,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1100"></a>
 
-**REQ-1100.** The `case_branch_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1100.** The `case_branch_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -232,8 +208,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1101"></a>
 
-**REQ-1101.** The `case_otherwise_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1101.** The `case_otherwise_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -241,8 +216,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1256"></a>
 
-**REQ-1256.** The `expressions.flag` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration. `flag` is the shorthand
+**REQ-1256.** The `expressions.flag` fields have these meanings: `flag` is the shorthand
 for the common one-branch `case` that returns a flag value.
 
 | Field | Meaning |
@@ -298,30 +272,3 @@ mapping, whose mapping form lacks `condition` or names a non-predicate
 value, or be `null` for missing. A `flag` that declares `false_value`
 without `missing_value`: fail as `missing_value_required` at
 `missing_value`.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-tied-baseline](../../benchmarks/negative-tied-baseline/README.md).
-- [negative-multiple-baselines](../../benchmarks/negative-multiple-baselines/README.md).
-- [negative-previous-fixed](../../benchmarks/negative-previous-fixed/README.md).
-- [negative-variable-nested](../../benchmarks/negative-variable-nested/README.md).
-- [negative-flag-missing-value](../../benchmarks/negative-flag-missing-value/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-This topic lives in one contract.
-Other owners refer to it without defining a second policy.
-
-A `flag` never lets an unknown condition fall through to `false_value`
-([REQ-1257](#req-1257)), so a flag written with only `false_value: N` would
-return missing for an unknown condition beside `N` for a false one, without
-the specification ever saying so.
-[REQ-1258](#req-1258) makes that outcome a written choice: an author who
-declares the false value also declares the unknown one, even when it is
-the same `N` or `null`.
