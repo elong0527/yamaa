@@ -1,0 +1,75 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: {path: input/dm.csv, types: {AGE: int}}
+  WT: {path: input/wt.csv, types: {WTSEQ: int, WT: float}}
+base: DM
+
+intermediates:
+  # The subject's latest dated weight record. The match key is written
+  # as a lone key, and the ordering value as a lone value; both expand
+  # to their full forms before the run.
+  - id: LAST_WT
+    dataset: WT
+    key: USUBJID
+    order_by: ["WT.WTDTC"]
+    keep: last
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SEX, AGE, AGE65FL, SUBJLBL, WTMAX, LASTWT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {literal: YAMAA-01}
+
+  # The completeness check is written as a lone check; it expands to a
+  # one-check list.
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+    verifications: {not_missing: {}}
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  # A lone condition is the common yes-answer flag: Y when true, blank
+  # when false or unknown, with no explicit answers written.
+  - name: AGE65FL
+    type: str
+    label: Age 65 or Older Flag
+    derivation:
+      flag: "AGE >= 65"
+
+  # A lone template string fills its placeholders from the current row.
+  - name: SUBJLBL
+    type: str
+    label: Subject Label
+    derivation:
+      str_template: "Subject {USUBJID} ({SEX})"
+
+  # The grouping key is written as a lone key over the weight records.
+  - name: WTMAX
+    type: float
+    label: Maximum Collected Weight
+    derivation:
+      aggregate:
+        key: USUBJID
+        expr: "MAX(WT.WT)"
+
+  # Read off the selected latest weight record.
+  - name: LASTWT
+    type: float
+    label: Latest Collected Weight
+    derivation: LAST_WT.WT
