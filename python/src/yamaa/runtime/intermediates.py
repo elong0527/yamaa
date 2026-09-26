@@ -518,6 +518,23 @@ class IntermediateSelector:
     def declares(self, identifier: str) -> bool:
         return identifier in self.plans
 
+    def driver_records(
+        self, identifier: str
+    ) -> tuple[IndexedRecord, ...] | IntermediateOutcome:
+        """Return a source-only intermediate's records for row construction."""
+        plan = self.plans[identifier]
+        eligible = self._filtered(plan)
+        if isinstance(eligible, ConditionResult):
+            return IntermediateOutcome(
+                condition=eligible, spec_path=f"{plan.path}.filter"
+            )
+        if isinstance(eligible, _DerivationFailure):
+            return IntermediateOutcome(
+                condition=eligible.condition,
+                spec_path=f"{plan.path}.derivations.{eligible.name}",
+            )
+        return eligible
+
     def _filtered(
         self, plan: PlannedIntermediate
     ) -> tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure:

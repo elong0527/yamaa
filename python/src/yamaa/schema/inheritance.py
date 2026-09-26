@@ -1046,7 +1046,10 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
             continue
         driver = row.get("dataset", result.get("base"))
         if isinstance(driver, str):
-            live_datasets.add(driver)
+            if driver in intermediate_map:
+                live_intermediates.add(driver)
+            else:
+                live_datasets.add(driver)
         for name in ("group_by", "filter"):
             if name in row:
                 initial.update(_references(row[name], row_fields[name]["type"], bundle))

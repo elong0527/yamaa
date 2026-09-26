@@ -12,11 +12,33 @@ status: normative
 
 <a id="req-0034"></a>
 
-**REQ-0034.** Each row template builds output rows from one input dataset,
-named by `row.dataset`. When `root.input` declares exactly one dataset, a
-row template omitting `dataset` builds from that dataset. When `root.input`
+**REQ-0034.** Each row template builds output rows from one input dataset or
+one eligible named intermediate, named by `row.dataset`. When `root.input`
+declares exactly one dataset, a row template omitting `dataset` builds from
+that dataset. When `root.input`
 declares more than one, every row template must state `dataset`; omission
 fails validation.
+
+<a id="req-1262"></a>
+
+**REQ-1262.** A named intermediate used as `row.dataset` exposes its
+source-only filtered records after its ordered `derivations:` have completed.
+The intermediate's `columns:` list, when present, limits the fields the row
+template may read; otherwise all stored and derived fields are visible. The
+row template reads those fields through the intermediate's qualifier as its
+current driver record, not through a keyed lookup. Records retain source
+order. A driver intermediate must read an `input` dataset and may not declare
+`key`, `key_base`, `between`, `order_by`, `keep`, `missing`, or `strict: true`.
+Its filter may read only its own donor fields and earlier derived names;
+correlation to a current row is invalid because no current row exists yet.
+An exposed derived field must have a determinable type: `source` keeps its
+source type, a string/integer/float `literal` has that type, `row_number` and
+`rank` are integer, and `str_upper`, `str_lower`, `str_sentence`, and
+`str_title` are string. A `case` has a type only when all nonmissing branches
+have the same determinable type. Other exposed derived fields fail row-driver
+validation as `unknown_intermediate_driver_type`.
+An ineligible intermediate fails as `invalid_intermediate_driver` at the row
+template's `dataset` field.
 
 <a id="req-0035"></a>
 
@@ -25,31 +47,31 @@ fails validation.
 <a id="req-0036"></a>
 
 **REQ-0036.** A row template without `group_by` is record-driven. Its
-   `filter`, when present, evaluates against each input record before any
-   row derivation. Every retained input record produces one candidate row.
+   `filter`, when present, evaluates against each driver record before any
+   row derivation. Every retained driver record produces one candidate row.
 
 <a id="req-0037"></a>
 
 **REQ-0037.** A row template with `group_by` is group-driven. The
    `group_by` list is non-empty and names only qualified variables of
-   the row template's input dataset. Each variable's type defines
+   the row template's driver. Each variable's type defines
    equality; [Text values](../values/text.md) defines strings. Missing values equal missing values.
    Every group produces one candidate row.
 
 <a id="req-0038"></a>
 
-**REQ-0038.** Groups follow the position of their first input record. Input
+**REQ-0038.** Groups follow the position of their first driver record. Driver
 order is kept within each group. For each group, evaluate every row derivation
 once and complete stages 1 to 3 of the [Execution lifecycle](lifecycle.md).
 Then evaluate the row template's `filter`, when present, over the candidate's
 completed unqualified columns. Append the candidate only when the `filter` is
 `TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter`
-filters after a group reduction. An ungrouped `filter` filters input records.
+filters after a group reduction. An ungrouped `filter` filters driver records.
 
 <a id="req-0039"></a>
 
 **REQ-0039.** Constructed rows are appended in specification order.
-Record-driven row templates keep input order. Group-driven row templates
+Record-driven row templates keep driver order. Group-driven row templates
 keep first-occurrence group order.
 
 <a id="req-0040"></a>
@@ -85,14 +107,14 @@ supplies the input records.
 <a id="req-0043"></a>
 
 **REQ-0043.** When `rows` is present, row templates construct the rows.
-Each row template is one section. A row template's `filter` keeps input records
-or candidate groups. Each retained input record or group yields one row.
+Each row template is one section. A row template's `filter` keeps driver records
+or candidate groups. Each retained driver record or group yields one row.
 The sections concatenate in specification order. Row templates build rows
 finer than input records only as [REQ-0040](rows.md#req-0040) permits. The built rows must
 still match the `keys`. Repeating a key combination fails at the output
 gate under [REQ-0240](../storage/publication.md#req-0240). A `filter` states which rows the artifact carries, never
 which input record represents a key combination. A row template that keeps
-one of several input records with one key combination still writes one row
+one of several driver records with one key combination still writes one row
 per key combination. The specification omits `rows` instead.
 
 <a id="req-1170"></a>
@@ -139,7 +161,7 @@ only the generated ordinary templates; execution never reads the catalog.
 <a id="req-0047"></a>
 
 **REQ-0047.** During group-driven row construction, a source variable of the row
-template's input dataset is a scalar only when that exact qualified variable
+  template's driver is a scalar only when that exact qualified variable
 occurs in the row template's `group_by`. An aggregate expression may instead
 reduce the input records of the current group under [Expression evaluation](../operations/expressions.md) and [Aggregation](../operations/aggregation.md). Other row
 expressions consume group keys, literals, earlier row-derived columns, or a
@@ -155,9 +177,9 @@ follows dependency order.
 | Field | Meaning |
 | --- | --- |
 | `row_class.id` | Identifier of this row template, unique within rows. |
-| `row_class.dataset` | Input dataset whose records build this entry's output rows; required when more than one dataset is declared. |
-| `row_class.group_by` | Grouping keys over input records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
-| `row_class.filter` | Predicate selecting input records for an ungrouped row template or completed candidate groups for a grouped row template. |
+| `row_class.dataset` | Input dataset or eligible named intermediate whose records build this entry's output rows; required when more than one input dataset is declared. |
+| `row_class.group_by` | Grouping keys over driver records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
+| `row_class.filter` | Predicate selecting driver records for an ungrouped row template or completed candidate groups for a grouped row template. |
 | `row_class.derivations` | Columns this row template derives; [Specification structure](../specification/structure.md) owns coverage across row templates. |
 | `row_class.catalog` | Fixed CSV catalog expanded into ordinary row templates under [REQ-1249](rows.md#req-1249). |
 | `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
