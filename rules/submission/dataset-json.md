@@ -140,8 +140,6 @@ rather than declared nothing.
 <a id="req-1205"></a>
 
 **REQ-1205.** `rows` is written even when the dataset has no rows, as `[]`.
-The standard makes the member optional; two admissible spellings of an empty
-dataset would leave two conforming runtimes with different files.
 
 <a id="req-1206"></a>
 
