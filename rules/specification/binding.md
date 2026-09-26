@@ -213,7 +213,7 @@ declaration defines shape, defaults, and structural constraints.
 
 | Field | Meaning |
 | --- | --- |
-| `variable` | Qualified source variable or unqualified current-output column. |
+| `variable` | Qualified source variable or unqualified constructed output column. |
 
 <a id="req-1058"></a>
 
