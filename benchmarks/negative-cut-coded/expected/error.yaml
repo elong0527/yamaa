@@ -4,6 +4,6 @@ spec_paths:
   - columns.AGEGRP.derivation.cut.source
 requirement: REQ-0306
 context:
-  source: SEX
+  source: DM.SEX
   expected: numeric
   actual: str

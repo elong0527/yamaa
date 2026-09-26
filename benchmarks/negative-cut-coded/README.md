@@ -21,7 +21,7 @@ rejected before any data is read and no artifact is accepted.
 
 ## How to fix
 
-Group by the numeric age rather than the coded sex. The demographics file is
+Band the numeric age rather than the coded sex. The demographics file is
 read as text unless a field is given a type, so declare `AGE` as a whole
 number on the input:
 
