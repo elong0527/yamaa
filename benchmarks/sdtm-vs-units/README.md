@@ -5,9 +5,10 @@
 
 **Goal:** build one record per collected vital-signs measurement,
 carrying the collected test, result, and unit through and adding
-the standardized numeric result, text result, and standard unit:
+the standardized numeric result, text result, standard unit, and
+completion status:
 `VSTESTCD`, `VSTEST`, `VSORRES`, `VSORRESU`, `VSSTRESN`,
-`VSSTRESC`, and `VSSTRESU`.
+`VSSTRESC`, `VSSTRESU`, and `VSSTAT`.
 
 **Input:** collected vital-signs rows with test code and name,
 collected result and unit, plus study, subject, sequence, and
@@ -23,7 +24,7 @@ visit identifiers.
   back as text (so a collected `72.50` reads `72.5`); the conversion
   never overwrites it.
 - `VSORRESU` is the unit exactly as collected: `cm`, `kg`, `C`,
-  `LB`, or `F`.
+  `LB`, or `F`. Blank when no result was collected.
 - `VSSTRESN` is the numeric result in the test's standard unit:
   height passes through in `cm`; weight in `LB` is multiplied by
   `0.45359237` to reach `kg`; temperature in `F` becomes
@@ -35,13 +36,16 @@ visit identifiers.
   is already the standard unit, it equals the collected result.
   Blank when no result was collected.
 - `VSSTRESU` is the test's standard unit: `cm` for height, `kg`
-  for weight, and `C` for temperature. Blank when no result was
-  collected.
+  for weight, and `C` for temperature. An unexpected unit for the
+  test (for example a weight in `cm`) fails the run instead of
+  passing through. Blank when no result was collected.
+- `VSSTAT` is `NOT DONE` when no result was collected, blank
+  otherwise.
 
 **Note:** records are grouped by test rather than kept in
 collection order, so each test stands alone; adding a test means
 describing that test, not changing the others. A record whose
-result was never collected carries no standardized value in any of
-the three added columns.
+result was never collected carries `VSSTAT` `NOT DONE`, no original
+unit, and no standardized value in any of the three added columns.
 
 **Standard:** SDTM | **Domain:** VS
