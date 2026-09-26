@@ -48,30 +48,41 @@ jobs:
         run: uv run --project python --no-sync ruff check python/src/yamaa python/tests
 
       - name: Test
-        run: uv run --project python --no-sync pytest python/tests
+        run: >-
+          uv run --project python --no-sync coverage run
+          --source=yamaa --data-file=python/.coverage.pytest
+          -m pytest python/tests
 
       # #101: every benchmark runs through one runner, on both platforms,
       # and the reports it writes are the per-example parity artifact.
-      - name: Run the conformance suite
+      - name: Run the benchmark suite
         run: >-
-          uv run --project python --no-sync python -m yamaa.adapters.conformance
-          $(ls -d benchmarks/*/ | xargs -n1 basename)
-          --run-dir "${{ runner.temp }}/conformance"
-          --examples-root benchmarks
+          uv run --project python --no-sync coverage run
+          --source=yamaa --data-file=python/.coverage.bench
+          python/check_benchmarks.py
+          --benchmarks-root benchmarks
+          --run-dir "${{ runner.temp }}/benchmarks"
 
-      - name: Upload conformance reports
+      - name: Enforce coverage above 80%
+        working-directory: python
+        run: >-
+          uv run --project . --no-sync coverage combine
+          --data-file=.coverage .coverage.pytest .coverage.bench &&
+          uv run --project . --no-sync coverage report
+          --data-file=.coverage --fail-under=80
+
+      - name: Upload benchmark reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: conformance-${{ matrix.os }}-${{ matrix.python-version }}
-          path: ${{ runner.temp }}/conformance/reports
+          name: benchmarks-${{ matrix.os }}-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/benchmarks/reports
           if-no-files-found: error
 
       - name: Import installed package outside the checkout
         working-directory: ${{ runner.temp }}
         run: >-
           ${{ github.workspace }}/python/.venv/bin/python -c
-          "import yamaa; from yamaa.odm import write_odm_parquet;
-          from yamaa.specification import load_specification;
-          print(yamaa.__version__, write_odm_parquet.__name__,
-          load_specification.__name__)"
+          "from yamaa import derive, YamaaError;
+          from yamaa.engine import Engine;
+          print(derive.__name__, YamaaError.__name__, Engine.__name__)"

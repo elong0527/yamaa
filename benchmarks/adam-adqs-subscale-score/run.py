@@ -1,4 +1,4 @@
 import yamaa
 
-adqs = yamaa.yamaa_domain("spec.yaml").output
+adqs = yamaa.derive("spec.yaml")
 adqs

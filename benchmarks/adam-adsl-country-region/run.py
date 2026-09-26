@@ -1,4 +1,4 @@
 import yamaa
 
-adsl = yamaa.yamaa_domain("spec.yaml").output
+adsl = yamaa.derive("spec.yaml")
 adsl

@@ -1,4 +1,4 @@
 import yamaa
 
-dm = yamaa.yamaa_domain("spec.yaml").output
+dm = yamaa.derive("spec.yaml")
 dm

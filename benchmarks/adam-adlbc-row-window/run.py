@@ -1,4 +1,4 @@
 import yamaa
 
-adlbc = yamaa.yamaa_domain("spec.yaml").output
+adlbc = yamaa.derive("spec.yaml")
 adlbc
