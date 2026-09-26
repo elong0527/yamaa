@@ -208,7 +208,9 @@ names visible at each predicate site:
 
 <a id="req-0182"></a>
 
-**REQ-0182.** a window filter sees completed output columns;
+**REQ-0182.** a window filter sees constructed output columns in row
+  construction and the augmented donor records [REQ-1185](lookup.md#req-1185)
+  describes in an intermediate derivation;
 
 <a id="req-0183"></a>
 
