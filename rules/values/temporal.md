@@ -274,17 +274,6 @@ argument intact.
 
 **REQ-0574.** A completed date names a day.
 
-<a id="req-0575"></a>
-
-**REQ-0575.** The cost is worth stating plainly: it is the case the
-property was added for: an imputed start still decides whether an event is
-treatment emergent, and precision does not stop it. What precision changes is
-that the specification classifying the event can now see that the day was
-supplied. The specification can record that fact in the artifact. A
-specification that needs a supplied day not to reach a classification
-bounds the imputation with `not_before`, or states a verification under
-[Verification](../execution/verification.md). Neither is a comparison, so neither belongs in this section.
-
 ### Conversion
 
 <a id="req-0576"></a>
