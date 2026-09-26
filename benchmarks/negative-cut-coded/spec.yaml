@@ -19,18 +19,13 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  - name: SEX
-    type: str
-    label: Sex
-    derivation: DM.SEX
-
-  # The age bands are applied to the coded sex, a text column, where a
-  # number such as the age belongs.
+  # The age bands are applied to the collected coded sex, a text field,
+  # where a number such as the age belongs.
   - name: AGEGRP
     type: str
     label: Age Group
     derivation:
       cut:
-        source: SEX
+        source: DM.SEX
         breaks: [65]
         labels: [younger, elderly]
