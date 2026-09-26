@@ -2,12 +2,19 @@ schema_version: "1.0"
 domain: RELREC
 keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
 input:
-  AE: input/ae.csv
-  CM: input/cm.csv
+  AE:
+    path: input/ae.csv
+    types:
+      AESEQ: int
+  CM:
+    path: input/cm.csv
+    types:
+      CMSEQ: int
 
 output:
   path: relrec.csv
   columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
+  order_by: [STUDYID, USUBJID, RELID, RDOMAIN, SEQNUM]
 
 columns:
   - name: STUDYID
@@ -39,6 +46,13 @@ columns:
     type: str
     label: Relationship Identifier
 
+  # Internal working column: the sequence number as a number, so the
+  # output order puts sequence 10 after 2 instead of before it. Not in
+  # output.columns, so it never reaches the artifact (REQ-0205).
+  - name: SEQNUM
+    type: int
+    label: Numeric Sequence Number
+
 rows:
   - id: ae_link_1
     dataset: AE
@@ -50,6 +64,7 @@ rows:
       IDVAR: {literal: AESEQ}
       IDVARVAL: AE.AESEQ
       RELID: AE.AELNKID1
+      SEQNUM: AE.AESEQ
 
   - id: ae_link_2
     dataset: AE
@@ -61,6 +76,7 @@ rows:
       IDVAR: {literal: AESEQ}
       IDVARVAL: AE.AESEQ
       RELID: AE.AELNKID2
+      SEQNUM: AE.AESEQ
 
   - id: cm_link_1
     dataset: CM
@@ -72,6 +88,7 @@ rows:
       IDVAR: {literal: CMSEQ}
       IDVARVAL: CM.CMSEQ
       RELID: CM.CMLNKID1
+      SEQNUM: CM.CMSEQ
 
   - id: cm_link_2
     dataset: CM
@@ -83,14 +100,19 @@ rows:
       IDVAR: {literal: CMSEQ}
       IDVARVAL: CM.CMSEQ
       RELID: CM.CMLNKID2
+      SEQNUM: CM.CMSEQ
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
   - row_count:
-      min: 6
-      max: 6
-  - implies:
-      id: relationship-row-identifies-a-record
-      when: "RELID IS NOT NULL"
-      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"
+      min: 8
+      max: 8
+  # A relationship with only one member is a dangling link number: the
+  # implies check this replaces could never fail (RDOMAIN/IDVAR are
+  # literals, IDVARVAL/RELID are non-missing keys), while this check
+  # fails the run when a link number is carried by only one record.
+  - row_count:
+      id: each-relationship-has-two-or-more-rows
+      group_by: [STUDYID, USUBJID, RELID]
+      min: 2
