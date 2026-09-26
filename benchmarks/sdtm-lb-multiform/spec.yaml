@@ -2,7 +2,9 @@ schema_version: "1.0"
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  ODM: input/odm.csv
+  ODM:
+    path: input/odm.csv
+    types: {ItemGroupRepeatKey: int}
 
 output:
   path: lb.csv
@@ -44,20 +46,36 @@ columns:
       allowed_values:
         values: [SCREENING, BASELINE, DAY 21, UNSCHEDULED]
 
-  - name: VISITNUM
+  # The form occurrence number inside the study event. Unscheduled visits
+  # have no planned number, so this feeds VISITNUM's per-occurrence
+  # numbering below; it is not part of the delivered dataset.
+  - name: FORMREPEAT
     type: int
+    label: Form occurrence number within the visit
+    derivation: ODM.ItemGroupRepeatKey
+
+  # Planned visits keep their fixed numbers. Each unscheduled visit is
+  # numbered after the baseline visit it follows, with the form occurrence
+  # as the decimal part, so two unscheduled visits of one subject stay
+  # distinct (2.01, 2.02) and join to the subject visits dataset.
+  - name: VISITNUM
+    type: float
     label: Visit Number
     derivation:
-      mapping:
-        source: ODM.StudyEventOID
-        dict:
-          SE.NCT00789880.SCRN: 1
-          SE.NCT00789880.BL: 2
-          SE.NCT00789880.D21: 3
-          SE.NCT00789880.UNSCH: 99
+      case:
+        - when: "ODM.StudyEventOID = 'SE.NCT00789880.SCRN'"
+          then: {literal: 1}
+        - when: "ODM.StudyEventOID = 'SE.NCT00789880.BL'"
+          then: {literal: 2}
+        - when: "ODM.StudyEventOID = 'SE.NCT00789880.D21'"
+          then: {literal: 3}
+        - when: "ODM.StudyEventOID = 'SE.NCT00789880.UNSCH'"
+          then:
+            compute:
+              expr: "2 + FORMREPEAT / 100"
     verifications:
       allowed_values:
-        values: [1, 2, 3, 99]
+        values: [1, 2, 3, 2.01, 2.02]
 
   - name: LBTESTCD
     type: str
@@ -88,11 +106,24 @@ columns:
       allowed_values:
         values: [LESIONAL, NON-LESIONAL]
 
+  # The collected entry, exactly as reported; the text 'NOT DONE' marks a
+  # test that was not done. The result columns below read this raw value so
+  # the sentinel never lands in the delivered result or units. It is not
+  # part of the delivered dataset.
+  - name: RAWORRES
+    type: str
+    label: Collected entry (raw)
+
+  # A test not done has no result: LBORRES, LBSTRESC, LBORRESU and LBSTRESU
+  # stay empty and LBSTAT carries 'NOT DONE'.
   - name: LBORRES
     type: str
     label: Result or Finding in Original Units
-    verifications:
-      not_missing: {}
+    derivation:
+      case:
+        - when: "RAWORRES = 'NOT DONE'"
+          then: {literal: null}
+        - otherwise: RAWORRES
 
   - name: LBORRESU
     type: str
@@ -122,7 +153,7 @@ columns:
     label: Completion Status
     derivation:
       case:
-        - when: "LBORRES = 'NOT DONE'"
+        - when: "RAWORRES = 'NOT DONE'"
           then: {literal: NOT DONE}
     verifications:
       allowed_values:
@@ -148,23 +179,33 @@ columns:
 # occurrence (item group and repeat key) whose result item for that test
 # and site is present. The record takes the date item of the same
 # occurrence; ONLY() fails if the occurrence carries either item twice.
+# An entry of 'NOT DONE' still builds a record: the result and unit
+# columns stay empty and LBSTAT carries 'NOT DONE'.
 rows:
   - id: serum_vitamin_d
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: VITD25OH}
       LBTEST: {literal: 25-Hydroxyvitamin D}
       LBCAT: {literal: CHEMISTRY}
       LBSPEC: {literal: SERUM}
       LBLOC: {literal: null}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.LB.VITD'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: ng/mL}
-      LBSTRESU: {literal: ng/mL}
+      LBORRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
+      LBSTRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.LB.LBDTC'"
@@ -173,19 +214,27 @@ rows:
   - id: biopsy_il13_lesional
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: IL13}
       LBTEST: {literal: Interleukin 13 mRNA}
       LBCAT: {literal: GENE EXPRESSION}
       LBSPEC: {literal: SKIN BIOPSY}
       LBLOC: {literal: LESIONAL}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.IL13_LES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: CYCLE}
-      LBSTRESU: {literal: CYCLE}
+      LBORRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: CYCLE}
+      LBSTRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: CYCLE}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.BXDTC'"
@@ -194,19 +243,27 @@ rows:
   - id: biopsy_il13_nonlesional
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: IL13}
       LBTEST: {literal: Interleukin 13 mRNA}
       LBCAT: {literal: GENE EXPRESSION}
       LBSPEC: {literal: SKIN BIOPSY}
       LBLOC: {literal: NON-LESIONAL}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.IL13_NONLES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: CYCLE}
-      LBSTRESU: {literal: CYCLE}
+      LBORRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: CYCLE}
+      LBSTRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: CYCLE}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.BX.BXDTC'"
@@ -215,19 +272,27 @@ rows:
   - id: saliva_cathelicidin
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CAMPPRO}
       LBTEST: {literal: Cathelicidin Protein}
       LBCAT: {literal: ANTIMICROBIAL PEPTIDE}
       LBSPEC: {literal: SALIVA}
       LBLOC: {literal: null}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.SAL.SAL_CAMP'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: ng/mL}
-      LBSTRESU: {literal: ng/mL}
+      LBORRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
+      LBSTRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.SAL.SALDTC'"
@@ -236,19 +301,27 @@ rows:
   - id: tape_cathelicidin_lesional
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CAMPPRO}
       LBTEST: {literal: Cathelicidin Protein}
       LBCAT: {literal: ANTIMICROBIAL PEPTIDE}
       LBSPEC: {literal: TAPE STRIP}
       LBLOC: {literal: LESIONAL}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_LES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: ng/mL}
-      LBSTRESU: {literal: ng/mL}
+      LBORRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
+      LBSTRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TSDTC'"
@@ -257,19 +330,27 @@ rows:
   - id: tape_cathelicidin_nonlesional
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    filter: "LBORRES IS NOT NULL"
+    filter: "RAWORRES IS NOT NULL"
     derivations:
       LBTESTCD: {literal: CAMPPRO}
       LBTEST: {literal: Cathelicidin Protein}
       LBCAT: {literal: ANTIMICROBIAL PEPTIDE}
       LBSPEC: {literal: TAPE STRIP}
       LBLOC: {literal: NON-LESIONAL}
-      LBORRES:
+      RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_NONLES'"
           expr: "ONLY(ODM.Value)"
-      LBORRESU: {literal: ng/mL}
-      LBSTRESU: {literal: ng/mL}
+      LBORRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
+      LBSTRESU:
+        case:
+          - when: "RAWORRES = 'NOT DONE'"
+            then: {literal: null}
+          - otherwise: {literal: ng/mL}
       LBDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TSDTC'"
@@ -282,10 +363,10 @@ verifications:
       min: 18
       max: 18
   - implies:
-      id: not-done-result-has-status
-      when: "LBORRES = 'NOT DONE'"
-      then: "LBSTRESN IS NULL AND LBSTAT = 'NOT DONE'"
+      id: not-done-record-has-no-result
+      when: "LBSTAT = 'NOT DONE'"
+      then: "LBORRES IS NULL AND LBSTRESC IS NULL AND LBORRESU IS NULL AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
   - implies:
-      id: completed-result-is-numeric
-      when: "LBORRES <> 'NOT DONE'"
-      then: "LBSTRESN IS NOT NULL AND LBSTAT IS NULL"
+      id: completed-record-is-not-flagged
+      when: "LBSTAT IS NULL"
+      then: "LBORRES IS NOT NULL"
