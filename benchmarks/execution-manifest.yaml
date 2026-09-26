@@ -639,6 +639,9 @@ examples:
   schema-parquet:
     status: executable
     runtimes: ['python']
+  schema-rows-override:
+    status: executable
+    runtimes: ['python']
   schema-sentence-case:
     status: executable
     runtimes: ['python']

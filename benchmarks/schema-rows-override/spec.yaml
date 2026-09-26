@@ -1,0 +1,85 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSTRESN: float}
+  ADSL:
+    path: input/adsl.csv
+    types: {HEIGHTBL: float}
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit Name
+    derivation: VS.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height (cm)
+
+  # The column default: every row template inherits this unless it names
+  # AVAL itself (REQ-0199).
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+
+rows:
+  # This template does not name AVAL, so its rows inherit the column
+  # default: the standardized result passes through unchanged, including
+  # the weight records.
+  - id: collected
+    dataset: VS
+    derivations:
+      PARAMCD: VS.VSTESTCD
+      PARAM: VS.VSTEST
+      HEIGHTBL: {literal: null}
+
+  # This template names AVAL, overriding the default for its rows only
+  # (REQ-0199). The override reads HEIGHTBL in this template's scope
+  # (REQ-1260): each weight record divides by its own subject's baseline
+  # height, and a missing height leaves the index blank.
+  - id: derived_bmi
+    dataset: VS
+    filter: "VS.VSTESTCD = 'WEIGHT'"
+    derivations:
+      PARAMCD: {literal: BMI}
+      PARAM: {literal: Body Mass Index (kg/m^2)}
+      HEIGHTBL: ADSL.HEIGHTBL
+      AVAL:
+        compute:
+          expr: "VS.VSSTRESN / NULLIF(HEIGHTBL * HEIGHTBL / 10000, 0)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
+  - row_count:
+      min: 11
+      max: 11
+  - implies:
+      id: bmi-blank-only-without-usable-height
+      when: "PARAMCD = 'BMI' AND AVAL IS NULL"
+      then: "HEIGHTBL IS NULL OR HEIGHTBL = 0"
