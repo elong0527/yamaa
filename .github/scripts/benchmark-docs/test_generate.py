@@ -486,6 +486,22 @@ class DashboardTests(unittest.TestCase):
             '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle">',
             reviewed,
         )
+        draft = generate.render_benchmark(
+            generate.BENCHMARKS / "schema-structure"
+        ).decode("ascii")
+        self.assertIn(
+            '<img src="https://img.shields.io/badge/Lifecycle-draft-lightgrey"',
+            draft,
+        )
+        self.assertIn('alt="Lifecycle: draft"', draft)
+        self.assertIn(
+            '<h2 id="readme-heading">Summary</h2><a class="lifecycle-badge"',
+            draft,
+        )
+        self.assertIn(
+            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle">',
+            draft,
+        )
 
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_benchmark(

@@ -1,0 +1,97 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+base: AE
+
+# Each adverse event is ranked within its subject, worst severity first,
+# with the later onset date breaking a severity tie. The ranking runs as
+# a window over the intermediate's donor records after the numeric
+# severity is attached to them, so the window reads the earlier-derived
+# name together with the stored fields.
+intermediates:
+  - id: RANKED_AE
+    dataset: AE
+    key: [STUDYID, USUBJID, AESEQ]
+    derivations:
+      # Numeric severity attached to each donor record before the
+      # windows below partition them. The rank window reads it bare;
+      # the sequence window reads it dataset-qualified.
+      SEVN:
+        mapping:
+          source: AE.AESEV
+          missing: null
+          dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
+      # Competition rank of the event within its subject: worst numeric
+      # severity first, later onset date first. Events tied on both
+      # share a rank and the next rank is skipped.
+      SEV_RANK:
+        rank:
+          window:
+            group_by: [AE.USUBJID]
+            order_by:
+              - {variable: SEVN, direction: desc}
+              - {variable: AE.AESTDTC, direction: desc}
+      # Sequence number along the same ordering. Events tied on every
+      # ordering rule number in the order they appear in the source
+      # data: record order is the final tie-break.
+      SEV_SEQ:
+        row_number:
+          window:
+            group_by: [AE.USUBJID]
+            order_by:
+              - {variable: AE.SEVN, direction: desc}
+              - {variable: AE.AESTDTC, direction: desc}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESEV, AESTDTC, SEV_RANK, SEV_SEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+
+  - name: AESEV
+    type: str
+    label: Severity/Intensity
+    derivation: AE.AESEV
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  - name: SEV_RANK
+    type: int
+    label: Severity Rank
+    derivation: RANKED_AE.SEV_RANK
+
+  - name: SEV_SEQ
+    type: int
+    label: Severity Sequence
+    derivation: RANKED_AE.SEV_SEQ
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 9
+      max: 9
