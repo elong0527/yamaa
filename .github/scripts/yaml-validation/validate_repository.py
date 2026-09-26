@@ -5371,10 +5371,16 @@ def validate_spec_contracts(
             )
 
     covered_columns = sorted(declared) if full_spec else []
+    # REQ-0199/REQ-1260: a row-local column-level derivation paired with
+    # rows-entry derivations for the same column is a covered override --
+    # the naming entries use their own derivation, the rest inherit the
+    # default -- not a duplication. Only a column-phase (non-row-local)
+    # derivation paired with a rows entry fails as duplicate_derivation.
+    row_local = row_local_column_derivations(spec)
     for name in covered_columns:
         at_column = name in column_derivations
         at_rows = [name in names for names in row_derivations]
-        if at_column and any(at_rows):
+        if at_column and any(at_rows) and name not in row_local:
             errors.append(
                 f"ERROR: {spec_label}.columns.{name}.derivation: column "
                 "is also derived by a row"

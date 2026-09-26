@@ -80,6 +80,6 @@ verifications:
       min: 11
       max: 11
   - implies:
-      id: bmi-blank-only-without-usable-height
-      when: "PARAMCD = 'BMI' AND AVAL IS NULL"
-      then: "HEIGHTBL IS NULL OR HEIGHTBL = 0"
+      id: bmi-blank-without-usable-height
+      when: "PARAMCD = 'BMI' AND (HEIGHTBL IS NULL OR HEIGHTBL = 0)"
+      then: "AVAL IS NULL"
