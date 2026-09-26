@@ -207,8 +207,8 @@ a value computed from one: fail.
 
 <a id="req-0327"></a>
 
-**REQ-0327.** A `window.filter` that is not a Boolean predicate over
-current-output columns: fail.
+**REQ-0327.** A `window.filter` in row construction that is not a Boolean
+predicate over constructed output columns: fail.
 
 <a id="req-0328"></a>
 
