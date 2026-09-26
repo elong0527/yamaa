@@ -6,8 +6,8 @@
 **Goal:** build `ELDFL` to mark each subject aged 65 or older with `Y` and
 every younger subject with `N`.
 
-**Input:** collected demographics carrying numeric age (`AGE`); some
-subjects have no recorded age.
+**Input:** collected demographics carrying numeric age (`AGE`), including
+one subject with no recorded age.
 
 **Variables:**
 
