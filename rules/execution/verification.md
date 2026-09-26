@@ -88,13 +88,12 @@ addition to the stable specification path.
 
 <a id="req-0375"></a>
 
-**REQ-0375.** `not_missing` passes only when every value is non-missing.
+**REQ-0375.** `not_missing` passes only when every value is non-missing. Every other value check passes missing values; combine with `not_missing` when absence is invalid.
 
 <a id="req-0376"></a>
 
 **REQ-0376.** `allowed_values` requires every non-missing value to equal one
-  listed value under its type's equality, including [Text values](../values/text.md) for strings. Missing
-  values pass; combine with `not_missing` when absence is invalid.
+  listed value under its type's equality, including [Text values](../values/text.md) for strings.
 
 <a id="req-0377"></a>
 
@@ -105,8 +104,7 @@ addition to the stable specification path.
 <a id="req-0378"></a>
 
 **REQ-0378.** `max_length` requires every non-missing string to contain at
-  most `max` [Text values](../values/text.md) scalar values. Missing values pass; combine with
-  `not_missing` when absence is invalid. It is declared only on a `str`
+  most `max` [Text values](../values/text.md) scalar values. It is declared only on a `str`
   column: the text a number or a temporal value renders as is a property of
   [Types and conversion](../values/types.md)'s rendering rather than of the value.
 
@@ -252,8 +250,7 @@ names an unknown column is rejected.
 The named dataset must be declared in the study document; it need not be a
 derivation source of this specification, which is what distinguishes this
 check from the producer-side link assertions [REQ-0369](verification.md#req-0369)
-requires. Missing values pass; combine with `not_missing` when absence is
-invalid. `subset_of` requires an `id`. The ADaM conformance rule that every
+requires. `subset_of` requires an `id`. The ADaM conformance rule that every
 `USUBJID` appear in SDTM `DM` is a `subset_of` naming the study's `DM` dataset
 and its `USUBJID` column. A `subset_of` that declares no `id`, names a
 dataset the study document does not declare, or names an unknown column or
