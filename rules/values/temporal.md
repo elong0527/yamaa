@@ -154,8 +154,7 @@ whitespace is accepted, and no other separator or field order is recognised.
 
 **REQ-0553.** `24:00` and `23:59:60` are rejected for the same reason as the rows above.
 `2025-01-12T24:00` names the moment `2025-01-13T00:00` already names, and the
-two spellings disagree about the day. A leap second is not a value either
-runtime holds.
+two spellings disagree about the day.
 
 <a id="req-0554"></a>
 
