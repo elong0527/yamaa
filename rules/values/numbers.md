@@ -6,19 +6,6 @@ status: normative
 
 # Numeric values
 
-## Purpose
-
-Define numeric representation, promotion, conversion, and overflow.
-
-## Scope and dependencies
-
-This contract owns numeric representation, promotion, overflow, and
-conversion details. [Types](types.md) owns the conversion matrix and missing
-normalization. [Computation](../operations/computation.md) owns arithmetic
-syntax, functions, and evaluation order. [CSV](../storage/csv.md) owns display
-precision, and [functions](../operations/functions.md) own conformance
-comparison. The numeric grammar remains in [grammar/numeric.yaml](../../yaml/grammar/numeric.yaml).
-
 ## Requirements
 
 <a id="req-0014"></a>
@@ -121,21 +108,3 @@ to missing instead of becoming parse failures.
 **REQ-0021.** A non-integral numeric value or a numeric value outside the
 signed 64-bit range must fail conversion to `int` through [REQ-0013](types.md#req-0013).
 Arithmetic errors remain distinct from conversion failures.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [schema-non-finite](../../benchmarks/schema-non-finite/README.md).
-- [negative-integer-overflow](../../benchmarks/negative-integer-overflow/README.md).
-- [negative-conversion-fractional](../../benchmarks/negative-conversion-fractional/README.md).
-- [negative-number-below-limit](../../benchmarks/negative-number-below-limit/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Define numeric representation, promotion, conversion, and overflow. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

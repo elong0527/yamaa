@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Lint rules prose for rationale phrases.
 
-Contracts state what is expected, never why. The sanctioned place for
-"why" is each contract's Rationale section. This check scans every
-``rules/**/*.md`` file outside fenced code blocks, inline code, and
-Rationale sections, and fails on phrases that signal rationale prose:
+Contracts state what is expected. This check scans every ``rules/**/*.md``
+file outside fenced code blocks and inline code, and fails on phrases that
+signal rationale prose:
 
 - because
 - in order to
@@ -35,8 +34,6 @@ PHRASES = [
 PATTERN = re.compile(r"\b(?:" + "|".join(PHRASES) + r")\b", re.IGNORECASE)
 FENCE_RUN = re.compile(r"```+|~~~+")
 INLINE_CODE = re.compile(r"`[^`\n]*`")
-RATIONALE_HEADING = re.compile(r"^##\s+Rationale\s*$")
-ANY_HEADING = re.compile(r"^##\s+")
 FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
 # (relative path from rules/, line pattern, why it cannot be reworded)
@@ -47,12 +44,10 @@ def strip_prose(path):
     """Yield (line number, text) for lintable prose lines of a markdown file.
 
     Drops frontmatter, fenced code blocks, and inline code; text before a
-    mid-line fence marker still counts as prose. Rationale sections are
-    skipped: "why" belongs there.
+    mid-line fence marker still counts as prose.
     """
     body = FRONTMATTER.sub("", path.read_text(encoding="ascii"))
     in_fence = False
-    in_rationale = False
     for number, raw in enumerate(body.splitlines(), start=1):
         markers = FENCE_RUN.findall(raw)
         if markers:
@@ -60,27 +55,13 @@ def strip_prose(path):
             # "**REQ-0160.** ```text"); the prose head still counts.
             head = raw[: FENCE_RUN.search(raw).start()]
             if not in_fence and head.strip():
-                line = INLINE_CODE.sub("", head)
-                if RATIONALE_HEADING.match(line):
-                    in_rationale = True
-                elif ANY_HEADING.match(line):
-                    in_rationale = False
-                if not in_rationale:
-                    yield number, line
+                yield number, INLINE_CODE.sub("", head)
             if len(markers) % 2 == 1:
                 in_fence = not in_fence
             continue
         if in_fence:
             continue
-        line = raw
-        if RATIONALE_HEADING.match(line):
-            in_rationale = True
-            continue
-        if ANY_HEADING.match(line):
-            in_rationale = False
-        if in_rationale:
-            continue
-        yield number, INLINE_CODE.sub("", line)
+        yield number, INLINE_CODE.sub("", raw)
 
 
 def check(root):
@@ -116,7 +97,7 @@ def main():
     if errors:
         print(f"FAIL: {len(errors)} rationale-phrase violation(s).")
         return 1
-    print("PASS: rules prose has no rationale phrases outside Rationale sections.")
+    print("PASS: rules prose has no rationale phrases.")
     return 0
 
 

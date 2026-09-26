@@ -6,23 +6,6 @@ status: normative
 
 # Local handlers
 
-## Purpose
-
-Handle conditions at their expression or conversion site and report substitutions.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](lifecycle.md).
-- [Aggregation](../operations/aggregation.md).
-- [Lookup and joins](../operations/lookup.md).
-- [Schema language](../reference/schema-language.md).
-- [Name binding](../specification/binding.md).
-- [Execution lifecycle](lifecycle.md).
-- [Temporal values](../values/temporal.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Handler sites
@@ -211,19 +194,3 @@ failure.
 <a id="req-0366"></a>
 
 **REQ-0366.** A conversion replacement that cannot be converted: fail.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [schema-text-mapping-unmapped](../../benchmarks/schema-text-mapping-unmapped/README.md).
-- [negative-mapping-unmapped-value](../../benchmarks/negative-mapping-unmapped-value/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Handle conditions at their expression or conversion site and report substitutions. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

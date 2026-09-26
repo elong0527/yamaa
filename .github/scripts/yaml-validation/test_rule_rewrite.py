@@ -37,6 +37,12 @@ class RuleRewriteTests(unittest.TestCase):
         migration = load_migration(self.root)
         self.assertEqual(resolve_requirement("R011-35", migration), ["REQ-0005"])
         self.assertEqual(resolve_requirement("REQ-0005", migration), ["REQ-0005"])
+        self.assertEqual(resolve_requirement("R001-42", migration), ["REQ-0033"])
+        self.assertEqual(resolve_requirement("REQ-0073", migration), ["REQ-0033"])
+        self.assertEqual(resolve_requirement("R002-28", migration), ["REQ-0080"])
+        self.assertEqual(resolve_requirement("REQ-0104", migration), ["REQ-0080"])
+        self.assertEqual(resolve_requirement("REQ-0096", migration), ["REQ-0098"])
+        self.assertEqual(resolve_requirement("REQ-0332", migration), [])
         self.assertGreater(len(resolve_requirement("R007-9", migration)), 1)
         self.assertEqual(resolve_requirement("R999-1", migration), [])
         self.assertTrue(resolve_requirement("R001-12a", migration))
@@ -82,6 +88,29 @@ class RuleRewriteTests(unittest.TestCase):
         errors, _ = check(self.root)
         self.assertIn("duplicate requirement: REQ-0001", errors)
 
+    def test_retired_requirement_cannot_be_redefined(self):
+        path = self.rules / "execution/lifecycle.md"
+        path.write_text(path.read_text() + "\n**REQ-0073.** Restored.\n")
+        errors, _ = check(self.root)
+        self.assertIn("retired requirement still defined: REQ-0073", errors)
+
+    def test_retired_replacement_must_exist(self):
+        self.replace(
+            self.rules / "migration.yaml",
+            '"replacement": ["REQ-0033"]',
+            '"replacement": ["REQ-9999"]',
+        )
+        errors, _ = check(self.root)
+        self.assertIn("invalid retired requirement replacement: REQ-0073", errors)
+
+    def test_redirected_legacy_alias_must_match_retired_replacement(self):
+        self.replace(
+            self.rules / "migration.yaml",
+            'R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0080"]}',
+            'R002-28: {"file": "R002-source-binding.md", "targets": ["REQ-0081"]}',
+        )
+        errors, _ = check(self.root)
+        self.assertIn("invalid reverse legacy alias: REQ-0104 -> R002-28", errors)
     def test_retired_requirement_stub_fails(self):
         self.replace(
             self.rules / "values/text.md",
@@ -140,6 +169,11 @@ class RuleRewriteTests(unittest.TestCase):
     def test_generated_references_match_sources(self):
         for path, expected in generated(self.root).items():
             self.assertEqual(path.read_text(), expected)
+        index = (self.rules / "reference/requirements.md").read_text()
+        self.assertNotIn("| [REQ-0073]", index)
+        self.assertIn("R001-42", next(
+            line for line in index.splitlines() if line.startswith("| [REQ-0033]")
+        ))
 
 
 if __name__ == "__main__":

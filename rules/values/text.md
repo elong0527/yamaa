@@ -6,18 +6,6 @@ status: normative
 
 # Text values
 
-## Purpose
-
-Define Unicode scalar identity, preservation, equality, and order.
-
-## Scope and dependencies
-
-This contract owns runtime Unicode scalar values, identity, and order.
-[Types](types.md) owns missingness and comparability. [Text operations](../operations/text.md)
-own casing, templates, and patterns; storage profiles own encodings.
-[Specification structure](../specification/structure.md) owns the ASCII
-source-file boundary.
-
 ## Requirements
 
 <a id="req-0022"></a>
@@ -92,19 +80,3 @@ fail with `invalid_text` at its entry boundary.
 **REQ-0030.** An implementation unable to preserve scalar values or apply
 this contract must fail before evaluation with `unsupported_text_contract`.
 It must not substitute a host default.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-adsl-text](../../benchmarks/schema-text-functions/README.md).
-- [negative-source-bad-encoding](../../benchmarks/negative-source-bad-encoding/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Define Unicode scalar identity, preservation, equality, and order. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

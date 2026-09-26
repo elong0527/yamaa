@@ -6,20 +6,6 @@ status: normative
 
 # Types and conversion
 
-## Purpose
-
-Define column types, missing normalization, compatibility, and conversion.
-
-## Scope and dependencies
-
-This contract owns the column vocabulary, missing normalization, input
-compatibility, and conversion matrix. [Numeric values](numbers.md),
-[text values](text.md), and [temporal values](temporal.md) own their value
-spaces and representations. The [lifecycle](../execution/lifecycle.md) owns
-conversion timing, [handlers](../execution/handlers.md) own replacements,
-and [ingestion](../storage/ingestion.md) owns source-field typing.
-
-
 ## Requirements
 
 <a id="req-0001"></a>
@@ -139,8 +125,7 @@ canonical fields but does not retain collected precision.
 
 <a id="req-1149"></a>
 
-**REQ-1149.** The `literal_value` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1149.** The `literal_value` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -148,8 +133,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1150"></a>
 
-**REQ-1150.** The `module` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1150.** The `module` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -180,22 +164,3 @@ Numeric range and integrality failures are defined by [REQ-0021](numbers.md#req-
 
 **REQ-0324.** A `sources` list or an ordering term mixing two runtime types
 that are not mutually comparable: fail rather than convert an operand.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [schema-non-finite](../../benchmarks/schema-non-finite/README.md).
-- [negative-ambiguous-type](../../benchmarks/negative-ambiguous-type/README.md).
-- [negative-number-below-limit](../../benchmarks/negative-number-below-limit/README.md).
-- [negative-greatest-mixed](../../benchmarks/negative-greatest-mixed/README.md).
-- [negative-least-mixed](../../benchmarks/negative-least-mixed/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Define column types, missing normalization, compatibility, and conversion. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

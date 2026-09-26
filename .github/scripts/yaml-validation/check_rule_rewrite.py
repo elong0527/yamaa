@@ -16,12 +16,8 @@ RETIRED_DEFINITION = re.compile(
 REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
 LEGACY = re.compile(r"R[0-9]{3}-[1-9][0-9]*[a-z]?\Z")
 SECTIONS = [
-    "Purpose",
-    "Scope and dependencies",
     "Requirements",
     "Error conditions",
-    "Conformance examples",
-    "Rationale",
 ]
 
 
@@ -47,9 +43,20 @@ def load_migration(root):
 
 def resolve_requirement(identifier, migration):
     """Resolve canonical or historical IDs without depending on a filename."""
-    if identifier in migration["requirements"]:
-        return [identifier]
-    return migration["sources"].get(identifier, {}).get("targets", [])
+    requirements = migration["requirements"]
+    targets = (
+        [identifier]
+        if identifier in requirements
+        else migration["sources"].get(identifier, {}).get("targets", [])
+    )
+    resolved = []
+    for target in targets:
+        entry = requirements.get(target, {})
+        active = entry.get("replacement", []) if entry.get("retired") else [target]
+        for current in active:
+            if current not in resolved:
+                resolved.append(current)
+    return resolved
 
 
 def check(root):
@@ -120,7 +127,8 @@ def check(root):
             rf"^\| .*\]\({re.escape(label)}\) \| normative \|", index, re.MULTILINE
         ):
             errors.append(f"{label}: absent from normative rule index")
-        if re.findall(r"^## (.+)$", body, re.MULTILINE) != SECTIONS:
+        sections = re.findall(r"^## (.+)$", body, re.MULTILINE)
+        if sections not in (["Requirements"], SECTIONS):
             errors.append(f"{label}: incorrect contract section order")
         definitions = DEFINITION.findall(body)
         if not definitions:
@@ -142,11 +150,23 @@ def check(root):
     for identifier in sorted(found.keys() - requirements.keys()):
         errors.append(f"requirement has no migration entry: {identifier}")
     for identifier, entry in requirements.items():
-        if (
-            not isinstance(entry, dict)
-            or entry.get("file") != found.get(identifier)
-            or identifier not in found
-        ):
+        if not isinstance(entry, dict):
+            errors.append(f"invalid requirement migration entry: {identifier}")
+            continue
+        if entry.get("retired") is True:
+            replacements = entry.get("replacement")
+            if identifier in found:
+                errors.append(f"retired requirement still defined: {identifier}")
+            if not (directory / str(entry.get("file", ""))).is_file():
+                errors.append(f"retired requirement owner missing: {identifier}")
+            if (
+                not isinstance(replacements, list)
+                or not all(isinstance(replacement, str) for replacement in replacements)
+                or len(replacements) != len(set(replacements))
+                or any(replacement not in found for replacement in replacements)
+            ):
+                errors.append(f"invalid retired requirement replacement: {identifier}")
+        elif entry.get("file") != found.get(identifier) or identifier not in found:
             errors.append(f"migration target missing or in wrong file: {identifier}")
 
     coverage = Counter()
@@ -168,10 +188,13 @@ def check(root):
             continue
         valid = True
         for target in targets:
-            if target not in found:
+            entry = requirements.get(target)
+            if not isinstance(entry, dict) or (
+                target not in found and not entry.get("retired")
+            ):
                 errors.append(f"unknown migration target: {source} -> {target}")
                 valid = False
-            elif source not in requirements.get(target, {}).get("sources", []):
+            elif source not in entry.get("sources", []):
                 errors.append(f"missing reverse provenance: {source} -> {target}")
                 valid = False
         if valid:
@@ -186,7 +209,7 @@ def check(root):
         if source in prose_by_source:
             errors.append(f"duplicate schema provenance: {source}")
         prose_by_source[source] = target
-        if target not in found or source not in requirements.get(target, {}).get(
+        if target not in requirements or source not in requirements.get(target, {}).get(
             "sources", []
         ):
             errors.append(f"unresolved schema provenance: {source}")
@@ -196,7 +219,15 @@ def check(root):
             errors.append(f"missing or duplicate provenance: {target}")
         for source in provenance:
             if source in sources:
-                if target not in sources[source].get("targets", []):
+                aliases = sources[source].get("targets", [])
+                replacements = entry.get("replacement", []) if isinstance(entry, dict) else []
+                redirected = (
+                    isinstance(entry, dict)
+                    and entry.get("retired") is True
+                    and bool(replacements)
+                    and set(replacements).issubset(resolve_requirement(source, migration))
+                )
+                if target not in aliases and not redirected:
                     errors.append(f"invalid reverse legacy alias: {target} -> {source}")
             elif prose_by_source.get(source) != target:
                 errors.append(f"unknown provenance: {target} -> {source}")
@@ -221,14 +252,16 @@ def check(root):
             pointer = re.fullmatch(r"See (REQ-[0-9]{4,}) in rules/([^ ]+)\.", comment)
             if (
                 pointer is None
+                or pointer[1] not in found
                 or requirements.get(pointer[1], {}).get("file") != pointer[2]
             ):
                 errors.append(f"schema comment has no canonical owner: {path.name}")
         for field, value in descriptions(yaml.load(schema_text, Loader=UniqueLoader)):
             source = f"{path.name}:{field}"
             target = prose_by_source.get(source)
-            file = requirements.get(target, {}).get("file")
-            if value != f"See {target} in rules/{file}.":
+            current = resolve_requirement(target, migration) if target else []
+            owner = requirements.get(current[0], {}) if len(current) == 1 else {}
+            if len(current) != 1 or value != f"See {current[0]} in rules/{owner.get('file')}.":
                 errors.append(f"schema description has no canonical owner: {source}")
     return errors, {
         family: (mapped[family], total) for family, total in sorted(coverage.items())

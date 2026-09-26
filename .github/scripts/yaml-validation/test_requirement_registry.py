@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Tests for check_requirement_registry.py.
 
-Every requirement ID is defined exactly once as a bold dotted marker
-``**REQ-0001.**``; every other REQ-XXXX citation in rules/ (including
-rules/migration.yaml) must resolve to one of those definitions.
+Every active requirement ID is defined exactly once as a bold dotted marker
+``**REQ-0001.**``. Retired IDs occur only in migration.yaml; other citations
+in rules/ must resolve to active definitions.
 """
 
 import tempfile
@@ -100,6 +100,19 @@ class RequirementRegistryTests(unittest.TestCase):
                 for error in found
             ),
             found,
+        )
+
+    def test_retired_id_is_allowed_only_in_migration(self):
+        self.write("values/a.md", "**REQ-0001.** First.\n")
+        (self.rules / "migration.yaml").write_text(
+            "requirements:\n"
+            "  REQ-0099: {retired: true, replacement: [REQ-0001]}\n",
+            encoding="ascii",
+        )
+        self.assertEqual(self.errors(), [])
+        self.write("operations/b.md", "See REQ-0099.\n")
+        self.assertTrue(
+            any("unresolved requirement citation: REQ-0099" in error for error in self.errors())
         )
 
     def test_definition_in_fenced_code_does_not_count(self):

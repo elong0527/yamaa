@@ -6,20 +6,6 @@ status: normative
 
 # Resource resolution
 
-## Purpose
-
-Confine declared source paths and read one immutable snapshot per physical file.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Project functions](../operations/functions.md).
-- [Name binding](../specification/binding.md).
-- [Specification composition](../specification/composition.md).
-- [Source ingestion](ingestion.md).
-- [Text values](../values/text.md).
-
 ## Requirements
 
 ### The approved roots
@@ -30,45 +16,36 @@ This contract owns the requirements below. Related contracts:
 local directory fixed for the whole run. The root is the directory holding the
 **project configuration** of [REQ-0768](resources.md#req-0768). A run whose entry file sits under no
 project configuration, and whose runner names no root, uses the directory
-holding the entry file, so a study that declares nothing keeps
-its earlier behavior. A runner may name the root.
+holding the entry file. A runner may name the root.
 
 <a id="req-0768"></a>
 
 **REQ-0768.** A **project configuration** is one `yamaa-project.yaml` file. A run
 finds it by walking up from the entry file to the first directory that holds
-one, and reads it once, before any specification. It is the study authors'
-own statement of where the study keeps things, so
-the file marks the project root by sitting at the root rather than naming
-the root. A runner that names the root takes the configuration
-sitting at that root and no other, so naming a narrower root never inherits a
-wider project's declarations.
+one, and reads it once, before any specification. The file's directory is the
+project root. A runner that names the root takes only the configuration at
+that root.
 
 <a id="req-0769"></a>
 
 **REQ-0769.** A run may also receive **approved data roots**: existing local
 directories that a rooted path may name. They come from the project
-configuration's `data_roots`, from the runner, or from both. They are how one
-organization keeps code and data apart -- the project root holds the
-specifications a study is reviewed from, an approved data root holds stored
-data the study reads. A run given none leaves the approved project root as the
-only approved root. Every approved root is canonicalized and opened when it is
-selected, so nothing that happens to a name above it afterwards moves what the
-run reads.
+configuration's `data_roots`, from the runner, or from both. Without approved
+data roots, only the project root is approved. Every approved root is
+canonicalized and opened when selected; later changes to its parent path do
+not redirect reads.
 
 <a id="req-0770"></a>
 
 **REQ-0770.** The approved roots are fixed before any specification is read. **No
 specification field, no layer [Specification composition](../specification/composition.md) reaches, and no value a specification reads
 contributes to the roots.** Only the entry project's own configuration and the
-runner do. A study says where its own data is kept; composition never enlarges
-what a run may read, so an inherited layer a study does not control cannot
-redirect where that study reads from, and a producing specification reached
-through `dataset_class.schema` is read under the roots of the run that reached
-it, never under a configuration of its own. When [Project functions](../operations/functions.md) also selects a project
-root for an implementation environment, that root and the approved project root
-are the same directory; a difference fails before code activation. An approved
-data root holds data a run reads, never code it activates.
+runner do. A producing specification reached through `dataset_class.schema`
+uses the same approved roots, never its own configuration. When
+[Project functions](../operations/functions.md) also selects a project root
+for an implementation environment, it must be the same directory; a mismatch
+fails before code activation. An approved data root holds readable data, not
+activatable code.
 
 <a id="req-0771"></a>
 
@@ -76,10 +53,7 @@ data root holds data a run reads, never code it activates.
 that names data roots makes them the **ceiling**: each root the configuration
 declares resolves inside one of them, or the run fails before it reads a
 specification. A runner may also decline the configuration's data roots
-entirely, which is the mode a packaging or conformance run uses -- every source
-then resolves inside the project root, and portability is enforced there rather
-than at specification-read time. A shared runner therefore confines a study it
-did not write, while a study run by its own authors approves its own data.
+entirely; every source then resolves inside the project root.
 
 <a id="req-0772"></a>
 
@@ -100,34 +74,27 @@ the approved roots like any other.
 **REQ-0773.** A `project_path` is either **relative** -- one or more segments
 separated by `/` -- or **rooted** -- a leading `/`, or one ASCII letter
 followed by `:/`, and then one or more such segments. Path form and syntax are
-decided before the filesystem is consulted. A malformed path therefore fails
-identically on every platform and reveals nothing about the host.
+decided before the filesystem is consulted. A malformed path fails validation.
 
 <a id="req-0774"></a>
 
-**REQ-0774.** A rooted path can name a host location outright. [REQ-0781](resources.md#req-0781) still
-  requires a rooted path to name an approved root, so the run reads no more than the approved root
-  contains. A submission package must be portable. An intermediate study layout need not be portable.
+**REQ-0774.** A rooted path may name a host location only inside an approved
+root under [REQ-0781](#req-0781).
 
 <a id="req-0775"></a>
 
-**REQ-0775.** No URI scheme. A specification declares stored files;
-  retrieval, caching, and authentication are not part of a derivation. One
-  One ASCII letter followed by `:/` is a drive, not a scheme. One
-  platform spells a rooted location that way. Every other `scheme:` prefix is a
-  scheme, a drive letter followed by anything else included.
+**REQ-0775.** A `project_path` must not contain a URI scheme. One ASCII
+letter followed by `:/` is a drive path, not a scheme; every other `scheme:`
+prefix is prohibited.
 
 <a id="req-0776"></a>
 
-**REQ-0776.** No `\` anywhere. A backslash is an ordinary filename character
-  on one platform and a separator on another, so a path containing one
-  denotes two different files.
+**REQ-0776.** A `project_path` must not contain `\`.
 
 <a id="req-0777"></a>
 
-**REQ-0777.** No empty segment and no trailing separator. Each is a
-  misspelling with no legitimate layout behind it, and an empty path is one
-  empty segment.
+**REQ-0777.** A `project_path` must not contain an empty segment or trailing
+separator. An empty path has one empty segment and is invalid.
 
 <a id="req-0778"></a>
 
@@ -289,8 +256,7 @@ when content does.
 
 <a id="req-1151"></a>
 
-**REQ-1151.** The `project_path` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1151.** The `project_path` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -348,22 +314,3 @@ which reports under `ingest`.
   directories, or declares one outside a ceiling the runner named: fail before
   any specification is read. A malformed configuration is a run that was never
   configured, not a run with fewer roots.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-path-absolute](../../benchmarks/negative-path-absolute/README.md).
-- [negative-path-directory](../../benchmarks/negative-path-directory/README.md).
-- [negative-path-missing](../../benchmarks/negative-path-missing/README.md).
-- [negative-path-parent-escape](../../benchmarks/negative-path-parent-escape/README.md).
-- [schema-inheritance-project-root](../../benchmarks/schema-inheritance-project-root/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Confine declared source paths and read one immutable snapshot per physical file. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

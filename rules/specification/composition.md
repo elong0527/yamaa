@@ -6,21 +6,6 @@ status: normative
 
 # Specification composition
 
-## Purpose
-
-Resolve inherited layers into one minimal, ordered specification.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Schema language](../reference/schema-language.md).
-- [Specification structure](structure.md).
-- [Resource resolution](../storage/resources.md).
-
 ## Requirements
 
 ### Terms
@@ -450,26 +435,3 @@ and contributing file.
 **REQ-0661.** An unknown reference, cycle, incomplete
 final object, or other invalid final result fails under the rule that owns that
 constraint, with contributing provenance included in the diagnostic.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [schema-inheritance](../../benchmarks/schema-inheritance/README.md).
-- [schema-inherited-output](../../benchmarks/schema-inherited-output/README.md).
-- [negative-cyclic-parent](../../benchmarks/negative-cyclic-parent/README.md).
-- [negative-property-clear](../../benchmarks/negative-property-clear/README.md).
-- [negative-version-mismatch](../../benchmarks/negative-version-mismatch/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Resolve inherited layers into one minimal, ordered specification. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
-
-`output` inherits like every other replaced root field. Specifications that
-publish one table keep its column manifest in the layer they share, written
-once, rather than in copies each entry must keep identical.

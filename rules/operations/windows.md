@@ -6,19 +6,6 @@ status: normative
 
 # Windows
 
-## Purpose
-
-Partition constructed output rows and compute ranks, neighbors, and baseline selections.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Specification composition](../specification/composition.md).
-- [Aggregation](aggregation.md).
-- [Expression evaluation](expressions.md).
-- [Temporal values](../values/temporal.md).
-
 ## Requirements
 
 ### Named windows
@@ -107,8 +94,7 @@ Scalar selection follows [REQ-0315](expressions.md#req-0315); temporal operation
 
 <a id="req-1122"></a>
 
-**REQ-1122.** The `window_spec` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1122.** The `window_spec` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -118,8 +104,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1123"></a>
 
-**REQ-1123.** The `expressions.row_number` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1123.** The `expressions.row_number` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -128,8 +113,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1124"></a>
 
-**REQ-1124.** The `expressions.rank` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1124.** The `expressions.rank` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -139,8 +123,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1125"></a>
 
-**REQ-1125.** The `expressions.row_value` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1125.** The `expressions.row_value` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -151,8 +134,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1126"></a>
 
-**REQ-1126.** The `expressions.previous_non_missing` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1126.** The `expressions.previous_non_missing` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -162,8 +144,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1239"></a>
 
-**REQ-1239.** The `expressions.locf` interface has the following meanings.
-Shape and structural constraints come from its schema declaration.
+**REQ-1239.** The `expressions.locf` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -189,8 +170,7 @@ derivation:
 
 <a id="req-1127"></a>
 
-**REQ-1127.** The `expressions.baseline_flag` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1127.** The `expressions.baseline_flag` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -201,8 +181,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1129"></a>
 
-**REQ-1129.** The `module` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1129.** The `module` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -248,23 +227,3 @@ positions to number or to move along. Omitting it is a validation error.
 `window.order_by`: it locates the baseline row by date, not by a
 declared order. Declaring it is a validation error rather than silently
 ignored.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-adae-severity-rank](../../benchmarks/adam-adae-severity-rank/README.md).
-- [adam-adrs-confirmed-response](../../benchmarks/adam-adrs-confirmed-response/README.md).
-- [schema-window-functions](../../benchmarks/schema-window-functions/README.md).
-- [adam-advs-locf](../../benchmarks/adam-advs-locf/README.md).
-- [negative-unknown-window](../../benchmarks/negative-unknown-window/README.md).
-- [negative-locf-no-order](../../benchmarks/negative-locf-no-order/README.md).
-- [negative-row-no-prior](../../benchmarks/negative-row-no-prior/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-One contract defines partitions, ranks, neighbors, and baseline selection.

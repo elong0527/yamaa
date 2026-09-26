@@ -6,21 +6,6 @@ status: normative
 
 # CSV profile
 
-## Purpose
-
-Read admitted CSV spellings and write canonical CSV bytes and display precision.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Specification structure](../specification/structure.md).
-- [Source ingestion](ingestion.md).
-- [Resource resolution](resources.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Writing: The csv profile
@@ -122,8 +107,9 @@ conversion has no exponent.
 
 <a id="req-0744"></a>
 
-**REQ-0744.** `output.decimals` is an optional non-negative integer. It applies
-to `csv` alone, and to every `float` column of the artifact.
+**REQ-0744.** `output.decimals` is an optional non-negative integer. An
+invalid value fails validation. It applies to `csv` alone, and to every
+`float` column of the artifact.
 
 <a id="req-0745"></a>
 
@@ -302,11 +288,6 @@ delivers, not of which library produced it.
 
 ### Writing: Errors
 
-<a id="req-0761"></a>
-
-**REQ-0761.** An
-`output.decimals` that is not a non-negative integer: fail validation.
-
 <a id="req-0762"></a>
 
 **REQ-0762.** An `output.decimals` declared on a path the mapping resolves to
@@ -360,21 +341,3 @@ message carries no host path.
 **REQ-0854.** Repairing a rejected file in the reader -- skipping a mark,
   trimming a field, padding a record, renaming a duplicate name, or
   normalizing a terminator inside a value: none is an implementation option.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-source-field-duplicate](../../benchmarks/negative-source-field-duplicate/README.md).
-- [negative-source-unnamed-field](../../benchmarks/negative-source-unnamed-field/README.md).
-- [negative-source-extra-field](../../benchmarks/negative-source-extra-field/README.md).
-- [negative-source-unterminated-quote](../../benchmarks/negative-source-unterminated-quote/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Read admitted CSV spellings and write canonical CSV bytes and display precision. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.
