@@ -93,13 +93,8 @@ metadata of its own beyond what the format requires.
 
 <a id="req-0742"></a>
 
-**REQ-0742.** The bytes are not fixed. A Parquet writer stamps its own
-identity and version into the file, and the row-group and page sizing, the
-encodings it selects, and the statistics it records are properties of the
-library rather than of this design. Requiring identical bytes would require
-every conforming implementation to abandon its ecosystem's writer, which buys
-less than it costs. An artifact needing direct byte comparison is written
-under `csv`, whose byte guarantee is exactly that.
+**REQ-0742.** Conforming Parquet artifacts are not required to have identical
+bytes. Artifacts requiring byte-identical output must use the `csv` profile.
 
 #### Floats are stored, not rendered
 
