@@ -72,10 +72,8 @@ value. Two runtimes that each shift by their own offset do not agree.
 
 <a id="req-0739"></a>
 
-**REQ-0739.** A `datetime` has whole-second resolution, so its microsecond part
-is always zero. Microseconds are used. The format offers no second unit,
-and both ecosystems' readers agree on this one. The finer resolution is
-never used.
+**REQ-0739.** A `datetime` has whole-second resolution. It is written with the
+microsecond unit, and its microsecond part is always zero.
 
 #### Determinism
 
