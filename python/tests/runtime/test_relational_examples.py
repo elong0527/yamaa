@@ -179,9 +179,14 @@ def test_a_right_side_orphan_creates_no_row_and_studies_stay_apart() -> None:
         ("CATH", "CATH-UCSD-0002"),
         ("CATH", "CATH-UCSD-0003"),
         ("CATH", "CATH-UCSD-0004"),
+        ("CATH", "CATH-UCSD-0006"),
         ("CATH2", "CATH-UCSD-0001"),
     ]
-    reused = {row["STUDYID"]: row["RFXSTDTC"].isoformat() for row in rows[3:]}
+    reused = {
+        row["STUDYID"]: row["RFXSTDTC"].isoformat()
+        for row in rows[3:]
+        if row["RFXSTDTC"] is not None
+    }
     assert reused == {"CATH": "2025-04-05", "CATH2": "2025-05-06"}
 
 
