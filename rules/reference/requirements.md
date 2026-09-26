@@ -40,7 +40,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0031](../execution/lifecycle.md#req-0031) | `execution/lifecycle.md` | R001-1 |
 | [REQ-0032](../execution/lifecycle.md#req-0032) | `execution/lifecycle.md` | R001-2 |
 | [REQ-0033](../execution/lifecycle.md#req-0033) | `execution/lifecycle.md` | R001-3 |
-| [REQ-0034](../execution/rows.md#req-0034) | `execution/rows.md` | R001-4 |
+| [REQ-0034](../execution/rows.md#req-0034) | `execution/rows.md` | R001-4, R001-32 |
 | [REQ-0035](../execution/rows.md#req-0035) | `execution/rows.md` | R001-5 |
 | [REQ-0036](../execution/rows.md#req-0036) | `execution/rows.md` | R001-6 |
 | [REQ-0037](../execution/rows.md#req-0037) | `execution/rows.md` | R001-7 |
@@ -69,7 +69,6 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-0060](../execution/lifecycle.md#req-0060) | `execution/lifecycle.md` | R001-28 |
 | [REQ-0061](../execution/lifecycle.md#req-0061) | `execution/lifecycle.md` | R001-29 |
 | [REQ-0062](../storage/publication.md#req-0062) | `storage/publication.md` | R001-31 |
-| [REQ-0063](../execution/rows.md#req-0063) | `execution/rows.md` | R001-32 |
 | [REQ-0064](../execution/rows.md#req-0064) | `execution/rows.md` | R001-33 |
 | [REQ-0065](../execution/rows.md#req-0065) | `execution/rows.md` | R001-34 |
 | [REQ-0066](../execution/rows.md#req-0066) | `execution/rows.md` | R001-35 |

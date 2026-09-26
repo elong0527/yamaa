@@ -30,7 +30,8 @@ This contract owns the requirements below. Related contracts:
 **REQ-0034.** Each row template builds output rows from one input dataset,
 named by `row.dataset`. When `root.input` declares exactly one dataset, a
 row template omitting `dataset` builds from that dataset. When `root.input`
-declares more than one, every row template must state `dataset`.
+declares more than one, every row template must state `dataset`; a template
+omitting it fails.
 
 <a id="req-0035"></a>
 
@@ -178,11 +179,6 @@ structural constraints come from its schema declaration.
 | `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
 
 ## Error conditions
-
-<a id="req-0063"></a>
-
-**REQ-0063.** A `rows` entry omitting `dataset` when `root.input`
-  declares more than one: fail.
 
 <a id="req-0064"></a>
 
