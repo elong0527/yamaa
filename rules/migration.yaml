@@ -35,7 +35,7 @@ sources:
   R001-29: {"file": "R001-execution-model.md", "targets": ["REQ-0061"]}
   R001-30: {"file": "R001-execution-model.md", "targets": ["REQ-0211"]}
   R001-31: {"file": "R001-execution-model.md", "targets": ["REQ-0062"]}
-  R001-32: {"file": "R001-execution-model.md", "targets": ["REQ-0063"]}
+  R001-32: {"file": "R001-execution-model.md", "targets": ["REQ-0034"]}
   R001-33: {"file": "R001-execution-model.md", "targets": ["REQ-0064"]}
   R001-34: {"file": "R001-execution-model.md", "targets": ["REQ-0065"]}
   R001-35: {"file": "R001-execution-model.md", "targets": ["REQ-0066"]}
@@ -1107,7 +1107,7 @@ requirements:
   REQ-0031: {"file": "execution/lifecycle.md", "sources": ["R001-1"]}
   REQ-0032: {"file": "execution/lifecycle.md", "sources": ["R001-2"]}
   REQ-0033: {"file": "execution/lifecycle.md", "sources": ["R001-3"]}
-  REQ-0034: {"file": "execution/rows.md", "sources": ["R001-4"]}
+  REQ-0034: {"file": "execution/rows.md", "sources": ["R001-4", "R001-32"]}
   REQ-0035: {"file": "execution/rows.md", "sources": ["R001-5"]}
   REQ-0036: {"file": "execution/rows.md", "sources": ["R001-6"]}
   REQ-0037: {"file": "execution/rows.md", "sources": ["R001-7"]}
