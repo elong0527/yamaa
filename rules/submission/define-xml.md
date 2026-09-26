@@ -128,7 +128,7 @@ identifier must not equal a dataset identifier; checked, not disambiguated.
 **REQ-0972.** An implementation must not mint an identifier from a counter, a
 hash, or a random value. A generated identifier is a function of declarations
 a reviewer can read, so a document regenerated after an unrelated edit keeps
-every identifier it had, and two implementations agree without coordinating.
+every identifier it had.
 
 <a id="req-0973"></a>
 
