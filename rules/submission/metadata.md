@@ -477,8 +477,7 @@ supporting documents.
 
 <a id="req-0902"></a>
 
-**REQ-0902.** `description` is required, so a reader who cannot run the code
-still learns what the column means. `type` defaults to `Computation`; a
+**REQ-0902.** `description` is required. `type` defaults to `Computation`; a
 method that replaces a missing value with a substitute declares `Imputation`.
 
 <a id="req-0903"></a>
