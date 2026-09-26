@@ -6,7 +6,7 @@ input:
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, SEX, SEXN, SEXDECOD, RACE, RACEN, AGE, AGEGR1]
+  columns: [STUDYID, USUBJID, SEX, SEXN, RACE, RACEN, AGE, AGEGR1]
 
 columns:
   - name: STUDYID
@@ -19,19 +19,14 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The three sex columns match the collected sex without regard to case
-  # ('m' is M). An empty or unlisted value takes the fallback: U, 0, Unknown.
+  # SEX carries the collected DM value through unchanged; a missing source
+  # becomes U. SEXN is the numeric code of the carried SEX.
   - name: SEX
     type: str
     label: Sex
     derivation:
-      mapping:
-        source: DM.SEX
-        case_sensitive: false
-        dict:
-          M: M
-          F: F
-          U: U
+      first_available:
+        sources: [DM.SEX]
         missing: U
     verifications:
       - not_missing: {}
@@ -45,26 +40,12 @@ columns:
     label: Sex (N)
     derivation:
       mapping:
-        source: DM.SEX
-        case_sensitive: false
+        source: SEX
         dict:
           M: 1
           F: 2
           U: 0
         missing: 0
-
-  - name: SEXDECOD
-    type: str
-    label: Sex Decoded
-    derivation:
-      mapping:
-        source: DM.SEX
-        case_sensitive: false
-        dict:
-          M: Male
-          F: Female
-          U: Unknown
-        missing: Unknown
 
   - name: RACE
     type: str
