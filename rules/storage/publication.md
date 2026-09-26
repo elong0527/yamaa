@@ -127,12 +127,7 @@ conforming artifact wrongly without failing, and neither is permitted.
 
 <a id="req-0719"></a>
 
-**REQ-0719.** The two profiles exist for different readers. `parquet` is the
-production container: it carries its own types, so an artifact read by another
-specification needs no declaration to be understood, and a large one does not
-pay for decimal text. `csv` is the reviewable container: a human can read it, a
-diff can show what moved in it, and its bytes are fixed exactly, which is what
-makes it usable as a golden contract.
+**REQ-0719.** The `parquet` profile carries its own types: an artifact read by another specification needs no declaration to be understood. The `csv` profile's bytes are fixed exactly.
 
 <a id="req-0720"></a>
 
