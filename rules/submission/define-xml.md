@@ -812,5 +812,4 @@ schema: fail and report the schema violation. The run publishes nothing.
 
 <a id="req-1027"></a>
 
-**REQ-1027.** A failed publication: fail and report the target, exactly as
-[Artifact publication](../storage/publication.md) does. The previous document is unchanged.
+**REQ-1027.** A failed publication fails under [REQ-0764](../storage/publication.md#req-0764).
