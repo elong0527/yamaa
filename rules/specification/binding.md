@@ -53,7 +53,7 @@ resolved specification.
 
 <a id="req-0080"></a>
 
-**REQ-0080.** A dataset identifier must not equal the output `domain`.
+**REQ-0080.** A dataset identifier must not equal the output `domain`: fail.
 
 <a id="req-0081"></a>
 
@@ -264,7 +264,8 @@ declaration defines shape, defaults, and structural constraints.
 
 <a id="req-0104"></a>
 
-**REQ-0104.** A dataset identifier equal to the output `domain`: fail.
+**REQ-0104.** Retired. The output-domain identifier rule is stated once in
+[REQ-0080](#req-0080). This identifier is never reused.
 
 <a id="req-0105"></a>
 
