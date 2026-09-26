@@ -58,7 +58,7 @@ KEYS = ["STUDYID", "USUBJID"]
 def test_range_failure_reproduces_the_committed_error_contract() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
-        [["PILOT7", "P7-731", 64], ["PILOT7", "P7-732", 214]],
+        [["YAMAA-01", "YAMAA-01-101", 64], ["YAMAA-01", "YAMAA-01-102", 214]],
     )
 
     failures = check_column(
