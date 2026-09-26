@@ -304,6 +304,8 @@ class RowResolver:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
         if qualifier is None:
             return self._base.resolve(variable)
+        if qualifier in self._candidate.source_rows:
+            return self._base.resolve(variable)
         if self._context.intermediates.declares(qualifier):
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
         implicit = self._implicit_joins.get(qualifier)
@@ -322,6 +324,10 @@ class RowResolver:
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
+        if qualifier in self._candidate.source_rows:
+            return self._base.resolve_selected(
+                variable, selector=selector, multiple_matches=multiple_matches
+            )
         if qualifier is not None and self._context.intermediates.declares(qualifier):
             # R003 already chose the record; the source reads a column of it.
             return self._lookup_read(qualifier, variable.split(".", 1)[1])

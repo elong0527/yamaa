@@ -43,6 +43,7 @@ from yamaa.models import (
     HandlerName,
     RuntimeCondition,
     RuntimeValue,
+    TypedColumn,
     TypedTable,
     ValueResult,
     compare_values,
@@ -163,6 +164,27 @@ class RelationIndex:
         self._matched: dict[
             tuple[str, ...], dict[PartitionKey, tuple[IndexedRecord, ...]]
         ] = {}
+
+    @classmethod
+    def from_records(
+        cls,
+        dataset: str,
+        columns: Sequence[TypedColumn],
+        records: Sequence[IndexedRecord],
+    ) -> RelationIndex:
+        """Index a previously materialized, ordered intermediate relation."""
+        relation = cls.__new__(cls)
+        relation.dataset = dataset
+        relation.types = {column.name: column.type for column in columns}
+        relation.records = tuple(
+            IndexedRecord(
+                position=record.position,
+                values={name: record.values[name] for name in relation.types},
+            )
+            for record in records
+        )
+        relation._matched = {}
+        return relation
 
     @property
     def fields(self) -> tuple[str, ...]:

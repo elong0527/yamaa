@@ -15,8 +15,8 @@ status: normative
 **REQ-0111.** A dataset-qualified scalar source reads that dataset through
 the implicit join: one value per current row, matched on the applicable
 keys ([REQ-0150](lookup.md#req-0150)), answering absence as a missing
-result. The qualifier for this row template's input dataset is not a
-join. That qualifier reads the input record that built the row.
+result. The qualifier for this row template's driver is not a join. That
+qualifier reads the input or intermediate record that built the row.
 
 ```yaml
 derivation:
@@ -200,11 +200,13 @@ ordering, and `columns`, apply to `SELF` as they do to input datasets.
 For input datasets, `order_by` names qualified fields of that dataset only; `columns`
 lists bare field names. Every `filter` field is qualified. The lookup's
 own qualifier reads a candidate donor record. A different qualifier may
-read the current row's driver dataset: root `base` (or the sole input)
+read the current row's driver: root `base` (or the sole input)
 without explicit rows, or the enclosing `rows[].dataset` during row
 construction. During column derivation it must be the driver of every
-row template that the expression can evaluate on. Other datasets,
-intermediates and unqualified output names are not filter scopes.
+row template that the expression can evaluate on. The row driver may be an
+eligible named intermediate under [REQ-1262](../execution/rows.md#req-1262).
+Other datasets, intermediates that are not the current driver, and
+unqualified output names are not filter scopes.
 
 The current-driver references are dependencies of each lookup read and
 obey the existing phase and group-key rules. In a grouped template, the

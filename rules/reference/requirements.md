@@ -1188,6 +1188,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1255](../operations/expressions.md#req-1255) | `operations/expressions.md` | Schema prose |
 | [REQ-1260](../specification/structure.md#req-1260) | `specification/structure.md` | R005-11, R005-41 |
 | [REQ-1261](../operations/text.md#req-1261) | `operations/text.md` | Schema prose |
+| [REQ-1262](../execution/rows.md#req-1262) | `execution/rows.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

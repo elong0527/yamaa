@@ -14,7 +14,8 @@ status: normative
 
 **REQ-0076.** `input` maps dataset identifiers to source data
 declarations. Identifiers are used by `base`, `rows.dataset`, qualified
-source variables, and `lookup`.
+source variables, and `lookup`. A row template may also name a named
+intermediate under [REQ-1262](../execution/rows.md#req-1262).
 
 <a id="req-0077"></a>
 
@@ -71,18 +72,19 @@ lookup resolution.
 
 <a id="req-0085"></a>
 
-**REQ-0085.** A qualified reference to the current row template's input
-dataset reads the current input record. A qualified reference to
-another dataset follows [Lookup and joins](../operations/lookup.md).
+**REQ-0085.** A qualified reference to the current row template's driver
+reads the current driver record. The driver is an input dataset or an eligible
+named intermediate under [REQ-1262](../execution/rows.md#req-1262). A
+qualified reference to another dataset follows [Lookup and joins](../operations/lookup.md).
 
 <a id="req-0086"></a>
 
 **REQ-0086.** During grouped row construction there is no single current
-input record. A qualified reference to the input dataset of the row
+driver record. A qualified reference to the driver of the row
 template is scalar only when the exact variable appears in the enclosing
 `row.group_by`. That reference then returns the key value of that group.
 A column-level derivation reads each constructed row, so the same holds
-there: a qualified reference to a row template's input dataset is scalar
+there: a qualified reference to a row template's driver is scalar
 only when the exact variable appears in the `group_by` of every grouped
 row template driven by that dataset.
 

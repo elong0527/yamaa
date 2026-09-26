@@ -291,8 +291,8 @@ This includes variables in derivations, row derivations, filters, grouping and
 ordering, closed expression languages, string-template placeholders,
 verifications, and record-lookup matching. A qualified variable makes its
 dataset or record lookup live. A live record lookup makes its dataset and
-matching inputs live. A live row makes its input dataset, filter inputs,
-grouping inputs, and derivations needed for live columns live.
+matching inputs live. A live row makes its driver input or intermediate,
+filter inputs, grouping inputs, and derivations needed for live columns live.
 
 <a id="req-0640"></a>
 

@@ -40,7 +40,7 @@ from yamaa.planning import (
     plan_execution,
     preflight_execution,
 )
-from yamaa.runtime.intermediates import IntermediateSelector
+from yamaa.runtime.intermediates import IntermediateOutcome, IntermediateSelector
 from yamaa.runtime.joins import RelationIndex, build_relation_indexes
 from yamaa.runtime.lifecycle import (
     HandlerCount,
@@ -558,6 +558,27 @@ def _construct_rows(
     # before its grouped filter drops rows.
     position = 0
     for planned in plan.rows:
+        if planned.driver not in context.relations:
+            outcome = context.intermediates.driver_records(planned.driver)
+            if isinstance(outcome, IntermediateOutcome):
+                assert outcome.condition is not None
+                condition = outcome.condition.condition
+                raise _ExecutionAbort(
+                    [
+                        ExecutionDiagnostic(
+                            phase=condition.phase,
+                            condition=condition.condition,
+                            spec_paths=(outcome.spec_path or "rows.dataset",),
+                            requirement=condition.requirement,
+                            context=condition.context,
+                        )
+                    ]
+                )
+            context.relations[planned.driver] = RelationIndex.from_records(
+                planned.driver,
+                plan.bindings.datasets[planned.driver].columns,
+                outcome,
+            )
         relation = context.relations[planned.driver]
         if planned.declaration is None:
             # REQ-0042: with no template the key table is the output row set.
@@ -850,7 +871,11 @@ def execute_specification(
     try:
         relations = build_relation_indexes(sources)
         context = RelationalContext(
-            bindings=BindingIndex(plan.bindings, sources),
+            bindings=BindingIndex(
+                plan.bindings,
+                sources,
+                virtual_datasets=set(plan.bindings.datasets) - set(sources),
+            ),
             relations=relations,
             intermediates=IntermediateSelector(
                 plan.intermediates, relations, selected_dispatcher.evaluate
