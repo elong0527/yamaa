@@ -463,8 +463,7 @@ column: any other derivation computes rather than copies, and the
 [REQ-0897](metadata.md#req-0897) refutation already rejects a computed column that claims
 otherwise. When both the column and the named predecessor column declare
 submission metadata, their declared labels must be equal. A copy keeps the
-name, the label, and the values of what it copies; that is the ADaM
-conformance rule for variables carried unchanged from SDTM.
+name, the label, and the values of what it copies.
 
 ### Method
 
