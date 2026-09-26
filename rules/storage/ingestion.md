@@ -6,26 +6,6 @@ status: normative
 
 # Source ingestion
 
-## Purpose
-
-Select input profiles and assign source field types without inferring values.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Aggregation](../operations/aggregation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Schema language](../reference/schema-language.md).
-- [CSV profile](csv.md).
-- [Parquet profile](parquet.md).
-- [Artifact publication](publication.md).
-- [Resource resolution](resources.md).
-- [Temporal values](../values/temporal.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Source record order
@@ -270,8 +250,7 @@ describe at all.
 
 <a id="req-1059"></a>
 
-**REQ-1059.** The `dataset_source` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1059.** The `dataset_source` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -279,8 +258,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1060"></a>
 
-**REQ-1060.** The `dataset_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1060.** The `dataset_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -334,21 +312,3 @@ structural constraints come from its schema declaration.
 any byte is read and reports under the `validation` phase. Every other
 condition is decided while the snapshot is read and reports under the
 `ingest` phase.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-redefined-date](../../benchmarks/negative-redefined-date/README.md).
-- [negative-ingest-unit](../../benchmarks/negative-ingest-unit/README.md).
-- [negative-source-na-age](../../benchmarks/negative-source-na-age/README.md).
-- [negative-source-unknown-format](../../benchmarks/negative-source-unknown-format/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Select input profiles and assign source field types without inferring values. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

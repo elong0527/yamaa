@@ -6,24 +6,6 @@ status: normative
 
 # Numeric computation
 
-## Purpose
-
-Evaluate written arithmetic formulas without reassociation or presentation rounding.
-
-## Scope and dependencies
-
-[Numeric values](../values/numbers.md) owns representation, result promotion,
-and integer overflow. Its numeric constraints and overflow failure apply to
-every operator and function in this grammar.
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Expression evaluation](expressions.md).
-- [Lookup and joins](lookup.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Type behavior
@@ -44,7 +26,8 @@ numeric.
 **REQ-0407.** `compute` evaluates a closed numeric grammar over current-output
 columns, fields of a declared record lookup, and numeric literals.
 `compute` returns one numeric value per current row. The grammar is a
-subset of SQL.
+subset of SQL. [Numeric values](../values/numbers.md)'s representation,
+promotion, and overflow rules apply to every operator and function.
 
 ### Identifiers
 
@@ -269,8 +252,7 @@ implementation returns the double for the written formula.
 
 <a id="req-1118"></a>
 
-**REQ-1118.** The `expressions.cut` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1118.** The `expressions.cut` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -283,8 +265,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1119"></a>
 
-**REQ-1119.** The `expressions.compute` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1119.** The `expressions.compute` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -293,8 +274,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1120"></a>
 
-**REQ-1120.** The `numeric_expression` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1120.** The `numeric_expression` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -302,8 +282,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1121"></a>
 
-**REQ-1121.** The `module` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1121.** The `module` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -311,8 +290,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1172"></a>
 
-**REQ-1172.** The `expressions.round_half_away_from_zero` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1172.** The `expressions.round_half_away_from_zero` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -321,10 +299,6 @@ structural constraints come from its schema declaration.
 | `Result` | The source rounded to `digits` places with ties half away from zero; a float. |
 
 ## Error conditions
-
-<a id="req-0335"></a>
-
-**REQ-0335.** A `compute` expression that violates [Numeric computation](computation.md): fail.
 
 <a id="req-0439"></a>
 
@@ -359,21 +333,3 @@ or a field of a declared record lookup: fail.
 
 **REQ-0445.** Any failure condition listed above: fail, reporting the
 expression and the operation that failed.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-row-aggregate](../../benchmarks/negative-row-aggregate/README.md).
-- [negative-formula-flag](../../benchmarks/negative-formula-flag/README.md).
-- [negative-zero-division](../../benchmarks/negative-zero-division/README.md).
-- [negative-log-zero](../../benchmarks/negative-log-zero/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-This topic lives in one contract.
-Other owners refer to it without defining a second policy.

@@ -6,24 +6,6 @@ status: normative
 
 # Submission metadata
 
-## Purpose
-
-Govern dataset and column metadata, origin, methods, and document references.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Verification](../execution/verification.md).
-- [Specification structure](../specification/structure.md).
-- [CSV profile](../storage/csv.md).
-- [Define-XML](define-xml.md).
-- [Controlled terminology](terminology.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Where it is declared
@@ -529,8 +511,7 @@ a submission.
 
 <a id="req-1130"></a>
 
-**REQ-1130.** The `submission_dataset_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1130.** The `submission_dataset_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -545,8 +526,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1131"></a>
 
-**REQ-1131.** The `submission_column_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1131.** The `submission_column_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -564,8 +544,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1132"></a>
 
-**REQ-1132.** The `submission_origin_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1132.** The `submission_origin_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -576,8 +555,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1133"></a>
 
-**REQ-1133.** The `submission_method_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1133.** The `submission_method_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -589,8 +567,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1134"></a>
 
-**REQ-1134.** The `submission_comment_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1134.** The `submission_comment_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -599,8 +576,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1135"></a>
 
-**REQ-1135.** The `formal_expression_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1135.** The `formal_expression_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -609,8 +585,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1136"></a>
 
-**REQ-1136.** The `document_reference_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1136.** The `document_reference_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -619,8 +594,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1137"></a>
 
-**REQ-1137.** The `page_reference_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1137.** The `page_reference_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -630,8 +604,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1138"></a>
 
-**REQ-1138.** The `submission_comment` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1138.** The `submission_comment` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -639,8 +612,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1139"></a>
 
-**REQ-1139.** The `submission_method` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1139.** The `submission_method` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -648,8 +620,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1140"></a>
 
-**REQ-1140.** The `document_reference` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1140.** The `document_reference` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -657,8 +628,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1141"></a>
 
-**REQ-1141.** The `core_designation` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1141.** The `core_designation` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -666,8 +636,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1142"></a>
 
-**REQ-1142.** The `origin_type` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1142.** The `origin_type` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -675,8 +644,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1143"></a>
 
-**REQ-1143.** The `origin_source` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1143.** The `origin_source` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -684,8 +652,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1144"></a>
 
-**REQ-1144.** The `method_type` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1144.** The `method_type` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -693,8 +660,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1145"></a>
 
-**REQ-1145.** The `define_data_type` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1145.** The `define_data_type` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -702,8 +668,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1146"></a>
 
-**REQ-1146.** The `dataset_class_name` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1146.** The `dataset_class_name` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -711,8 +676,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1147"></a>
 
-**REQ-1147.** The `dataset_subclass_name` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1147.** The `dataset_subclass_name` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -720,8 +684,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1148"></a>
 
-**REQ-1148.** The `module` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1148.** The `module` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -821,14 +784,3 @@ dataset and the standard. [REQ-0965](define-xml.md#req-0965) owns the binding th
 
 **REQ-0925.** A `reference_data: true` dataset declaring `repeating: true`:
 fail validation and report the dataset.
-
-## Conformance examples
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Govern dataset and column metadata, origin, methods, and document references. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

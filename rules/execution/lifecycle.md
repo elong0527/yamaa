@@ -6,39 +6,17 @@ status: normative
 
 # Execution lifecycle
 
-## Purpose
-
-Sequence resolution, row construction, dependency evaluation, value completion, and output checks.
-
-## Scope and dependencies
-
-The run follows this sequence: resolve and validate the specification and its
-resources, construct rows, derive columns in dependency order, complete column
-verification, validate output keys, run dataset verification, order the final
-artifact, then serialize and publish it. Within either derivation phase, the
-value stages below complete before a dependent reads that value. Row filters
-and whole-column verification follow the timing specified below.
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](handlers.md).
-- [Verification](verification.md).
-- [Aggregation](../operations/aggregation.md).
-- [Numeric computation](../operations/computation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Lookup and joins](../operations/lookup.md).
-- [Predicates](../operations/predicates.md).
-- [Text operations](../operations/text.md).
-- [Specification composition](../specification/composition.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Phases
 
 <a id="req-0031"></a>
 
-**REQ-0031.** Derivation has two phases:
+**REQ-0031.** A run resolves and validates the specification and resources,
+constructs rows, derives columns in dependency order, completes column
+verification, validates output keys, runs dataset verification, orders the
+artifact, then serializes and publishes it. A value completes its lifecycle
+before a dependent reads it. Derivation has two phases:
 
 <a id="req-0032"></a>
 
@@ -234,11 +212,6 @@ derivation:
 
 **REQ-0072.** A dependency cycle: fail and report the cycle path.
 
-<a id="req-0073"></a>
-
-**REQ-0073.** An expression that changes row count during column derivation:
-  fail.
-
 <a id="req-0074"></a>
 
 **REQ-0074.** In a specification without `rows`, a key column derivation
@@ -258,21 +231,3 @@ derivation:
 **REQ-0241.** A failed error-level verification: fail under [Verification](verification.md). A
 warning-level violation leaves the primary artifact intact and enters [Verification](verification.md)'s
 warning log.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-adlb-computed-param](../../benchmarks/negative-adlb-computed-param/README.md).
-- [negative-forward-reference](../../benchmarks/negative-forward-reference/README.md).
-- [negative-first-available-self](../../benchmarks/negative-first-available-self/README.md).
-- [negative-keys-conflict](../../benchmarks/negative-keys-conflict/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Sequence resolution, row construction, dependency evaluation, value completion, and output checks. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

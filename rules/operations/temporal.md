@@ -6,21 +6,6 @@ status: normative
 
 # Temporal operations
 
-## Purpose
-
-Compute calendar differences, study days, date completion, and precision.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Verification](../execution/verification.md).
-- [Numeric computation](computation.md).
-- [Expression evaluation](expressions.md).
-- [Temporal values](../values/temporal.md).
-
-
 ## Requirements
 
 ### Type behavior
@@ -240,8 +225,7 @@ and is rejected where the specification is read, before any data is seen.
 
 <a id="req-1104"></a>
 
-**REQ-1104.** The `expressions.date_diff` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1104.** The `expressions.date_diff` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -253,8 +237,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1105"></a>
 
-**REQ-1105.** The `expressions.date_impute` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1105.** The `expressions.date_impute` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -269,8 +252,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1106"></a>
 
-**REQ-1106.** The `expressions.date_precision` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1106.** The `expressions.date_precision` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -281,8 +263,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1107"></a>
 
-**REQ-1107.** The `expressions.to_date` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1107.** The `expressions.to_date` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -291,8 +272,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1108"></a>
 
-**REQ-1108.** The `expressions.study_day` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1108.** The `expressions.study_day` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -302,8 +282,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1188"></a>
 
-**REQ-1188.** The `expressions.to_epoch_day` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1188.** The `expressions.to_epoch_day` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -312,8 +291,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1109"></a>
 
-**REQ-1109.** The `day_rule` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1109.** The `day_rule` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -348,8 +326,7 @@ declaration.
 
 <a id="req-1184"></a>
 
-**REQ-1184.** The `time_rule` interface has the following meanings. Shape,
-defaults, and structural constraints come from its schema declaration.
+**REQ-1184.** The `time_rule` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -410,25 +387,3 @@ non-`day` `unit` fails validation with condition `value_not_permitted`,
 naming the offending `bounds` value and the permitted value
 `exclusive`. Like every validation failure, no handler answers it and
 no artifact is accepted.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-adae-partial-dates](../../benchmarks/adam-adae-partial-dates/README.md).
-- [adam-adsl-treatment](../../benchmarks/adam-adsl-treatment/README.md).
-- [negative-date-diff-units](../../benchmarks/negative-date-diff-units/README.md).
-- [negative-date-diff-endpoints](../../benchmarks/negative-date-diff-endpoints/README.md).
-- [negative-impute-bad-source](../../benchmarks/negative-impute-bad-source/README.md).
-- [negative-impute-bad-month](../../benchmarks/negative-impute-bad-month/README.md).
-- [negative-datetime-impute-bad-source](../../benchmarks/negative-datetime-impute-bad-source/README.md).
-- [negative-datetime-precision-bad-source](../../benchmarks/negative-datetime-precision-bad-source/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Compute calendar differences, study days, date completion, and precision. This
-topic lets other owners refer to one policy.

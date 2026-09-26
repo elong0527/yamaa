@@ -2,8 +2,9 @@
 """Requirement registry check for the rules/ tree.
 
 Every requirement ID is defined exactly once, as a bold dotted marker
-``**REQ-0001.**`` in a markdown contract. Every other ``REQ-XXXX``
-citation in ``rules/`` must resolve to one of those definitions. Fails
+``**REQ-0001.**`` in a markdown contract. Retired IDs live only in
+``migration.yaml``. Every other ``REQ-XXXX`` citation in ``rules/`` must
+resolve to a definition. Fails
 on:
 
 - a requirement ID defined more than once;
@@ -18,6 +19,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
 REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
@@ -54,6 +57,7 @@ def check(root):
     rules = root / "rules"
     defined = {}
     cited = {}
+    retired = set()
     for path in sorted(rules.glob("**/*.md")):
         label = path.relative_to(rules).as_posix()
         body = "\n".join(strip_code(path.read_text(encoding="ascii")))
@@ -63,8 +67,19 @@ def check(root):
             cited.setdefault(identifier, set()).add(label)
     migration = rules / "migration.yaml"
     if migration.is_file():
-        for identifier in REFERENCE.findall(migration.read_text(encoding="ascii")):
+        migration_text = migration.read_text(encoding="ascii")
+        for identifier in REFERENCE.findall(migration_text):
             cited.setdefault(identifier, set()).add("migration.yaml")
+        try:
+            data = yaml.safe_load(migration_text)
+        except yaml.YAMLError:
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("requirements"), dict):
+            retired = {
+                identifier
+                for identifier, entry in data["requirements"].items()
+                if isinstance(entry, dict) and entry.get("retired") is True
+            }
     for identifier in sorted(defined):
         locations = defined[identifier]
         if len(locations) > 1:
@@ -73,10 +88,14 @@ def check(root):
                 f"({len(locations)}x in {', '.join(sorted(set(locations)))})"
             )
     for identifier in sorted(set(cited) - set(defined)):
+        if identifier in retired and cited[identifier] == {"migration.yaml"}:
+            continue
         files = sorted(cited[identifier])
         errors.append(
             f"unresolved requirement citation: {identifier} ({', '.join(files)})"
         )
+    for identifier in sorted(retired & defined.keys()):
+        errors.append(f"retired requirement still defined: {identifier}")
     return errors
 
 
@@ -95,7 +114,7 @@ def main():
     if errors:
         print(f"FAIL: {len(errors)} requirement-registry violation(s).")
         return 1
-    print("PASS: every requirement ID is defined once and every citation resolves.")
+    print("PASS: active requirements resolve; retired IDs stay in migration.")
     return 0
 
 

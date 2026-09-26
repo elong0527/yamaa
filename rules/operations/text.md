@@ -6,23 +6,6 @@ status: normative
 
 # Text operations
 
-## Purpose
-
-Apply casing, inline mapping, templates, and portable regular expressions.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Verification](../execution/verification.md).
-- [Expression evaluation](expressions.md).
-- [Predicates](predicates.md).
-- [Schema language](../reference/schema-language.md).
-- [Name binding](../specification/binding.md).
-- [Text values](../values/text.md).
-
 ## Requirements
 
 ### Type behavior
@@ -355,7 +338,8 @@ the whole match.
 
 **REQ-0816.** `str_extract.group` selects by that number and defaults to `0`.
 A `group` above the number of capturing groups in its pattern, or a negative
-`group`, is a specification defect and fails validation.
+`group`, fails validation with `regex_group_out_of_range`; report the path,
+requested group, and number of capturing groups.
 
 <a id="req-0817"></a>
 
@@ -442,8 +426,7 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 
 <a id="req-1110"></a>
 
-**REQ-1110.** The `expressions.mapping` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1110.** The `expressions.mapping` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -458,8 +441,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1111"></a>
 
-**REQ-1111.** The `expressions.str_extract` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1111.** The `expressions.str_extract` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -472,8 +454,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1243"></a>
 
-**REQ-1243.** The `expressions.str_contains` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1243.** The `expressions.str_contains` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -484,8 +465,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1112"></a>
 
-**REQ-1112.** The `expressions.str_concat` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1112.** The `expressions.str_concat` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -495,8 +475,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1113"></a>
 
-**REQ-1113.** The `expressions.str_template` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1113.** The `expressions.str_template` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -505,8 +484,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1114"></a>
 
-**REQ-1114.** The `expressions.str_upper` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1114.** The `expressions.str_upper` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -516,8 +494,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1115"></a>
 
-**REQ-1115.** The `expressions.str_lower` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1115.** The `expressions.str_lower` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -527,8 +504,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1240"></a>
 
-**REQ-1240.** The `expressions.str_sentence` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1240.** The `expressions.str_sentence` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -538,8 +514,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1241"></a>
 
-**REQ-1241.** The `expressions.str_title` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1241.** The `expressions.str_title` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -549,8 +524,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1116"></a>
 
-**REQ-1116.** The `string_template` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1116.** The `string_template` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -558,8 +532,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1117"></a>
 
-**REQ-1117.** The `str_template_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1117.** The `str_template_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -584,15 +557,6 @@ or unmatched brace.
 
 **REQ-0462.** A placeholder that does not bind: fail under [Execution lifecycle](../execution/lifecycle.md) and [Name binding](../specification/binding.md).
 
-<a id="req-0463"></a>
-
-**REQ-0463.** A non-string placeholder value: fail under [Types and conversion](../values/types.md).
-
-<a id="req-0464"></a>
-
-**REQ-0464.** A missing placeholder value without `missing`: fail under
-[Local handlers](../execution/handlers.md).
-
 ### Errors
 
 <a id="req-0714"></a>
@@ -609,13 +573,6 @@ validation with `ambiguous_dictionary`.
   declaring path and the rejection. A pattern is rejected the same way
   whether its syntax is malformed or merely outside the portable grammar.
 
-<a id="req-0828"></a>
-
-**REQ-0828.** A `str_extract.group` that is negative or exceeds the
-  capturing groups its pattern declares: fail validation with
-  `regex_group_out_of_range` and report the path, the requested group, and
-  the count the pattern declares.
-
 <a id="req-0829"></a>
 
 **REQ-0829.** A consumer that cannot implement the normalization contract:
@@ -623,33 +580,3 @@ validation with `ambiguous_dictionary`.
   cannot provide. It must not read patterns with a host default that violates
   the normalization, translate the pattern into another dialect, or skip the
   check.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-adsl-text](../../benchmarks/schema-text-functions/README.md).
-- [negative-subject-reference](../../benchmarks/negative-subject-reference/README.md).
-- [negative-mapping-case-collision](../../benchmarks/negative-mapping-case-collision/README.md).
-- [negative-matches-bad-pattern](../../benchmarks/negative-matches-bad-pattern/README.md).
-- [negative-str-uncaptured-group](../../benchmarks/negative-str-uncaptured-group/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-This contract covers casing, mapping, templates, and regular expressions.
-
-### Current implementation limits
-
-Linear-time matching is not required. Python's backtracking `re` can make
-pathological patterns slow. `re` matches still follow this contract.
-
-Outside a character class, the Python consumer normalizes `\S` to the exact
-negation of the ECMA-262 whitespace set. Inside a character class, `[\S]`
-keeps the host `re` behavior under `re.ASCII`: it excludes only ASCII
-whitespace, so it still matches non-ASCII whitespace scalars such as U+00A0
-that the contract counts as whitespace. This is a known consumer edge of the
-normalization, not a second dialect.

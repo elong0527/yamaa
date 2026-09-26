@@ -6,25 +6,6 @@ status: normative
 
 # Aggregation
 
-## Purpose
-
-Reduce eligible records within one of three permitted key scopes.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Numeric computation](computation.md).
-- [Project functions](functions.md).
-- [Lookup and joins](lookup.md).
-- [Predicates](predicates.md).
-- [Name binding](../specification/binding.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
-
 ## Requirements
 
 ### Evaluation kinds
@@ -409,8 +390,7 @@ still uses a window or `multiple_matches`, where the value order is declared.
 
 <a id="req-1088"></a>
 
-**REQ-1088.** The `aggregate_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1088.** The `aggregate_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -424,8 +404,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1089"></a>
 
-**REQ-1089.** The `aggregate_expression` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1089.** The `aggregate_expression` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -433,8 +412,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1090"></a>
 
-**REQ-1090.** The `aggregate_between_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1090.** The `aggregate_between_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -444,8 +422,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1091"></a>
 
-**REQ-1091.** The `module` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1091.** The `module` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -453,8 +430,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1192"></a>
 
-**REQ-1192.** The `derive_binding_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1192.** The `derive_binding_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -464,8 +440,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1092"></a>
 
-**REQ-1092.** The `expressions.aggregate` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1092.** The `expressions.aggregate` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -486,10 +461,6 @@ context: fail.
 
 **REQ-0331.** A grouped-row aggregate naming a dataset other than its
 row template's input dataset or declaring its own `group_by`: fail.
-
-<a id="req-0332"></a>
-
-**REQ-0332.** An `aggregate` expression that violates [Aggregation](aggregation.md): fail.
 
 <a id="req-0499"></a>
 
@@ -569,20 +540,3 @@ fail.
 
 **REQ-0513.** Any [Numeric computation](computation.md) failure condition reached through the arithmetic:
 fail, reporting the expression and the column that failed.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-dose-intensity](../../benchmarks/negative-dose-intensity/README.md).
-- [negative-adlb-duplicate-wbc](../../benchmarks/negative-adlb-duplicate-wbc/README.md).
-- [negative-sum-non-numeric](../../benchmarks/negative-sum-non-numeric/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Reduce eligible records within one of three permitted key scopes. One contract
-avoids a second policy.

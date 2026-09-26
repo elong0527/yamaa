@@ -6,25 +6,6 @@ status: normative
 
 # Name binding
 
-## Purpose
-
-Resolves input datasets, current-output columns, and contextual ODM references.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [Aggregation](../operations/aggregation.md).
-- [Expression evaluation](../operations/expressions.md).
-- [Lookup and joins](../operations/lookup.md).
-- [Text operations](../operations/text.md).
-- [Specification composition](composition.md).
-- [Source ingestion](../storage/ingestion.md).
-- [Resource resolution](../storage/resources.md).
-- [Text values](../values/text.md).
-
 ## Requirements
 
 ### Dataset declarations
@@ -53,7 +34,8 @@ resolved specification.
 
 <a id="req-0080"></a>
 
-**REQ-0080.** A dataset identifier must not equal the output `domain`: fail.
+**REQ-0080.** A dataset identifier must not equal the output `domain`;
+validation fails when they match.
 
 <a id="req-0081"></a>
 
@@ -280,20 +262,3 @@ handled.
 <a id="req-0110"></a>
 
 **REQ-0110.** No ODM contextual match: fail unless locally handled.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [adam-adsl-text](../../benchmarks/schema-text-functions/README.md).
-- [negative-source-self-reference](../../benchmarks/negative-source-self-reference/README.md).
-- [negative-source-undeclared-field](../../benchmarks/negative-source-undeclared-field/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Keeping this topic in one contract lets other owners refer to it without
-defining a second policy.

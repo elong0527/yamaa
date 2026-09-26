@@ -6,20 +6,6 @@ status: normative
 
 # Parquet profile
 
-## Purpose
-
-Read and write the closed Parquet field and value mapping.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Source ingestion](ingestion.md).
-- [Artifact publication](publication.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Writing: The parquet profile
@@ -195,14 +181,3 @@ are ignored. They cannot supply or override a field type.
 **REQ-1041.** A temporal value outside the calendar or whole-second contract:
   fail with `source_field_value_invalid`, reporting the field, record, and
   stored integer value.
-
-## Conformance examples
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Read and write the closed Parquet field and value mapping. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

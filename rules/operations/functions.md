@@ -6,22 +6,6 @@ status: normative
 
 # Project functions
 
-## Purpose
-
-Resolve immutable runtimes and validate function inputs, results, and activation conformance.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Local handlers](../execution/handlers.md).
-- [Execution lifecycle](../execution/lifecycle.md).
-- [CSV profile](../storage/csv.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
-
 ## Requirements
 
 ### Type behavior
@@ -339,8 +323,7 @@ differences.
 
 <a id="req-1080"></a>
 
-**REQ-1080.** The `environment_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1080.** The `environment_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -351,8 +334,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1081"></a>
 
-**REQ-1081.** The `project_runtime_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1081.** The `project_runtime_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -361,8 +343,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1082"></a>
 
-**REQ-1082.** The `runtime_artifact_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1082.** The `runtime_artifact_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -370,8 +351,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1083"></a>
 
-**REQ-1083.** The `function_contract_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1083.** The `function_contract_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -388,8 +368,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1084"></a>
 
-**REQ-1084.** The `function_binding_class` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1084.** The `function_binding_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -398,8 +377,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1085"></a>
 
-**REQ-1085.** The `expressions.function` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1085.** The `expressions.function` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -410,8 +388,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1086"></a>
 
-**REQ-1086.** The `function_arg` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1086.** The `function_arg` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -419,8 +396,7 @@ structural constraints come from its schema declaration.
 
 <a id="req-1087"></a>
 
-**REQ-1087.** The `function_contract_version` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1087.** The `function_contract_version` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -492,18 +468,3 @@ not converted.
 **REQ-0704.** Each failure identifies the logical function, contract version,
 implementation version when available, and original host context when a binding
 was invoked.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [negative-function-contract](../../benchmarks/negative-function-contract/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-This topic lives in one contract.
-Other owners refer to it without defining a second policy.

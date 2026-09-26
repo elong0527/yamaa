@@ -648,6 +648,9 @@ examples:
   schema-sentence-case:
     status: executable
     runtimes: ['python']
+  schema-shorthand:
+    status: executable
+    runtimes: ['python']
   schema-str-contains:
     status: executable
     runtimes: ['python']
@@ -865,6 +868,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-window-functions:
+    status: executable
+    runtimes: ['python']
+  schema-window-intermediate-rank:
     status: executable
     runtimes: ['python']
   schema-row-templates:

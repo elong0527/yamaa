@@ -6,26 +6,6 @@ status: normative
 
 # Dataset-JSON
 
-## Purpose
-
-Write a dataset and its submission metadata as one deterministic
-Dataset-JSON 1.1 file.
-
-## Scope and dependencies
-
-This contract owns the requirements below. Related contracts:
-
-- [Define-XML](define-xml.md).
-- [Submission metadata](metadata.md).
-- [Artifact publication](../storage/publication.md).
-- [Source ingestion](../storage/ingestion.md).
-- [CSV profile](../storage/csv.md).
-- [Parquet profile](../storage/parquet.md).
-- [Numeric values](../values/numbers.md).
-- [Temporal values](../values/temporal.md).
-- [Text values](../values/text.md).
-- [Types and conversion](../values/types.md).
-
 ## Requirements
 
 ### Where a Dataset-JSON file is declared
@@ -364,8 +344,7 @@ stays closed at `.csv` and `.parquet`, and a `dataset_class.path` ending in
 
 <a id="req-1225"></a>
 
-**REQ-1225.** The `dataset_json_path` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
+**REQ-1225.** The `dataset_json_path` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
@@ -419,18 +398,3 @@ exactly as [REQ-1026](define-xml.md#req-1026) requires of an invalid document.
 **REQ-1232.** A failed publication: fail and report the target, exactly as
 [Artifact publication](../storage/publication.md) does. Every file already published stays as it is, and every
 other target is unchanged.
-
-## Conformance examples
-
-Representative specifications, input data, and expected outcomes:
-
-- [sdtm-dm-metadata](../../benchmarks/sdtm-dm-metadata/README.md).
-
-The [execution manifest](../../benchmarks/execution-manifest.yaml) records
-which fixtures execute. Grammar contracts additionally replay their shared
-vectors. Static validation does not establish runtime parity.
-
-## Rationale
-
-Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. Keeping this topic in one contract lets
-other owners refer to it without defining a second policy.

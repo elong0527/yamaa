@@ -2,11 +2,13 @@
 
 Every contract indexed below is normative. Files have one semantic owner;
 requirements use permanent global IDs independent of that owner's filename.
-The schema owns shape, defaults, and structural constraints. Contracts own
-shared and operation-local behavior. Examples demonstrate the contracts.
+The schema owns shape, defaults, and structural constraints. Contracts state
+shared and operation-local behavior and failure conditions. The
+[benchmark manifest](../benchmarks/execution-manifest.yaml) identifies
+executable examples.
 
-Read the relevant block, then follow its dependencies. The blocks are reading
-order, not execution phases; [execution/lifecycle](execution/lifecycle.md)
+Read the relevant block, then follow its requirement links. The blocks are
+reading order, not execution phases; [execution/lifecycle](execution/lifecycle.md)
 owns the sequence of a run.
 
 ## Specification
@@ -77,25 +79,24 @@ owns the sequence of a run.
 
 ## Requirement identity
 
-Requirements are defined once as `**REQ-0001.**`. Active IDs remain stable across
-file moves and section reordering. Allocate IDs above the largest assigned number,
-never renumber an existing requirement, and never fill a retired gap. Delete a
-retired requirement block and redirect its historical aliases in
-`migration.yaml` to the surviving requirement. Normative
-`must`, `must not`, `should`, and `may` have their usual requirement meanings.
-Every contract begins with Purpose and Scope and dependencies, then states
-Requirements, Error conditions, Conformance examples, and Rationale. Topic
-subsections live within these sections. Rationale adds no requirements.
+Requirements are defined once as `**REQ-0001.**`. IDs remain stable across
+file moves and section reordering. Allocate new IDs above the largest assigned
+number; never renumber or reuse a retired ID. Delete retired rule blocks and
+record their IDs in `migration.yaml`, with a replacement where one exists.
+Normative `must`, `must not`, `should`, and `may` have their usual requirement
+meanings.
+Every contract has Requirements; contracts with distinct failure rules also
+have Error conditions. Topic subsections group related rules.
 
-[migration.yaml](migration.yaml) resolves every former `RNNN-n` citation to
-one or more canonical requirements. It also records schema-prose provenance
-and legacy source hashes for audit; it is not a second semantic contract.
+[migration.yaml](migration.yaml) tracks former `RNNN-n` citations, retired
+IDs and their replacements where one exists, and schema-prose provenance. It
+is not a second semantic contract.
 
 The generated [requirement index](reference/requirements.md) links each active ID
 and its historical aliases to the current owner.
 
 Old diagnostic families (`R001`, etc.) in the validation-condition registry
-remain compatibility names for their registered conditions. Their requirement
+remain compatibility names for their registered conditions. Active requirement
 citations resolve through the same map. New author-facing citations use REQ IDs.
 
 [Schema fields](reference/schema-fields.md) is generated from the current

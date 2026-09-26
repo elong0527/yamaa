@@ -58,6 +58,10 @@ def generated(root):
         document = yaml.load(path.read_text(encoding="ascii"), Loader=UniqueLoader)
         for name, descriptor in descriptors(document):
             target = prose.get(f"{path.name}:{name}.description")
+            entry = migration["requirements"].get(target, {})
+            if entry.get("retired"):
+                replacement = entry["replacement"]
+                target = replacement[0] if len(replacement) == 1 else None
             owner = migration["requirements"].get(target, {}).get("file")
             contract = (
                 f"[{target}](../{owner}#{target.lower()})"
@@ -81,15 +85,29 @@ def generated(root):
         "",
         "<!-- generated: generate_rule_reference.py -->",
         "",
-        "IDs identify requirements independently of file paths. Historical IDs",
-        "are aliases; the linked contract is the sole semantic authority.",
+        "Active IDs identify requirements independently of file paths.",
+        "Historical and retired IDs are tracked in migration.yaml.",
         "",
         "| Requirement | Contract | Historical citations |",
         "| --- | --- | --- |",
     ]
-    for identifier, entry in migration["requirements"].items():
+    requirements = migration["requirements"]
+    historical_sources = {
+        identifier: [source for source in entry["sources"] if source.startswith("R")]
+        for identifier, entry in requirements.items()
+        if not entry.get("retired")
+    }
+    for entry in requirements.values():
+        if entry.get("retired"):
+            for replacement in entry["replacement"]:
+                historical_sources[replacement].extend(
+                    source for source in entry["sources"] if source.startswith("R")
+                )
+    for identifier, entry in requirements.items():
+        if entry.get("retired"):
+            continue
         historical = (
-            ", ".join(source for source in entry["sources"] if source.startswith("R"))
+            ", ".join(dict.fromkeys(historical_sources[identifier]))
             or "Schema prose"
         )
         index.append(
