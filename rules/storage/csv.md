@@ -214,8 +214,7 @@ change to the records or values the file delivers.
 <a id="req-0838"></a>
 
 **REQ-0838.** A **record terminator** is `U+000A`, optionally preceded by
-`U+000D`. The final record may omit its terminator. A file's records are the
-same under either terminator, which is why both are admitted.
+`U+000D`. The final record may omit its terminator.
 
 <a id="req-0839"></a>
 
