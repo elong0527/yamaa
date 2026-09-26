@@ -1,0 +1,83 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  VS:
+    path: input/vs.csv
+    types: {AVISITN: int, AVAL: float}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, BASEVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+  - name: AVAL
+    type: float
+    label: Analysis Value
+  - name: _RANK
+    type: int
+    label: Observed Visit Rank
+  - name: _IS_SEL
+    type: str
+    label: First Observed Visit Flag
+  - name: _SEL_AVAL
+    type: float
+    label: First Observed Analysis Value
+  - name: _CARRIED
+    type: float
+    label: Prior First Observed Analysis Value
+  - name: BASEVAL
+    type: float
+    label: First Observed Analysis Value Carried Forward
+
+rows:
+  - id: vital_signs
+    dataset: VS
+    derivations:
+      STUDYID: VS.STUDYID
+      USUBJID: VS.USUBJID
+      PARAMCD: VS.PARAMCD
+      AVISITN: VS.AVISITN
+      AVAL: VS.AVAL
+      _RANK:
+        rank:
+          window:
+            group_by: [STUDYID, USUBJID, PARAMCD]
+            order_by: [AVISITN]
+            filter: "AVAL IS NOT NULL"
+      _IS_SEL:
+        case:
+          - when: "_RANK = 1"
+            then: {literal: Y}
+      _SEL_AVAL:
+        case:
+          - when: "_IS_SEL = 'Y'"
+            then: AVAL
+      _CARRIED:
+        previous_non_missing:
+          source: _SEL_AVAL
+          window:
+            group_by: [STUDYID, USUBJID, PARAMCD]
+            order_by: [AVISITN]
+      BASEVAL:
+        first_available:
+          sources: [_SEL_AVAL, _CARRIED]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, AVISITN]
+  - row_count:
+      min: 9
+      max: 9

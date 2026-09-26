@@ -4816,46 +4816,6 @@ def plan_execution(
                 )
                 for name, planned in derivations.items()
             }
-            window_columns = {
-                name
-                for name, planned in derivations.items()
-                if planned.declaration.value.operation in WINDOW_OPERATIONS
-            }
-            if window_columns:
-                # REQ-0326 evaluates a template's windows in one pass over
-                # its constructed rows, so a window must not depend on
-                # another window's result, directly or through a value
-                # computed from one: window results have no declared
-                # evaluation order within the pass, and scalars derived
-                # from window results evaluate after it. A window reading
-                # its own column is a cycle and is left to the cycle
-                # detector below.
-                deferred: set[str] = set(window_columns)
-                changed = True
-                while changed:
-                    changed = False
-                    for name, planned in derivations.items():
-                        if name not in deferred and any(
-                            dependency in deferred
-                            for dependency in planned.dependencies
-                        ):
-                            deferred.add(name)
-                            changed = True
-                for name in sorted(window_columns):
-                    blocked = sorted(
-                        dependency
-                        for dependency in derivations[name].dependencies
-                        if dependency in deferred and dependency != name
-                    )
-                    if blocked:
-                        diagnostics.append(
-                            _diagnostic(
-                                "window_on_window_result",
-                                derivations[name].operation_path,
-                                {"column": name, "depends_on": blocked},
-                                requirement="REQ-0326",
-                            )
-                        )
             cycle = _find_cycle(
                 [name for name in column_order if name in derivations], graph
             )
