@@ -1641,8 +1641,8 @@ requirements:
   REQ-0571: {"file": "values/temporal.md", "sources": ["R016-33"]}
   REQ-0572: {"file": "values/temporal.md", "sources": ["R016-34"]}
   REQ-0573: {"file": "values/temporal.md", "sources": ["R016-35"]}
-  REQ-0574: {"file": "values/temporal.md", "sources": ["R016-36"]}
-  REQ-0575: {"file": "values/temporal.md", "sources": ["R016-37"]}
+  REQ-0574: {"file": "values/temporal.md", "sources": ["R016-36", "yamaa:issue-1301:req-0575-retired"]}
+  REQ-0575: {"file": "values/temporal.md", "sources": ["R016-37"], "retired": true, "replacement": ["REQ-0574"]}
   REQ-0576: {"file": "values/temporal.md", "sources": ["R016-40"]}
   REQ-0577: {"file": "values/temporal.md", "sources": ["R016-41"]}
   REQ-0578: {"file": "operations/temporal.md", "sources": ["R016-42"]}
@@ -2817,3 +2817,4 @@ provenance_addenda:
   - {"source": "yamaa:issue-1070:req-0557-retired", "text": "Issue #1070: the rationale-only requirement on prohibiting the zone is retired; the no-zone-no-offset decision stands as REQ-0555 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "no-zone-no-offset", "target": "REQ-0555"}
   - {"source": "yamaa:issue-1081:req-0203-retired", "text": "Issue #1081: the placement-advice requirement is retired; numbered requirements are for testable behavior only. Where a column may be derived is stated testably by REQ-1260's row-phase hoisting rule and REQ-0204's literal-null rule.", "owner": "specification/structure", "group": "column-default-derivations", "target": "REQ-1260"}
   - {"source": "yamaa:issue-1091:req-0562-retired", "text": "Issue #1091: the rationale-only requirement on fractional seconds is retired; the whole-second decision stands as REQ-0561 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "whole-second", "target": "REQ-0561"}
+  - {"source": "yamaa:issue-1301:req-0575-retired", "text": "Issue #1301: the rationale-only requirement on the completed-date decision is retired; the completed-date decision stands as REQ-0574 states it, and its rationale lives in the issue.", "owner": "values/temporal", "group": "completed-date", "target": "REQ-0574"}
