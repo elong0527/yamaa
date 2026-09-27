@@ -43,7 +43,7 @@ columns:
     label: Cause of Death
     derivation: DEATHEV.AEDECOD
 
-  # The coded cause of death: an inline lookup into the dictionary on
+  # The coded cause of death: a named intermediate into the dictionary on
   # differently named key columns. A missing or unlisted cause selects
   # nothing and gives the default missing value.
   - name: DTHPTERM

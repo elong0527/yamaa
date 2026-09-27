@@ -34,7 +34,7 @@ columns:
   - {name: QVAL, type: str, label: Supplemental Value}
   - name: QVAL_INLINE
     type: str
-    label: Supplemental Value by Inline Lookup
+    label: Supplemental Value by Named Intermediate
     derivation: SUP_EP.QVAL
 
 verifications:

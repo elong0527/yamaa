@@ -2643,7 +2643,7 @@ def _plan_lookups(
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
-    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # REQ-0120: a named intermediate's filter/order_by suggests the qualified
     # spelling, so the lookup datasets' columns ride along for suggestions.
     dataset_fields = {
         name: _dataset_types(bindings, name) for name in bindings.datasets
@@ -4396,7 +4396,7 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
-    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # REQ-0120: a named intermediate's filter/order_by suggests the qualified
     # spelling, so the lookup datasets' columns ride along for suggestions.
     dataset_fields = {
         name: _dataset_types(bindings, name) for name in bindings.datasets

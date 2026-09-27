@@ -271,8 +271,8 @@ def inline_payload() -> dict[str, object]:
     }
 
 
-def test_an_inline_key_match_expression_uses_the_configured_dispatcher() -> None:
-    # REQ-1189/REQ-1259: an inline lookup's expression match value evaluates
+def test_a_key_match_expression_uses_the_configured_dispatcher() -> None:
+    # REQ-1189/REQ-1259: a named intermediate's expression match value evaluates
     # through the caller's configured dispatcher, so an R018 function
     # operation resolves there instead of failing as unsupported.
 
@@ -385,7 +385,7 @@ def test_a_named_key_match_expression_reads_its_source_when_selecting() -> None:
 
 def test_key_match_window_expression_uses_the_current_row_partition() -> None:
     # REQ-1259: a window expression as a key match value needs the row's relational
-    # resolver, for both a named intermediate and an inline lookup.
+    # resolver, for a named intermediate.
     def read(variable: str) -> HandledExpression:
         return HandledExpression(value=Expression(root={"source": variable}))
 

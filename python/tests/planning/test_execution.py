@@ -1862,7 +1862,7 @@ def test_a_cross_dataset_source_without_applicable_keys_requires_a_lookup() -> N
         )
 
     # REQ-0152: no output key exists on RIGHT, so the intended match is
-    # unclear and the author must declare it with an explicit `lookup:`.
+    # unclear and the author must declare it with a named intermediate.
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "no_applicable_keys"
     assert diagnostic.requirement == "REQ-0152"

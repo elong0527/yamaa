@@ -87,7 +87,7 @@ meaning, and each use operates on its caller's rows. See the
 It preserves a current value and fills gaps from earlier non-missing values
 within the partition; it never constructs additional rows.
 
-A named intermediate or inline `lookup` can compare a donor field with the
+A named intermediate can compare a donor field with the
 current driver's field in its `filter`, for example
 `OBS.AVISITN < PLAN.AVISITN`. The driver is root `base` without row templates,
 or the explicit template's `dataset`. `order_by` and `keep` select one donor
