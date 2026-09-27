@@ -6624,14 +6624,14 @@ def validate_spec_predicates(
                 },
             )
             if isinstance(row.get('filter'), str):
+                # REQ-0068: an ungrouped filter evaluates after the record's
+                # derivations, so it reads the driver record, the template's
+                # derived columns, and lookup state; a grouped filter reads
+                # only the completed candidate's columns.
                 filter_resolver = (
                     predicate_resolver(unqualified=row_output)
                     if is_grouped
-                    else predicate_resolver(
-                        qualified={driver: driver_fields}
-                        if isinstance(driver, str)
-                        else {}
-                    )
+                    else row_resolver
                 )
                 errors.extend(
                     validate_predicate_at(

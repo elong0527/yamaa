@@ -108,6 +108,9 @@ examples:
   adam-adoe-study-eye:
     status: executable
     runtimes: ['python']
+  adam-adqs-missed-visit-locf:
+    status: executable
+    runtimes: ['python']
   adam-adqs-subscale-score:
     status: executable
     runtimes: ['python']
