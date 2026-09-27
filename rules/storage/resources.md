@@ -152,8 +152,8 @@ declared data root wins among data roots. A traversal that climbs above an
 anchor's root is re-anchored at the approved root whose canonical leading segments the
 resolved location repeats, the longest match winning when one approved root
 lies inside another, exactly as for a rooted path. A traversal that resolves
-inside no approved root fails as `resource_path_outside_project`: it reaches
-no location this run approved. A rooted path is anchored at the approved root
+inside no approved root fails as `resource_path_outside_project`
+([REQ-0778](resources.md#req-0778)). A rooted path is anchored at the approved root
 whose leading segments it repeats -- either the spelling the runner used or
 that root's canonical spelling, compared segment by segment before the
 filesystem is consulted, the longest match winning when one approved root lies
