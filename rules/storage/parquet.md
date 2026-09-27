@@ -45,7 +45,7 @@ not attach a zone when writing or reading. A runtime whose
 native timestamp always carries a zone -- [Temporal values](../values/temporal.md) names R's `POSIXct` as such a
 type -- must still write and read this column. The same wall clock
 survives. Shifting a value into or out of a machine timezone changes the
-value. Two runtimes that each shift by their own offset do not agree.
+value.
 
 <a id="req-0739"></a>
 
