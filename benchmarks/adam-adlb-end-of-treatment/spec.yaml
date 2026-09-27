@@ -86,5 +86,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
-      min: 8
-      max: 8
+      min: 12
+      max: 12

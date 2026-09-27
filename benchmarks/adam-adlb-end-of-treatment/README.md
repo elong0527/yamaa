@@ -24,7 +24,9 @@ protocol endpoint qualifier is read.
   Every other record is empty.
 
 **Note:** the endpoint qualifier decides the choice even when a later visit
-exists, so the flag can sit before the subject's last visit. Other
+exists, so the flag can sit before the subject's last visit. A record wins
+the flag even when its result is missing, and a group with a single record
+still gets the flag. Other
 qualifiers on the same record, and endpoint qualifiers for records the
 laboratory data does not hold, change nothing.
 
