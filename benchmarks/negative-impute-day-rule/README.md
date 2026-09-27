@@ -8,7 +8,8 @@ collected adverse event (AE), completing a start recorded without
 a day.
 
 **Input:** collected adverse events carrying the reported start
-(`AESTDTC`), which is sometimes a year and month with no day.
+(`AESTDTC`), which is sometimes a year and month with no day and
+sometimes a year with no month.
 
 **Variables:**
 
