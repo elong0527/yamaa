@@ -168,7 +168,14 @@ def test_case_evaluates_a_nested_expression_rather_than_a_literal_only() -> None
 def test_a_handler_inside_a_case_branch_is_observed_at_its_own_path() -> None:
     result = _evaluate(
         _case(
-            [{"when": "TRUE", "then": {"str_lower": {"source": "A", "missing": "x"}}}]
+            [
+                {
+                    "when": "TRUE",
+                    "then": {
+                        "str_case": {"source": "A", "to": "lower", "missing": "x"}
+                    },
+                }
+            ]
         ),
         {"A": MISSING},
     )
@@ -176,7 +183,7 @@ def test_a_handler_inside_a_case_branch_is_observed_at_its_own_path() -> None:
     assert isinstance(result, ValueResult)
     assert result.value == "x"
     assert [(item.path, item.handler) for item in result.observations] == [
-        ("[0].then.str_lower", "missing")
+        ("[0].then.str_case", "missing")
     ]
 
 

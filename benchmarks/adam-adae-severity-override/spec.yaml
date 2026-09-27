@@ -35,8 +35,9 @@ columns:
         - when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
           then: {literal: SEVERE}
         - otherwise:
-            str_upper:
+            str_case:
               source: AE.AESEV
+              to: upper
               missing: null
     verifications:
       - allowed_values:

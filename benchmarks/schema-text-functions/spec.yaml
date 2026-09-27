@@ -49,16 +49,18 @@ columns:
     type: str
     label: Uppercase ASCII Text
     derivation:
-      str_upper:
+      str_case:
         source: RAWTXT
+        to: upper
         missing: MISSING
 
   - name: LOWERTXT
     type: str
     label: Lowercase ASCII Text
     derivation:
-      str_lower:
+      str_case:
         source: RAWTXT
+        to: lower
         missing: MISSING
 
   # Two missing texts count as equal. With only one side missing the

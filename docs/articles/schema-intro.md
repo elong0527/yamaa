@@ -61,7 +61,7 @@ family:
 |---|---|---|
 | Core selection | `schema_expression_core.yaml` | `source`, `literal`, `first_available`, `case` |
 | Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
-| Strings | `schema_expression_str.yaml` | `str_extract`, `str_concat`, `str_template`, `str_upper`, `str_lower`, `str_sentence`, `str_title` |
+| Strings | `schema_expression_str.yaml` | `str_extract`, `str_concat`, `str_template`, `str_case` |
 | Arithmetic | `schema_expression_numeric.yaml` | `compute`, `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
 | Dates | `schema_expression_date.yaml` | `date_diff`, `study_day`, `date_impute`, `date_precision` |

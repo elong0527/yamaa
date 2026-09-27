@@ -579,16 +579,13 @@ examples:
   negative-str-contains-bool-result:
     status: executable
     runtimes: ['python']
-  negative-str-lowercase-number:
+  negative-str-case-number:
+    status: executable
+    runtimes: ['python']
+  negative-str-case-unknown:
     status: executable
     runtimes: ['python']
   negative-str-pad-width:
-    status: executable
-    runtimes: ['python']
-  negative-str-sentence-number:
-    status: executable
-    runtimes: ['python']
-  negative-str-title-number:
     status: executable
     runtimes: ['python']
   negative-study-day-datetime:

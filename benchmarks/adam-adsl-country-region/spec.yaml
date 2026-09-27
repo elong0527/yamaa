@@ -25,8 +25,9 @@ columns:
     type: str
     label: Country
     derivation:
-      str_upper:
+      str_case:
         source: DM.COUNTRY
+        to: upper
         missing: UNKNOWN
 
   # The fallback answers an unlisted country as well as an empty one, so
