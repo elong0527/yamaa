@@ -49,10 +49,15 @@ def describe_mapping(mapping):
         var = src.get("variable")
         filt = src.get("filter")
     where = " where " + str(filt) if filt else ""
-    pairs = ", ".join(
-        '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
-        for k, v in mapping.get("dict", {}).items()
-    )
+    dictionary = mapping.get("dict", {})
+    if isinstance(dictionary, str):
+        # A dictionary kept in a project file is named rather than inlined.
+        rule = " using the dictionary in " + dictionary
+    else:
+        rule = ": " + ", ".join(
+            '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
+            for k, v in dictionary.items()
+        )
     strict = mapping.get("strict", False)
     absent = describe_mapping_handler(mapping, "missing", strict)
     if "unmapped" in mapping or strict:
@@ -69,7 +74,7 @@ def describe_mapping(mapping):
             + "; unlisted values "
             + (unlisted or "stay missing")
         )
-    return "Recode " + str(var) + where + ": " + pairs + tail + "."
+    return "Recode " + str(var) + where + rule + tail + "."
 
 
 def describe_mapping_handler(mapping, handler, strict):

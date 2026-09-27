@@ -274,14 +274,13 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         )
     operand = source_operand(payload.get("source"))
     dictionary = payload.get("dict")
-    unresolved = payload.get("dict_yaml")
-    if unresolved is not None:
+    if isinstance(dictionary, str):
         return expression_condition(
             "validation",
             "invalid_field_type",
             {
                 "operation": "mapping",
-                "expected": "dict (dict_yaml is expanded during workflow planning)",
+                "expected": "dict (a dict path is expanded during workflow planning)",
             },
         )
     case_sensitive = payload.get("case_sensitive", True)

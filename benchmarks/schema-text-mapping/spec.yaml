@@ -42,7 +42,7 @@ columns:
     derivation:
       mapping:
         source: DM.RACE
-        dict_yaml: input/race_dict.yaml
+        dict: input/race_dict.yaml
         missing: Unknown
 
   # Case-insensitive read: the source and the dictionary keys are folded

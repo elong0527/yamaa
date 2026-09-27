@@ -52,7 +52,6 @@ conditions:
   key_dependency: {phases: [validation]}
   length_failed: {phases: [verification]}
   ln_of_nonpositive: {phases: [derivation]}
-  mapping_dictionary_source_conflict: {phases: [validation]}
   matches_failed: {phases: [verification]}
   missing_input: {phases: [cut, mapping]}
   missing_key: {phases: [output]}

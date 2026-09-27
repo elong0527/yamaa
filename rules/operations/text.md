@@ -431,8 +431,7 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 | Field | Meaning |
 | --- | --- |
 | `expressions.mapping.source` | String variable used as the dictionary key. |
-| `expressions.mapping.dict` | Source-value to result-value dictionary. Exactly one of `dict` and `dict_yaml` is present. |
-| `expressions.mapping.dict_yaml` | Path to a YAML file holding the source-value to result-value dictionary. The file is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the `dict` contract. |
+| `expressions.mapping.dict` | Source-value to result-value dictionary, written inline or as the path of a YAML file holding it. A path is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the inline dictionary contract. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
 | `expressions.mapping.missing` | Value returned when the source is missing. Also covers a source with no dictionary entry when `unmapped` is absent and `strict` is not true. |
 | `expressions.mapping.unmapped` | Value returned when the source is present but has no dictionary entry. |

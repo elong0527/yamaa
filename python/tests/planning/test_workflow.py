@@ -298,10 +298,10 @@ def _write_mapping_project(
     )
 
 
-def test_mapping_dict_yaml_loads_dictionary_from_file(tmp_path: Path) -> None:
+def test_mapping_dict_path_loads_dictionary_from_file(tmp_path: Path) -> None:
     _write_mapping_project(
         tmp_path,
-        "        source: ASEV\n        missing: null\n        dict_yaml: sevord.yaml\n",
+        "        source: ASEV\n        missing: null\n        dict: sevord.yaml\n",
         "MILD: 1\nMODERATE: 2\nSEVERE: 3\n",
     )
     resources = ProjectResources(tmp_path)
@@ -316,7 +316,21 @@ def test_mapping_dict_yaml_loads_dictionary_from_file(tmp_path: Path) -> None:
     assert frame["SEVORD"].to_list() == [1, 3]
 
 
-def test_mapping_dict_yaml_rejects_inline_dict_beside_it(tmp_path: Path) -> None:
+def test_mapping_without_dict_is_a_plan_error(tmp_path: Path) -> None:
+    _write_mapping_project(tmp_path, "        source: ASEV\n", None)
+
+    with pytest.raises(SpecificationError) as raised:
+        plan_workflow(
+            tmp_path / "spec.yaml",
+            load_schema_bundle(SCHEMA_ROOT),
+            ProjectResources(tmp_path),
+        )
+
+    spec_path = raised.value.diagnostics[0].spec_paths[0]
+    assert spec_path.startswith("columns.SEVORD.derivation")
+
+
+def test_mapping_dict_yaml_is_no_longer_a_field(tmp_path: Path) -> None:
     _write_mapping_project(
         tmp_path,
         "        source: ASEV\n        dict: {MILD: 1}\n        dict_yaml: sevord.yaml\n",
@@ -330,16 +344,15 @@ def test_mapping_dict_yaml_rejects_inline_dict_beside_it(tmp_path: Path) -> None
             ProjectResources(tmp_path),
         )
 
-    diagnostic = raised.value.diagnostics[0]
-    assert diagnostic.condition == "mapping_dictionary_source_conflict"
-    assert diagnostic.requirement == "REQ-1110"
-    assert diagnostic.spec_paths[0] == "columns[3].derivation.value.root.mapping"
+    assert "unknown_field" in {
+        diagnostic.condition for diagnostic in raised.value.diagnostics
+    }
 
 
-def test_mapping_dict_yaml_missing_file_is_a_plan_error(tmp_path: Path) -> None:
+def test_mapping_dict_path_missing_file_is_a_plan_error(tmp_path: Path) -> None:
     _write_mapping_project(
         tmp_path,
-        "        source: ASEV\n        dict_yaml: sevord.yaml\n",
+        "        source: ASEV\n        dict: sevord.yaml\n",
         None,
     )
 
@@ -352,13 +365,13 @@ def test_mapping_dict_yaml_missing_file_is_a_plan_error(tmp_path: Path) -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "resource_path_missing"
-    assert diagnostic.context["path"] == "sevord.yaml"
+    assert diagnostic.context == {"field": "dict", "path": "sevord.yaml"}
 
 
-def test_mapping_dict_yaml_rejects_paths_outside_the_project(tmp_path: Path) -> None:
+def test_mapping_dict_path_rejects_paths_outside_the_project(tmp_path: Path) -> None:
     _write_mapping_project(
         tmp_path,
-        "        source: ASEV\n        dict_yaml: ../escape.yaml\n",
+        "        source: ASEV\n        dict: ../escape.yaml\n",
         None,
     )
 
@@ -376,12 +389,12 @@ def test_mapping_dict_yaml_rejects_paths_outside_the_project(tmp_path: Path) -> 
     "dictionary",
     ["- MILD\n- SEVERE\n", "1: one\n"],
 )
-def test_mapping_dict_yaml_rejects_non_mapping_content(
+def test_mapping_dict_path_rejects_non_mapping_content(
     tmp_path: Path, dictionary: str
 ) -> None:
     _write_mapping_project(
         tmp_path,
-        "        source: ASEV\n        dict_yaml: sevord.yaml\n",
+        "        source: ASEV\n        dict: sevord.yaml\n",
         dictionary,
     )
 
