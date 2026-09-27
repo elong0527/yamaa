@@ -25,7 +25,7 @@ no artifact is accepted.
 
 ## How to fix
 
-Name the lookup-table columns paired with the current-row values:
+Name the lookup-table columns to match on:
 
 ```yaml
 intermediates:
@@ -34,7 +34,7 @@ intermediates:
     key: [LBTESTCD, SEX]
 ```
 
-This replaces `key_base`: both sides name the same columns, the
-current-row values default to the table's names, and writing the same list
-twice is rejected. Omit `key` only when the intended match is on the output
-keys that the lookup table also carries.
+Each listed column matches the same-named current-row value. When the
+current-row name differs, map the column to it, as in
+`key: {TESTCD: LBTESTCD, SEX: SEX}`. Omit `key` only when the intended match
+is on the output keys that the lookup table also carries.

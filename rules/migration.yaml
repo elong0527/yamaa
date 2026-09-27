@@ -1188,7 +1188,7 @@ requirements:
   REQ-0112: {"file": "operations/lookup.md", "sources": ["R003-2"]}
   REQ-0113: {"file": "operations/lookup.md", "sources": ["R003-3"]}
   REQ-0114: {"file": "operations/lookup.md", "sources": ["R003-4"]}
-  REQ-0115: {"file": "operations/lookup.md", "sources": ["R003-5"]}
+  REQ-0115: {"file": "operations/lookup.md", "sources": ["R003-5", "yamaa:issue-1315:single-key", "schema.yaml:match_key.description", "schema.yaml:match_key_columns.description"]}
   REQ-0116: {"file": "operations/lookup.md", "sources": ["R003-6"]}
   REQ-0117: {"file": "operations/lookup.md", "sources": ["R003-7"]}
   REQ-0118: {"file": "operations/lookup.md", "sources": ["R003-8"]}
@@ -1227,8 +1227,8 @@ requirements:
   REQ-0151: {"file": "operations/lookup.md", "sources": ["R003-41"]}
   REQ-0152: {"file": "operations/lookup.md", "sources": ["R003-42"]}
   REQ-0153: {"file": "operations/lookup.md", "sources": ["R003-43"]}
-  REQ-0154: {"file": "operations/lookup.md", "sources": ["R003-44"]}
-  REQ-0155: {"file": "operations/lookup.md", "sources": ["R003-45"]}
+  REQ-0154: {"file": "operations/lookup.md", "sources": ["R003-44"], "retired": true, "replacement": ["REQ-0115"]}
+  REQ-0155: {"file": "operations/lookup.md", "sources": ["R003-45"], "retired": true, "replacement": ["REQ-0115"]}
   REQ-0156: {"file": "operations/lookup.md", "sources": ["R003-46"]}
   REQ-0157: {"file": "operations/lookup.md", "sources": ["R003-47"]}
   REQ-0158: {"file": "operations/predicates.md", "sources": ["R004-1"]}
@@ -1404,7 +1404,7 @@ requirements:
   REQ-0330: {"file": "operations/aggregation.md", "sources": ["R007-45"]}
   REQ-0331: {"file": "operations/aggregation.md", "sources": ["R007-46"]}
   REQ-0332: {"file": "operations/aggregation.md", "sources": ["R007-47"], "retired": true, "replacement": []}
-  REQ-0333: {"file": "operations/lookup.md", "sources": ["R007-48"]}
+  REQ-0333: {"file": "operations/lookup.md", "sources": ["R007-48"], "retired": true, "replacement": ["REQ-0115"]}
   REQ-0334: {"file": "execution/handlers.md", "sources": ["R007-49"]}
   REQ-0335: {"file": "operations/computation.md", "sources": ["R007-50"], "retired": true, "replacement": []}
   REQ-0336: {"file": "operations/text.md", "sources": ["R007-51"]}
@@ -2325,7 +2325,7 @@ requirements:
   REQ-1256: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:expressions.flag.description", "schema_expression_core.yaml:flag_class.condition.description", "schema_expression_core.yaml:flag_class.true_value.description", "yamaa:issue-881:flag-shorthand"]}
   REQ-1257: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:flag_class.false_value.description", "schema_expression_core.yaml:flag_class.missing_value.description", "yamaa:issue-881:flag-semantics"]}
   REQ-1258: {"file": "operations/expressions.md", "sources": ["yamaa:issue-881:flag-missing-value-required"]}
-  REQ-1259: {"file": "operations/lookup.md", "sources": ["schema.yaml:key_base_entry.description", "yamaa:issue-994:key-base-expressions"]}
+  REQ-1259: {"file": "operations/lookup.md", "sources": ["schema.yaml:key_base_entry.description", "yamaa:issue-994:key-base-expressions", "schema.yaml:match_value.description"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2818,3 +2818,7 @@ provenance_addenda:
   - {"source": "yamaa:issue-1081:req-0203-retired", "text": "Issue #1081: the placement-advice requirement is retired; numbered requirements are for testable behavior only. Where a column may be derived is stated testably by REQ-1260's row-phase hoisting rule and REQ-0204's literal-null rule.", "owner": "specification/structure", "group": "column-default-derivations", "target": "REQ-1260"}
   - {"source": "yamaa:issue-1091:req-0562-retired", "text": "Issue #1091: the rationale-only requirement on fractional seconds is retired; the whole-second decision stands as REQ-0561 states it, and its rationale lives in the contract's Rationale section.", "owner": "values/temporal", "group": "whole-second", "target": "REQ-0561"}
   - {"source": "yamaa:issue-1301:req-0575-retired", "text": "Issue #1301: the rationale-only requirement on the completed-date decision is retired; the completed-date decision stands as REQ-0574 states it, and its rationale lives in the issue.", "owner": "values/temporal", "group": "completed-date", "target": "REQ-0574"}
+  - {"source": "yamaa:issue-1315:single-key", "text": "Issue #1315: one `key` field pairs each looked-up column with its current-row match value, either by name or as a mapping; `key_base` and its positional pairing are retired, with REQ-0154, REQ-0155, and REQ-0333.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
+  - {"source": "schema.yaml:match_key.description", "text": "See REQ-0115 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
+  - {"source": "schema.yaml:match_key_columns.description", "text": "See REQ-0115 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
+  - {"source": "schema.yaml:match_value.description", "text": "See REQ-1259 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_value", "target": "REQ-1259"}

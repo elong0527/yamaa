@@ -117,7 +117,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0112](../operations/lookup.md#req-0112) | `operations/lookup.md` | R003-2 |
 | [REQ-0113](../operations/lookup.md#req-0113) | `operations/lookup.md` | R003-3 |
 | [REQ-0114](../operations/lookup.md#req-0114) | `operations/lookup.md` | R003-4 |
-| [REQ-0115](../operations/lookup.md#req-0115) | `operations/lookup.md` | R003-5 |
+| [REQ-0115](../operations/lookup.md#req-0115) | `operations/lookup.md` | R003-5, R003-44, R003-45, R007-48 |
 | [REQ-0116](../operations/lookup.md#req-0116) | `operations/lookup.md` | R003-6 |
 | [REQ-0117](../operations/lookup.md#req-0117) | `operations/lookup.md` | R003-7 |
 | [REQ-0118](../operations/lookup.md#req-0118) | `operations/lookup.md` | R003-8 |
@@ -156,8 +156,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0151](../operations/lookup.md#req-0151) | `operations/lookup.md` | R003-41 |
 | [REQ-0152](../operations/lookup.md#req-0152) | `operations/lookup.md` | R003-42 |
 | [REQ-0153](../operations/lookup.md#req-0153) | `operations/lookup.md` | R003-43 |
-| [REQ-0154](../operations/lookup.md#req-0154) | `operations/lookup.md` | R003-44 |
-| [REQ-0155](../operations/lookup.md#req-0155) | `operations/lookup.md` | R003-45 |
 | [REQ-0156](../operations/lookup.md#req-0156) | `operations/lookup.md` | R003-46 |
 | [REQ-0157](../operations/lookup.md#req-0157) | `operations/lookup.md` | R003-47 |
 | [REQ-0158](../operations/predicates.md#req-0158) | `operations/predicates.md` | R004-1 |
@@ -321,7 +319,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0329](../operations/aggregation.md#req-0329) | `operations/aggregation.md` | R007-44 |
 | [REQ-0330](../operations/aggregation.md#req-0330) | `operations/aggregation.md` | R007-45 |
 | [REQ-0331](../operations/aggregation.md#req-0331) | `operations/aggregation.md` | R007-46 |
-| [REQ-0333](../operations/lookup.md#req-0333) | `operations/lookup.md` | R007-48 |
 | [REQ-0334](../execution/handlers.md#req-0334) | `execution/handlers.md` | R007-49 |
 | [REQ-0336](../operations/text.md#req-0336) | `operations/text.md` | R007-51 |
 | [REQ-0337](../operations/temporal.md#req-0337) | `operations/temporal.md` | R007-52 |

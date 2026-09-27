@@ -40,8 +40,7 @@ does not mistake a race marked twice for two races:
 intermediates:
   - id: RACELOW
     dataset: ODM
-    key: [StudyOID, SubjectKey]
-    key_base: [STUDYID, USUBJID]
+    key: {StudyOID: STUDYID, SubjectKey: USUBJID}
     filter: "ODM.ItemOID = 'IT.DM.RACE' AND ODM.Value IS NOT NULL"
     order_by: [ODM.Value]
     keep: first

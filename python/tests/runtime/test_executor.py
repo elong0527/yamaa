@@ -931,9 +931,7 @@ def test_an_ungrouped_filter_reads_lookup_state() -> None:
     # the issue #1124 donor-read shape.
     specification = _filtered_row_spec(
         "LOOK.FLAG = 'Y'",
-        intermediates=[
-            Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.K"], key=["K"])
-        ],
+        intermediates=[Intermediate(id="LOOK", dataset="RIGHT", key={"K": "SRC.K"})],
     )
 
     result = execute_specification(specification, _filtered_row_sources())
@@ -945,9 +943,7 @@ def test_an_ungrouped_filter_reads_lookup_state() -> None:
 def test_an_ungrouped_filter_lookup_matches_a_derived_column() -> None:
     specification = _filtered_row_spec(
         "LOOK.FLAG = 'Y'",
-        intermediates=[
-            Intermediate(id="LOOK", dataset="RIGHT", key_base=["MATCH"], key=["K"])
-        ],
+        intermediates=[Intermediate(id="LOOK", dataset="RIGHT", key={"K": "MATCH"})],
     )
     specification = specification.model_copy(
         update={

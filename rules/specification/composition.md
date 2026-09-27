@@ -178,7 +178,9 @@ value of a different kind replaces what it inherits, and a field the
 accumulated member does not carry is taken whole. A registry value carries
 exactly one keyword under [Expression evaluation](../operations/expressions.md), so two of them compose only when they name the
 same keyword, and that keyword's payload then composes by its own declared
-kind. Different keywords replace the value whole. Every list replaces. A
+kind. Different keywords replace the value whole. Every list replaces, and so
+does a lookup or aggregate `key` in any form
+([REQ-0115](../operations/lookup.md#req-0115)). A
 column's `verifications` entries carry no identifier to compose by, and the
 remaining lists are ordered arguments, such as `str_concat.sources`,
 `order_by`, `first_available.sources`, and the `cut` breaks and labels.

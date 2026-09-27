@@ -12,8 +12,7 @@ metadata:
 intermediates:
   - id: PRIMARY_PATH
     dataset: MEDDRA
-    key_base: AE_RAW.AELLTCD
-    key: LLTCD
+    key: {LLTCD: AE_RAW.AELLTCD}
     filter: "MEDDRA.PRIMARY_SOC = 'Y'"
     verification:
       unique: [LLTCD]

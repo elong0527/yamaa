@@ -106,7 +106,7 @@ class MappingResolver:
 class CallableResolver:
     """Adapt a ``Callable[[str], Resolution]`` to the Resolver protocol.
 
-    REQ-1259 evaluates key_base expressions through the caller's own
+    REQ-1259 evaluates expression match values through the caller's own
     resolution (the derivation resolver for aggregates, the lookup's
     resolve callable for inline intermediates), so a reference reads
     exactly what the surrounding derivation would read.

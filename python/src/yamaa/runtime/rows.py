@@ -63,7 +63,6 @@ from yamaa.planning import (
 from yamaa.runtime.intermediates import (
     IntermediateOutcome,
     IntermediateSelector,
-    _key_base_entries,
     absent_value,
     evaluate_intermediate,
 )
@@ -78,7 +77,7 @@ from yamaa.runtime.joins import (
     partition_records,
 )
 from yamaa.runtime.lifecycle import LifecycleCondition
-from yamaa.specification.models import Expression, OrderTerm
+from yamaa.specification.models import Expression, OrderTerm, key_pairs
 
 
 @dataclass(slots=True)
@@ -370,8 +369,13 @@ class RowResolver:
         )
         payload: dict[str, object] = {
             "dataset": join.dataset,
-            "key_base": list(match_variables),
-            "key": list(join.keys),
+            # An unpaired match reaches evaluate_intermediate as no key, which
+            # answers it as a condition rather than a truncated match.
+            "key": (
+                dict(zip(join.keys, match_variables, strict=True))
+                if len(join.keys) == len(match_variables)
+                else None
+            ),
             "value": field_name,
         }
         if selector is not None:
@@ -657,18 +661,18 @@ class RowResolver:
         elif self._row_phase and relation_name == self._candidate.group_driver:
             selected = self._driver_group(relation_name, identifiers, predicate)
         else:
-            key_fields = _names(payload.get("key"))
-            key_entries = _key_base_entries(payload.get("key_base"))
-            if not key_fields or not key_entries or len(key_fields) != len(key_entries):
+            pairs = key_pairs(payload.get("key"))
+            if pairs is None or not pairs[0]:
                 # REQ-0140: the planner requires the declared pairs, so this
                 # is only reachable on an unplanned path.
-                return _invalid("aggregate", "declared key and source pairs")
+                return _invalid("aggregate", "declared key pairs")
+            key_fields, key_entries = pairs
             key_values: list[RuntimeValue] = []
             key_resolver = CallableResolver(self.resolve)
-            # REQ-1189: the key_base expressions evaluate through the
+            # REQ-1189: the expression match values evaluate through the
             # configured dispatcher, like the derive bindings below.
             dispatcher = self._dispatcher or ExpressionDispatcher()
-            for index, entry in enumerate(key_entries):
+            for entry in key_entries:
                 if isinstance(entry, str):
                     resolved = self.resolve(entry)
                     if isinstance(resolved, ResolvedValue):
@@ -678,17 +682,20 @@ class RowResolver:
                     else:
                         key_values.append(MISSING)
                     continue
-                # REQ-1259: a key_base expression evaluates against the
-                # current row and supplies that key position's match value.
-                # A missing result matches nothing.
-                expression = Expression.model_validate(dict(entry))
+                # REQ-1259: an expression match value evaluates against the
+                # current row. A missing result matches nothing.
+                expression = (
+                    entry
+                    if isinstance(entry, Expression)
+                    else Expression.model_validate(dict(entry))  # type: ignore[call-overload]
+                )
                 evaluated = dispatcher.evaluate(expression, key_resolver)
                 if isinstance(evaluated, ConditionResult):
                     return evaluated
                 if not isinstance(evaluated, ValueResult):
                     return _invalid(
                         "aggregate",
-                        "a key_base expression that did not evaluate to a value",
+                        "a key match value that did not evaluate to a value",
                     )
                 key_values.append(evaluated.value)
             selected = self._right_side(

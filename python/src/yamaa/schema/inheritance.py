@@ -57,6 +57,10 @@ _KEYED_COLLECTIONS: dict[str, tuple[Literal["mapping", "list"], str | None, str]
     "rows": ("list", "id", "row_class"),
 }
 
+# REQ-0630: a `key` states one match whatever its form, so it replaces whole
+# rather than composing its column-to-value mapping key by key.
+_REPLACED_WHOLE = frozenset({"match_key"})
+
 # REQ-0630 composes a matching column member by each field's declared kind.
 # Every other keyed collection still replaces a present member field whole.
 _COMPOSING_COLLECTIONS = frozenset({"columns"})
@@ -587,7 +591,7 @@ def _compose_value(
     REQ-0633 keeps the marker at the two composition boundaries above.
     """
     member = _composing_member(accumulated, incoming, type_value, bundle)
-    if member is None:
+    if member is None or member in _REPLACED_WHOLE:
         return _replace(incoming, path, origin, provenance)
     assert isinstance(accumulated, dict) and isinstance(incoming, dict)
     if member in bundle.classes:
@@ -1184,7 +1188,7 @@ def _column_dependencies(
         for intermediate_kind, intermediate_reference in _member_references(
             intermediate,
             "intermediate_class",
-            ("key_base", "between", "filter", "order_by"),
+            ("key", "between", "filter", "order_by"),
             bundle,
         ):
             if intermediate_kind == "variable" and "." not in intermediate_reference:

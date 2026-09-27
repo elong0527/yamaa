@@ -75,9 +75,8 @@ columns:
     label: Conversion Factor to the Standard Unit
     derivation:
       lookup:
-        key_base: [LBTESTCD, LBORRESU]
         dataset: CONV
-        key: [TESTCD, UNIT]
+        key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
         value: FACTOR
         missing: null
 

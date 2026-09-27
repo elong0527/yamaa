@@ -53,7 +53,7 @@ order and detect cycles. Recursively traverse each expression and collect:
 
 <a id="req-0050"></a>
 
-**REQ-0050.** the `key_base` and `between.value` variables of a named lookup read by a
+**REQ-0050.** the match values and `between.value` variable of a named lookup read by a
 qualified reference, or the applicable output keys when matching fields
 are omitted, under [Lookup and joins](../operations/lookup.md);
 

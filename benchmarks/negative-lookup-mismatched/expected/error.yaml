@@ -1,15 +1,8 @@
 phase: validation
-condition: source_key_length_mismatch
+condition: unknown_field
 spec_paths:
-  - intermediates[0]
-requirement: REQ-0115
+  - intermediates[0].key
+requirement: REQ-0117
 context:
-  key_base:
-    - LBTESTCD
-    - SEX
-  key:
-    - LBTESTCD
-    - SEX
-    - UNIT
-  key_base_count: 2
-  key_count: 3
+  identifier: UNIT
+  intermediate: REFRANGE

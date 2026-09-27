@@ -35,13 +35,12 @@ reference-range rules. A lookup cannot choose one duplicate by file order.
 
 If both rows are valid for different conditions, such as different assay
 methods, carry that condition on both the collected records and the table,
-and add it to both lists in the same position. A collected field that is not
-an output column is named with its dataset prefix:
+and add it to the key, pairing the table column with the collected value. A
+collected field that is not an output column is named with its dataset prefix:
 
 ```yaml
 lookup:
-  key_base: [PARAMCD, SEX, LB.METHOD]
   dataset: LBREF
-  key: [LBTESTCD, SEX, METHOD]
+  key: {LBTESTCD: PARAMCD, SEX: SEX, METHOD: LB.METHOD}
   value: ANRHI
 ```

@@ -247,6 +247,54 @@ columns:
     }
 
 
+def test_a_child_lookup_key_replaces_the_inherited_key_whole(tmp_path: Path) -> None:
+    # REQ-0630: a column composes its lookup payload field by field, but the
+    # key states one match, so the child's pairs replace the parent's rather
+    # than merging with them.
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input: {SRC: input.csv, REF: ref.csv}
+base: SRC
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SRC.ID}
+  - name: VALUE
+    type: str
+    label: Value
+    derivation:
+      lookup:
+        dataset: REF
+        key: {REFID: SRC.ID, KIND: SRC.KIND}
+        value: VALUE
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID, VALUE]}
+columns:
+  - name: VALUE
+    derivation:
+      lookup:
+        key: {REFID: SRC.ID}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+
+    lookup = resolved.document["columns"][1]["derivation"]["value"]["lookup"]
+    assert lookup["key"] == {"REFID": "SRC.ID"}
+    assert lookup["dataset"] == "REF"
+
+
 def test_row_member_field_still_replaces_whole(tmp_path: Path) -> None:
     (tmp_path / "input.csv").write_text("ID,CODE\n01,a\n", encoding="ascii")
     (tmp_path / "parent.yaml").write_text(
@@ -601,7 +649,7 @@ def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
         assert actual == expected
 
 
-def test_a_column_reading_an_intermediate_depends_on_its_key_base() -> None:
+def test_a_column_reading_an_intermediate_depends_on_its_key_values() -> None:
     from yamaa.schema.inheritance import _column_dependencies
 
     bundle = load_schema_bundle(SCHEMA_ROOT)
@@ -609,8 +657,7 @@ def test_a_column_reading_an_intermediate_depends_on_its_key_base() -> None:
         "LOOK": {
             "id": "LOOK",
             "dataset": "RIGHT",
-            "key_base": ["MATCHKEY"],
-            "key": ["TESTCD"],
+            "key": {"TESTCD": "MATCHKEY"},
         }
     }
     column = {"name": "V", "type": "float", "derivation": {"source": "LOOK.V"}}

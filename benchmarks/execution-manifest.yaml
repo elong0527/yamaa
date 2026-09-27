@@ -438,9 +438,6 @@ examples:
   negative-mapping-duplicate-key:
     status: executable
     runtimes: ['python']
-  negative-mapping-unpaired-key:
-    status: executable
-    runtimes: ['python']
   negative-mapping-partial-key:
     status: executable
     runtimes: ['python']

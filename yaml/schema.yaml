@@ -106,11 +106,7 @@ intermediate_class:
         required: true
         description: See REQ-1048 in rules/operations/lookup.md.
     - key:
-        type: [identifier, "list[identifier]"]
-        required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
-    - key_base:
-        type: [key_base_entry, "list[key_base_entry]"]
+        type: match_key
         required: false
         description: See REQ-1048 in rules/operations/lookup.md.
     - between:
@@ -260,7 +256,15 @@ variable:
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
     description: See REQ-1057 in rules/specification/binding.md.
 
-key_base_entry:
+match_key:
+    type: [match_key_columns, "dict[identifier, match_value]"]
+    description: See REQ-0115 in rules/operations/lookup.md.
+
+match_key_columns:
+    type: [identifier, "list[identifier]"]
+    description: See REQ-0115 in rules/operations/lookup.md.
+
+match_value:
     type: [variable, expression]
     description: See REQ-1259 in rules/operations/lookup.md.
 

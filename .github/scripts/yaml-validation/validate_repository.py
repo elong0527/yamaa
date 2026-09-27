@@ -324,9 +324,6 @@ VALIDATION_CONTEXT_FIELDS = {
     },
     ('R007', 'invalid_cut'): {'reason'},
     ('R007', 'incomparable_sources'): {'sources', 'types'},
-    ('R007', 'source_key_length_mismatch'): {
-        'key', 'key_count', 'key_base', 'key_base_count',
-    },
     ('R007', 'zero_offset'): {'offset'},
     ('R007', 'unknown_window'): {'window'},
     ('R007', 'window_order_by_required'): {'operation'},
@@ -365,12 +362,6 @@ VALIDATION_CONTEXT_FIELDS = {
         'lower_type', 'intermediate', 'upper_type', 'value_type',
     },
     ('R003', 'no_applicable_keys'): {'dataset', 'hint', 'keys'},
-    ('R003', 'redundant_key_base'): {
-        'key', 'key_base',
-    },
-    ('R003', 'source_key_length_mismatch'): {
-        'key', 'key_count', 'key_base', 'key_base_count',
-    },
     ('R003', 'unpaired_fields'): {
         'declared', 'intermediate', 'missing',
     },
@@ -2578,6 +2569,11 @@ def _compose_operation_value(
     return {keyword: composed}
 
 
+# REQ-0630: a `key` states one match whatever its form, so it replaces whole
+# rather than composing its column-to-value mapping key by key.
+INHERITANCE_REPLACED_WHOLE = frozenset({'match_key'})
+
+
 def _compose_value(
     accumulated, incoming, type_value, env, path, provenance_source,
     provenance,
@@ -2590,7 +2586,7 @@ def _compose_value(
     REQ-0633 keeps the marker at the two composition boundaries above.
     """
     member = _composing_member(accumulated, incoming, type_value, env)
-    if member is None:
+    if member is None or member in INHERITANCE_REPLACED_WHOLE:
         return _replace_value(incoming, path, provenance_source, provenance)
     if member in env.get('classes', {}):
         return _compose_class_value(
@@ -5406,8 +5402,8 @@ def validate_spec_contracts(
             if not isinstance(intermediate, dict):
                 continue
             path = f"{spec_label}.intermediates[{index}]"
-            # `order_by` and `keep` pair with each other; `source`/`key`
-            # pairing is checked below now that both are optional (REQ-0153).
+            # `order_by` and `keep` pair with each other; an omitted `key` is
+            # inferred below (REQ-0153).
             if ('order_by' in intermediate) != ('keep' in intermediate):
                 has_order = 'order_by' in intermediate
                 errors.append(
@@ -5422,40 +5418,7 @@ def validate_spec_contracts(
                         },
                     )
                 )
-            sources = intermediate.get('key_base')
             keys = intermediate.get('key')
-            if (
-                isinstance(sources, list)
-                and isinstance(keys, list)
-            ):
-                if sources == keys:
-                    # REQ-0155: key_base must not repeat the key names.
-                    errors.append(
-                        validation_diagnostic(
-                            path,
-                            'redundant_key_base',
-                            'key_base repeats the key names; omit it',
-                            context={
-                                'key_base': sources,
-                                'key': keys,
-                            },
-                        )
-                    )
-                elif len(sources) != len(keys):
-                    errors.append(
-                        validation_diagnostic(
-                            path,
-                            'source_key_length_mismatch',
-                            f"key_base has {len(sources)} value(s), key has "
-                            f"{len(keys)}",
-                            context={
-                                'key_base': sources,
-                                'key': keys,
-                                'key_base_count': len(sources),
-                                'key_count': len(keys),
-                            },
-                        )
-                    )
             dataset = intermediate.get('dataset')
             if keys is None and isinstance(dataset, str):
                 # REQ-0153: an omitted key is inferred from the output keys
@@ -7189,6 +7152,23 @@ def normalize_scalar_list(value):
     return value if isinstance(value, list) else [value]
 
 
+def key_pairs(value):
+    """Split a `key` into its columns and current-row match values.
+
+    REQ-0115: a column name or a list of names matches each column against
+    the same-named current-row value; a mapping pairs each column with its
+    own match value, a variable or an expression (REQ-1259). Returns None for
+    any other shape.
+    """
+    if isinstance(value, str):
+        return [value], [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return list(value), list(value)
+    if isinstance(value, dict):
+        return list(value), list(value.values())
+    return None
+
+
 def validate_aggregate_between(
     between, path, relation, fields, current_resolver
 ):
@@ -7418,8 +7398,8 @@ def derive_binding_reference_names(derivation):
                     names.extend(predicate_identifier_names(condition))
                     return
                 if operation == 'lookup' and isinstance(payload, dict):
-                    key_base = payload.get('key_base')
-                    entries = key_base if isinstance(key_base, list) else [key_base]
+                    key = payload.get('key')
+                    entries = key.values() if isinstance(key, dict) else ()
                     names.extend(entry for entry in entries if isinstance(entry, str))
                     names.extend(predicate_identifier_names(payload.get('filter')))
                     add_order_by_names(payload.get('order_by'))
@@ -7715,17 +7695,16 @@ def validate_aggregate_at(payload, path, context):
             )
         # REQ-0142: the group is the match, so a key pair could only be
         # ignored; it never widens the read to the scope it names.
-        for field in ('key', 'key_base'):
-            if isinstance(payload, dict) and payload.get(field) is not None:
-                errors.append(
-                    validation_diagnostic(
-                        f"{path}.{field}",
-                        'invalid_aggregate_context',
-                        'grouped-row aggregate reads its own group and '
-                        'declares no key pairs',
-                        context={'reason': 'grouped_row_key_pairs'},
-                    )
+        if isinstance(payload, dict) and payload.get('key') is not None:
+            errors.append(
+                validation_diagnostic(
+                    f"{path}.key",
+                    'invalid_aggregate_context',
+                    'grouped-row aggregate reads its own group and '
+                    'declares no key pairs',
+                    context={'reason': 'grouped_row_key_pairs'},
                 )
+            )
         grouped = set(context.get('row_group_by') or [])
         fields = datasets.get(driver, {})
         resolver = numeric_identifier_resolver(
@@ -8125,43 +8104,9 @@ def validate_expression_static_semantics(expression, path, context):
         return errors
 
     if keyword == 'lookup' and isinstance(payload, dict):
-        sources = normalize_scalar_list(payload.get('key_base'))
-        keys = normalize_scalar_list(payload.get('key'))
+        pairs = key_pairs(payload.get('key'))
+        keys, sources = pairs if pairs is not None else ([], [])
         operation_path = f"{path}.lookup"
-        # REQ-0155: only flag if BOTH were explicitly written (not inferred).
-        # If either was omitted, the inference/defaulting is not redundant.
-        if (
-            payload.get('key_base') is not None
-            and payload.get('key') is not None
-            and sources == keys
-        ):
-            # REQ-0155: key_base must not repeat the key names.
-            return [
-                validation_diagnostic(
-                    operation_path,
-                    'redundant_key_base',
-                    'key_base repeats the key names; omit it',
-                    context={
-                        'key_base': sources,
-                        'key': keys,
-                    },
-                )
-            ]
-        if len(sources) != len(keys):
-            return [
-                validation_diagnostic(
-                    operation_path,
-                    'source_key_length_mismatch',
-                    f"key_base has {len(sources)} value(s), key has "
-                    f"{len(keys)}",
-                    context={
-                        'key_base': sources,
-                        'key': keys,
-                        'key_base_count': len(sources),
-                        'key_count': len(keys),
-                    },
-                )
-            ]
         dataset = payload.get('dataset')
         fields = context['input'].get(dataset, {})
         if not fields:
@@ -8540,6 +8485,11 @@ def validate_intermediate_static_semantics(
     output_resolver = predicate_resolver(
         unqualified=output_types, qualified=datasets
     )
+    intermediate_ids = {
+        intermediate.get('id')
+        for intermediate in intermediates
+        if isinstance(intermediate, dict)
+    }
     for index, intermediate in enumerate(intermediates):
         if not isinstance(intermediate, dict):
             continue
@@ -8547,7 +8497,6 @@ def validate_intermediate_static_semantics(
         dataset = intermediate.get('dataset')
         if (
             intermediate.get('key') is None
-            and intermediate.get('key_base') is None
             and intermediate.get('between') is None
             and intermediate.get('filter') is None
             and intermediate.get('order_by') is None
@@ -8570,60 +8519,53 @@ def validate_intermediate_static_semantics(
                 )
             )
         fields = datasets.get(dataset, {})
-        sources = intermediate.get('source')
-        keys = intermediate.get('key')
-        if sources is not None and keys is not None:
-            source_list = normalize_scalar_list(sources)
-            key_list = normalize_scalar_list(keys)
-            if len(source_list) != len(key_list):
+        derived = intermediate.get('derivations')
+        derived = set(derived) if isinstance(derived, dict) else set()
+        pairs = key_pairs(intermediate.get('key'))
+        for key, value in zip(*pairs) if pairs is not None else ():
+            if not isinstance(value, str) or not isinstance(key, str):
+                continue
+            # REQ-0117: every variable match value reads a known current-row
+            # value. A value qualified by another intermediate reads that
+            # intermediate's record, which its own declaration validates.
+            if '.' in value and value.split('.', 1)[0] in intermediate_ids:
+                continue
+            unresolved = unresolved_variable_diagnostic(
+                value, f"{operation_path}.key", output_resolver
+            )
+            if unresolved is not None:
+                errors.append(unresolved)
+                continue
+            # REQ-0116/REQ-0118: the key column exists and compares with its
+            # match value. A derived name (REQ-1185) has no stored type here.
+            if not fields or key in derived:
+                continue
+            if key not in fields:
                 errors.append(
                     validation_diagnostic(
-                        operation_path,
-                        'source_key_length_mismatch',
-                        'record intermediate source and key lengths differ',
-                        context={
-                            'source': source_list,
-                            'key': key_list,
-                            'source_count': len(source_list),
-                            'key_count': len(key_list),
-                        },
+                        f"{operation_path}.key",
+                        'unknown_field',
+                        f"unknown intermediate key {key!r}",
+                        context={'identifier': key},
                     )
                 )
-            elif fields:
-                for source, key in zip(source_list, key_list):
-                    if not isinstance(source, str) or not isinstance(key, str):
-                        continue
-                    unresolved = unresolved_variable_diagnostic(
-                        source, operation_path, output_resolver
-                    )
-                    if unresolved is not None:
-                        errors.append(unresolved)
-                    if key not in fields:
-                        errors.append(
-                            validation_diagnostic(
-                                f"{operation_path}.key",
-                                'unknown_field',
-                                f"unknown record intermediate key {key!r}",
-                                context={'identifier': key},
-                            )
-                        )
-                        continue
-                    source_type = output_resolver(source)
-                    key_type = fields.get(key)
-                    if (
-                        source_type is None
-                        or key_type is None
-                        or runtime_types_comparable(source_type, key_type)
-                    ):
-                        continue
-                    errors.append(
-                        incompatible_variable_diagnostic(
-                            operation_path,
-                            source,
-                            f"a type comparable with {key!r} ({key_type})",
-                            source_type,
-                        )
-                    )
+                continue
+            value_type = output_resolver(value)
+            key_type = fields.get(key)
+            if (
+                value_type is None
+                or key_type is None
+                or runtime_types_comparable(value_type, key_type)
+            ):
+                continue
+            errors.append(
+                incompatible_variable_diagnostic(
+                    operation_path,
+                    value,
+                    f"a type comparable with {key!r} ({key_type})",
+                    value_type,
+                )
+            )
         between = intermediate.get('between')
         if not isinstance(between, dict) or not fields:
             continue

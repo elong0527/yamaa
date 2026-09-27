@@ -12,11 +12,10 @@ output:
 intermediates:
   - id: SUP_EP
     dataset: SUPPLB
-    key: [STUDYID, USUBJID, IDVARVAL]
-    key_base:
-      - LB.STUDYID
-      - LB.USUBJID
-      - str_pad: {source: LBSEQ, width: 8}
+    key:
+      STUDYID: LB.STUDYID
+      USUBJID: LB.USUBJID
+      IDVARVAL: {str_pad: {source: LBSEQ, width: 8}}
 
 rows:
   - id: low_sequence
@@ -40,11 +39,10 @@ columns:
       lookup:
         dataset: SUPPLB
         value: QVAL
-        key: [STUDYID, USUBJID, IDVARVAL]
-        key_base:
-          - LB.STUDYID
-          - LB.USUBJID
-          - str_pad: {source: LB.LBSEQ, width: 8}
+        key:
+          STUDYID: LB.STUDYID
+          USUBJID: LB.USUBJID
+          IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
 
 verifications:
   - row_count:

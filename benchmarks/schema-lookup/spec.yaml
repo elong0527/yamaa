@@ -49,8 +49,7 @@ columns:
     derivation:
       lookup:
         dataset: MEDDRA
-        key_base: DTHCAUS
-        key: LLTNAME
+        key: {LLTNAME: DTHCAUS}
         value: PTNAME
 
 verifications:

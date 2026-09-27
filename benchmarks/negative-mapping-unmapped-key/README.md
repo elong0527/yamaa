@@ -31,9 +31,8 @@ answer:
 
 ```yaml
 lookup:
-  key_base: [PARAMCD, SEX]
   dataset: LBREF
-  key: [LBTESTCD, SEX]
+  key: {LBTESTCD: PARAMCD, SEX: SEX}
   value: ANRHI
   missing: null
 ```

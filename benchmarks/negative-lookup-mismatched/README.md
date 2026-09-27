@@ -15,19 +15,18 @@ table carrying the upper limit (`NRHI`) by test code and sex.
 - `LBSTNRHI` would contain the upper limit value from the
   reference-limit table for the test code and sex of the result.
 
-**Note:** the lookup pairs two current-row values with three
-limit-table columns, so one column would match against nothing.
-The two lists pair by position, and a length mismatch is rejected
-before any data is read; no artifact is accepted.
+**Note:** the lookup names three limit-table columns, and each listed
+column matches the same-named current-row value. The collected results
+carry no unit, so the `UNIT` column would match against nothing. The
+unknown current-row value is rejected before any data is read; no artifact
+is accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
 If the limit table holds one unit per test code, match on test code and sex
-alone, since the collected results carry no unit. Both sides then name the
-same columns, so state the table columns once; the current-row values default
-to the same names:
+alone, since the collected results carry no unit:
 
 ```yaml
 intermediates:
@@ -36,6 +35,5 @@ intermediates:
     key: [LBTESTCD, SEX]
 ```
 
-Keeping `key_base: [LBTESTCD, SEX]` beside it would only repeat `key`, which
-is also rejected. When the current-row names differ from the table's, state
-both lists, with one entry each in the same order.
+When a current-row name differs from the table's, map the table column to
+it, as in `key: {LBTESTCD: PARAMCD, SEX: SEX}`.

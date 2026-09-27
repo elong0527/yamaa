@@ -292,8 +292,7 @@ def test_another_lookup_can_match_against_the_intermediate_driver() -> None:
     prior = Intermediate(
         id="PRIOR",
         dataset="LB",
-        key=["USUBJID", "LBTESTCD"],
-        key_base=["EOTFB.USUBJID", "EOTFB.LBTESTCD"],
+        key={"USUBJID": "EOTFB.USUBJID", "LBTESTCD": "EOTFB.LBTESTCD"},
         filter="LB.VISITNUM < EOTFB.VISITNUM",
         order_by=[OrderTerm(variable="LB.VISITNUM")],
         keep="last",

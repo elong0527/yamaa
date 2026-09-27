@@ -47,8 +47,7 @@ columns:
     derivation:
       lookup:
         dataset: FACM
-        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
-        key: [STUDYID, USUBJID, CMSEQ]
+        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
         filter: "FACM.FATESTCD = 'ATC1'"
         value: FAORRES
 
@@ -58,8 +57,7 @@ columns:
     derivation:
       lookup:
         dataset: FACM
-        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
-        key: [STUDYID, USUBJID, CMSEQ]
+        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
         filter: "FACM.FATESTCD = 'ATC2'"
         value: FAORRES
 
@@ -69,8 +67,7 @@ columns:
     derivation:
       lookup:
         dataset: FACM
-        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
-        key: [STUDYID, USUBJID, CMSEQ]
+        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
         filter: "FACM.FATESTCD = 'ATC3'"
         value: FAORRES
 
@@ -80,8 +77,7 @@ columns:
     derivation:
       lookup:
         dataset: FACM
-        key_base: [CM.STUDYID, CM.USUBJID, CM.CMSEQ]
-        key: [STUDYID, USUBJID, CMSEQ]
+        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
         filter: "FACM.FATESTCD = 'ATC4'"
         value: FAORRES
 
@@ -94,8 +90,7 @@ columns:
     derivation:
       lookup:
         dataset: ATCDICT
-        key_base: ATC1CD
-        key: ATCCODE
+        key: {ATCCODE: ATC1CD}
         value: ATCNAME
 
   - name: ATC2
@@ -104,8 +99,7 @@ columns:
     derivation:
       lookup:
         dataset: ATCDICT
-        key_base: ATC2CD
-        key: ATCCODE
+        key: {ATCCODE: ATC2CD}
         value: ATCNAME
 
   - name: ATC3
@@ -114,8 +108,7 @@ columns:
     derivation:
       lookup:
         dataset: ATCDICT
-        key_base: ATC3CD
-        key: ATCCODE
+        key: {ATCCODE: ATC3CD}
         value: ATCNAME
 
   - name: ATC4
@@ -124,8 +117,7 @@ columns:
     derivation:
       lookup:
         dataset: ATCDICT
-        key_base: ATC4CD
-        key: ATCCODE
+        key: {ATCCODE: ATC4CD}
         value: ATCNAME
 
 verifications:

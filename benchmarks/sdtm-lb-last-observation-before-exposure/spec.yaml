@@ -29,14 +29,12 @@ rows:
       LBTESTCD:
         lookup:
           dataset: LB_MAPPING
-          key_base: ODM.ItemOID
-          key: ItemOID
+          key: {ItemOID: ODM.ItemOID}
           value: LBTESTCD
       LBSPEC:
         lookup:
           dataset: LB_MAPPING
-          key_base: ODM.ItemOID
-          key: ItemOID
+          key: {ItemOID: ODM.ItemOID}
           value: LBSPEC
       LBORRES:
         aggregate:
@@ -85,10 +83,13 @@ columns:
     derivation:
       aggregate:
         filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
-        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID,
-              ItemGroupRepeatKey]
-        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-                   ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+        key:
+          StudyOID: ODM.StudyOID
+          SubjectKey: ODM.SubjectKey
+          StudyEventOID: ODM.StudyEventOID
+          FormOID: ODM.FormOID
+          ItemGroupOID: ODM.ItemGroupOID
+          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
         expr: "ONLY(ODM.Value)"
 
   - name: LBSTAT
@@ -97,10 +98,13 @@ columns:
     derivation:
       aggregate:
         filter: "ODM.ItemOID = 'IT.LB.LBSTAT'"
-        key: [StudyOID, SubjectKey, StudyEventOID, FormOID, ItemGroupOID,
-              ItemGroupRepeatKey]
-        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-                   ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+        key:
+          StudyOID: ODM.StudyOID
+          SubjectKey: ODM.SubjectKey
+          StudyEventOID: ODM.StudyEventOID
+          FormOID: ODM.FormOID
+          ItemGroupOID: ODM.ItemGroupOID
+          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
         expr: "ONLY(ODM.Value)"
 
   - name: RFSTDTC

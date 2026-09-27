@@ -44,7 +44,6 @@ columns:
     # the table has no row for that pair or the sex is missing.
     derivation:
       lookup:
-        key_base: [PARAMCD, SEX]
         dataset: LBREF
-        key: [LBTESTCD, SEX]
+        key: {LBTESTCD: PARAMCD, SEX: SEX}
         value: ANRHI

@@ -36,8 +36,9 @@ lookup would.
 intermediate, `dataset: SELF` instead reads the spec's completed derived
 rows. The current row is
 the output row (or grouped-row candidate) the match runs for. Match fields
-are the `key` columns; match variables are the `key_base` values. Eligible
-records are the dataset records surviving `filter`.
+are the `key` columns; match values are what the current row supplies for
+them ([REQ-0115](lookup.md#req-0115)). Eligible records are the dataset
+records surviving `filter`.
 
 <a id="req-0113"></a>
 
@@ -47,13 +48,11 @@ as `duplicate_identifier`.
 
 <a id="req-0114"></a>
 
-**REQ-0114.** A named lookup declares `id` and `dataset`; `key_base` and
-`key` are optional. The schema requires `id` and `dataset`: omitting
-either fails as `missing_required_field` with no requirement attached.
-An omitted `key` is inferred from
-the applicable output keys ([REQ-0153](lookup.md#req-0153)); an omitted `key_base` defaults to
-the key names ([REQ-0154](lookup.md#req-0154)). State both lists only when the intended match
-differs from the inferred match.
+**REQ-0114.** A named lookup declares `id` and `dataset`; `key` is
+optional. The schema requires `id` and `dataset`: omitting either fails as
+`missing_required_field` with no requirement attached. An omitted `key` is
+inferred from the applicable output keys ([REQ-0153](lookup.md#req-0153)).
+State `key` only when the intended match differs from the inferred match.
 
 ```yaml
 intermediates:
@@ -71,7 +70,6 @@ states the same match explicitly:
 intermediates:
   - id: DEATHEV
     dataset: AE
-    key_base: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.ASTDT]
@@ -106,17 +104,36 @@ columns:
     derivation:
       lookup:
         dataset: WHODRUG
-        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
-        key: [DRUG_RECORD_NO, ATC_CODE]
+        key:
+          DRUG_RECORD_NO: CODING.DRUG_RECORD_NO
+          ATC_CODE: CODING.ATC_CODE
         value: PREFERRED_NAME
 ```
 
 <a id="req-0115"></a>
 
-**REQ-0115.** `key_base` and `key` pair by position, have equal length, and
-are both non-empty -- after inference ([REQ-0153](lookup.md#req-0153)) and defaulting ([REQ-0154](lookup.md#req-0154))
-have run. Otherwise the lookup names no key and fails as
-`source_key_length_mismatch`.
+**REQ-0115.** `key` states the match as pairs, each a column of the
+lookup's dataset and the current-row match value it must equal. A column
+name, or a list of column names, pairs each column with the same-named
+current-row value. A mapping pairs each column, written as the mapping key,
+with the match value written beside it: a variable or an expression
+([REQ-1259](lookup.md#req-1259)). A mapping may pair a column with the
+same-named value. Pair order does not change the result.
+
+```yaml
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: {TESTCD: LBTESTCD, SEX: SEX}
+```
+
+Here the current-row `LBTESTCD` matches the limit table's `TESTCD` column;
+the list `[TESTCD, SEX]` would have matched `TESTCD` against a current-row
+`TESTCD` that does not exist.
+
+A written `key` names at least one pair. An empty list or mapping names no
+match: a lookup fails as `invalid_field_type`, and an aggregate fails as
+`missing_aggregate_keys` ([REQ-0140](lookup.md#req-0140)).
 
 <a id="req-0116"></a>
 
@@ -125,9 +142,9 @@ Otherwise fail as `unknown_field`.
 
 <a id="req-0117"></a>
 
-**REQ-0117.** Every `key_base` entry must read a known current-row value: a
-variable entry must name one, and every identifier an expression entry reads
-must be one. Otherwise fail as `unknown_field`.
+**REQ-0117.** Every match value must read a known current-row value: a
+variable must name one, and every identifier an expression reads must be
+one. Otherwise fail as `unknown_field`.
 
 <a id="req-0118"></a>
 
@@ -140,7 +157,8 @@ not a wider comparison.
 
 <a id="req-1259"></a>
 
-**REQ-1259.** A `key_base` entry may be an expression instead of a variable.
+**REQ-1259.** A match value in a `key` mapping may be an expression instead
+of a variable.
 The expression is evaluated against the current row and its value is the
 match operand for that position; a result that is missing matches nothing,
 exactly as a missing variable does ([REQ-0131](lookup.md#req-0131)). The
@@ -359,15 +377,14 @@ narrow, choose, and absence steps for one value:
 derivation:
   lookup:
     dataset: MEDDRA
-    key_base: AE_RAW.AETERM
-    key: LLTNAME
+    key: {LLTNAME: AE_RAW.AETERM}
     value: PTNAME
     missing: NOT CODED
 ```
 
 Its `filter`, `order_by`, `keep`, `between`, `missing`, and `strict`
-behave exactly as the named form's, and its `key_base`/`key` follow the
-same omission rules ([REQ-0153](lookup.md#req-0153), [REQ-0154](lookup.md#req-0154)). Its operation-level mechanics
+behave exactly as the named form's, and its `key` takes the same forms
+([REQ-0115](lookup.md#req-0115)) and inference ([REQ-0153](lookup.md#req-0153)). Its operation-level mechanics
 are defined by this lookup contract; registry dispatch follows
 [Expression evaluation](expressions.md).
 
@@ -466,16 +483,15 @@ so it cannot combine with `verification:` and fails validation.
 <a id="req-0140"></a>
 
 **REQ-0140.** An aggregate whose expression reads a qualified dataset
-relation matches on key pairs: `key_base` and `key` pair by position and
-are non-empty after inference ([REQ-0153](lookup.md#req-0153)) and defaulting ([REQ-0154](lookup.md#req-0154)) have
-run. An omitted `key` is inferred from the applicable output keys; an
-omitted `key_base` defaults to the key names. With no pairs at all the
-aggregate names no match and fails as `missing_aggregate_keys`.
+relation matches on `key` pairs ([REQ-0115](lookup.md#req-0115)). An
+omitted `key` is inferred from the applicable output keys
+([REQ-0153](lookup.md#req-0153)). With no pairs at all the aggregate names
+no match and fails as `missing_aggregate_keys`.
 
 <a id="req-0141"></a>
 
 **REQ-0141.** An aggregate's declared `key` columns must exist in the
-relation and its `key_base` variables must be known, or fail as
+relation and its match values must be known, or fail as
 `unknown_field`. A pair that cannot compare fails under [REQ-0004](../values/types.md#req-0004).
 
 <a id="req-0142"></a>
@@ -552,7 +568,7 @@ right types are not mutually comparable fails as
 
 **REQ-0152.** With no applicable key the intended match is unclear: the
 read fails as `no_applicable_keys`, and the author states the match with
-an explicit `lookup:` naming its `key_base`/`key` pairs. The same explicit
+an explicit `lookup:` naming its `key` pairs. The same explicit
 form serves whenever the intended keys differ from the applicable
 output keys or the read should be a reusable named lookup.
 
@@ -565,35 +581,6 @@ dataset also carries. The inference is the same one the implicit join
 uses, so a lookup that omits `key` matches exactly as the implicit join
 would. With no applicable key the read fails as `no_applicable_keys`.
 
-<a id="req-0154"></a>
-
-**REQ-0154.** A lookup may omit `key_base`: the omitted source defaults to
-the (possibly inferred) key names, matching each key column against the
-same-named current-row value. `key_base` is stated only when a key column
-is matched against a differently named current-row value.
-
-```yaml
-intermediates:
-  - id: REFRANGE
-    dataset: LBRANGE
-    key_base: [LBTESTCD, SEX]
-    key: [TESTCD, SEX]
-```
-
-Here the current-row `LBTESTCD` matches the limit table's `TESTCD`
-column; omitting `key_base` would have matched `TESTCD` against a
-current-row `TESTCD` that does not exist.
-
-<a id="req-0155"></a>
-
-**REQ-0155.** A written `key_base` must not simply repeat `key`: naming
-the same columns on both sides states the [REQ-0154](lookup.md#req-0154) default twice, and the
-two statements can then drift apart under edit. A `key_base` equal to
-its `key` fails as `redundant_key_base`; the author omits it instead.
-An expression entry never repeats a key name. The requirement is on what
-the author wrote: the `key_base` [REQ-0154](lookup.md#req-0154)
-supplies is never redundant.
-
 ### Row construction reads through the same join
 
 <a id="req-0156"></a>
@@ -604,8 +591,8 @@ with another input dataset joins that dataset on the applicable keys
 input record. Each retained input record builds one candidate row
 ([REQ-0036](../execution/rows.md#req-0036)). The input record's fields are the only single values the match
 can read. Values produced only by column derivation are not available
-then. An explicit `lookup:` states the same match with declared
-`key_base`/`key` pairs. Its match variables have the same availability:
+then. An explicit `lookup:` states the same match with declared `key`
+pairs. Its match values have the same availability:
 input-record fields or columns in the same row template. The join binds
 one value per row. Later derivations in the same row template read that
 value through the bound column. A row-phase `compute` still names no
@@ -624,8 +611,8 @@ carries fails as `unknown_field` ([REQ-0103](../specification/binding.md#req-010
 
 <a id="req-0305"></a>
 
-**REQ-0305.** `lookup` requires each source and its positionally
-corresponding key column to have the same comparable type.
+**REQ-0305.** `lookup` requires each match value and its paired key
+column to have the same comparable type.
 
 ### Interface behavior
 
@@ -637,8 +624,7 @@ corresponding key column to have the same comparable type.
 | --- | --- |
 | `intermediate_class.id` | Name through which the looked-up record is read. |
 | `intermediate_class.dataset` | Declared input dataset, or `SELF` for completed derived rows ([REQ-0120](lookup.md#req-0120)). |
-| `intermediate_class.key` | Dataset columns paired by position with key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
-| `intermediate_class.key_base` | Current-row variables or expressions ([REQ-1259](lookup.md#req-1259)) paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `intermediate_class.key` | Dataset columns, each paired with its current-row match value ([REQ-0115](lookup.md#req-0115)); omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
 | `intermediate_class.between` | Current-row value matched inclusively against lower and upper dataset bounds. |
 | `intermediate_class.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
@@ -712,18 +698,11 @@ corresponding key column to have the same comparable type.
 | --- | --- |
 | `expressions.lookup.value` | Dataset column returned by the lookup. |
 | `expressions.lookup.dataset` | Declared dataset containing the lookup table. |
-| `expressions.lookup.key_base` | One or more current-row lookup variables or expressions ([REQ-1259](lookup.md#req-1259)); omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
-| `expressions.lookup.key` | Dataset columns paired by position with key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
+| `expressions.lookup.key` | Dataset columns, each paired with its current-row match value ([REQ-0115](lookup.md#req-0115)); omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
 | `expressions.lookup.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `expressions.lookup.between` | Current-row value matched inclusively against lower and upper dataset bounds. |
 | `expressions.lookup.order_by` | Terms ordering eligible records; declared with keep. |
 | `expressions.lookup.keep` | Ordered record to retain; declared with order_by. |
 | `expressions.lookup.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `expressions.lookup.strict` | Fail when the lookup yields nothing. |
-| `Result` | Looks up one value in a declared dataset by explicit key pairs. Key_base entries (variables or expressions, [REQ-1259](lookup.md#req-1259)) and key lists pair by position, have equal length, and form a unique combined dataset key. Pair order does not change the result. Either list may be omitted: an omitted key is inferred from the applicable output keys ([REQ-0150](lookup.md#req-0150)), and an omitted key_base defaults to the key names. Key_base must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
-
-## Error conditions
-
-<a id="req-0333"></a>
-
-**REQ-0333.** `lookup` whose `key_base` and `key` lists differ in length must fail.
+| `Result` | Looks up one value in a declared dataset by explicit key pairs ([REQ-0115](lookup.md#req-0115)), which form a unique combined dataset key. Pair order does not change the result. An omitted key is inferred from the applicable output keys ([REQ-0153](lookup.md#req-0153)). |

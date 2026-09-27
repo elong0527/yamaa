@@ -680,8 +680,7 @@ intermediates:
     dataset: SRC
     derivations:
       IDVARVAL_U: str_upper(IDVARVAL)
-    key: [IDVARVAL_U]
-    key_base: [STUDYID]
+    key: {IDVARVAL_U: STUDYID}
 output:
   path: out.csv
   columns: [STUDYID]

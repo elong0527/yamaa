@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Literal
 
@@ -93,6 +94,29 @@ class Expression(RootModel[dict[str, JsonValue]]):
         return next(iter(self.root))
 
 
+def key_pairs(key: object) -> tuple[tuple[str, ...], tuple[object, ...]] | None:
+    """Split a written `key` into its columns and current-row match values.
+
+    REQ-0115: a column name or a list of names matches each column against
+    the same-named current-row value; a mapping pairs each column with its
+    own match value, a variable or an expression (REQ-1259). Returns None for
+    any other shape so the caller reports it.
+    """
+    if isinstance(key, str):
+        return (key,), (key,)
+    if isinstance(key, Mapping):
+        if not all(isinstance(column, str) for column in key) or not all(
+            isinstance(value, (str, Expression))
+            or (isinstance(value, Mapping) and len(value) == 1)
+            for value in key.values()
+        ):
+            return None
+        return tuple(key), tuple(key.values())
+    if isinstance(key, Sequence) and all(isinstance(column, str) for column in key):
+        return tuple(key), tuple(key)
+    return None
+
+
 class DatasetSource(_StrictModel):
     path: str
     types: dict[str, ColumnType] | None = None
@@ -131,11 +155,11 @@ class IntermediateVerification(_StrictModel):
 class Intermediate(_StrictModel):
     id: str
     dataset: str
-    # REQ-1259: a key_base entry is a bare variable or an expression the
-    # current row evaluates; the planner turns expressions into synthetic
-    # match names paired with their KeyBaseExpression.
-    key_base: list[str | Expression] | None = None
-    key: list[str] | None = None
+    # REQ-0115: the columns matched by name, or each column mapped to its
+    # current-row match value. REQ-1259: a match value is a bare variable or
+    # an expression the current row evaluates; the planner turns expressions
+    # into synthetic match names paired with their MatchValueExpression.
+    key: list[str] | dict[str, str | Expression] | None = None
     between: IntermediateBetween | None = None
     filter: str | None = None
     order_by: list[OrderTerm] | None = None
