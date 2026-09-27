@@ -300,11 +300,10 @@ the one spelling two runtimes can both produce.
 
 <a id="req-1220"></a>
 
-**REQ-1220.** The bytes are fixed rather than the information. Two conforming
+**REQ-1220.** A generation's data files meet the byte-identity contract [REQ-1008](define-xml.md#req-1008) states: two conforming
 implementations produce byte-identical files, and a golden file is compared
-byte for byte. The
-layout above keeps a file readable in a diff, which is what a reviewer
-compares, while leaving exactly one spelling of every part of it.
+byte for byte. The layout above leaves exactly one spelling of every part of
+a file.
 
 ### Publication
 
