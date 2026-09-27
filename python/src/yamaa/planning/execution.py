@@ -3395,7 +3395,11 @@ def _check_between(
 ) -> bool:
     """Check the closed range an intermediate matches by, before any data is read."""
     context = {"intermediate": identifier} if identifier is not None else {}
-    stated = [(name, side) for side, name in (("lower", lower), ("upper", upper)) if name is not None]
+    stated = [
+        (name, side)
+        for side, name in (("lower", lower), ("upper", upper))
+        if name is not None
+    ]
     missing = [name for name, _ in stated if name not in fields]
     if missing:
         # REQ-0121: a bound naming a column the dataset does not have.
