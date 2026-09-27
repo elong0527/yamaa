@@ -28,12 +28,7 @@ mapping stays closed at `.csv` and `.parquet`. A Dataset-JSON file carries
 a creation timestamp. Every one of those is a study-document fact: [REQ-0970](define-xml.md#req-0970)
 builds the identifiers from the document's `study`, `metadata_version`, and
 dataset `id`, and [REQ-0962](define-xml.md#req-0962) declares the timestamp rather than reading a clock.
-A specification holds none of them. An `output.path` ending in `.json` would
-therefore either mint identifiers a document can contradict or require every
-specification to restate the study it belongs to, and [REQ-0960](define-xml.md#req-0960) already fixes
-where composition is declared. The exclusion is not [REQ-1234](../storage/publication.md#req-1234)'s:
-this container loses nothing, and [REQ-1233](../storage/publication.md#req-1233)
-records that it is the identity rather than the values that keeps it out.
+A specification holds none of them.
 
 <a id="req-1195"></a>
 
