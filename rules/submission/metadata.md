@@ -43,9 +43,7 @@ all column metadata field names below.
 
 **REQ-0859.** Every dataset follows one foundational standard, and the study
 document binds it: [REQ-0965](define-xml.md#req-0965) resolves each dataset to a declared standard of type
-`IG`. A specification does not name the standard. The implementation-guide
-release changes between submissions. Binding the release in the specification
-would version every dataset specification against one study. This contract reads
+`IG`. A specification does not name the standard. This contract reads
 the bound standard's published name as one of three closed **families**:
 
 | Family | Standard names |
@@ -57,10 +55,7 @@ the bound standard's published name as one of three closed **families**:
 <a id="req-0860"></a>
 
 **REQ-0860.** The table is closed. A dataset bound to an `IG` standard outside
-the table fails: the origin pairs, the core mapping, and the domain and
-purpose decisions below are all family-specific, and this design closes none
-of them for a standard it does not name. `BIMO` is excluded today; admitting
-it changes this table rather than an implementation's judgment.
+the table fails. `BIMO` is excluded today.
 
 <a id="req-0861"></a>
 

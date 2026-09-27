@@ -38,6 +38,9 @@ ARTIFACT_EXAMPLES = [
     "sdtm-dm-dates",
     "adam-adlb-mean",
     "adam-adlb-supplb-padded-key",
+    # REQ-1263: a supplemental qualifier read per laboratory record feeds the
+    # window that ranks each subject's records for one test.
+    "adam-adlb-end-of-treatment",
     # REQ-0119 matches on the applicable keys as the two sides declare them, so
     # a sequence number joins once both sides say it is one.
     "adam-adae-severity",
@@ -264,6 +267,7 @@ intermediates:
   - id: REF_LOOKUP
     dataset: REF
     key: [PARAMCD, SEX]
+    missing: null
   - id: EX_LOOKUP
     dataset: EX
     key: [STUDYID, USUBJID]
@@ -410,6 +414,7 @@ def test_that_study_reports_the_selection_handler_only_where_it_chose(
         counts[("columns.TRT.derivation.source.multiple_matches", "multiple_matches")]
         == 3
     )
+    assert counts[("columns.ANRHI.derivation.source.missing", "missing")] == 1
 
 
 def test_that_study_is_reproduced_exactly_on_a_second_run(

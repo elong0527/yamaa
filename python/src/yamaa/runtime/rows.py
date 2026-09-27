@@ -474,8 +474,6 @@ class RowResolver:
         payload: Mapping[str, object],
     ) -> EvaluationResult:
         """Answer the operations that read a relation rather than one value."""
-        if operation == "lookup":
-            return self._inline_lookup(payload)
         if operation in WINDOW_OPERATIONS:
             return self._window(operation, payload)
         return self._aggregate(payload)
@@ -604,19 +602,6 @@ class RowResolver:
             kept.append(result.value is TruthValue.TRUE)
         return tuple(kept)
 
-    def _inline_lookup(self, payload: Mapping[str, object]) -> EvaluationResult:
-        dataset = payload.get("dataset")
-        if not isinstance(dataset, str) or dataset not in self._context.relations:
-            return _invalid("lookup", "an undeclared dataset")
-        return evaluate_intermediate(
-            payload,
-            self._context.relations[dataset],
-            self.resolve,
-            evaluate=self._dispatcher.evaluate
-            if self._dispatcher is not None
-            else None,
-            resolver=self,
-        )
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:
         expr = payload.get("expr")

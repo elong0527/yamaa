@@ -2986,6 +2986,233 @@ def test_an_intermediate_derivation_rejects_a_stored_column_shadow() -> None:
     assert diagnostic.spec_paths == ("intermediates[0].derivations.IDVARVAL",)
 
 
+def _supp_endpoint(**fields: object) -> Intermediate:
+    fields.setdefault("key", {"STUDYID": "SRC.STUDYID", "USUBJID": "SRC.USUBJID"})
+    return Intermediate(id="SUP_EP", dataset="SUPP", **fields)
+
+
+def _read_spec(
+    reader_derivations: dict[str, dict[str, object]],
+    *,
+    supp_endpoint: Intermediate | None = None,
+    reader_key: list[str] | None = None,
+    rows: list[Row] | None = None,
+    extra_columns: tuple[Column, ...] = (),
+) -> Specification:
+    """SRC_EP augments each SRC record with a REQ-1263 read of SUP_EP."""
+    columns = [
+        Column(
+            name="STUDYID", type="str", derivation=derivation({"source": "SRC.STUDYID"})
+        ),
+        Column(
+            name="USUBJID", type="str", derivation=derivation({"source": "SRC.USUBJID"})
+        ),
+        Column(
+            name="LBSEQ", type="int", derivation=derivation({"source": "SRC.LBSEQ"})
+        ),
+        *extra_columns,
+    ]
+    if rows is None:
+        columns.append(
+            Column(
+                name="EPFLAG",
+                type="str",
+                derivation=derivation({"source": "SRC_EP.EP"}),
+            )
+        )
+    reader = Intermediate(
+        id="SRC_EP",
+        dataset="SRC",
+        key=reader_key if rows is None else None,
+        derivations={
+            name: derivation(expression)
+            for name, expression in reader_derivations.items()
+        },
+    )
+    return specification(columns, rows).model_copy(
+        update={
+            "input": {
+                "SRC": DatasetSource(path="input/source.csv"),
+                "SUPP": DatasetSource(path="input/supp.csv"),
+            },
+            "intermediates": [supp_endpoint or _supp_endpoint(), reader],
+        }
+    )
+
+
+def _read_sources() -> dict[str, object]:
+    return {"SRC": _src_table(), "SUPP": _supp_table()}
+
+
+def _read_diagnostics(spec: Specification) -> tuple[object, ...]:
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec, _read_sources(), supported_operations=DEFAULT_EXPRESSION_OPERATIONS
+        )
+    return tuple(raised.value.diagnostics)
+
+
+def test_an_intermediate_derivation_may_read_another_intermediate() -> None:
+    # REQ-1263: SUP_EP matches on SRC fields, which the SRC donor record
+    # supplies, so SRC_EP may carry SUP_EP's value on each record.
+    spec = _read_spec(
+        {"EP": {"source": "SUP_EP.QVAL"}},
+        reader_key=["STUDYID", "USUBJID", "LBSEQ"],
+    )
+
+    plan = plan_execution(
+        spec, _read_sources(), supported_operations=DEFAULT_EXPRESSION_OPERATIONS
+    )
+
+    reader = next(item for item in plan.intermediates if item.identifier == "SRC_EP")
+    assert [name for name, _ in reader.derived] == ["EP"]
+    # The read adds no current-row dependency of its own.
+    assert reader.dependencies == ("STUDYID", "USUBJID", "LBSEQ")
+
+
+def test_an_intermediate_read_inside_a_window_is_rejected() -> None:
+    # REQ-1263: a window's fields read only the partitioned donor records.
+    diagnostics = _read_diagnostics(
+        _read_spec(
+            {
+                "EP": {"source": "SUP_EP.QVAL"},
+                "_RN": {
+                    "row_number": {
+                        "window": {
+                            "group_by": ["STUDYID"],
+                            "order_by": [{"variable": "SUP_EP.QVAL"}],
+                        }
+                    }
+                },
+            },
+            reader_key=["STUDYID", "USUBJID", "LBSEQ"],
+        )
+    )
+
+    [diagnostic] = [d for d in diagnostics if d.requirement == "REQ-1263"]
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.spec_paths == (
+        "intermediates[1].derivations._RN.row_number.window.order_by[0]",
+    )
+
+
+def test_an_intermediate_read_needs_match_values_from_the_donor_record() -> None:
+    # REQ-1263: SITEID is an output column, not an SRC field, so the SRC
+    # donor record cannot supply SUP_EP's match value.
+    diagnostics = _read_diagnostics(
+        _read_spec(
+            {"EP": {"source": "SUP_EP.QVAL"}},
+            supp_endpoint=_supp_endpoint(key={"STUDYID": "SITEID"}),
+            reader_key=["STUDYID", "USUBJID", "LBSEQ"],
+            extra_columns=(
+                Column(
+                    name="SITEID",
+                    type="str",
+                    derivation=derivation({"source": "SRC.STUDYID"}),
+                ),
+            ),
+        )
+    )
+
+    [diagnostic] = diagnostics
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "REQ-1263"
+    assert diagnostic.spec_paths == ("intermediates[1].derivations.EP.source",)
+    assert diagnostic.context["identifier"] == "SITEID"
+    assert diagnostic.context["read"] == "SUP_EP"
+
+
+def test_an_intermediate_read_respects_the_read_columns() -> None:
+    # REQ-1263/REQ-0125: SUP_EP limits its readable columns to IDVARVAL.
+    diagnostics = _read_diagnostics(
+        _read_spec(
+            {"EP": {"source": "SUP_EP.QVAL"}},
+            supp_endpoint=_supp_endpoint(columns=["IDVARVAL"]),
+            reader_key=["STUDYID", "USUBJID", "LBSEQ"],
+        )
+    )
+
+    [diagnostic] = diagnostics
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "REQ-0125"
+    assert diagnostic.context["identifier"] == "SUP_EP.QVAL"
+
+
+def test_intermediates_that_read_each_other_form_a_cycle() -> None:
+    # REQ-1263: SUP_EP reads SRC_EP, which reads SUP_EP.
+    diagnostics = _read_diagnostics(
+        _read_spec(
+            {"EP": {"source": "SUP_EP.QVAL"}},
+            supp_endpoint=_supp_endpoint(
+                derivations={"BACK": derivation({"source": "SRC_EP.LBSEQ"})}
+            ),
+            reader_key=["STUDYID", "USUBJID"],
+        )
+    )
+
+    [diagnostic] = [d for d in diagnostics if d.condition == "dependency_cycle"]
+    assert diagnostic.requirement == "REQ-1263"
+    assert diagnostic.context["cycle"] == ["SUP_EP", "SRC_EP", "SUP_EP"]
+    assert diagnostic.spec_paths == (
+        "intermediates[0].derivations.BACK.source",
+        "intermediates[1].derivations.EP.source",
+    )
+
+
+def test_an_intermediate_read_of_self_crosses_the_phase_boundary() -> None:
+    # REQ-1263: completed rows do not exist while donor records are
+    # augmented, so a SELF intermediate cannot be read there.
+    spec = self_donor_specification(Intermediate(id="DONOR", dataset="SELF", key=["K"]))
+    spec = spec.model_copy(
+        update={
+            "intermediates": [
+                *spec.intermediates,
+                Intermediate(
+                    id="READER",
+                    dataset="SRC",
+                    key={"X": "K"},
+                    derivations={"DK": derivation({"source": "DONOR.K"})},
+                ),
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    [diagnostic] = [
+        d for d in raised.value.diagnostics if d.condition == "phase_boundary"
+    ]
+    assert diagnostic.requirement == "REQ-1263"
+    assert diagnostic.spec_paths == ("intermediates[1].derivations.DK.source",)
+
+
+def test_a_row_driver_types_a_read_by_the_read_column() -> None:
+    # REQ-1262/REQ-1263: an exposed read keeps the read column's type.
+    spec = _read_spec(
+        {"EP": {"source": "SUP_EP.QVAL"}},
+        rows=[
+            Row(
+                id="records",
+                dataset="SRC_EP",
+                derivations={
+                    "STUDYID": derivation({"source": "SRC_EP.STUDYID"}),
+                    "USUBJID": derivation({"source": "SRC_EP.USUBJID"}),
+                    "LBSEQ": derivation({"source": "SRC_EP.LBSEQ"}),
+                    "EPFLAG": derivation({"source": "SRC_EP.EP"}),
+                },
+            )
+        ],
+        extra_columns=(Column(name="EPFLAG", type="str"),),
+    )
+
+    plan = plan_execution(
+        spec, _read_sources(), supported_operations=DEFAULT_EXPRESSION_OPERATIONS
+    )
+
+    assert [row.declaration.id for row in plan.rows] == ["records"]
+
+
 def test_a_key_an_intermediate_matches_on_is_derived_before_its_reader() -> None:
     # REQ-0050 makes the intermediate's match values dependencies of the
     # reading column; the forward_reference check exempts keys (REQ-0074),
@@ -3347,3 +3574,39 @@ def test_intermediate_verification_rejects_a_correlated_filter() -> None:
     assert diagnostic.condition == "correlated_filter_with_unique_verification"
     assert diagnostic.requirement == "REQ-1245"
     assert diagnostic.spec_paths == ("intermediates[0].verification",)
+
+
+def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    # REQ-0153/REQ-0115: the aggregate omits its key and groups on X.
+    [join] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "columns.V.derivation.aggregate.expr"
+    ]
+    assert join.source == ("X",)
+    assert join.key == ("X",)
+    assert join.inferred is True
+
+
+def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
+            ),
+        ],
+        right="int",
+    )
+
+    # REQ-0151: an inferred key must compare equal on both sides.
+    assert diagnostic.condition == "incompatible_input_type"

@@ -615,8 +615,6 @@ rows:
 """
 
 
-
-
 def _cap_intermediate(**overrides):
     fields = {
         "id": "CAP",

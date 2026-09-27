@@ -32,7 +32,9 @@ order. A driver intermediate must read an `input` dataset and may not declare
 Its filter may read only its own donor fields and earlier derived names; it
 may not reference a current row.
 An exposed derived field must have a determinable type: `source` keeps its
-source type, a string/integer/float `literal` has that type, `row_number` and
+source type, including a read of another intermediate's column under
+[REQ-1263](../operations/lookup.md#req-1263), a string/integer/float
+`literal` has that type, `row_number` and
 `rank` are integer, and `str_upper`, `str_lower`, `str_sentence`, and
 `str_title` are string. A `case` has a type only when all nonmissing branches
 have the same determinable type. Other exposed derived fields fail row-driver

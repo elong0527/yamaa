@@ -375,9 +375,9 @@ through lookup-qualified variables. Every column reading the same lookup
 sees the same record: the match runs once per row and the selection is
 shared.
 
-<a id="req-1263"></a>
+<a id="req-1264"></a>
 
-**REQ-1263.** A named lookup matches only when it is read. The match runs the
+**REQ-1264.** A named lookup matches only when it is read. The match runs the
 first time a column reads the lookup for a row, and the selection is shared
 with every later read in that row ([REQ-0138](lookup.md#req-0138)). An
 intermediate that no column reads for a row is never matched for that row:
@@ -398,10 +398,11 @@ derivations written in the same expression language as row-template
 computed once per record of the intermediate's dataset, and a derivation
 may read the dataset's stored fields plus the derivations declared before
 it. A bare name reads the dataset's stored field or an earlier derived
-name, and a qualified name must name the dataset. A reference to a driver
-field, another intermediate, a derivation declared later in the same map,
-or anything the dataset does not store fails as `unknown_field`; a derived
-name that shadows a stored column fails as `duplicate_derivation`.
+name, and a qualified name must name the dataset or, under
+[REQ-1263](lookup.md#req-1263), another named intermediate. A reference to
+a driver field, a derivation declared later in the same map, or anything
+else the dataset does not store fails as `unknown_field`; a derived name
+that shadows a stored column fails as `duplicate_derivation`.
 
 A derivation may use a window function. The window partitions the donor
 records as augmented by every derivation declared before it, so its
@@ -432,6 +433,64 @@ intermediates:
     keep: first
     columns: [DSDECOD, EOT_FALLBACK]
 ```
+
+<a id="req-1263"></a>
+
+**REQ-1263.** An intermediate derivation may read a column of another named
+intermediate through that intermediate's id. The read runs the other
+intermediate's match for the donor record being augmented, not for an
+output row. Every match value, `between` value, and correlated `filter`
+field that the match reads comes from that donor record under
+[REQ-1185](lookup.md#req-1185): a bare name, or a name qualified by the
+reading intermediate's dataset, that names a stored field or a derivation
+declared before the reading one. A name the donor record cannot supply
+fails as `unknown_field`. The read column must exist in the other
+intermediate's dataset or derivations and, when that intermediate declares
+`columns`, be one of them ([REQ-0125](lookup.md#req-0125)).
+
+Filtering, matching, range narrowing, ordered selection, and the absence
+policy apply exactly as for any other read of that intermediate. It is
+selected once per donor record, and every derivation of that record that
+reads it shares the selection ([REQ-0138](lookup.md#req-0138)). A read that
+fails, such as a `strict` intermediate that selects nothing, fails the run
+with that intermediate's condition at that intermediate's path, as a row
+reading it would. The read adds no current-row dependency and never changes
+the number of donor records ([REQ-0146](lookup.md#req-0146)).
+
+The other intermediate must read an `input` dataset. A `SELF` intermediate
+has no completed rows while donor records are augmented, so reading one
+fails as `phase_boundary`. Intermediates whose derivations read each
+other, directly or through a chain, fail as `dependency_cycle`. A window's
+fields read only the donor records being partitioned. A read of another
+intermediate in a window's `group_by`, `order_by`, `filter`, or value field
+fails as `unknown_field`: derive the value first and let the window read
+the derived name.
+
+```yaml
+intermediates:
+  - id: SUPP_EP
+    dataset: SUPPLB
+    filter: "SUPPLB.QNAM = 'ENDPOINT'"
+    key:
+      STUDYID: LB.STUDYID
+      USUBJID: LB.USUBJID
+      IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
+  - id: EOT_RANK
+    dataset: LB
+    key: [STUDYID, USUBJID, LBSEQ]
+    derivations:
+      ENDPOINT: SUPP_EP.QVAL
+      EOT_SEQ:
+        row_number:
+          window:
+            group_by: [LB.USUBJID, LB.LBTESTCD]
+            order_by:
+              - {variable: ENDPOINT, direction: desc}
+              - {variable: LB.VISITNUM, direction: desc}
+```
+
+Each laboratory record reads its own supplemental endpoint qualifier, and
+the window ranks the records of each subject and test on it.
 
 ### Intermediate uniqueness checks
 
@@ -619,7 +678,7 @@ column to have the same comparable type.
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
-| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, available to `key`, `filter`, `order_by`, `columns`, and `verification.unique` ([REQ-1185](lookup.md#req-1185)). |
+| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verification.unique` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `intermediate_class.strict` | Fail when the lookup yields nothing. |

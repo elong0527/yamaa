@@ -2280,7 +2280,8 @@ requirements:
   REQ-1260: {"file": "specification/structure.md", "sources": ["yamaa:issue-991:column-default-derivations", "yamaa:issue-1005:row-phase-column-reads", "R005-11", "yamaa:issue-1081:req-0203-retired"]}
   REQ-1261: {"file": "operations/text.md", "sources": ["yamaa:issue-994:str-pad", "schema_expression_str.yaml:expressions.str_pad.source.description", "schema_expression_str.yaml:expressions.str_pad.width.description"]}
   REQ-1262: {"file": "execution/rows.md", "sources": ["yamaa:issue-1113:intermediate-row-driver"]}
-  REQ-1263: {"file": "operations/lookup.md", "sources": ["yamaa:issue-1316:lazy-intermediate-match"]}
+  REQ-1263: {"file": "operations/lookup.md", "sources": ["yamaa:issue-1369:intermediate-reads-intermediate"]}
+  REQ-1264: {"file": "operations/lookup.md", "sources": ["yamaa:issue-1316:lazy-intermediate-match"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2810,4 +2811,5 @@ provenance_addenda:
   - {"source": "schema.yaml:match_key.description", "text": "See REQ-0115 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
   - {"source": "schema.yaml:match_key_columns.description", "text": "See REQ-0115 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
   - {"source": "schema.yaml:match_value.description", "text": "See REQ-1259 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_value", "target": "REQ-1259"}
-  - {"source": "yamaa:issue-1316:lazy-intermediate-match", "text": "Issue #1316: a named lookup matches only when read; an intermediate no column reads for a row is never matched, and a strict lookup never fails on an unread row.", "owner": "operations/lookup", "group": "lazy-intermediate-match", "target": "REQ-1263"}
+  - {"source": "yamaa:issue-1369:intermediate-reads-intermediate", "text": "Issue #1369: an intermediate derivation may read another input-backed named intermediate, matched against the donor record being augmented, so a supplemental qualifier can feed a window over the donor records.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1263"}
+  - {"source": "yamaa:issue-1316:lazy-intermediate-match", "text": "Issue #1316: a named lookup matches only when read; an intermediate no column reads for a row is never matched, and a strict lookup never fails on an unread row.", "owner": "operations/lookup", "group": "lazy-intermediate-match", "target": "REQ-1264"}
