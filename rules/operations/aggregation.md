@@ -246,9 +246,8 @@ rounding behavior.
 
 <a id="req-0481"></a>
 
-**REQ-0481.** `AVG` is not an alias; the portable reducer name is `MEAN`. A
-median would have to fix its interpolation rule before two runtimes could
-agree. No median is registered by default.
+**REQ-0481.** `AVG` is not an alias; the portable reducer name is `MEAN`.
+No median is registered by default.
 
 <a id="req-0482"></a>
 
