@@ -1332,8 +1332,7 @@ def evaluate_intermediate(
         upper_raw = raw.get("upper")
         if not (
             isinstance(value_raw, str)
-            and isinstance(lower_raw, str)
-            and isinstance(upper_raw, str)
+            and (isinstance(lower_raw, str) or isinstance(upper_raw, str))
         ):
             return ConditionResult(
                 condition=RuntimeCondition(
@@ -1341,7 +1340,7 @@ def evaluate_intermediate(
                     condition="invalid_field_type",
                     context={
                         "operation": "lookup",
-                        "expected": "between value with lower and upper",
+                        "expected": "between value with at least one bound",
                     },
                     requirement="REQ-0321",
                 )
