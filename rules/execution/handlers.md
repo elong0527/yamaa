@@ -80,8 +80,8 @@ invalid conditions. Thus, all four use `impute` in structured errors.
 <a id="req-0350"></a>
 
 **REQ-0350.** Where an operation has several inputs, such as `lookup`,
-`missing` fires when any input is missing. The present-but-unusable handler
-fires only when every input is present.
+`missing` fires when any input is missing ([REQ-0347](handlers.md#req-0347)
+states the present-but-unusable condition).
 
 ### Source handlers
 
