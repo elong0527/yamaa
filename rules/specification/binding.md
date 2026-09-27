@@ -97,7 +97,7 @@ expression, as [Expression evaluation](../operations/expressions.md) and [Aggreg
 <a id="req-0088"></a>
 
 **REQ-0088.** Operation operand fields typed as `variable` accept a
-concise source or current output variable. Compose operations through
+concise source or constructed output variable. Compose operations through
 a named derived column:
 
 ```yaml
