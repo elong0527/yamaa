@@ -210,8 +210,7 @@ not invoke the absent-item handler.
 
 <a id="req-1057"></a>
 
-**REQ-1057.** The `variable` interface has these meanings. Its schema
-declaration defines shape, defaults, and structural constraints.
+**REQ-1057.** The `variable` interface has these meanings.
 
 | Field | Meaning |
 | --- | --- |
@@ -219,8 +218,7 @@ declaration defines shape, defaults, and structural constraints.
 
 <a id="req-1058"></a>
 
-**REQ-1058.** The `regex` interface has these meanings. Its schema
-declaration defines shape, defaults, and structural constraints.
+**REQ-1058.** The `regex` interface has these meanings.
 
 | Field | Meaning |
 | --- | --- |
