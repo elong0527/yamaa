@@ -1,0 +1,102 @@
+schema_version: "1.0"
+domain: TEST
+keys: [ID]
+input:
+  SOURCE:
+    path: input/source.csv
+    types: {NUM: float, DEN: float, ADJ: float}
+
+output:
+  path: test.csv
+  columns:
+    - ID
+    - RATIO
+    - RATIO_DEFAULT
+    - RATIO_PCT
+    - RATIO_ADJ_MISSING
+    - RATIO_MISSING
+
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: SOURCE.ID
+
+  # The project's own ratio routine with every argument named: the
+  # quotient of NUM over DEN, rounded to two places, unadjusted.
+  - name: RATIO
+    type: float
+    label: Adjusted Ratio
+    derivation:
+      function:
+        name: project_ratio
+        contract_version: "1.0.0"
+        args:
+          numerator: SOURCE.NUM
+          denominator: SOURCE.DEN
+          decimals: 2
+          adjust: 0.0
+          as_percent: false
+
+  # The same call with the optional decimals left out: the project's
+  # default of two places applies, so it matches RATIO on every row.
+  - name: RATIO_DEFAULT
+    type: float
+    label: Adjusted Ratio With Default Decimals
+    derivation:
+      function:
+        name: project_ratio
+        contract_version: "1.0.0"
+        args:
+          numerator: SOURCE.NUM
+          denominator: SOURCE.DEN
+          adjust: 0.0
+          as_percent: false
+
+  # The percentage form: the quotient scaled by one hundred and rounded
+  # to one place.
+  - name: RATIO_PCT
+    type: float
+    label: Adjusted Ratio As Percentage
+    derivation:
+      function:
+        name: project_ratio
+        contract_version: "1.0.0"
+        args:
+          numerator: SOURCE.NUM
+          denominator: SOURCE.DEN
+          decimals: 1
+          adjust: 0.0
+          as_percent: true
+
+  # The adjustment is accepted missing: a blank ADJ reaches the routine
+  # as missing and counts as zero, so the result matches RATIO there.
+  - name: RATIO_ADJ_MISSING
+    type: float
+    label: Adjusted Ratio With Missing Adjustment
+    derivation:
+      function:
+        name: project_ratio
+        contract_version: "1.0.0"
+        args:
+          numerator: SOURCE.NUM
+          denominator: SOURCE.DEN
+          decimals: 2
+          adjust: SOURCE.ADJ
+          as_percent: false
+
+  # A missing numerator skips the call entirely: the routine is never
+  # invoked and the result stays empty on every row.
+  - name: RATIO_MISSING
+    type: float
+    label: Ratio With Missing Numerator
+    derivation:
+      function:
+        name: project_ratio
+        contract_version: "1.0.0"
+        args:
+          numerator: null
+          denominator: SOURCE.DEN
+          decimals: 2
+          adjust: 0.0
+          as_percent: false
