@@ -140,7 +140,7 @@ class Output(_StrictModel):
     order_by: list[OrderTerm] | None = None
 
 
-class IntermediateBetween(_StrictModel):
+class RecordBetween(_StrictModel):
     value: str
     lower: str | None = None
     upper: str | None = None
@@ -160,7 +160,7 @@ class Intermediate(_StrictModel):
     # an expression the current row evaluates; the planner turns expressions
     # into synthetic match names paired with their MatchValueExpression.
     key: list[str] | dict[str, str | Expression] | None = None
-    between: IntermediateBetween | None = None
+    between: RecordBetween | None = None
     filter: str | None = None
     order_by: list[OrderTerm] | None = None
     keep: Literal["first", "last"] | None = None

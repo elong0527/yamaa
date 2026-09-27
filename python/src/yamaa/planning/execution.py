@@ -42,7 +42,7 @@ from yamaa.specification.models import (
     Expression,
     HandledExpression,
     Intermediate,
-    IntermediateBetween,
+    RecordBetween,
     OrderTerm,
     Row,
     Specification,
@@ -1629,7 +1629,7 @@ def _aggregate_context(
             # REQ-0472: bounds are bare donor-record fields of the
             # expression's one relation, not qualified references.
             return reject(
-                f"a between bound names a bare column of {relation!r}",
+                f"a between bound must name a bare column of {relation!r}",
                 f"{operation_path}.between",
             )
     return []
@@ -3346,7 +3346,7 @@ def _validate_intermediate_derivations(
 
 def _validate_intermediate_between(
     identifier: str,
-    between: IntermediateBetween,
+    between: RecordBetween,
     path: str,
     fields: Mapping[str, ColumnType],
     bindings: BindingPlan,
