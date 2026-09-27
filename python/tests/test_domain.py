@@ -130,7 +130,7 @@ def test_two_values_for_one_key_fail_where_the_column_is_read() -> None:
     context = json.loads(issue["context"])
     assert context["identifier"] == "DM.AGE"
     assert context["value_count"] == 2
-    assert context["keys"] == [{"STUDYID": "PILOT9", "USUBJID": "P9-812"}]
+    assert context["keys"] == [{"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-102"}]
 
 
 def test_sequence_keys_derive_from_base_before_unique_logic() -> None:
