@@ -404,21 +404,7 @@ def test_key_match_window_expression_uses_the_current_row_partition() -> None:
         ),
     }
     for named in (True,):
-        value = (
-            read("T.VAL")
-            if named
-            else HandledExpression(
-                value=Expression(
-                    root={
-                        "lookup": {
-                            "dataset": "TAB",
-                            "key": key,
-                            "value": "VAL",
-                        }
-                    }
-                )
-            )
-        )
+        value = read("T.VAL")
         spec = Specification(
             schema_version="1.0",
             domain="OUT",

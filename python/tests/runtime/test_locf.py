@@ -45,28 +45,7 @@ def test_committed_locf_examples(name):
 def record_spec(inline=False, row_mode=None):
     spec, sources = fixture("adam-advs-locf-record")
     if inline:
-        donor = spec.intermediates[0]
-        columns = []
-        for column in spec.columns:
-            if column.name in {"AVAL", "ADT", "QSSEQ"}:
-                column = column.model_copy(
-                    update={
-                        "derivation": derive(
-                            {
-                                "lookup": {
-                                    "dataset": "OBS",
-                                    "key": ["USUBJID", "PARAMCD"],
-                                    "filter": donor.filter,
-                                    "order_by": ["OBS.AVISITN", "OBS.QSSEQ"],
-                                    "keep": "last",
-                                    "value": column.name,
-                                }
-                            }
-                        )
-                    }
-                )
-            columns.append(column)
-        spec = spec.model_copy(update={"columns": columns, "intermediates": []})
+        raise AssertionError("inline lookup is removed")
     if row_mode:
         derivations = {column.name: column.derivation for column in spec.columns}
         row = Row(
@@ -112,16 +91,7 @@ def replace_filter(spec, predicate):
                 ]
             }
         )
-    columns = []
-    for column in spec.columns:
-        if column.name in {"AVAL", "ADT", "QSSEQ"}:
-            payload = dict(column.derivation.value.root["lookup"])
-            payload["filter"] = predicate
-            column = column.model_copy(
-                update={"derivation": derive({"lookup": payload})}
-            )
-        columns.append(column)
-    return spec.model_copy(update={"columns": columns})
+    raise AssertionError("spec has no intermediates")
 
 
 @pytest.mark.parametrize("inline", [False])

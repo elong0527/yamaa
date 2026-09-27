@@ -325,10 +325,9 @@ def lookup_default_specification(
     "default",
     [
         {"source": "LOOK.V"},
-        {"lookup": {"dataset": "RIGHT", "key": ["X"], "value": "V"}},
         {"row_number": {"window": {"order_by": ["X"]}}},
     ],
-    ids=["named-intermediate", "inline-lookup", "window"],
+    ids=["named-intermediate", "window"],
 )
 def test_a_dataset_level_column_derivation_is_not_an_overridable_default(
     default: dict[str, object],
