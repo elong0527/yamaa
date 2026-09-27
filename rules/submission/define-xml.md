@@ -35,9 +35,8 @@ form.
 <a id="req-0962"></a>
 
 **REQ-0962.** `creation_datetime` is declared rather than read from a clock.
-Two runs of the same inputs must produce the same bytes, and a timestamp taken
-at run time would make all runs differ. `file_oid` is declared for
-byte-identical runs: an identity minted per run is not reproducible.
+Two runs of the same inputs must produce the same bytes. `file_oid` is declared
+rather than minted per run.
 
 <a id="req-0963"></a>
 
