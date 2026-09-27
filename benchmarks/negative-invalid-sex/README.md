@@ -12,17 +12,21 @@ identifiers and recorded sex (`SEX`).
 **Variables:**
 
 - `SEX` is the subject's recorded sex, copied from collected
-  `SEX`, and blank when none was recorded. Only `M` and `F` are
-  recognized, so any other code rejects the run at the final check
-  after the values are derived, and no artifact is accepted.
+  `SEX`, and blank when none was recorded. Only the exact codes
+  `M` and `F` are recognized, so a lowercase `m`, an `X`, or a
+  `U` is not accepted.
+
+A code the study does not recognize rejects the run at the final
+check, after the values are derived, so no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Correct the offending record at collection: `X` is not a code the study
-defines, so query the site for the subject's sex. Widen the accepted codes only
-when the study genuinely admits another value, such as `U` for unknown:
+Correct the offending records at collection: `m`, `X`, and `U` are
+not codes the study defines, so query the sites for the subjects'
+sex. Widen the accepted codes only when the study genuinely admits
+another value, such as `U` for unknown:
 
 ```yaml
 verifications:
