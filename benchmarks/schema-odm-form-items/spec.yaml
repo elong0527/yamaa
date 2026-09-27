@@ -36,7 +36,7 @@ columns:
           FO.LB_HEM: HGB
           FO.LB_THY: TSH
           FO.LB_UA: URPROT
-          FO.LB_EXTRA: OTHER
+          FO.LB_EXTRA: FIB
 
   - name: LBTEST
     type: str
@@ -49,7 +49,7 @@ columns:
           FO.LB_HEM: Hemoglobin
           FO.LB_THY: Thyrotropin
           FO.LB_UA: Urine Protein
-          FO.LB_EXTRA: Other Laboratory Test
+          FO.LB_EXTRA: Fibrinogen
 
   - name: LBCAT
     type: str
@@ -62,7 +62,7 @@ columns:
           FO.LB_HEM: HEMATOLOGY
           FO.LB_THY: THYROID
           FO.LB_UA: URINALYSIS
-          FO.LB_EXTRA: OTHER
+          FO.LB_EXTRA: COAGULATION
 
   - name: LBORRES
     type: str
