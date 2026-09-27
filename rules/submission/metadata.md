@@ -386,9 +386,8 @@ algorithm attached is not traceable.
 **REQ-0896.** The [Execution lifecycle](../execution/lifecycle.md) derivation graph proves some facts about a column value.
 A declared origin that contradicts a proven fact is rejected. The graph never
 supplies an origin. The graph cannot tell an investigator-recorded
-value from a vendor-transmitted or protocol-fixed value. Guessing would put an
-unverifiable claim in a submission document. Origin is always declared and
-sometimes refuted, never inferred.
+value from a vendor-transmitted or protocol-fixed value. Origin is always
+declared and sometimes refuted, never inferred.
 
 <a id="req-0897"></a>
 
