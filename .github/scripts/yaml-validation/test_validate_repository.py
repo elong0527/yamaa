@@ -408,6 +408,211 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn("unknown identifier 'USUBJID'", message)
         self.assertIn("unknown identifier 'ODM.Missing'", message)
 
+    def test_an_ungrouped_row_filter_reads_derived_columns_and_lookups(self):
+        # REQ-0068: the filter evaluates after the record's derivations, so
+        # it reads the driver, the template's derived columns, and lookup
+        # state, but not a column another template derives.
+        spec = {
+            'domain': 'ADQS',
+            'input': {'ADSL': 'adsl.csv', 'QS': 'qs.csv'},
+            'keys': ['USUBJID', 'AVISITN'],
+            'intermediates': [
+                {'id': 'COLLECTED', 'dataset': 'QS', 'key': ['USUBJID', 'AVISITN']}
+            ],
+            'output': {'path': 'out.csv', 'columns': ['USUBJID', 'AVISITN']},
+            'columns': [
+                {'name': 'USUBJID', 'type': 'str'},
+                {'name': 'AVISITN', 'type': 'int'},
+                {'name': 'OTHER', 'type': 'str'},
+            ],
+            'rows': [
+                {
+                    'id': 'missed',
+                    'dataset': 'ADSL',
+                    'filter': (
+                        "ADSL.EFFFL = 'Y' AND AVISITN = 8 "
+                        'AND COLLECTED.AVAL IS NULL'
+                    ),
+                    'derivations': {
+                        'USUBJID': 'ADSL.USUBJID',
+                        'AVISITN': {'literal': 8},
+                        'OTHER': {'literal': 'A'},
+                    },
+                },
+                {
+                    'id': 'unknown',
+                    'dataset': 'QS',
+                    'filter': "OTHER = 'A' OR COLLECTED.NOSUCH IS NULL",
+                    'derivations': {
+                        'USUBJID': 'QS.USUBJID',
+                        'AVISITN': 'QS.AVISITN',
+                    },
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            (example_dir / 'adsl.csv').write_text('USUBJID,EFFFL\n01,Y\n')
+            (example_dir / 'qs.csv').write_text('USUBJID,AVISITN,AVAL\n01,8,3\n')
+            errors = VALIDATOR.validate_spec_predicates(
+                spec, 'example/spec.yaml', example_dir / 'spec.yaml'
+            )
+        message = '\n'.join(errors)
+
+        self.assertEqual(len(errors), 2, message)
+        self.assertNotIn('rows[0].filter', message)
+        self.assertIn('rows[1].filter', message)
+        self.assertIn("unknown identifier 'OTHER'", message)
+        self.assertIn("unknown identifier 'COLLECTED.NOSUCH'", message)
+
+    def test_an_ungrouped_row_filter_rejects_a_window_derived_column(self):
+        # REQ-0068: the filter evaluates before the window pass, so naming
+        # a window-derived column fails -- directly or through a derivation
+        # that reads one -- while a grouped filter may name one.
+        def window_derivation():
+            return {
+                'locf': {
+                    'source': 'QS.AVAL',
+                    'window': {
+                        'group_by': ['USUBJID'],
+                        'order_by': ['AVISITN'],
+                    },
+                }
+            }
+
+        spec = {
+            'domain': 'ADQS',
+            'input': {'ADSL': 'adsl.csv', 'QS': 'qs.csv'},
+            'keys': ['USUBJID', 'AVISITN'],
+            'output': {
+                'path': 'out.csv',
+                'columns': ['USUBJID', 'AVISITN', 'AVAL', 'DOUBLED'],
+            },
+            'columns': [
+                {'name': 'USUBJID', 'type': 'str'},
+                {'name': 'AVISITN', 'type': 'int'},
+                {'name': 'AVAL', 'type': 'float'},
+                {'name': 'DOUBLED', 'type': 'float'},
+            ],
+            'rows': [
+                {
+                    'id': 'direct',
+                    'dataset': 'ADSL',
+                    'filter': 'AVAL > 20',
+                    'derivations': {
+                        'USUBJID': 'ADSL.USUBJID',
+                        'AVISITN': {'literal': 8},
+                        'AVAL': window_derivation(),
+                    },
+                },
+                {
+                    'id': 'transitive',
+                    'dataset': 'ADSL',
+                    'filter': 'DOUBLED > 40',
+                    'derivations': {
+                        'USUBJID': 'ADSL.USUBJID',
+                        'AVISITN': {'literal': 16},
+                        'AVAL': window_derivation(),
+                        'DOUBLED': 'AVAL',
+                    },
+                },
+                {
+                    'id': 'grouped',
+                    'dataset': 'ADSL',
+                    'group_by': ['USUBJID'],
+                    'filter': 'AVAL > 20',
+                    'derivations': {
+                        'USUBJID': 'ADSL.USUBJID',
+                        'AVISITN': {'literal': 32},
+                        'AVAL': window_derivation(),
+                    },
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            (example_dir / 'adsl.csv').write_text('USUBJID\n01\n')
+            (example_dir / 'qs.csv').write_text(
+                'USUBJID,AVISITN,AVAL\n01,8,25\n'
+            )
+            errors = VALIDATOR.validate_spec_predicates(
+                spec, 'example/spec.yaml', example_dir / 'spec.yaml'
+            )
+        message = '\n'.join(errors)
+
+        self.assertEqual(len(errors), 2, message)
+        self.assertIn('rows[0].filter', message)
+        self.assertIn("row filter names 'AVAL'", message)
+        self.assertIn('rows[1].filter', message)
+        self.assertIn("row filter names 'DOUBLED'", message)
+        self.assertIn('[phase_boundary]', message)
+        self.assertNotIn('rows[2].filter', message)
+
+    def test_an_ungrouped_row_filter_rejects_a_window_derived_lookup_match(self):
+        # REQ-0068: a qualified read through a lookup consumes its match
+        # values, so a match naming a window-derived template column fails
+        # like a direct read.
+        spec = {
+            'domain': 'ADQS',
+            'input': {'ADSL': 'adsl.csv', 'QS': 'qs.csv'},
+            'keys': ['USUBJID', 'AVISITN'],
+            'intermediates': [
+                {
+                    'id': 'COLLECTED',
+                    'dataset': 'QS',
+                    'key': ['USUBJID', 'AVISITN'],
+                    'keep': ['AVAL'],
+                }
+            ],
+            'output': {
+                'path': 'out.csv',
+                'columns': ['USUBJID', 'AVISITN', 'AVAL'],
+            },
+            'columns': [
+                {'name': 'USUBJID', 'type': 'str'},
+                {'name': 'AVISITN', 'type': 'int'},
+                {'name': 'AVAL', 'type': 'float'},
+            ],
+            'rows': [
+                {
+                    'id': 'week_8',
+                    'dataset': 'ADSL',
+                    'filter': 'COLLECTED.AVAL IS NULL',
+                    'derivations': {
+                        'USUBJID': 'ADSL.USUBJID',
+                        'AVISITN': {
+                            'row_number': {
+                                'window': {
+                                    'group_by': ['USUBJID'],
+                                    'order_by': ['AVISITN'],
+                                },
+                            }
+                        },
+                        'AVAL': 'QS.AVAL',
+                    },
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            (example_dir / 'adsl.csv').write_text('USUBJID\n01\n')
+            (example_dir / 'qs.csv').write_text(
+                'USUBJID,AVISITN,AVAL\n01,8,25\n'
+            )
+            errors = VALIDATOR.validate_spec_predicates(
+                spec, 'example/spec.yaml', example_dir / 'spec.yaml'
+            )
+        message = '\n'.join(errors)
+
+        self.assertEqual(len(errors), 1, message)
+        self.assertIn('rows[0].filter', message)
+        self.assertIn("row filter reads 'COLLECTED.AVAL'", message)
+        self.assertIn("lookup match 'AVISITN'", message)
+        self.assertIn('[phase_boundary]', message)
+
     def test_validates_a_grouped_row_count_filter(self):
         spec = {
             'domain': 'ADLB',

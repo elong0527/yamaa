@@ -6527,6 +6527,144 @@ def validate_lookup_filter_scopes(spec, spec_label, env):
     return errors
 
 
+def _derivation_top_operation(derivation):
+    """Return the operation a derivation's top level declares.
+
+    Mirrors the engine's ``HandledExpression.value.operation``: a
+    ``value``/``missing``/``strict`` wrapper unwraps to the inner
+    expression, and a bare string is a source read, not an operation.
+    """
+    node = derivation
+    while (
+        isinstance(node, dict)
+        and set(node) <= {'value', 'missing', 'strict'}
+        and 'value' in node
+    ):
+        node = node['value']
+    if isinstance(node, dict) and len(node) == 1:
+        operation = next(iter(node))
+        return operation if isinstance(operation, str) else None
+    return None
+
+
+def _row_window_deferred_columns(derivations):
+    """Return the template columns unavailable when its row filter runs.
+
+    REQ-0068: an ungrouped row filter evaluates before the window pass, so
+    a column whose derivation is a window operation -- or which reads such a
+    column -- has no value for the filter. Mirrors the engine's
+    ``deferred_columns`` fixpoint in planning.
+    """
+    deferred = {
+        name
+        for name, derivation in derivations.items()
+        if _derivation_top_operation(derivation) in _DERIVE_WINDOW_OPERATIONS
+    }
+    changed = True
+    while changed:
+        changed = False
+        for name, derivation in derivations.items():
+            if name in deferred:
+                continue
+            references = {
+                reference
+                for reference in derive_binding_reference_names(derivation)
+                if '.' not in reference
+            }
+            if references & deferred:
+                deferred.add(name)
+                changed = True
+    return deferred
+
+
+def _intermediate_row_value_names(intermediate, root_keys, datasets):
+    """Return the bare current-row names one intermediate consumes.
+
+    REQ-0068: a qualified read through a lookup consumes its match values,
+    so a match naming a window-derived template column fails like a direct
+    read. Mirrors the engine's ``PlannedIntermediate.dependencies`` for the
+    window check: the key's match values (REQ-0115, inferred like REQ-0153
+    when omitted) plus the bare names the intermediate's own filter reads.
+    """
+    names = []
+    pairs = key_pairs(intermediate.get('key'))
+    if pairs is None:
+        dataset = intermediate.get('dataset')
+        if isinstance(dataset, str):
+            fields = datasets.get(dataset, {})
+            values = [key for key in root_keys if key in fields]
+        else:
+            values = []
+    else:
+        values = pairs[1]
+    for value in values:
+        if isinstance(value, str) and '.' not in value:
+            names.append(value)
+    filter_text = intermediate.get('filter')
+    if isinstance(filter_text, str):
+        names.extend(
+            name
+            for name in predicate_identifier_names(filter_text)
+            if '.' not in name
+        )
+    return names
+
+
+def _row_filter_window_errors(
+    filter_text, path, derivations, intermediate_matches, driver
+):
+    """Fail an ungrouped row filter naming a window-derived column.
+
+    REQ-0068: the filter evaluates before the window pass, so no window
+    result is available to it -- whether the filter names the column
+    directly or consumes it as a lookup's match value through a qualified
+    read.
+    """
+    deferred = _row_window_deferred_columns(derivations)
+    if not deferred:
+        return []
+    errors = []
+    for identifier in sorted(predicate_identifier_names(filter_text)):
+        if '.' not in identifier:
+            if identifier in deferred:
+                errors.append(
+                    validation_diagnostic(
+                        path,
+                        'phase_boundary',
+                        f"row filter names {identifier!r}, whose derivation "
+                        "reads a window result; the filter evaluates before "
+                        "the window pass",
+                        context={
+                            'identifier': identifier,
+                            'available_phase': 'window_derivation',
+                            'required_phase': 'row_filter',
+                        },
+                    )
+                )
+            continue
+        qualifier = identifier.partition('.')[0]
+        if qualifier == driver or qualifier not in intermediate_matches:
+            continue
+        for match in sorted(set(intermediate_matches[qualifier]) & deferred):
+            errors.append(
+                validation_diagnostic(
+                    path,
+                    'phase_boundary',
+                    f"row filter reads {identifier!r}, whose lookup match "
+                    f"{match!r} reads a window result; the filter evaluates "
+                    "before the window pass",
+                    context={
+                        'identifier': identifier,
+                        'intermediate': qualifier,
+                        'match': match,
+                        'available_phase': 'window_derivation',
+                        'required_phase': 'row_filter',
+                    },
+                )
+            )
+    return errors
+
+
 def validate_spec_predicates(
     spec, spec_label, spec_path=None, env=None, sources=None
 ):
@@ -6594,6 +6732,33 @@ def validate_spec_predicates(
                 )
 
     rows = spec.get('rows')
+    root_keys = spec.get('keys')
+    root_keys = root_keys if isinstance(root_keys, list) else []
+    # REQ-1260: a template without its own derivation inherits the
+    # column-level default, planned in the template's scope, so a
+    # column-level window derivation defers the filter the same way.
+    column_derivations = {
+        column.get('name'): column['derivation']
+        for column in spec.get('columns') or []
+        if isinstance(column, dict)
+        and isinstance(column.get('name'), str)
+        and 'derivation' in column
+    }
+    intermediate_matches = {}
+    if isinstance(intermediate_entries, list):
+        for intermediate in intermediate_entries:
+            if not isinstance(intermediate, dict):
+                continue
+            intermediate_id = intermediate.get('id')
+            dataset_id = intermediate.get('dataset')
+            if isinstance(intermediate_id, str) and isinstance(
+                dataset_id, str
+            ):
+                intermediate_matches[intermediate_id] = (
+                    _intermediate_row_value_names(
+                        intermediate, root_keys, datasets
+                    )
+                )
     if isinstance(rows, list):
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
@@ -6624,20 +6789,36 @@ def validate_spec_predicates(
                 },
             )
             if isinstance(row.get('filter'), str):
+                # REQ-0068: an ungrouped filter evaluates after the record's
+                # derivations, so it reads the driver record, the template's
+                # derived columns, and lookup state; a grouped filter reads
+                # only the completed candidate's columns.
                 filter_resolver = (
                     predicate_resolver(unqualified=row_output)
                     if is_grouped
-                    else predicate_resolver(
-                        qualified={driver: driver_fields}
-                        if isinstance(driver, str)
-                        else {}
-                    )
+                    else row_resolver
                 )
                 errors.extend(
                     validate_predicate_at(
                         row['filter'],
                         f"{spec_label}.rows[{index}].filter",
                         filter_resolver,
+                    )
+                )
+            if isinstance(row.get('filter'), str) and not is_grouped:
+                # REQ-0068: the filter evaluates before the window pass, so
+                # naming a window-derived column -- directly, or as a lookup's
+                # match value through a qualified read -- fails validation.
+                template_derivations = dict(column_derivations)
+                if isinstance(derivations, dict):
+                    template_derivations.update(derivations)
+                errors.extend(
+                    _row_filter_window_errors(
+                        row['filter'],
+                        f"{spec_label}.rows[{index}].filter",
+                        template_derivations,
+                        intermediate_matches,
+                        driver,
                     )
                 )
             if isinstance(derivations, dict):
