@@ -1,4 +1,6 @@
 LLTNAME,PTNAME,SOCNAME
 Headache,Headache,Nervous system disorders
+Cephalgia,Headache,Nervous system disorders
 Nausea,Nausea,Gastrointestinal disorders
+Queasy,Nausea,Gastrointestinal disorders
 Dizziness,Dizziness,Nervous system disorders
