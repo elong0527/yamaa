@@ -1,5 +1,8 @@
 DOMAIN,STUDYID,USUBJID,SUBJID,SEX,AGE,ARM,ACTARM,ARMNRS
-DM,STUDY01,001,001,M,34,Placebo,Placebo,
-DM,STUDY01,002,002,F,28,Vitamin D3,Vitamin D3,
-DM,STUDY01,003,003,U,,,,Not assigned to treatment arm
-DM,STUDY01,004,004,U,,,,Not assigned to treatment arm
+DM,YAMAA-01,YAMAA-01-101,YAMAA-01-101,M,34,Placebo,Placebo,
+DM,YAMAA-01,YAMAA-01-102,YAMAA-01-102,F,28,Vitamin D3,Vitamin D3,
+DM,YAMAA-01,YAMAA-01-103,YAMAA-01-103,U,,,,Not assigned to treatment arm
+DM,YAMAA-01,YAMAA-01-104,YAMAA-01-104,U,,,,Not assigned to treatment arm
+DM,YAMAA-01,YAMAA-01-105,YAMAA-01-105,U,52,Aspirin,Aspirin,
+DM,YAMAA-01,YAMAA-01-106,YAMAA-01-106,M,61,Placebo,Placebo,
+DM,YAMAA-01,YAMAA-01-107,YAMAA-01-107,U,,Vitamin D3,Vitamin D3,

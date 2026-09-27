@@ -51,7 +51,7 @@ def dm_inputs() -> tuple[object, dict[str, object]]:
     return specification, load_source_tables(specification.input, resources)
 
 
-def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
+def test_the_basic_dm_specification_derives_seven_ordered_typed_rows() -> None:
     specification = load_specification(
         DM_EXAMPLE / "spec.yaml", SCHEMA_ROOT
     ).specification
@@ -65,10 +65,10 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
     assert isinstance(result, ExecutionSuccess)
     assert result.artifact.frame.to_dicts() == [
         {
-            "STUDYID": "STUDY01",
+            "STUDYID": "YAMAA-01",
             "DOMAIN": "DM",
-            "USUBJID": "001",
-            "SUBJID": "001",
+            "USUBJID": "YAMAA-01-101",
+            "SUBJID": "YAMAA-01-101",
             "SEX": "M",
             "AGE": 34,
             "ARM": "Placebo",
@@ -76,10 +76,10 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "ARMNRS": None,
         },
         {
-            "STUDYID": "STUDY01",
+            "STUDYID": "YAMAA-01",
             "DOMAIN": "DM",
-            "USUBJID": "002",
-            "SUBJID": "002",
+            "USUBJID": "YAMAA-01-102",
+            "SUBJID": "YAMAA-01-102",
             "SEX": "F",
             "AGE": 28,
             "ARM": "Vitamin D3",
@@ -87,10 +87,10 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "ARMNRS": None,
         },
         {
-            "STUDYID": "STUDY01",
+            "STUDYID": "YAMAA-01",
             "DOMAIN": "DM",
-            "USUBJID": "003",
-            "SUBJID": "003",
+            "USUBJID": "YAMAA-01-103",
+            "SUBJID": "YAMAA-01-103",
             "SEX": "U",
             "AGE": None,
             "ARM": None,
@@ -98,15 +98,48 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "ARMNRS": "Not assigned to treatment arm",
         },
         {
-            "STUDYID": "STUDY01",
+            "STUDYID": "YAMAA-01",
             "DOMAIN": "DM",
-            "USUBJID": "004",
-            "SUBJID": "004",
+            "USUBJID": "YAMAA-01-104",
+            "SUBJID": "YAMAA-01-104",
             "SEX": "U",
             "AGE": None,
             "ARM": None,
             "ACTARM": None,
             "ARMNRS": "Not assigned to treatment arm",
+        },
+        {
+            "STUDYID": "YAMAA-01",
+            "DOMAIN": "DM",
+            "USUBJID": "YAMAA-01-105",
+            "SUBJID": "YAMAA-01-105",
+            "SEX": "U",
+            "AGE": 52,
+            "ARM": "Aspirin",
+            "ACTARM": "Aspirin",
+            "ARMNRS": None,
+        },
+        {
+            "STUDYID": "YAMAA-01",
+            "DOMAIN": "DM",
+            "USUBJID": "YAMAA-01-106",
+            "SUBJID": "YAMAA-01-106",
+            "SEX": "M",
+            "AGE": 61,
+            "ARM": "Placebo",
+            "ACTARM": "Placebo",
+            "ARMNRS": None,
+        },
+        {
+            "STUDYID": "YAMAA-01",
+            "DOMAIN": "DM",
+            "USUBJID": "YAMAA-01-107",
+            "SUBJID": "YAMAA-01-107",
+            "SEX": "U",
+            "AGE": None,
+            "ARM": "Vitamin D3",
+            "ACTARM": "Vitamin D3",
+            "ARMNRS": None,
         },
     ]
     assert result.artifact.frame.schema["AGE"] == pl.Int64
@@ -115,7 +148,7 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         == (DM_EXAMPLE / "expected/dm.csv").read_bytes()
     )
     assert [(item.spec_path, item.count) for item in result.handler_counts] == [
-        ("columns.SEX.derivation.mapping.missing", 2),
+        ("columns.SEX.derivation.mapping.missing", 4),
     ]
 
 
@@ -358,9 +391,15 @@ def test_execution_uses_source_values_and_never_needs_expected_artifacts() -> No
     specification, loaded = dm_inputs()
     source = loaded["ODM"]
     changed = source.table.frame.with_columns(
-        pl.when((pl.col("SubjectKey") == "001") & (pl.col("ItemOID") == "IT.DM.SEX"))
+        pl.when(
+            (pl.col("SubjectKey") == "YAMAA-01-101")
+            & (pl.col("ItemOID") == "IT.DM.SEX")
+        )
         .then(pl.lit("Female"))
-        .when((pl.col("SubjectKey") == "001") & (pl.col("ItemOID") == "IT.DM.AGE"))
+        .when(
+            (pl.col("SubjectKey") == "YAMAA-01-101")
+            & (pl.col("ItemOID") == "IT.DM.AGE")
+        )
         .then(pl.lit("35"))
         .otherwise(pl.col("Value"))
         .alias("Value")
@@ -401,7 +440,7 @@ def test_column_enrichment_keeps_the_constructed_row_count() -> None:
         "ACTARM",
         "ARMNRS",
     ]
-    assert {height for _, height in observed} == {4}
+    assert {height for _, height in observed} == {7}
 
 
 def test_verification_and_output_hooks_run_in_normative_order() -> None:

@@ -51,7 +51,7 @@ POSITIVE_HANDLERS = (
     HandlerObservation(
         spec_path="columns.SEX.derivation.mapping.missing",
         handler="missing",
-        count=2,
+        count=4,
     ),
 )
 
@@ -120,10 +120,10 @@ class TestSupportedPair:
             "str",
             "str",
         )
-        assert artifact.row_count == 4
+        assert artifact.row_count == 7
         # A missing AGE renders as no characters at all (REQ-0731).
         assert artifact.records[3] == (
-            "DM,STUDY01,003,003,U,,,,Not assigned to treatment arm"
+            "DM,YAMAA-01,YAMAA-01-103,YAMAA-01-103,U,,,,Not assigned to treatment arm"
         )
 
     def test_positive_run_reports_every_declared_handler_path(
