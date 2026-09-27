@@ -145,8 +145,8 @@ verifications:
   - unique:
       columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
-      min: 9
-      max: 9
+      min: 11
+      max: 11
   - implies:
       id: race-value-has-parent-identifier
       when: "QVAL IS NOT NULL"
