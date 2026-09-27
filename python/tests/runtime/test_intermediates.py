@@ -1074,6 +1074,135 @@ def test_a_window_derivation_error_surfaces_at_the_derivation_path() -> None:
     assert outcome.spec_path == "intermediates[0].derivations._RN"
 
 
+def _endpoint_relations() -> dict[str, RelationIndex]:
+    return {
+        "LB": relation(
+            "LB",
+            [("STUDYID", "str"), ("USUBJID", "str"), ("LBSEQ", "int")],
+            [["S1", "U1", 259], ["S1", "U1", 7], ["S1", "U2", 7]],
+        ),
+        "SUPPLB": relation(
+            "SUPPLB",
+            [
+                ("STUDYID", "str"),
+                ("USUBJID", "str"),
+                ("IDVARVAL", "str"),
+                ("QVAL", "str"),
+            ],
+            [["S1", "U1", "   259", "Y"], ["S1", "U2", "     7", "N"]],
+        ),
+    }
+
+
+def _supp_endpoint_plan(**extra: object) -> PlannedIntermediate:
+    # The supplemental key is the laboratory sequence padded to six characters.
+    return PlannedIntermediate(
+        identifier="SUP_EP",
+        dataset="SUPPLB",
+        path="intermediates[0]",
+        match_variables=("LB.STUDYID", "LB.USUBJID", "key[IDVARVAL]"),
+        match_fields=("STUDYID", "USUBJID", "IDVARVAL"),
+        match_expressions=(
+            MatchValueExpression(
+                column="IDVARVAL",
+                name="key[IDVARVAL]",
+                expression=Expression(
+                    root={"str_pad": {"source": "LB.LBSEQ", "width": 6}}
+                ),
+                variables=("LB.LBSEQ",),
+            ),
+        ),
+        **extra,
+    )
+
+
+def _endpoint_reader_plan(
+    *derived: tuple[str, dict[str, object]],
+) -> PlannedIntermediate:
+    return PlannedIntermediate(
+        identifier="LB_EP",
+        dataset="LB",
+        path="intermediates[1]",
+        match_variables=("USUBJID", "LBSEQ"),
+        match_fields=("USUBJID", "LBSEQ"),
+        derived=tuple(
+            (name, HandledExpression(value=Expression(root=expression)))
+            for name, expression in derived
+        ),
+    )
+
+
+def test_an_intermediate_derivation_reads_another_intermediate_per_record() -> None:
+    # REQ-1263: each donor record supplies the other intermediate's match
+    # values, so every record reads its own supplemental qualifier.
+    selector = IntermediateSelector(
+        [
+            _supp_endpoint_plan(),
+            _endpoint_reader_plan(("ENDPOINT", {"source": "SUP_EP.QVAL"})),
+        ],
+        _endpoint_relations(),
+    )
+
+    def endpoint(usubjid: str, lbseq: int) -> object:
+        outcome = selector.select("LB_EP", {"USUBJID": usubjid, "LBSEQ": lbseq})
+        assert outcome.condition is None
+        assert outcome.record is not None
+        return outcome.record.values["ENDPOINT"]
+
+    assert endpoint("U1", 259) == "Y"
+    # The padding is exact: seven pads to five spaces for U2 only.
+    assert endpoint("U1", 7) is MISSING
+    assert endpoint("U2", 7) == "N"
+
+
+def test_a_read_shares_one_selection_per_donor_record() -> None:
+    # REQ-1263/REQ-0138: every derivation of one record that reads the
+    # other intermediate shares its selection.
+    class CountingSelector(IntermediateSelector):
+        calls = 0
+
+        def select(self, identifier, current, *, resolver=None):  # type: ignore[no-untyped-def]
+            if identifier == "SUP_EP":
+                CountingSelector.calls += 1
+            return super().select(identifier, current, resolver=resolver)
+
+    selector = CountingSelector(
+        [
+            _supp_endpoint_plan(),
+            _endpoint_reader_plan(
+                ("ENDPOINT", {"source": "SUP_EP.QVAL"}),
+                ("SUPP_KEY", {"source": "SUP_EP.IDVARVAL"}),
+            ),
+        ],
+        _endpoint_relations(),
+    )
+
+    outcome = selector.select("LB_EP", {"USUBJID": "U1", "LBSEQ": 259})
+
+    assert outcome.record is not None
+    assert outcome.record.values["SUPP_KEY"] == "   259"
+    assert CountingSelector.calls == 3
+
+
+def test_a_failed_read_names_the_read_intermediate() -> None:
+    # REQ-1263: a strict read that finds nothing fails as the read
+    # intermediate's unmatched key, at that intermediate's path.
+    selector = IntermediateSelector(
+        [
+            _supp_endpoint_plan(strict=True),
+            _endpoint_reader_plan(("ENDPOINT", {"source": "SUP_EP.QVAL"})),
+        ],
+        _endpoint_relations(),
+    )
+
+    outcome = selector.select("LB_EP", {"USUBJID": "U1", "LBSEQ": 259})
+
+    assert outcome.record is None
+    assert outcome.condition is not None
+    assert outcome.condition.condition.condition == "unmatched_key"
+    assert outcome.spec_path == "intermediates[0]"
+
+
 def test_an_intermediate_rank_then_filter_matches_issue_964() -> None:
     # Issue #964: derive a flag, rank the augmented donor records with a
     # window, then filter on the rank and the flag.

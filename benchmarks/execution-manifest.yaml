@@ -72,6 +72,9 @@ examples:
   adam-adex-uncollected:
     status: executable
     runtimes: ['python']
+  adam-adlb-end-of-treatment:
+    status: executable
+    runtimes: ['python']
   adam-adlb-lymphocytes:
     status: executable
     runtimes: ['python']

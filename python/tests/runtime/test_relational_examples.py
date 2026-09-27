@@ -38,6 +38,9 @@ ARTIFACT_EXAMPLES = [
     "sdtm-dm-dates",
     "adam-adlb-mean",
     "adam-adlb-supplb-padded-key",
+    # REQ-1263: a supplemental qualifier read per laboratory record feeds the
+    # window that ranks each subject's records for one test.
+    "adam-adlb-end-of-treatment",
     # REQ-0119 matches on the applicable keys as the two sides declare them, so
     # a sequence number joins once both sides say it is one.
     "adam-adae-severity",
