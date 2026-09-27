@@ -8,7 +8,13 @@ input:
 
 output:
   path: test.csv
-  columns: [ID, RATIO, RATIO_DEFAULT, RATIO_PCT, RATIO_ADJ_MISSING, RATIO_MISSING]
+  columns:
+    - ID
+    - RATIO
+    - RATIO_DEFAULT
+    - RATIO_PCT
+    - RATIO_ADJ_MISSING
+    - RATIO_MISSING
 
 columns:
   - name: ID
