@@ -296,8 +296,7 @@ and is rejected where the specification is read, before any data is seen.
 <a id="req-1182"></a>
 
 **REQ-1182.** The `expressions.datetime_impute` interface has the following
-meanings. Shape, defaults, and structural constraints come from its schema
-declaration.
+meanings.
 
 | Field | Meaning |
 | --- | --- |
@@ -310,8 +309,7 @@ declaration.
 <a id="req-1183"></a>
 
 **REQ-1183.** The `expressions.datetime_precision` interface has the following
-meanings. Shape, defaults, and structural constraints come from its schema
-declaration.
+meanings.
 
 | Field | Meaning |
 | --- | --- |
