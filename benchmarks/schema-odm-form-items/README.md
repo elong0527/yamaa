@@ -28,6 +28,6 @@ identifier on every form.
 row from one form never supplies the date for a result on another
 form at the same subject and visit. Within each study and subject,
 records are numbered in a fixed form order: chemistry, hematology,
-thyroid, urinalysis, then other.
+thyroid, urinalysis, then coagulation.
 
 **Standard:** SDTM | **Domain:** LB
