@@ -368,32 +368,21 @@ selects among records already read; it never re-reads the dataset. A `SELF`
 intermediate extends its donor pool after each completed row template and
 invalidates its cached selection index at that boundary.
 
-<a id="req-0137"></a>
-
-**REQ-0137.** An inline `lookup:` expression performs the same match,
-narrow, choose, and absence steps for one value:
-
-```yaml
-derivation:
-  lookup:
-    dataset: MEDDRA
-    key: {LLTNAME: AE_RAW.AETERM}
-    value: PTNAME
-    missing: NOT CODED
-```
-
-Its `filter`, `order_by`, `keep`, `between`, `missing`, and `strict`
-behave exactly as the named form's, and its `key` takes the same forms
-([REQ-0115](lookup.md#req-0115)) and inference ([REQ-0153](lookup.md#req-0153)). Its operation-level mechanics
-are defined by this lookup contract; registry dispatch follows
-[Expression evaluation](expressions.md).
-
 <a id="req-0138"></a>
 
 **REQ-0138.** A named lookup's selected record is read by several columns
 through lookup-qualified variables. Every column reading the same lookup
 sees the same record: the match runs once per row and the selection is
 shared.
+
+<a id="req-1263"></a>
+
+**REQ-1263.** A named lookup matches only when it is read. The match runs the
+first time a column reads the lookup for a row, and the selection is shared
+with every later read in that row ([REQ-0138](lookup.md#req-0138)). An
+intermediate that no column reads for a row is never matched for that row:
+no record is selected, and a `strict: true` lookup never fails as
+`unmatched_key` on a row that did not read it.
 
 <a id="req-0139"></a>
 
@@ -689,20 +678,3 @@ column to have the same comparable type.
 | --- | --- |
 | `multiple_matches_class.order_by` | Terms used to order eligible right-side matches. |
 | `multiple_matches_class.keep` | Ordered match to retain. |
-
-<a id="req-1055"></a>
-
-**REQ-1055.** The `expressions.lookup` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.lookup.value` | Dataset column returned by the lookup. |
-| `expressions.lookup.dataset` | Declared dataset containing the lookup table. |
-| `expressions.lookup.key` | Dataset columns, each paired with its current-row match value ([REQ-0115](lookup.md#req-0115)); omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
-| `expressions.lookup.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
-| `expressions.lookup.between` | Current-row value matched inclusively against lower and upper dataset bounds. |
-| `expressions.lookup.order_by` | Terms ordering eligible records; declared with keep. |
-| `expressions.lookup.keep` | Ordered record to retain; declared with order_by. |
-| `expressions.lookup.missing` | Value returned when the lookup yields nothing; defaults to missing. |
-| `expressions.lookup.strict` | Fail when the lookup yields nothing. |
-| `Result` | Looks up one value in a declared dataset by explicit key pairs ([REQ-0115](lookup.md#req-0115)), which form a unique combined dataset key. Pair order does not change the result. An omitted key is inferred from the applicable output keys ([REQ-0153](lookup.md#req-0153)). |

@@ -35,14 +35,7 @@ columns:
   - name: QVAL_INLINE
     type: str
     label: Supplemental Value by Inline Lookup
-    derivation:
-      lookup:
-        dataset: SUPPLB
-        value: QVAL
-        key:
-          STUDYID: LB.STUDYID
-          USUBJID: LB.USUBJID
-          IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
+    derivation: SUP_EP.QVAL
 
 verifications:
   - row_count:

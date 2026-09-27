@@ -20,7 +20,7 @@ each lowest-level term beside its preferred term.
   subject with two fatal records takes the later one's day and term,
   and a subject with no fatal record keeps `DTHDY` and `DTHCAUS`
   blank.
-- The inline lookup codes the cause into `DTHPTERM`: the subject's
+- The named intermediate codes the cause into `DTHPTERM`: the subject's
   cause is matched against the dictionary's lowest-level term and the
   preferred term comes back. A missing cause matches nothing, so the
   coded cause stays blank too, as it does for a cause the dictionary

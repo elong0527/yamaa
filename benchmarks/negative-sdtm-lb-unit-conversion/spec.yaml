@@ -10,6 +10,12 @@ input:
     types: {FACTOR: float}
 base: LB_RAW
 
+intermediates:
+  - id: CONV_LOOKUP
+    dataset: CONV
+    key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
+    missing: null
+
 output:
   path: lb.csv
   columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBORRES, LBORRESU, LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI]
@@ -73,12 +79,7 @@ columns:
   - name: FACTOR
     type: float
     label: Conversion Factor to the Standard Unit
-    derivation:
-      lookup:
-        dataset: CONV
-        key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
-        value: FACTOR
-        missing: null
+    derivation: CONV_LOOKUP.FACTOR
 
   - name: LO_RESN
     type: float

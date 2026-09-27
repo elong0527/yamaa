@@ -11,6 +11,9 @@ intermediates:
   # projection, so the spec is rejected before any data is read.
   - id: CODED
     dataset: CODING
+  - id: WHODRUG_LOOKUP
+    dataset: WHODRUG
+    key: {DRUG_RECORD_NO: CODING.DRUG_RECORD_NO, ATC_CODE: CODING.ATC_CODE}
 
 output:
   path: cm.csv
@@ -40,8 +43,4 @@ columns:
   - name: CMDECOD
     type: str
     label: Standardized Medication Name
-    derivation:
-      lookup:
-        dataset: WHODRUG
-        key: {DRUG_RECORD_NO: CODED.DRUG_RECORD_NO, ATC_CODE: CODED.ATC_CODE}
-        value: PREFERRED_NAME
+    derivation: WHODRUG_LOOKUP.PREFERRED_NAME

@@ -6,6 +6,7 @@ input:
   ADSL: input/adsl.csv
 base: LB
 
+
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, TRTSDT, AVAL, ABLFL, BASE]
@@ -39,10 +40,7 @@ columns:
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation:
-      lookup:
-        dataset: ADSL
-        value: TRTSDT
+    derivation: ADSL.TRTSDT
 
   - name: AVAL
     type: float

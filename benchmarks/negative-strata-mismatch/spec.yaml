@@ -7,6 +7,7 @@ input:
   RE: input/re.csv
 base: DM
 
+
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, METSTATR, ECOG0R, REGIONUSR, METSTAT, ECOG0, REGIONUS, STRAT1R, STRAT1]
@@ -27,36 +28,24 @@ columns:
   - name: METSTATR
     type: str
     label: Randomization Metastatic Disease Status
-    derivation:
-      lookup:
-        dataset: RE
-        value: METSTAT
+    derivation: RE.METSTAT
 
   - name: ECOG0R
     type: str
     label: Randomization Baseline ECOG Performance Status
-    derivation:
-      lookup:
-        dataset: RE
-        value: ECOG0
+    derivation: RE.ECOG0
 
   - name: REGIONUSR
     type: str
     label: Randomization United States Region
-    derivation:
-      lookup:
-        dataset: RE
-        value: REGIONUS
+    derivation: RE.REGIONUS
 
   # The same strata collected independently: metastatic status from the
   # subject's MH record, performance status and region from DM.
   - name: METSTAT
     type: str
     label: Metastatic Disease Status
-    derivation:
-      lookup:
-        dataset: MH
-        value: METSTAT
+    derivation: MH.METSTAT
 
   - name: ECOG0
     type: str

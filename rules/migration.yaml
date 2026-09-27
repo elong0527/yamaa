@@ -109,7 +109,7 @@ sources:
   R003-24: {"file": "R003-intermediate.md", "targets": ["REQ-0134"]}
   R003-25: {"file": "R003-intermediate.md", "targets": ["REQ-0135"]}
   R003-26: {"file": "R003-intermediate.md", "targets": ["REQ-0136"]}
-  R003-27: {"file": "R003-intermediate.md", "targets": ["REQ-0137"]}
+  R003-27: {"file": "R003-intermediate.md", "targets": ["REQ-0138"]}
   R003-28: {"file": "R003-intermediate.md", "targets": ["REQ-0138"]}
   R003-29: {"file": "R003-intermediate.md", "targets": ["REQ-0139"]}
   R003-30: {"file": "R003-intermediate.md", "targets": ["REQ-0140"]}
@@ -1210,8 +1210,7 @@ requirements:
   REQ-0134: {"file": "operations/lookup.md", "sources": ["R003-24"]}
   REQ-0135: {"file": "operations/lookup.md", "sources": ["R003-25"]}
   REQ-0136: {"file": "operations/lookup.md", "sources": ["R003-26"]}
-  REQ-0137: {"file": "operations/lookup.md", "sources": ["R003-27"]}
-  REQ-0138: {"file": "operations/lookup.md", "sources": ["R003-28"]}
+  REQ-0138: {"file": "operations/lookup.md", "sources": ["R003-27", "R003-28"]}
   REQ-0139: {"file": "operations/lookup.md", "sources": ["R003-29"]}
   REQ-0140: {"file": "operations/lookup.md", "sources": ["R003-30"]}
   REQ-0141: {"file": "operations/lookup.md", "sources": ["R003-31"]}
@@ -2122,7 +2121,6 @@ requirements:
   REQ-1052: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:filtered_source.description"]}
   REQ-1053: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:filtered_source_class.variable.description", "schema_expression_core.yaml:filtered_source_class.filter.description"]}
   REQ-1054: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:multiple_matches_class.order_by.description", "schema_expression_core.yaml:multiple_matches_class.keep.description"]}
-  REQ-1055: {"file": "operations/lookup.md", "sources": ["schema_expression_mapping.yaml:expressions.lookup.value.description", "schema_expression_mapping.yaml:expressions.lookup.dataset.description", "schema_expression_mapping.yaml:expressions.lookup.key_base.description", "schema_expression_mapping.yaml:expressions.lookup.key.description", "schema_expression_mapping.yaml:expressions.lookup.filter.description", "schema_expression_mapping.yaml:expressions.lookup.between.description", "schema_expression_mapping.yaml:expressions.lookup.order_by.description", "schema_expression_mapping.yaml:expressions.lookup.keep.description", "schema_expression_mapping.yaml:expressions.lookup.missing.description", "schema_expression_mapping.yaml:expressions.lookup.strict.description", "schema_expression_mapping.yaml:comment:25"]}
   REQ-1056: {"file": "execution/rows.md", "sources": ["schema.yaml:row_class.id.description", "schema.yaml:row_class.dataset.description", "schema.yaml:row_class.group_by.description", "schema.yaml:row_class.filter.description", "schema.yaml:row_class.derivations.description", "schema.yaml:row_class.submission.description"]}
   REQ-1057: {"file": "specification/binding.md", "sources": ["schema.yaml:variable.description"]}
   REQ-1058: {"file": "specification/binding.md", "sources": ["schema.yaml:regex.description"]}
@@ -2282,6 +2280,7 @@ requirements:
   REQ-1260: {"file": "specification/structure.md", "sources": ["yamaa:issue-991:column-default-derivations", "yamaa:issue-1005:row-phase-column-reads", "R005-11", "yamaa:issue-1081:req-0203-retired"]}
   REQ-1261: {"file": "operations/text.md", "sources": ["yamaa:issue-994:str-pad", "schema_expression_str.yaml:expressions.str_pad.source.description", "schema_expression_str.yaml:expressions.str_pad.width.description"]}
   REQ-1262: {"file": "execution/rows.md", "sources": ["yamaa:issue-1113:intermediate-row-driver"]}
+  REQ-1263: {"file": "operations/lookup.md", "sources": ["yamaa:issue-1316:lazy-intermediate-match"]}
   REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
   REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
   REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
@@ -2534,23 +2533,12 @@ schema_prose:
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.case_sensitive.description", "text": "Compare exactly when true; use R019 ASCII folding when false.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.missing.description", "text": "Value returned when source is missing.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.unmapped.description", "text": "Value returned when source has no dictionary entry.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.value.description", "text": "Dataset column returned by the lookup.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.dataset.description", "text": "Declared dataset containing the lookup table.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.key_base.description", "text": "One or more current-row lookup values; omit when they name the same columns as key. Must not repeat the key names (R003-45).", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.key.description", "text": "Dataset columns paired by position with key_base; omit to match on the applicable output keys (R003-40).", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.filter.description", "text": "Predicate selecting eligible records before matching.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.between.description", "text": "Current-row value matched inclusively against lower and upper dataset bounds.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.order_by.description", "text": "Terms ordering eligible records; declared with keep.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.keep.description", "text": "Ordered record to retain; declared with order_by.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.missing.description", "text": "Value returned when the lookup yields nothing; defaults to missing.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
-  - {"source": "schema_expression_mapping.yaml:expressions.lookup.strict.description", "text": "Fail when the lookup yields nothing.", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
   - {"source": "schema_expression_mapping.yaml:expressions.cut.source.description", "text": "Numeric variable to classify.", "owner": "operations/computation", "group": "expressions.cut", "target": "REQ-1118"}
   - {"source": "schema_expression_mapping.yaml:expressions.cut.breaks.description", "text": "Ascending interval boundaries.", "owner": "operations/computation", "group": "expressions.cut", "target": "REQ-1118"}
   - {"source": "schema_expression_mapping.yaml:expressions.cut.labels.description", "text": "One label per interval; exactly one more than breaks.", "owner": "operations/computation", "group": "expressions.cut", "target": "REQ-1118"}
   - {"source": "schema_expression_mapping.yaml:expressions.cut.right.description", "text": "Right-closed/left-open; false is left-closed/right-open.", "owner": "operations/computation", "group": "expressions.cut", "target": "REQ-1118"}
   - {"source": "schema_expression_mapping.yaml:expressions.cut.missing.description", "text": "Value returned when source is missing.", "owner": "operations/computation", "group": "expressions.cut", "target": "REQ-1118"}
   - {"source": "schema_expression_mapping.yaml:comment:4", "text": "Looks up a string source in an inline dictionary. Case-insensitive lookup folds ASCII a-z to A-Z under R019; folded keys must be unique.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
-  - {"source": "schema_expression_mapping.yaml:comment:25", "text": "Looks up one value in a declared dataset by explicit key pairs. Key_base and key lists pair by position, have equal length, and form a unique combined dataset key. Pair order does not change the result. Either list may be omitted: an omitted key is inferred from the applicable output keys (R003-40), and an omitted key_base defaults to the key names. Key_base must not repeat the key names (R003-45).", "owner": "operations/lookup", "group": "expressions.lookup", "target": "REQ-1055"}
   - {"source": "schema_expression_mapping.yaml:comment:73", "text": "Assigns a numeric source to one of the labeled break intervals.", "owner": "operations/computation", "group": "expressions.cut", "target": "REQ-1118"}
   - {"source": "schema_expression_numeric.yaml:expressions.compute.expr.description", "text": "Closed numeric expression over named variables.", "owner": "operations/computation", "group": "expressions.compute", "target": "REQ-1119"}
   - {"source": "schema_expression_numeric.yaml:numeric_expression.description", "text": "Numeric formula in the portable grammar defined by R010.", "owner": "operations/computation", "group": "numeric_expression", "target": "REQ-1120"}
@@ -2822,3 +2810,4 @@ provenance_addenda:
   - {"source": "schema.yaml:match_key.description", "text": "See REQ-0115 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
   - {"source": "schema.yaml:match_key_columns.description", "text": "See REQ-0115 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_key", "target": "REQ-0115"}
   - {"source": "schema.yaml:match_value.description", "text": "See REQ-1259 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "match_value", "target": "REQ-1259"}
+  - {"source": "yamaa:issue-1316:lazy-intermediate-match", "text": "Issue #1316: a named lookup matches only when read; an intermediate no column reads for a row is never matched, and a strict lookup never fails on an unread row.", "owner": "operations/lookup", "group": "lazy-intermediate-match", "target": "REQ-1263"}

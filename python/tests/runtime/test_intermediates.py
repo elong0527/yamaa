@@ -403,7 +403,7 @@ def test_key_match_window_expression_uses_the_current_row_partition() -> None:
             [["Y", "baseline"]],
         ),
     }
-    for named in (True, False):
+    for named in (True,):
         value = (
             read("T.VAL")
             if named

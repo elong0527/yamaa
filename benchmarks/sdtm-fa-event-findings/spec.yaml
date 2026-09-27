@@ -7,6 +7,16 @@ input:
   # adverse event items while the findings items build the rows.
   ODM_AE: input/odm.csv
 
+intermediates:
+  - id: AE_TERM
+    dataset: ODM_AE
+    filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      StudyEventRepeatKey: ODM.StudyEventRepeatKey
+
 output:
   path: fa.csv
   columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
@@ -110,16 +120,7 @@ rows:
     derivations:
       FATESTCD: {literal: LOC}
       FATEST: {literal: Location}
-      FAOBJ:
-        lookup:
-          dataset: ODM_AE
-          filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-          key:
-            StudyOID: ODM.StudyOID
-            SubjectKey: ODM.SubjectKey
-            StudyEventOID: ODM.StudyEventOID
-            StudyEventRepeatKey: ODM.StudyEventRepeatKey
-          value: Value
+      FAOBJ: AE_TERM.Value
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
@@ -144,16 +145,7 @@ rows:
     derivations:
       FATESTCD: {literal: SIZE}
       FATEST: {literal: Size}
-      FAOBJ:
-        lookup:
-          dataset: ODM_AE
-          filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-          key:
-            StudyOID: ODM.StudyOID
-            SubjectKey: ODM.SubjectKey
-            StudyEventOID: ODM.StudyEventOID
-            StudyEventRepeatKey: ODM.StudyEventRepeatKey
-          value: Value
+      FAOBJ: AE_TERM.Value
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.SIZE'"
@@ -181,16 +173,7 @@ rows:
     derivations:
       FATESTCD: {literal: BIOPSY}
       FATEST: {literal: Biopsied}
-      FAOBJ:
-        lookup:
-          dataset: ODM_AE
-          filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-          key:
-            StudyOID: ODM.StudyOID
-            SubjectKey: ODM.SubjectKey
-            StudyEventOID: ODM.StudyEventOID
-            StudyEventRepeatKey: ODM.StudyEventRepeatKey
-          value: Value
+      FAOBJ: AE_TERM.Value
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"

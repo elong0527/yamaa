@@ -6,6 +6,7 @@ input:
   ADSL_RAW: input/adsl_raw.csv
 base: DM
 
+
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, TRT01A]
@@ -26,7 +27,4 @@ columns:
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
-    derivation:
-      lookup:
-        dataset: ADSL_RAW
-        value: TRT01A
+    derivation: ADSL_RAW.TRT01A

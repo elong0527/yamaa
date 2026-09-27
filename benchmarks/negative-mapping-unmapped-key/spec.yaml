@@ -6,6 +6,12 @@ input:
   LBREF: input/lbref.csv
 base: LB
 
+intermediates:
+  - id: LBREF_LOOKUP
+    dataset: LBREF
+    key: {LBTESTCD: PARAMCD, SEX: SEX}
+    strict: true
+
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, SEX, AVAL, ANRHI]
@@ -41,9 +47,4 @@ columns:
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit
-    derivation:
-      lookup:
-        dataset: LBREF
-        key: {LBTESTCD: PARAMCD, SEX: SEX}
-        value: ANRHI
-        strict: true
+    derivation: LBREF_LOOKUP.ANRHI

@@ -5,6 +5,11 @@ input:
   MH_SUPP_RAW: input/mh_supp_raw.csv
   MH: input/mh.csv
 
+intermediates:
+  - id: MH_PARENT
+    dataset: MH
+    key: {USUBJID: MH_SUPP_RAW.USUBJID, MHTERM: MH_SUPP_RAW.MHTERM}
+
 output:
   path: suppmh.csv
   columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
@@ -36,11 +41,7 @@ columns:
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
-    derivation:
-      lookup:
-        dataset: MH
-        key: {USUBJID: MH_SUPP_RAW.USUBJID, MHTERM: MH_SUPP_RAW.MHTERM}
-        value: MHSEQ
+    derivation: MH_PARENT.MHSEQ
     verifications:
       not_missing: {}
 

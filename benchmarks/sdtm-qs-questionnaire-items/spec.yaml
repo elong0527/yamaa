@@ -7,6 +7,16 @@ input:
   NOTDONE: {path: input/notdone.csv}
   ITEMS: {path: input/items.csv, types: {ItemOrder: int}}
 
+intermediates:
+  - id: VISIT
+    dataset: VISITS
+    key: {SubjectKey: VISIT_SUBJECT, StudyEventOID: VISIT_EVENT}
+    strict: true
+  - id: ITEM
+    dataset: ITEMS
+    key: {ItemOID: ITEM_OID}
+    strict: true
+
 output:
   path: qs.csv
   columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT,
@@ -19,6 +29,17 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: QS}
+
+  # Working keys for the VISIT and ITEM intermediates; not in the output.
+  - name: VISIT_SUBJECT
+    type: str
+    label: Visit Lookup Subject Key
+  - name: VISIT_EVENT
+    type: str
+    label: Visit Lookup Study Event
+  - name: ITEM_OID
+    type: str
+    label: Item Lookup OID
 
   - name: STUDYID
     type: str
@@ -117,30 +138,13 @@ rows:
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
-      VISITNUM:
-        lookup:
-          dataset: VISITS
-          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
-          value: VISITNUM
-          strict: true
-      QSDTC:
-        lookup:
-          dataset: VISITS
-          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
-          value: VisitDate
-          strict: true
-      QSTESTCD:
-        lookup:
-          dataset: ITEMS
-          key: {ItemOID: ODM.ItemOID}
-          value: QSTESTCD
-          strict: true
-      QSTEST:
-        lookup:
-          dataset: ITEMS
-          key: {ItemOID: ODM.ItemOID}
-          value: QSTEST
-          strict: true
+      VISIT_SUBJECT: ODM.SubjectKey
+      VISIT_EVENT: ODM.StudyEventOID
+      ITEM_OID: ODM.ItemOID
+      VISITNUM: VISIT.VISITNUM
+      QSDTC: VISIT.VisitDate
+      QSTESTCD: ITEM.QSTESTCD
+      QSTEST: ITEM.QSTEST
       QSORRES:
         case:
           - when: "ODM.Value = 0"
@@ -167,44 +171,23 @@ rows:
     derivations:
       STUDYID: NOTDONE.StudyOID
       USUBJID: NOTDONE.SubjectKey
-      VISITNUM:
-        lookup:
-          dataset: VISITS
-          key:
-            SubjectKey: NOTDONE.SubjectKey
-            StudyEventOID: NOTDONE.StudyEventOID
-          value: VISITNUM
-          strict: true
-      QSDTC:
-        lookup:
-          dataset: VISITS
-          key:
-            SubjectKey: NOTDONE.SubjectKey
-            StudyEventOID: NOTDONE.StudyEventOID
-          value: VisitDate
-          strict: true
+      VISIT_SUBJECT: NOTDONE.SubjectKey
+      VISIT_EVENT: NOTDONE.StudyEventOID
+      ITEM_OID: NOTDONE.ItemOID
+      VISITNUM: VISIT.VISITNUM
+      QSDTC: VISIT.VisitDate
       QSTESTCD:
         case:
           - when: "NOTDONE.ItemOID IS NULL"
             then: {literal: QSALL}
           - when: "NOTDONE.ItemOID IS NOT NULL"
-            then:
-              lookup:
-                dataset: ITEMS
-                key: {ItemOID: NOTDONE.ItemOID}
-                value: QSTESTCD
-                strict: true
+            then: ITEM.QSTESTCD
       QSTEST:
         case:
           - when: "NOTDONE.ItemOID IS NULL"
             then: {literal: "All Questionnaires"}
           - when: "NOTDONE.ItemOID IS NOT NULL"
-            then:
-              lookup:
-                dataset: ITEMS
-                key: {ItemOID: NOTDONE.ItemOID}
-                value: QSTEST
-                strict: true
+            then: ITEM.QSTEST
       QSORRES: {literal: null}
       QSSTRESC: {literal: null}
       QSSTRESN: {literal: null}
@@ -228,18 +211,11 @@ rows:
           expr: "SUM(ODM.Value)"
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
-      VISITNUM:
-        lookup:
-          dataset: VISITS
-          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
-          value: VISITNUM
-          strict: true
-      QSDTC:
-        lookup:
-          dataset: VISITS
-          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
-          value: VisitDate
-          strict: true
+      VISIT_SUBJECT: ODM.SubjectKey
+      VISIT_EVENT: ODM.StudyEventOID
+      ITEM_OID: {literal: null}
+      VISITNUM: VISIT.VISITNUM
+      QSDTC: VISIT.VisitDate
       QSTESTCD: {literal: PHQ9T}
       QSTEST: {literal: "Patient Health Questionnaire 9 item total score"}
       QSORRES: {literal: null}

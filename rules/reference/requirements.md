@@ -139,8 +139,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0134](../operations/lookup.md#req-0134) | `operations/lookup.md` | R003-24 |
 | [REQ-0135](../operations/lookup.md#req-0135) | `operations/lookup.md` | R003-25 |
 | [REQ-0136](../operations/lookup.md#req-0136) | `operations/lookup.md` | R003-26 |
-| [REQ-0137](../operations/lookup.md#req-0137) | `operations/lookup.md` | R003-27 |
-| [REQ-0138](../operations/lookup.md#req-0138) | `operations/lookup.md` | R003-28 |
+| [REQ-0138](../operations/lookup.md#req-0138) | `operations/lookup.md` | R003-27, R003-28 |
 | [REQ-0139](../operations/lookup.md#req-0139) | `operations/lookup.md` | R003-29 |
 | [REQ-0140](../operations/lookup.md#req-0140) | `operations/lookup.md` | R003-30 |
 | [REQ-0141](../operations/lookup.md#req-0141) | `operations/lookup.md` | R003-31 |
@@ -1026,7 +1025,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1052](../operations/lookup.md#req-1052) | `operations/lookup.md` | Schema prose |
 | [REQ-1053](../operations/lookup.md#req-1053) | `operations/lookup.md` | Schema prose |
 | [REQ-1054](../operations/lookup.md#req-1054) | `operations/lookup.md` | Schema prose |
-| [REQ-1055](../operations/lookup.md#req-1055) | `operations/lookup.md` | Schema prose |
 | [REQ-1056](../execution/rows.md#req-1056) | `execution/rows.md` | Schema prose |
 | [REQ-1057](../specification/binding.md#req-1057) | `specification/binding.md` | Schema prose |
 | [REQ-1058](../specification/binding.md#req-1058) | `specification/binding.md` | Schema prose |
@@ -1184,6 +1182,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1260](../specification/structure.md#req-1260) | `specification/structure.md` | R005-11, R005-41 |
 | [REQ-1261](../operations/text.md#req-1261) | `operations/text.md` | Schema prose |
 | [REQ-1262](../execution/rows.md#req-1262) | `execution/rows.md` | Schema prose |
+| [REQ-1263](../operations/lookup.md#req-1263) | `operations/lookup.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

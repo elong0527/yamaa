@@ -17,6 +17,9 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEDY]
     keep: last
+  - id: MEDDRA_PT
+    dataset: MEDDRA
+    key: {LLTNAME: DTHCAUS}
 
 output:
   path: adsl.csv
@@ -46,11 +49,7 @@ columns:
   - name: DTHPTERM
     type: str
     label: Cause of Death Preferred Term
-    derivation:
-      lookup:
-        dataset: MEDDRA
-        key: {LLTNAME: DTHCAUS}
-        value: PTNAME
+    derivation: MEDDRA_PT.PTNAME
 
 verifications:
   - unique:

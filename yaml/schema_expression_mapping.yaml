@@ -27,47 +27,10 @@ expressions:
         - strict:
             type: bool
             required: false
+
             description: See REQ-1110.
-    lookup: # See REQ-1055.
-        - value:
-            type: identifier
-            required: true
-            description: See REQ-1055.
-        - dataset:
-            type: identifier
-            required: true
-            description: See REQ-1055.
-        - key:
-            type: match_key
-            required: false
-            description: See REQ-1055.
-        - filter:
-            type: predicate
-            required: false
-            description: See REQ-1055.
-        - between:
-            type: intermediate_between_class
-            required: false
-            description: See REQ-1055.
-        - order_by:
-            type: "list[order_by_term]"
-            required: false
-            description: See REQ-1055.
-        - keep:
-            type: str
-            required: false
-            values: [first, last]
-            description: See REQ-1055.
-        - missing:
-            type: literal_value
-            required: false
-            description: See REQ-1055.
-        - strict:
-            type: bool
-            required: false
-            default: false
-            description: See REQ-1055.
     cut: # See REQ-1118.
+
         - source:
             type: variable
             required: true

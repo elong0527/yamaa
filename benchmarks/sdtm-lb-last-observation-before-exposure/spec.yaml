@@ -11,6 +11,11 @@ input:
   LB_MAPPING: input/lb_mapping.csv
 base: ODM
 
+intermediates:
+  - id: LB_MAP
+    dataset: LB_MAPPING
+    key: {ItemOID: ODM.ItemOID}
+
 output:
   path: lb.csv
   columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,
@@ -26,16 +31,8 @@ rows:
                ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "LBTESTCD IS NOT NULL"
     derivations:
-      LBTESTCD:
-        lookup:
-          dataset: LB_MAPPING
-          key: {ItemOID: ODM.ItemOID}
-          value: LBTESTCD
-      LBSPEC:
-        lookup:
-          dataset: LB_MAPPING
-          key: {ItemOID: ODM.ItemOID}
-          value: LBSPEC
+      LBTESTCD: LB_MAP.LBTESTCD
+      LBSPEC: LB_MAP.LBSPEC
       LBORRES:
         aggregate:
           expr: "ONLY(ODM.Value)"

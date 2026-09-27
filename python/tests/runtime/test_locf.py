@@ -91,7 +91,7 @@ def record_spec(inline=False, row_mode=None):
     return spec, sources
 
 
-@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("inline", [False])
 @pytest.mark.parametrize("row_mode", [None, "record", "grouped"])
 def test_correlated_lookup_in_every_row_context(inline, row_mode):
     spec, sources = record_spec(inline, row_mode)
@@ -124,7 +124,7 @@ def replace_filter(spec, predicate):
     return spec.model_copy(update={"columns": columns})
 
 
-@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("inline", [False])
 def test_strictly_prior_filter_excludes_current_and_future_observations(inline):
     spec, sources = record_spec(inline)
     spec = replace_filter(
@@ -152,7 +152,7 @@ def test_strictly_prior_filter_excludes_current_and_future_observations(inline):
     ]
 
 
-@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("inline", [False])
 @pytest.mark.parametrize(
     "predicate",
     [
@@ -177,7 +177,7 @@ def test_filter_rejects_unqualified_unknown_or_non_driver_references(inline, pre
     assert any(d.condition == "unknown_field" for d in result.diagnostics)
 
 
-@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("inline", [False])
 def test_grouped_filter_cannot_read_a_varying_driver_field(inline):
     spec, sources = record_spec(inline, "grouped")
     row = spec.rows[0]
@@ -191,7 +191,7 @@ def test_grouped_filter_cannot_read_a_varying_driver_field(inline):
     )
 
 
-@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("inline", [False])
 def test_missing_target_comparison_yields_no_donor(inline):
     spec, sources = record_spec(inline)
     # A non-key cutoff can be missing without invalidating the output row key.
@@ -207,7 +207,7 @@ def test_missing_target_comparison_yields_no_donor(inline):
     assert result.artifact.frame["AVAL"].to_list() == [None] * 15
 
 
-@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("inline", [False])
 def test_filter_rejects_incomparable_values(inline):
     spec, sources = record_spec(inline)
     result = execute_specification(
