@@ -55,8 +55,8 @@ columns:
 
   # A dosing record with no dose never qualifies; among the dosed
   # records the later start date wins. A subject with no dosing
-  # record keeps the dose blank. Without multiple_matches, a subject
-  # with two different doses would stop the run.
+  # record keeps the dose blank. Multiple matches fail by default;
+  # `order_by` + `keep` selects the later start date instead.
   - name: LASTDOSE
     type: float
     label: Latest Dose
