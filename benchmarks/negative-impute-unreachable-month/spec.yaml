@@ -44,7 +44,7 @@ columns:
     label: Analysis Start Date
     derivation:
       date_impute:
-        source: AESTDTC
+        source: AE.AESTDTC
         month: 6
         day: 15
         minimum_source_precision: month
