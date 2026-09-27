@@ -548,6 +548,10 @@ def test_plan_rejects_derive_step_naming_two_relations() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# REQ-1242: derive bindings may read keep-declared named intermediates.
+# ---------------------------------------------------------------------------
+
 _INLINE_QS_TWO_SUBJECTS = """\
 STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES
 S1,001,PF01,SCALE,1

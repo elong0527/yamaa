@@ -244,11 +244,11 @@ def test_a_different_input_batch_size_changes_no_value_and_no_row_order() -> Non
     )
 
 
-# One compact study that exercises the whole component in one run: a named
-# lookup with a declared selection, a cross-dataset aggregate, an inline
-# `lookup` declared-key lookup, an output-row reduction, and a grouped row
-# template with a grouped filter. It stays scalar-only because
-# sdtm-lb-multiform's own end to end run waits on #221.
+# One compact study that exercises the whole component in one run: named
+# lookups with and without a declared selection, a cross-dataset aggregate,
+# an output-row reduction, and a grouped row template with a grouped filter.
+# It stays scalar-only because sdtm-lb-multiform's own end to end run waits
+# on #221.
 _SPEC = """\
 schema_version: "1.0"
 domain: ADLB

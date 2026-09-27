@@ -14,8 +14,8 @@ subjects may share a sequence number.
 
 - `QVAL` is the qualifier value from the supplemental record whose study,
   subject, and padded sequence all match; empty when nothing matches.
-- `QVAL_INLINE` holds the same value from an independent inline match;
-  empty when nothing matches.
+- `QVAL_INLINE` holds the same value from the same match, taken again once
+  every laboratory row exists; empty when nothing matches.
 
 **Note:** the padding must be exact: a zero-padded key does not match the
 space-padded form, and a supplemental record with no laboratory record

@@ -3029,7 +3029,6 @@ _IDENTIFIER_DATASET_FIELDS = frozenset(
         ('root_class', 'base'),
         ('row_class', 'dataset'),
         ('intermediate_class', 'dataset'),
-        ('lookup', 'dataset'),
     }
 )
 
@@ -6113,7 +6112,7 @@ def row_local_column_derivations(spec):
         derivation = column['derivation']
         names = derive_binding_reference_names(derivation)
         if any(
-            operation in ('lookup', 'aggregate')
+            operation == 'aggregate'
             or operation in ROW_WINDOW_OPERATIONS
             for operation in derivation_operations(derivation)
         ) or any(
@@ -6424,13 +6423,6 @@ def validate_expression_predicates(
                 )
             )
 
-    elif keyword == 'lookup' and isinstance(payload, dict):
-        if isinstance(payload.get('filter'), str):
-            errors.extend(validate_predicate_at(
-                payload['filter'], f"{path}.lookup.filter",
-                predicate_resolver(qualified=datasets),
-            ))
-
     elif keyword in {
         'row_number', 'rank', 'row_value', 'previous_non_missing', 'locf',
         'baseline_flag',
@@ -6510,16 +6502,6 @@ def validate_lookup_filter_scopes(spec, spec_label, env):
                         context={'identifier': name},
                     ))
 
-    def visit(node, path, scopes):
-        if isinstance(node, dict):
-            for key, value in node.items():
-                if key == 'lookup' and isinstance(value, dict):
-                    check(value, f"{path}.lookup.filter", scopes)
-                visit(value, f"{path}.{key}", scopes)
-        elif isinstance(node, list):
-            for index, value in enumerate(node):
-                visit(value, f"{path}[{index}]", scopes)
-
     def derivation(value, path, scopes):
         references = (
             [name for kind, name in collect_type_references(value, 'derivation', env)
@@ -6531,7 +6513,6 @@ def validate_lookup_filter_scopes(spec, spec_label, env):
             if qualifier in entries:
                 payload, filter_path = entries[qualifier]
                 check(payload, filter_path, scopes)
-        visit(value, path, scopes)
 
     for column in spec.get('columns') or []:
         if 'derivation' in column:
@@ -7387,16 +7368,6 @@ def derive_binding_reference_names(derivation):
                     )
                     names.extend(predicate_identifier_names(condition))
                     return
-                if operation == 'lookup' and isinstance(payload, dict):
-                    key = payload.get('key')
-                    entries = key.values() if isinstance(key, dict) else ()
-                    names.extend(entry for entry in entries if isinstance(entry, str))
-                    names.extend(predicate_identifier_names(payload.get('filter')))
-                    add_order_by_names(payload.get('order_by'))
-                    between = payload.get('between')
-                    if isinstance(between, dict):
-                        add_variable_field(between.get('value'))
-                    return
                 if operation == 'first_available' and isinstance(payload, dict):
                     sources = payload.get('sources')
                     if isinstance(sources, list):
@@ -8091,53 +8062,6 @@ def validate_expression_static_semantics(expression, path, context):
                         },
                     )
                 )
-        return errors
-
-    if keyword == 'lookup' and isinstance(payload, dict):
-        pairs = key_pairs(payload.get('key'))
-        keys, sources = pairs if pairs is not None else ([], [])
-        operation_path = f"{path}.lookup"
-        dataset = payload.get('dataset')
-        fields = context['input'].get(dataset, {})
-        if not fields:
-            return errors
-        for source, key in zip(sources, keys):
-            if not isinstance(source, str) or not isinstance(key, str):
-                continue
-            source_type = resolver(source)
-            key_type = fields.get(key)
-            if key_type is None:
-                errors.append(
-                    validation_diagnostic(
-                        f"{operation_path}.key",
-                        'unknown_field',
-                        f"unknown mapping key {key!r}",
-                        context={'identifier': key},
-                    )
-                )
-                continue
-            if (
-                source_type is not None
-                and not runtime_types_comparable(source_type, key_type)
-            ):
-                errors.append(
-                    incompatible_variable_diagnostic(
-                        operation_path,
-                        source,
-                        f"a type comparable with {key!r} ({key_type})",
-                        source_type,
-                    )
-                )
-        value = payload.get('value')
-        if isinstance(value, str) and value not in fields:
-            errors.append(
-                validation_diagnostic(
-                    f"{operation_path}.value",
-                    'unknown_field',
-                    f"unknown mapping value field {value!r}",
-                    context={'identifier': value},
-                )
-            )
         return errors
 
     if keyword in {'greatest', 'least'} and isinstance(payload, dict):

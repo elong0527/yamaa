@@ -42,10 +42,8 @@ def test_committed_locf_examples(name):
     )
 
 
-def record_spec(inline=False, row_mode=None):
+def record_spec(row_mode=None):
     spec, sources = fixture("adam-advs-locf-record")
-    if inline:
-        raise AssertionError("inline lookup is removed")
     if row_mode:
         derivations = {column.name: column.derivation for column in spec.columns}
         row = Row(
@@ -70,10 +68,9 @@ def record_spec(inline=False, row_mode=None):
     return spec, sources
 
 
-@pytest.mark.parametrize("inline", [False])
 @pytest.mark.parametrize("row_mode", [None, "record", "grouped"])
-def test_correlated_lookup_in_every_row_context(inline, row_mode):
-    spec, sources = record_spec(inline, row_mode)
+def test_correlated_lookup_in_every_row_context(row_mode):
+    spec, sources = record_spec(row_mode)
     result = execute_specification(spec, sources)
     assert isinstance(result, ExecutionSuccess), result
     assert (
@@ -83,20 +80,17 @@ def test_correlated_lookup_in_every_row_context(inline, row_mode):
 
 
 def replace_filter(spec, predicate):
-    if spec.intermediates:
-        return spec.model_copy(
-            update={
-                "intermediates": [
-                    spec.intermediates[0].model_copy(update={"filter": predicate})
-                ]
-            }
-        )
-    raise AssertionError("spec has no intermediates")
+    return spec.model_copy(
+        update={
+            "intermediates": [
+                spec.intermediates[0].model_copy(update={"filter": predicate})
+            ]
+        }
+    )
 
 
-@pytest.mark.parametrize("inline", [False])
-def test_strictly_prior_filter_excludes_current_and_future_observations(inline):
-    spec, sources = record_spec(inline)
+def test_strictly_prior_filter_excludes_current_and_future_observations():
+    spec, sources = record_spec()
     spec = replace_filter(
         spec,
         "OBS.ANL01FL = 'Y' AND OBS.AVAL IS NOT NULL AND OBS.AVISITN < PLAN.AVISITN",
@@ -122,7 +116,6 @@ def test_strictly_prior_filter_excludes_current_and_future_observations(inline):
     ]
 
 
-@pytest.mark.parametrize("inline", [False])
 @pytest.mark.parametrize(
     "predicate",
     [
@@ -131,8 +124,8 @@ def test_strictly_prior_filter_excludes_current_and_future_observations(inline):
         "OBS.AVISITN < OTHER.AVISITN",
     ],
 )
-def test_filter_rejects_unqualified_unknown_or_non_driver_references(inline, predicate):
-    spec, sources = record_spec(inline)
+def test_filter_rejects_unqualified_unknown_or_non_driver_references(predicate):
+    spec, sources = record_spec()
     spec = spec.model_copy(
         update={
             "input": {
@@ -147,9 +140,8 @@ def test_filter_rejects_unqualified_unknown_or_non_driver_references(inline, pre
     assert any(d.condition == "unknown_field" for d in result.diagnostics)
 
 
-@pytest.mark.parametrize("inline", [False])
-def test_grouped_filter_cannot_read_a_varying_driver_field(inline):
-    spec, sources = record_spec(inline, "grouped")
+def test_grouped_filter_cannot_read_a_varying_driver_field():
+    spec, sources = record_spec("grouped")
     row = spec.rows[0]
     # Grouping deliberately omits the field the correlated predicate reads.
     row = row.model_copy(update={"group_by": ["PLAN.USUBJID", "PLAN.PARAMCD"]})
@@ -161,9 +153,8 @@ def test_grouped_filter_cannot_read_a_varying_driver_field(inline):
     )
 
 
-@pytest.mark.parametrize("inline", [False])
-def test_missing_target_comparison_yields_no_donor(inline):
-    spec, sources = record_spec(inline)
+def test_missing_target_comparison_yields_no_donor():
+    spec, sources = record_spec()
     # A non-key cutoff can be missing without invalidating the output row key.
     plan = sources["PLAN"].table
     sources["PLAN"] = TypedTable(
@@ -177,9 +168,8 @@ def test_missing_target_comparison_yields_no_donor(inline):
     assert result.artifact.frame["AVAL"].to_list() == [None] * 15
 
 
-@pytest.mark.parametrize("inline", [False])
-def test_filter_rejects_incomparable_values(inline):
-    spec, sources = record_spec(inline)
+def test_filter_rejects_incomparable_values():
+    spec, sources = record_spec()
     result = execute_specification(
         replace_filter(spec, "OBS.AVISITN < PLAN.USUBJID"), sources
     )

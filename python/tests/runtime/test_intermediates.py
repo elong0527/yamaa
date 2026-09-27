@@ -261,7 +261,7 @@ def test_key_match_expression_missing_result_matches_nothing() -> None:
     assert answered.record is None
 
 
-def inline_payload() -> dict[str, object]:
+def expression_key_payload() -> dict[str, object]:
     return {
         "dataset": "EX",
         "key": {"USUBJID": {"double": {"source": "SUBJECT"}}},
@@ -272,16 +272,16 @@ def inline_payload() -> dict[str, object]:
 
 
 def test_a_key_match_expression_uses_the_configured_dispatcher() -> None:
-    # REQ-1189/REQ-1259: a named intermediate's expression match value evaluates
-    # through the caller's configured dispatcher, so an R018 function
-    # operation resolves there instead of failing as unsupported.
+    # REQ-1189/REQ-1259: an expression match value in an evaluate_intermediate
+    # payload evaluates through the caller's configured dispatcher, so an R018
+    # function operation resolves there instead of failing as unsupported.
 
     def double(payload, resolver):
         return ValueResult(value="S1")
 
     dispatcher = ExpressionDispatcher(extensions={"double": double})
     result = evaluate_intermediate(
-        inline_payload(),
+        expression_key_payload(),
         ex(),
         lambda name: ResolvedValue(value="s1"),
         evaluate=dispatcher.evaluate,
@@ -291,11 +291,11 @@ def test_a_key_match_expression_uses_the_configured_dispatcher() -> None:
     assert result.value == "VITAMIN D3"
 
 
-def test_an_inline_key_match_expression_without_a_dispatcher_is_a_condition() -> None:
+def test_a_key_match_expression_without_a_dispatcher_is_a_condition() -> None:
     # REQ-1259: without a configured dispatcher an unsupported operation
     # yields a clean condition, never an AttributeError on the result.
     result = evaluate_intermediate(
-        inline_payload(), ex(), lambda name: ResolvedValue(value="s1")
+        expression_key_payload(), ex(), lambda name: ResolvedValue(value="s1")
     )
 
     assert isinstance(result, ConditionResult)
@@ -403,33 +403,30 @@ def test_key_match_window_expression_uses_the_current_row_partition() -> None:
             [["Y", "baseline"]],
         ),
     }
-    for named in (True,):
-        value = read("T.VAL")
-        spec = Specification(
-            schema_version="1.0",
-            domain="OUT",
-            input={
-                "DM": DatasetSource(path="dm.csv"),
-                "TAB": DatasetSource(path="tab.csv"),
-            },
-            base="DM",
-            keys=["USUBJID"],
-            intermediates=(
-                [Intermediate(id="T", dataset="TAB", key=key)] if named else None
-            ),
-            columns=[
-                Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
-                Column(name="ADT", type="date", derivation=read("DM.ADT")),
-                Column(name="TRTSDT", type="date", derivation=read("DM.ADT")),
-                Column(name="VAL", type="str", derivation=value),
-            ],
-            output=Output(path="out.csv", columns=["USUBJID", "VAL"]),
-        )
+    value = read("T.VAL")
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "DM": DatasetSource(path="dm.csv"),
+            "TAB": DatasetSource(path="tab.csv"),
+        },
+        base="DM",
+        keys=["USUBJID"],
+        intermediates=[Intermediate(id="T", dataset="TAB", key=key)],
+        columns=[
+            Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+            Column(name="ADT", type="date", derivation=read("DM.ADT")),
+            Column(name="TRTSDT", type="date", derivation=read("DM.ADT")),
+            Column(name="VAL", type="str", derivation=value),
+        ],
+        output=Output(path="out.csv", columns=["USUBJID", "VAL"]),
+    )
 
-        result = execute_specification(spec, sources)
+    result = execute_specification(spec, sources)
 
-        assert isinstance(result, ExecutionSuccess), (named, result)
-        assert result.artifact.frame.to_dicts()[0]["VAL"] == "baseline"
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame.to_dicts()[0]["VAL"] == "baseline"
 
 
 def epochs() -> RelationIndex:

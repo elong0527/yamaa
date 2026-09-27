@@ -193,10 +193,10 @@ class PlannedIntermediate(_FrozenModel):
 class ResolvedJoin(_FrozenModel):
     """The key pairs one intermediate-like resolution matches on.
 
-    R003 makes validation report the pairs for every named intermediate, inline
-    intermediate, dataset-qualified aggregate, and implicit join, so a reviewer
-    sees which columns the resolution matches on rather than having to
-    infer them from two schemas. `inferred` marks the pairs REQ-0150 infers
+    R003 makes validation report the pairs for every named intermediate,
+    dataset-qualified aggregate, and implicit join, so a reviewer sees which
+    columns the resolution matches on rather than having to infer them from
+    two schemas. `inferred` marks the pairs REQ-0150 infers
     from the applicable keys; the rest are declared by the author.
     """
 
@@ -1674,13 +1674,13 @@ def _fill_omitted_lookup_keys(
 ) -> tuple[HandledExpression, frozenset[str]]:
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
-    REQ-0153 lets a named intermediate or a qualified
-    aggregate omit `key`, inferring the applicable output keys, and REQ-0115
-    lets a key name its columns alone, matching same-named current-row
-    values. The planner and the runtime downstream only understand a
-    complete mapping of columns to match values, so both are resolved here,
-    before reference collection. Returns the rewritten declaration and the
-    operation paths where a key was inferred.
+    REQ-0153 lets a named intermediate or a qualified aggregate omit `key`,
+    inferring the applicable output keys, and REQ-0115 lets a key name its
+    columns alone, matching same-named current-row values. The planner and
+    the runtime downstream only understand a complete mapping of columns to
+    match values, so both are resolved here, before reference collection.
+    Returns the rewritten declaration and the operation paths where a key
+    was inferred.
     """
     inferred: set[str] = set()
 
@@ -1989,8 +1989,8 @@ def _row_join_reference(
     """Tell whether a row-phase read reaches another dataset legitimately.
 
     REQ-0156/REQ-0157 let a row derivation read a non-driver dataset through
-    a planned implicit join, and name relation-internal fields of inline
-    lookups and source filters directly. Such references skip the row-phase
+    a planned implicit join, and name relation-internal fields of lookups
+    and source filters directly. Such references skip the row-phase
     gate; existence and types are still checked. A scalar read the
     key-inference pre-pass left unannotated already carries its own
     REQ-0151/REQ-0152 diagnostic, so it reports no knock-on phase error;

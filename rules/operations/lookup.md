@@ -622,12 +622,11 @@ output keys.
 
 <a id="req-0153"></a>
 
-**REQ-0153.** A named lookup or a qualified
-aggregate may omit `key`: the omitted key is the applicable keys of
-[REQ-0150](lookup.md#req-0150) -- the output `keys`, in output-key order, that the right-side
-dataset also carries. The inference is the same one the implicit join
-uses, so a lookup that omits `key` matches exactly as the implicit join
-would. With no applicable key the read fails as `no_applicable_keys`.
+**REQ-0153.** A named lookup or a qualified aggregate may omit `key`: the
+omitted key is the applicable keys of [REQ-0150](lookup.md#req-0150) -- the
+output `keys`, in output-key order, that the right-side dataset also carries.
+The inference is the same one the implicit join uses, so a lookup that omits
+`key` matches exactly as the implicit join would. With no applicable key the read fails as `no_applicable_keys`.
 
 ### Row construction reads through the same join
 
