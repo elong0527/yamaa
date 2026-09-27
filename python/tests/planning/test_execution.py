@@ -3593,5 +3593,3 @@ def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() 
     assert join.source == ("X",)
     assert join.key == ("X",)
     assert join.inferred is True
-
-
