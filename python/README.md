@@ -323,7 +323,8 @@ the output keys both sides carry, in `keys` order:
   derivation:
     source:
       variable: EX.EXTRT
-      multiple_matches: {order_by: [EX.EXSTDTC, EX.EXSEQ], keep: first}
+      order_by: [EX.EXSTDTC, EX.EXSEQ]
+      keep: first
 ```
 
 `yamaa.runtime.joins` reads each declared source once into ordered typed

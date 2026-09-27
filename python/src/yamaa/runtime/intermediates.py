@@ -1076,7 +1076,11 @@ def _narrowed(
             try:
                 if "lower" in edges and compare_values(edges["lower"], value) > 0:
                     admitted = False
-                if "upper" in edges and compare_values(value, edges["upper"]) > 0:
+                if (
+                    admitted
+                    and "upper" in edges
+                    and compare_values(value, edges["upper"]) > 0
+                ):
                     admitted = False
             except TypeError:
                 return IntermediateOutcome(
