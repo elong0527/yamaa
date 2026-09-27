@@ -20,6 +20,7 @@ from yamaa.specification.models import (
     IntermediateVerification,
     OrderTerm,
     Output,
+    RecordBetween,
     Row,
     Specification,
 )
@@ -301,3 +302,55 @@ def test_row_phase_consumers_read_column_level_derivations(
         ("S1", "Week 6", 6, 41, 42, 1, 30.0, "Y"),
         ("S1", "Week 8", 8, 41, 56, 15, 30.0, None),
     ]
+
+
+def test_self_with_one_sided_between_filters_none_bound() -> None:
+    # REQ-1049: a SELF intermediate with a one-sided between leaves the
+    # absent bound as None; _row_phase_default_columns must filter it
+    # instead of calling .partition on None (AttributeError at plan time).
+    from yamaa.planning.execution import _row_phase_default_columns
+
+    spec = Specification(
+        schema_version="1.0",
+        domain="ADQS",
+        input={"QS": DatasetSource(path="input/qs.csv")},
+        base="QS",
+        keys=["USUBJID", "QSSEQ"],
+        intermediates=[
+            Intermediate(
+                id="PRIOR",
+                dataset="SELF",
+                key=["USUBJID"],
+                between=RecordBetween(value="QSSEQ", lower="QSSEQ"),
+            )
+        ],
+        rows=[
+            Row(
+                id="obs",
+                dataset="QS",
+                derivations={
+                    "USUBJID": derive("QS.USUBJID"),
+                    "QSSEQ": derive("QS.QSSEQ"),
+                    "AVAL": derive("QS.AVAL"),
+                    "PRIOR_AVAL": derive("PRIOR.AVAL"),
+                },
+            ),
+        ],
+        columns=[
+            Column(
+                name="PRIOR_AVAL",
+                type="float",
+                derivation=derive("PRIOR.AVAL"),
+            ),
+        ],
+        output=Output(
+            path="adqs.csv",
+            columns=["PRIOR_AVAL"],
+        ),
+    )
+
+    # Must not raise AttributeError from None.partition(".").
+    result = _row_phase_default_columns(
+        spec, set(), {"QS": {"USUBJID", "QSSEQ", "AVAL"}}
+    )
+    assert None not in result

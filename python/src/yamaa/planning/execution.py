@@ -4165,7 +4165,15 @@ def _row_phase_default_columns(
         if intermediate.between is not None:
             # REQ-0121: the bounds are donor fields; the value is the current
             # row's, promoted only by a row-phase read (see `match_reads`).
-            names.extend((intermediate.between.lower, intermediate.between.upper))
+            # REQ-1049: one-sided between leaves the absent bound as None.
+            names.extend(
+                bound
+                for bound in (
+                    intermediate.between.lower,
+                    intermediate.between.upper,
+                )
+                if bound is not None
+            )
         if intermediate.verification is not None:
             # REQ-1245: the asserted-unique columns are donor fields.
             names.extend(intermediate.verification.unique)
