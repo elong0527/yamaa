@@ -6,5 +6,5 @@ requirement: REQ-0434
 context:
   expr: "CELLCNT * VOLUML"
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-772
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102

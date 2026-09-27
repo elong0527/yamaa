@@ -7,7 +7,11 @@
 sample, as `CELLCNT * VOLUML` for each subject.
 
 **Input:** laboratory records carrying the collected cell
-concentration (`CELLCNT`) and the sample volume (`VOLUML`).
+concentration (`CELLCNT`) and the sample volume (`VOLUML`) for
+four subjects: an ordinary count and volume, a product exactly
+at the largest whole number the result can hold
+(9,223,372,036,854,775,807), a missing concentration, and a
+product one past that largest whole number.
 
 **Variables:**
 
