@@ -6,8 +6,10 @@
 **Goal:** build a subject-level listing carrying `SITEID` and
 `SEX`.
 
-**Input:** collected demographics records carrying `SITEID` and
-two fields both named `SEX`.
+**Input:** collected demographics records for two subjects at one
+site, carrying `SITEID` and two fields both named `SEX`. The two
+fields agree for the first subject and disagree for the second, so
+no single answer is defensible there.
 
 **Variables:**
 
@@ -15,7 +17,7 @@ two fields both named `SEX`.
   from the collected records.
 - `SEX` would contain the recorded sex, copied from the collected
   records, but a value asked for by that name could come from
-  either of the two fields.
+  either of the two fields, which disagree for the second subject.
 
 The run is rejected when the listing is read and no artifact is
 accepted.
