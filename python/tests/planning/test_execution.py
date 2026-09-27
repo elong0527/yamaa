@@ -3595,18 +3595,3 @@ def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() 
     assert join.inferred is True
 
 
-def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> None:
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
-            ),
-        ],
-        right="int",
-    )
-
-    # REQ-0151: an inferred key must compare equal on both sides.
-    assert diagnostic.condition == "incompatible_input_type"

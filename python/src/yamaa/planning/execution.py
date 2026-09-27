@@ -1707,15 +1707,6 @@ def _fill_omitted_lookup_keys(
                 return None
         return {**payload, "key": {key: key for key in keys}}
 
-    def fill_intermediate(payload: object, operation_path: str) -> object:
-        if not isinstance(payload, Mapping):
-            return payload
-        dataset = payload.get("dataset")
-        if not isinstance(dataset, str):
-            return payload
-        filled = fill_pairs(payload, dataset, operation_path)
-        return payload if filled is None else filled
-
     def qualified_relation(payload: Mapping[str, object]) -> str | None:
         """Mirror _aggregate_references' join detection for the fill."""
         expr = payload.get("expr")
@@ -1766,12 +1757,6 @@ def _fill_omitted_lookup_keys(
 
     def walk(node: object, operation_path: str) -> object:
         if isinstance(node, Mapping):
-            if set(node) == {"lookup"}:
-                return {
-                    "lookup": fill_intermediate(
-                        node["lookup"], f"{operation_path}.lookup"
-                    )
-                }
             if set(node) == {"aggregate"}:
                 return {
                     "aggregate": fill_aggregate(
