@@ -27,7 +27,7 @@ YAMAA-01-101 has **SEX**, **AGE** and **ARM** rows.
 that subject has. The keys **STUDYID** and **USUBJID** are that row identity,
 so no filter decides how many records come out, and a subject collected twice
 does not become two records. Each variable names the collected item it reads;
-a subject with no usable entry for **SEX** gets `U`, while **AGE**, **ARM**
-and **ACTARM** stay null and the unassigned reason is recorded in **ARMNRS**.
+a subject with no usable entry for **SEX** gets `U`; subjects with no collected
+ARM keep **ARM** and **ACTARM** null and record the reason in **ARMNRS**.
 
 **Standard:** SDTM | **Domain:** DM
