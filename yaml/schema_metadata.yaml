@@ -1,229 +1,229 @@
 version: "1.0"
 
-# See REQ-1148 in rules/submission/metadata.md.
+# See REQ-1148.
 
 submission_dataset_class:
     - label:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - class:
         type: dataset_class_name
         required: true
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - subclass:
         type: dataset_subclass_name
         required: false
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - structure:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - repeating:
         type: bool
         required: true
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - reference_data:
         type: bool
         default: false
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - domain:
         type: identifier
         required: false
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
     - comment:
         type: submission_comment
         required: false
-        description: See REQ-1130 in rules/submission/metadata.md.
+        description: See REQ-1130.
 
 submission_column_class:
     - core:
         type: core_designation
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - mandatory:
         type: bool
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - role:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - data_type:
         type: define_data_type
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - length:
         type: int
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - significant_digits:
         type: int
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - display_format:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - codelist:
         type: identifier
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - inventory_vocabulary:
         type: bool
         required: false
-        description: See REQ-1156 in rules/submission/terminology.md.
+        description: See REQ-1156.
     - origin:
         type: submission_origin_class
         required: true
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - method:
         type: submission_method
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
     - comment:
         type: submission_comment
         required: false
-        description: See REQ-1131 in rules/submission/metadata.md.
+        description: See REQ-1131.
 
-# See REQ-1157 in rules/submission/metadata.md.
+# See REQ-1157.
 
 submission_origin_class:
     - type:
         type: origin_type
         required: true
-        description: See REQ-1132 in rules/submission/metadata.md.
+        description: See REQ-1132.
     - source:
         type: origin_source
         required: false
-        description: See REQ-1132 in rules/submission/metadata.md.
+        description: See REQ-1132.
     - description:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1132 in rules/submission/metadata.md.
+        description: See REQ-1132.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1132 in rules/submission/metadata.md.
+        description: See REQ-1132.
 
 submission_method_class:
     - name:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1133 in rules/submission/metadata.md.
+        description: See REQ-1133.
     - type:
         type: method_type
         default: Computation
-        description: See REQ-1133 in rules/submission/metadata.md.
+        description: See REQ-1133.
     - description:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1133 in rules/submission/metadata.md.
+        description: See REQ-1133.
     - expression:
         type: formal_expression_class
         required: false
-        description: See REQ-1133 in rules/submission/metadata.md.
+        description: See REQ-1133.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1133 in rules/submission/metadata.md.
+        description: See REQ-1133.
 
 submission_comment_class:
     - text:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1134 in rules/submission/metadata.md.
+        description: See REQ-1134.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1134 in rules/submission/metadata.md.
+        description: See REQ-1134.
 
 formal_expression_class:
     - context:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1135 in rules/submission/metadata.md.
+        description: See REQ-1135.
     - code:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1135 in rules/submission/metadata.md.
+        description: See REQ-1135.
 
 document_reference_class:
     - document:
         type: identifier
         required: true
-        description: See REQ-1136 in rules/submission/metadata.md.
+        description: See REQ-1136.
     - pages:
         type: page_reference_class
         required: false
-        description: See REQ-1136 in rules/submission/metadata.md.
+        description: See REQ-1136.
 
 page_reference_class:
     - type:
         type: str
         required: true
         values: [PhysicalRef, NamedDestination]
-        description: See REQ-1137 in rules/submission/metadata.md.
+        description: See REQ-1137.
     - refs:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1137 in rules/submission/metadata.md.
+        description: See REQ-1137.
     - title:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1137 in rules/submission/metadata.md.
+        description: See REQ-1137.
 
 submission_comment:
     type: [str, submission_comment_class]
-    description: See REQ-1138 in rules/submission/metadata.md.
+    description: See REQ-1138.
 
 submission_method:
     type: [str, submission_method_class]
-    description: See REQ-1139 in rules/submission/metadata.md.
+    description: See REQ-1139.
 
 document_reference:
     type: [identifier, document_reference_class]
-    description: See REQ-1140 in rules/submission/metadata.md.
+    description: See REQ-1140.
 
 core_designation:
     type: str
     values: [Req, Exp, Perm]
-    description: See REQ-1141 in rules/submission/metadata.md.
+    description: See REQ-1141.
 
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
         Protocol]
-    description: See REQ-1142 in rules/submission/metadata.md.
+    description: See REQ-1142.
 
 origin_source:
     type: str
     values: [Investigator, Sponsor, Subject, Vendor]
-    description: See REQ-1143 in rules/submission/metadata.md.
+    description: See REQ-1143.
 
 method_type:
     type: str
     values: [Computation, Imputation]
-    description: See REQ-1144 in rules/submission/metadata.md.
+    description: See REQ-1144.
 
 define_data_type:
     type: str
     values: [text, integer, float, date, datetime, time, partialDate,
         partialTime, partialDatetime, incompleteDate, incompleteTime,
         incompleteDatetime, durationDatetime, intervalDatetime, URI]
-    description: See REQ-1145 in rules/submission/metadata.md.
+    description: See REQ-1145.
 
 dataset_class_name:
     type: str
@@ -233,11 +233,11 @@ dataset_class_name:
         MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, OCCURRENCE DATA STRUCTURE,
         REFERENCE DATA STRUCTURE, RELATIONSHIP, SPECIAL PURPOSE,
         STUDY REFERENCE, SUBJECT LEVEL ANALYSIS DATASET, TRIAL DESIGN]
-    description: See REQ-1146 in rules/submission/metadata.md.
+    description: See REQ-1146.
 
 dataset_subclass_name:
     type: str
     values: [ADVERSE EVENT, MEDICAL DEVICE TIME-TO-EVENT,
         NON-COMPARTMENTAL ANALYSIS, POPULATION PHARMACOKINETIC ANALYSIS,
         TIME-TO-EVENT]
-    description: See REQ-1147 in rules/submission/metadata.md.
+    description: See REQ-1147.

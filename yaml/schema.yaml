@@ -1,6 +1,6 @@
 version: "1.0"
 
-# See REQ-1045 in rules/specification/structure.md.
+# See REQ-1045.
 
 includes:
     - schema_shared.yaml
@@ -12,273 +12,273 @@ root_class:
     - schema_version:
         type: str
         required: true
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - domain:
         type: identifier
         required: true
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - keys:
         type: "list[identifier]"
         required: true
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - input:
         type: "dict[identifier, dataset_source]"
         required: true
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - base:
         type: identifier
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - parents:
         type: [path, "list[path]"]
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - windows:
         type: "dict[identifier, window_spec]"
         required: false
-        description: See REQ-1251 in rules/operations/windows.md.
+        description: See REQ-1251.
     - intermediates:
         type: "list[intermediate_class]"
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - output:
         type: output_class
         required: true
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - columns:
         type: "list[column_class]"
         required: true
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - rows:
         type: "list[row_class]"
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - filter:
         type: predicate
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - submission:
         type: submission_dataset_class
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: See REQ-1042 in rules/specification/structure.md.
+        description: See REQ-1042.
 
 output_class:
     - path:
         type: path
         required: true
-        description: See REQ-1047 in rules/storage/publication.md.
+        description: See REQ-1047.
     - decimals:
         type: int
         required: false
-        description: See REQ-1047 in rules/storage/publication.md.
+        description: See REQ-1047.
     - columns:
         type: "list[identifier]"
         required: true
-        description: See REQ-1047 in rules/storage/publication.md.
+        description: See REQ-1047.
     - warning_log:
         type: path
         required: false
-        description: See REQ-1047 in rules/storage/publication.md.
+        description: See REQ-1047.
     - verification_log:
         type: path
         required: false
-        description: See REQ-1047 in rules/storage/publication.md.
+        description: See REQ-1047.
     - order_by:
         type: "list[order_by_term]"
         required: false
-        description: See REQ-1047 in rules/storage/publication.md.
+        description: See REQ-1047.
 
 intermediate_class:
     - id:
         type: intermediate_id
         required: true
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - dataset:
         type: identifier
         required: true
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - key:
         type: match_key
         required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - between:
         type: intermediate_between_class
         required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - filter:
         type: predicate
         required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - order_by:
         type: "list[order_by_term]"
         required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - keep:
         type: str
         required: false
         values: [first, last]
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - columns:
         type: "list[identifier]"
         required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - missing:
         type: literal_value
         required: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - strict:
         type: bool
         required: false
         default: false
-        description: See REQ-1048 in rules/operations/lookup.md.
+        description: See REQ-1048.
     - derivations:
         type: "dict[identifier, derivation]"
         required: false
-        description: See REQ-1185 in rules/operations/lookup.md.
+        description: See REQ-1185.
     - verification:
         type: intermediate_verification_class
         required: false
-        description: See REQ-1245 in rules/operations/lookup.md.
+        description: See REQ-1245.
 
 intermediate_verification_class:
     - unique:
         type: "list[identifier]"
         required: true
-        description: See REQ-1245 in rules/operations/lookup.md.
+        description: See REQ-1245.
 
 intermediate_between_class:
     - value:
         type: variable
         required: true
-        description: See REQ-1049 in rules/operations/lookup.md.
+        description: See REQ-1049.
     - lower:
         type: identifier
         required: true
-        description: See REQ-1049 in rules/operations/lookup.md.
+        description: See REQ-1049.
     - upper:
         type: identifier
         required: true
-        description: See REQ-1049 in rules/operations/lookup.md.
+        description: See REQ-1049.
 
 column_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
     - type:
         type: column_type
         required: true
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
     - label:
         type: str
         required: false
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
     - derivation:
         type: derivation
         required: false
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
     - verifications:
         type: [column_verification, "list[column_verification]"]
         required: false
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
     - submission:
         type: submission_column_class
         required: false
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: See REQ-1043 in rules/specification/structure.md.
+        description: See REQ-1043.
 
 row_class:
     - id:
         type: row_id
         required: true
-        description: See REQ-1056 in rules/execution/rows.md.
+        description: See REQ-1056.
     - dataset:
         type: identifier
         required: false
-        description: See REQ-1056 in rules/execution/rows.md.
+        description: See REQ-1056.
     - group_by:
         type: "list[variable]"
         required: false
-        description: See REQ-1056 in rules/execution/rows.md.
+        description: See REQ-1056.
     - filter:
         type: predicate
         required: false
-        description: See REQ-1056 in rules/execution/rows.md.
+        description: See REQ-1056.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
-        description: See REQ-1056 in rules/execution/rows.md.
+        description: See REQ-1056.
     - submission:
         type: "dict[identifier, submission_column_class]"
         required: false
-        description: See REQ-1056 in rules/execution/rows.md.
+        description: See REQ-1056.
 
 variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
-    description: See REQ-1057 in rules/specification/binding.md.
+    description: See REQ-1057.
 
 match_key:
     type: [match_key_columns, "dict[identifier, match_value]"]
-    description: See REQ-0115 in rules/operations/lookup.md.
+    description: See REQ-0115.
 
 match_key_columns:
     type: [identifier, "list[identifier]"]
-    description: See REQ-0115 in rules/operations/lookup.md.
+    description: See REQ-0115.
 
 match_value:
     type: [variable, expression]
-    description: See REQ-1259 in rules/operations/lookup.md.
+    description: See REQ-1259.
 
 dataset_source:
     type: [project_path, dataset_class]
-    description: See REQ-1059 in rules/storage/ingestion.md.
+    description: See REQ-1059.
 
 dataset_class:
     - path:
         type: project_path
         required: true
-        description: See REQ-1060 in rules/storage/ingestion.md.
+        description: See REQ-1060.
     - types:
         type: "dict[identifier, column_type]"
         required: false
-        description: See REQ-1060 in rules/storage/ingestion.md.
+        description: See REQ-1060.
     - schema:
         type: project_path
         required: false
-        description: See REQ-1060 in rules/storage/ingestion.md.
+        description: See REQ-1060.
     - empty_string:
         type: str
         required: false
         default: missing
         values: [missing, present]
-        description: See REQ-1158 in rules/storage/ingestion.md.
+        description: See REQ-1158.
 
 intermediate_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1050 in rules/operations/lookup.md.
+    description: See REQ-1050.
 
 row_id:
     type: str
     min_length: 1
-    description: See REQ-1044 in rules/specification/structure.md.
+    description: See REQ-1044.
 
 regex:
     type: str
     min_length: 1
-    description: See REQ-1058 in rules/specification/binding.md.
+    description: See REQ-1058.
 
 predicate:
     type: str

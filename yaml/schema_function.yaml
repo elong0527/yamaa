@@ -1,19 +1,19 @@
 version: "1.0"
 
 expressions:
-    function: # See REQ-1085 in rules/operations/functions.md.
+    function: # See REQ-1085.
         - name:
             type: identifier
             required: true
-            description: See REQ-1085 in rules/operations/functions.md.
+            description: See REQ-1085.
         - contract_version:
             type: function_contract_version
             required: true
-            description: See REQ-1085 in rules/operations/functions.md.
+            description: See REQ-1085.
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
-            description: See REQ-1085 in rules/operations/functions.md.
+            description: See REQ-1085.
 
 function_arg:
     type:
@@ -25,4 +25,4 @@ function_arg:
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: See REQ-1086 in rules/operations/functions.md.
+    description: See REQ-1086.

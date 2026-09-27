@@ -1,6 +1,6 @@
 version: "1.0"
 
-# See REQ-1075 in rules/submission/define-xml.md.
+# See REQ-1075.
 
 includes:
     - schema_shared.yaml
@@ -9,316 +9,316 @@ define_class:
     - schema_version:
         type: str
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - define_version:
         type: define_version
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - context:
         type: str
         required: true
         values: [Submission, Other]
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - language:
         type: language_tag
         default: en
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - file_oid:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - creation_datetime:
         type: creation_datetime
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - originator:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - source_system:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - source_system_version:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - stylesheet:
         type: relative_href
         required: false
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - study:
         type: study_class
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - metadata_version:
         type: metadata_version_class
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - standards:
         type: "list[standard_class]"
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - default_standard:
         type: identifier
         required: false
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - documents:
         type: "list[document_class]"
         required: false
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - codelists:
         type: "list[codelist_class]"
         required: false
-        description: See REQ-1076 in rules/submission/terminology.md.
+        description: See REQ-1076.
     - datasets:
         type: "list[define_dataset_class]"
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
     - output:
         type: define_output_class
         required: true
-        description: See REQ-1061 in rules/submission/define-xml.md.
+        description: See REQ-1061.
 
 study_class:
     - id:
         type: define_id
         required: true
-        description: See REQ-1062 in rules/submission/define-xml.md.
+        description: See REQ-1062.
     - name:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1062 in rules/submission/define-xml.md.
+        description: See REQ-1062.
     - description:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1062 in rules/submission/define-xml.md.
+        description: See REQ-1062.
     - protocol_name:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1062 in rules/submission/define-xml.md.
+        description: See REQ-1062.
 
 metadata_version_class:
     - id:
         type: define_id
         required: true
-        description: See REQ-1063 in rules/submission/define-xml.md.
+        description: See REQ-1063.
     - name:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1063 in rules/submission/define-xml.md.
+        description: See REQ-1063.
     - description:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1063 in rules/submission/define-xml.md.
+        description: See REQ-1063.
 
 standard_class:
     - id:
         type: identifier
         required: true
-        description: See REQ-1064 in rules/submission/define-xml.md.
+        description: See REQ-1064.
     - name:
         type: standard_name
         required: true
-        description: See REQ-1064 in rules/submission/define-xml.md.
+        description: See REQ-1064.
     - type:
         type: str
         required: true
         values: [IG, CT]
-        description: See REQ-1064 in rules/submission/define-xml.md.
+        description: See REQ-1064.
     - publishing_set:
         type: str
         required: false
         values: [ADaM, CDASH, DEFINE-XML, SDTM, SEND]
-        description: See REQ-1064 in rules/submission/define-xml.md.
+        description: See REQ-1064.
     - version:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1064 in rules/submission/define-xml.md.
+        description: See REQ-1064.
     - status:
         type: str
         required: true
         values: [Draft, Final, Provisional]
-        description: See REQ-1064 in rules/submission/define-xml.md.
+        description: See REQ-1064.
 
 document_class:
     - id:
         type: identifier
         required: true
-        description: See REQ-1065 in rules/submission/define-xml.md.
+        description: See REQ-1065.
     - kind:
         type: str
         required: true
         values: [annotated_crf, supplemental, other]
-        description: See REQ-1065 in rules/submission/define-xml.md.
+        description: See REQ-1065.
     - href:
         type: relative_href
         required: true
-        description: See REQ-1065 in rules/submission/define-xml.md.
+        description: See REQ-1065.
     - title:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1065 in rules/submission/define-xml.md.
+        description: See REQ-1065.
 
 codelist_class:
     - id:
         type: identifier
         required: true
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - name:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - standard:
         type: identifier
         required: false
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - data_type:
         type: str
         default: text
         values: [text, integer, float]
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - extensible:
         type: bool
         default: false
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - alias:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - format_name:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - items:
         type: "list[codelist_item_class]"
         required: false
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
     - external:
         type: external_codelist_class
         required: false
-        description: See REQ-1077 in rules/submission/terminology.md.
+        description: See REQ-1077.
 
 codelist_item_class:
     - value:
         type: literal_value
         required: true
-        description: See REQ-1078 in rules/submission/terminology.md.
+        description: See REQ-1078.
     - decode:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1078 in rules/submission/terminology.md.
+        description: See REQ-1078.
     - rank:
         type: int
         required: false
-        description: See REQ-1078 in rules/submission/terminology.md.
+        description: See REQ-1078.
     - alias:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1078 in rules/submission/terminology.md.
+        description: See REQ-1078.
     - extended:
         type: bool
         default: false
-        description: See REQ-1078 in rules/submission/terminology.md.
+        description: See REQ-1078.
 
 external_codelist_class:
     - dictionary:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1079 in rules/submission/terminology.md.
+        description: See REQ-1079.
     - version:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1079 in rules/submission/terminology.md.
+        description: See REQ-1079.
     - href:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1079 in rules/submission/terminology.md.
+        description: See REQ-1079.
 
 define_dataset_class:
     - id:
         type: identifier
         required: true
-        description: See REQ-1066 in rules/submission/define-xml.md.
+        description: See REQ-1066.
     - spec:
         type: project_path
         required: true
-        description: See REQ-1066 in rules/submission/define-xml.md.
+        description: See REQ-1066.
     - standard:
         type: identifier
         required: false
-        description: See REQ-1066 in rules/submission/define-xml.md.
+        description: See REQ-1066.
     - has_no_data:
         type: bool
         default: false
-        description: See REQ-1066 in rules/submission/define-xml.md.
+        description: See REQ-1066.
     - dataset_json:
         type: dataset_json_path
         required: false
-        description: See REQ-1066 in rules/submission/define-xml.md.
+        description: See REQ-1066.
 
 define_output_class:
     - path:
         type: define_path
         required: true
-        description: See REQ-1067 in rules/submission/define-xml.md.
+        description: See REQ-1067.
 
 define_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_.-]*$'
-    description: See REQ-1068 in rules/submission/define-xml.md.
+    description: See REQ-1068.
 
 define_version:
     type: str
     pattern: '^2\.1\.(0|[1-9][0-9]*)$'
-    description: See REQ-1069 in rules/submission/define-xml.md.
+    description: See REQ-1069.
 
 relative_href:
     type: str
     pattern: '^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$'
-    description: See REQ-1070 in rules/submission/define-xml.md.
+    description: See REQ-1070.
 
 define_path:
     type: str
     pattern: '^[^/\\][^\\]*\.[Xx][Mm][Ll]$'
-    description: See REQ-1071 in rules/submission/define-xml.md.
+    description: See REQ-1071.
 
 dataset_json_path:
     type: str
     pattern: '^[^/\\][^\\]*\.[Jj][Ss][Oo][Nn]$'
-    description: See REQ-1225 in rules/submission/dataset-json.md.
+    description: See REQ-1225.
 
 creation_datetime:
     type: str
     pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$'
-    description: See REQ-1072 in rules/submission/define-xml.md.
+    description: See REQ-1072.
 
 language_tag:
     type: str
     pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
-    description: See REQ-1073 in rules/submission/define-xml.md.
+    description: See REQ-1073.
 
 standard_name:
     type: str
     values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
         SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
-    description: See REQ-1074 in rules/submission/define-xml.md.
+    description: See REQ-1074.

@@ -249,19 +249,14 @@ def check(root):
         for comment in re.findall(
             r"(?:^\s*#|\s+#)\s*([^\n]*)", schema_text, re.MULTILINE
         ):
-            pointer = re.fullmatch(r"See (REQ-[0-9]{4,}) in rules/([^ ]+)\.", comment)
-            if (
-                pointer is None
-                or pointer[1] not in found
-                or requirements.get(pointer[1], {}).get("file") != pointer[2]
-            ):
+            pointer = re.fullmatch(r"See (REQ-[0-9]{4,})\.", comment)
+            if pointer is None or pointer[1] not in found:
                 errors.append(f"schema comment has no canonical owner: {path.name}")
         for field, value in descriptions(yaml.load(schema_text, Loader=UniqueLoader)):
             source = f"{path.name}:{field}"
             target = prose_by_source.get(source)
             current = resolve_requirement(target, migration) if target else []
-            owner = requirements.get(current[0], {}) if len(current) == 1 else {}
-            if len(current) != 1 or value != f"See {current[0]} in rules/{owner.get('file')}.":
+            if len(current) != 1 or value != f"See {current[0]}.":
                 errors.append(f"schema description has no canonical owner: {source}")
     return errors, {
         family: (mapped[family], total) for family, total in sorted(coverage.items())
