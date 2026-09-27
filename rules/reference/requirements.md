@@ -1175,7 +1175,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1246](../storage/resources.md#req-1246) | `storage/resources.md` | Schema prose |
 | [REQ-1247](../storage/resources.md#req-1247) | `storage/resources.md` | Schema prose |
 | [REQ-1248](../operations/lookup.md#req-1248) | `operations/lookup.md` | Schema prose |
-| [REQ-1249](../execution/rows.md#req-1249) | `execution/rows.md` | Schema prose |
 | [REQ-1250](../operations/expressions.md#req-1250) | `operations/expressions.md` | Schema prose |
 | [REQ-1251](../operations/windows.md#req-1251) | `operations/windows.md` | Schema prose |
 | [REQ-1252](../operations/windows.md#req-1252) | `operations/windows.md` | Schema prose |
