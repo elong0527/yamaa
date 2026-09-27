@@ -1954,6 +1954,35 @@ def test_between_narrows_a_qualified_right_side_only() -> None:
     assert diagnostic.requirement == "REQ-0329"
 
 
+def test_aggregate_between_with_no_bound_is_rejected() -> None:
+    # REQ-1049: a between with neither bound narrows by nothing; the planner
+    # rejects it as invalid_aggregate_context.
+    diagnostic = aggregate_diagnostic(
+        {
+            "expr": "SUM(EX.EXDOSE)",
+            "between": {"value": "ADY"},
+        }
+    )
+
+    assert diagnostic.condition == "invalid_aggregate_context"
+    assert diagnostic.requirement == "REQ-0329"
+
+
+def test_aggregate_between_with_qualified_bound_is_rejected() -> None:
+    # REQ-0472: between bounds are bare donor-record fields, not qualified
+    # references; the planner rejects a qualified bound.
+    diagnostic = aggregate_diagnostic(
+        {
+            "expr": "SUM(EX.EXDOSE)",
+            "between": {"value": "ADY", "lower": "EX.STARTDY"},
+        }
+    )
+
+    assert diagnostic.condition == "invalid_aggregate_context"
+    assert diagnostic.requirement == "REQ-0329"
+    assert "bare column" in diagnostic.context["reason"]
+
+
 def test_an_aggregate_has_no_context_in_an_ungrouped_row_template() -> None:
     # REQ-0295 through REQ-0467 permit exactly three contexts, and a
     # record-driven template is none of them.
