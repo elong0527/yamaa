@@ -635,7 +635,7 @@ eval_num_fn <- function(fn, ev) {
     yamaa_error("invalid_argument", paste0("unknown function: ", fn)))
 }
 
-# round_half_away_from_zero (REQ-0444): vectorized --------------------------
+# round_half_away_from_zero (REQ-0418): vectorized --------------------------
 round_half_away <- function(x, digits) {
   v <- x$v
   if (!x$t %in% c("int", "float"))
@@ -645,8 +645,10 @@ round_half_away <- function(x, digits) {
   s <- abs(f) * p
   out <- sign(f) * floor(s + 0.5) / p
   # REQ-0418: a value exactly at a tie, or within sqrt(2^-52)*10^-digits
-  # below it, rounds half away from zero instead of down.
-  tol <- sqrt(2^-52) * 10^-digits
+  # (source units) below it, rounds half away from zero instead of down.
+  # In scaled units the 10^-digits factor cancels: the bound on the scaled
+  # fractional part is just sqrt(2^-52).
+  tol <- sqrt(2^-52)
   frac <- s - floor(s)
   below <- !is.na(frac) & frac >= 0.5 - tol & frac < 0.5
   out[below] <- sign(f[below]) * (floor(s[below]) + 1) / p
