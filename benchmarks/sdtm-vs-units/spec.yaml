@@ -150,9 +150,11 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VSSEQ]
+  # Every input record matches exactly one per-test row template, so the
+  # output holds one record per input record.
   - row_count:
-      min: 6
-      max: 6
+      min: 10
+      max: 10
   - all_or_none:
       id: standardized-result-completeness
       columns: [VSSTRESN, VSSTRESC, VSSTRESU]
