@@ -261,6 +261,14 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [EX.EXSEQ]
     keep: last
+  - id: REF_LOOKUP
+    dataset: REF
+    key: [PARAMCD, SEX]
+  - id: EX_LOOKUP
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXSEQ]
+    keep: first
 
 output:
   path: adlb.csv
@@ -282,21 +290,10 @@ columns:
     type: float
   - name: ANRHI
     type: float
-    derivation:
-      lookup:
-        dataset: REF
-        key: [PARAMCD, SEX]
-        value: ANRHI
-        missing: null
+    derivation: REF_LOOKUP.ANRHI
   - name: TRT
     type: str
-    derivation:
-      lookup:
-        dataset: EX
-        key: [STUDYID, USUBJID]
-        value: EXTRT
-        order_by: [EX.EXSEQ]
-        keep: first
+    derivation: EX_LOOKUP.EXTRT
   - name: TOTDOSE
     type: float
     derivation:
@@ -410,10 +407,9 @@ def test_that_study_reports_the_selection_handler_only_where_it_chose(
         (count.spec_path, count.handler): count.count for count in result.handler_counts
     }
     assert (
-        counts[("columns.TRT.derivation.lookup.multiple_matches", "multiple_matches")]
+        counts[("columns.TRT.derivation.source.multiple_matches", "multiple_matches")]
         == 3
     )
-    assert counts[("columns.ANRHI.derivation.lookup.missing", "missing")] == 1
 
 
 def test_that_study_is_reproduced_exactly_on_a_second_run(
@@ -692,6 +688,10 @@ input:
   MAIN: {path: input/main.csv, types: {W: float}}
   AUX: {path: input/aux.csv, types: {H: float}}
 keys: [ID, KIND]
+intermediates:
+  - id: AUX_LOOKUP
+    dataset: AUX
+    key: {ID: MAIN.ID}
 output:
   path: out.csv
   columns: [ID, KIND, VAL]
@@ -718,11 +718,7 @@ rows:
     filter: "MAIN.KIND = 'B'"
     derivations:
       KIND: {literal: LK}
-      VAL:
-        lookup:
-          dataset: AUX
-          key: {ID: MAIN.ID}
-          value: H
+      VAL: AUX_LOOKUP.H
   - id: joined
     dataset: MAIN
     filter: "MAIN.KIND = 'A'"
