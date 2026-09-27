@@ -109,6 +109,20 @@ class SdtmMappingTests(unittest.TestCase):
             rule["SEXC_SINGLE"],
         )
 
+    def test_mapping_rule_names_a_dictionary_kept_in_a_file(self):
+        spec = load_spec("schema-text-mapping")
+        sheets = {
+            tab_id: (headers, rows)
+            for tab_id, _, headers, rows in mapping_doc.mapping_sheets(spec)
+        }
+        _, rows = sheets["mapping"]
+        rule = {row[1]: row[6] for row in rows}
+        self.assertEqual(
+            "Recode DM.RACE using the dictionary in input/race_dict.yaml"
+            "; missing or unlisted values " + mapping_doc.ARROW + ' "Unknown".',
+            rule["RACEC"],
+        )
+
     def test_strict_mapping_rule_names_the_event_that_errors(self):
         rule = mapping_doc.describe_mapping(
             {

@@ -7,12 +7,8 @@ expressions:
             required: true
             description: See REQ-1110.
         - dict:
-            type: "dict[str, literal_value]"
-            required: false
-            description: See REQ-1110.
-        - dict_yaml:
-            type: project_path
-            required: false
+            type: ["dict[str, literal_value]", project_path]
+            required: true
             description: See REQ-1110.
         - case_sensitive:
             type: bool

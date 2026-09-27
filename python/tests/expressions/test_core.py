@@ -287,9 +287,9 @@ def test_mapping_validates_dictionary_before_resolving_its_source() -> None:
     assert result.condition.condition == "ambiguous_dictionary"
 
 
-def test_mapping_rejects_unresolved_dict_yaml() -> None:
+def test_mapping_rejects_unexpanded_dict_path() -> None:
     result = evaluate_expression(
-        {"mapping": {"source": "CODE", "dict_yaml": "sevord.yaml"}},
+        {"mapping": {"source": "CODE", "dict": "sevord.yaml"}},
         MappingResolver({"CODE": "MILD"}),
     )
 

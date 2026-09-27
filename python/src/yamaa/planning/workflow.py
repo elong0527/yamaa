@@ -112,35 +112,14 @@ def _expand_mapping_dictionary(
     resources: ProjectResources,
     path: str,
 ) -> None:
-    """Replace one mapping dict_yaml with the dictionary it names (REQ-1110).
+    """Replace one mapping dict path with the dictionary it names (REQ-1110).
 
     The file is read once during workflow planning through the spec's project
     resources, so evaluation never touches the filesystem. Mutates the
     expression payload in place; the payload dicts belong to this plan run.
     """
-    written = payload["dict_yaml"]
-    if "dict" in payload:
-        raise SpecificationError(
-            [
-                _diagnostic(
-                    "mapping_dictionary_source_conflict",
-                    path,
-                    "REQ-1110",
-                    {"fields": ["dict", "dict_yaml"]},
-                )
-            ]
-        )
-    if not isinstance(written, str):
-        raise SpecificationError(
-            [
-                _diagnostic(
-                    "invalid_field_type",
-                    path,
-                    "REQ-1110",
-                    {"operation": "mapping", "expected": "dict_yaml"},
-                )
-            ]
-        )
+    written = payload["dict"]
+    assert isinstance(written, str)
     try:
         snapshot = resources.capture(written)
         resources.verify(snapshot)
@@ -151,7 +130,7 @@ def _expand_mapping_dictionary(
                     error.condition,
                     path,
                     "REQ-1110",
-                    {"field": "dict_yaml", "path": written},
+                    {"field": "dict", "path": written},
                 )
             ]
         ) from error
@@ -178,14 +157,13 @@ def _expand_mapping_dictionary(
             ]
         )
     payload["dict"] = document
-    del payload["dict_yaml"]
 
 
 def _expand_mapping_dictionaries(
     specification: Specification,
     resources: ProjectResources,
 ) -> None:
-    """Expand every mapping dict_yaml in one resolved specification (REQ-1110)."""
+    """Expand every mapping dict path in one resolved specification (REQ-1110)."""
 
     def visit(node: object, path: str) -> None:
         if isinstance(node, BaseModel):
@@ -194,7 +172,7 @@ def _expand_mapping_dictionaries(
                 visit(getattr(node, name), child)
         elif isinstance(node, dict):
             payload = node.get("mapping")
-            if isinstance(payload, dict) and "dict_yaml" in payload:
+            if isinstance(payload, dict) and isinstance(payload.get("dict"), str):
                 mapping_path = f"{path}.mapping" if path else "mapping"
                 _expand_mapping_dictionary(payload, resources, mapping_path)
             for key, item in node.items():
