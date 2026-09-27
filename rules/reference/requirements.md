@@ -1024,7 +1024,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1051](../operations/lookup.md#req-1051) | `operations/lookup.md` | Schema prose |
 | [REQ-1052](../operations/lookup.md#req-1052) | `operations/lookup.md` | Schema prose |
 | [REQ-1053](../operations/lookup.md#req-1053) | `operations/lookup.md` | Schema prose |
-| [REQ-1054](../operations/lookup.md#req-1054) | `operations/lookup.md` | Schema prose |
 | [REQ-1056](../execution/rows.md#req-1056) | `execution/rows.md` | Schema prose |
 | [REQ-1057](../specification/binding.md#req-1057) | `specification/binding.md` | Schema prose |
 | [REQ-1058](../specification/binding.md#req-1058) | `specification/binding.md` | Schema prose |
@@ -1059,7 +1058,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1087](../operations/functions.md#req-1087) | `operations/functions.md` | Schema prose |
 | [REQ-1088](../operations/aggregation.md#req-1088) | `operations/aggregation.md` | Schema prose |
 | [REQ-1089](../operations/aggregation.md#req-1089) | `operations/aggregation.md` | Schema prose |
-| [REQ-1090](../operations/aggregation.md#req-1090) | `operations/aggregation.md` | Schema prose |
 | [REQ-1091](../operations/aggregation.md#req-1091) | `operations/aggregation.md` | Schema prose |
 | [REQ-1092](../operations/aggregation.md#req-1092) | `operations/aggregation.md` | Schema prose |
 | [REQ-1093](../operations/expressions.md#req-1093) | `operations/expressions.md` | Schema prose |

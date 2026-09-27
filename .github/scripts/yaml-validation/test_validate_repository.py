@@ -899,10 +899,10 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
             path,
             self.context(),
         )
-        wrong_relation = VALIDATOR.validate_aggregate_at(
+        qualified = VALIDATOR.validate_aggregate_at(
             {
                 'expr': 'SUM(EX.DOSE)',
-                'between': {'value': 'VALUE', 'lower': 'AE.DOSE'},
+                'between': {'value': 'VALUE', 'lower': 'EX.DOSE'},
             },
             path,
             self.context(),
@@ -910,7 +910,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
         incomparable = VALIDATOR.validate_aggregate_at(
             {
                 'expr': 'SUM(EX.DOSE)',
-                'between': {'value': 'TERM', 'lower': 'EX.DOSE'},
+                'between': {'value': 'TERM', 'lower': 'DOSE'},
             },
             path,
             self.context(),
@@ -918,8 +918,8 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 
         self.assertEqual(missing[0].context['reason'], 'missing_between_bound')
         self.assertEqual(
-            wrong_relation[0].context['reason'],
-            'wrong_between_bound_relation',
+            qualified[0].context['reason'],
+            'qualified_between_bound',
         )
         self.assertEqual(incomparable[0].condition, 'incompatible_input_type')
 

@@ -7360,17 +7360,17 @@ def validate_aggregate_between(
             operand_types.append((value, value_type))
 
     for name, bound in bounds:
-        if not isinstance(bound, str) or not bound.startswith(relation + '.'):
+        if not isinstance(bound, str) or '.' in bound:
             errors.append(
                 validation_diagnostic(
                     f"{path}.{name}",
                     'invalid_aggregate_context',
-                    f"aggregate {name} must be qualified by {relation!r}",
-                    context={'reason': 'wrong_between_bound_relation'},
+                    f"aggregate {name} must be a bare donor-record field, not qualified",
+                    context={'reason': 'qualified_between_bound'},
                 )
             )
             continue
-        field = bound.split('.', 1)[1]
+        field = bound
         bound_type = fields.get(field)
         if bound_type is None:
             if not fields:

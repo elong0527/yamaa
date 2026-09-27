@@ -276,7 +276,7 @@ What changed:
   contract's declared-key join: the join keys are the *applicable keys* -- the output `keys` that also
   exist on the right side. So "merge by STUDYID USUBJID" is not written: it is
   a consequence of `keys`. Multiple matches fail by default; relaxing it
-  requires an explicit `multiple_matches`.
+  requires explicit `order_by` and `keep`.
 - `case` has one branch and no `otherwise`, so the result is missing. "else
   blank" needs no statement.
 

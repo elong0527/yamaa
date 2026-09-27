@@ -1192,7 +1192,7 @@ requirements:
   REQ-0116: {"file": "operations/lookup.md", "sources": ["R003-6"]}
   REQ-0117: {"file": "operations/lookup.md", "sources": ["R003-7"]}
   REQ-0118: {"file": "operations/lookup.md", "sources": ["R003-8"]}
-  REQ-0119: {"file": "operations/lookup.md", "sources": ["R003-9"]}
+  REQ-0119: {"file": "operations/lookup.md", "sources": ["R003-9", "schema_expression_core.yaml:keep_policy.description"]}
   REQ-0120: {"file": "operations/lookup.md", "sources": ["R003-10"]}
   REQ-0121: {"file": "operations/lookup.md", "sources": ["R003-11"]}
   REQ-0122: {"file": "operations/lookup.md", "sources": ["R003-12"]}
@@ -2115,12 +2115,12 @@ requirements:
   REQ-1046: {"file": "specification/structure.md", "sources": ["schema_shared.yaml:identifier.description"]}
   REQ-1047: {"file": "storage/publication.md", "sources": ["schema.yaml:output_class.path.description", "schema.yaml:output_class.decimals.description", "schema.yaml:output_class.columns.description", "schema.yaml:output_class.warning_log.description", "schema.yaml:output_class.verification_log.description", "schema.yaml:output_class.order_by.description"]}
   REQ-1048: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.id.description", "schema.yaml:intermediate_class.dataset.description", "schema.yaml:intermediate_class.key.description", "schema.yaml:intermediate_class.key_base.description", "schema.yaml:intermediate_class.between.description", "schema.yaml:intermediate_class.filter.description", "schema.yaml:intermediate_class.order_by.description", "schema.yaml:intermediate_class.keep.description", "schema.yaml:intermediate_class.columns.description", "schema.yaml:intermediate_class.missing.description", "schema.yaml:intermediate_class.strict.description"]}
-  REQ-1049: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_between_class.value.description", "schema.yaml:intermediate_between_class.lower.description", "schema.yaml:intermediate_between_class.upper.description"]}
+  REQ-1049: {"file": "operations/lookup.md", "sources": ["schema.yaml:record_between_class.value.description", "schema.yaml:record_between_class.lower.description", "schema.yaml:record_between_class.upper.description", "yamaa:issue-1321:record-between"]}
   REQ-1050: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_id.description"]}
-  REQ-1051: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:source_binding_class.variable.description", "schema_expression_core.yaml:source_binding_class.filter.description", "schema_expression_core.yaml:source_binding_class.missing.description", "schema_expression_core.yaml:source_binding_class.multiple_matches.description"]}
+  REQ-1051: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:source_binding_class.variable.description", "schema_expression_core.yaml:source_binding_class.filter.description", "schema_expression_core.yaml:source_binding_class.missing.description", "schema_expression_core.yaml:source_binding_class.order_by.description", "schema_expression_core.yaml:source_binding_class.keep.description", "schema_expression_core.yaml:source_binding_class.multiple_matches.description"]}
   REQ-1052: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:filtered_source.description"]}
   REQ-1053: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:filtered_source_class.variable.description", "schema_expression_core.yaml:filtered_source_class.filter.description"]}
-  REQ-1054: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:multiple_matches_class.order_by.description", "schema_expression_core.yaml:multiple_matches_class.keep.description"]}
+  REQ-1054: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:multiple_matches_class.order_by.description", "schema_expression_core.yaml:multiple_matches_class.keep.description"], "retired": true, "replacement": ["REQ-1051"]}
   REQ-1056: {"file": "execution/rows.md", "sources": ["schema.yaml:row_class.id.description", "schema.yaml:row_class.dataset.description", "schema.yaml:row_class.group_by.description", "schema.yaml:row_class.filter.description", "schema.yaml:row_class.derivations.description", "schema.yaml:row_class.submission.description"]}
   REQ-1057: {"file": "specification/binding.md", "sources": ["schema.yaml:variable.description"]}
   REQ-1058: {"file": "specification/binding.md", "sources": ["schema.yaml:regex.description"]}
@@ -2155,7 +2155,7 @@ requirements:
   REQ-1087: {"file": "operations/functions.md", "sources": ["schema_shared.yaml:function_contract_version.description"]}
   REQ-1088: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:aggregate_class.filter.description", "schema_expression_aggregate.yaml:aggregate_class.between.description", "schema_expression_aggregate.yaml:aggregate_class.group_by.description", "schema_expression_aggregate.yaml:aggregate_class.key.description", "schema_expression_aggregate.yaml:aggregate_class.key_base.description", "schema_expression_aggregate.yaml:aggregate_class.expr.description"]}
   REQ-1089: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:aggregate_expression.description"]}
-  REQ-1090: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:aggregate_between_class.value.description", "schema_expression_aggregate.yaml:aggregate_between_class.lower.description", "schema_expression_aggregate.yaml:aggregate_between_class.upper.description"]}
+  REQ-1090: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:aggregate_between_class.value.description", "schema_expression_aggregate.yaml:aggregate_between_class.lower.description", "schema_expression_aggregate.yaml:aggregate_between_class.upper.description"], "retired": true, "replacement": ["REQ-1049"]}
   REQ-1091: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:comment:3"]}
   REQ-1092: {"file": "operations/aggregation.md", "sources": ["schema_expression_aggregate.yaml:comment:6"]}
   REQ-1093: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:expressions.source.description", "schema_expression_core.yaml:comment:4"]}
@@ -2356,9 +2356,10 @@ schema_prose:
   - {"source": "schema.yaml:intermediate_class.columns.description", "text": "Dataset columns the lookup may read; defaults to every dataset column.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
   - {"source": "schema.yaml:intermediate_class.missing.description", "text": "Value returned when the lookup yields nothing; defaults to missing.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
   - {"source": "schema.yaml:intermediate_class.strict.description", "text": "Fail when the lookup yields nothing.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
-  - {"source": "schema.yaml:intermediate_between_class.value.description", "text": "Value read from the current row.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1049"}
-  - {"source": "schema.yaml:intermediate_between_class.lower.description", "text": "Dataset column whose value is an inclusive lower bound.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1049"}
-  - {"source": "schema.yaml:intermediate_between_class.upper.description", "text": "Dataset column whose value is an inclusive upper bound.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1049"}
+  - {"source": "schema.yaml:intermediate_between_class.value.description", "text": "Value read from the current row.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1055"}
+  - {"source": "schema.yaml:intermediate_between_class.lower.description", "text": "Dataset column whose value is an inclusive lower bound.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1055"}
+  - {"source": "schema.yaml:intermediate_between_class.upper.description", "text": "Dataset column whose value is an inclusive upper bound.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1055"}
+  - {"source": "schema_expression_core.yaml:source_binding_class.multiple_matches.description", "text": "Rule for selecting one of several right-side matches.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
   - {"source": "schema.yaml:column_class.name.description", "text": "Column name this specification declares.", "owner": "specification/structure", "group": "column_class", "target": "REQ-1043"}
   - {"source": "schema.yaml:column_class.type.description", "text": "Declared data type this column must carry in the completed dataset.", "owner": "specification/structure", "group": "column_class", "target": "REQ-1043"}
   - {"source": "schema.yaml:column_class.label.description", "text": "Descriptive text carried with the column for a reader of the dataset.", "owner": "specification/structure", "group": "column_class", "target": "REQ-1043"}
@@ -2486,7 +2487,6 @@ schema_prose:
   - {"source": "schema_expression_core.yaml:source_binding_class.variable.description", "text": "Variable to copy.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
   - {"source": "schema_expression_core.yaml:source_binding_class.filter.description", "text": "Predicate selecting the right-side records this source reads; R003 defines the selection.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
   - {"source": "schema_expression_core.yaml:source_binding_class.missing.description", "text": "Value used when the source variable or item is absent.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
-  - {"source": "schema_expression_core.yaml:source_binding_class.multiple_matches.description", "text": "Rule for selecting one of several right-side matches.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
   - {"source": "schema_expression_core.yaml:filtered_source.description", "text": "A variable, or a variable with the predicate selecting the records it reads.", "owner": "operations/lookup", "group": "filtered_source", "target": "REQ-1052"}
   - {"source": "schema_expression_core.yaml:filtered_source_class.variable.description", "text": "Variable to copy.", "owner": "operations/lookup", "group": "filtered_source_class", "target": "REQ-1053"}
   - {"source": "schema_expression_core.yaml:filtered_source_class.filter.description", "text": "Predicate selecting the right-side records this source reads; R003 defines the selection.", "owner": "operations/lookup", "group": "filtered_source_class", "target": "REQ-1053"}
@@ -2645,6 +2645,13 @@ schema_prose:
   - {"source": "schema_shared.yaml:comment:3", "text": "Types shared by specification and project-environment schema entry points.", "owner": "values/types", "group": "module", "target": "REQ-1150"}
   - {"source": "schema_verification.yaml:comment:43", "text": "Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies both bounds to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. A grouped count requires id, which an ungrouped count does not.", "owner": "execution/verification", "group": "dataset_verifications.row_count", "target": "REQ-1152"}
 provenance_addenda:
+  - {"source": "schema_expression_core.yaml:keep_policy.description", "text": "Ordered selection policy: keep the first or last match.", "owner": "operations/lookup", "group": "keep_policy", "target": "REQ-0119"}
+  - {"source": "schema.yaml:record_between_class.value.description", "text": "Value read from the current row.", "owner": "operations/lookup", "group": "record_between_class", "target": "REQ-1049"}
+  - {"source": "schema.yaml:record_between_class.lower.description", "text": "Bare donor-record field for the inclusive lower bound; optional.", "owner": "operations/lookup", "group": "record_between_class", "target": "REQ-1049"}
+  - {"source": "schema.yaml:record_between_class.upper.description", "text": "Bare donor-record field for the inclusive upper bound; optional.", "owner": "operations/lookup", "group": "record_between_class", "target": "REQ-1049"}
+  - {"source": "yamaa:issue-1321:record-between", "text": "Shared record_between_class for named intermediates and aggregates.", "owner": "operations/lookup", "group": "record_between_class", "target": "REQ-1049"}
+  - {"source": "schema_expression_core.yaml:source_binding_class.order_by.description", "text": "Order matches by these fields before keeping.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
+  - {"source": "schema_expression_core.yaml:source_binding_class.keep.description", "text": "Which ordered match to keep: first or last.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
   - {"source": "yamaa:pr-818:fixed-row-catalog", "text": "A fixed CSV specification resource expands one row template into ordinary templates before data ingestion.", "owner": "execution/rows", "group": "row_catalog", "target": "REQ-1249"}
   - {"source": "schema.yaml:row_class.catalog.description", "text": "See REQ-1249 in rules/execution/rows.md.", "owner": "execution/rows", "group": "row_class", "target": "REQ-1249"}
   - {"source": "schema.yaml:row_catalog_class.path.description", "text": "See REQ-1249 in rules/execution/rows.md.", "owner": "execution/rows", "group": "row_catalog_class", "target": "REQ-1249"}

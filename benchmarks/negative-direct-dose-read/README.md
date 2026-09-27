@@ -35,9 +35,8 @@ earliest administration:
   derivation:
     source:
       variable: EX.EXDOSE
-      multiple_matches:
-        order_by: [EX.EXSEQ]
-        keep: first
+      order_by: [EX.EXSEQ]
+      keep: first
 
 - name: DOSEDBL
   type: float

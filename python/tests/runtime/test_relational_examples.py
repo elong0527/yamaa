@@ -472,7 +472,7 @@ columns:
     derivation:
       aggregate:
         key: [STUDYID, USUBJID]
-        between: {value: ADY, lower: EX.STARTDY, upper: EX.ENDDY}
+        between: {value: ADY, lower: STARTDY, upper: ENDDY}
         expr: "SUM(EX.EXDOSE)"
   - name: EPOCH
     type: str
@@ -564,8 +564,8 @@ def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
 @pytest.mark.parametrize(
     ("bound", "expected"),
     [
-        ("{value: ADY, lower: EX.STARTDY}", [10.0, 30.0]),
-        ("{value: ADY, upper: EX.ENDDY}", [30.0, 20.0]),
+        ("{value: ADY, lower: STARTDY}", [10.0, 30.0]),
+        ("{value: ADY, upper: ENDDY}", [30.0, 20.0]),
     ],
     ids=["lower only", "upper only"],
 )

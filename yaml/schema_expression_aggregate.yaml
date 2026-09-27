@@ -12,7 +12,7 @@ aggregate_class:
         type: predicate
         description: See REQ-1088.
     - between:
-        type: aggregate_between_class
+        type: record_between_class
         description: See REQ-1088.
     - group_by:
         type: "list[variable]"
@@ -48,17 +48,3 @@ aggregate_expression:
     type: str
     min_length: 1
     description: See REQ-1089.
-
-aggregate_between_class:
-    - value:
-        type: variable
-        required: true
-        description: See REQ-1090.
-    - lower:
-        type: variable
-        required: false
-        description: See REQ-1090.
-    - upper:
-        type: variable
-        required: false
-        description: See REQ-1090.

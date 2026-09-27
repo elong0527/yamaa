@@ -38,9 +38,8 @@ working column the coded value then reads.
     source:
       filter: ODM.ItemOID = 'IT.DM.SEX'
       variable: ODM.Value
-      multiple_matches:
-        order_by: [ODM.StudyEventRepeatKey]
-        keep: last
+      order_by: [ODM.StudyEventRepeatKey]
+      keep: last
 
 - name: SEX
   type: str

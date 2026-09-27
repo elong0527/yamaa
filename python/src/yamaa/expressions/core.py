@@ -212,13 +212,24 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
             {"operation": "source", "expected": "str or mapping"},
         )
 
-    multiple = options.get("multiple_matches")
-    if multiple is not None and not isinstance(multiple, Mapping):
+    order_by = options.get("order_by")
+    keep = options.get("keep")
+    if (order_by is None) != (keep is None):
+        # REQ-0119: the ordered choice is declared as a pair, like the
+        # named intermediate's.
         return expression_condition(
             "validation",
-            "invalid_field_type",
-            {"field": "multiple_matches", "expected": "mapping"},
+            "unpaired_fields",
+            {
+                "operation": "source",
+                "declared": ["order_by"] if order_by is not None else ["keep"],
+                "missing": ["keep"] if order_by is not None else ["order_by"],
+            },
+            requirement="REQ-0119",
         )
+    multiple: Mapping[str, object] | None = None
+    if order_by is not None:
+        multiple = {"order_by": order_by, "keep": keep}
     selector = options.get("filter")
     if selector is not None and not isinstance(selector, str):
         return expression_condition(

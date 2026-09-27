@@ -64,6 +64,5 @@ columns:
       source:
         variable: EX.EXDOSE
         filter: "EX.EXDOSE IS NOT NULL"
-        multiple_matches:
-          order_by: [EX.EXSTDTC]
-          keep: last
+        order_by: [EX.EXSTDTC]
+        keep: last

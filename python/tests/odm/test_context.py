@@ -265,16 +265,14 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
                 "filter": "ODM.Include = 'Y'",
-                "multiple_matches": {
-                    "order_by": [
-                        {
-                            "variable": "ODM.Rank",
-                            "direction": "asc",
-                            "nulls": "last",
-                        }
-                    ],
-                    "keep": "first",
-                },
+                "order_by": [
+                    {
+                        "variable": "ODM.Rank",
+                        "direction": "asc",
+                        "nulls": "last",
+                    }
+                ],
+                "keep": "first",
             }
         },
         context,
@@ -284,16 +282,14 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
                 "filter": "ODM.Include = 'Y'",
-                "multiple_matches": {
-                    "order_by": [
-                        {
-                            "variable": "ODM.Rank",
-                            "direction": "asc",
-                            "nulls": "last",
-                        }
-                    ],
-                    "keep": "last",
-                },
+                "order_by": [
+                    {
+                        "variable": "ODM.Rank",
+                        "direction": "asc",
+                        "nulls": "last",
+                    }
+                ],
+                "keep": "last",
             }
         },
         context,
@@ -301,6 +297,60 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
 
     assert first == ValueResult(value="first", handled_by="multiple_matches")
     assert last == ValueResult(value="last", handled_by="multiple_matches")
+
+
+def test_source_order_by_without_keep_is_unpaired() -> None:
+    table = _table(
+        ["StudyOID", "ItemOID", "Value", "Rank"],
+        [
+            ["S1", "IT.TEST.TARGET", "target", None],
+            ["S1", "IT.TEST.VALUE", "first", 1],
+        ],
+        types={"Rank": "int"},
+    )
+    context = _index(table).context({"ODM": runtime_rows(table)[0]})
+
+    result = evaluate_expression(
+        {
+            "source": {
+                "variable": "ODM.IT.TEST.VALUE",
+                "order_by": [
+                    {"variable": "ODM.Rank", "direction": "asc", "nulls": "last"}
+                ],
+            }
+        },
+        context,
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "unpaired_fields"
+    assert result.condition.context["missing"] == ["keep"]
+
+
+def test_source_keep_without_order_by_is_unpaired() -> None:
+    table = _table(
+        ["StudyOID", "ItemOID", "Value", "Rank"],
+        [
+            ["S1", "IT.TEST.TARGET", "target", None],
+            ["S1", "IT.TEST.VALUE", "first", 1],
+        ],
+        types={"Rank": "int"},
+    )
+    context = _index(table).context({"ODM": runtime_rows(table)[0]})
+
+    result = evaluate_expression(
+        {
+            "source": {
+                "variable": "ODM.IT.TEST.VALUE",
+                "keep": "first",
+            }
+        },
+        context,
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "unpaired_fields"
+    assert result.condition.context["missing"] == ["order_by"]
 
 
 def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None:
@@ -324,7 +374,7 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
                 "filter": "ODM.Rank = 2",
-                "multiple_matches": policy,
+                **policy,
             }
         },
         context,
@@ -335,7 +385,7 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
                 "variable": "ODM.IT.TEST.VALUE",
                 "missing": "fallback",
                 "filter": "ODM.Rank > 9",
-                "multiple_matches": policy,
+                **policy,
             }
         },
         context,
@@ -361,16 +411,14 @@ def test_order_terms_are_validated_when_filter_leaves_one_survivor() -> None:
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
                 "filter": "ODM.Include = 'Y'",
-                "multiple_matches": {
-                    "order_by": [
-                        {
-                            "variable": "ODM.Unknown",
-                            "direction": "asc",
-                            "nulls": "last",
-                        }
-                    ],
-                    "keep": "first",
-                },
+                "order_by": [
+                    {
+                        "variable": "ODM.Unknown",
+                        "direction": "asc",
+                        "nulls": "last",
+                    }
+                ],
+                "keep": "first",
             }
         },
         context,
@@ -425,16 +473,14 @@ def test_duplicate_order_applies_direction_and_null_placement_independently() ->
             {
                 "source": {
                     "variable": "ODM.IT.TEST.VALUE",
-                    "multiple_matches": {
-                        "order_by": [
-                            {
-                                "variable": "ODM.Rank",
-                                "direction": "desc",
-                                "nulls": nulls,
-                            }
-                        ],
-                        "keep": "first",
-                    },
+                    "order_by": [
+                        {
+                            "variable": "ODM.Rank",
+                            "direction": "desc",
+                            "nulls": nulls,
+                        }
+                    ],
+                    "keep": "first",
                 }
             },
             context,
@@ -463,16 +509,14 @@ def test_index_batching_preserves_source_order_tie_breaks() -> None:
     expression = {
         "source": {
             "variable": "ODM.IT.TEST.VALUE",
-            "multiple_matches": {
-                "order_by": [
-                    {
-                        "variable": "ODM.Rank",
-                        "direction": "asc",
-                        "nulls": "last",
-                    }
-                ],
-                "keep": "last",
-            },
+            "order_by": [
+                {
+                    "variable": "ODM.Rank",
+                    "direction": "asc",
+                    "nulls": "last",
+                }
+            ],
+            "keep": "last",
         }
     }
 

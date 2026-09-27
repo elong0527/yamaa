@@ -142,8 +142,8 @@ class Output(_StrictModel):
 
 class IntermediateBetween(_StrictModel):
     value: str
-    lower: str
-    upper: str
+    lower: str | None = None
+    upper: str | None = None
 
 
 class IntermediateVerification(_StrictModel):

@@ -110,7 +110,7 @@ intermediate_class:
         required: false
         description: See REQ-1048.
     - between:
-        type: intermediate_between_class
+        type: record_between_class
         required: false
         description: See REQ-1048.
     - filter:
@@ -122,9 +122,8 @@ intermediate_class:
         required: false
         description: See REQ-1048.
     - keep:
-        type: str
+        type: keep_policy
         required: false
-        values: [first, last]
         description: See REQ-1048.
     - columns:
         type: "list[identifier]"
@@ -154,19 +153,33 @@ intermediate_verification_class:
         required: true
         description: See REQ-1245.
 
-intermediate_between_class:
+record_between_class:
     - value:
         type: variable
         required: true
         description: See REQ-1049.
     - lower:
         type: identifier
-        required: true
+        required: false
         description: See REQ-1049.
     - upper:
         type: identifier
-        required: true
+        required: false
         description: See REQ-1049.
+
+intermediate_between_class:
+    - value:
+        type: variable
+        required: true
+        description: See REQ-1055.
+    - lower:
+        type: identifier
+        required: true
+        description: See REQ-1055.
+    - upper:
+        type: identifier
+        required: true
+        description: See REQ-1055.
 
 column_class:
     - name:

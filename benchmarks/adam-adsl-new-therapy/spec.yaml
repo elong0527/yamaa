@@ -50,7 +50,7 @@ columns:
         filter: "CM.CMCAT = 'ON TREATMENT'"
         between:
           value: TRTSDT
-          upper: CM.CMSTDTC_IMP
+          upper: CMSTDTC_IMP
         expr: "MIN(CM.CMSTDTC_IMP)"
 
   - name: PRNACTDT
@@ -61,7 +61,7 @@ columns:
         filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT'"
         between:
           value: TRTSDT
-          upper: PR.PRSTDTC
+          upper: PRSTDTC
         expr: "MIN(PR.PRSTDTC)"
 
   # The earlier of the two, skipping an empty one; empty when both are.

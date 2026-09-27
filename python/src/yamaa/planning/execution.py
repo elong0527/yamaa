@@ -1502,7 +1502,19 @@ def _aggregate_references(
         for bound in ("lower", "upper"):
             name = between.get(bound)
             if isinstance(name, str):
-                references.append(relational(name, f"{operation_path}.between.{bound}"))
+                # REQ-0472: bounds are bare donor-record fields; qualify
+                # them with the aggregate's one relation for the join.
+                references.append(
+                    _Reference(
+                        f"{relation}.{name}",
+                        f"{operation_path}.between.{bound}",
+                        join_relation=joined,
+                        join_key=key_fields if joined else None,
+                        join_match_values=key_variables if joined else None,
+                        join_key_expressions=key_expressions if joined else None,
+                        reach="relation",
+                    )
+                )
     return diagnostics
 
 
@@ -1613,10 +1625,11 @@ def _aggregate_context(
             return reject(
                 "between declares at least one bound", f"{operation_path}.between"
             )
-        if any(not str(bound).startswith(f"{relation}.") for bound in bounds):
-            # REQ-0472: both bounds are columns of the expression's one relation.
+        if any("." in str(bound) for bound in bounds):
+            # REQ-0472: bounds are bare donor-record fields of the
+            # expression's one relation, not qualified references.
             return reject(
-                f"a between bound names a column of {relation!r}",
+                f"a between bound names a bare column of {relation!r}",
                 f"{operation_path}.between",
             )
     return []
@@ -3341,6 +3354,21 @@ def _validate_intermediate_between(
     diagnostics: list[ExecutionDiagnostic],
 ) -> bool:
     """Check the closed range an intermediate matches by, before any data is read."""
+    if between.lower is None and between.upper is None:
+        # REQ-1049: a between with no bound narrows by nothing; the
+        # declaration is refused rather than silently ignored.
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                f"{path}.between",
+                {
+                    "intermediate": identifier,
+                    "expected": "at least one of lower, upper",
+                },
+                requirement="REQ-1049",
+            )
+        )
+        return True
     return _check_between(
         identifier,
         between.value,
@@ -3357,8 +3385,8 @@ def _validate_intermediate_between(
 def _check_between(
     identifier: str | None,
     value: str,
-    lower: str,
-    upper: str,
+    lower: str | None,
+    upper: str | None,
     path: str,
     fields: Mapping[str, ColumnType],
     bindings: BindingPlan,
@@ -3367,7 +3395,8 @@ def _check_between(
 ) -> bool:
     """Check the closed range an intermediate matches by, before any data is read."""
     context = {"intermediate": identifier} if identifier is not None else {}
-    missing = [name for name in (lower, upper) if name not in fields]
+    stated = [(name, side) for side, name in (("lower", lower), ("upper", upper)) if name is not None]
+    missing = [name for name, _ in stated if name not in fields]
     if missing:
         # REQ-0121: a bound naming a column the dataset does not have.
         diagnostics.extend(
@@ -3391,11 +3420,8 @@ def _check_between(
             )
         )
         return True
-    lower_type = fields[lower]
-    upper_type = fields[upper]
-    if _comparable_types(value_type, lower_type) and _comparable_types(
-        value_type, upper_type
-    ):
+    types = {side: fields[name] for name, side in stated}
+    if all(_comparable_types(value_type, bound_type) for bound_type in types.values()):
         return False
     # REQ-0121: report the runtime types before any record is compared.
     diagnostics.append(
@@ -3405,8 +3431,7 @@ def _check_between(
             {
                 **context,
                 "value_type": value_type,
-                "lower_type": lower_type,
-                "upper_type": upper_type,
+                **{f"{side}_type": bound_type for side, bound_type in types.items()},
             },
             requirement="REQ-0121",
         )
