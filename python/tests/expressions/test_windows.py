@@ -142,6 +142,32 @@ def test_an_offset_moves_along_the_declared_order(
     )
 
 
+@pytest.mark.parametrize(
+    ("current", "offset", "expected"),
+    [
+        (2, -1, 5),
+        (0, 1, 7),
+        (3, -2, 5),
+        (0, 3, MISSING),
+    ],
+)
+def test_an_offset_counts_only_the_rows_the_filter_kept(
+    current: int, offset: int, expected: object
+) -> None:
+    # REQ-0294: the filter selects rows before partitioning, so the excluded
+    # 6 is not a neighbor of either side.
+    located = partition(visits(5, 6, 7, 8), current, eligible=[True, False, True, True])
+
+    assert _value(row_value(located, "AVAL", offset)) == expected
+
+
+@pytest.mark.parametrize("offset", [-1, 1])
+def test_a_row_the_filter_excluded_reads_missing(offset: int) -> None:
+    located = partition(visits(5, 6, 7), 1, eligible=[True, False, True])
+
+    assert _value(row_value(located, "AVAL", offset)) is MISSING
+
+
 def test_a_zero_offset_is_refused_rather_than_read_as_the_current_row() -> None:
     # REQ-0328: the current row's own value is `source`.
     condition = _condition(row_value(partition(visits(5), 0), "AVAL", 0))
