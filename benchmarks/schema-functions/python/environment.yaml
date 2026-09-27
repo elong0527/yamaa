@@ -1,0 +1,14 @@
+schema_version: "1.0"
+version: "1.0.0"
+
+runtime:
+  language: python
+  artifact:
+    reference: org.example/yamaa/ratio-python:1.0.0
+
+functions:
+  project_ratio:
+    contract: contracts.yaml
+    binding:
+      call: projectratio.project_ratio
+    conformance: conformance/project_ratio.yaml
