@@ -9711,22 +9711,8 @@ def validate_condition_registry(root: Path, registry):
         if not isinstance(registration, dict):
             errors.append(f"ERROR: {path}: expected a mapping")
             continue
-        for field in sorted(set(registration) - {'rules', 'phases'}):
+        for field in sorted(set(registration) - {'phases'}):
             errors.append(f"ERROR: {path}.{field}: unknown field")
-        rules = registration.get('rules')
-        if not (
-            isinstance(rules, list)
-            and rules
-            and all(
-                isinstance(rule, str)
-                and re.fullmatch(r'R[0-9]{3}', rule)
-                for rule in rules
-            )
-            and rules == sorted(set(rules))
-        ):
-            errors.append(
-                f"ERROR: {path}.rules: expected unique sorted rule ids"
-            )
         phases = registration.get('phases')
         if not (
             isinstance(phases, list)

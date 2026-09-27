@@ -1,114 +1,114 @@
 version: "1.0"
 
 expressions:
-    date_diff: # See REQ-1104 in rules/operations/temporal.md.
+    date_diff: # See REQ-1104.
         - start:
             type: variable
             required: true
-            description: See REQ-1104 in rules/operations/temporal.md.
+            description: See REQ-1104.
         - end:
             type: variable
             required: true
-            description: See REQ-1104 in rules/operations/temporal.md.
+            description: See REQ-1104.
         - unit:
             type: str
             required: true
             values: [day, week, month, year]
-            description: See REQ-1104 in rules/operations/temporal.md.
+            description: See REQ-1104.
         - bounds:
             type: str
             default: exclusive
             values: [exclusive, inclusive, between]
-            description: See REQ-1104 in rules/operations/temporal.md.
-    date_impute: # See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1104.
+    date_impute: # See REQ-1105.
         - source:
             type: variable
             required: true
-            description: See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1105.
         - month:
             type: int
-            description: See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1105.
         - day:
             type: [int, day_rule]
             required: true
-            description: See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1105.
         - minimum_source_precision:
             type: str
             default: year
             values: [year, month]
-            description: See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1105.
         - not_before:
             type: variable
-            description: See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1105.
         - missing:
             type: literal_value
-            description: See REQ-1105 in rules/operations/temporal.md.
+            description: See REQ-1105.
         - invalid:
             type: literal_value
-            description: See REQ-1105 in rules/operations/temporal.md.
-    date_precision: # See REQ-1106 in rules/operations/temporal.md.
+            description: See REQ-1105.
+    date_precision: # See REQ-1106.
         - source:
             type: variable
             required: true
-            description: See REQ-1106 in rules/operations/temporal.md.
+            description: See REQ-1106.
         - missing:
             type: literal_value
-            description: See REQ-1106 in rules/operations/temporal.md.
+            description: See REQ-1106.
         - invalid:
             type: literal_value
-            description: See REQ-1106 in rules/operations/temporal.md.
-    datetime_impute: # See REQ-1182 in rules/operations/temporal.md.
+            description: See REQ-1106.
+    datetime_impute: # See REQ-1182.
         - source:
             type: variable
             required: true
-            description: See REQ-1182 in rules/operations/temporal.md.
+            description: See REQ-1182.
         - time:
             type: time_rule
             required: true
-            description: See REQ-1182 in rules/operations/temporal.md.
+            description: See REQ-1182.
         - missing:
             type: literal_value
-            description: See REQ-1182 in rules/operations/temporal.md.
+            description: See REQ-1182.
         - invalid:
             type: literal_value
-            description: See REQ-1182 in rules/operations/temporal.md.
-    datetime_precision: # See REQ-1183 in rules/operations/temporal.md.
+            description: See REQ-1182.
+    datetime_precision: # See REQ-1183.
         - source:
             type: variable
             required: true
-            description: See REQ-1183 in rules/operations/temporal.md.
+            description: See REQ-1183.
         - missing:
             type: literal_value
-            description: See REQ-1183 in rules/operations/temporal.md.
+            description: See REQ-1183.
         - invalid:
             type: literal_value
-            description: See REQ-1183 in rules/operations/temporal.md.
-    to_date: # See REQ-1107 in rules/operations/temporal.md.
+            description: See REQ-1183.
+    to_date: # See REQ-1107.
         - source:
             type: variable
             required: true
-            description: See REQ-1107 in rules/operations/temporal.md.
-    study_day: # See REQ-1108 in rules/operations/temporal.md.
+            description: See REQ-1107.
+    study_day: # See REQ-1108.
         - date:
             type: variable
             required: true
-            description: See REQ-1108 in rules/operations/temporal.md.
+            description: See REQ-1108.
         - reference:
             type: variable
             required: true
-            description: See REQ-1108 in rules/operations/temporal.md.
-    to_epoch_day: # See REQ-1188 in rules/operations/temporal.md.
+            description: See REQ-1108.
+    to_epoch_day: # See REQ-1188.
         - source:
             type: variable
             required: true
-            description: See REQ-1188 in rules/operations/temporal.md.
+            description: See REQ-1188.
 
 day_rule:
     type: str
     values: [first, last]
-    description: See REQ-1109 in rules/operations/temporal.md.
+    description: See REQ-1109.
 
 time_rule:
     type: str
     values: [first, last]
-    description: See REQ-1184 in rules/operations/temporal.md.
+    description: See REQ-1184.

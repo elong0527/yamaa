@@ -1,73 +1,73 @@
 version: "1.0"
 
-# See REQ-1129 in rules/operations/windows.md.
+# See REQ-1129.
 
 window_selection:
     type: [identifier, window_spec]
-    description: See REQ-1251 in rules/operations/windows.md.
+    description: See REQ-1251.
 
 window_spec:
     - group_by:
         type: "list[variable]"
-        description: See REQ-1122 in rules/operations/windows.md.
+        description: See REQ-1122.
     - order_by:
         type: "list[order_by_term]"
-        description: See REQ-1122 in rules/operations/windows.md.
+        description: See REQ-1122.
     - filter:
         type: predicate
-        description: See REQ-1122 in rules/operations/windows.md.
+        description: See REQ-1122.
 
 expressions:
-    row_number: # See REQ-1123 in rules/operations/windows.md.
+    row_number: # See REQ-1123.
         - window:
             type: window_selection
-            description: See REQ-1123 in rules/operations/windows.md.
-    rank: # See REQ-1124 in rules/operations/windows.md.
+            description: See REQ-1123.
+    rank: # See REQ-1124.
         - method:
             type: str
             default: competition
             values: [competition, dense]
-            description: See REQ-1124 in rules/operations/windows.md.
+            description: See REQ-1124.
         - window:
             type: window_selection
-            description: See REQ-1124 in rules/operations/windows.md.
-    row_value: # See REQ-1125 in rules/operations/windows.md.
+            description: See REQ-1124.
+    row_value: # See REQ-1125.
         - source:
             type: variable
             required: true
-            description: See REQ-1125 in rules/operations/windows.md.
+            description: See REQ-1125.
         - offset:
             type: int
             required: true
-            description: See REQ-1125 in rules/operations/windows.md.
+            description: See REQ-1125.
         - window:
             type: window_selection
-            description: See REQ-1125 in rules/operations/windows.md.
-    previous_non_missing: # See REQ-1126 in rules/operations/windows.md.
+            description: See REQ-1125.
+    previous_non_missing: # See REQ-1126.
         - source:
             type: variable
             required: true
-            description: See REQ-1126 in rules/operations/windows.md.
+            description: See REQ-1126.
         - window:
             type: window_selection
-            description: See REQ-1126 in rules/operations/windows.md.
-    locf: # See REQ-1239 in rules/operations/windows.md.
+            description: See REQ-1126.
+    locf: # See REQ-1239.
         - source:
             type: variable
             required: true
-            description: See REQ-1239 in rules/operations/windows.md.
+            description: See REQ-1239.
         - window:
             type: window_selection
-            description: See REQ-1239 in rules/operations/windows.md.
-    baseline_flag: # See REQ-1127 in rules/operations/windows.md.
+            description: See REQ-1239.
+    baseline_flag: # See REQ-1127.
         - date:
             type: variable
             required: true
-            description: See REQ-1127 in rules/operations/windows.md.
+            description: See REQ-1127.
         - reference_date:
             type: variable
             required: true
-            description: See REQ-1127 in rules/operations/windows.md.
+            description: See REQ-1127.
         - window:
             type: window_selection
-            description: See REQ-1127 in rules/operations/windows.md.
+            description: See REQ-1127.

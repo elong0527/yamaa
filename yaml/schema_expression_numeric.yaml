@@ -1,24 +1,24 @@
 version: "1.0"
 
-# See REQ-1121 in rules/operations/computation.md.
+# See REQ-1121.
 
 expressions:
-    compute: # See REQ-1119 in rules/operations/computation.md.
+    compute: # See REQ-1119.
         - expr:
             type: numeric_expression
             required: true
-            description: See REQ-1119 in rules/operations/computation.md.
-    round_half_away_from_zero: # See REQ-1172 in rules/operations/computation.md.
+            description: See REQ-1119.
+    round_half_away_from_zero: # See REQ-1172.
         - source:
             type: variable
             required: true
-            description: See REQ-1172 in rules/operations/computation.md.
+            description: See REQ-1172.
         - digits:
             type: int
             required: true
-            description: See REQ-1172 in rules/operations/computation.md.
+            description: See REQ-1172.
 
 numeric_expression:
     type: str
     min_length: 1
-    description: See REQ-1120 in rules/operations/computation.md.
+    description: See REQ-1120.

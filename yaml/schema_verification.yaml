@@ -40,14 +40,14 @@ dataset_verifications:
         - id: {type: verification_id, required: true}
         - expr: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
-    row_count: # See REQ-1152 in rules/execution/verification.md.
+    row_count: # See REQ-1152.
         - id: {type: verification_id, required: false}
         - group_by: {type: "list[variable]", required: false}
         - filter: {type: predicate, required: false}
         - when:
             type: predicate
             required: false
-            description: See REQ-1154 in rules/execution/verification.md.
+            description: See REQ-1154.
         - min: {type: int, required: false}
         - max: {type: int, required: false}
         - min_fraction: {type: float, required: false}

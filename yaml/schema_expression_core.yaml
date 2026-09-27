@@ -1,132 +1,132 @@
 version: "1.0"
 
 expressions:
-    source: # See REQ-1093 in rules/operations/expressions.md.
+    source: # See REQ-1093.
         type: [variable, source_binding_class]
-        description: See REQ-1093 in rules/operations/expressions.md.
-    literal: # See REQ-1094 in rules/operations/expressions.md.
+        description: See REQ-1093.
+    literal: # See REQ-1094.
         type: literal_value
-        description: See REQ-1094 in rules/operations/expressions.md.
-    first_available: # See REQ-1095 in rules/operations/expressions.md.
+        description: See REQ-1094.
+    first_available: # See REQ-1095.
         - sources:
             type: "list[filtered_source]"
             required: true
-            description: See REQ-1095 in rules/operations/expressions.md.
+            description: See REQ-1095.
         - missing:
             type: literal_value
-            description: See REQ-1095 in rules/operations/expressions.md.
-    greatest: # See REQ-1096 in rules/operations/expressions.md.
+            description: See REQ-1095.
+    greatest: # See REQ-1096.
         - sources:
             type: "list[variable]"
             required: true
-            description: See REQ-1096 in rules/operations/expressions.md.
-    least: # See REQ-1097 in rules/operations/expressions.md.
+            description: See REQ-1096.
+    least: # See REQ-1097.
         - sources:
             type: "list[variable]"
             required: true
-            description: See REQ-1097 in rules/operations/expressions.md.
-    case: # See REQ-1098 in rules/operations/expressions.md.
+            description: See REQ-1097.
+    case: # See REQ-1098.
         type: "list[case_item_class]"
-        description: See REQ-1098 in rules/operations/expressions.md.
-    flag: # See REQ-1256 in rules/operations/expressions.md.
+        description: See REQ-1098.
+    flag: # See REQ-1256.
         type: [predicate, flag_class]
-        description: See REQ-1256 in rules/operations/expressions.md.
+        description: See REQ-1256.
 
 source_binding_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1051 in rules/operations/lookup.md.
+        description: See REQ-1051.
     - filter:
         type: predicate
-        description: See REQ-1051 in rules/operations/lookup.md.
+        description: See REQ-1051.
     - missing:
         type: literal_value
-        description: See REQ-1051 in rules/operations/lookup.md.
+        description: See REQ-1051.
     - multiple_matches:
         type: multiple_matches_class
-        description: See REQ-1051 in rules/operations/lookup.md.
+        description: See REQ-1051.
 
 flag_class:
     - condition:
         type: predicate
         required: true
-        description: See REQ-1256 in rules/operations/expressions.md.
+        description: See REQ-1256.
     - true_value:
         type: literal_value
         default: "Y"
-        description: See REQ-1256 in rules/operations/expressions.md.
+        description: See REQ-1256.
     - false_value:
         type: literal_value
-        description: See REQ-1257 in rules/operations/expressions.md.
+        description: See REQ-1257.
     - missing_value:
         type: literal_value
-        description: See REQ-1257 in rules/operations/expressions.md.
+        description: See REQ-1257.
 
 filtered_source:
     type: [variable, filtered_source_class]
-    description: See REQ-1052 in rules/operations/lookup.md.
+    description: See REQ-1052.
 
 filtered_source_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1053 in rules/operations/lookup.md.
+        description: See REQ-1053.
     - filter:
         type: predicate
         required: true
-        description: See REQ-1053 in rules/operations/lookup.md.
+        description: See REQ-1053.
 
 multiple_matches_class:
     - order_by:
         type: "list[order_by_term]"
         required: true
-        description: See REQ-1054 in rules/operations/lookup.md.
+        description: See REQ-1054.
     - keep:
         type: str
         required: true
         values: [first, last]
-        description: See REQ-1054 in rules/operations/lookup.md.
+        description: See REQ-1054.
 
 order_by_term:
     type: [variable, order_term_class]
-    description: See REQ-1102 in rules/execution/ordering.md.
+    description: See REQ-1102.
 
 order_term_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1103 in rules/execution/ordering.md.
+        description: See REQ-1103.
     - direction:
         type: str
         default: asc
         values: [asc, desc]
-        description: See REQ-1103 in rules/execution/ordering.md.
+        description: See REQ-1103.
     - nulls:
         type: str
         default: last
         values: [first, last]
-        description: See REQ-1103 in rules/execution/ordering.md.
+        description: See REQ-1103.
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]
-    description: See REQ-1099 in rules/operations/expressions.md.
+    description: See REQ-1099.
 
 case_branch_class:
     - when:
         type: predicate
         required: true
-        description: See REQ-1100 in rules/operations/expressions.md.
+        description: See REQ-1100.
     - then:
         type: case_result
         required: true
-        description: See REQ-1100 in rules/operations/expressions.md.
+        description: See REQ-1100.
 
 case_otherwise_class:
     - otherwise:
         type: case_result
         required: true
-        description: See REQ-1101 in rules/operations/expressions.md.
+        description: See REQ-1101.
 
 case_result:
     type: [str, expression]

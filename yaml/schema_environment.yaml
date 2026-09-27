@@ -7,75 +7,75 @@ environment_class:
     - schema_version:
         type: str
         required: true
-        description: See REQ-1080 in rules/operations/functions.md.
+        description: See REQ-1080.
     - version:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1080 in rules/operations/functions.md.
+        description: See REQ-1080.
     - runtime:
         type: project_runtime_class
         required: true
-        description: See REQ-1080 in rules/operations/functions.md.
+        description: See REQ-1080.
     - functions:
         type: "dict[identifier, function_contract_class]"
         required: true
-        description: See REQ-1080 in rules/operations/functions.md.
+        description: See REQ-1080.
 
 project_runtime_class:
     - language:
         type: str
         required: true
         values: [r, python]
-        description: See REQ-1081 in rules/operations/functions.md.
+        description: See REQ-1081.
     - artifact:
         type: runtime_artifact_class
         required: true
-        description: See REQ-1081 in rules/operations/functions.md.
+        description: See REQ-1081.
 
 runtime_artifact_class:
     - reference:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1082 in rules/operations/functions.md.
+        description: See REQ-1082.
 
 function_contract_class:
     - contract:
         type: path
     - contract_version:
         type: function_contract_version
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - implementation_version:
         type: str
         min_length: 1
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - description:
         type: str
         min_length: 1
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - comparison_decimals:
         type: int
         default: 4
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - may_return_missing:
         type: bool
         default: false
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - params:
         type: "list[function_parameter_class]"
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - returns:
         type: column_type
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - binding:
         type: function_binding_class
         required: true
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
     - conformance:
         type: path
         required: true
-        description: See REQ-1083 in rules/operations/functions.md.
+        description: See REQ-1083.
 
 shared_function_contract_class:
     - contract_version:
@@ -109,10 +109,10 @@ function_binding_class:
     - call:
         type: qualified_callable
         required: true
-        description: See REQ-1084 in rules/operations/functions.md.
+        description: See REQ-1084.
     - args:
         type: "dict[identifier, host_argument_name]"
-        description: See REQ-1084 in rules/operations/functions.md.
+        description: See REQ-1084.
 
 function_conformance_class:
     - schema_version: {type: str, required: true}

@@ -1,99 +1,99 @@
 version: "1.0"
 
 expressions:
-    str_pad: # See REQ-1261 in rules/operations/text.md.
+    str_pad: # See REQ-1261.
         - source:
             type: variable
             required: true
-            description: See REQ-1261 in rules/operations/text.md.
+            description: See REQ-1261.
         - width:
             type: int
             required: true
-            description: See REQ-1261 in rules/operations/text.md.
-    str_extract: # See REQ-1111 in rules/operations/text.md.
+            description: See REQ-1261.
+    str_extract: # See REQ-1111.
         - source:
             type: variable
             required: true
-            description: See REQ-1111 in rules/operations/text.md.
+            description: See REQ-1111.
         - pattern:
             type: regex
             required: true
-            description: See REQ-1111 in rules/operations/text.md.
+            description: See REQ-1111.
         - group:
             type: int
             default: 0
-            description: See REQ-1111 in rules/operations/text.md.
+            description: See REQ-1111.
         - missing:
             type: literal_value
-            description: See REQ-1111 in rules/operations/text.md.
+            description: See REQ-1111.
         - no_match:
             type: literal_value
-            description: See REQ-1111 in rules/operations/text.md.
-    str_contains: # See REQ-1243 in rules/operations/text.md.
+            description: See REQ-1111.
+    str_contains: # See REQ-1243.
         - source:
             type: variable
             required: true
-            description: See REQ-1243 in rules/operations/text.md.
+            description: See REQ-1243.
         - pattern:
             type: regex
             required: true
-            description: See REQ-1243 in rules/operations/text.md.
+            description: See REQ-1243.
         - missing:
             type: literal_value
-            description: See REQ-1243 in rules/operations/text.md.
-    str_concat: # See REQ-1112 in rules/operations/text.md.
+            description: See REQ-1243.
+    str_concat: # See REQ-1112.
         - sources:
             type: "list[expression]"
             required: true
-            description: See REQ-1112 in rules/operations/text.md.
+            description: See REQ-1112.
         - missing:
             type: literal_value
-            description: See REQ-1112 in rules/operations/text.md.
-    str_template: # See REQ-1113 in rules/operations/text.md.
+            description: See REQ-1112.
+    str_template: # See REQ-1113.
         type: [string_template, str_template_class]
-        description: See REQ-1113 in rules/operations/text.md.
-    str_upper: # See REQ-1114 in rules/operations/text.md.
+        description: See REQ-1113.
+    str_upper: # See REQ-1114.
         - source:
             type: variable
             required: true
-            description: See REQ-1114 in rules/operations/text.md.
+            description: See REQ-1114.
         - missing:
             type: literal_value
-            description: See REQ-1114 in rules/operations/text.md.
-    str_lower: # See REQ-1115 in rules/operations/text.md.
+            description: See REQ-1114.
+    str_lower: # See REQ-1115.
         - source:
             type: variable
             required: true
-            description: See REQ-1115 in rules/operations/text.md.
+            description: See REQ-1115.
         - missing:
             type: literal_value
-            description: See REQ-1115 in rules/operations/text.md.
-    str_sentence: # See REQ-1240 in rules/operations/text.md.
+            description: See REQ-1115.
+    str_sentence: # See REQ-1240.
         - source:
             type: variable
             required: true
-            description: See REQ-1240 in rules/operations/text.md.
+            description: See REQ-1240.
         - missing:
             type: literal_value
-            description: See REQ-1240 in rules/operations/text.md.
-    str_title: # See REQ-1241 in rules/operations/text.md.
+            description: See REQ-1240.
+    str_title: # See REQ-1241.
         - source:
             type: variable
             required: true
-            description: See REQ-1241 in rules/operations/text.md.
+            description: See REQ-1241.
         - missing:
             type: literal_value
-            description: See REQ-1241 in rules/operations/text.md.
+            description: See REQ-1241.
 
 string_template:
     type: str
-    description: See REQ-1116 in rules/operations/text.md.
+    description: See REQ-1116.
 
 str_template_class:
     - template:
         type: string_template
         required: true
-        description: See REQ-1117 in rules/operations/text.md.
+        description: See REQ-1117.
     - missing:
         type: literal_value
-        description: See REQ-1117 in rules/operations/text.md.
+        description: See REQ-1117.

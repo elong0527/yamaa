@@ -1,89 +1,89 @@
 version: "1.0"
 
 expressions:
-    mapping: # See REQ-1110 in rules/operations/text.md.
+    mapping: # See REQ-1110.
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1110 in rules/operations/text.md.
+            description: See REQ-1110.
         - dict:
             type: "dict[str, literal_value]"
             required: false
-            description: See REQ-1110 in rules/operations/text.md.
+            description: See REQ-1110.
         - dict_yaml:
             type: project_path
             required: false
-            description: See REQ-1110 in rules/operations/text.md.
+            description: See REQ-1110.
         - case_sensitive:
             type: bool
             default: true
-            description: See REQ-1110 in rules/operations/text.md.
+            description: See REQ-1110.
         - missing:
             type: literal_value
-            description: See REQ-1110 in rules/operations/text.md.
+            description: See REQ-1110.
         - unmapped:
             type: literal_value
-            description: See REQ-1110 in rules/operations/text.md.
+            description: See REQ-1110.
         - strict:
             type: bool
             required: false
-            description: See REQ-1110 in rules/operations/text.md.
-    lookup: # See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1110.
+    lookup: # See REQ-1055.
         - value:
             type: identifier
             required: true
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - dataset:
             type: identifier
             required: true
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - key:
             type: match_key
             required: false
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - filter:
             type: predicate
             required: false
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - between:
             type: intermediate_between_class
             required: false
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - order_by:
             type: "list[order_by_term]"
             required: false
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - keep:
             type: str
             required: false
             values: [first, last]
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - missing:
             type: literal_value
             required: false
-            description: See REQ-1055 in rules/operations/lookup.md.
+            description: See REQ-1055.
         - strict:
             type: bool
             required: false
             default: false
-            description: See REQ-1055 in rules/operations/lookup.md.
-    cut: # See REQ-1118 in rules/operations/computation.md.
+            description: See REQ-1055.
+    cut: # See REQ-1118.
         - source:
             type: variable
             required: true
-            description: See REQ-1118 in rules/operations/computation.md.
+            description: See REQ-1118.
         - breaks:
             type: "list[float]"
             required: true
-            description: See REQ-1118 in rules/operations/computation.md.
+            description: See REQ-1118.
         - labels:
             type: "list[str]"
             required: true
-            description: See REQ-1118 in rules/operations/computation.md.
+            description: See REQ-1118.
         - right:
             type: bool
             default: false
-            description: See REQ-1118 in rules/operations/computation.md.
+            description: See REQ-1118.
         - missing:
             type: literal_value
-            description: See REQ-1118 in rules/operations/computation.md.
+            description: See REQ-1118.

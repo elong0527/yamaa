@@ -95,9 +95,11 @@ is not a second semantic contract.
 The generated [requirement index](reference/requirements.md) links each active ID
 and its historical aliases to the current owner.
 
-Old diagnostic families (`R001`, etc.) in the validation-condition registry
-remain compatibility names for their registered conditions. Active requirement
-citations resolve through the same map. New author-facing citations use REQ IDs.
+The validation-condition registry (`yaml/conditions.yaml`) maps every condition an
+implementation may raise to the phases that may raise it. It no longer carries
+the old diagnostic family tags (`R001`, etc.); those remain compatibility names
+resolved through [migration.yaml](migration.yaml). New author-facing citations
+use REQ IDs.
 
 [Schema fields](reference/schema-fields.md) is generated from the current
 schema: it lists shapes and defaults and links to semantic owners. Edit the

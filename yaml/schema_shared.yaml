@@ -1,6 +1,6 @@
 version: "1.0"
 
-# See REQ-1150 in rules/values/types.md.
+# See REQ-1150.
 
 column_type:
     type: str
@@ -8,7 +8,7 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149 in rules/values/types.md.
+    description: See REQ-1149.
 
 path:
     type: str
@@ -17,17 +17,17 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151 in rules/storage/resources.md.
+    description: See REQ-1151.
 
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046 in rules/specification/structure.md.
+    description: See REQ-1046.
 
 function_contract_version:
     type: str
     min_length: 1
-    description: See REQ-1087 in rules/operations/functions.md.
+    description: See REQ-1087.
 
 function_param_type:
     type: str

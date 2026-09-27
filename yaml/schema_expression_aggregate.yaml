@@ -1,64 +1,64 @@
 version: "1.0"
 
-# See REQ-1091 in rules/operations/aggregation.md.
+# See REQ-1091.
 
 expressions:
-# See REQ-1092 in rules/operations/aggregation.md.
+# See REQ-1092.
     aggregate:
         type: [aggregate_expression, aggregate_class]
 
 aggregate_class:
     - filter:
         type: predicate
-        description: See REQ-1088 in rules/operations/aggregation.md.
+        description: See REQ-1088.
     - between:
         type: aggregate_between_class
-        description: See REQ-1088 in rules/operations/aggregation.md.
+        description: See REQ-1088.
     - group_by:
         type: "list[variable]"
-        description: See REQ-1088 in rules/operations/aggregation.md.
+        description: See REQ-1088.
     - key:
         type: match_key
         required: false
-        description: See REQ-1088 in rules/operations/aggregation.md.
+        description: See REQ-1088.
     - derive:
         type: "list[derive_binding_class]"
         required: false
-        description: See REQ-1189 in rules/operations/aggregation.md.
+        description: See REQ-1189.
     - expr:
         type: aggregate_expression
         required: true
-        description: See REQ-1088 in rules/operations/aggregation.md.
+        description: See REQ-1088.
 
 derive_binding_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1192 in rules/operations/aggregation.md.
+        description: See REQ-1192.
     - type:
         type: column_type
         required: true
-        description: See REQ-1192 in rules/operations/aggregation.md.
+        description: See REQ-1192.
     - derivation:
         type: derivation
         required: true
-        description: See REQ-1192 in rules/operations/aggregation.md.
+        description: See REQ-1192.
 
 aggregate_expression:
     type: str
     min_length: 1
-    description: See REQ-1089 in rules/operations/aggregation.md.
+    description: See REQ-1089.
 
 aggregate_between_class:
     - value:
         type: variable
         required: true
-        description: See REQ-1090 in rules/operations/aggregation.md.
+        description: See REQ-1090.
     - lower:
         type: variable
         required: false
-        description: See REQ-1090 in rules/operations/aggregation.md.
+        description: See REQ-1090.
     - upper:
         type: variable
         required: false
-        description: See REQ-1090 in rules/operations/aggregation.md.
+        description: See REQ-1090.
