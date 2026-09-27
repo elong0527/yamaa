@@ -243,7 +243,10 @@ class TestProducerWorkflow:
         example = copy_example(WORKFLOW, tmp_path)
         golden = example / "expected/dm.csv"
         golden.write_bytes(
-            golden.read_bytes().replace(b",008,008,WHITE,", b",008,008,ASIAN,")
+            golden.read_bytes().replace(
+                b",YAMAA-01-108,YAMAA-01-108,WHITE,",
+                b",YAMAA-01-108,YAMAA-01-108,ASIAN,",
+            )
         )
 
         verdict = verdict_of(WORKFLOW, tmp_path, example)
