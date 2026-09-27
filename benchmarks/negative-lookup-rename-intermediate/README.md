@@ -41,7 +41,7 @@ columns:
   - name: CMDECOD
     type: str
     label: Standardized Medication Name
-    derivation: read("WHODRUG_LOOKUP.PREFERRED_NAME")
+    derivation: WHODRUG_LOOKUP.PREFERRED_NAME
 ```
 
 A named intermediate must narrow, derive, or reshape its dataset

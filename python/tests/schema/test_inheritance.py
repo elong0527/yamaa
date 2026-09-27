@@ -747,3 +747,54 @@ output: {path: out.csv, columns: [ID]}
     assert run.issues.is_empty()
     assert run.output is not None
     assert run.output.to_dicts() == [{"ID": "S1"}, {"ID": "S2"}]
+
+
+def test_child_intermediate_key_replaces_inherited_key_whole(tmp_path: Path) -> None:
+    # REQ-0630: a matching `intermediates` member merges by id; a present
+    # non-null `key` replaces the parent's complete key value rather than
+    # merging with it.
+    (tmp_path / "input.csv").write_text("ID,CODE\n01,A\n", encoding="ascii")
+    (tmp_path / "ref.csv").write_text("CODE,VAL\nA,Alpha\n", encoding="ascii")
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+domain: TEST
+input: {SRC: input.csv, REF: ref.csv}
+base: SRC
+keys: [ID]
+output: {path: out.csv, columns: [ID, VALUE]}
+intermediates:
+  - id: LOOKUP_REF
+    dataset: REF
+    key: [CODE]
+    columns: [VAL]
+columns:
+  - name: ID
+    type: str
+    derivation: {source: SRC.ID}
+  - name: VALUE
+    type: str
+    derivation: {source: LOOKUP_REF.VAL}
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+intermediates:
+  - id: LOOKUP_REF
+    dataset: REF
+    key: {CODE: SRC.CODE}
+    columns: [VAL]
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT))
+
+    # The child's key replaces the parent's key whole, not merged.
+    intermediates = resolved.document["intermediates"]
+    assert len(intermediates) == 1
+    assert intermediates[0]["id"] == "LOOKUP_REF"
+    assert intermediates[0]["key"] == {"CODE": "SRC.CODE"}
+    # The dataset field is preserved.
+    assert intermediates[0]["dataset"] == "REF"
