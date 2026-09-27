@@ -75,7 +75,7 @@ record's candidate row after its prewindow derivations.
 <a id="req-0039"></a>
 
 **REQ-0039.** Constructed rows are appended in specification order.
-Record-driven row templates keep driver order. Group-driven row templates
+Record-driven row templates keep base-record order. Group-driven row templates
 keep first-occurrence group order.
 
 <a id="req-0040"></a>

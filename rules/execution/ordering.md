@@ -14,7 +14,7 @@ status: normative
 
 **REQ-0222.** `output.order_by` declares the order the artifact's rows are
 presented in. It is optional. An artifact whose specification omits the
-order keeps [Execution lifecycle](lifecycle.md)'s construction order: row-template order, and input order
+order keeps [Execution lifecycle](lifecycle.md)'s construction order: row-template order, and base-record order
 or first-occurrence group order within each row template.
 
 <a id="req-0223"></a>
