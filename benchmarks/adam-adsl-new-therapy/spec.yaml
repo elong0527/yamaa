@@ -5,7 +5,7 @@ input:
   ADSL_RAW: input/adsl.csv
   CM:
     path: input/cm.csv
-    types: {CMSTDTC: date}
+    types: {CMSTDTC: str, CMSTDTC_IMP: date}
   PR:
     path: input/pr.csv
     types: {PRSTDTC: date}
@@ -37,7 +37,11 @@ columns:
   # cancer-related procedure, on or after the treatment start date. A record
   # dated before TRTSDT does not qualify; a record with no start date is
   # ineligible under the range narrowing. MIN skips a missing date, so either
-  # is empty when the subject has no dated qualifying record.
+  # is empty when the subject has no dated qualifying record. The medication
+  # side reads the completed start date: a year-month CMSTDTC is completed
+  # to the 15th of that month in CMSTDTC_IMP, and full dates pass through
+  # unchanged, so the example shows the stated completion rule on a partial
+  # date (subject 107).
   - name: CMNACTDT
     type: date
     label: First New Anti-Cancer Medication Date
@@ -46,8 +50,8 @@ columns:
         filter: "CM.CMCAT = 'ON TREATMENT'"
         between:
           value: TRTSDT
-          upper: CM.CMSTDTC
-        expr: "MIN(CM.CMSTDTC)"
+          upper: CM.CMSTDTC_IMP
+        expr: "MIN(CM.CMSTDTC_IMP)"
 
   - name: PRNACTDT
     type: date

@@ -31,8 +31,13 @@ category (`PRCAT`), subcategory (`PRSCAT`), and start date (`PRSTDTC`).
   otherwise.
 
 **Note:** a qualifying therapy must start on or after the treatment start
-date: each aggregate only considers records with `CMSTDTC >= TRTSDT` (or
+date: each aggregate only considers records with `CMSTDTC_IMP >= TRTSDT` (or
 `PRSTDTC >= TRTSDT`), so a flagged therapy start always falls on or after
 the treatment start date by construction.
+
+**Note:** the collected medication start `CMSTDTC` is text and may carry a
+partial date. The analysis-ready `CMSTDTC_IMP` completes it under a stated
+rule: a year-month start is completed to the 15th of that month, and a full
+date passes through unchanged. Subject 107's `2025-04` becomes `2025-04-15`.
 
 **Standard:** ADaM | **Domain:** ADSL
