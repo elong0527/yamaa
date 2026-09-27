@@ -4,22 +4,23 @@
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** complete the analysis start date (`ASTDT`) of each
-collected adverse event (AE) from its collected onset text.
+adverse event (AE) from its collected onset text (`AESTDTC`).
 
-**Input:** collected adverse event records carrying onset text
-(`AESTDTC`).
+**Input:** collected event records carrying the reported term
+(`AETERM`) and the collected onset text (`AESTDTC`).
 
 **Variables:**
 
-- `ASTDT` would be the analysis start date of the event,
-  completed to the earliest calendar date the collected onset
-  text (`AESTDTC`) still allows.
+- `ASTDT` would be the analysis start date completed from the
+  onset text: a complete collected date unchanged, a year-and-month
+  completed to its first day, a year-only start completed to
+  January 1. Text that cannot be read as a date or the beginning
+  of one has no stated completion, so the run stops when it reaches
+  it and no artifact is accepted.
 
-Onset text entered as a word rather than as a date or the
-beginning of one has no stated completion. A date that was never
-collected and text that cannot be read as a date are different
-defects, and neither has a stated outcome here, so the run stops
-when it reaches the unreadable text and no artifact is accepted.
+**Note:** a date that was never collected and text that cannot be
+read as a date are different defects, and neither has a stated
+outcome here.
 
 **Standard:** ADaM | **Domain:** ADAE
 
