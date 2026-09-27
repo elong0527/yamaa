@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE_RAW: input/ae_raw.csv
-  MEDDRA: input/meddra_synthetic.csv
+  AE_RAW:
+    path: input/ae_raw.csv
+  MEDDRA:
+    path: input/meddra_synthetic.csv
 base: AE_RAW
 metadata:
   dictionary: MedDRA-shaped synthetic hierarchy
@@ -19,9 +21,7 @@ intermediates:
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD,
-    AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD,
-    AEBODSYS, AEBODSCD, AESOC, AESOCCD]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD, AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD, AEBODSYS, AEBODSCD, AESOC, AESOCCD]
 
 columns:
   - name: DOMAIN

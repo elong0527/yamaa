@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   path: adsl.csv
   columns:
@@ -37,8 +37,8 @@ columns:
     label: Raw Text
     derivation: DM.RAWTXT
     verifications:
-      max_length:
-        max: 6
+      - max_length:
+          max: 6
 
   - name: PEERTXT
     type: str

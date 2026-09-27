@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: CM
 keys: [STUDYID, USUBJID, CMSEQ]
 input:
-  CM_RAW: input/cm_raw.csv
-  CODING: input/coding.csv
-  WHODRUG: input/whodrug.csv
+  CM_RAW:
+    path: input/cm_raw.csv
+  CODING:
+    path: input/coding.csv
+  WHODRUG:
+    path: input/whodrug.csv
 base: CM_RAW
 intermediates:
   # CODED only renames CODING: it adds no filter, key, computed field or

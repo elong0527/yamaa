@@ -6,8 +6,8 @@ input:
   ODM:
     path: input/odm.csv
     types: {StudyEventRepeatKey: int, FormRepeatKey: int, ItemGroupRepeatKey: int}
-  KITLIST: input/kit_list.csv
-
+  KITLIST:
+    path: input/kit_list.csv
 base: ODM
 
 intermediates:
@@ -236,8 +236,8 @@ columns:
           then: {literal: AUC}
         - otherwise: {literal: mg}
     verifications:
-      allowed_values:
-        values: [mg, AUC]
+      - allowed_values:
+          values: [mg, AUC]
 
   - name: EXSTDTC
     type: date

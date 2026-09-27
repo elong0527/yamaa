@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADOE
 keys: [STUDYID, USUBJID, OESEQ]
 input:
-  OE: input/oe.csv
-  ADSL: input/adsl.csv
+  OE:
+    path: input/oe.csv
+  ADSL:
+    path: input/adsl.csv
 base: OE
 
 output:
@@ -36,8 +38,8 @@ columns:
     label: Laterality
     derivation: OE.OELAT
     verifications:
-      allowed_values:
-        values: [LEFT, RIGHT, BILATERAL]
+      - allowed_values:
+          values: [LEFT, RIGHT, BILATERAL]
 
   - name: AVAL
     type: float
@@ -51,8 +53,8 @@ columns:
     label: Assigned Study Eye
     derivation: ADSL.STUDYEYE
     verifications:
-      allowed_values:
-        values: [LEFT, RIGHT, BILATERAL]
+      - allowed_values:
+          values: [LEFT, RIGHT, BILATERAL]
 
   # First match wins: a bilateral measurement is Both Eyes; with both eyes
   # assigned, a single eye is the study eye; otherwise the matching eye is
@@ -72,8 +74,8 @@ columns:
         - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
           then: {literal: Fellow Eye}
     verifications:
-      allowed_values:
-        values: [Study Eye, Fellow Eye, Both Eyes]
+      - allowed_values:
+          values: [Study Eye, Fellow Eye, Both Eyes]
 
 verifications:
   - unique:

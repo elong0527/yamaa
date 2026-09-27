@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-
+  AE:
+    path: input/ae.csv
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AESPID, AEREFNUM, AETERM, AETERMLO, AERELLC, AREL]
@@ -59,7 +59,7 @@ columns:
       str_lower:
         source: AETERM
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AERELLC
     type: str

@@ -3,9 +3,10 @@ domain: SUPPDM
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 input:
-  ODM: input/odm.csv
+  ODM:
   # DM is built by spec_dm.yaml in the same run, so the subjects that get
   # supplemental race records are exactly the ones DM calls MULTIPLE.
+    path: input/odm.csv
   DM:
     path: dm.csv
     schema: spec_dm.yaml
@@ -44,7 +45,7 @@ columns:
     label: Identifying Variable Value
     derivation: USUBJID
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: ITEMOID
     type: str
@@ -81,8 +82,8 @@ columns:
     derivation:
       str_template: "RACE{RACENUMC}"
     verifications:
-      matches:
-        pattern: "^RACE[1-9][0-9]*$"
+      - matches:
+          pattern: "^RACE[1-9][0-9]*$"
 
   - name: QLABEL
     type: str
@@ -106,14 +107,11 @@ columns:
           "Other, specify: Fijian": OTHER
           "Not reported": NOT REPORTED
           "Subject refused": UNKNOWN
-        missing: null
+        missing:
     verifications:
       - not_missing: {}
       - allowed_values:
-          values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
-            BLACK OR AFRICAN AMERICAN,
-            NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE,
-            OTHER, NOT REPORTED, UNKNOWN]
+          values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN, BLACK OR AFRICAN AMERICAN, NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, OTHER, NOT REPORTED, UNKNOWN]
 
   - name: QORIG
     type: str

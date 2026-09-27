@@ -2,12 +2,11 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  SOURCE: input/adsl.csv
-
+  SOURCE:
+    path: input/adsl.csv
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, AVAL, BVAL, CVAL, CEILVAL, FLOORVAL,
-    TRUNCVAL, EXPVAL, MODVAL, GREATESTVAL, LEASTVAL, COALESCEVAL]
+  columns: [STUDYID, USUBJID, AVAL, BVAL, CVAL, CEILVAL, FLOORVAL, TRUNCVAL, EXPVAL, MODVAL, GREATESTVAL, LEASTVAL, COALESCEVAL]
 
 columns:
   - name: STUDYID

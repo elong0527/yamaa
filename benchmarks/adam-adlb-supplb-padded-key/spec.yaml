@@ -3,8 +3,8 @@ domain: ADLB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
   LB: {path: input/lb.csv, types: {LBSEQ: int}}
-  SUPPLB: input/supplb.csv
-
+  SUPPLB:
+    path: input/supplb.csv
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, LBSEQ, QVAL, QVAL_INLINE]

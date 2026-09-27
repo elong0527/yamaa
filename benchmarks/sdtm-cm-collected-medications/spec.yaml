@@ -36,7 +36,7 @@ columns:
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: CMINDC
     type: str
@@ -54,8 +54,8 @@ columns:
       str_extract:
         source: DSTXT
         pattern: '^[0-9]+(\.[0-9]+)?$'
-        missing: null
-        no_match: null
+        missing:
+        no_match:
 
   # Any other collected dose, such as the range "200-400", stays as text.
   - name: CMDOSTXT
@@ -70,8 +70,8 @@ columns:
     type: str
     label: Dose Units
     verifications:
-      allowed_values:
-        values: [mg]
+      - allowed_values:
+          values: [mg]
 
   - name: FRQLBL
     type: str
@@ -86,7 +86,7 @@ columns:
         dict:
           Once daily: QD
           Twice daily: BID
-        missing: null
+        missing:
         strict: true
 
   - name: ROUTELBL
@@ -101,7 +101,7 @@ columns:
         source: ROUTELBL
         dict:
           By mouth: ORAL
-        missing: null
+        missing:
         strict: true
 
   - name: CMSTDTC

@@ -3,8 +3,8 @@ domain: DM
 keys: [STUDYID, USUBJID]
 
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: dm.csv
   columns: [DOMAIN, STUDYID, USUBJID, AGE]

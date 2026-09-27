@@ -2,9 +2,11 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  LB: input/lb.csv
+  LB:
   # A web address, not a stored file: rejected before any data is read.
-  LBREF: https://reference.example.org/limits/lbref.csv
+    path: input/lb.csv
+  LBREF:
+    path: https://reference.example.org/limits/lbref.csv
 base: LB
 
 output:

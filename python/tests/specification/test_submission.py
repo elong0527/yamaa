@@ -58,4 +58,76 @@ def test_rejects_unknown_column_submission_subfield(tmp_path: Path) -> None:
 
     diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
     assert diagnostic["condition"] in ("unknown_field", "model_contract_mismatch")
-    assert diagnostic["spec_paths"] == ["columns.DOMAIN.submission.bogus_field"]
+
+
+def test_rejects_bare_submission_comment(tmp_path: Path) -> None:
+    source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
+    old = (
+        "  comment:\n"
+        "    text: Demographics are described in section 2.1 of the reviewer's guide.\n"
+        "    documents: [{document: csdrg}]\n"
+    )
+    assert old in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        source.replace(
+            old,
+            "  comment: Demographics are described in section 2.1.\n",
+            1,
+        ),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["submission.comment"]
+
+
+def test_rejects_bare_submission_method(tmp_path: Path) -> None:
+    source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
+    old = (
+        "      method:\n"
+        "        description: Study identifier, site identifier, and subject identifier joined by hyphens.\n"
+    )
+    assert old in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        source.replace(
+            old,
+            "      method: Study identifier joined by hyphens.\n",
+            1,
+        ),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["columns.USUBJID.submission.method"]
+
+
+def test_rejects_bare_document_reference(tmp_path: Path) -> None:
+    source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
+    old = "    documents: [{document: csdrg}]\n"
+    assert old in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        source.replace(
+            old,
+            "    documents: [{document: csdrg}, bare-ref]\n",
+            1,
+        ),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["submission.comment.documents[1]"]

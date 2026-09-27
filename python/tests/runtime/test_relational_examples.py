@@ -106,7 +106,8 @@ schema_version: "1.0"
 domain: OUT
 keys: [ID]
 input:
-  BASE: input/base.csv
+  BASE:
+    path: input/base.csv
   SRC: {path: input/src.csv, types: {DAY: int}}
 base: BASE
 intermediates:
@@ -658,8 +659,10 @@ _ODM_SPEC = """\
 schema_version: "1.0"
 domain: DM
 input:
-  DM_RAW: input/dm.csv
-  ODM: input/odm.csv
+  DM_RAW:
+    path: input/dm.csv
+  ODM:
+    path: input/odm.csv
 base: DM_RAW
 keys: [STUDYID, USUBJID]
 
@@ -816,7 +819,7 @@ def test_grouped_filter_precedes_whole_column_verification(
               - name: AVAL
                 type: int
                 verifications:
-                  range: {{min: 0}}
+                  - range: {{min: 0}}
             """
         )
     )

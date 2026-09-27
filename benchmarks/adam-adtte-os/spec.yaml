@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  ADSL: input/adsl.csv
+  ADSL:
+    path: input/adsl.csv
   ADRS:
     path: input/adrs.csv
     types:

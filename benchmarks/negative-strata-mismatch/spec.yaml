@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-  MH: input/mh.csv
-  RE: input/re.csv
+  DM:
+    path: input/dm.csv
+  MH:
+    path: input/mh.csv
+  RE:
+    path: input/re.csv
 base: DM
 
 output:

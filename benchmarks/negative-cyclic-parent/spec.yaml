@@ -1,5 +1,6 @@
 schema_version: "1.0"
-parents: layers/parent.yaml
+parents:
+  - layers/parent.yaml
 output:
   path: output.csv
   columns: []

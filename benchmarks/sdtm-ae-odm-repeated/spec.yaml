@@ -10,8 +10,7 @@ input:
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC,
-            AESEV, AESER]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER]
   order_by: [USUBJID, AESEQ]
 
 columns:
@@ -38,7 +37,7 @@ columns:
     type: str
     label: Reported Term for the Adverse Event
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AESTDTC
     type: date
@@ -52,15 +51,15 @@ columns:
     type: str
     label: Severity/Intensity
     verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
 
   - name: AESER
     type: str
     label: Serious Event
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
   # Visit order for AESEQ; a kept event at any other visit stops the run.
   - name: EVENTORD

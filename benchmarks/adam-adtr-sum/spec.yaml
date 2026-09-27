@@ -2,9 +2,11 @@ schema_version: "1.0"
 domain: ADTR
 keys: [STUDYID, USUBJID, AVISIT]
 input:
-  TRVISIT: input/trvisit.csv
+  TRVISIT:
+    path: input/trvisit.csv
   TR: {path: input/tr.csv, types: {TRSTRESN: float}}
-  TU: input/tu.csv
+  TU:
+    path: input/tu.csv
 base: TRVISIT
 
 output:
@@ -83,8 +85,8 @@ columns:
     derivation:
       flag: "NMEAS = NTARGET"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

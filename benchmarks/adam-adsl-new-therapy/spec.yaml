@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_RAW: input/adsl.csv
+  ADSL_RAW:
+    path: input/adsl.csv
   CM:
     path: input/cm.csv
     types: {CMSTDTC: date}
@@ -31,7 +32,7 @@ columns:
     label: Date of First Exposure to Treatment
     derivation: ADSL_RAW.TRTSDT
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # The first start of an on-treatment medication, and of an on-treatment
   # cancer-related procedure, on or after the treatment start date. A record
@@ -83,8 +84,8 @@ columns:
     derivation:
       flag: "NACTDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

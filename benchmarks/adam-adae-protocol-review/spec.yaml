@@ -55,7 +55,7 @@ columns:
           then: {literal: Y}
         - otherwise: {literal: N}
     verifications:
-      allowed_values: {values: [Y, N]}
+      - allowed_values: {values: [Y, N]}
 
 verifications:
   - unique: {columns: [STUDYID, USUBJID, AESEQ]}

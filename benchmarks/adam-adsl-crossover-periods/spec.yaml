@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
+  DM:
+    path: input/dm.csv
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
 base: DM
 
@@ -69,8 +70,8 @@ columns:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO]
 
   - name: TRT02A
     type: str
@@ -83,8 +84,8 @@ columns:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO]
 
   # Days strictly between the end of period 1 and the start of period 2, so
   # back-to-back periods give 0; empty when either date is.
@@ -98,8 +99,8 @@ columns:
         unit: day
         bounds: between
     verifications:
-      range:
-        min: 0
+      - range:
+          min: 0
 
 verifications:
   - unique:

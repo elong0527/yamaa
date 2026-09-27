@@ -535,7 +535,7 @@ sources:
   R014-3: {"file": "R014-source-ingestion.md", "targets": ["REQ-0516"]}
   R014-4: {"file": "R014-source-ingestion.md", "targets": ["REQ-0517"]}
   R014-5: {"file": "R014-source-ingestion.md", "targets": ["REQ-0518"]}
-  R014-6: {"file": "R014-source-ingestion.md", "targets": ["REQ-0519"]}
+  R014-6: {"file": "R014-source-ingestion.md", "targets": ["REQ-1060"]}
   R014-7: {"file": "R014-source-ingestion.md", "targets": ["REQ-0520"]}
   R014-8: {"file": "R014-source-ingestion.md", "targets": ["REQ-0521"]}
   R014-9: {"file": "R014-source-ingestion.md", "targets": ["REQ-0522"]}
@@ -1590,7 +1590,7 @@ requirements:
   REQ-0516: {"file": "storage/ingestion.md", "sources": ["R014-3"]}
   REQ-0517: {"file": "storage/ingestion.md", "sources": ["R014-4"]}
   REQ-0518: {"file": "storage/ingestion.md", "sources": ["R014-5"]}
-  REQ-0519: {"file": "storage/ingestion.md", "sources": ["R014-6"]}
+  REQ-0519: {"file": "storage/ingestion.md", "sources": ["R014-6"], "retired": true, "replacement": ["REQ-1060"]}
   REQ-0520: {"file": "storage/ingestion.md", "sources": ["R014-7"]}
   REQ-0521: {"file": "storage/ingestion.md", "sources": ["R014-8"]}
   REQ-0522: {"file": "storage/ingestion.md", "sources": ["R014-9"]}
@@ -2127,7 +2127,7 @@ requirements:
   REQ-1057: {"file": "specification/binding.md", "sources": ["schema.yaml:variable.description"]}
   REQ-1058: {"file": "specification/binding.md", "sources": ["schema.yaml:regex.description"]}
   REQ-1059: {"file": "storage/ingestion.md", "sources": ["schema.yaml:dataset_source.description"]}
-  REQ-1060: {"file": "storage/ingestion.md", "sources": ["schema.yaml:dataset_class.path.description", "schema.yaml:dataset_class.types.description", "schema.yaml:dataset_class.schema.description"]}
+  REQ-1060: {"file": "storage/ingestion.md", "sources": ["schema.yaml:dataset_class.path.description", "schema.yaml:dataset_class.types.description", "schema.yaml:dataset_class.schema.description", "R014-6"]}
   REQ-1061: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_class.schema_version.description", "schema_define.yaml:define_class.define_version.description", "schema_define.yaml:define_class.context.description", "schema_define.yaml:define_class.language.description", "schema_define.yaml:define_class.file_oid.description", "schema_define.yaml:define_class.creation_datetime.description", "schema_define.yaml:define_class.originator.description", "schema_define.yaml:define_class.source_system.description", "schema_define.yaml:define_class.source_system_version.description", "schema_define.yaml:define_class.stylesheet.description", "schema_define.yaml:define_class.study.description", "schema_define.yaml:define_class.metadata_version.description", "schema_define.yaml:define_class.standards.description", "schema_define.yaml:define_class.default_standard.description", "schema_define.yaml:define_class.documents.description", "schema_define.yaml:define_class.datasets.description", "schema_define.yaml:define_class.output.description"]}
   REQ-1062: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:study_class.id.description", "schema_define.yaml:study_class.name.description", "schema_define.yaml:study_class.description.description", "schema_define.yaml:study_class.protocol_name.description"]}
   REQ-1063: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:metadata_version_class.id.description", "schema_define.yaml:metadata_version_class.name.description", "schema_define.yaml:metadata_version_class.description.description"]}

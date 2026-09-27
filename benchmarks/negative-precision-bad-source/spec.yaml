@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-
+  AE:
+    path: input/ae.csv
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, ASTDTF]
@@ -32,4 +32,4 @@ columns:
     derivation:
       date_precision:
         source: AE.AESTDTC
-        missing: null
+        missing:

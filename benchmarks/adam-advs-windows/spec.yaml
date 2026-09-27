@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
-  ADVS_RAW: input/advs_raw.csv
-
+  ADVS_RAW:
+    path: input/advs_raw.csv
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL, AVISIT, AVISITN, ANL01FL]
@@ -54,7 +54,7 @@ columns:
     label: Analysis Value
     derivation: ADVS_RAW.AVAL
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # Windows on study day, each including its lower break and excluding its
   # upper one: before 0 SCREENING, 0-1 BASELINE (there is no day 0), 2-21
@@ -68,10 +68,10 @@ columns:
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
         right: false
-        missing: null
+        missing:
     verifications:
-      allowed_values:
-        values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+      - allowed_values:
+          values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
 
   - name: AVISITN
     type: int
@@ -85,7 +85,7 @@ columns:
           WEEK 2: 2
           WEEK 4: 4
           POST-TREATMENT: 99
-        missing: null
+        missing:
 
   # Within each subject, parameter, and window: earliest study day first,
   # then the lower sequence number. ANL01FL marks rank 1; a record with no

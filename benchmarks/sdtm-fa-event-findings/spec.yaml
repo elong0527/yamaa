@@ -2,11 +2,12 @@ schema_version: "1.0"
 domain: FA
 keys: [STUDYID, USUBJID, FASEQ]
 input:
-  ODM: input/odm.csv
+  ODM:
   # The same file under a second name, so the event term lookup can read the
   # adverse event items while the findings items build the rows.
-  ODM_AE: input/odm.csv
-
+    path: input/odm.csv
+  ODM_AE:
+    path: input/odm.csv
 output:
   path: fa.csv
   columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
@@ -40,7 +41,7 @@ columns:
     type: str
     label: Object of the Observation
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: FACAT
     type: str

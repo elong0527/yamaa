@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADVS_RAW: input/advs_raw.csv
-
+  ADVS_RAW:
+    path: input/advs_raw.csv
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADT, ADY, AVAL, AVISIT]
@@ -58,4 +58,4 @@ columns:
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
         right: false
-        missing: null
+        missing:

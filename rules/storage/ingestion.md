@@ -59,13 +59,8 @@ than one specification belongs in a container that carries the types.
 ```yaml
 input:
   EX: {path: input/ex.csv, types: {EXDOSE: float, EXSEQ: int}}
-  DM: input/dm.csv
+  DM: {path: input/dm.csv}
 ```
-
-<a id="req-0519"></a>
-
-**REQ-0519.** Both forms are the same declaration: a bare path is [Schema language](../reference/schema-language.md) shorthand
-for a `dataset_class` with no `types`.
 
 ### Producing-specification link
 
@@ -254,7 +249,7 @@ describe at all.
 
 | Field | Meaning |
 | --- | --- |
-| `dataset_source` | Path to the dataset, or a path with its producing specification or field types. |
+| `dataset_source` | The dataset source, always written as a `dataset_class`: a path, optionally with its producing specification or field types. |
 
 <a id="req-1060"></a>
 

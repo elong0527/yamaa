@@ -97,16 +97,18 @@ def test_normalizes_schema_defaults_with_collection_shorthand(tmp_path: Path) ->
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
-        '    - parents:\n        type: [path, "list[path]"]\n        required: false\n',
-        "    - parents:\n"
-        '        type: [path, "list[path]"]\n'
+        "    - domain:\n",
+        "    - probe_keys:\n"
+        '        type: [identifier, "list[identifier]"]\n'
         "        required: false\n"
-        "        default: parent.yaml\n",
+        "        default: STUDYID\n"
+        "    - domain:\n",
     )
 
-    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+    bundle = load_schema_bundle(schema_root)
+    normalized = normalize_specification({"domain": "DM"}, bundle)
 
-    assert loaded.specification.parents == ["parent.yaml"]
+    assert normalized["probe_keys"] == ["STUDYID"]
 
 
 def test_does_not_expand_collection_shorthand_in_larger_union(
@@ -235,6 +237,76 @@ def test_rejects_unknown_fields_with_a_stable_path(tmp_path: Path) -> None:
         "requirement": None,
         "context": {"field": "unexpected", "class": "root_class"},
     }
+
+
+def test_rejects_bare_parents_path(tmp_path: Path) -> None:
+    path, source = _copy_basic_specification(tmp_path)
+    old = 'schema_version: "1.0"\n'
+    assert old in source
+    path.write_text(
+        source.replace(old, old + "parents: other.yaml\n", 1),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["parents"]
+
+
+def test_rejects_bare_input_path(tmp_path: Path) -> None:
+    path, source = _copy_basic_specification(tmp_path)
+    old = "  ODM:\n    path: input/odm.csv"
+    assert old in source
+    path.write_text(
+        source.replace(old, "  ODM: input/odm.csv", 1),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["input.ODM"]
+
+
+def test_rejects_bare_column_verifications_mapping(tmp_path: Path) -> None:
+    path, source = _copy_basic_specification(tmp_path)
+    old = "    label: Sex\n"
+    assert old in source
+    path.write_text(
+        source.replace(
+            old,
+            old + "    verifications:\n      not_missing: {}\n",
+            1,
+        ),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["columns.SEX.verifications"]
+
+
+def test_rejects_bare_root_verifications_mapping(tmp_path: Path) -> None:
+    path, source = _copy_basic_specification(tmp_path)
+    path.write_text(
+        source + "verifications:\n  row_count: {}\n",
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    diagnostic = caught.value.diagnostics[0].model_dump(mode="json")
+    assert diagnostic["condition"] == "invalid_field_type"
+    assert diagnostic["spec_paths"] == ["verifications"]
 
 
 def test_rejects_unknown_registry_operations_with_a_stable_path(

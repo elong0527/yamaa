@@ -2,14 +2,15 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  RAND: input/rand.csv
-  EX: input/ex.csv
+  RAND:
+    path: input/rand.csv
+  EX:
+    path: input/ex.csv
 base: RAND
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS,
-            ACTARMUD]
+  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD]
 
 columns:
   - name: DOMAIN
@@ -60,7 +61,7 @@ columns:
         dict:
           PLACEBO: PBO
           VITAMIN D3: TRT
-        missing: null
+        missing:
 
   - name: ACTARM
     type: str
@@ -71,7 +72,7 @@ columns:
         dict:
           PLACEBO: Placebo
           VITAMIN D3: Vitamin D3
-        missing: null
+        missing:
 
   - name: ACTARMUD
     type: str

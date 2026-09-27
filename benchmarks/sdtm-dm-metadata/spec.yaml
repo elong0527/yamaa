@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  DM_RAW: input/dm_raw.csv
+  DM_RAW:
+    path: input/dm_raw.csv
 submission:
   label: Demographics
   class: SPECIAL PURPOSE
@@ -10,7 +11,7 @@ submission:
   repeating: false
   comment:
     text: Demographics are described in section 2.1 of the reviewer's guide.
-    documents: [csdrg]
+    documents: [{document: csdrg}]
 
 output:
   path: dm.csv
@@ -30,7 +31,7 @@ columns:
         type: Assigned
         source: Sponsor
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: STUDYID
     type: str
@@ -44,7 +45,7 @@ columns:
         type: Protocol
         source: Sponsor
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: USUBJID
     type: str
@@ -63,8 +64,8 @@ columns:
       origin:
         type: Derived
         source: Sponsor
-      method: Study identifier, site identifier, and subject identifier joined
-        by hyphens.
+      method:
+        description: Study identifier, site identifier, and subject identifier joined by hyphens.
     verifications:
       - not_missing: {}
       - max_length:
@@ -85,7 +86,7 @@ columns:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: SITEID
     type: str
@@ -99,7 +100,7 @@ columns:
         type: Collected
         source: Investigator
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AGE
     type: int
@@ -116,9 +117,9 @@ columns:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      range:
-        min: 0
-        max: 120
+      - range:
+          min: 0
+          max: 120
 
   - name: AGEU
     type: str
@@ -132,8 +133,9 @@ columns:
       origin:
         type: Assigned
         source: Sponsor
-      comment: Defaulted to YEARS because age is collected in whole years.
+      comment:
 
+        text: Defaulted to YEARS because age is collected in whole years.
   - name: SEX
     type: str
     label: Sex
@@ -170,7 +172,7 @@ columns:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 verifications:
   - unique:

@@ -501,7 +501,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0516](../storage/ingestion.md#req-0516) | `storage/ingestion.md` | R014-3 |
 | [REQ-0517](../storage/ingestion.md#req-0517) | `storage/ingestion.md` | R014-4 |
 | [REQ-0518](../storage/ingestion.md#req-0518) | `storage/ingestion.md` | R014-5 |
-| [REQ-0519](../storage/ingestion.md#req-0519) | `storage/ingestion.md` | R014-6 |
 | [REQ-0520](../storage/ingestion.md#req-0520) | `storage/ingestion.md` | R014-7 |
 | [REQ-0521](../storage/ingestion.md#req-0521) | `storage/ingestion.md` | R014-8 |
 | [REQ-0522](../storage/ingestion.md#req-0522) | `storage/ingestion.md` | R014-9 |
@@ -1031,7 +1030,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1057](../specification/binding.md#req-1057) | `specification/binding.md` | Schema prose |
 | [REQ-1058](../specification/binding.md#req-1058) | `specification/binding.md` | Schema prose |
 | [REQ-1059](../storage/ingestion.md#req-1059) | `storage/ingestion.md` | Schema prose |
-| [REQ-1060](../storage/ingestion.md#req-1060) | `storage/ingestion.md` | Schema prose |
+| [REQ-1060](../storage/ingestion.md#req-1060) | `storage/ingestion.md` | R014-6 |
 | [REQ-1061](../submission/define-xml.md#req-1061) | `submission/define-xml.md` | Schema prose |
 | [REQ-1062](../submission/define-xml.md#req-1062) | `submission/define-xml.md` | Schema prose |
 | [REQ-1063](../submission/define-xml.md#req-1063) | `submission/define-xml.md` | Schema prose |

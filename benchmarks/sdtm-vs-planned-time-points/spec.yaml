@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  ODM: input/odm.csv
-  DM: input/dm.csv
-  VS_MAPPING: input/vs_mapping.csv
+  ODM:
+    path: input/odm.csv
+  DM:
+    path: input/dm.csv
+  VS_MAPPING:
+    path: input/vs_mapping.csv
 base: ODM
 
 # The subject's first-dose date-time, from the dosing form's start item. It
@@ -17,8 +20,7 @@ intermediates:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM,
-    VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 # One candidate record per subject, visit, form and item. Only items in the
@@ -27,8 +29,7 @@ output:
 rows:
   - id: vs_reading
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
-      ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemOID]
     filter: "VSTESTCD IS NOT NULL"
     derivations:
       VSTESTCD:
@@ -94,7 +95,7 @@ columns:
           FO.VS_1H: 3
           FO.VS_4H: 4
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: VSELTM
     type: str
@@ -108,14 +109,14 @@ columns:
           FO.VS_1H: PT1H
           FO.VS_4H: PT4H
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
     verifications:
-      allowed_values:
-        values: [PULSE, SYSBP, DIABP]
+      - allowed_values:
+          values: [PULSE, SYSBP, DIABP]
 
   - name: ORD_TEST
     type: int
@@ -140,7 +141,7 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [VSTPTNUM, ORD_TEST]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: VSORRES
     type: str
@@ -150,8 +151,8 @@ columns:
     type: str
     label: Original Units
     verifications:
-      allowed_values:
-        values: [beats/min, mmHg]
+      - allowed_values:
+          values: [beats/min, mmHg]
 
   # Collected in standard units, so this is the collected result read as a
   # number; a result that is not a number stops the run.
@@ -180,7 +181,7 @@ columns:
           FormOID: ODM.FormOID
         expr: "ONLY(ODM.Value)"
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # Typed copies of the first-dose date-time and the reference start date,
   # for the dose-order checks and the study day; neither is in the output.

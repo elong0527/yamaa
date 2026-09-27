@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-  DM: input/dm.csv
+  AE:
+    path: input/ae.csv
+  DM:
+    path: input/dm.csv
 base: AE
 intermediates:
   - id: DEATHEV
@@ -69,8 +71,8 @@ columns:
     derivation:
       flag: "DTHDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

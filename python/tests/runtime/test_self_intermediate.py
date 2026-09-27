@@ -184,8 +184,10 @@ schema_version: "1.0"
 domain: ADQS
 keys: [USUBJID, AVISITN, ADY]
 input:
-  QS: input/qs.csv
-  WIN: input/win.csv
+  QS:
+    path: input/qs.csv
+  WIN:
+    path: input/win.csv
 intermediates:
   - id: TARGETS
     dataset: WIN

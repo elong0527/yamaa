@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: ADCM
 keys: [STUDYID, USUBJID, CMSEQ]
 input:
-  CM: input/cm.csv
-  FACM: input/facm.csv
-  ATCDICT: input/atc_dict.csv
+  CM:
+    path: input/cm.csv
+  FACM:
+    path: input/facm.csv
+  ATCDICT:
+    path: input/atc_dict.csv
 base: CM
 
 output:

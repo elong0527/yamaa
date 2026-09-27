@@ -3,8 +3,8 @@ domain: DS
 keys: [STUDYID, USUBJID, DSSEQ]
 
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: ds.csv
   columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC]
@@ -16,8 +16,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: DS}
     verifications:
-      allowed_values:
-        values: [DS]
+      - allowed_values:
+          values: [DS]
 
   - name: STUDYID
     type: str
@@ -48,8 +48,8 @@ columns:
     label: Category for Disposition Event
     derivation: {literal: DISPOSITION EVENT}
     verifications:
-      allowed_values:
-        values: [DISPOSITION EVENT]
+      - allowed_values:
+          values: [DISPOSITION EVENT]
 
   - name: DSSCAT
     type: str

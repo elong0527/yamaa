@@ -2,9 +2,11 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  LB: input/lb.csv
+  LB:
   # Climbs above the study folder: rejected before any data is read.
-  LBREF: ../reference/lbref.csv
+    path: input/lb.csv
+  LBREF:
+    path: ../reference/lbref.csv
 base: LB
 
 output:

@@ -2,9 +2,11 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  LB: input/lb.csv
+  LB:
   # A folder, not a table file: rejected before any data is read.
-  LBREF: input/lbref
+    path: input/lb.csv
+  LBREF:
+    path: input/lbref
 base: LB
 
 output:

@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   # A SAS Transport (.xpt) file is not a format this run writes, so the
   # spec is rejected before any data is read.

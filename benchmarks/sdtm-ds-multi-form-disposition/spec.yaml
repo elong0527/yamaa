@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: DS
 keys: [STUDYID, USUBJID, DSSEQ]
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: ds.csv
   columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC]
@@ -15,8 +15,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: DS}
     verifications:
-      allowed_values:
-        values: [DS]
+      - allowed_values:
+          values: [DS]
 
   - name: STUDYID
     type: str
@@ -54,8 +54,7 @@ columns:
     verifications:
       - not_missing: {}
       - allowed_values:
-          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED,
-                   ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
+          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED, ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
 
   - name: DSCAT
     type: str
@@ -90,7 +89,7 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [DSSTDTC, DSTERM]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 # One row per collected form of each event. Each item is read from the
 # form's single record for it: a form holding the item twice fails the run,

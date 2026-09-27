@@ -1,5 +1,6 @@
 schema_version: "1.0"
-parents: layers/parent.yaml
+parents:
+  - layers/parent.yaml
 domain: ADSL
 keys: [USUBJID]
 output:
@@ -9,4 +10,4 @@ columns:
   # null clears the type inherited from layers/parent.yaml, but a column
   # must have a type, so it cannot be cleared.
   - name: USUBJID
-    type: null
+    type:

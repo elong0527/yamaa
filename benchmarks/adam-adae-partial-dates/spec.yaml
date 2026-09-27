@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-  ADSL: input/adsl.csv
+  AE:
+    path: input/ae.csv
+  ADSL:
+    path: input/adsl.csv
 base: AE
 
 output:
@@ -54,8 +56,8 @@ columns:
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        missing: null   # handlers are explicit: an omitted one is fatal
-        invalid: null
+        missing:        # handlers are explicit: an omitted one is fatal
+        invalid:
 
   - name: ASTDTC
     type: str
@@ -68,7 +70,7 @@ columns:
     derivation:
       date_precision:
         source: ASTDT
-        missing: null
+        missing:
 
   # M means the collected start carried a year and month, so the day was
   # supplied.
@@ -80,8 +82,8 @@ columns:
         - when: "ASTDTPR = 'M'"
           then: {literal: "D"}
     verifications:
-      allowed_values:
-        values: ["D"]
+      - allowed_values:
+          values: ["D"]
 
   - name: TRTEMFL
     type: str
@@ -89,8 +91,8 @@ columns:
     derivation:
       flag: "ASTDT >= TRTSDT"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

@@ -188,7 +188,7 @@ class DocumentReferenceClass(_StrictModel):
     pages: PageReference | None = None
 
 
-DocumentReference = str | DocumentReferenceClass
+DocumentReference = DocumentReferenceClass
 
 
 class FormalExpression(_StrictModel):
@@ -204,7 +204,7 @@ class SubmissionMethodClass(_StrictModel):
     documents: list[DocumentReference] | None = None
 
 
-SubmissionMethod = str | SubmissionMethodClass
+SubmissionMethod = SubmissionMethodClass
 
 
 class SubmissionCommentClass(_StrictModel):
@@ -212,7 +212,7 @@ class SubmissionCommentClass(_StrictModel):
     documents: list[DocumentReference] | None = None
 
 
-SubmissionComment = str | SubmissionCommentClass
+SubmissionComment = SubmissionCommentClass
 
 
 class SubmissionOrigin(_StrictModel):

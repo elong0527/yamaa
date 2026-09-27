@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: PR
 keys: [STUDYID, USUBJID, PRSEQ]
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: pr.csv
   columns: [DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC]
@@ -15,8 +15,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: PR}
     verifications:
-      allowed_values:
-        values: [PR]
+      - allowed_values:
+          values: [PR]
 
   - name: STUDYID
     type: str
@@ -104,7 +104,7 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [PRSTDTC, PRTRT]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 rows:
   - id: surgery

@@ -106,7 +106,7 @@ def test_inherited_definitions_replace_whole_and_keep_other_names(tmp_path):
     write_spec(tmp_path, parent, "parent.yaml")
     child = {
         "schema_version": "1.0",
-        "parents": "parent.yaml",
+        "parents": ["parent.yaml"],
         "windows": {"VISITS": {"order_by": [{"variable": "SEQ", "direction": "desc"}]}},
     }
     resolved = resolve(write_spec(tmp_path, child))
@@ -138,7 +138,7 @@ def test_inherited_window_dependencies_are_retained_and_ordered(tmp_path):
     write_spec(tmp_path, parent, "parent.yaml")
     child = {
         "schema_version": "1.0",
-        "parents": "parent.yaml",
+        "parents": ["parent.yaml"],
         "windows": {"ANOTHER": {"group_by": ["G"]}},
     }
     resolved = resolve(write_spec(tmp_path, child))
@@ -159,7 +159,7 @@ def test_unknown_reference_in_dead_inherited_column_is_pruned(tmp_path):
     write_spec(tmp_path, parent, "parent.yaml")
     child = {
         "schema_version": "1.0",
-        "parents": "parent.yaml",
+        "parents": ["parent.yaml"],
         "output": {"path": "out.csv", "columns": ["ID"]},
     }
     assert [
@@ -260,7 +260,7 @@ def test_replacing_reference_with_inline_or_another_reference_is_atomic(
     write_spec(tmp_path, parent, "parent.yaml")
     child = {
         "schema_version": "1.0",
-        "parents": "parent.yaml",
+        "parents": ["parent.yaml"],
         "columns": [
             {"name": "PREV", "derivation": {"row_value": {"window": replacement}}}
         ],
@@ -276,7 +276,7 @@ def test_replacing_reference_with_inline_or_another_reference_is_atomic(
 
 def test_clearing_collection_rejects_surviving_reference(tmp_path):
     write_spec(tmp_path, document(), "parent.yaml")
-    child = {"schema_version": "1.0", "parents": "parent.yaml", "windows": None}
+    child = {"schema_version": "1.0", "parents": ["parent.yaml"], "windows": None}
     with pytest.raises(SpecificationError) as error:
         resolve(write_spec(tmp_path, child))
     assert error.value.diagnostics[0].condition == "unknown_window"

@@ -2,14 +2,15 @@ schema_version: "1.0"
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  ODM: input/odm.csv
-  DM: input/dm.csv
+  ODM:
+    path: input/odm.csv
+  DM:
+    path: input/dm.csv
 base: ODM
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY,
-            AEENDY]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY]
   order_by: [USUBJID, AESEQ]
 
 columns:
@@ -141,8 +142,8 @@ columns:
     derivation:
       date_precision:
         source: AESTDTC
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   - name: AEENPR
     type: str
@@ -150,8 +151,8 @@ columns:
     derivation:
       date_precision:
         source: AEENDTC
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   # Only a complete date (precision D) becomes a date, so a partial date
   # gets no study day.

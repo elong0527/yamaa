@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, ASEQ]
 input:
-  ADRS_RAW: input/adrs_raw.csv
-
+  ADRS_RAW:
+    path: input/adrs_raw.csv
 output:
   path: adrs.csv
   columns: [STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ]
@@ -61,8 +61,8 @@ columns:
           then: {literal: NE}
         - otherwise: {literal: null}
     verifications:
-      allowed_values:
-        values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
+      - allowed_values:
+          values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
 
   - name: BORPRI
     type: int
@@ -77,9 +77,9 @@ columns:
           NON-CR/NON-PD: 4
           PD: 5
           NE: 6
-        missing: null
+        missing:
     verifications:
-      range: {min: 1, max: 6}
+      - range: {min: 1, max: 6}
 
   # Best first: category priority, then the earlier date, then the lower
   # sequence number. A record with no category gets no number.

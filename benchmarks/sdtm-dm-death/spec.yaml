@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  DM_RAW: input/dm_raw.csv
-  DS: input/ds.csv
-  AE: input/ae.csv
+  DM_RAW:
+    path: input/dm_raw.csv
+  DS:
+    path: input/ds.csv
+  AE:
+    path: input/ae.csv
 base: DM_RAW
 intermediates:
   # Per subject: the latest death disposition record and the latest fatal
@@ -64,8 +67,8 @@ columns:
     derivation:
       flag: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

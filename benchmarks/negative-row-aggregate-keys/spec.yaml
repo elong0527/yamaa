@@ -3,8 +3,8 @@ domain: SUPPDM
 keys: [STUDYID, USUBJID, QVAL]
 
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: suppdm.csv
   columns: [STUDYID, USUBJID, QVAL]

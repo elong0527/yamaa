@@ -8,9 +8,7 @@ input:
 
 output:
   path: tu.csv
-  columns: [DOMAIN, STUDYID, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST,
-            TUORRES, TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM,
-            VISIT, TUDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST, TUORRES, TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM, VISIT, TUDTC]
 
 columns:
   - name: DOMAIN
@@ -33,7 +31,7 @@ columns:
     label: Sequence Number
     derivation: TU_RAW.TUSEQ
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: TULNKID
     type: str
@@ -50,16 +48,16 @@ columns:
           then:
             str_template: "NEW{TU_RAW.LESION_NUM}"
     verifications:
-      matches:
-        pattern: "^(T|NT|NEW)[0-9]+$"
+      - matches:
+          pattern: "^(T|NT|NEW)[0-9]+$"
 
   - name: TUTESTCD
     type: str
     label: Tumor Identification Test Short Name
     derivation: {literal: TUMIDENT}
     verifications:
-      allowed_values:
-        values: [TUMIDENT]
+      - allowed_values:
+          values: [TUMIDENT]
 
   - name: TUTEST
     type: str
@@ -73,8 +71,8 @@ columns:
       str_upper:
         source: TU_RAW.LESION_CATEGORY
     verifications:
-      allowed_values:
-        values: [TARGET, NON-TARGET, NEW]
+      - allowed_values:
+          values: [TARGET, NON-TARGET, NEW]
 
   - name: TUSTRESC
     type: str

@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_RAW: input/adsl_raw.csv
-  DS: input/ds.csv
+  ADSL_RAW:
+    path: input/adsl_raw.csv
+  DS:
+    path: input/ds.csv
 base: ADSL_RAW
 # The subject's end-of-study COMPLETED disposition record, if any: a
 # DISPOSITION EVENT in the FOLLOW-UP epoch. A treatment-epoch completion
@@ -50,8 +52,8 @@ columns:
         false_value: "N"
         missing_value: "N"
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
 verifications:
   - unique:

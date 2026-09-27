@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: SUPPMH
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 input:
-  MH_RAW: input/mh_raw.csv
-
+  MH_RAW:
+    path: input/mh_raw.csv
 output:
   path: suppmh.csv
   columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
@@ -36,14 +36,14 @@ columns:
     label: Identifying Variable Value
     derivation: MH_RAW.MHSEQ
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: QNAM
     type: str
     label: Qualifier Variable Name
     verifications:
-      allowed_values:
-        values: [MHFAMHX, MHCONF]
+      - allowed_values:
+          values: [MHFAMHX, MHCONF]
 
   - name: QLABEL
     type: str

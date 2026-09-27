@@ -2,10 +2,12 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  LB: input/lb.csv
+  LB:
   # A symbolic link to input/reference/lbref.csv, not the file itself:
   # rejected before any data is read.
-  LBREF: input/lbref.csv
+    path: input/lb.csv
+  LBREF:
+    path: input/lbref.csv
 base: LB
 
 output:

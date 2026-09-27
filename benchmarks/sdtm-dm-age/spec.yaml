@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: dm.csv
   columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU]
@@ -32,7 +32,7 @@ columns:
         filter: ODM.ItemOID = 'IT.DM.RFICDTC'
         variable: ODM.Value
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: BRTHDTC
     type: str
@@ -50,7 +50,7 @@ columns:
     derivation:
       date_precision:
         source: BRTHDTC
-        missing: null
+        missing:
 
   # Only a complete birth date becomes a date; a year-month or year-only
   # one gives none, and so no age.

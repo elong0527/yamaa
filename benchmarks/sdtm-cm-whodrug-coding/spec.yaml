@@ -4,7 +4,8 @@ keys: [STUDYID, USUBJID, CMSEQ]
 input:
   ODM: {path: input/odm.csv, types: {ItemGroupRepeatKey: int}}
   CODING: {path: input/coding_output.csv, types: {CMSEQ: int}}
-  WHODRUG: input/whodrug_extract.csv
+  WHODRUG:
+    path: input/whodrug_extract.csv
 metadata:
   dictionary: WHODrug
   dictionary_version: "C3 2024"

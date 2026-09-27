@@ -2,14 +2,14 @@ schema_version: "1.0"
 domain: ADSL
 keys: [USUBJID]
 input:
-  DM: input/dm.csv
+  DM:
+    path: input/dm.csv
   EX: {path: input/ex.csv, types: {EXDOSE: float}}
 base: DM
 
 output:
   path: adsl.csv
-  columns: [USUBJID, TRTGRP, NDOSE, NDOSEVAL, TOTDOSE, MEANDOSE, MAXDOSE,
-            DRUGDOSE, PLACDOSE, TOTDOSE_MG, AVGNDOSE]
+  columns: [USUBJID, TRTGRP, NDOSE, NDOSEVAL, TOTDOSE, MEANDOSE, MAXDOSE, DRUGDOSE, PLACDOSE, TOTDOSE_MG, AVGNDOSE]
 
 columns:
   - name: USUBJID

@@ -5,8 +5,8 @@ domain: ADSL
 # rejected before any data is read.
 keys: [STUDYID, USUBJID, SITEID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, INVID]

@@ -8,8 +8,8 @@ input:
   VS:
     path: input/vs.csv
     types: {VSDTC: date}
-  ADSL: input/adsl.csv
-
+  ADSL:
+    path: input/adsl.csv
 base: PLAN
 intermediates:
   # The vital-signs record collected for a planned measurement: same subject,

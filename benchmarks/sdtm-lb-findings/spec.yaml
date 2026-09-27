@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: lb.csv
   columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
@@ -71,8 +71,8 @@ columns:
         - when: "RAWORRES = 'NOT DONE'"
           then: {literal: NOT DONE}
     verifications:
-      allowed_values:
-        values: [NOT DONE]
+      - allowed_values:
+          values: [NOT DONE]
 
   - name: LBTESTCD
     type: str
@@ -87,7 +87,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: LBORRES}
-      missing: null
+      missing:
 
   - name: LBDTC
     type: date

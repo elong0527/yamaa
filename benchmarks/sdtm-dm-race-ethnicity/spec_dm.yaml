@@ -3,8 +3,8 @@ domain: DM
 keys: [STUDYID, USUBJID]
 
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: dm.csv
   columns: [DOMAIN, STUDYID, USUBJID, SUBJID, RACE, ETHNIC]
@@ -82,13 +82,10 @@ columns:
                 "Other, specify: Fijian": OTHER
                 "Not reported": NOT REPORTED
                 "Subject refused": UNKNOWN
-              missing: null
+              missing:
     verifications:
-      allowed_values:
-        values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
-          BLACK OR AFRICAN AMERICAN,
-          NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE,
-          OTHER, NOT REPORTED, UNKNOWN]
+      - allowed_values:
+          values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN, BLACK OR AFRICAN AMERICAN, NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE, OTHER, NOT REPORTED, UNKNOWN]
 
   # No ethnicity record, or an answer not listed, gives a blank.
   - name: ETHNIC
@@ -102,11 +99,10 @@ columns:
           "Not Hispanic or Latino": NOT HISPANIC OR LATINO
           "Not reported": NOT REPORTED
           "Unknown": UNKNOWN
-        missing: null
+        missing:
     verifications:
-      allowed_values:
-        values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO,
-          NOT REPORTED, UNKNOWN]
+      - allowed_values:
+          values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO, NOT REPORTED, UNKNOWN]
 
 verifications:
   - unique:

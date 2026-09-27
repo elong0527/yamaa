@@ -2,9 +2,10 @@ schema_version: "1.0"
 domain: SUPPMH
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 input:
-  MH_SUPP_RAW: input/mh_supp_raw.csv
-  MH: input/mh.csv
-
+  MH_SUPP_RAW:
+    path: input/mh_supp_raw.csv
+  MH:
+    path: input/mh.csv
 output:
   path: suppmh.csv
   columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
@@ -42,14 +43,14 @@ columns:
         key: {USUBJID: MH_SUPP_RAW.USUBJID, MHTERM: MH_SUPP_RAW.MHTERM}
         value: MHSEQ
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: QNAM
     type: str
     label: Qualifier Variable Name
     verifications:
-      allowed_values:
-        values: [MHFAMHX, MHCONF]
+      - allowed_values:
+          values: [MHFAMHX, MHCONF]
 
   - name: QLABEL
     type: str

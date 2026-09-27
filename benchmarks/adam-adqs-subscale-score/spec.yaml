@@ -28,8 +28,8 @@ columns:
     type: str
     label: Parameter Code
     verifications:
-      allowed_values:
-        values: [PF01, PF02, PF03, PF04, PFSCORE]
+      - allowed_values:
+          values: [PF01, PF02, PF03, PF04, PFSCORE]
 
   - name: PARAM
     type: str
@@ -75,9 +75,9 @@ columns:
           then: {literal: null}
         - otherwise: ITEMRESN
     verifications:
-      range:
-        min: 0
-        max: 100
+      - range:
+          min: 0
+          max: 100
 
 rows:
   # Every physical functioning item record, answered or not.

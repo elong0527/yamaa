@@ -81,7 +81,7 @@ columns:
         value: Value
         strict: true
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: FACAT
     type: str

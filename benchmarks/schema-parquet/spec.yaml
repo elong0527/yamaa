@@ -3,8 +3,8 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 # Parquet fields carry their own types, so the input declares none.
 input:
-  DM: input/dm.parquet
-
+  DM:
+    path: input/dm.parquet
 output:
   path: adsl.parquet
   columns: [STUDYID, USUBJID, AGE]

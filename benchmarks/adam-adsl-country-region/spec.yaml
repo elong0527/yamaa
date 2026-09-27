@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, COUNTRY, REGION1]
@@ -43,8 +43,8 @@ columns:
           DEU: Europe
         missing: Rest of World
     verifications:
-      allowed_values:
-        values: [North America, Europe, Rest of World]
+      - allowed_values:
+          values: [North America, Europe, Rest of World]
 
 verifications:
   - unique:

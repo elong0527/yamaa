@@ -2,11 +2,14 @@ schema_version: "1.0"
 domain: RELREC
 keys: [STUDYID, RDOMAIN, IDVAR, RELID]
 input:
-  TU: input/tu.csv
-  TR: input/tr.csv
-  AE: input/ae.csv
-  CM: input/cm.csv
-
+  TU:
+    path: input/tu.csv
+  TR:
+    path: input/tr.csv
+  AE:
+    path: input/ae.csv
+  CM:
+    path: input/cm.csv
 output:
   path: relrec.csv
   columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]

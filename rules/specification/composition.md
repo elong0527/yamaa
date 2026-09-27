@@ -38,9 +38,8 @@ own spelling, which [Resource resolution](../storage/resources.md) retries under
 
 <a id="req-0617"></a>
 
-**REQ-0617.** `parents` accepts one `path` or an ordered `list[path]`. A single
-path is the [Schema language](../reference/schema-language.md) shorthand for a one-item list and is normalized before
-traversal.
+**REQ-0617.** `parents` is an ordered `list[path]`, always written in the
+explicit list form; a bare `path` is a schema error.
 
 <a id="req-0618"></a>
 

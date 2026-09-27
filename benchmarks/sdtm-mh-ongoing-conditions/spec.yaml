@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: MH
 keys: [STUDYID, USUBJID, MHSEQ]
 input:
-  MH_FORM: input/mh_form.csv
-
+  MH_FORM:
+    path: input/mh_form.csv
 output:
   path: mh.csv
   columns: [STUDYID, USUBJID, MHSEQ, MHTERM, MHSTDTC, MHENDTC, MHENRTPT, MHENTPT]
@@ -30,7 +30,7 @@ columns:
     label: Reported Term for the Medical History Condition
     derivation: MH_FORM.MHTERM
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # The collected start year alone, or year and month joined with a hyphen.
   # A month with no year, or no year at all, leaves the start empty.
@@ -64,8 +64,8 @@ columns:
         - when: "MHENDTC < MH_FORM.SCRFDTC"
           then: {literal: BEFORE}
     verifications:
-      allowed_values:
-        values: [ONGOING, BEFORE]
+      - allowed_values:
+          values: [ONGOING, BEFORE]
 
   - name: MHENTPT
     type: str

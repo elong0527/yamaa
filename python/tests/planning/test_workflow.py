@@ -145,7 +145,7 @@ def test_shared_producer_executes_once_and_shares_generated_snapshot(
     (tmp_path / "producer.yaml").write_text(
         """schema_version: "1.0"
 domain: PRODUCED
-input: {SEED: seed.csv}
+input: {SEED: {path: seed.csv}}
 base: SEED
 keys: [ID]
 output: {path: produced.parquet, columns: [ID]}

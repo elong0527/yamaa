@@ -2,12 +2,11 @@ schema_version: "1.0"
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
-    VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 columns:
@@ -63,7 +62,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: VSORRES}
-      missing: null
+      missing:
 
   - name: VSSTRESC
     type: str
@@ -154,7 +153,7 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [VSDTC, TESTORD]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 # Each test catalog record becomes its own row template, so every visit form
 # group yields one record per test even when the test's items are absent.
@@ -162,8 +161,7 @@ columns:
 # item gives missing, and a repeated item stops the run.
 rows:
   - id: vs
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     catalog:
       path: input/vs_tests.csv
       id_column: ID

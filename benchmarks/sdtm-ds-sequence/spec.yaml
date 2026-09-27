@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: DS
 keys: [STUDYID, USUBJID, DSSEQ]
 input:
-  DS_RAW: input/ds_raw.csv
-
+  DS_RAW:
+    path: input/ds_raw.csv
 output:
   path: ds.csv
   columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC]
@@ -14,8 +14,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: DS}
     verifications:
-      allowed_values:
-        values: [DS]
+      - allowed_values:
+          values: [DS]
 
   - name: STUDYID
     type: str
@@ -35,8 +35,8 @@ columns:
         source: DS_RAW.DSDTCOL
         month: 6
         day: 15
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   # Number on the completed collection date so a partial entry takes
   # its chronological position among fully dated records.
@@ -49,7 +49,7 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [DSDTC]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: DSDECOD
     type: str
@@ -69,8 +69,8 @@ columns:
           then: {literal: PROTOCOL MILESTONE}
         - otherwise: {literal: DISPOSITION EVENT}
     verifications:
-      allowed_values:
-        values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
+      - allowed_values:
+          values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
 rows:
   - id: disposition

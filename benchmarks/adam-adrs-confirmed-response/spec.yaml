@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, RSSEQ]
 input:
-  RS: input/rs.csv
-
+  RS:
+    path: input/rs.csv
 output:
   path: adrs.csv
   columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]

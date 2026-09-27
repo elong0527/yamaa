@@ -1,7 +1,9 @@
 schema_version: "1.0"
 input:
-  LB: input/lb.csv
-  UNUSED: input/not-used.csv
+  LB:
+    path: input/lb.csv
+  UNUSED:
+    path: input/not-used.csv
 base: LB
 intermediates:
   - id: unused_reference
@@ -32,7 +34,7 @@ columns:
     label: Unused Intermediate Value
     derivation: {literal: unused}
 verifications:
-  unique:
-    columns: [USUBJID, PARAMCD]
+  - unique:
+      columns: [USUBJID, PARAMCD]
 metadata:
   scope: organization

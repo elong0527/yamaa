@@ -8,8 +8,7 @@ input:
 
 output:
   path: rs.csv
-  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, RSSEQ, RSTESTCD, RSTEST,
-            RSSTRESC, RSSTAT]
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, RSSEQ, RSTESTCD, RSTEST, RSSTRESC, RSSTAT]
 
 rows:
   # One record per subject and scheduled assessment that has a visit
@@ -188,8 +187,8 @@ columns:
           then: {literal: PD}
         - otherwise: {literal: SD}
     verifications:
-      allowed_values:
-        values: [CR, PR, SD, PD, NE]
+      - allowed_values:
+          values: [CR, PR, SD, PD, NE]
 
 verifications:
   - unique:

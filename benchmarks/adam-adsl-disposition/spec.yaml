@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
+  DM:
+    path: input/dm.csv
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: DM
 
@@ -67,8 +68,8 @@ columns:
           then: {literal: DISCONTINUED}
         - otherwise: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCSREAS
     type: str

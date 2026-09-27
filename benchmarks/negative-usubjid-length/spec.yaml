@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  DM_RAW: input/dm_raw.csv
-
+  DM_RAW:
+    path: input/dm_raw.csv
 output:
   path: dm.csv
   columns: [STUDYID, USUBJID, SUBJID, SITEID]

@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-  ADSL: input/adsl.csv
+  AE:
+    path: input/ae.csv
+  ADSL:
+    path: input/adsl.csv
 base: AE
 
 output:
@@ -49,8 +51,8 @@ columns:
     derivation:
       flag: "ASTDTM >= TRTSDTM"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   - name: AOCCSEQ
     type: int
@@ -68,8 +70,8 @@ columns:
     derivation:
       flag: "AOCCSEQ = 1"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

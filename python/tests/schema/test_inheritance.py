@@ -45,7 +45,7 @@ def test_composition_retains_an_intermediate_used_as_a_row_driver(
 ) -> None:
     (tmp_path / "parent.yaml").write_text(
         """schema_version: "1.0"
-input: {LB: input/lb.csv, UNUSED: input/unused.csv}
+input: {LB: {path: input/lb.csv}, UNUSED: {path: input/unused.csv}}
 intermediates:
   - id: EOTFB
     dataset: LB
@@ -62,7 +62,8 @@ rows:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
+parents:
+- parent.yaml
 domain: OUT
 keys: [X]
 output: {path: out.csv, columns: [X]}
@@ -135,7 +136,7 @@ def test_column_member_composes_by_declared_kind(tmp_path: Path) -> None:
     (tmp_path / "input.csv").write_text("ID,CODE\n01,a\n", encoding="ascii")
     (tmp_path / "parent.yaml").write_text(
         """schema_version: "1.0"
-input: {SRC: input.csv}
+input: {SRC: {path: input.csv}}
 base: SRC
 columns:
   - name: ID
@@ -158,7 +159,8 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
+parents:
+- parent.yaml
 domain: OUT
 keys: [ID]
 output: {path: out.csv, columns: [ID, RESULT]}
@@ -208,7 +210,7 @@ def test_child_expression_naming_another_keyword_replaces_the_derivation(
     (tmp_path / "input.csv").write_text("ID,CODE\n01,A\n", encoding="ascii")
     (tmp_path / "parent.yaml").write_text(
         """schema_version: "1.0"
-input: {SRC: input.csv}
+input: {SRC: {path: input.csv}}
 base: SRC
 columns:
   - name: ID
@@ -227,7 +229,8 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
+parents:
+- parent.yaml
 domain: OUT
 keys: [ID]
 output: {path: out.csv, columns: [ID, RESULT]}
@@ -253,7 +256,7 @@ def test_a_child_lookup_key_replaces_the_inherited_key_whole(tmp_path: Path) -> 
     # than merging with them.
     (tmp_path / "parent.yaml").write_text(
         """schema_version: "1.0"
-input: {SRC: input.csv, REF: ref.csv}
+input: {SRC: {path: input.csv}, REF: {path: ref.csv}}
 base: SRC
 columns:
   - name: ID
@@ -273,7 +276,8 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
+parents:
+- parent.yaml
 domain: OUT
 keys: [ID]
 output: {path: out.csv, columns: [ID, VALUE]}
@@ -299,7 +303,7 @@ def test_row_member_field_still_replaces_whole(tmp_path: Path) -> None:
     (tmp_path / "input.csv").write_text("ID,CODE\n01,a\n", encoding="ascii")
     (tmp_path / "parent.yaml").write_text(
         """schema_version: "1.0"
-input: {SRC: input.csv}
+input: {SRC: {path: input.csv}}
 rows:
   - id: only
     dataset: SRC
@@ -322,7 +326,8 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
+parents:
+- parent.yaml
 domain: OUT
 keys: [ID]
 output: {path: out.csv, columns: [ID, CODE]}
@@ -372,7 +377,8 @@ def test_inherited_source_literal_and_mapping_execute(tmp_path: Path) -> None:
     (tmp_path / "layers/parent.yaml").write_text(
         """schema_version: "1.0"
 input:
-  SRC: ../input.csv
+  SRC:
+    path: ../input.csv
 base: SRC
 columns:
   - name: ID
@@ -399,7 +405,8 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: layers/parent.yaml
+parents:
+- layers/parent.yaml
 domain: OUT
 keys: [ID]
 output:
@@ -431,7 +438,7 @@ def test_parent_relative_path_is_rebased_without_changing_its_file(
     (first / "data.csv").write_text("ID\nfirst\n", encoding="ascii")
     (second / "data.csv").write_text("ID\nsecond\n", encoding="ascii")
     parent_text = """schema_version: "1.0"
-input: {SRC: data.csv}
+input: {SRC: {path: data.csv}}
 base: SRC
 columns:
   - name: ID
@@ -443,7 +450,8 @@ columns:
     (second / "parent.yaml").write_text(parent_text, encoding="ascii")
     entry = child / "spec.yaml"
     entry_text = """schema_version: "1.0"
-parents: ../first/parent.yaml
+parents:
+- ../first/parent.yaml
 domain: OUT
 keys: [ID]
 output: {path: out.csv, columns: [ID]}
@@ -475,7 +483,7 @@ def test_inherited_source_does_not_widen_entry_project_root(tmp_path: Path) -> N
     (organization / "data.csv").write_text("ID\n01\n", encoding="ascii")
     (organization / "parent.yaml").write_text(
         """schema_version: "1.0"
-input: {SRC: data.csv}
+input: {SRC: {path: data.csv}}
 base: SRC
 columns:
   - name: ID
@@ -487,7 +495,8 @@ columns:
     )
     (study / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: ../organization/parent.yaml
+parents:
+- ../organization/parent.yaml
 domain: OUT
 keys: [ID]
 output: {path: out.csv, columns: [ID]}
@@ -531,7 +540,8 @@ columns:
         """schema_version: "1.0"
 parents: [../common/base.yaml]
 input:
-  SRC: input/src.csv
+  SRC:
+    path: input/src.csv
 base: SRC
 """,
         encoding="ascii",
@@ -560,7 +570,7 @@ def test_entry_output_replaces_inherited_output_whole(tmp_path: Path) -> None:
         """schema_version: "1.0"
 domain: OUT
 keys: [ID]
-input: {SRC: input.csv}
+input: {SRC: {path: input.csv}}
 base: SRC
 output:
   path: shared.csv
@@ -578,7 +588,8 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
+parents:
+- parent.yaml
 output: {path: out.csv, columns: [ID]}
 """,
         encoding="ascii",
@@ -609,8 +620,9 @@ columns:
     )
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: parent.yaml
-input: {SRC: input.csv}
+parents:
+- parent.yaml
+input: {SRC: {path: input.csv}}
 base: SRC
 """,
         encoding="ascii",
@@ -685,7 +697,8 @@ columns:
 """
 
 _STUDY_ENTRY = """schema_version: "1.0"
-parents: ../common/base.yaml
+parents:
+- ../common/base.yaml
 output: {path: out.csv, columns: [ID, N]}
 """
 
@@ -768,7 +781,7 @@ columns:
         """schema_version: "1.0"
 domain: PARENT
 keys: [ID]
-input: {SRC: input/src.csv}
+input: {SRC: {path: input/src.csv}}
 base: SRC
 output: {path: out/parent.csv, columns: [ID]}
 columns:
@@ -781,7 +794,8 @@ columns:
     )
     (study / "spec.yaml").write_text(
         """schema_version: "1.0"
-parents: ../common/base.yaml
+parents:
+- ../common/base.yaml
 output: {path: out.csv, columns: [ID]}
 """,
         encoding="ascii",

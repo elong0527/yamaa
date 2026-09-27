@@ -30,7 +30,7 @@ root_class:
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
     - parents:
-        type: [path, "list[path]"]
+        type: "list[path]"
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
     - windows:
@@ -58,7 +58,7 @@ root_class:
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
     - verifications:
-        type: [dataset_verification, "list[dataset_verification]"]
+        type: "list[dataset_verification]"
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
     - submission:
@@ -186,7 +186,7 @@ column_class:
         required: false
         description: See REQ-1043 in rules/specification/structure.md.
     - verifications:
-        type: [column_verification, "list[column_verification]"]
+        type: "list[column_verification]"
         required: false
         description: See REQ-1043 in rules/specification/structure.md.
     - submission:
@@ -269,7 +269,7 @@ match_value:
     description: See REQ-1259 in rules/operations/lookup.md.
 
 dataset_source:
-    type: [project_path, dataset_class]
+    type: dataset_class
     description: See REQ-1059 in rules/storage/ingestion.md.
 
 dataset_class:

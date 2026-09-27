@@ -66,8 +66,8 @@ columns:
     label: Analysis Record Flag 01
     derivation: ADTR_RAW.ANL01FL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # Lowest complete (ANL01FL = Y) sum among the subject's assessments dated
   # on or before this one, itself included. The key spans the whole subject,

@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  BX_RAW: input/bx_raw.csv
-
+  BX_RAW:
+    path: input/bx_raw.csv
 output:
   path: lb.csv
   columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
@@ -78,8 +78,8 @@ columns:
         - when: "LBORRES IS NULL"
           then: {literal: NOT DONE}
     verifications:
-      allowed_values:
-        values: [NOT DONE]
+      - allowed_values:
+          values: [NOT DONE]
 
 rows:
   # Only for a subject whose cohort is recorded and is not NONAD.

@@ -2,9 +2,10 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADRS_RAW: input/adrs_raw.csv
-  ADSL: input/adsl.csv
-
+  ADRS_RAW:
+    path: input/adrs_raw.csv
+  ADSL:
+    path: input/adsl.csv
 base: ADRS_RAW
 
 output:
@@ -98,7 +99,7 @@ columns:
           OTHERWISE: THRESHOLD NOT MET
         strict: true
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # No branch for NOT EVALUABLE, so AVAL stays empty there.
   - name: AVAL

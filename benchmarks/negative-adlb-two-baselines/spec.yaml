@@ -39,8 +39,8 @@ columns:
     label: Baseline Record Flag
     derivation: ADLB_RAW.ABLFL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

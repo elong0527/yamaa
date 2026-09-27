@@ -40,16 +40,16 @@ columns:
     label: Dose Units
     derivation: EC_RAW.ECDOSU
     verifications:
-      allowed_values:
-        values: [mg]
+      - allowed_values:
+          values: [mg]
 
   - name: EXDOSFRQ
     type: str
     label: Dosing Frequency per Interval
     derivation: EC_RAW.ECDOSFRQ
     verifications:
-      allowed_values:
-        values: [QD]
+      - allowed_values:
+          values: [QD]
 
   - name: EXSTDTC
     type: date

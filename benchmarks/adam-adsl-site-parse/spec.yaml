@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, SUBJID, SITEIDP, SITEID, SUBJREF]
@@ -34,8 +34,8 @@ columns:
         source: USUBJID
         pattern: '^YAMAA-([^-]+)-[0-9]{4}$'
         group: 1
-        missing: null
-        no_match: null
+        missing:
+        no_match:
 
   - name: SITEID
     type: str
@@ -45,7 +45,7 @@ columns:
         sources: [SITEIDP, DM.SITEID]
         missing: UNKNOWN
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # SITEID is never missing, so UNKNOWN here means SUBJID is missing.
   - name: SUBJREF
@@ -56,7 +56,7 @@ columns:
         template: "{SITEID}:{SUBJID}"
         missing: UNKNOWN
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 verifications:
   - unique:

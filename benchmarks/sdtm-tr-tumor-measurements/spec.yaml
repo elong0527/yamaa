@@ -8,9 +8,7 @@ input:
 
 output:
   path: tr.csv
-  columns: [DOMAIN, STUDYID, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST,
-            TRORRES, TRORRESU, TRSTRESC, TRSTRESN, TRSTRESU, TRSTAT,
-            TRMETHOD, TREVAL, VISITNUM, TRDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST, TRORRES, TRORRESU, TRSTRESC, TRSTRESN, TRSTRESU, TRSTAT, TRMETHOD, TREVAL, VISITNUM, TRDTC]
 
 columns:
   - name: DOMAIN
@@ -33,7 +31,7 @@ columns:
     label: Sequence Number
     derivation: TR_RAW.TRSEQ
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: TRLNKID
     type: str
@@ -45,8 +43,8 @@ columns:
     label: Tumor Result Test Short Name
     derivation: TR_RAW.TRTESTCD
     verifications:
-      allowed_values:
-        values: [DIAMETER, TUMSTATE]
+      - allowed_values:
+          values: [DIAMETER, TUMSTATE]
 
   - name: TRTEST
     type: str
@@ -63,8 +61,8 @@ columns:
     label: Original Units
     derivation: TR_RAW.TRORRESU
     verifications:
-      allowed_values:
-        values: [mm, cm]
+      - allowed_values:
+          values: [mm, cm]
 
   - name: TRORRES_N
     type: float
@@ -107,16 +105,16 @@ columns:
         - when: "TRSTRESN IS NOT NULL"
           then: {literal: mm}
     verifications:
-      allowed_values:
-        values: [mm]
+      - allowed_values:
+          values: [mm]
 
   - name: TRSTAT
     type: str
     label: Completion Status
     derivation: TR_RAW.TRSTAT
     verifications:
-      allowed_values:
-        values: [NOT DONE]
+      - allowed_values:
+          values: [NOT DONE]
 
   - name: TRMETHOD
     type: str

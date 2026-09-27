@@ -2,10 +2,14 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_RAW: input/adsl.csv
-  EX: input/ex.csv
-  EC: input/ec.csv
-  FA: input/fa.csv
+  ADSL_RAW:
+    path: input/adsl.csv
+  EX:
+    path: input/ex.csv
+  EC:
+    path: input/ec.csv
+  FA:
+    path: input/fa.csv
 base: ADSL_RAW
 
 output:
@@ -85,5 +89,5 @@ columns:
         - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
           then: {literal: "N"}
     verifications:
-      allowed_values:
-        values: ["Y", "N"]
+      - allowed_values:
+          values: ["Y", "N"]

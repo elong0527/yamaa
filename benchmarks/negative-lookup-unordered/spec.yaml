@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-  EX: input/ex.csv
+  DM:
+    path: input/dm.csv
+  EX:
+    path: input/ex.csv
 base: DM
 intermediates:
   # Exposure records in start-date, then sequence-number order, but no

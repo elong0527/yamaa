@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  VS_RAW: input/vs_raw.csv
-  DM: input/dm.csv
-  TV: input/tv.csv
+  VS_RAW:
+    path: input/vs_raw.csv
+  DM:
+    path: input/dm.csv
+  TV:
+    path: input/tv.csv
   SE:
     path: input/se.csv
     types: {SESTDTC: date, SEENDTC: date}
@@ -53,7 +56,7 @@ columns:
     label: Sequence Number
     derivation: VS_RAW.VSSEQ
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: VSTESTCD
     type: str
@@ -133,8 +136,8 @@ columns:
     label: Epoch
     derivation: SEHIT.EPOCH
     verifications:
-      allowed_values:
-        values: [SCREENING, TREATMENT, FOLLOW-UP]
+      - allowed_values:
+          values: [SCREENING, TREATMENT, FOLLOW-UP]
 
 verifications:
   - unique:

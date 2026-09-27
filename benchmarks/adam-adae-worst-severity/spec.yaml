@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  ADAE_RAW: input/adae_raw.csv
-
+  ADAE_RAW:
+    path: input/adae_raw.csv
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, AESEVN, AWSEVFL]
@@ -44,16 +44,16 @@ columns:
     label: Severity/Intensity
     derivation: ADAE_RAW.AESEV
     verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
 
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
     derivation: ADAE_RAW.TRTEMFL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   - name: AESEVN
     type: int
@@ -65,11 +65,11 @@ columns:
           MILD: 1
           MODERATE: 2
           SEVERE: 3
-        missing: null
+        missing:
     verifications:
-      range:
-        min: 1
-        max: 3
+      - range:
+          min: 1
+          max: 3
 
   # Ranks the subject's treatment-emergent, graded events within each
   # preferred term: worst severity first, then earliest start date, then

@@ -2,10 +2,13 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  DM_RAW: input/dm_raw.csv
+  DM_RAW:
+    path: input/dm_raw.csv
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
-  DS: input/ds.csv
-  AE: input/ae.csv
+  DS:
+    path: input/ds.csv
+  AE:
+    path: input/ae.csv
 base: DM_RAW
 intermediates:
   # Each subject's last exposure record with an end date: latest end date,
@@ -19,8 +22,7 @@ intermediates:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
-            RFPENDTC, RFENDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFPENDTC, RFENDTC]
 
 columns:
   - name: DOMAIN
@@ -43,7 +45,7 @@ columns:
     label: Date/Time of Informed Consent
     derivation: DM_RAW.RFICDTC
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # MIN and MAX skip missing dates; a subject with none gets no date.
   - name: RFXSTDTC

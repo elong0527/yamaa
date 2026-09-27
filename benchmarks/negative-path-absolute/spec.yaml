@@ -2,10 +2,12 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  LB: input/lb.csv
+  LB:
   # An absolute location on the machine that runs the study, not a file
   # the study carries: rejected before any data is read.
-  LBREF: /shared/reference/lbref.csv
+    path: input/lb.csv
+  LBREF:
+    path: /shared/reference/lbref.csv
 base: LB
 
 output:

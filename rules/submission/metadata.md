@@ -601,7 +601,7 @@ a submission.
 
 | Field | Meaning |
 | --- | --- |
-| `submission_comment` | Comment text, or text with the documents it refers to. |
+| `submission_comment` | The comment, always written as a `submission_comment_class`: its text and the documents it refers to. |
 
 <a id="req-1139"></a>
 
@@ -609,7 +609,7 @@ a submission.
 
 | Field | Meaning |
 | --- | --- |
-| `submission_method` | Algorithm stated in prose, or with its name, code, and documents. |
+| `submission_method` | The method, always written as a `submission_method_class`: the algorithm stated in prose, with its name, code, and documents. |
 
 <a id="req-1140"></a>
 
@@ -617,7 +617,7 @@ a submission.
 
 | Field | Meaning |
 | --- | --- |
-| `document_reference` | Document identifier, or an identifier with the place it points at. |
+| `document_reference` | The reference, always written as a `document_reference_class`: the document identifier with the place it points at. |
 
 <a id="req-1141"></a>
 

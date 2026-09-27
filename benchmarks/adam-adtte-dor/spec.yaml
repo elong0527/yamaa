@@ -2,9 +2,12 @@ schema_version: "1.0"
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  ADSL: input/adsl.csv
-  ADRS_RAW: input/adrs_raw.csv
-  DS: input/ds.csv
+  ADSL:
+    path: input/adsl.csv
+  ADRS_RAW:
+    path: input/adrs_raw.csv
+  DS:
+    path: input/ds.csv
 base: ADSL
 
 output:
@@ -37,7 +40,7 @@ columns:
     label: Time to Event Origin Date for Subject
     derivation: ADSL.RESPDT
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # The therapy start as a date: ADSL is read as text, and the comparisons
   # below need a date.
@@ -168,7 +171,7 @@ columns:
       first_available:
         sources: [EVENTDT, CENSORDT]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AVAL
     type: int

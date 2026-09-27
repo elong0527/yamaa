@@ -14,14 +14,14 @@ requirement link for behavior. It is not an additional semantic contract.
 | `root_class.keys` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.input` | `"dict[identifier, dataset_source]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.base` | `"identifier"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
-| `root_class.parents` | `["path", "list[path]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.parents` | `"list[path]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.windows` | `"dict[identifier, window_spec]"` | `false` | Absent | -- | [REQ-1251](../operations/windows.md#req-1251) |
 | `root_class.intermediates` | `"list[intermediate_class]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.output` | `"output_class"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.columns` | `"list[column_class]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.rows` | `"list[row_class]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
-| `root_class.verifications` | `["dataset_verification", "list[dataset_verification]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.verifications` | `"list[dataset_verification]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.submission` | `"submission_dataset_class"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.metadata` | `"dict[str, str]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `output_class.path` | `"path"` | `true` | Absent | -- | [REQ-1047](../storage/publication.md#req-1047) |
@@ -50,7 +50,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `column_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.label` | `"str"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.derivation` | `"derivation"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
-| `column_class.verifications` | `["column_verification", "list[column_verification]"]` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
+| `column_class.verifications` | `"list[column_verification]"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.submission` | `"submission_column_class"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.metadata` | `"dict[str, str]"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `row_class.id` | `"row_id"` | `true` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
@@ -69,7 +69,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `match_key` | `["match_key_columns", "dict[identifier, match_value]"]` | `false` | Absent | -- | [REQ-0115](../operations/lookup.md#req-0115) |
 | `match_key_columns` | `["identifier", "list[identifier]"]` | `false` | Absent | -- | [REQ-0115](../operations/lookup.md#req-0115) |
 | `match_value` | `["variable", "expression"]` | `false` | Absent | -- | [REQ-1259](../operations/lookup.md#req-1259) |
-| `dataset_source` | `["project_path", "dataset_class"]` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
+| `dataset_source` | `"dataset_class"` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
 | `dataset_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.types` | `"dict[identifier, column_type]"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.schema` | `"project_path"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
@@ -429,9 +429,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | `page_reference_class.type` | `"str"` | `true` | Absent | `{"values": ["PhysicalRef", "NamedDestination"]}` | [REQ-1137](../submission/metadata.md#req-1137) |
 | `page_reference_class.refs` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1137](../submission/metadata.md#req-1137) |
 | `page_reference_class.title` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1137](../submission/metadata.md#req-1137) |
-| `submission_comment` | `["str", "submission_comment_class"]` | `false` | Absent | -- | [REQ-1138](../submission/metadata.md#req-1138) |
-| `submission_method` | `["str", "submission_method_class"]` | `false` | Absent | -- | [REQ-1139](../submission/metadata.md#req-1139) |
-| `document_reference` | `["identifier", "document_reference_class"]` | `false` | Absent | -- | [REQ-1140](../submission/metadata.md#req-1140) |
+| `submission_comment` | `"submission_comment_class"` | `false` | Absent | -- | [REQ-1138](../submission/metadata.md#req-1138) |
+| `submission_method` | `"submission_method_class"` | `false` | Absent | -- | [REQ-1139](../submission/metadata.md#req-1139) |
+| `document_reference` | `"document_reference_class"` | `false` | Absent | -- | [REQ-1140](../submission/metadata.md#req-1140) |
 | `core_designation` | `"str"` | `false` | Absent | `{"values": ["Req", "Exp", "Perm"]}` | [REQ-1141](../submission/metadata.md#req-1141) |
 | `origin_type` | `"str"` | `false` | Absent | `{"values": ["Assigned", "Collected", "Derived", "Not Available", "Other", "Predecessor", "Protocol"]}` | [REQ-1142](../submission/metadata.md#req-1142) |
 | `origin_source` | `"str"` | `false` | Absent | `{"values": ["Investigator", "Sponsor", "Subject", "Vendor"]}` | [REQ-1143](../submission/metadata.md#req-1143) |

@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, ASEQ]
 input:
-  AE: input/ae.csv
-
+  AE:
+    path: input/ae.csv
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT, ASEV]
@@ -49,8 +49,8 @@ columns:
     label: Analysis Severity/Intensity
     derivation: AE.AESEV
     verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
 
   # Rank for the review order above.
   - name: SEVORD
@@ -59,7 +59,7 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing:
         dict:
           MILD: 1
           MODERATE: 2

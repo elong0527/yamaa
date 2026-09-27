@@ -2,8 +2,10 @@ schema_version: "1.0"
 domain: ADEX
 keys: [STUDYID, USUBJID]
 input:
-  TRT: input/subject_treatment.csv
-  EX: input/ex.csv
+  TRT:
+    path: input/subject_treatment.csv
+  EX:
+    path: input/ex.csv
 base: TRT
 
 output:

@@ -2,14 +2,14 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
+  DM:
+    path: input/dm.csv
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
 base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTSDTM, TRTSTMF,
-    TRTEDT, TRTEDTM, TRTETMF, TRTDURD, SAFFL]
+  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTSDTM, TRTSTMF, TRTEDT, TRTEDTM, TRTETMF, TRTDURD, SAFFL]
 
 columns:
   - name: STUDYID
@@ -51,8 +51,8 @@ columns:
       str_upper:
         source: TRT01SRC
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO, NOT TREATED]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
   # Earliest start and latest end as collected text. A date alone gets
   # 00:00:00 (start) or 23:59:59 (end), and precision D marks that; a date
@@ -80,8 +80,8 @@ columns:
       datetime_impute:
         source: TRTSDTC
         time: first
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   - name: TRTSTPR
     type: str
@@ -89,7 +89,7 @@ columns:
     derivation:
       datetime_precision:
         source: TRTSDTM
-        missing: null
+        missing:
 
   - name: TRTSTMF
     type: str
@@ -99,8 +99,8 @@ columns:
         - when: "TRTSTPR = 'D'"
           then: {literal: H}
     verifications:
-      allowed_values:
-        values: [H]
+      - allowed_values:
+          values: [H]
 
   - name: TRTEDTM
     type: datetime
@@ -109,8 +109,8 @@ columns:
       datetime_impute:
         source: TRTEDTC
         time: last
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   - name: TRTETPR
     type: str
@@ -118,7 +118,7 @@ columns:
     derivation:
       datetime_precision:
         source: TRTEDTM
-        missing: null
+        missing:
 
   - name: TRTETMF
     type: str
@@ -128,8 +128,8 @@ columns:
         - when: "TRTETPR = 'D'"
           then: {literal: H}
     verifications:
-      allowed_values:
-        values: [H]
+      - allowed_values:
+          values: [H]
 
   - name: TRTSDT
     type: date
@@ -155,8 +155,8 @@ columns:
         unit: day
         bounds: inclusive
     verifications:
-      range:
-        min: 1
+      - range:
+          min: 1
 
   - name: SAFFL
     type: str

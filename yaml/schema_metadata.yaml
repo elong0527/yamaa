@@ -186,15 +186,15 @@ page_reference_class:
         description: See REQ-1137 in rules/submission/metadata.md.
 
 submission_comment:
-    type: [str, submission_comment_class]
+    type: submission_comment_class
     description: See REQ-1138 in rules/submission/metadata.md.
 
 submission_method:
-    type: [str, submission_method_class]
+    type: submission_method_class
     description: See REQ-1139 in rules/submission/metadata.md.
 
 document_reference:
-    type: [identifier, document_reference_class]
+    type: document_reference_class
     description: See REQ-1140 in rules/submission/metadata.md.
 
 core_designation:

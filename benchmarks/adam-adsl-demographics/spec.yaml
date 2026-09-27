@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, SEX, SEXN, RACE, RACEN, AGE, AGEGR1]
@@ -65,7 +65,7 @@ columns:
           BLACK OR AFRICAN AMERICAN: 2
           ASIAN: 3
           MULTIPLE: 4
-        missing: null
+        missing:
         unmapped: 99
 
   # A collected age that is not a whole number (text, or 34.5) cannot become
@@ -76,7 +76,7 @@ columns:
     derivation:
       value:
         source: DM.AGE
-      missing: null
+      missing:
     verifications:
       - range:
           min: 0

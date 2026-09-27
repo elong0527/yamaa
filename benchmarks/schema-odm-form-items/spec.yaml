@@ -2,12 +2,11 @@ schema_version: "1.0"
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  ODM: input/odm.csv
-
+  ODM:
+    path: input/odm.csv
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT,
-    LBORRES, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
 
 columns:
   - name: DOMAIN

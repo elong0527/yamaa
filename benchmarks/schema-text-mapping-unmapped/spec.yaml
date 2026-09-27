@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [USUBJID]
 input:
-  DM: input/dm.csv
+  DM:
+    path: input/dm.csv
 base: DM
 
 output:
@@ -32,7 +33,7 @@ columns:
         dict:
           M: Male
           F: Female
-        missing: null
+        missing:
         unmapped: Outside codelist
 
   # One named result for both events: with no separate result for unlisted

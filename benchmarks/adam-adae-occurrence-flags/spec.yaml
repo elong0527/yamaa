@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  ADAE_RAW: input/adae_raw.csv
-
+  ADAE_RAW:
+    path: input/adae_raw.csv
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, TRTEMFL, AOCCFL, AOCCSFL, AOCCPFL]
@@ -44,8 +44,8 @@ columns:
     label: Treatment Emergent Analysis Flag
     derivation: ADAE_RAW.TRTEMFL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # Number each subject's treatment-emergent events (earliest first, AESEQ
   # breaking same-day ties) at three levels; each flag below marks number 1.

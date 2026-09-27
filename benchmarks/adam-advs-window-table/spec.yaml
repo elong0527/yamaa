@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
-  ADVS_RAW: input/advs_raw.csv
+  ADVS_RAW:
+    path: input/advs_raw.csv
   AWINDOW:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
@@ -114,8 +115,8 @@ columns:
     derivation:
       flag: "AWRANK = 1"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - unique:

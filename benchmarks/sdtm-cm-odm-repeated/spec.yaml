@@ -50,7 +50,7 @@ columns:
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: CMSTDTC
     type: str

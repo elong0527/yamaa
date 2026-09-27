@@ -2,7 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
+  AE:
+    path: input/ae.csv
   QUERY: {path: input/queries.csv, types: {GRPID: int}}
 base: AE
 intermediates:
@@ -67,8 +68,8 @@ columns:
     label: Standardized MedDRA Query 01 Scope
     derivation: SMQ1.SCOPE
     verifications:
-      allowed_values:
-        values: [BROAD, NARROW]
+      - allowed_values:
+          values: [BROAD, NARROW]
 
   - name: SMQ02NAM
     type: str
@@ -85,8 +86,8 @@ columns:
     label: Standardized MedDRA Query 02 Scope
     derivation: SMQ2.SCOPE
     verifications:
-      allowed_values:
-        values: [BROAD, NARROW]
+      - allowed_values:
+          values: [BROAD, NARROW]
 
   - name: CQ01NAM
     type: str

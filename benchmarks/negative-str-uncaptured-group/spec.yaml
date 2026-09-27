@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
-
+  DM:
+    path: input/dm.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, SITEID]
@@ -29,5 +29,5 @@ columns:
         source: USUBJID
         pattern: '^CATH-([^-]+)-[0-9]{4}$'
         group: 2
-        missing: null
-        no_match: null
+        missing:
+        no_match:

@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  VS: input/vs.csv
-
+  VS:
+    path: input/vs.csv
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, VSSEQ, SYSBP, PRIORBP]

@@ -779,7 +779,8 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  RAW: input/raw.csv
+  RAW:
+    path: input/raw.csv
 
 output:
   path: dm.csv
