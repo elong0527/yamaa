@@ -1322,7 +1322,7 @@ def evaluate_intermediate(
     between_lower: str | None = None
     between_upper: str | None = None
     if between is not None:
-        # The inline form requires `value` plus both bounds (REQ-1055); a
+        # The named form requires `value` plus at least one bound (REQ-1049); a
         # payload that reached here without them narrows by a bound it
         # cannot read, so answer the declaration rather than raising on
         # the missing one.

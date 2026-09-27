@@ -167,20 +167,6 @@ record_between_class:
         required: false
         description: See REQ-1049.
 
-intermediate_between_class:
-    - value:
-        type: variable
-        required: true
-        description: See REQ-1055.
-    - lower:
-        type: identifier
-        required: true
-        description: See REQ-1055.
-    - upper:
-        type: identifier
-        required: true
-        description: See REQ-1055.
-
 column_class:
     - name:
         type: identifier

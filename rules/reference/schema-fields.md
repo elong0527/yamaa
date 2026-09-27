@@ -46,9 +46,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `record_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.lower` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.upper` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
-| `intermediate_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `intermediate_between_class.lower` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `intermediate_between_class.upper` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `column_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.label` | `"str"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
