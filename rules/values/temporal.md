@@ -86,8 +86,7 @@ expressions that return an operand rather than computing one.
 beside it. A component finer than the collected precision was supplied by an
 imputation operation. A date whose precision is `day` was collected in full;
 a datetime whose precision is `day` had its time supplied, while `second`
-means the source carried a time. A second property would be a second place to
-keep correct, and the two could disagree.
+means the source carried a time.
 
 ### Lexical form
 
