@@ -55,10 +55,7 @@ entry to say in a comment why the dataset is empty.
 
 **REQ-1197.** The generated file conforms to Dataset-JSON 1.1, and
 `datasetJSONVersion` is exactly `1.1.0`. A later release of the standard is a
-new profile under a new name rather than a redefinition of this one, for the
-reason [REQ-0721](../storage/publication.md#req-0721) gives: a file keeps the meaning its producer's version gave
-it, and a reader that resolved `1.1.0` against a later mapping would read a
-conforming file wrongly without failing.
+new profile under a new name rather than a redefinition of this one.
 
 <a id="req-1198"></a>
 
