@@ -3,6 +3,18 @@ domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
   ODM: input/odm.csv
+  TESTS:
+    path: input/vs_tests.csv
+    types: {TESTORD: int, HAS_POSITION: int, HAS_METHOD: int, HAS_NOTDONE: int}
+
+# The test table, read through each record's test code.
+intermediates:
+  - id: TEST
+    dataset: TESTS
+    key: VSTESTCD
+    strict: true
+    verification:
+      unique: [VSTESTCD]
 
 output:
   path: vs.csv
@@ -31,9 +43,64 @@ columns:
     label: Visit Name
     derivation: ODM.StudyEventOID
 
+  # Each form item value reads the visit form group's single record for that
+  # item: an absent item gives missing, and a repeated item stops the run.
+  # The form-level items below are read by every test's record; only the
+  # date is in the output.
   - name: VSDTC
     type: date
     label: Date/Time of Measurements
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
+        filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+        expr: "ONLY(ODM.Value)"
+
+  - name: POSITION
+    type: str
+    label: Body Position Collected on the Form
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
+        filter: "ODM.ItemOID = 'IT.VS.POSITION'"
+        expr: "ONLY(ODM.Value)"
+
+  - name: TEMPMETHOD
+    type: str
+    label: Temperature Method Collected on the Form
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
+        filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
+        expr: "ONLY(ODM.Value)"
+
+  - name: BPNOTDONE
+    type: str
+    label: Blood Pressure Not-Done Flag Collected on the Form
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
+        filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
+        expr: "ONLY(ODM.Value)"
+
+  - name: BPREASND
+    type: str
+    label: Blood Pressure Not-Done Reason Collected on the Form
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
+        filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
+        expr: "ONLY(ODM.Value)"
 
   - name: VSTESTCD
     type: str
@@ -42,18 +109,62 @@ columns:
   - name: VSTEST
     type: str
     label: Vital Signs Test Name
+    derivation: TEST.VSTEST
 
   - name: TESTORD
     type: int
     label: Test Order Within Visit
+    derivation: TEST.TESTORD
+
+  # The form items that hold the test's result and its unit.
+  - name: RESULT_ITEM
+    type: str
+    label: Result Item Identifier
+    derivation: TEST.RESULT_ITEM
+
+  - name: UNIT_ITEM
+    type: str
+    label: Unit Item Identifier
+    derivation: TEST.UNIT_ITEM
+
+  # Test table flags, 1 or 0: whether the test uses the form's body
+  # position, its temperature method, or its blood pressure not-done flag.
+  - name: HAS_POSITION
+    type: int
+    label: Test Uses Collected Body Position
+    derivation: TEST.HAS_POSITION
+
+  - name: HAS_METHOD
+    type: int
+    label: Test Uses Collected Method
+    derivation: TEST.HAS_METHOD
+
+  - name: HAS_NOTDONE
+    type: int
+    label: Test Uses Blood Pressure Not-Done Flag
+    derivation: TEST.HAS_NOTDONE
 
   - name: VSORRES
     type: str
     label: Result or Finding in Original Units
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey,
+          ItemOID: RESULT_ITEM}
+        expr: "ONLY(ODM.Value)"
 
   - name: VSORRESU
     type: str
     label: Original Units
+    derivation:
+      aggregate:
+        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
+          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
+          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey,
+          ItemOID: UNIT_ITEM}
+        expr: "ONLY(ODM.Value)"
 
   # The form collects standard units, so this is the collected result read
   # as a number. A result that is not a number becomes missing here, and the
@@ -74,38 +185,6 @@ columns:
     type: str
     label: Standard Units
     derivation: VSORRESU
-
-  # The form-level items, which every test's record reads from its visit
-  # form group; none is in the output.
-  - name: POSITION
-    type: str
-    label: Body Position Collected on the Form
-
-  - name: TEMPMETHOD
-    type: str
-    label: Temperature Method Collected on the Form
-
-  - name: BPNOTDONE
-    type: str
-    label: Blood Pressure Not-Done Flag Collected on the Form
-
-  - name: BPREASND
-    type: str
-    label: Blood Pressure Not-Done Reason Collected on the Form
-
-  # Test catalog flags, 1 or 0: whether the test uses the form's body
-  # position, its temperature method, or its blood pressure not-done flag.
-  - name: HAS_POSITION
-    type: int
-    label: Test Uses Collected Body Position
-
-  - name: HAS_METHOD
-    type: int
-    label: Test Uses Collected Method
-
-  - name: HAS_NOTDONE
-    type: int
-    label: Test Uses Blood Pressure Not-Done Flag
 
   # Position and method go only on the tests that use them, and only when
   # a result was collected; otherwise they stay missing.
@@ -143,8 +222,7 @@ columns:
         - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
           then: BPREASND
 
-  # Numbered per subject by visit date, then by catalog test order within
-  # the visit.
+  # Numbered per subject by visit date, then by test order within the visit.
   - name: VSSEQ
     type: int
     label: Sequence Number
@@ -156,54 +234,45 @@ columns:
     verifications:
       not_missing: {}
 
-# Each test catalog record becomes its own row template, so every visit form
-# group yields one record per test even when the test's items are absent.
-# Each item value reads the group's single record for that item: an absent
-# item gives missing, and a repeated item stops the run.
+# One row template per test, so every visit form group yields one record
+# per test even when the test's items are absent. Each template names only
+# its test; the test table supplies the rest.
 rows:
-  - id: vs
+  - id: sysbp
+    dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    catalog:
-      path: input/vs_tests.csv
-      id_column: ID
-      types: {TESTORD: int, HAS_POSITION: int, HAS_METHOD: int, HAS_NOTDONE: int}
-      unique_columns: [VSTESTCD, TESTORD, RESULT_ITEM]
-    derivations:
-      VSTESTCD: {literal: "${VSTESTCD}"}
-      VSTEST: {literal: "${VSTEST}"}
-      TESTORD: {literal: "${TESTORD}"}
-      HAS_POSITION: {literal: "${HAS_POSITION}"}
-      HAS_METHOD: {literal: "${HAS_METHOD}"}
-      HAS_NOTDONE: {literal: "${HAS_NOTDONE}"}
-      VSORRES:
-        aggregate:
-          filter: "ODM.ItemOID = ${RESULT_ITEM}"
-          expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        aggregate:
-          filter: "ODM.ItemOID = ${UNIT_ITEM}"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      POSITION:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-          expr: "ONLY(ODM.Value)"
-      TEMPMETHOD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-          expr: "ONLY(ODM.Value)"
-      BPNOTDONE:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-          expr: "ONLY(ODM.Value)"
-      BPREASND:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-          expr: "ONLY(ODM.Value)"
+    derivations: {VSTESTCD: {literal: SYSBP}}
+
+  - id: diabp
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations: {VSTESTCD: {literal: DIABP}}
+
+  - id: pulse
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations: {VSTESTCD: {literal: PULSE}}
+
+  - id: resp
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations: {VSTESTCD: {literal: RESP}}
+
+  - id: temp
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations: {VSTESTCD: {literal: TEMP}}
+
+  - id: weight
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+      ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    derivations: {VSTESTCD: {literal: WEIGHT}}
 
 verifications:
   - unique:

@@ -2272,7 +2272,7 @@ requirements:
   REQ-1246: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:project-root-anchor"]}
   REQ-1247: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:produced-artifact-anchor"]}
   REQ-1248: {"file": "operations/lookup.md", "sources": ["yamaa:issue-371:rename-only-intermediate"]}
-  REQ-1249: {"file": "execution/rows.md", "sources": ["yamaa:pr-818:fixed-row-catalog", "schema.yaml:row_class.catalog.description", "schema.yaml:row_catalog_class.path.description", "schema.yaml:row_catalog_class.id_column.description", "schema.yaml:row_catalog_class.types.description", "schema.yaml:row_catalog_class.unique_columns.description", "schema.yaml:row_catalog_type.description"]}
+  REQ-1249: {"file": "execution/rows.md", "sources": ["yamaa:pr-818:fixed-row-catalog", "schema.yaml:row_class.catalog.description", "schema.yaml:row_catalog_class.path.description", "schema.yaml:row_catalog_class.id_column.description", "schema.yaml:row_catalog_class.types.description", "schema.yaml:row_catalog_class.unique_columns.description", "schema.yaml:row_catalog_type.description"], "retired": true, "replacement": []}
   REQ-1250: {"file": "operations/expressions.md", "sources": ["yamaa:issue-879:literal-canonical-form"]}
   REQ-1251: {"file": "operations/windows.md", "sources": ["schema.yaml:root_class.windows.description", "schema_expression_window.yaml:window_selection.description"]}
   REQ-1252: {"file": "operations/windows.md", "sources": ["yamaa:issue-882:window-expansion"]}
