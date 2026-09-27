@@ -789,7 +789,9 @@ intermediates:
         encoding="ascii",
     )
 
-    resolved = resolve_specification(tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT))
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
 
     # The child's key replaces the parent's key whole, not merged.
     intermediates = resolved.document["intermediates"]

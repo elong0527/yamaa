@@ -1674,7 +1674,7 @@ def _fill_omitted_lookup_keys(
 ) -> tuple[HandledExpression, frozenset[str]]:
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
-    REQ-0153 lets a named intermediate, an inline `lookup:`, or a qualified
+    REQ-0153 lets a named intermediate or a qualified
     aggregate omit `key`, inferring the applicable output keys, and REQ-0115
     lets a key name its columns alone, matching same-named current-row
     values. The planner and the runtime downstream only understand a
