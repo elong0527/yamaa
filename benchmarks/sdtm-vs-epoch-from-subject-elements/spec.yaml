@@ -93,8 +93,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 10
+      max: 10
   - implies:
       id: missing-date-means-missing-epoch
       when: "VSDTC IS NULL"
