@@ -374,15 +374,13 @@ columns, in this order and with these [Types and conversion](../values/types.md)
 <a id="req-1175"></a>
 
 **REQ-1175.** There is one row for every declared check rather than one row
-per violation. A check that ran and held is therefore a row, which is what
-distinguishes it from a check the specification never declared. Rows keep
+per violation. A check that ran and held is therefore a row. Rows keep
 execution order: column declaration order first, then dataset-verification
 order, exactly as [REQ-0393](verification.md#req-0393) orders the log.
 `SPEC_PATH` is the key. It is non-missing, unique within the log, and the
 join to the warning log, whose row for the same path carries the complete
 `OFFENDING_KEYS` evidence [REQ-0393](verification.md#req-0393) requires.
-Offending keys stay out of the log so the same unbounded sequence is not
-maintained in two places. `CHECK` is the verification's registered name under
+Offending keys stay out of the log. `CHECK` is the verification's registered name under
 [REQ-0371](verification.md#req-0371), and `TARGET` is the column a column
 verification infers under [REQ-0372](verification.md#req-0372), missing for a
 dataset verification.

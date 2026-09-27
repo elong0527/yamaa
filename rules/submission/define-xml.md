@@ -35,9 +35,8 @@ form.
 <a id="req-0962"></a>
 
 **REQ-0962.** `creation_datetime` is declared rather than read from a clock.
-Two runs of the same inputs must produce the same bytes, and a timestamp taken
-at run time would make all runs differ. `file_oid` is declared for
-byte-identical runs: an identity minted per run is not reproducible.
+Two runs of the same inputs must produce the same bytes. `file_oid` is declared
+rather than minted per run.
 
 <a id="req-0963"></a>
 
@@ -133,11 +132,7 @@ every identifier it had.
 <a id="req-0973"></a>
 
 **REQ-0973.** One `ItemDef` is generated per dataset and column, and never
-shared between datasets. Define-XML admits a shared definition, and sharing
-one would require every dataset that carries the column to agree on its label,
-length, origin, and codelist forever. Two specifications can drift, and a
-shared definition turns that drift into a silently wrong document. The cost is
-stated: a document carries as many `STUDYID` definitions as it has datasets.
+shared between datasets.
 
 ### Document structure
 

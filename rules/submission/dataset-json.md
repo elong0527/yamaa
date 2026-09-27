@@ -55,10 +55,7 @@ entry to say in a comment why the dataset is empty.
 
 **REQ-1197.** The generated file conforms to Dataset-JSON 1.1, and
 `datasetJSONVersion` is exactly `1.1.0`. A later release of the standard is a
-new profile under a new name rather than a redefinition of this one, for the
-reason [REQ-0721](../storage/publication.md#req-0721) gives: a file keeps the meaning its producer's version gave
-it, and a reader that resolved `1.1.0` against a later mapping would read a
-conforming file wrongly without failing.
+new profile under a new name rather than a redefinition of this one.
 
 <a id="req-1198"></a>
 
@@ -242,15 +239,11 @@ property of that container and are not a second spelling here.
 <a id="req-1214"></a>
 
 **REQ-1214.** A missing value is `null` and a collected empty string is `""`.
-The two stay apart, as they do in [Parquet profile](../storage/parquet.md) under [REQ-1034](../storage/parquet.md#req-1034). Which of them
-reaches this file is decided by the artifact's own container and by nothing
-else: a `parquet` artifact's zero-length string arrives as a present empty
-string, and a `csv` artifact's empty field arrives as missing under
-[REQ-0529](../storage/ingestion.md#req-0529), so a study whose package must carry the distinction publishes its
-artifact as `parquet`. [REQ-1158](../storage/ingestion.md#req-1158)'s empty-string convention does not apply here.
-It is a property of an input a specification declares, and a composition
-declares none; reading an artifact under a convention the study document
-chose would let a package change a value the producer published.
+Which of them reaches this file is decided by the artifact's own container
+and by nothing else: a `parquet` artifact's zero-length string arrives as a
+present empty string, and a `csv` artifact's empty field arrives as missing
+under [REQ-0529](../storage/ingestion.md#req-0529).
+[REQ-1158](../storage/ingestion.md#req-1158)'s empty-string convention does not apply here.
 
 ### Serialization
 

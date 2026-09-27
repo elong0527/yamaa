@@ -645,6 +645,9 @@ examples:
   schema-sentence-case:
     status: executable
     runtimes: ['python']
+  schema-functions:
+    status: executable
+    runtimes: ['python']
   schema-shorthand:
     status: executable
     runtimes: ['python']

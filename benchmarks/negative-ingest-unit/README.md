@@ -26,7 +26,7 @@ read, so no artifact is accepted.
 ## How to fix
 
 Normalize the source into separate value and unit fields before declaring the
-dose numeric. For this record, the governed input should carry `EXDOSE` as
+dose numeric. For this record, the corrected input should carry `EXDOSE` as
 `200` and `EXDOSU` as `mg`; then the existing declaration is valid:
 
 ```yaml

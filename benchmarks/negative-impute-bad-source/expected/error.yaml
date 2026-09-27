@@ -7,6 +7,6 @@ context:
   source: AE.AESTDTC
   value: UNKNOWN
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-901
-      AESEQ: 2
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
+      AESEQ: 4

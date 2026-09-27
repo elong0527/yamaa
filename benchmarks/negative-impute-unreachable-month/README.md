@@ -28,7 +28,7 @@ Drop the month: nothing the policy accepts can use it.
 
 ```yaml
 date_impute:
-  source: AESTDTC
+  source: AE.AESTDTC
   day: 15
   minimum_source_precision: month
 ```

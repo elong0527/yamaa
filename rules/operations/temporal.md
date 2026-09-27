@@ -83,11 +83,7 @@ invalid text and invokes no handler. A missing bound is no bound.
 <a id="req-0586"></a>
 
 **REQ-0586.** A complete source date is returned unchanged whatever the bound
-says. The date supplied nothing for the bound to move. This is what
-makes the bound a rule rather than a comparison a specification could write
-itself: the bound constrains an invented component and never a collected one.
-A specification constraining collected dates states a verification under [Verification](../execution/verification.md),
-which is where a claim about data a study recorded belongs.
+says. A specification constraining collected dates states a verification under [Verification](../execution/verification.md).
 
 <a id="req-0587"></a>
 

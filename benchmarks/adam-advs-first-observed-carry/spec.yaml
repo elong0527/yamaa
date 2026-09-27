@@ -5,79 +5,88 @@ input:
   VS:
     path: input/vs.csv
     types: {AVISITN: int, AVAL: float}
+base: VS
 
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, BASEVAL]
 
+# One visit ordering per subject and parameter, stated once: OBSERVED_ORDER
+# ranks only visits with a collected result, while VISIT_ORDER walks every
+# visit so the carry reaches later visits.
+windows:
+  VISIT_ORDER:
+    group_by: [STUDYID, USUBJID, PARAMCD]
+    order_by: [AVISITN]
+  OBSERVED_ORDER:
+    group_by: [STUDYID, USUBJID, PARAMCD]
+    order_by: [AVISITN]
+    filter: "AVAL IS NOT NULL"
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: VS.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
   - name: PARAMCD
     type: str
     label: Parameter Code
+    derivation: VS.PARAMCD
+
   - name: AVISITN
     type: int
     label: Analysis Visit Number
+    derivation: VS.AVISITN
+
   - name: AVAL
     type: float
     label: Analysis Value
+    derivation: VS.AVAL
+
+  # Rank among the subject-parameter visits with a collected result, so
+  # rank 1 marks the first observed visit.
   - name: _RANK
     type: int
     label: Observed Visit Rank
-  - name: _IS_SEL
-    type: str
-    label: First Observed Visit Flag
+    derivation:
+      rank:
+        window: OBSERVED_ORDER
+
+  # The collected result, kept only on the first observed visit.
   - name: _SEL_AVAL
     type: float
     label: First Observed Analysis Value
+    derivation:
+      case:
+        - when: "_RANK = 1"
+          then: AVAL
+
+  # The first observed result, carried to every later visit of the
+  # subject and parameter.
   - name: _CARRIED
     type: float
     label: Prior First Observed Analysis Value
+    derivation:
+      previous_non_missing:
+        source: _SEL_AVAL
+        window: VISIT_ORDER
+
   - name: BASEVAL
     type: float
     label: First Observed Analysis Value Carried Forward
-
-rows:
-  - id: vital_signs
-    dataset: VS
-    derivations:
-      STUDYID: VS.STUDYID
-      USUBJID: VS.USUBJID
-      PARAMCD: VS.PARAMCD
-      AVISITN: VS.AVISITN
-      AVAL: VS.AVAL
-      _RANK:
-        rank:
-          window:
-            group_by: [STUDYID, USUBJID, PARAMCD]
-            order_by: [AVISITN]
-            filter: "AVAL IS NOT NULL"
-      _IS_SEL:
-        case:
-          - when: "_RANK = 1"
-            then: {literal: Y}
-      _SEL_AVAL:
-        case:
-          - when: "_IS_SEL = 'Y'"
-            then: AVAL
-      _CARRIED:
-        previous_non_missing:
-          source: _SEL_AVAL
-          window:
-            group_by: [STUDYID, USUBJID, PARAMCD]
-            order_by: [AVISITN]
-      BASEVAL:
-        first_available:
-          sources: [_SEL_AVAL, _CARRIED]
+    derivation:
+      first_available:
+        sources: [_SEL_AVAL, _CARRIED]
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, AVISITN]
   - row_count:
-      min: 9
-      max: 9
+      min: 12
+      max: 12
