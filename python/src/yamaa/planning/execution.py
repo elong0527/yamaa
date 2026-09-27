@@ -3933,7 +3933,7 @@ def preflight_execution(
 # REQ-1260: operations that read beyond the current row -- another dataset's
 # records, or the completed rows a window partitions. A derivation using one
 # keeps its column-phase meaning.
-_DATASET_LEVEL_OPERATIONS = frozenset({"lookup", "aggregate", *WINDOW_OPERATIONS})
+_DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", *WINDOW_OPERATIONS})
 
 
 def _column_level_reads(
