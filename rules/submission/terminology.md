@@ -14,15 +14,13 @@ status: normative
 
 **REQ-0926.** A codelist is declared once in the study document and carries an
 `id`. A column names that `id` through `submission.codelist`. Columns share
-one codelist statement, so a study upgrades a published version in one place.
+one codelist statement.
 
 <a id="req-0927"></a>
 
 **REQ-0927.** `name` is the codelist's human-readable name and is unique across
 the document's codelists. `id` and `name` are separate. `id` is what a
-specification writes, and `name` is what a reader sees. Forcing `id` and
-`name` to match would make renaming a codelist a change to every
-specification that binds the codelist.
+specification writes, and `name` is what a reader sees.
 
 <a id="req-0928"></a>
 
