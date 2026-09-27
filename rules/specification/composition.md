@@ -178,13 +178,10 @@ value of a different kind replaces what it inherits, and a field the
 accumulated member does not carry is taken whole. A registry value carries
 exactly one keyword under [Expression evaluation](../operations/expressions.md), so two of them compose only when they name the
 same keyword, and that keyword's payload then composes by its own declared
-kind. Different keywords replace the value whole: composing across them would
-build the two-keyword value [Expression evaluation](../operations/expressions.md) rejects, and naming a different operation is
-how a layer says it derives the value differently. Every list replaces. A
+kind. Different keywords replace the value whole. Every list replaces. A
 column's `verifications` entries carry no identifier to compose by, and the
 remaining lists are ordered arguments, such as `str_concat.sources`,
-`order_by`, `first_available.sources`, and the `cut` breaks and labels, where
-composing element by element would build a third argument list no layer wrote.
+`order_by`, `first_available.sources`, and the `cut` breaks and labels.
 A schema default is materialized on the composed value rather than on each
 contribution, so a later layer that never mentions a field cannot replace what
 an earlier layer wrote there with this bundle's default. Thus a child may
