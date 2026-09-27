@@ -22,25 +22,42 @@ def test_one_argument_loads_and_executes_a_domain_specification() -> None:
     assert isinstance(pilot.inputs["ODM"], pl.DataFrame)
     assert pilot.input["ODM"].equals(pilot.inputs["ODM"])
     assert pilot.output is not None
-    assert pilot.output.shape == (4, 9)
-    assert pilot.output.get_column("AGE").to_list() == [34, 28, None, None]
+    assert pilot.output.shape == (7, 9)
+    assert pilot.output.get_column("AGE").to_list() == [
+        34,
+        28,
+        None,
+        None,
+        52,
+        61,
+        None,
+    ]
     assert pilot.output.get_column("ARM").to_list() == [
         "Placebo",
         "Vitamin D3",
         None,
         None,
+        "Aspirin",
+        "Placebo",
+        "Vitamin D3",
     ]
     assert pilot.output.get_column("ACTARM").to_list() == [
         "Placebo",
         "Vitamin D3",
         None,
         None,
+        "Aspirin",
+        "Placebo",
+        "Vitamin D3",
     ]
     assert pilot.output.get_column("ARMNRS").to_list() == [
         None,
         None,
         "Not assigned to treatment arm",
         "Not assigned to treatment arm",
+        None,
+        None,
+        None,
     ]
     assert pilot.issues.is_empty()
     assert pilot.issues.schema == {

@@ -423,7 +423,7 @@ class DashboardTests(unittest.TestCase):
             "ascii"
         )
         self.assertNotIn("badge/Dashboard", page)
-        self.assertIn("Basic Demographics", page)
+        self.assertIn("Build One Demographics Record per Subject", page)
 
     def test_readme_lifecycle_extracts_state_and_badge_url(self):
         text = (
