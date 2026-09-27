@@ -193,8 +193,8 @@ names visible at each predicate site:
 
 <a id="req-0179"></a>
 
-**REQ-0179.** an ungrouped row filter sees only fields of its row
-  template's input dataset;
+**REQ-0179.** an ungrouped row filter sees the names
+  [REQ-0068](../execution/rows.md#req-0068) defines;
 
 <a id="req-0180"></a>
 
