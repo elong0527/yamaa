@@ -2952,6 +2952,8 @@ def _plan_lookups(
     if specification.rows:
         dataset_fields["SELF"] = self_fields
     row_drivers = {row.dataset for row in specification.rows or ()}
+    intermediate_ids = frozenset(item.id for item in specification.intermediates or ())
+    reads: dict[str, tuple[_IntermediateRead, ...]] = {}
     for index, intermediate in enumerate(specification.intermediates or ()):
         path = f"intermediates[{index}]"
         if intermediate.dataset not in dataset_fields:
@@ -3068,6 +3070,7 @@ def _plan_lookups(
         match_expressions = tuple(keyed_list)
 
         failed = False
+        intermediate_reads: list[_IntermediateRead] = []
         derived = _validate_intermediate_derivations(
             intermediate,
             path,
@@ -3076,6 +3079,8 @@ def _plan_lookups(
             diagnostics,
             unsupported,
             dataset_fields=dataset_fields,
+            intermediate_ids=intermediate_ids,
+            reads=intermediate_reads,
         )
         # REQ-1185: a name whose derivation failed validation is already
         # reported at its derivation path; the key below must not repeat the
@@ -3377,7 +3382,109 @@ def _plan_lookups(
             derived=tuple(derived.items()),
             unique_columns=unique_columns,
         )
+        if intermediate_reads:
+            reads[intermediate.id] = tuple(intermediate_reads)
+    _validate_intermediate_reads(planned, reads, dataset_fields, diagnostics)
     return planned
+
+
+def _validate_intermediate_reads(
+    planned: Mapping[str, PlannedIntermediate],
+    reads: Mapping[str, Sequence[_IntermediateRead]],
+    dataset_fields: Mapping[str, Mapping[str, ColumnType]],
+    diagnostics: list[ExecutionDiagnostic],
+) -> None:
+    """Check each REQ-1263 read once every intermediate is planned.
+
+    The read intermediate must be input-backed, expose the read column, and
+    take every match value, range value, and correlated filter field from the
+    reading donor record. Intermediates that read each other form a
+    `dependency_cycle`. Any diagnostic fails planning, so the reader keeps
+    its plan and a column reading it reports nothing further.
+    """
+    for reader, entries in reads.items():
+        for read in entries:
+            if read.target == reader:
+                # A read of the reader itself is the one-member cycle below.
+                continue
+            target = planned.get(read.target)
+            if target is None:
+                # The read intermediate's own validation already reported
+                # why it has no plan.
+                continue
+            identifier = f"{read.target}.{read.field}"
+            if target.dataset == "SELF":
+                # REQ-1263: completed rows do not exist while donor records
+                # are augmented.
+                diagnostics.append(
+                    _diagnostic(
+                        "phase_boundary",
+                        read.path,
+                        {"intermediate": reader, "identifier": identifier},
+                        requirement="REQ-1263",
+                    )
+                )
+                continue
+            readable = set(dataset_fields.get(target.dataset, ())) | {
+                name for name, _ in target.derived
+            }
+            if read.field not in readable or (
+                target.readable_columns and read.field not in target.readable_columns
+            ):
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        read.path,
+                        {"intermediate": reader, "identifier": identifier},
+                        requirement="REQ-0125",
+                    )
+                )
+            for name in target.dependencies:
+                qualifier, separator, field = name.partition(".")
+                supplied = (
+                    qualifier == read.dataset and field in read.visible
+                    if separator
+                    else name in read.visible
+                )
+                if supplied:
+                    continue
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        read.path,
+                        {
+                            "intermediate": reader,
+                            "identifier": name,
+                            "read": read.target,
+                        },
+                        requirement="REQ-1263",
+                    )
+                )
+    order = [identifier for identifier in planned if identifier in reads]
+    graph = {
+        reader: {read.target for read in entries} for reader, entries in reads.items()
+    }
+    cycle = _find_cycle(order, graph)
+    if cycle is not None:
+        members = cycle[:-1]
+        paths = tuple(
+            dict.fromkeys(
+                next(
+                    read.path
+                    for read in reads[member]
+                    if read.target == cycle[position + 1]
+                )
+                for position, member in enumerate(members)
+            )
+        )
+        diagnostics.append(
+            _diagnostic(
+                "dependency_cycle",
+                paths,
+                {"cycle": list(cycle)},
+                requirement="REQ-1263",
+            )
+        )
 
 
 # REQ-1185: the declared result type of each operation an intermediate
@@ -3391,6 +3498,33 @@ _DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class _IntermediateRead:
+    """One REQ-1263 read of another intermediate by an intermediate derivation.
+
+    `visible` is what the donor record supplies at the reading derivation:
+    the reader dataset's stored fields plus the derivations declared before
+    it. The read intermediate's match must be answerable from exactly that.
+    """
+
+    reader: str
+    dataset: str
+    target: str
+    field: str
+    path: str
+    visible: frozenset[str]
+
+
+def _in_window(reference_path: str, derivation_path: str) -> bool:
+    """Say whether a derivation reference sits inside a window operation.
+
+    REQ-1263: a window's fields read the partitioned donor records only,
+    so a read of another intermediate there is out of scope.
+    """
+    remainder = reference_path[len(derivation_path) :].split(".")
+    return any(segment.split("[", 1)[0] in WINDOW_OPERATIONS for segment in remainder)
+
+
 def _validate_intermediate_derivations(
     intermediate: Intermediate,
     path: str,
@@ -3399,16 +3533,21 @@ def _validate_intermediate_derivations(
     diagnostics: list[ExecutionDiagnostic],
     unsupported: list[UnsupportedFeature],
     dataset_fields: Mapping[str, Collection[str]] | None = None,
+    intermediate_ids: Collection[str] = (),
+    reads: list[_IntermediateRead] | None = None,
 ) -> dict[str, HandledExpression]:
     """Validate one intermediate's REQ-1185 derivations.
 
     A derivation reads the intermediate's own stored dataset fields plus the
     derivations declared before it in the same map: a bare name means the
     dataset's field or an earlier derived name, and a qualified name must
-    name the dataset. Anything else - a driver field, another intermediate,
-    a later derivation in the same map, or a name the dataset does not store
-    - fails as `unknown_field`. A derived name must not shadow a stored
-    column. Returns the valid declarations in author order.
+    name the dataset. A name qualified by another declared intermediate is a
+    REQ-1263 read, collected into `reads` for `_validate_intermediate_reads`
+    once every intermediate is planned. Anything else - a driver field, a
+    later derivation in the same map, a read of another intermediate inside
+    a window, or a name the dataset does not store - fails as
+    `unknown_field`. A derived name must not shadow a stored column. Returns
+    the valid declarations in author order.
     """
     dataset = intermediate.dataset
     derived: dict[str, HandledExpression] = {}
@@ -3439,6 +3578,7 @@ def _validate_intermediate_derivations(
         unsupported.extend(info.unsupported)
         diagnostics.extend(info.diagnostics)
         ok = True
+        name_reads: list[_IntermediateRead] = []
         for reference in info.references:
             identifier = reference.name
             if "." in identifier:
@@ -3447,21 +3587,43 @@ def _validate_intermediate_derivations(
                 # reference may read an earlier derived name as well as a
                 # stored field; a later one is not in scope yet.
                 allowed = qualifier == dataset and (field in fields or field in derived)
+                if (
+                    not allowed
+                    and qualifier in intermediate_ids
+                    and not _in_window(reference.path, derivation_path)
+                ):
+                    # REQ-1263: another intermediate's column, matched for
+                    # this donor record; checked once every plan exists.
+                    name_reads.append(
+                        _IntermediateRead(
+                            reader=intermediate.id,
+                            dataset=dataset,
+                            target=qualifier,
+                            field=field,
+                            path=reference.path,
+                            visible=frozenset(fields) | frozenset(derived),
+                        )
+                    )
+                    continue
             else:
                 allowed = identifier in fields or identifier in derived
             if allowed:
                 continue
+            windowed_read = identifier.partition(".")[0] in intermediate_ids
             diagnostics.append(
                 _diagnostic(
                     "unknown_field",
                     reference.path,
                     {"intermediate": intermediate.id, "identifier": identifier},
-                    requirement="REQ-1185",
+                    # REQ-1263 keeps another intermediate out of a window.
+                    requirement="REQ-1263" if windowed_read else "REQ-1185",
                 )
             )
             ok = False
         if ok:
             derived[name] = declaration
+            if reads is not None:
+                reads.extend(name_reads)
     return derived
 
 
@@ -4312,8 +4474,13 @@ def _row_phase_default_columns(
 def _intermediate_driver_type(
     expression: Expression,
     fields: Mapping[str, ColumnType],
+    intermediates: Mapping[str, Mapping[str, ColumnType]] | None = None,
 ) -> ColumnType | None:
-    """Find a stable type for a projected intermediate derivation."""
+    """Find a stable type for a projected intermediate derivation.
+
+    `intermediates` holds the known field types of every declared
+    intermediate, so a REQ-1263 read keeps the read column's type.
+    """
     operation = expression.operation
     value = expression.root[operation]
     if operation in ("row_number", "rank"):
@@ -4325,7 +4492,10 @@ def _intermediate_driver_type(
         if isinstance(variable, str):
             if variable in fields:
                 return fields[variable]
-            return fields.get(variable.partition(".")[2])
+            qualifier, _, field = variable.partition(".")
+            if intermediates is not None and qualifier in intermediates:
+                return intermediates[qualifier].get(field)
+            return fields.get(field)
     if operation == "literal":
         if isinstance(value, str):
             return "str"
@@ -4349,7 +4519,7 @@ def _intermediate_driver_type(
                 nested = Expression.model_validate(result)
             except ValidationError:
                 return None
-            branch_type = _intermediate_driver_type(nested, fields)
+            branch_type = _intermediate_driver_type(nested, fields, intermediates)
             if branch_type is None:
                 if result != {"literal": None}:
                     return None
@@ -4360,6 +4530,38 @@ def _intermediate_driver_type(
     return None
 
 
+def _intermediate_field_types(
+    declared: Mapping[str, Intermediate],
+    bindings: BindingPlan,
+) -> dict[str, dict[str, ColumnType]]:
+    """Return the stored and typed derived fields of each input intermediate.
+
+    REQ-1263 reads may chain through several intermediates in any
+    declaration order, so derived types settle over repeated passes until
+    no pass types another name.
+    """
+    types = {
+        identifier: {
+            column.name: column.type
+            for column in bindings.datasets[item.dataset].columns
+        }
+        for identifier, item in declared.items()
+        if item.dataset in bindings.datasets
+    }
+    changed = True
+    while changed:
+        changed = False
+        for identifier, fields in types.items():
+            for name, derivation in (declared[identifier].derivations or {}).items():
+                if name in fields:
+                    continue
+                inferred = _intermediate_driver_type(derivation.value, fields, types)
+                if inferred is not None:
+                    fields[name] = inferred
+                    changed = True
+    return types
+
+
 def _bind_intermediate_drivers(
     specification: Specification,
     bindings: BindingPlan,
@@ -4367,6 +4569,7 @@ def _bind_intermediate_drivers(
 ) -> BindingPlan:
     """Expose source-only intermediate records as typed row drivers."""
     declared = {item.id: item for item in specification.intermediates or ()}
+    intermediate_types = _intermediate_field_types(declared, bindings)
     datasets = dict(bindings.datasets)
     for index, row in enumerate(specification.rows or ()):
         identifier = row.dataset
@@ -4410,7 +4613,9 @@ def _bind_intermediate_drivers(
             column.name: column.type for column in source.columns
         }
         for name, derivation in (item.derivations or {}).items():
-            inferred = _intermediate_driver_type(derivation.value, types)
+            inferred = _intermediate_driver_type(
+                derivation.value, types, intermediate_types
+            )
             if inferred is not None:
                 types[name] = inferred
         visible = (

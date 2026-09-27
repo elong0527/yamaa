@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Literal, NamedTuple
 
 from pydantic import JsonValue, ValidationError
@@ -341,6 +342,11 @@ def _window_value_for(
     return evaluate_window(operation, payload, partition)
 
 
+_IntermediateReader = Callable[[str, str, Resolver], Resolution | None]
+"""Answer `<intermediate>.<field>` for one donor record, or `None` when the
+qualifier names no declared intermediate (REQ-1263)."""
+
+
 class _IntermediateDerivationResolver(_DerivedRecordResolver):
     """Resolve derivation references across the intermediate's donor records.
 
@@ -357,7 +363,8 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
     the readable records (stored fields plus earlier derived names) are
     identical for every record, so rebuilding per record is pure waste.
     `exclude` names the in-progress derivation, which the planner keeps
-    out of its own scope.
+    out of its own scope. `read` answers a REQ-1263 read of another
+    intermediate for this record.
     """
 
     def __init__(
@@ -367,12 +374,24 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
         index: int,
         partition_cache: dict[tuple[str, object], _PreparedPartitions] | None = None,
         exclude: str | None = None,
+        read: _IntermediateReader | None = None,
     ) -> None:
         super().__init__(dataset, values_list[index])
         self._values_list = values_list
         self._index = index
         self._partition_cache = partition_cache
         self._exclude = (exclude,) if exclude is not None else ()
+        self._read = read
+
+    def resolve(self, variable: str) -> Resolution:
+        qualifier, separator, field = variable.partition(".")
+        if separator and qualifier != self._dataset and self._read is not None:
+            # REQ-1263: a name qualified by another intermediate reads the
+            # record that intermediate selects for this donor record.
+            resolution = self._read(qualifier, field, self)
+            if resolution is not None:
+                return resolution
+        return super().resolve(variable)
 
     def resolve_relation(
         self, operation: str, payload: Mapping[str, object]
@@ -457,11 +476,17 @@ class _DerivationFailure(NamedTuple):
     """A derivation that raised an expression condition on a record.
 
     REQ-1185 surfaces the condition at the derivation's own path instead of
-    treating the record as a miss.
+    treating the record as a miss. A failed REQ-1263 read of another
+    intermediate keeps that intermediate's own path, exactly as a row
+    reading it would report.
     """
 
     name: str
     condition: ConditionResult
+    spec_path: str | None = None
+
+    def path(self, plan: PlannedIntermediate) -> str:
+        return self.spec_path or f"{plan.path}.derivations.{self.name}"
 
 
 def _filter_records(
@@ -536,7 +561,7 @@ class IntermediateSelector:
         if isinstance(eligible, _DerivationFailure):
             return IntermediateOutcome(
                 condition=eligible.condition,
-                spec_path=f"{plan.path}.derivations.{eligible.name}",
+                spec_path=eligible.path(plan),
             )
         return eligible
 
@@ -597,11 +622,16 @@ class IntermediateSelector:
         simply does not match.
         """
         values_list = [dict(record.values) for record in source]
+        # REQ-1263: one selection per donor record and read intermediate,
+        # shared by every derivation of that record that reads it.
+        selections: list[dict[str, IntermediateOutcome]] = [{} for _ in source]
         for name, declaration in plan.derived:
             if declaration.value.operation in WINDOW_OPERATIONS:
                 failure = self._augment_window(plan, name, declaration, values_list)
             else:
-                failure = self._augment_scalar(plan, name, declaration, values_list)
+                failure = self._augment_scalar(
+                    plan, name, declaration, values_list, selections
+                )
             if failure is not None:
                 return failure
         return tuple(
@@ -615,6 +645,7 @@ class IntermediateSelector:
         name: str,
         declaration: HandledExpression,
         values_list: list[dict[str, RuntimeValue]],
+        selections: list[dict[str, IntermediateOutcome]],
     ) -> _DerivationFailure | None:
         """Compute one scalar derivation for every donor record.
 
@@ -625,18 +656,79 @@ class IntermediateSelector:
         """
         partition_cache: dict[tuple[str, object], _PreparedPartitions] = {}
         for index, values in enumerate(values_list):
+            failed_reads: list[tuple[RuntimeCondition, str]] = []
             resolver = _IntermediateDerivationResolver(
                 plan.dataset,
                 values_list,
                 index,
                 partition_cache=partition_cache,
                 exclude=name,
+                read=partial(
+                    self._read_for_record,
+                    selected=selections[index],
+                    failed=failed_reads,
+                ),
             )
             result = self._evaluate(declaration.value, resolver)
             if isinstance(result, ConditionResult):
-                return _DerivationFailure(name, result)
+                spec_path = next(
+                    (
+                        path
+                        for condition, path in failed_reads
+                        if condition is result.condition
+                    ),
+                    None,
+                )
+                return _DerivationFailure(name, result, spec_path)
             values[name] = result.value
         return None
+
+    def _read_for_record(
+        self,
+        identifier: str,
+        field: str,
+        resolver: Resolver,
+        *,
+        selected: dict[str, IntermediateOutcome],
+        failed: list[tuple[RuntimeCondition, str]],
+    ) -> Resolution | None:
+        """Read another intermediate's column for one donor record (REQ-1263).
+
+        The other intermediate's match values, range value, and correlated
+        filter fields resolve against the donor record through `resolver`,
+        which the planner has confined to the record's stored fields and
+        earlier derivations. The selection is cached in `selected` so every
+        derivation of the record shares it; a failed selection is recorded
+        in `failed` with the other intermediate's path.
+        """
+        plan = self.plans.get(identifier)
+        if plan is None:
+            return None
+        outcome = selected.get(identifier)
+        if outcome is None:
+            current: dict[str, RuntimeValue] = {}
+            for name in plan.dependencies:
+                resolved = resolver.resolve(name)
+                if isinstance(resolved, FailedResolution):
+                    return resolved
+                current[name] = (
+                    resolved.value if isinstance(resolved, ResolvedValue) else MISSING
+                )
+            outcome = self.select(identifier, current, resolver=resolver)
+            selected[identifier] = outcome
+        if outcome.condition is not None:
+            assert outcome.spec_path is not None
+            failed.append((outcome.condition.condition, outcome.spec_path))
+            return FailedResolution(condition=outcome.condition.condition)
+        if outcome.record is None:
+            # REQ-0124: a decided absence answers the declared `missing`
+            # literal, distinct from a selected record's missing value.
+            return ResolvedValue(
+                value=absent_value(outcome.absent), handled_by=outcome.handled_by
+            )
+        return ResolvedValue(
+            value=outcome.record.values[field], handled_by=outcome.handled_by
+        )
 
     def _augment_window(
         self,
@@ -693,7 +785,7 @@ class IntermediateSelector:
         if isinstance(eligible, _DerivationFailure):
             return IntermediateOutcome(
                 condition=eligible.condition,
-                spec_path=f"{plan.path}.derivations.{eligible.name}",
+                spec_path=eligible.path(plan),
             )
         if plan.match_expressions:
             # REQ-1259: an expression match value evaluates against the
@@ -763,7 +855,7 @@ class IntermediateSelector:
                     _materialization_failure(
                         plan,
                         records.condition.condition,
-                        f"{plan.path}.derivations.{records.name}",
+                        records.path(plan),
                     )
                 )
                 continue
