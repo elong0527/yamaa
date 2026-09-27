@@ -974,7 +974,7 @@ sources:
   R025-15: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0940"]}
   R025-16: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0941"]}
   R025-17: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0942"]}
-  R025-18: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0943"]}
+  R025-18: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0942"]}
   R025-19: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0944"]}
   R025-20: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0945"]}
   R025-21: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0946"]}
@@ -2008,8 +2008,8 @@ requirements:
   REQ-0939: {"file": "submission/terminology.md", "sources": ["R025-14"]}
   REQ-0940: {"file": "submission/terminology.md", "sources": ["R025-15"]}
   REQ-0941: {"file": "submission/terminology.md", "sources": ["R025-16"]}
-  REQ-0942: {"file": "submission/terminology.md", "sources": ["R025-17"]}
-  REQ-0943: {"file": "submission/terminology.md", "sources": ["R025-18"]}
+  REQ-0942: {"file": "submission/terminology.md", "sources": ["R025-17", "R025-18"]}
+  REQ-0943: {"file": "submission/terminology.md", "sources": ["R025-18"], "retired": true, "replacement": ["REQ-0942"]}
   REQ-0944: {"file": "submission/terminology.md", "sources": ["R025-19"]}
   REQ-0945: {"file": "submission/terminology.md", "sources": ["R025-20"]}
   REQ-0946: {"file": "submission/terminology.md", "sources": ["R025-21"]}
