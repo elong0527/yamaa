@@ -6,7 +6,6 @@ input:
   ADSL: input/adsl.csv
 base: LB
 
-
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, TRTSDT, AVAL, ABLFL, BASE]

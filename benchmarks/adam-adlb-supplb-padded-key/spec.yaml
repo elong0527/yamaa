@@ -7,7 +7,7 @@ input:
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, QVAL, QVAL_INLINE]
+  columns: [STUDYID, USUBJID, LBSEQ, QVAL, QVAL_NAMED]
 
 intermediates:
   - id: SUP_EP
@@ -32,7 +32,7 @@ columns:
   - {name: USUBJID, type: str, label: Subject Identifier, derivation: LB.USUBJID}
   - {name: LBSEQ, type: int, label: Sequence Number, derivation: LB.LBSEQ}
   - {name: QVAL, type: str, label: Supplemental Value}
-  - name: QVAL_INLINE
+  - name: QVAL_NAMED
     type: str
     label: Supplemental Value by Named Intermediate
     derivation: SUP_EP.QVAL

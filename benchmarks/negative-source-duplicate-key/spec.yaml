@@ -6,7 +6,6 @@ input:
   ADSL_RAW: input/adsl_raw.csv
 base: DM
 
-
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, TRT01A]
