@@ -147,9 +147,7 @@ date operations. A `datetime` operand to one of those operations is an error
 rather than a widened one. `date_diff` counts whole calendar units and its `bounds` field
 counts endpoints of a day range, and neither has a meaning between two moments:
 `unit: day` between `2025-01-01T23:00:00` and `2025-01-02T01:00:00` could be
-`1` or `0`. Widening either operation would make that choice silently, so both
-stay on `date`. A difference between two moments enters the vocabulary when an
-example needs it.
+`1` or `0`.
 
 <a id="req-0592"></a>
 
