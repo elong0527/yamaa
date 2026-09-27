@@ -602,7 +602,6 @@ class RowResolver:
             kept.append(result.value is TruthValue.TRUE)
         return tuple(kept)
 
-
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:
         expr = payload.get("expr")
         if not isinstance(expr, str):

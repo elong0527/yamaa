@@ -338,7 +338,7 @@ answers the same way.
 **REQ-0132.** A lookup `filter` identifier must name an available field in
 one of the scopes admitted by [REQ-0120](lookup.md#req-0120), otherwise fail
 as `unknown_field`. A filtered scalar source remains donor-only; correlated
-predicates are supported by named intermediates and inline `lookup`.
+predicates are supported by named intermediates.
 
 <a id="req-0133"></a>
 
@@ -616,13 +616,13 @@ right types are not mutually comparable fails as
 
 **REQ-0152.** With no applicable key the intended match is unclear: the
 read fails as `no_applicable_keys`, and the author states the match with
-an explicit `lookup:` naming its `key` pairs. The same explicit
+a named intermediate declaring its `key`. The same explicit
 form serves whenever the intended keys differ from the applicable
-output keys or the read should be a reusable named lookup.
+output keys.
 
 <a id="req-0153"></a>
 
-**REQ-0153.** A named lookup, an inline `lookup:`, or a qualified
+**REQ-0153.** A named lookup or a qualified
 aggregate may omit `key`: the omitted key is the applicable keys of
 [REQ-0150](lookup.md#req-0150) -- the output `keys`, in output-key order, that the right-side
 dataset also carries. The inference is the same one the implicit join

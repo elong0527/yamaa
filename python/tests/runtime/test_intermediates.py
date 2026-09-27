@@ -1322,3 +1322,57 @@ def test_a_scalar_derivation_with_a_nested_window_partitions_once(monkeypatch) -
     assert outcome.record.values["_SHIFTED"] == 3
     # Four donor records, one partition build for the nested window.
     assert len(builds) == 1
+
+
+def test_an_unread_strict_intermediate_never_fails_as_unmatched_key() -> None:
+    # REQ-1264: a named lookup matches only when it is read. An intermediate
+    # that no column reads for a row is never matched, so a strict:true
+    # lookup never fails as unmatched_key on a row that did not read it.
+    def read(variable: str) -> HandledExpression:
+        return HandledExpression(value=Expression(root={"source": variable}))
+
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "DM": DatasetSource(path="dm.csv"),
+            "REF": DatasetSource(path="ref.csv"),
+        },
+        base="DM",
+        keys=["USUBJID"],
+        intermediates=[
+            Intermediate(
+                id="STRICT_REF",
+                dataset="REF",
+                key={"PARAMCD": "DM.PARAMCD"},
+                strict=True,
+            )
+        ],
+        columns=[
+            Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+            # No column reads STRICT_REF: the lazy match never runs, so the
+            # strict lookup cannot fail even though P2 has no match in REF.
+        ],
+        output=Output(path="out.csv", columns=["USUBJID"]),
+    )
+    sources = {
+        "DM": frame_from_values(
+            (
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="PARAMCD", type="str"),
+            ),
+            [["s1", "P2"]],
+        ),
+        "REF": frame_from_values(
+            (
+                TypedColumn(name="PARAMCD", type="str"),
+                TypedColumn(name="VALUE", type="str"),
+            ),
+            [["P1", "V1"]],
+        ),
+    }
+
+    result = execute_specification(spec, sources)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert [row["USUBJID"] for row in result.artifact.frame.to_dicts()] == ["s1"]
