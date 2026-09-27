@@ -912,8 +912,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0939](../submission/terminology.md#req-0939) | `submission/terminology.md` | R025-14 |
 | [REQ-0940](../submission/terminology.md#req-0940) | `submission/terminology.md` | R025-15 |
 | [REQ-0941](../submission/terminology.md#req-0941) | `submission/terminology.md` | R025-16 |
-| [REQ-0942](../submission/terminology.md#req-0942) | `submission/terminology.md` | R025-17 |
-| [REQ-0943](../submission/terminology.md#req-0943) | `submission/terminology.md` | R025-18 |
+| [REQ-0942](../submission/terminology.md#req-0942) | `submission/terminology.md` | R025-17, R025-18 |
 | [REQ-0944](../submission/terminology.md#req-0944) | `submission/terminology.md` | R025-19 |
 | [REQ-0945](../submission/terminology.md#req-0945) | `submission/terminology.md` | R025-20 |
 | [REQ-0946](../submission/terminology.md#req-0946) | `submission/terminology.md` | R025-21 |

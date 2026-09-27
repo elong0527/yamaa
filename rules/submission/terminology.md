@@ -128,15 +128,6 @@ constraint that never fires.
 two value sets must be equal: same values, no more and no fewer, compared
 under the equality [REQ-0935](terminology.md#req-0935) uses. A difference is rejected.
 
-<a id="req-0943"></a>
-
-**REQ-0943.** Equality is required rather than containment in either
-direction. A specification listing fewer values than its terminology asserts a
-narrowing that the document does not report, and a specification listing
-more asserts values the terminology does not admit. Either way the document
-and the run would state different things about the same column, which is the
-failure this requirement exists to prevent.
-
 <a id="req-0944"></a>
 
 **REQ-0944.** Binding an extensible or `external` codelist beside an
