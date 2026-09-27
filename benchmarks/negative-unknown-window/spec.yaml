@@ -21,7 +21,7 @@ columns:
 
   - name: AVISITN
     type: int
-    label: Analysis Visit Number
+    label: Analysis Visit (N)
     derivation: VS.AVISITN
 
   - name: VISITSEQ
