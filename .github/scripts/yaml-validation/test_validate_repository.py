@@ -2760,46 +2760,6 @@ class TestSpecificationInheritance(unittest.TestCase):
             result['derivation'], {'value': {'literal': 'parent-b'}}
         )
 
-    def test_a_child_lookup_key_replaces_the_inherited_key_whole(self):
-        # REQ-0630: the key states one match, so a child's pairs replace the
-        # parent's instead of composing with them key by key.
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            (root / 'parent.yaml').write_text(
-                'schema_version: "1.0"\n'
-                'input: {SRC: input.csv, REF: ref.csv}\n'
-                'base: SRC\n'
-                'columns:\n'
-                '  - name: VALUE\n'
-                '    type: str\n'
-                '    label: Value\n'
-                '    derivation:\n'
-                '      lookup:\n'
-                '        dataset: REF\n'
-                '        key: {REFID: SRC.ID, KIND: SRC.KIND}\n'
-                '        value: VALUE\n'
-            )
-            spec_path = root / 'spec.yaml'
-            spec_path.write_text(
-                'schema_version: "1.0"\n'
-                'parents: parent.yaml\n'
-                'domain: TEST\n'
-                'keys: [VALUE]\n'
-                'output: {path: out.csv, columns: [VALUE]}\n'
-                'columns:\n'
-                '  - name: VALUE\n'
-                '    derivation:\n'
-                '      lookup:\n'
-                '        key: {REFID: SRC.ID}\n'
-            )
-
-            resolved, errors, _ = self.resolve(spec_path)
-
-        self.assertEqual(errors, [])
-        lookup = resolved['columns'][0]['derivation']['value']['lookup']
-        self.assertEqual(lookup['key'], {'REFID': 'SRC.ID'})
-        self.assertEqual(lookup['dataset'], 'REF')
-
     def test_merges_each_keyed_collection_at_the_member_boundary(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

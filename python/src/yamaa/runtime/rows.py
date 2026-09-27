@@ -909,7 +909,7 @@ class RowResolver:
             )
         value = resolved.value
         if value is MISSING:
-            # REQ-0137 and REQ-0473: a missing cutoff admits no record rather
+            # REQ-0473: a missing cutoff admits no record rather
             # than silently reducing the unrestricted right side.
             return []
         bounds = [

@@ -30,11 +30,10 @@ key is not in the table, replace `strict: true` with that missing-value
 answer:
 
 ```yaml
-lookup:
-  dataset: LBREF
-  key: {LBTESTCD: PARAMCD, SEX: SEX}
-  value: ANRHI
-  missing: null
+intermediates:
+  - id: LBREF_LOOKUP
+    dataset: LBREF
+    key: {LBTESTCD: PARAMCD, SEX: SEX}
 ```
 
 The same answer also covers a result whose test code or sex is blank: both

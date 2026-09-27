@@ -31,11 +31,10 @@ missing reference limit whenever any lookup input is missing, replace
 `strict: true` with the lookup's missing-value answer:
 
 ```yaml
-lookup:
-  dataset: LBREF
-  key: {LBTESTCD: PARAMCD, SEX: SEX}
-  value: ANRHI
-  missing: null
+intermediates:
+  - id: LBREF_LOOKUP
+    dataset: LBREF
+    key: {LBTESTCD: PARAMCD, SEX: SEX}
 ```
 
 That one answer also covers a complete test and sex that the reference table

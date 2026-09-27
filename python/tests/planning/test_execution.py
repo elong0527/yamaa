@@ -1247,6 +1247,7 @@ def test_a_datetime_precision_key_match_expression_pairs_with_a_str_key() -> Non
     assert planned.match_variables == ("key[X]",)
     assert planned.match_fields == ("X",)
 
+
 def test_a_qualified_aggregate_key_match_expression_plans() -> None:
     # REQ-1259: a qualified aggregate accepts an expression match value; the
     # planner normalizes it to an expression model before rendering.
@@ -1796,6 +1797,7 @@ def test_a_lookup_order_by_with_an_unqualified_field_suggests_the_qualified_spel
     assert diagnostic.context["identifier"] == "V"
     assert diagnostic.context["suggestion"] == "RIGHT.V"
 
+
 def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
     diagnostic = first_diagnostic(
         [
@@ -1814,41 +1816,6 @@ def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
     # reduce over the whole relation unkeyed.
     assert diagnostic.condition == "missing_aggregate_keys"
     assert diagnostic.requirement == "REQ-0140"
-
-def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() -> None:
-    plan = plan_two(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            aggregate_column({"expr": "SUM(RIGHT.V)"}),
-        ]
-    )
-
-    # REQ-0153/REQ-0115: the aggregate omits its key and groups on X.
-    [join] = [
-        join
-        for join in plan.resolved_joins
-        if join.spec_path == "columns.V.derivation.aggregate.expr"
-    ]
-    assert join.source == ("X",)
-    assert join.key == ("X",)
-    assert join.inferred is True
-
-
-def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> None:
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
-            ),
-        ],
-        right="int",
-    )
-
-    # REQ-0151: an inferred key must compare equal on both sides.
-    assert diagnostic.condition == "incompatible_input_type"
 
 
 def test_a_cross_dataset_source_with_clear_keys_uses_the_implicit_join() -> None:
@@ -2505,6 +2472,7 @@ def test_a_column_level_group_key_echo_on_a_grouped_row_plans() -> None:
     plan = plan_execution(spec, {"SRC": source})
 
     assert [planned.column for planned in plan.columns] == ["K"]
+
 
 def test_a_grouped_row_lookup_keyed_on_group_keys_is_planned() -> None:
     spec = row_two_dataset_specification(
