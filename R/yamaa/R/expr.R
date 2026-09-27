@@ -76,6 +76,15 @@ resolve_name <- function(name, ctx) {
     yamaa_error("unknown_field", paste0("unresolved reference: ", name))
   }
   q <- s$q; v <- s$v
+  # REQ-1185: inside an intermediate's derivations the dataset qualifier
+  # names the derivation-augmented donor frame -- stored and
+  # earlier-derived names resolve per donor record, never through the
+  # join machinery (there is no driver row here).
+  if (!is.null(ctx$inter_ds) && q == ctx$inter_ds) {
+    if (v %in% names(ctx$col)) return(ctx$col[[v]])
+    yamaa_error("unknown_field",
+      paste0("unknown field: ", name, " (intermediate derivation context)"))
+  }
   if (q %in% names(ctx$inter_specs)) return(inter_read(ctx, q, v))
   if (q %in% names(ctx$inputs)) return(dataset_scalar_read(ctx, q, v, NULL))
   yamaa_error("unknown_field", paste0("unknown qualifier: ", q, " in ", name))

@@ -29,6 +29,10 @@ derive_intermediate_frame <- function(ctx, spec, ds) {
     inter = new.env(parent = emptyenv()),
     keys = character(0),
     phase = "derivation",
+    # REQ-1185: the dataset qualifier inside an intermediate's derivations
+    # names the derivation-augmented donor frame (stored + earlier-derived
+    # names in col); resolve_name short-circuits on this marker.
+    inter_ds = ds,
     spec = ctx$spec,
     spec_dir = ctx$spec_dir,
     project_fns = ctx$project_fns,
@@ -47,6 +51,9 @@ derive_intermediate_frame <- function(ctx, spec, ds) {
           tv_len(val), " values for ", nrow(ydf), " records"))
     ydf[[nm]] <- val$v
     cts[[nm]] <- val$t
+    # later derivations (and their windows) read earlier-derived names
+    # bare through the context, alongside the stored fields
+    dctx$col[[nm]] <- val
   }
   attr(ydf, "coltypes") <- cts
   ydf
