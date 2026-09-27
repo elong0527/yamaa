@@ -37,12 +37,8 @@ expressions:
             type: identifier
             required: true
             description: See REQ-1055 in rules/operations/lookup.md.
-        - key_base:
-            type: [key_base_entry, "list[key_base_entry]"]
-            required: false
-            description: See REQ-1055 in rules/operations/lookup.md.
         - key:
-            type: [identifier, "list[identifier]"]
+            type: match_key
             required: false
             description: See REQ-1055 in rules/operations/lookup.md.
         - filter:

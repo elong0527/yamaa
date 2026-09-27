@@ -13,8 +13,7 @@ intermediates:
   - id: DOSE
     dataset: ODM
     filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
-    key: [StudyOID, SubjectKey]
-    key_base: [STUDYID, USUBJID]
+    key: {StudyOID: STUDYID, SubjectKey: USUBJID}
 
 output:
   path: vs.csv
@@ -35,8 +34,7 @@ rows:
       VSTESTCD:
         lookup:
           dataset: VS_MAPPING
-          key_base: ODM.ItemOID
-          key: ItemOID
+          key: {ItemOID: ODM.ItemOID}
           value: VSTESTCD
       VSORRES:
         aggregate:
@@ -44,8 +42,7 @@ rows:
       VSORRESU:
         lookup:
           dataset: VS_MAPPING
-          key_base: ODM.ItemOID
-          key: ItemOID
+          key: {ItemOID: ODM.ItemOID}
           value: UNIT
 
 columns:
@@ -176,9 +173,11 @@ columns:
     derivation:
       aggregate:
         filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-        key: [StudyOID, SubjectKey, StudyEventOID, FormOID]
-        key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-          ODM.FormOID]
+        key:
+          StudyOID: ODM.StudyOID
+          SubjectKey: ODM.SubjectKey
+          StudyEventOID: ODM.StudyEventOID
+          FormOID: ODM.FormOID
         expr: "ONLY(ODM.Value)"
     verifications:
       not_missing: {}

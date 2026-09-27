@@ -46,6 +46,7 @@ from yamaa.specification.models import (
     OrderTerm,
     Row,
     Specification,
+    key_pairs,
 )
 
 INITIAL_OPERATIONS = ("source", "literal", "mapping")
@@ -97,18 +98,28 @@ class PlannedDerivation(_FrozenModel):
         return f"{self.expression_path}.{self.declaration.value.operation}"
 
 
-class KeyBaseExpression(_FrozenModel):
-    """One key_base expression entry REQ-1259 plans.
+class MatchValueExpression(_FrozenModel):
+    """One `key` match value REQ-1259 plans as an expression.
 
-    `name` is the synthetic match name (`key_base[<index>]`) the entry takes
-    in `match_variables`; `expression` is evaluated against the current row
-    at match time; `variables` are the current-row identifiers the
-    expression reads, which `dependencies` reports.
+    `column` is the key column the value is paired with; `name` is the
+    synthetic match name (`key[<column>]`) the value takes in
+    `match_variables`; `expression` is evaluated against the current row at
+    match time; `variables` are the current-row identifiers the expression
+    reads, which `dependencies` reports.
     """
 
+    column: str = Field(min_length=1)
     name: str = Field(min_length=1)
     expression: Expression
     variables: tuple[str, ...] = ()
+
+
+def _match_name(column: str) -> str:
+    """Return the synthetic match name of an expression-valued `key` pair.
+
+    The brackets keep the name from ever colliding with a real variable.
+    """
+    return f"key[{column}]"
 
 
 class PlannedIntermediate(_FrozenModel):
@@ -116,12 +127,11 @@ class PlannedIntermediate(_FrozenModel):
 
     `match_variables` and `match_fields` pair by position: the first names
     what the current row reads, the second the right-side column it must
-    equal. Both come from the entry's declared `source` and `key`, with
-    REQ-0153 inferring an omitted key from the applicable output keys and
-    REQ-0154 defaulting an omitted source to the key names. A `key_base`
-    entry that is an expression (REQ-1259) takes the synthetic name
-    `key_base[<index>]` in `match_variables`, and its `KeyBaseExpression`
-    lives in `match_expressions`.
+    equal. Both come from the entry's `key` (REQ-0115), with REQ-0153
+    inferring an omitted key from the applicable output keys. A match value
+    that is an expression (REQ-1259) takes the synthetic name `key[<column>]`
+    in `match_variables`, and its `MatchValueExpression` lives in
+    `match_expressions`.
     """
 
     identifier: str = Field(min_length=1)
@@ -130,7 +140,7 @@ class PlannedIntermediate(_FrozenModel):
     path: str = Field(min_length=1)
     match_variables: tuple[str, ...]
     match_fields: tuple[str, ...]
-    match_expressions: tuple[KeyBaseExpression, ...] = ()
+    match_expressions: tuple[MatchValueExpression, ...] = ()
     filter_predicate: dict[str, Any] | None = None
     order_terms: tuple[tuple[OrderTerm, str], ...] = ()
     keep: Literal["first", "last"] | None = None
@@ -166,7 +176,7 @@ class PlannedIntermediate(_FrozenModel):
 
         Donor fields contribute no current-row dependency. Matching values,
         range values and correlated filter fields must be available before
-        selecting the shared record. REQ-1259: a key_base expression entry
+        selecting the shared record. REQ-1259: an expression match value
         contributes the identifiers its expression reads, not its synthetic
         match name.
         """
@@ -292,8 +302,8 @@ class _Reference:
     join_relation: str | None = None
     # The declared `key` columns of that pairing, in order.
     join_key: tuple[str, ...] | None = None
-    # The declared `key_base` variables of that pairing, in order.
-    join_key_base: tuple[str, ...] | None = None
+    # The current-row match values of that pairing, in `join_key` order.
+    join_match_values: tuple[str, ...] | None = None
     # The columns that join replaces the applicable keys with, when REQ-0130
     # lets a reduction declare keys coarser than they are.
     join_group_by: tuple[str, ...] | None = None
@@ -306,16 +316,16 @@ class _Reference:
     # The other name this reference's runtime type must be comparable with,
     # which is how REQ-0305 pairs a `intermediate` source with its key column.
     same_type_as: str | None = None
-    # REQ-1259: a key_base expression entry's planned expression. `name` is
-    # the synthetic match name (`key_base[i]`), which is not a real variable:
+    # REQ-1259: an expression match value's planned expression. `name` is
+    # the synthetic match name (`key[<column>]`), which is not a real variable:
     # ordinary name validation and dependency recording skip it, and only the
     # paired-type check applies (against `same_type_as`).
-    key_expression: KeyBaseExpression | None = None
-    # REQ-1259: parallel to `join_key_base`; the planned expression for each
-    # declared key_base entry, or None when the entry is a bare variable.
+    key_expression: MatchValueExpression | None = None
+    # REQ-1259: parallel to `join_match_values`; the planned expression for each
+    # match value, or None when the value is a bare variable.
     # Lets _validate_aggregate_keys type-check expression results instead of
     # resolving synthetic names.
-    join_key_expressions: tuple[KeyBaseExpression | None, ...] | None = None
+    join_key_expressions: tuple[MatchValueExpression | None, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,7 +393,7 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
             reference.requirement,
             reference.join_relation,
             reference.join_key,
-            reference.join_key_base,
+            reference.join_match_values,
             reference.reach,
             reference.same_type_as,
         )
@@ -422,7 +432,7 @@ _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] =
 
 # The operations whose `source` names one variable their handler types at
 # evaluation. The read is still a dependency, and REQ-1259 evaluates a named
-# intermediate's key_base expression over exactly the reads collected here.
+# intermediate's expression match values over exactly the reads collected here.
 _EVALUATED_SOURCES: tuple[str, ...] = (
     "round_half_away_from_zero",
     "str_contains",
@@ -786,36 +796,32 @@ def _as_names(value: object) -> tuple[str, ...] | None:
     return None
 
 
-def _key_base_entries(
-    value: object,
-) -> tuple[str | Mapping[str, object], ...] | None:
-    """Normalize a written `key_base` to its entries.
+# REQ-0115: how a diagnostic describes the shape a `key` must take.
+_KEY_EXPECTED = (
+    "key as a column, a non-empty list of columns, or a non-empty mapping of "
+    "columns to match values"
+)
 
-    REQ-1259: each entry is a bare variable or an expression mapping of
-    exactly one operation, as the runtime reads it. Returns None when the
-    value is not a variable, such a mapping, or a list of those, so a
-    malformed entry is reported rather than failing expression validation.
+
+def _match_value_entries(values: Sequence[object]) -> tuple[str | Expression, ...]:
+    """Return match values with every expression as an Expression model.
+
+    REQ-1259: expression match values arrive as raw mappings on the payload
+    paths; validating each once lets every use see an Expression model.
     """
-    if isinstance(value, str):
-        return (value,)
-    if isinstance(value, Mapping) and len(value) == 1:
-        return (value,)
-    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
-        entries: list[str | Mapping[str, object]] = []
-        for item in value:
-            if isinstance(item, str) or (isinstance(item, Mapping) and len(item) == 1):
-                entries.append(item)
-            else:
-                return None
-        return tuple(entries)
-    return None
+    return tuple(
+        value
+        if isinstance(value, (str, Expression))
+        else Expression.model_validate(dict(value))  # type: ignore[call-overload]
+        for value in values
+    )
 
 
 # REQ-1259: fixed-result operations in the rule's closed static-type table,
-# for the REQ-0118 comparability check on key_base expressions. `source` and
+# for the REQ-0118 comparability check on expression match values. `source` and
 # `literal` take their types from their payloads below. Operations absent
 # here defer the check to runtime comparison of values.
-_KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
+_MATCH_VALUE_RESULT_TYPES: dict[str, ColumnType] = {
     "baseline_flag": "str",
     "cut": "str",
     "date_diff": "int",
@@ -846,12 +852,12 @@ _KEY_BASE_RESULT_TYPES: dict[str, ColumnType] = {
 }
 
 
-def _key_base_result_type(
+def _match_value_result_type(
     expression: Expression,
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
 ) -> ColumnType | None:
-    """Infer a key_base expression's static result type, if it is known.
+    """Infer an expression match value's static result type, if it is known.
 
     `source` takes its variable's type, `literal` takes its value's type,
     and the fixed-result operations above take their table type. Anything
@@ -877,7 +883,7 @@ def _key_base_result_type(
         if isinstance(value, str):
             return "str"
         return None
-    return _KEY_BASE_RESULT_TYPES.get(operation)
+    return _MATCH_VALUE_RESULT_TYPES.get(operation)
 
 
 def _lookup_references(
@@ -901,102 +907,42 @@ def _lookup_references(
     between's type comparability is checked when the intermediate runs, as with
     an unplanned path.
     """
-    entries = _key_base_entries(payload.get("key_base"))
-    keys = _as_names(payload.get("key"))
+    written = payload.get("key")
     dataset = payload.get("dataset")
     value = payload.get("value")
-    if payload.get("key_base") is not None and entries is None:
-        # The fill leaves a written-but-malformed list alone, so a `key_base`
-        # that holds no variable or expression is reported here rather than
-        # reaching the runtime as an unvalidated payload.
-        diagnostics.append(
-            _diagnostic(
-                "invalid_field_type",
-                operation_path,
-                {
-                    "operation": "lookup",
-                    "expected": "key_base as a variable, an expression, or a list of them",
-                },
-                requirement="REQ-0321",
-            )
-        )
-        return
-    if payload.get("key") is not None and keys is None:
-        diagnostics.append(
-            _diagnostic(
-                "invalid_field_type",
-                operation_path,
-                {
-                    "operation": "lookup",
-                    "expected": "key as an identifier or a list of them",
-                },
-                requirement="REQ-0321",
-            )
-        )
-        return
-    if payload.get("key_base") is None or payload.get("key") is None:
-        # REQ-0153/REQ-0154: the planner fills omitted pairs before reference
+    if written is None:
+        # REQ-0153: the planner fills an omitted key before reference
         # collection, or records no_applicable_keys when no key applies.
         # Either way there is nothing left to collect here.
         return
-    if entries is None or keys is None or not isinstance(dataset, str):
+    pairs = key_pairs(written)
+    if pairs is None or not pairs[0]:
+        # REQ-0115: a key that names no column and match value is reported
+        # here rather than reaching the runtime as an unvalidated payload;
+        # REQ-0321 owns a key of the wrong shape.
         diagnostics.append(
             _diagnostic(
                 "invalid_field_type",
                 operation_path,
-                {"operation": "lookup", "expected": "key_base, dataset, and key"},
+                {"operation": "lookup", "expected": _KEY_EXPECTED},
+                requirement="REQ-0115" if pairs is not None else "REQ-0321",
+            )
+        )
+        return
+    if not isinstance(dataset, str):
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                operation_path,
+                {"operation": "lookup", "expected": "dataset and key"},
                 requirement="REQ-0321",
             )
         )
         return
-    # REQ-1259: key_base expressions arrive as raw mappings on this path;
-    # validate each once so every use below sees an Expression model.
-    entries = tuple(
-        entry if isinstance(entry, str) else Expression.model_validate(dict(entry))
-        for entry in entries
-    )
-    rendered = [
-        entry if isinstance(entry, str) else entry.model_dump() for entry in entries
-    ]
-    if (
-        not payload.get("_key_base_defaulted")
-        and all(isinstance(entry, str) for entry in entries)
-        and list(entries) == list(keys)
-    ):
-        # REQ-0155: an explicitly written key_base must not repeat the key
-        # names; omit it instead. (A defaulted key_base is not redundant, and
-        # an expression entry is never a repeated key name.)
-        diagnostics.append(
-            _diagnostic(
-                "redundant_key_base",
-                operation_path,
-                {
-                    "key_base": rendered,
-                    "key": list(keys),
-                },
-                requirement="REQ-0155",
-            )
-        )
-        return
-    if len(entries) != len(keys) or not entries:
-        # REQ-0333: the lists pair by position, so unequal lengths name no
-        # key, and an empty pairing matches nothing.
-        diagnostics.append(
-            _diagnostic(
-                "source_key_length_mismatch",
-                operation_path,
-                {
-                    "key_base": rendered,
-                    "key": list(keys),
-                    "key_base_count": len(entries),
-                    "key_count": len(keys),
-                },
-                requirement="REQ-0333",
-            )
-        )
-        return
-    for index, (entry, key) in enumerate(zip(entries, keys, strict=True)):
-        entry_path = f"{operation_path}.key_base[{index}]"
+    keys, raw_entries = pairs
+    entries = _match_value_entries(raw_entries)
+    for key, entry in zip(keys, entries, strict=True):
+        entry_path = f"{operation_path}.key.{key}"
         if isinstance(entry, str):
             references.append(
                 _Reference(
@@ -1010,10 +956,9 @@ def _lookup_references(
                 )
             )
         else:
-            # REQ-1259: a key_base expression evaluates against the current
-            # row and supplies that key position's match value. The inner
-            # references validate as ordinary reads; the synthetic match name
-            # only carries the paired-type check.
+            # REQ-1259: an expression match value evaluates against the
+            # current row. The inner references validate as ordinary reads;
+            # the synthetic match name only carries the paired-type check.
             info = _expression_info(
                 entry,
                 entry_path,
@@ -1021,8 +966,9 @@ def _lookup_references(
                 scope=scope,
                 dataset_fields=dataset_fields,
             )
-            keyed = KeyBaseExpression(
-                name=f"key_base[{index}]",
+            keyed = MatchValueExpression(
+                column=key,
+                name=_match_name(key),
                 expression=entry,
                 # The expression's current-row dependencies are exactly the
                 # identifiers its references read -- not every string leaf.
@@ -1043,7 +989,7 @@ def _lookup_references(
         references.append(
             _Reference(
                 f"{dataset}.{key}",
-                f"{operation_path}.key[{index}]",
+                f"{operation_path}.key.{key}",
                 reach="declared",
             )
         )
@@ -1459,14 +1405,15 @@ def _derive_reference_names(derivation: object) -> list[str]:
                     add_predicate_names(condition)
                     return
                 if operation == "lookup" and isinstance(payload, Mapping):
-                    key_base = payload.get("key_base")
-                    entries = key_base if isinstance(key_base, list) else [key_base]
-                    for entry in entries:
+                    written = payload.get("key")
+                    for entry in (
+                        written.values() if isinstance(written, Mapping) else ()
+                    ):
                         if isinstance(entry, str):
                             names.append(entry)
                         elif isinstance(entry, Mapping):
-                            # REQ-1259: a key_base expression reads what its
-                            # own derivation names.
+                            # REQ-1259: an expression match value reads what
+                            # its own derivation names.
                             visit(entry)
                     add_predicate_names(payload.get("filter"))
                     add_order_by_names(payload.get("order_by"))
@@ -1713,7 +1660,7 @@ def _aggregate_references(
         relation,
         group_by,
         between,
-        tuple(field for field in ("key", "key_base") if payload.get(field) is not None),
+        ("key",) if payload.get("key") is not None else (),
         expr,
         operation_path,
         scope,
@@ -1739,102 +1686,49 @@ def _aggregate_references(
     joined = relation if scope.grouped_driver is None and relation else None
     key_fields: tuple[str, ...] | None = None
     key_variables: tuple[str, ...] | None = None
-    key_expressions: tuple[KeyBaseExpression | None, ...] | None = None
+    key_expressions: tuple[MatchValueExpression | None, ...] | None = None
     if joined is not None:
-        keys = _as_names(payload.get("key"))
-        entries = _key_base_entries(payload.get("key_base"))
-        if entries is not None:
-            # REQ-1259: key_base expressions arrive as raw mappings on this
-            # path; validate each once so every use below sees an
-            # Expression model.
-            entries = tuple(
-                entry
-                if isinstance(entry, str)
-                else Expression.model_validate(dict(entry))
-                for entry in entries
-            )
-        if (payload.get("key") is not None and keys is None) or (
-            payload.get("key_base") is not None and entries is None
-        ):
-            # REQ-0140: the fill leaves a written-but-malformed list alone, so
-            # a `key` or `key_base` that holds no variable or expression is
+        written = payload.get("key")
+        pairs = key_pairs(written) if written is not None else None
+        if written is None:
+            # REQ-0153: the planner fills an omitted key before reference
+            # collection, or records no_applicable_keys when no key applies.
+            # Either way there is nothing left to check here.
+            pass
+        elif pairs is None or not pairs[0]:
+            # REQ-0140: a key that names no column and match value is
             # reported here rather than reducing over the whole relation
             # unkeyed.
             diagnostics.append(
                 _diagnostic(
                     "missing_aggregate_keys",
                     operation_path,
-                    {
-                        "dataset": joined,
-                        "key": list(keys or ()),
-                        "key_base": [
-                            e if isinstance(e, str) else e.model_dump()
-                            for e in (entries or ())
-                        ],
-                    },
-                    requirement="REQ-0140",
-                )
-            )
-        elif payload.get("key") is None or payload.get("key_base") is None:
-            # REQ-0153/REQ-0154: the planner fills omitted pairs before
-            # reference collection, or records no_applicable_keys when no
-            # key applies. Either way there is nothing left to check here.
-            pass
-        elif (
-            not payload.get("_key_base_defaulted")
-            and all(isinstance(e, str) for e in (entries or ()))
-            and list(entries or ()) == list(keys or ())
-        ):
-            # REQ-0155: an explicitly written key_base must not repeat the
-            # key names. (A defaulted key_base is not redundant, and an
-            # expression entry is never a repeated key name.)
-            diagnostics.append(
-                _diagnostic(
-                    "redundant_key_base",
-                    operation_path,
-                    {
-                        "dataset": joined,
-                        "key_base": list(entries or ()),
-                        "key": list(keys or ()),
-                    },
-                    requirement="REQ-0155",
-                )
-            )
-        elif not keys or not entries or len(keys) != len(entries):
-            diagnostics.append(
-                _diagnostic(
-                    "missing_aggregate_keys",
-                    operation_path,
-                    {
-                        "dataset": joined,
-                        "key": list(keys or ()),
-                        "key_base": [
-                            e if isinstance(e, str) else e.model_dump()
-                            for e in (entries or ())
-                        ],
-                    },
+                    {"dataset": joined, "key": written},
                     requirement="REQ-0140",
                 )
             )
         else:
+            keys, raw_entries = pairs
+            entries = _match_value_entries(raw_entries)
             key_fields = tuple(keys)
-            keyed: list[KeyBaseExpression | None] = []
+            keyed: list[MatchValueExpression | None] = []
             variables: list[str] = []
-            for index, entry in enumerate(entries):
+            for key, entry in zip(keys, entries, strict=True):
                 if isinstance(entry, str):
                     keyed.append(None)
                     variables.append(entry)
                     continue
-                # REQ-1259: a key_base expression evaluates against the
-                # current row and supplies that key position's match value.
+                # REQ-1259: an expression match value evaluates against the
+                # current row.
                 info = _expression_info(
                     entry,
-                    f"{operation_path}.key_base[{index}]",
+                    f"{operation_path}.key.{key}",
                     supported_operations,
                     scope=scope,
                 )
-                planned = KeyBaseExpression(
-                    name=f"key_base[{index}]",
+                planned = MatchValueExpression(
+                    column=key,
+                    name=_match_name(key),
                     expression=entry,
                     # The expression's current-row dependencies are exactly
                     # the identifiers its references read -- not every
@@ -1856,7 +1750,7 @@ def _aggregate_references(
             path,
             join_relation=joined if qualified else None,
             join_key=key_fields if qualified and joined else None,
-            join_key_base=key_variables if qualified and joined else None,
+            join_match_values=key_variables if qualified and joined else None,
             join_key_expressions=key_expressions if qualified and joined else None,
             reach="relation" if qualified else "scalar",
         )
@@ -2062,11 +1956,12 @@ def _fill_omitted_lookup_keys(
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
     REQ-0153 lets a named intermediate, an inline `lookup:`, or a qualified
-    aggregate omit `key`, inferring the applicable output keys; REQ-0154 lets
-    either form omit `key_base`, defaulting it to the key names. The planner
-    and the runtime downstream only understand complete pairs, so the
-    omission is resolved here, before reference collection. Returns the
-    rewritten declaration and the operation paths where a key was inferred.
+    aggregate omit `key`, inferring the applicable output keys, and REQ-0115
+    lets a key name its columns alone, matching same-named current-row
+    values. The planner and the runtime downstream only understand a
+    complete mapping of columns to match values, so both are resolved here,
+    before reference collection. Returns the rewritten declaration and the
+    operation paths where a key was inferred.
     """
     inferred: set[str] = set()
 
@@ -2075,31 +1970,23 @@ def _fill_omitted_lookup_keys(
         dataset: str,
         operation_path: str,
     ) -> Mapping[str, object] | None:
-        """Return the payload with omitted pairs filled, or None to skip."""
-        key_present = payload.get("key") is not None
-        key_base_present = payload.get("key_base") is not None
-        if key_present and key_base_present:
+        """Return the payload with its key as a full mapping, or None to skip."""
+        written = payload.get("key")
+        if isinstance(written, Mapping):
             return None
-        keys = _as_names(payload.get("key")) if key_present else None
-        if not key_present:
+        if written is None:
             keys = infer(dataset, operation_path)
             if keys is None:
                 # The diagnostic is recorded; leave the payload for the
                 # operation's own validation to report.
                 return None
             inferred.add(operation_path)
-        sources = _as_names(payload.get("key_base")) if key_base_present else None
-        if not key_base_present:
-            sources = keys
-        if keys is None or sources is None:
-            # Present but malformed; downstream validation reports it.
-            return None
-        filled = {**payload, "key_base": list(sources), "key": list(keys)}
-        if not key_base_present:
-            # Mark that key_base was defaulted, so REQ-0155 (redundancy)
-            # does not flag the inferred default.
-            filled["_key_base_defaulted"] = True
-        return filled
+        else:
+            keys = _as_names(written)
+            if keys is None:
+                # Present but malformed; downstream validation reports it.
+                return None
+        return {**payload, "key": {key: key for key in keys}}
 
     def fill_intermediate(payload: object, operation_path: str) -> object:
         if not isinstance(payload, Mapping):
@@ -2235,7 +2122,7 @@ def _plan_derivation(
             reference.name
             for reference in ordered_references
             if "." not in reference.name
-            # REQ-1259: a key_base expression's synthetic match name is not a
+            # REQ-1259: an expression match value's synthetic match name is not a
             # real variable; its inner references already carry the true deps.
             and reference.key_expression is None
             and not (reference.current_value_available and reference.name == column)
@@ -2555,9 +2442,9 @@ def _validate_paired_type(
     if reference.same_type_as is None:
         return
     if reference.key_expression is not None:
-        # REQ-1259: a key_base expression entry compares its statically known
+        # REQ-1259: an expression match value compares its statically known
         # result type; an unknown static type defers the check to the runtime.
-        actual = _key_base_result_type(
+        actual = _match_value_result_type(
             reference.key_expression.expression, bindings, column_types
         )
         if actual is None:
@@ -2695,7 +2582,7 @@ def _resolve_implicit_joins(
                 reference,
                 join_relation=qualifier,
                 join_key=keys,
-                join_key_base=keys,
+                join_match_values=keys,
             )
         )
     return tuple(annotated)
@@ -2731,7 +2618,7 @@ def _row_join_match_variables(
         if (
             reference.join_relation is None
             or reference.join_key is None
-            or reference.join_key_base is None
+            or reference.join_match_values is None
             or reference.join_relation == driver
         ):
             rewritten.append(reference)
@@ -2780,7 +2667,7 @@ def _row_join_match_variables(
                 )
                 continue
             match.append(f"{driver}.{key}")
-        rewritten.append(replace(reference, join_key_base=tuple(match)))
+        rewritten.append(replace(reference, join_match_values=tuple(match)))
     return tuple(rewritten)
 
 
@@ -2827,14 +2714,14 @@ def _with_relation_dependencies(
         if (
             reference.join_relation is not None
             and reference.join_key is not None
-            and reference.join_key_base is not None
+            and reference.join_match_values is not None
         ):
             if reference.reach == "scalar":
                 # REQ-0150: an implicit join the pre-pass inferred from the
                 # applicable keys. The keys were validated there.
                 # REQ-0156/REQ-0157: a row-phase join states its driver-side
                 # match variables separately; elsewhere they are the keys.
-                match_variables = reference.join_key_base
+                match_variables = reference.join_match_values
                 implicit.append(
                     ImplicitJoin(
                         dataset=reference.join_relation,
@@ -2853,10 +2740,10 @@ def _with_relation_dependencies(
                     column_types,
                     diagnostics,
                 )
-            extra.extend(reference.join_key_base)
+            extra.extend(reference.join_match_values)
             pairing = (
                 reference.join_relation,
-                reference.join_key_base,
+                reference.join_match_values,
                 reference.join_key,
             )
             if pairing in checked:
@@ -2866,7 +2753,7 @@ def _with_relation_dependencies(
                 ResolvedJoin(
                     spec_path=reference.path,
                     dataset=reference.join_relation,
-                    source=reference.join_key_base,
+                    source=reference.join_match_values,
                     key=reference.join_key,
                     inferred=reference.reach == "scalar"
                     or any(
@@ -2941,12 +2828,12 @@ def _validate_aggregate_keys(
     """
     assert reference.join_relation is not None
     assert reference.join_key is not None
-    assert reference.join_key_base is not None
+    assert reference.join_match_values is not None
     dataset = reference.join_relation
     fields = _dataset_types(bindings, dataset)
     expressions = reference.join_key_expressions or ()
     for index, (variable, field) in enumerate(
-        zip(reference.join_key_base, reference.join_key, strict=True)
+        zip(reference.join_match_values, reference.join_key, strict=True)
     ):
         if field not in fields:
             diagnostics.append(
@@ -2960,10 +2847,10 @@ def _validate_aggregate_keys(
             continue
         keyed = expressions[index] if index < len(expressions) else None
         if keyed is not None:
-            # REQ-1259: a key_base expression entry compares its statically
+            # REQ-1259: an expression match value compares its statically
             # known result type; an unknown static type defers to the runtime.
             # The inner references were validated separately.
-            left = _key_base_result_type(keyed.expression, bindings, column_types)
+            left = _match_value_result_type(keyed.expression, bindings, column_types)
             if left is None:
                 continue
         else:
@@ -3070,11 +2957,10 @@ def _plan_lookups(
         if intermediate.dataset not in dataset_fields:
             continue
         if (
-            not any(
+            intermediate.key is None
+            and not any(
                 getattr(intermediate, field)
                 for field in (
-                    "key",
-                    "key_base",
                     "between",
                     "filter",
                     "order_by",
@@ -3091,7 +2977,9 @@ def _plan_lookups(
             # its dataset; a bare id+dataset only renames the qualifier, so
             # the author should read the input dataset directly instead.
             # Value-based (not declaration-based): the schema materializes
-            # defaults such as strict:false, which change no behavior.
+            # defaults such as strict:false, which change no behavior. A
+            # written key has no default, so even an empty one is declared
+            # and REQ-0115 reports it.
             diagnostics.append(
                 _diagnostic(
                     "rename_only_intermediate",
@@ -3106,12 +2994,16 @@ def _plan_lookups(
             continue
         fields = dataset_fields[intermediate.dataset]
         key_inferred = False
-        source_defaulted = False
+        # REQ-0115: a key of column names matches same-named current-row
+        # values; only a mapping states each match value.
+        source_defaulted = not isinstance(intermediate.key, Mapping)
+        written_values: tuple[object, ...]
         if intermediate.key is None and intermediate.id in row_drivers:
             # A row driver exposes every surviving record. It does not match
             # on output keys, which may not even be present on its source.
             # Retain any applicable keys for ordinary lookup reads elsewhere.
             match_fields = tuple(key for key in specification.keys if key in fields)
+            written_values = match_fields
         elif intermediate.key is None:
             # REQ-0153: an omitted key is inferred from the applicable keys.
             inferred = _infer_applicable_keys(
@@ -3128,68 +3020,52 @@ def _plan_lookups(
             if inferred is None:
                 continue
             match_fields = inferred
+            written_values = inferred
             key_inferred = True
         else:
-            match_fields = tuple(intermediate.key)
-        if intermediate.key_base is None:
-            # REQ-0154: an omitted key_base defaults to the key names.
-            variables = match_fields
-            source_defaulted = True
-            match_expressions: tuple[KeyBaseExpression, ...] = ()
-        else:
-            # REQ-1259: a key_base entry is a bare variable or an ordinary
-            # expression; an expression evaluates against the current row and
-            # supplies that key position's match value.
-            variables_list: list[str] = []
-            keyed_list: list[KeyBaseExpression] = []
-            keyed_infos: dict[str, _ExpressionInfo] = {}
-            for index, entry in enumerate(intermediate.key_base):
-                if isinstance(entry, str):
-                    variables_list.append(entry)
-                    continue
-                info = _expression_info(
-                    entry,
-                    f"{path}.key_base[{index}]",
-                    supported_operations,
-                    dataset_fields=dataset_fields,
-                )
-                keyed = KeyBaseExpression(
-                    name=f"key_base[{index}]",
-                    expression=entry,
-                    # The expression's current-row dependencies are exactly
-                    # the identifiers its references read -- not every
-                    # string leaf.
-                    variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
-                )
-                variables_list.append(keyed.name)
-                keyed_list.append(keyed)
-                keyed_infos[keyed.name] = info
-            variables = tuple(variables_list)
-            match_expressions = tuple(keyed_list)
-        if len(variables) != len(match_fields) or (
-            not variables and intermediate.id not in row_drivers
-        ):
-            if intermediate.key_base is None or intermediate.key is None:
-                # REQ-0115: _lookup_declarations only sees the pairs the author
-                # wrote on both sides, so a pairing that fails after REQ-0153
-                # inference or REQ-0154 defaulting is reported here instead of
-                # dropping the intermediate and failing its readers as unknown.
+            pairs = key_pairs(intermediate.key)
+            if pairs is None or not pairs[0]:
+                # REQ-0115: a written key names at least one pair.
                 diagnostics.append(
                     _diagnostic(
-                        "source_key_length_mismatch",
-                        path,
-                        {
-                            "intermediate": intermediate.id,
-                            "key_base": list(variables),
-                            "key": list(match_fields),
-                            "key_base_count": len(variables),
-                            "key_count": len(match_fields),
-                        },
-                        requirement="REQ-0115",
+                        "invalid_field_type",
+                        f"{path}.key",
+                        {"intermediate": intermediate.id, "expected": _KEY_EXPECTED},
+                        requirement="REQ-0115" if pairs is not None else "REQ-0321",
                     )
                 )
-            # Otherwise _lookup_declarations reported it; skip planning.
-            continue
+                continue
+            match_fields, written_values = pairs
+        # REQ-1259: a match value is a bare variable or an ordinary
+        # expression; an expression evaluates against the current row and
+        # supplies its column's match value.
+        variables_list: list[str] = []
+        keyed_list: list[MatchValueExpression] = []
+        keyed_infos: dict[str, _ExpressionInfo] = {}
+        for field, entry in zip(match_fields, written_values, strict=True):
+            if isinstance(entry, str):
+                variables_list.append(entry)
+                continue
+            assert isinstance(entry, Expression)
+            info = _expression_info(
+                entry,
+                f"{path}.key.{field}",
+                supported_operations,
+                dataset_fields=dataset_fields,
+            )
+            keyed = MatchValueExpression(
+                column=field,
+                name=_match_name(field),
+                expression=entry,
+                # The expression's current-row dependencies are exactly the
+                # identifiers its references read -- not every string leaf.
+                variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
+            )
+            variables_list.append(keyed.name)
+            keyed_list.append(keyed)
+            keyed_infos[keyed.name] = info
+        variables = tuple(variables_list)
+        match_expressions = tuple(keyed_list)
 
         failed = False
         derived = _validate_intermediate_derivations(
@@ -3210,10 +3086,12 @@ def _plan_lookups(
         for variable, field in zip(variables, match_fields, strict=True):
             keyed = keyed_by_name.get(variable)
             if keyed is not None:
-                # REQ-1259: a key_base expression entry compares its
+                # REQ-1259: an expression match value compares its
                 # statically known result type; an unknown static type defers
                 # the check to the runtime.
-                left = _key_base_result_type(keyed.expression, bindings, column_types)
+                left = _match_value_result_type(
+                    keyed.expression, bindings, column_types
+                )
                 if left is None:
                     continue
             else:
@@ -3258,10 +3136,10 @@ def _plan_lookups(
                     )
                 )
                 failed = True
-        for index, variable in enumerate(variables):
+        for field, variable in zip(match_fields, variables, strict=True):
             keyed = keyed_by_name.get(variable)
             if keyed is not None:
-                # REQ-1259: every identifier a key_base expression reads must
+                # REQ-1259: every identifier an expression match value reads must
                 # be known, and must have the input type its operation
                 # states, exactly as the same expression inline in a
                 # derivation would be checked.
@@ -3274,7 +3152,7 @@ def _plan_lookups(
                         diagnostics.append(
                             _diagnostic(
                                 "unknown_field",
-                                f"{path}.key_base[{index}]",
+                                f"{path}.key.{field}",
                                 {
                                     "intermediate": intermediate.id,
                                     "identifier": reference.name,
@@ -3305,7 +3183,7 @@ def _plan_lookups(
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
-                        f"{path}.key_base",
+                        f"{path}.key",
                         {"intermediate": intermediate.id, "identifier": variable},
                         requirement="REQ-0117",
                     )
@@ -3504,7 +3382,7 @@ def _plan_lookups(
 
 # REQ-1185: the declared result type of each operation an intermediate
 # derivation may use, so a derived target-side key field type-checks
-# against its driver-side key_base partner.
+# against its driver-side match value.
 _DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
     "str_upper": "str",
     "str_lower": "str",
@@ -3988,39 +3866,6 @@ def _lookup_declarations(
                         requirement="REQ-0119",
                     )
                 )
-        if intermediate.key_base is not None and intermediate.key is not None:
-            if list(intermediate.key_base) == list(intermediate.key):
-                # REQ-0155: key_base must not repeat the key names.
-                diagnostics.append(
-                    _diagnostic(
-                        "redundant_key_base",
-                        path,
-                        {
-                            "intermediate": intermediate.id,
-                            "key_base": list(intermediate.key_base),
-                            "key": list(intermediate.key),
-                        },
-                        requirement="REQ-0155",
-                    )
-                )
-            elif (
-                len(intermediate.key_base) != len(intermediate.key)
-                or not intermediate.key_base
-            ):
-                diagnostics.append(
-                    _diagnostic(
-                        "source_key_length_mismatch",
-                        path,
-                        {
-                            "intermediate": intermediate.id,
-                            "key_base": list(intermediate.key_base),
-                            "key": list(intermediate.key),
-                            "key_base_count": len(intermediate.key_base),
-                            "key_count": len(intermediate.key),
-                        },
-                        requirement="REQ-0115",
-                    )
-                )
     return diagnostics
 
 
@@ -4330,24 +4175,24 @@ def _row_phase_default_columns(
         }
 
     def match_values(intermediate: Intermediate, index: int) -> tuple[str, ...]:
-        # REQ-0112: the match variables are the key_base values, defaulted
-        # to the key names (REQ-0154), which an omitted key infers from the
-        # applicable keys (REQ-0153). SELF's applicable keys are its donor
-        # fields, which this promotion decides, so an omitted SELF key
-        # promotes nothing. A qualified driver field names no column.
-        key = intermediate.key
+        # REQ-0112: the match values are the key's (REQ-0115), which an
+        # omitted key infers from the applicable keys (REQ-0153). SELF's
+        # applicable keys are its donor fields, which this promotion decides,
+        # so an omitted SELF key promotes nothing. A qualified driver field
+        # names no column.
+        key: object = intermediate.key
         if key is None and intermediate.dataset != "SELF":
             fields = dataset_fields.get(intermediate.dataset, {})
             key = [name for name in specification.keys if name in fields]
-        base = intermediate.key_base if intermediate.key_base is not None else key
+        pairs = key_pairs(key) if key is not None else None
         names: list[str] = []
-        for entry_index, entry in enumerate(base or ()):
+        for field, entry in zip(*(pairs or ((), ())), strict=True):
             if isinstance(entry, str):
                 names.append(entry)
-            else:
+            elif isinstance(entry, Expression):
                 info = _expression_info(
                     entry,
-                    f"intermediates[{index}].key_base[{entry_index}]",
+                    f"intermediates[{index}].key.{field}",
                     supported_operations,
                 )
                 names.extend(reference.name for reference in info.references)
@@ -4534,7 +4379,7 @@ def _bind_intermediate_drivers(
         item = declared[identifier]
         prohibited = [
             field
-            for field in ("key", "key_base", "between", "order_by", "keep")
+            for field in ("key", "between", "order_by", "keep")
             if getattr(item, field) is not None
         ]
         if item.dataset not in specification.input:
@@ -4981,7 +4826,7 @@ def plan_execution(
                             )
                         )
                     elif reference.key_expression is not None:
-                        # REQ-1259: a key_base expression's synthetic match
+                        # REQ-1259: an expression match value's synthetic match
                         # name is not a real variable; the inner references
                         # were validated separately, so only the paired-type
                         # check below applies.
@@ -5134,7 +4979,7 @@ def plan_execution(
                     grouped_by_driver=grouped_by_driver,
                 )
             elif reference.key_expression is not None:
-                # REQ-1259: a key_base expression's synthetic match name is
+                # REQ-1259: an expression match value's synthetic match name is
                 # not a real variable; the inner references were validated
                 # separately, so only the paired-type check below applies.
                 pass

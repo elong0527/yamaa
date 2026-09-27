@@ -55,7 +55,7 @@ from yamaa.models import (
     ValueResult,
     runtime_type_name,
 )
-from yamaa.planning import KeyBaseExpression, PlannedIntermediate
+from yamaa.planning import MatchValueExpression, PlannedIntermediate
 from yamaa.runtime.joins import (
     IndexedRecord,
     OrderError,
@@ -69,7 +69,12 @@ from yamaa.runtime.joins import (
     partition_records,
     select_record,
 )
-from yamaa.specification.models import Expression, HandledExpression, OrderTerm
+from yamaa.specification.models import (
+    Expression,
+    HandledExpression,
+    OrderTerm,
+    key_pairs,
+)
 from yamaa.verification.diagnostics import VerificationFailure
 
 
@@ -691,9 +696,9 @@ class IntermediateSelector:
                 spec_path=f"{plan.path}.derivations.{eligible.name}",
             )
         if plan.match_expressions:
-            # REQ-1259: a key_base expression evaluates against the current
-            # row and supplies that key position's match value. A missing
-            # result matches nothing, exactly like a missing variable.
+            # REQ-1259: an expression match value evaluates against the
+            # current row. A missing result matches nothing, exactly like a
+            # missing variable.
             resolved_current = dict(current)
             expression_resolver = (
                 resolver if resolver is not None else MappingResolver(current)
@@ -703,7 +708,7 @@ class IntermediateSelector:
                 if isinstance(result, ConditionResult):
                     return IntermediateOutcome(
                         condition=result,
-                        spec_path=f"{plan.path}.{keyed.name}",
+                        spec_path=f"{plan.path}.key.{keyed.column}",
                     )
                 if not isinstance(result, ValueResult):
                     return IntermediateOutcome(
@@ -713,13 +718,12 @@ class IntermediateSelector:
                             {
                                 "operation": "lookup",
                                 "reason": (
-                                    "a key_base expression that did not "
-                                    "evaluate to a value"
+                                    "a key match value that did not evaluate to a value"
                                 ),
                             },
                             phase="validation",
                         ),
-                        spec_path=f"{plan.path}.{keyed.name}",
+                        spec_path=f"{plan.path}.key.{keyed.column}",
                     )
                 resolved_current[keyed.name] = result.value
             current = resolved_current
@@ -1094,28 +1098,6 @@ def _names(value: object) -> tuple[str, ...] | None:
     return None
 
 
-def _key_base_entries(
-    value: object,
-) -> tuple[str | Mapping[str, object], ...] | None:
-    """Parse an inline lookup's key_base into variables and expressions.
-
-    REQ-1259: an entry is a bare variable or an ordinary expression mapping.
-    """
-    if isinstance(value, str):
-        return (value,)
-    if isinstance(value, Mapping) and len(value) == 1:
-        return (value,)
-    if isinstance(value, Sequence) and not isinstance(value, str):
-        entries: list[str | Mapping[str, object]] = []
-        for item in value:
-            if isinstance(item, str) or isinstance(item, Mapping) and len(item) == 1:
-                entries.append(item)
-            else:
-                return None
-        return tuple(entries)
-    return None
-
-
 def _order_terms(
     payload: Mapping[str, object], dataset: str
 ) -> tuple[tuple[OrderTerm, str], ...] | None:
@@ -1160,28 +1142,22 @@ def evaluate_intermediate(
     supplies the row's relation when a key expression is relational. `evaluate`
     is the configured expression dispatcher; it defaults to the module-level one.
     """
-    entries = _key_base_entries(payload.get("key_base"))
-    keys = _names(payload.get("key"))
+    pairs = key_pairs(payload.get("key"))
     value_field = payload.get("value")
     dataset = relation.dataset
-    if (
-        entries is None
-        or keys is None
-        or not isinstance(value_field, str)
-        or len(entries) != len(keys)
-        or not entries
-    ):
+    if pairs is None or not pairs[0] or not isinstance(value_field, str):
         return ConditionResult(
             condition=RuntimeCondition(
                 phase="validation",
                 condition="invalid_field_type",
                 context={
                     "operation": "lookup",
-                    "expected": "key_base, key, and value",
+                    "expected": "key and value",
                 },
                 requirement="REQ-0321",
             )
         )
+    keys, entries = pairs
     if not relation.has(value_field) or any(not relation.has(key) for key in keys):
         return ConditionResult(
             condition=RuntimeCondition(
@@ -1193,17 +1169,21 @@ def evaluate_intermediate(
 
     current: dict[str, RuntimeValue] = {}
     match_variables: list[str] = []
-    match_expressions: list[KeyBaseExpression] = []
+    match_expressions: list[MatchValueExpression] = []
     key_resolver = resolver if resolver is not None else CallableResolver(resolve)
     evaluate_expression_with = evaluate or evaluate_expression
-    for index, entry in enumerate(entries):
+    for key, entry in zip(keys, entries, strict=True):
         if isinstance(entry, str):
             match_variables.append(entry)
             continue
-        # REQ-1259: a key_base expression evaluates against the current row
-        # through the lookup's own resolver and supplies that key position's
-        # match value. A missing result matches nothing.
-        expression = Expression.model_validate(dict(entry))
+        # REQ-1259: an expression match value evaluates against the current
+        # row through the lookup's own resolver. A missing result matches
+        # nothing.
+        expression = (
+            entry
+            if isinstance(entry, Expression)
+            else Expression.model_validate(dict(entry))  # type: ignore[call-overload]
+        )
         result = evaluate_expression_with(expression, key_resolver)
         if isinstance(result, ConditionResult):
             return result
@@ -1213,14 +1193,16 @@ def evaluate_intermediate(
                 "REQ-0321",
                 {
                     "operation": "lookup",
-                    "reason": "a key_base expression that did not evaluate to a value",
+                    "reason": "a key match value that did not evaluate to a value",
                 },
                 phase="validation",
             )
-        name = f"key_base[{index}]"
+        name = f"key[{key}]"
         match_variables.append(name)
         match_expressions.append(
-            KeyBaseExpression(name=name, expression=expression, variables=())
+            MatchValueExpression(
+                column=key, name=name, expression=expression, variables=()
+            )
         )
         current[name] = result.value
     names = [entry for entry in entries if isinstance(entry, str)]

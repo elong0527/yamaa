@@ -11,13 +11,11 @@ intermediates:
   # Two entries for one term in the same place stop the run.
   - id: SMQ1
     dataset: QUERY
-    key_base: [AEDECOD]
-    key: [TERM]
+    key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ01'"
   - id: SMQ2
     dataset: QUERY
-    key_base: [AEDECOD]
-    key: [TERM]
+    key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ02'"
 
 output:

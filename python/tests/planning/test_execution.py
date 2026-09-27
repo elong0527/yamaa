@@ -503,7 +503,7 @@ def self_donor_specification(donor: Intermediate) -> Specification:
             key=["K"],
             verification=IntermediateVerification(unique=["D"]),
         ),
-        Intermediate(id="DONOR", dataset="SELF", key_base=["D"], key=["K"]),
+        Intermediate(id="DONOR", dataset="SELF", key={"K": "D"}),
         Intermediate(
             id="DONOR",
             dataset="SELF",
@@ -518,7 +518,7 @@ def test_a_self_donor_field_or_row_phase_match_value_promotes_the_column(
 ) -> None:
     # REQ-1260: the between bounds (REQ-0121) and asserted-unique columns
     # (REQ-1245) are donor fields, which are row-derived (REQ-0120); the
-    # key_base and between value are match values the second template's
+    # key match values and between value are match values the second template's
     # row-phase read needs from that template (REQ-0126).
     spec = self_donor_specification(donor)
 
@@ -566,14 +566,13 @@ def match_value_specification(
 @pytest.mark.parametrize(
     ("default", "lookup", "keys"),
     [
-        ("M", {"key_base": ["M"], "key": ["X"]}, None),
+        ("M", {"key": {"X": "M"}}, None),
         ("X", {"key": ["X"]}, None),
         ("X", {"filter": "RIGHT.V > 0"}, ["K", "X"]),
         (
             "M",
             {
-                "key_base": ["K"],
-                "key": ["X"],
+                "key": {"X": "K"},
                 "between": {"value": "M", "lower": "X", "upper": "X"},
             },
             None,
@@ -586,8 +585,8 @@ def test_a_row_phase_intermediate_read_promotes_its_match_values(
 ) -> None:
     # REQ-1260/REQ-0126: a template reading LOOK needs every value LOOK
     # matches on from that template, so the column-level derivation of a
-    # match value becomes a row-phase default -- whether key_base names it,
-    # key_base defaults to a key naming it (REQ-0154), the key is inferred
+    # match value becomes a row-phase default -- whether the key maps a column
+    # to it, a listed key column names it (REQ-0115), the key is inferred
     # from the applicable keys (REQ-0153), or the between value names it.
     spec = match_value_specification(default, lookup, keys=keys)
 
@@ -607,9 +606,7 @@ def test_a_row_phase_intermediate_read_promotes_its_match_values(
 def test_a_column_phase_intermediate_read_leaves_its_match_values_alone() -> None:
     # REQ-1260: a column-level read of LOOK matches on the completed column,
     # so M keeps its column-phase meaning.
-    spec = match_value_specification(
-        "M", {"key_base": ["M"], "key": ["X"]}, read_in_row=False
-    )
+    spec = match_value_specification("M", {"key": {"X": "M"}}, read_in_row=False)
 
     plan = plan_execution(
         spec,
@@ -776,7 +773,7 @@ def test_an_ungrouped_filter_reads_a_named_intermediate() -> None:
     spec = two_dataset_specification([Column(name="K", type="str")]).model_copy(
         update={
             "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.X"], key=["X"])
+                Intermediate(id="LOOK", dataset="RIGHT", key={"X": "SRC.X"})
             ],
             "rows": [
                 Row(
@@ -833,9 +830,7 @@ def test_an_ungrouped_filter_promotes_a_lookups_match_column() -> None:
         ]
     ).model_copy(
         update={
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["D"], key=["X"])
-            ],
+            "intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key={"X": "D"})],
             "rows": [
                 Row(
                     id="row",
@@ -963,9 +958,7 @@ def test_an_ungrouped_filter_lookup_cannot_match_on_a_window_column() -> None:
         [Column(name="K", type="str"), Column(name="W", type="str")]
     ).model_copy(
         update={
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["W"], key=["X"])
-            ],
+            "intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key={"X": "W"})],
             "rows": [
                 Row(
                     id="row",
@@ -1015,9 +1008,7 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     ).model_copy(
         update={
             "intermediates": [
-                Intermediate(
-                    id="LOOK", dataset="SRC", key_base=["A"], key=["X"], strict=True
-                )
+                Intermediate(id="LOOK", dataset="SRC", key={"X": "A"}, strict=True)
             ]
         }
     )
@@ -1031,8 +1022,8 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
 
 
-def test_key_base_expression_plans_with_synthetic_name() -> None:
-    # REQ-1259: a key_base expression entry takes a synthetic match name and
+def test_key_match_expression_plans_with_synthetic_name() -> None:
+    # REQ-1259: an expression match value takes a synthetic match name and
     # contributes its read identifiers as dependencies.
     spec = specification(
         [
@@ -1045,8 +1036,7 @@ def test_key_base_expression_plans_with_synthetic_name() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"str_upper": {"source": "A"}}],
-                    key=["X"],
+                    key={"X": {"str_upper": {"source": "A"}}},
                 )
             ]
         }
@@ -1059,17 +1049,17 @@ def test_key_base_expression_plans_with_synthetic_name() -> None:
     )
 
     planned = plan.intermediates[0]
-    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_variables == ("key[X]",)
     assert planned.match_fields == ("X",)
     assert len(planned.match_expressions) == 1
     keyed = planned.match_expressions[0]
-    assert keyed.name == "key_base[0]"
+    assert keyed.name == "key[X]"
     assert keyed.variables == ("A",)
     assert planned.dependencies == ("A",)
 
 
 @pytest.mark.parametrize("operation", ["str_upper", "to_date"])
-def test_key_base_expression_type_mismatch_fails(operation: str) -> None:
+def test_key_match_expression_type_mismatch_fails(operation: str) -> None:
     # REQ-1259: a statically known expression result type checks against the
     # donor key type with the existing comparability rules.
     int_table = frame_from_values(
@@ -1087,8 +1077,7 @@ def test_key_base_expression_type_mismatch_fails(operation: str) -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{operation: {"source": "A"}}],
-                    key=["X"],
+                    key={"X": {operation: {"source": "A"}}},
                 )
             ]
         }
@@ -1104,7 +1093,7 @@ def test_key_base_expression_type_mismatch_fails(operation: str) -> None:
     assert raised.value.diagnostics[0].condition == "incompatible_input_type"
 
 
-def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
+def test_baseline_flag_key_match_checks_its_static_str_type() -> None:
     # REQ-0316 fixes baseline_flag's result as str, so REQ-1259 must reject
     # its pairing with a numeric donor key during planning.
     table = frame_from_values(
@@ -1128,8 +1117,7 @@ def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"baseline_flag": {"date": "D", "reference_date": "R"}}],
-                    key=["N"],
+                    key={"N": {"baseline_flag": {"date": "D", "reference_date": "R"}}},
                 )
             ]
         }
@@ -1144,7 +1132,7 @@ def test_baseline_flag_key_base_checks_its_static_str_type() -> None:
     assert diagnostic.context["actual"] == "int"
 
 
-def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:
+def test_a_mapping_key_match_expression_defers_type_check_to_runtime() -> None:
     # REQ-1259: mapping's result type depends on its dict values, so it
     # states no static type; a mapping returning ints pairs with an int
     # donor key and the pair is judged at run time, not planning time.
@@ -1163,8 +1151,7 @@ def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"mapping": {"source": "A", "dict": {"x": 1, "y": 2}}}],
-                    key=["X"],
+                    key={"X": {"mapping": {"source": "A", "dict": {"x": 1, "y": 2}}}},
                 )
             ]
         }
@@ -1177,11 +1164,11 @@ def test_a_mapping_key_base_expression_defers_type_check_to_runtime() -> None:
     )
 
     planned = plan.intermediates[0]
-    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_variables == ("key[X]",)
     assert planned.match_fields == ("X",)
 
 
-def test_a_date_precision_key_base_expression_pairs_with_a_str_key() -> None:
+def test_a_date_precision_key_match_expression_pairs_with_a_str_key() -> None:
     # REQ-1259: date_precision returns a str precision code ("Y"/"M"/"D"),
     # so it pairs with a str donor key.
     src_table = frame_from_values(
@@ -1199,8 +1186,7 @@ def test_a_date_precision_key_base_expression_pairs_with_a_str_key() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"date_precision": {"source": "A"}}],
-                    key=["X"],
+                    key={"X": {"date_precision": {"source": "A"}}},
                 )
             ]
         }
@@ -1213,11 +1199,11 @@ def test_a_date_precision_key_base_expression_pairs_with_a_str_key() -> None:
     )
 
     planned = plan.intermediates[0]
-    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_variables == ("key[X]",)
     assert planned.match_fields == ("X",)
 
 
-def test_a_datetime_precision_key_base_expression_pairs_with_a_str_key() -> None:
+def test_a_datetime_precision_key_match_expression_pairs_with_a_str_key() -> None:
     # REQ-1259: datetime_precision returns a str precision code ("D"/"S"),
     # so it pairs with a str donor key.
     src_table = frame_from_values(
@@ -1245,8 +1231,7 @@ def test_a_datetime_precision_key_base_expression_pairs_with_a_str_key() -> None
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"datetime_precision": {"source": "A"}}],
-                    key=["X"],
+                    key={"X": {"datetime_precision": {"source": "A"}}},
                 )
             ]
         }
@@ -1259,12 +1244,12 @@ def test_a_datetime_precision_key_base_expression_pairs_with_a_str_key() -> None
     )
 
     planned = plan.intermediates[0]
-    assert planned.match_variables == ("key_base[0]",)
+    assert planned.match_variables == ("key[X]",)
     assert planned.match_fields == ("X",)
 
 
-def test_an_inline_lookup_key_base_expression_plans() -> None:
-    # REQ-1259: an inline lookup accepts a key_base expression; the planner
+def test_an_inline_lookup_key_match_expression_plans() -> None:
+    # REQ-1259: an inline lookup accepts an expression match value; the planner
     # validates it as an expression model, not a raw mapping.
     spec = specification(
         [
@@ -1276,8 +1261,7 @@ def test_an_inline_lookup_key_base_expression_plans() -> None:
                     {
                         "lookup": {
                             "dataset": "SRC",
-                            "key_base": [{"str_upper": {"source": "A"}}],
-                            "key": ["X"],
+                            "key": {"X": {"str_upper": {"source": "A"}}},
                             "value": "X",
                         }
                     }
@@ -1296,8 +1280,8 @@ def test_an_inline_lookup_key_base_expression_plans() -> None:
     assert plan.columns[-1].column == "V"
 
 
-def test_a_qualified_aggregate_key_base_expression_plans() -> None:
-    # REQ-1259: a qualified aggregate accepts a key_base expression; the
+def test_a_qualified_aggregate_key_match_expression_plans() -> None:
+    # REQ-1259: a qualified aggregate accepts an expression match value; the
     # planner normalizes it to an expression model before rendering.
     spec = specification(
         [
@@ -1309,8 +1293,7 @@ def test_a_qualified_aggregate_key_base_expression_plans() -> None:
                     {
                         "aggregate": {
                             "dataset": "SRC",
-                            "key_base": [{"str_upper": {"source": "A"}}],
-                            "key": ["X"],
+                            "key": {"X": {"str_upper": {"source": "A"}}},
                             "expr": "COUNT(SRC.*)",
                         }
                     }
@@ -1328,7 +1311,7 @@ def test_a_qualified_aggregate_key_base_expression_plans() -> None:
     assert plan.columns[-1].column == "N"
 
 
-def test_a_key_base_expression_collects_only_real_references() -> None:
+def test_a_key_match_expression_collects_only_real_references() -> None:
     # REQ-1259: the expression's dependencies are its references, not every
     # string leaf, so a literal string contributes no dependency.
     spec = specification(
@@ -1342,8 +1325,7 @@ def test_a_key_base_expression_collects_only_real_references() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"literal": "A"}],
-                    key=["X"],
+                    key={"X": {"literal": "A"}},
                 )
             ]
         }
@@ -1367,11 +1349,11 @@ def test_a_key_base_expression_collects_only_real_references() -> None:
         ("to_epoch_day", {"source": "A"}, "date", "int"),
     ],
 )
-def test_a_key_base_expression_depends_on_the_source_it_reads(
+def test_a_key_match_expression_depends_on_the_source_it_reads(
     operation: str, payload: dict[str, object], source_type: str, key_type: str
 ) -> None:
-    # REQ-1259: selection evaluates a named intermediate's key_base
-    # expression over exactly its recorded reads, so an operation's `source`
+    # REQ-1259: selection evaluates a named intermediate's expression match
+    # value over exactly its recorded reads, so an operation's `source`
     # must be one of them.
     table = frame_from_values(
         (
@@ -1395,8 +1377,7 @@ def test_a_key_base_expression_depends_on_the_source_it_reads(
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{operation: payload}],
-                    key=["X"],
+                    key={"X": {operation: payload}},
                 )
             ]
         }
@@ -1411,7 +1392,7 @@ def test_a_key_base_expression_depends_on_the_source_it_reads(
 
 
 @pytest.mark.parametrize("operation", ["greatest", "least"])
-def test_a_greatest_or_least_key_base_expression_pairs_with_a_date_key(
+def test_a_greatest_or_least_key_match_expression_pairs_with_a_date_key(
     operation: str,
 ) -> None:
     # REQ-1259/REQ-0425: greatest and least return the extreme of any
@@ -1434,8 +1415,7 @@ def test_a_greatest_or_least_key_base_expression_pairs_with_a_date_key(
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{operation: {"sources": ["A", "B"]}}],
-                    key=["D"],
+                    key={"D": {operation: {"sources": ["A", "B"]}}},
                 )
             ]
         }
@@ -1448,8 +1428,8 @@ def test_a_greatest_or_least_key_base_expression_pairs_with_a_date_key(
     assert plan.intermediates[0].match_fields == ("D",)
 
 
-def test_a_named_key_base_expression_checks_its_input_types() -> None:
-    # REQ-1259: a named intermediate's key_base expression is held to the
+def test_a_named_key_match_expression_checks_its_input_types() -> None:
+    # REQ-1259: a named intermediate's expression match value is held to the
     # same input types as the expression written inline.
     table = frame_from_values(
         (TypedColumn(name="N", type="int"), TypedColumn(name="X", type="str")),
@@ -1467,8 +1447,7 @@ def test_a_named_key_base_expression_checks_its_input_types() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=[{"str_upper": {"source": "A"}}],
-                    key=["X"],
+                    key={"X": {"str_upper": {"source": "A"}}},
                 )
             ]
         }
@@ -1482,26 +1461,22 @@ def test_a_named_key_base_expression_checks_its_input_types() -> None:
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "incompatible_input_type"
     assert diagnostic.requirement == "REQ-0308"
-    assert diagnostic.spec_paths == ("intermediates[0].key_base[0].str_upper.source",)
+    assert diagnostic.spec_paths == ("intermediates[0].key.X.str_upper.source",)
     assert diagnostic.context == {"source": "A", "expected": "str", "actual": "int"}
 
 
 @pytest.mark.parametrize(
     ("operation", "payload", "condition"),
     [
-        (
-            "lookup",
-            {"dataset": "SRC", "key": ["X"], "value": "X"},
-            "invalid_field_type",
-        ),
-        ("aggregate", {"key": ["X"], "expr": "COUNT(SRC.*)"}, "missing_aggregate_keys"),
+        ("lookup", {"dataset": "SRC", "value": "X"}, "invalid_field_type"),
+        ("aggregate", {"expr": "COUNT(SRC.*)"}, "missing_aggregate_keys"),
     ],
 )
-def test_a_key_base_entry_of_two_operations_is_a_diagnostic(
+def test_a_key_match_value_of_two_operations_is_a_diagnostic(
     operation: str, payload: dict[str, object], condition: str
 ) -> None:
-    # REQ-1259: an expression entry names exactly one operation; a malformed
-    # entry is reported, never raised out of the planner.
+    # REQ-1259: an expression match value names exactly one operation; a
+    # malformed value is reported, never raised out of the planner.
     malformed = {"str_upper": {"source": "X"}, "literal": "A"}
     spec = specification(
         [
@@ -1510,7 +1485,7 @@ def test_a_key_base_entry_of_two_operations_is_a_diagnostic(
                 name="V",
                 type="str" if operation == "lookup" else "int",
                 derivation=derivation(
-                    {operation: {**payload, "key_base": [malformed]}}
+                    {operation: {**payload, "key": {"X": malformed}}}
                 ),
             ),
         ]
@@ -1552,8 +1527,7 @@ def test_a_named_lookup_with_strict_true_and_missing_literal_is_rejected() -> No
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=["A"],
-                    key=["X"],
+                    key={"X": "A"},
                     strict=True,
                     missing="n/a",
                 )
@@ -1586,8 +1560,7 @@ def test_a_named_lookup_with_strict_true_and_explicit_missing_null_is_rejected()
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key_base=["A"],
-                    key=["X"],
+                    key={"X": "A"},
                     strict=True,
                     missing=None,
                 )
@@ -1685,8 +1658,8 @@ def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None
         supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
     )
 
-    # REQ-0153: the omitted key is the applicable output keys; REQ-0154: the
-    # omitted source defaults to the key names.
+    # REQ-0153: the omitted key is the applicable output keys; REQ-0115: each
+    # key column matches the same-named current-row value.
     assert plan.intermediates[0].match_variables == ("X",)
     assert plan.intermediates[0].match_fields == ("X",)
 
@@ -1707,7 +1680,7 @@ def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> No
         supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
     )
 
-    # REQ-0154: the omitted source defaults to the declared key names.
+    # REQ-0115: a listed key column matches the same-named current-row value.
     assert plan.intermediates[0].match_variables == ("X",)
     assert plan.intermediates[0].match_fields == ("X",)
 
@@ -1741,18 +1714,14 @@ def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> Non
     assert diagnostic.spec_paths == ("intermediates[0]",)
 
 
-def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
+def test_a_named_lookup_with_an_empty_key_fails() -> None:
     spec = two_dataset_specification(
         [
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
         ]
     ).model_copy(
-        update={
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["X", "X"], key=["X"])
-            ]
-        }
+        update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key={})]}
     )
 
     with pytest.raises(ExecutionPlanningError) as raised:
@@ -1762,63 +1731,46 @@ def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
             supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
         )
 
-    # REQ-0115: explicit pairs must pair by position after inference.
+    # REQ-0115: a written key names at least one column and match value.
     [diagnostic] = [
-        d
-        for d in raised.value.diagnostics
-        if d.condition == "source_key_length_mismatch"
+        d for d in raised.value.diagnostics if d.condition == "invalid_field_type"
     ]
     assert diagnostic.requirement == "REQ-0115"
-    assert diagnostic.spec_paths == ("intermediates[0]",)
+    assert diagnostic.spec_paths == ("intermediates[0].key",)
 
 
-def test_a_named_lookup_pairing_a_key_base_against_an_inferred_key_fails() -> None:
-    source = frame_from_values(
-        (TypedColumn(name="X", type="str"), TypedColumn(name="Y", type="str")),
-        [["one", "a"]],
-    )
-    spec = Specification(
-        schema_version="1.0",
-        domain="OUT",
-        input={
-            "SRC": DatasetSource(path="input/source.csv"),
-            "RIGHT": DatasetSource(path="input/right.csv"),
-        },
-        base="SRC",
-        keys=["X"],
-        output=Output(path="out.csv", columns=["X", "Y", "V"]),
-        columns=[
+@pytest.mark.parametrize(
+    ("operation", "payload", "condition"),
+    [
+        ("lookup", {"dataset": "RIGHT", "value": "V"}, "invalid_field_type"),
+        ("aggregate", {"expr": "COUNT(RIGHT.*)"}, "missing_aggregate_keys"),
+    ],
+)
+@pytest.mark.parametrize("empty", [[], {}])
+def test_an_empty_written_key_names_no_match(
+    operation: str, payload: dict[str, object], condition: str, empty: object
+) -> None:
+    # REQ-0115: an empty list or mapping names no pair; a lookup reports it as
+    # an invalid key and an aggregate as missing keys (REQ-0140).
+    spec = two_dataset_specification(
+        [
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(name="Y", type="str", derivation=derivation({"source": "SRC.Y"})),
-            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
-        ],
-    ).model_copy(
-        update={
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["X", "Y"])
-            ]
-        }
+            Column(
+                name="V",
+                type="float" if operation == "lookup" else "int",
+                derivation=derivation({operation: {**payload, "key": empty}}),
+            ),
+        ]
     )
 
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(
             spec,
-            {"SRC": source, "RIGHT": right_table()},
+            {"SRC": source_table(), "RIGHT": right_table()},
             supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
         )
 
-    # REQ-0115: the two declared key_base names pair with one inferred key, so
-    # the pairing is reported rather than the intermediate silently vanishing
-    # and its readers failing as unknown fields.
-    [diagnostic] = [
-        d
-        for d in raised.value.diagnostics
-        if d.condition == "source_key_length_mismatch"
-    ]
-    assert diagnostic.requirement == "REQ-0115"
-    assert diagnostic.spec_paths == ("intermediates[0]",)
-    assert diagnostic.context["key_base"] == ["X", "Y"]
-    assert diagnostic.context["key"] == ["X"]
+    assert [item.condition for item in raised.value.diagnostics] == [condition]
 
 
 def test_a_lookup_filter_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
@@ -1961,8 +1913,7 @@ def test_an_inline_lookup_filter_with_an_unqualified_field_suggests_the_qualifie
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_base": "SRC.X",
-                            "key": ["X"],
+                            "key": {"X": "SRC.X"},
                             "value": "V",
                             "filter": "V > 0",
                         }
@@ -1994,8 +1945,7 @@ def test_an_inline_lookup_filter_with_a_genuinely_unknown_field_suggests_nothing
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_base": "SRC.X",
-                            "key": ["X"],
+                            "key": {"X": "SRC.X"},
                             "value": "V",
                             "filter": "NOPE > 0",
                         }
@@ -2026,8 +1976,7 @@ def test_an_inline_lookup_order_by_with_an_unqualified_field_suggests_the_qualif
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_base": "SRC.X",
-                            "key": ["X"],
+                            "key": {"X": "SRC.X"},
                             "value": "V",
                             "order_by": ["V"],
                             "keep": "first",
@@ -2079,8 +2028,7 @@ def test_an_inline_lookup_with_strict_true_and_explicit_missing_null_is_rejected
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_base": "SRC.X",
-                            "key": ["X"],
+                            "key": {"X": "SRC.X"},
                             "value": "V",
                             "strict": True,
                             "missing": None,
@@ -2159,8 +2107,8 @@ def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> No
         ]
     )
 
-    # REQ-0153/REQ-0154: the inline lookup omits both lists. The inferred
-    # source becomes a dependency of the column.
+    # REQ-0153/REQ-0115: the inline lookup omits its key. The inferred
+    # match value becomes a dependency of the column.
     [derived] = [column for column in plan.columns if column.column == "V"]
     assert "X" in derived.dependencies
 
@@ -2173,7 +2121,7 @@ def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() 
         ]
     )
 
-    # REQ-0153/REQ-0154: the aggregate omits both lists and groups on X.
+    # REQ-0153/REQ-0115: the aggregate omits its key and groups on X.
     [join] = [
         join
         for join in plan.resolved_joins
@@ -2282,8 +2230,7 @@ def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_base": ["X"],
-                            "key": ["V"],
+                            "key": {"V": "X"},
                             "value": "V",
                         }
                     }
@@ -2307,8 +2254,7 @@ def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_base": ["X"],
-                            "key": ["V"],
+                            "key": {"V": "X"},
                             "value": "V",
                         }
                     }
@@ -2451,7 +2397,7 @@ def test_a_grouped_row_aggregate_declares_no_key_pairs() -> None:
                 group_by=["SRC.X"],
                 derivations={
                     "A": derivation(
-                        {"aggregate": {"key_base": ["SRC.X"], "expr": "COUNT(SRC.*)"}}
+                        {"aggregate": {"key": {"X": "SRC.X"}, "expr": "COUNT(SRC.*)"}}
                     )
                 },
             )
@@ -2468,7 +2414,7 @@ def test_a_grouped_row_aggregate_declares_no_key_pairs() -> None:
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "invalid_aggregate_context"
     assert diagnostic.requirement == "REQ-0142"
-    assert diagnostic.spec_paths == ("rows[0].derivations.A.aggregate.key_base",)
+    assert diagnostic.spec_paths == ("rows[0].derivations.A.aggregate.key",)
 
 
 def test_a_one_field_aggregate_names_the_shared_shorthand_operation() -> None:
@@ -2628,9 +2574,7 @@ def test_a_lookup_source_has_already_chosen_its_record() -> None:
         ]
     ).model_copy(
         update={
-            "intermediates": [
-                Intermediate(id="REF", dataset="SRC", key_base=["K"], key=["X"])
-            ]
+            "intermediates": [Intermediate(id="REF", dataset="SRC", key={"X": "K"})]
         }
     )
 
@@ -2927,8 +2871,7 @@ def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
                         {
                             "lookup": {
                                 "dataset": "RIGHT",
-                                "key_base": ["SRC.K"],
-                                "key": ["K"],
+                                "key": {"K": "SRC.K"},
                                 "value": "V",
                             }
                         }
@@ -2963,13 +2906,13 @@ def test_a_grouped_row_lookup_keyed_on_group_keys_is_planned() -> None:
     ).model_copy(
         update={
             "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.K"], key=["K"])
+                Intermediate(id="LOOK", dataset="RIGHT", key={"K": "SRC.K"})
             ]
         }
     )
 
     # Issue #711: group keys are known while grouped rows are built, so the
-    # lookup key_base needs no template derivation.
+    # lookup's match value needs no template derivation.
     plan_execution(
         spec,
         row_tables(),
@@ -2993,7 +2936,7 @@ def test_an_ungrouped_row_lookup_keyed_on_driver_fields_is_planned() -> None:
     ).model_copy(
         update={
             "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.K"], key=["K"])
+                Intermediate(id="LOOK", dataset="RIGHT", key={"K": "SRC.K"})
             ]
         }
     )
@@ -3040,7 +2983,7 @@ def test_a_grouped_row_lookup_keyed_on_a_varying_driver_field_still_fails() -> N
     ).model_copy(
         update={
             "intermediates": [
-                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.S"], key=["K"])
+                Intermediate(id="LOOK", dataset="RIGHT", key={"K": "SRC.S"})
             ]
         }
     )
@@ -3163,8 +3106,7 @@ def test_to_date_still_accepts_a_datetime_source_at_planning() -> None:
 
 def _intermediate_spec(
     derivations: dict[str, dict[str, object]] | None,
-    key: list[str],
-    key_base: list[str] | None = None,
+    key: list[str] | dict[str, str],
     read_field: str = "QVAL",
     **intermediate_fields: object,
 ) -> Specification:
@@ -3197,7 +3139,6 @@ def _intermediate_spec(
                     }
                     or None,
                     key=key,
-                    key_base=key_base,
                     **intermediate_fields,
                 )
             ],
@@ -3233,8 +3174,11 @@ def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
     # REQ-1185: the derived name is a legal target-side key field.
     spec = _intermediate_spec(
         {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
-        key=["STUDYID", "USUBJID", "IDVARVAL_U"],
-        key_base=["SRC.STUDYID", "SRC.USUBJID", "SRC.STUDYID"],
+        key={
+            "STUDYID": "SRC.STUDYID",
+            "USUBJID": "SRC.USUBJID",
+            "IDVARVAL_U": "SRC.STUDYID",
+        },
     )
 
     plan = plan_execution(
@@ -3250,8 +3194,7 @@ def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
 def test_intermediate_clauses_may_read_a_derived_name() -> None:
     spec = _intermediate_spec(
         {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
-        key=["STUDYID", "USUBJID"],
-        key_base=["SRC.STUDYID", "SRC.USUBJID"],
+        key={"STUDYID": "SRC.STUDYID", "USUBJID": "SRC.USUBJID"},
         read_field="IDVARVAL_U",
         filter="SUPP.IDVARVAL_U IS NOT NULL",
         order_by=[OrderTerm(variable="SUPP.IDVARVAL_U")],
@@ -3472,9 +3415,7 @@ def test_a_key_an_intermediate_matches_on_is_derived_before_its_reader() -> None
     ).model_copy(
         update={
             "keys": ["K", "J"],
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="SRC", key_base=["J"], key=["X"])
-            ],
+            "intermediates": [Intermediate(id="LOOK", dataset="SRC", key={"X": "J"})],
         }
     )
 
@@ -3767,8 +3708,7 @@ def _verification_spec(**intermediate_fields: object) -> Specification:
                 Intermediate(
                     id="DS_EOS",
                     dataset="DS",
-                    key=["STUDYID", "USUBJID"],
-                    key_base=["SRC.STUDYID", "SRC.USUBJID"],
+                    key={"STUDYID": "SRC.STUDYID", "USUBJID": "SRC.USUBJID"},
                     **intermediate_fields,
                 )
             ],

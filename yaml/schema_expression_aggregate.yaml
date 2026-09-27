@@ -18,11 +18,7 @@ aggregate_class:
         type: "list[variable]"
         description: See REQ-1088 in rules/operations/aggregation.md.
     - key:
-        type: [identifier, "list[identifier]"]
-        required: false
-        description: See REQ-1088 in rules/operations/aggregation.md.
-    - key_base:
-        type: [key_base_entry, "list[key_base_entry]"]
+        type: match_key
         required: false
         description: See REQ-1088 in rules/operations/aggregation.md.
     - derive:

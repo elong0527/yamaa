@@ -397,8 +397,7 @@ still uses a window or `multiple_matches`, where the value order is declared.
 | `aggregate_class.filter` | Predicate selecting records before reduction. |
 | `aggregate_class.between` | Current-row value matched inclusively against one or two columns of a qualified right-side relation. |
 | `aggregate_class.group_by` | Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys. |
-| `aggregate_class.key` | Dataset columns matched against key_base; omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)) when the expression reads a qualified dataset relation. |
-| `aggregate_class.key_base` | Current-row variables or expressions ([REQ-1259](lookup.md#req-1259)) paired by position with key; omit when they name the same columns as key. Must not repeat the key names ([REQ-0155](lookup.md#req-0155)). |
+| `aggregate_class.key` | Relation columns, each paired with its current-row match value ([REQ-0115](lookup.md#req-0115)); omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)) when the expression reads a qualified dataset relation. |
 | `aggregate_class.derive` | Per-record intermediate variable bindings evaluated before reduction ([REQ-1189](aggregation.md#req-1189)). |
 | `aggregate_class.expr` | Closed reducer expression over the records of one relation. |
 
@@ -511,7 +510,7 @@ unqualified expression with no `group_by`: fail.
 <a id="req-0508"></a>
 
 **REQ-0508.** A grouped-row
-aggregate declaring its own `group_by`, declaring `key` or `key_base`
+aggregate declaring its own `group_by`, declaring `key`
 ([REQ-0142](lookup.md#req-0142)), naming an identifier outside its row
 template's input dataset, or being used by an ungrouped row template: fail.
 

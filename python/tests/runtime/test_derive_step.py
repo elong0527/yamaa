@@ -548,8 +548,8 @@ def test_plan_rejects_derive_step_naming_two_relations() -> None:
     )
 
 
-def test_plan_reads_a_key_base_expression_in_a_binding_lookup() -> None:
-    """REQ-1259: a binding lookup's key_base expression names its relation."""
+def test_plan_reads_a_key_match_expression_in_a_binding_lookup() -> None:
+    """REQ-1259: a binding lookup's expression match value names its relation."""
     derive = [
         {
             "name": "QSNUM",
@@ -557,22 +557,21 @@ def test_plan_reads_a_key_base_expression_in_a_binding_lookup() -> None:
             "derivation": {
                 "lookup": {
                     "dataset": "QS",
-                    "key_base": [{"str_upper": {"source": "QS.QSTESTCD"}}],
-                    "key": ["QSTESTCD"],
+                    "key": {"QSTESTCD": {"str_upper": {"source": "QS.QSTESTCD"}}},
                     "value": "QSORRES",
                 }
             },
         },
     ]
     spec = _planned_spec(derive)
-    # Without the filter, only the key_base expression names the relation.
+    # Without the filter, only the expression match value names the relation.
     del spec.columns[2].derivation.value.root["aggregate"]["filter"]
 
     assert _plan_no_filter(spec) is None
 
 
-def test_plan_rejects_an_unknown_name_in_a_binding_key_base_expression() -> None:
-    """REQ-1189/REQ-1259: a key_base expression's reads are binding reads."""
+def test_plan_rejects_an_unknown_name_in_a_binding_key_match_expression() -> None:
+    """REQ-1189/REQ-1259: an expression match value's reads are binding reads."""
     derive = [
         {"name": "QSNUM", "type": "float", "derivation": "QS.QSORRES"},
         {
@@ -581,8 +580,7 @@ def test_plan_rejects_an_unknown_name_in_a_binding_key_base_expression() -> None
             "derivation": {
                 "lookup": {
                     "dataset": "QS",
-                    "key_base": [{"str_upper": {"source": "NOPE"}}],
-                    "key": ["QSTESTCD"],
+                    "key": {"QSTESTCD": {"str_upper": {"source": "NOPE"}}},
                     "value": "QSORRES",
                 }
             },

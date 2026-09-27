@@ -1240,14 +1240,6 @@ class TestStaticSemanticContracts(unittest.TestCase):
                 'dict': {'Y': 'Y', 'y': 'Y'},
             }
         })
-        length = self.validate({
-            'lookup': {
-                'key_base': ['KEY1', 'KEY2'],
-                'dataset': 'REF',
-                'key': 'K',
-                'value': 'K',
-            }
-        })
         extreme = self.validate({
             'greatest': {'sources': ['A', 'B']}
         })
@@ -1263,7 +1255,6 @@ class TestStaticSemanticContracts(unittest.TestCase):
         })
 
         self.assertEqual(collision[0].condition, 'ambiguous_dictionary')
-        self.assertEqual(length[0].condition, 'source_key_length_mismatch')
         self.assertEqual(extreme[0].condition, 'incomparable_sources')
         self.assertEqual(offset[0].condition, 'zero_offset')
         self.assertEqual(
@@ -1340,8 +1331,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'intermediates': [{
                 'id': 'R',
                 'dataset': 'REF',
-                'source': 'A',
-                'key': 'K',
+                'key': {'K': 'A'},
             }]
         }
         errors = VALIDATOR.validate_intermediate_static_semantics(
@@ -2823,6 +2813,46 @@ class TestSpecificationInheritance(unittest.TestCase):
             result['derivation'], {'value': {'literal': 'parent-b'}}
         )
 
+    def test_a_child_lookup_key_replaces_the_inherited_key_whole(self):
+        # REQ-0630: the key states one match, so a child's pairs replace the
+        # parent's instead of composing with them key by key.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'parent.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'input: {SRC: input.csv, REF: ref.csv}\n'
+                'base: SRC\n'
+                'columns:\n'
+                '  - name: VALUE\n'
+                '    type: str\n'
+                '    label: Value\n'
+                '    derivation:\n'
+                '      lookup:\n'
+                '        dataset: REF\n'
+                '        key: {REFID: SRC.ID, KIND: SRC.KIND}\n'
+                '        value: VALUE\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'domain: TEST\n'
+                'keys: [VALUE]\n'
+                'output: {path: out.csv, columns: [VALUE]}\n'
+                'columns:\n'
+                '  - name: VALUE\n'
+                '    derivation:\n'
+                '      lookup:\n'
+                '        key: {REFID: SRC.ID}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        lookup = resolved['columns'][0]['derivation']['value']['lookup']
+        self.assertEqual(lookup['key'], {'REFID': 'SRC.ID'})
+        self.assertEqual(lookup['dataset'], 'REF')
+
     def test_merges_each_keyed_collection_at_the_member_boundary(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -2836,8 +2866,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'intermediates:\n'
                 '  - id: ref\n'
                 '    dataset: REF\n'
-                '    key_base: DM.KEY\n'
-                '    key: KEY\n'
+                '    key: {KEY: DM.KEY}\n'
                 'columns:\n'
                 '  - name: X\n'
                 '    type: str\n'
@@ -2874,8 +2903,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             {
                 'id': 'ref',
                 'dataset': 'REF',
-                'key_base': ['DM.KEY'],
-                'key': ['KEY'],
+                'key': {'KEY': 'DM.KEY'},
                 'missing': 0,
             },
         )

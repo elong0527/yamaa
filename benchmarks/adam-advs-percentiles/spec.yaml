@@ -15,8 +15,7 @@ base: ADVS_RAW
 intermediates:
   - id: GROWTH
     dataset: LMS
-    key_base: [ADVS_RAW.PARAMCD, ADVS_RAW.SEX, ADVS_RAW.AGE]
-    key: [PARAMCD, SEX, AGE]
+    key: {PARAMCD: ADVS_RAW.PARAMCD, SEX: ADVS_RAW.SEX, AGE: ADVS_RAW.AGE}
 
 output:
   path: advs.csv

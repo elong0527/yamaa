@@ -57,8 +57,7 @@ columns:
     derivation:
       lookup:
         dataset: ADLB
-        key_base: [USUBJID, ADT, ASTCODE]
-        key: [USUBJID, ADT, PARAMCD]
+        key: {USUBJID: USUBJID, ADT: ADT, PARAMCD: ASTCODE}
         value: AVAL
 
   - name: AVAL

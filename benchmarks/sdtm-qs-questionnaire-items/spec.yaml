@@ -120,29 +120,25 @@ rows:
       VISITNUM:
         lookup:
           dataset: VISITS
-          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
-          key: [SubjectKey, StudyEventOID]
+          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
           value: VISITNUM
           strict: true
       QSDTC:
         lookup:
           dataset: VISITS
-          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
-          key: [SubjectKey, StudyEventOID]
+          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
           value: VisitDate
           strict: true
       QSTESTCD:
         lookup:
           dataset: ITEMS
-          key_base: [ODM.ItemOID]
-          key: [ItemOID]
+          key: {ItemOID: ODM.ItemOID}
           value: QSTESTCD
           strict: true
       QSTEST:
         lookup:
           dataset: ITEMS
-          key_base: [ODM.ItemOID]
-          key: [ItemOID]
+          key: {ItemOID: ODM.ItemOID}
           value: QSTEST
           strict: true
       QSORRES:
@@ -174,15 +170,17 @@ rows:
       VISITNUM:
         lookup:
           dataset: VISITS
-          key_base: [NOTDONE.SubjectKey, NOTDONE.StudyEventOID]
-          key: [SubjectKey, StudyEventOID]
+          key:
+            SubjectKey: NOTDONE.SubjectKey
+            StudyEventOID: NOTDONE.StudyEventOID
           value: VISITNUM
           strict: true
       QSDTC:
         lookup:
           dataset: VISITS
-          key_base: [NOTDONE.SubjectKey, NOTDONE.StudyEventOID]
-          key: [SubjectKey, StudyEventOID]
+          key:
+            SubjectKey: NOTDONE.SubjectKey
+            StudyEventOID: NOTDONE.StudyEventOID
           value: VisitDate
           strict: true
       QSTESTCD:
@@ -193,8 +191,7 @@ rows:
             then:
               lookup:
                 dataset: ITEMS
-                key_base: [NOTDONE.ItemOID]
-                key: [ItemOID]
+                key: {ItemOID: NOTDONE.ItemOID}
                 value: QSTESTCD
                 strict: true
       QSTEST:
@@ -205,8 +202,7 @@ rows:
             then:
               lookup:
                 dataset: ITEMS
-                key_base: [NOTDONE.ItemOID]
-                key: [ItemOID]
+                key: {ItemOID: NOTDONE.ItemOID}
                 value: QSTEST
                 strict: true
       QSORRES: {literal: null}
@@ -235,15 +231,13 @@ rows:
       VISITNUM:
         lookup:
           dataset: VISITS
-          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
-          key: [SubjectKey, StudyEventOID]
+          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
           value: VISITNUM
           strict: true
       QSDTC:
         lookup:
           dataset: VISITS
-          key_base: [ODM.SubjectKey, ODM.StudyEventOID]
-          key: [SubjectKey, StudyEventOID]
+          key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
           value: VisitDate
           strict: true
       QSTESTCD: {literal: PHQ9T}

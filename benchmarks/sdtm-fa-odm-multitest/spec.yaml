@@ -70,20 +70,13 @@ columns:
     derivation:
       lookup:
         dataset: ODM_SIBLING
-        key_base:
-          - ODM.StudyOID
-          - ODM.SubjectKey
-          - ODM.StudyEventOID
-          - ODM.StudyEventRepeatKey
-          - ODM.ItemGroupOID
-          - ODM.ItemGroupRepeatKey
         key:
-          - StudyOID
-          - SubjectKey
-          - StudyEventOID
-          - StudyEventRepeatKey
-          - ItemGroupOID
-          - ItemGroupRepeatKey
+          StudyOID: ODM.StudyOID
+          SubjectKey: ODM.SubjectKey
+          StudyEventOID: ODM.StudyEventOID
+          StudyEventRepeatKey: ODM.StudyEventRepeatKey
+          ItemGroupOID: ODM.ItemGroupOID
+          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
         filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
         value: Value
         strict: true
@@ -139,20 +132,13 @@ columns:
     derivation:
       lookup:
         dataset: ODM_SIBLING
-        key_base:
-          - ODM.StudyOID
-          - ODM.SubjectKey
-          - ODM.StudyEventOID
-          - ODM.StudyEventRepeatKey
-          - ODM.ItemGroupOID
-          - ODM.ItemGroupRepeatKey
         key:
-          - StudyOID
-          - SubjectKey
-          - StudyEventOID
-          - StudyEventRepeatKey
-          - ItemGroupOID
-          - ItemGroupRepeatKey
+          StudyOID: ODM.StudyOID
+          SubjectKey: ODM.SubjectKey
+          StudyEventOID: ODM.StudyEventOID
+          StudyEventRepeatKey: ODM.StudyEventRepeatKey
+          ItemGroupOID: ODM.ItemGroupOID
+          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
         filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
         value: Value
         strict: true

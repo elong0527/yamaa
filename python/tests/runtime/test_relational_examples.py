@@ -65,7 +65,6 @@ ERROR_EXAMPLES = [
     "negative-mapping-duplicate-key",
     "negative-mapping-unmapped-key",
     "negative-mapping-partial-key",
-    "negative-mapping-unpaired-key",
     "negative-adlb-duplicate-wbc",
 ]
 
@@ -722,8 +721,7 @@ rows:
       VAL:
         lookup:
           dataset: AUX
-          key_base: [MAIN.ID]
-          key: [ID]
+          key: {ID: MAIN.ID}
           value: H
   - id: joined
     dataset: MAIN

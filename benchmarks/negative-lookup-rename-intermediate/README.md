@@ -44,8 +44,7 @@ columns:
     derivation:
       lookup:
         dataset: WHODRUG
-        key_base: [CODING.DRUG_RECORD_NO, CODING.ATC_CODE]
-        key: [DRUG_RECORD_NO, ATC_CODE]
+        key: {DRUG_RECORD_NO: CODING.DRUG_RECORD_NO, ATC_CODE: CODING.ATC_CODE}
         value: PREFERRED_NAME
 ```
 

@@ -5,7 +5,7 @@ from yamaa.expressions.dispatch import ExpressionDispatcher
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, ConditionResult, DateValue, TypedColumn, ValueResult
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
-from yamaa.planning import KeyBaseExpression, PlannedIntermediate
+from yamaa.planning import MatchValueExpression, PlannedIntermediate
 from yamaa.runtime import ExecutionSuccess, execute_specification
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
@@ -210,18 +210,18 @@ def test_a_missing_match_value_is_answered_before_a_record_is_looked_for() -> No
     assert answered.record is None
 
 
-def test_key_base_expression_evaluates_against_current_row() -> None:
-    # REQ-1259: a key_base expression evaluates against the current row and
-    # supplies that key position's match value.
+def test_key_match_expression_evaluates_against_current_row() -> None:
+    # REQ-1259: an expression match value evaluates against the current row.
     plan = PlannedIntermediate(
         identifier="UPPER",
         dataset="EX",
         path="intermediates[0]",
-        match_variables=("key_base[0]",),
+        match_variables=("key[USUBJID]",),
         match_fields=("USUBJID",),
         match_expressions=(
-            KeyBaseExpression(
-                name="key_base[0]",
+            MatchValueExpression(
+                column="USUBJID",
+                name="key[USUBJID]",
                 expression=Expression.model_validate(
                     {"str_upper": {"source": "SUBJECT"}}
                 ),
@@ -237,18 +237,19 @@ def test_key_base_expression_evaluates_against_current_row() -> None:
     assert chosen.record.values["EXTRT"] == "VITAMIN D3"
 
 
-def test_key_base_expression_missing_result_matches_nothing() -> None:
+def test_key_match_expression_missing_result_matches_nothing() -> None:
     # REQ-1259: a missing expression result matches nothing, like a missing
     # variable.
     plan = PlannedIntermediate(
         identifier="UPPER",
         dataset="EX",
         path="intermediates[0]",
-        match_variables=("key_base[0]",),
+        match_variables=("key[USUBJID]",),
         match_fields=("USUBJID",),
         match_expressions=(
-            KeyBaseExpression(
-                name="key_base[0]",
+            MatchValueExpression(
+                column="USUBJID",
+                name="key[USUBJID]",
                 expression=Expression.model_validate({"literal": None}),
                 variables=(),
             ),
@@ -263,16 +264,15 @@ def test_key_base_expression_missing_result_matches_nothing() -> None:
 def inline_payload() -> dict[str, object]:
     return {
         "dataset": "EX",
-        "key_base": [{"double": {"source": "SUBJECT"}}],
-        "key": ["USUBJID"],
+        "key": {"USUBJID": {"double": {"source": "SUBJECT"}}},
         "value": "EXTRT",
         "order_by": ["EX.EXSEQ"],
         "keep": "first",
     }
 
 
-def test_an_inline_key_base_expression_uses_the_configured_dispatcher() -> None:
-    # REQ-1189/REQ-1259: an inline lookup key_base expression evaluates
+def test_an_inline_key_match_expression_uses_the_configured_dispatcher() -> None:
+    # REQ-1189/REQ-1259: an inline lookup's expression match value evaluates
     # through the caller's configured dispatcher, so an R018 function
     # operation resolves there instead of failing as unsupported.
 
@@ -291,7 +291,7 @@ def test_an_inline_key_base_expression_uses_the_configured_dispatcher() -> None:
     assert result.value == "VITAMIN D3"
 
 
-def test_an_inline_key_base_expression_without_a_dispatcher_is_a_condition() -> None:
+def test_an_inline_key_match_expression_without_a_dispatcher_is_a_condition() -> None:
     # REQ-1259: without a configured dispatcher an unsupported operation
     # yields a clean condition, never an AttributeError on the result.
     result = evaluate_intermediate(
@@ -303,18 +303,19 @@ def test_an_inline_key_base_expression_without_a_dispatcher_is_a_condition() -> 
     assert result.condition.requirement == "REQ-0321"
 
 
-def test_a_select_key_base_expression_without_a_dispatcher_is_a_condition() -> None:
-    # REQ-1259: in select, a key_base expression that does not evaluate to
+def test_a_select_key_match_expression_without_a_dispatcher_is_a_condition() -> None:
+    # REQ-1259: in select, an expression match value that does not evaluate to
     # a value yields a clean condition, never an AttributeError on .value.
     plan = PlannedIntermediate(
         identifier="UPPER",
         dataset="EX",
         path="intermediates[0]",
-        match_variables=("key_base[0]",),
+        match_variables=("key[USUBJID]",),
         match_fields=("USUBJID",),
         match_expressions=(
-            KeyBaseExpression(
-                name="key_base[0]",
+            MatchValueExpression(
+                column="USUBJID",
+                name="key[USUBJID]",
                 expression=Expression.model_validate({"double": {"source": "SUBJECT"}}),
                 variables=("SUBJECT",),
             ),
@@ -328,8 +329,8 @@ def test_a_select_key_base_expression_without_a_dispatcher_is_a_condition() -> N
     assert answered.condition.condition.requirement == "REQ-0321"
 
 
-def test_a_named_key_base_expression_reads_its_source_when_selecting() -> None:
-    # REQ-1259: selection evaluates the key_base expression over the row's
+def test_a_named_key_match_expression_reads_its_source_when_selecting() -> None:
+    # REQ-1259: selection evaluates the expression match value over the row's
     # recorded reads, so the source an operation names must be among them.
     def read(variable: str) -> HandledExpression:
         return HandledExpression(value=Expression(root={"source": variable}))
@@ -347,10 +348,9 @@ def test_a_named_key_base_expression_reads_its_source_when_selecting() -> None:
             Intermediate(
                 id="T",
                 dataset="TAB",
-                key_base=[
-                    {"round_half_away_from_zero": {"source": "SCORE", "digits": 0}}
-                ],
-                key=["K"],
+                key={
+                    "K": {"round_half_away_from_zero": {"source": "SCORE", "digits": 0}}
+                },
             )
         ],
         columns=[
@@ -383,13 +383,13 @@ def test_a_named_key_base_expression_reads_its_source_when_selecting() -> None:
     ]
 
 
-def test_key_base_window_expression_uses_the_current_row_partition() -> None:
-    # REQ-1259: a window expression in key_base needs the row's relational
+def test_key_match_window_expression_uses_the_current_row_partition() -> None:
+    # REQ-1259: a window expression as a key match value needs the row's relational
     # resolver, for both a named intermediate and an inline lookup.
     def read(variable: str) -> HandledExpression:
         return HandledExpression(value=Expression(root={"source": variable}))
 
-    key_base = [{"baseline_flag": {"date": "ADT", "reference_date": "TRTSDT"}}]
+    key = {"K": {"baseline_flag": {"date": "ADT", "reference_date": "TRTSDT"}}}
     sources = {
         "DM": frame_from_values(
             (
@@ -412,8 +412,7 @@ def test_key_base_window_expression_uses_the_current_row_partition() -> None:
                     root={
                         "lookup": {
                             "dataset": "TAB",
-                            "key_base": key_base,
-                            "key": ["K"],
+                            "key": key,
                             "value": "VAL",
                         }
                     }
@@ -430,9 +429,7 @@ def test_key_base_window_expression_uses_the_current_row_partition() -> None:
             base="DM",
             keys=["USUBJID"],
             intermediates=(
-                [Intermediate(id="T", dataset="TAB", key_base=key_base, key=["K"])]
-                if named
-                else None
+                [Intermediate(id="T", dataset="TAB", key=key)] if named else None
             ),
             columns=[
                 Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),

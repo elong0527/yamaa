@@ -47,5 +47,4 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.DM.RACE'"
           expr: "COUNT(ODM.*)"
-          key: [StudyOID, SubjectKey]
-          key_base: [STUDYID, USUBJID]
+          key: {StudyOID: STUDYID, SubjectKey: USUBJID}

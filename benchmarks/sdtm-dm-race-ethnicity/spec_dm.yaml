@@ -38,8 +38,7 @@ columns:
     label: Alphabetically First Reported Race
     derivation:
       aggregate:
-        key: [StudyOID, SubjectKey]
-        key_base: [STUDYID, USUBJID]
+        key: {StudyOID: STUDYID, SubjectKey: USUBJID}
         filter: "ODM.ItemOID = 'IT.DM.RACE'"
         expr: "MIN(ODM.Value)"
 
@@ -48,8 +47,7 @@ columns:
     label: Reported Race When One Race Was Reported
     derivation:
       aggregate:
-        key: [StudyOID, SubjectKey]
-        key_base: [STUDYID, USUBJID]
+        key: {StudyOID: STUDYID, SubjectKey: USUBJID}
         filter: "ODM.ItemOID = 'IT.DM.RACE'"
         expr: "MAX(ODM.Value)"
 
@@ -59,8 +57,7 @@ columns:
     label: Collected Ethnicity
     derivation:
       aggregate:
-        key: [StudyOID, SubjectKey]
-        key_base: [STUDYID, USUBJID]
+        key: {StudyOID: STUDYID, SubjectKey: USUBJID}
         filter: "ODM.ItemOID = 'IT.DM.ETHNIC'"
         expr: "ONLY(ODM.Value)"
 

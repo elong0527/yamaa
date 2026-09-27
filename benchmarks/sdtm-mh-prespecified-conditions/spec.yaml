@@ -109,8 +109,7 @@ rows:
             then:
               lookup:
                 dataset: MH_ITEMS
-                key_base: ODM.ItemOID
-                key: ItemOID
+                key: {ItemOID: ODM.ItemOID}
                 value: MHTERM
                 strict: true
           - otherwise: {literal: null}
@@ -135,8 +134,7 @@ rows:
             then:
               lookup:
                 dataset: MH_ITEMS
-                key_base: ODM.ItemOID
-                key: ItemOID
+                key: {ItemOID: ODM.ItemOID}
                 value: SORTORD
                 strict: true
           - otherwise: {literal: null}

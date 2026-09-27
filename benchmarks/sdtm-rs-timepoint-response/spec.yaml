@@ -83,8 +83,7 @@ columns:
       aggregate:
         filter: >-
           ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'
-        key: [SubjectKey, StudyEventOID]
-        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
         derive:
           - name: D
             type: float
@@ -99,8 +98,7 @@ columns:
       aggregate:
         filter: >-
           ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'
-        key: [SubjectKey, StudyEventOID]
-        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
         derive:
           - name: D
             type: float
@@ -115,8 +113,7 @@ columns:
       aggregate:
         filter: >-
           ODM.ItemGroupOID = 'IG.TUTARGET' AND ODM.ItemOID = 'IT.TU.TULNKID'
-        key: [SubjectKey]
-        key_base: [ODM.SubjectKey]
+        key: {SubjectKey: ODM.SubjectKey}
         expr: "COUNT(ODM.Value)"
 
   # Target and non-target measurement records at this visit, counted by
@@ -129,8 +126,7 @@ columns:
         filter: >-
           ODM.ItemGroupOID IN ('IG.TRTARGET', 'IG.TRNT')
           AND ODM.ItemOID = 'IT.TR.TRLNKID'
-        key: [SubjectKey, StudyEventOID]
-        key_base: [ODM.SubjectKey, ODM.StudyEventOID]
+        key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
         expr: "COUNT(ODM.Value)"
 
   # The baseline target sum; with no baseline diameters it is missing, and
@@ -143,8 +139,7 @@ columns:
         filter: >-
           ODM.StudyEventOID = 'BASELINE' AND ODM.ItemGroupOID = 'IG.TRTARGET'
           AND ODM.ItemOID = 'IT.TR.LDIAM'
-        key: [SubjectKey]
-        key_base: [ODM.SubjectKey]
+        key: {SubjectKey: ODM.SubjectKey}
         derive:
           - name: D
             type: float

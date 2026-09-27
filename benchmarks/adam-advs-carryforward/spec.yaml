@@ -17,8 +17,7 @@ intermediates:
   # no such record leaves VSSEQ and AVALCOL missing.
   - id: COLLECTED
     dataset: VS
-    key_base: [STUDYID, USUBJID, PARAMCD, ADT]
-    key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, VSTESTCD: PARAMCD, VSDTC: ADT}
 
 output:
   path: advs.csv

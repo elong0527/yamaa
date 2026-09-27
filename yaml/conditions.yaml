@@ -79,7 +79,6 @@ conditions:
   source_field_name_empty: {rules: [R023, R027], phases: [ingest]}
   source_field_type_unsupported: {rules: [R027], phases: [ingest]}
   source_field_value_invalid: {rules: [R027], phases: [ingest]}
-  source_key_length_mismatch: {rules: [R003, R007], phases: [validation]}
   source_parquet_invalid: {rules: [R027], phases: [ingest]}
   source_profile_unknown: {rules: [R023], phases: [validation]}
   source_quote_unterminated: {rules: [R023], phases: [ingest]}

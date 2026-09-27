@@ -20,29 +20,39 @@ intermediates:
   # Lab panel items, one row per (subject, event, panel repeat).
   - id: LB_TESTCD
     dataset: ODM
-    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    key: [StudyOID, SubjectKey, StudyEventOID, ItemGroupOID, ItemGroupRepeatKey]
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBTESTCD'"
   - id: LB_LBNAM
     dataset: ODM
-    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    key: [StudyOID, SubjectKey, StudyEventOID, ItemGroupOID, ItemGroupRepeatKey]
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBNAM'"
   - id: LB_STRESN
     dataset: ODM
-    key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    key: [StudyOID, SubjectKey, StudyEventOID, ItemGroupOID, ItemGroupRepeatKey]
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBSTRESN'"
   # Subject-level demographics from the DM form.
   - id: DM_SEX
     dataset: ODM
-    key_base: [ODM.StudyOID, ODM.SubjectKey]
-    key: [StudyOID, SubjectKey]
+    key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey}
     filter: "ODM.ItemOID = 'IT.DM.SEX'"
   - id: DM_BRTHDTC
     dataset: ODM
-    key_base: [ODM.StudyOID, ODM.SubjectKey]
-    key: [StudyOID, SubjectKey]
+    key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey}
     filter: "ODM.ItemOID = 'IT.DM.BRTHDTC'"
   # Reference-range entry for the lab, test, sex and age band that was in
   # effect on the collection date. The row is anchored on the IT.LB.LBDTC

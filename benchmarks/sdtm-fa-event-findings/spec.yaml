@@ -114,8 +114,11 @@ rows:
         lookup:
           dataset: ODM_AE
           filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-          key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
-          key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
+          key:
+            StudyOID: ODM.StudyOID
+            SubjectKey: ODM.SubjectKey
+            StudyEventOID: ODM.StudyEventOID
+            StudyEventRepeatKey: ODM.StudyEventRepeatKey
           value: Value
       FAORRES:
         aggregate:
@@ -145,8 +148,11 @@ rows:
         lookup:
           dataset: ODM_AE
           filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-          key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
-          key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
+          key:
+            StudyOID: ODM.StudyOID
+            SubjectKey: ODM.SubjectKey
+            StudyEventOID: ODM.StudyEventOID
+            StudyEventRepeatKey: ODM.StudyEventRepeatKey
           value: Value
       FAORRES:
         aggregate:
@@ -179,8 +185,11 @@ rows:
         lookup:
           dataset: ODM_AE
           filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-          key_base: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
-          key: [StudyOID, SubjectKey, StudyEventOID, StudyEventRepeatKey]
+          key:
+            StudyOID: ODM.StudyOID
+            SubjectKey: ODM.SubjectKey
+            StudyEventOID: ODM.StudyEventOID
+            StudyEventRepeatKey: ODM.StudyEventRepeatKey
           value: Value
       FAORRES:
         aggregate:
