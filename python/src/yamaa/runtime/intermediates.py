@@ -4,7 +4,7 @@ An intermediate states its match once and gives the chosen record a name, so the
 columns that read it are plainly reading one record. Everything about
 reaching that record -- filtering, equality matching, range narrowing, and
 ordered selection -- is one explicit declared-key mechanism, so a named
-intermediate and an inline `lookup:` cannot disagree.
+intermediate and an implicit join cannot disagree.
 """
 
 from __future__ import annotations
@@ -944,9 +944,9 @@ def _select_eligible(
 ) -> IntermediateOutcome:
     """Match, narrow, and choose one record from the eligible records.
 
-    Named and inline intermediates share these steps: the named selector caches
-    the eligible records per intermediate, while an inline `lookup:` derives them
-    from its payload on every row.
+    Named intermediates and implicit joins share these steps: the named
+    selector caches the eligible records per intermediate, while an implicit
+    join derives them from its payload on every row.
     """
     values = [current.get(name, MISSING) for name in plan.match_variables]
     if any(value is MISSING for value in values):
@@ -1193,7 +1193,7 @@ def _names(value: object) -> tuple[str, ...] | None:
 def _order_terms(
     payload: Mapping[str, object], dataset: str
 ) -> tuple[tuple[OrderTerm, str], ...] | None:
-    """Build the (term, field) pairs an inline `lookup:` orders by."""
+    """Build the (term, field) pairs an implicit join orders by."""
     raw = payload.get("order_by")
     if raw is None:
         return None
@@ -1225,7 +1225,7 @@ def evaluate_intermediate(
     *,
     resolver: Resolver | None = None,
 ) -> EvaluationResult:
-    """Evaluate one inline `lookup:` operation against its dataset.
+    """Evaluate one implicit join's read against its dataset.
 
     The planner validates the declaration; this answers the row. `resolve`
     reads one current-row variable the way the derivation's own resolver

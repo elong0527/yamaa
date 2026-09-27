@@ -1,8 +1,8 @@
 """R003 keyed joins and the helpers they share.
 
 One relation is read once into ordered typed records, and every operation
-that reaches those records -- a named or inline `lookup`, an R013
-reduction, and the grouped row construction R001 defines -- selects from
+that reaches those records -- a named intermediate, an implicit join, an
+R013 reduction, and the grouped row construction R001 defines -- selects from
 that one reading. Partitioning and
 ordering live here rather than beside each caller so that two operations
 cannot disagree about which records a key reaches or which record an order

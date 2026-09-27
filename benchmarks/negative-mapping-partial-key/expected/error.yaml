@@ -1,10 +1,10 @@
 phase: join
 condition: unmatched_key
 spec_paths:
-  - columns.ANRHI.derivation.lookup
+  - intermediates[0]
 requirement: REQ-0124
 context:
-  intermediate: intermediate(LBREF)
+  intermediate: LBREF_LOOKUP
   dataset: LBREF
   key:
     - LBTESTCD

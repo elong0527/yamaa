@@ -39,8 +39,8 @@ and add it to the key, pairing the table column with the collected value. A
 collected field that is not an output column is named with its dataset prefix:
 
 ```yaml
-lookup:
-  dataset: LBREF
-  key: {LBTESTCD: PARAMCD, SEX: SEX, METHOD: LB.METHOD}
-  value: ANRHI
+intermediates:
+  - id: LBREF_LOOKUP
+    dataset: LBREF
+    key: {LBTESTCD: PARAMCD, SEX: SEX, METHOD: LB.METHOD}
 ```

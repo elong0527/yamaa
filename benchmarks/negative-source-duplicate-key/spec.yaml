@@ -26,7 +26,4 @@ columns:
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
-    derivation:
-      lookup:
-        dataset: ADSL_RAW
-        value: TRT01A
+    derivation: ADSL_RAW.TRT01A

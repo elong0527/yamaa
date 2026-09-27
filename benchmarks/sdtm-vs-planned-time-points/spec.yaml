@@ -14,6 +14,9 @@ intermediates:
     dataset: ODM
     filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
     key: {StudyOID: STUDYID, SubjectKey: USUBJID}
+  - id: VS_MAP
+    dataset: VS_MAPPING
+    key: {ItemOID: ODM.ItemOID}
 
 output:
   path: vs.csv
@@ -31,19 +34,11 @@ rows:
       ODM.ItemOID]
     filter: "VSTESTCD IS NOT NULL"
     derivations:
-      VSTESTCD:
-        lookup:
-          dataset: VS_MAPPING
-          key: {ItemOID: ODM.ItemOID}
-          value: VSTESTCD
+      VSTESTCD: VS_MAP.VSTESTCD
       VSORRES:
         aggregate:
           expr: "ONLY(ODM.Value)"
-      VSORRESU:
-        lookup:
-          dataset: VS_MAPPING
-          key: {ItemOID: ODM.ItemOID}
-          value: UNIT
+      VSORRESU: VS_MAP.UNIT
 
 columns:
   - name: DOMAIN

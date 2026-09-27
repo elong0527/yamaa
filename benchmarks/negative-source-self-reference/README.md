@@ -45,8 +45,9 @@ Renaming the declaration alone leaves the read pointing at a name that no
 longer exists, so change where it reads from as well:
 
 ```yaml
-lookup:
-  dataset: ADLB_RAW
+intermediates:
+  - id: ADLB_LOOKUP
+    dataset: ADLB_RAW
 ```
 
 The read then uses a completed dataset by its own name, which is an ordinary

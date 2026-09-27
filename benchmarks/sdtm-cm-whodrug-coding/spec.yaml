@@ -3,11 +3,19 @@ domain: CM
 keys: [STUDYID, USUBJID, CMSEQ]
 input:
   ODM: {path: input/odm.csv, types: {ItemGroupRepeatKey: int}}
-  CODING: {path: input/coding_output.csv, types: {CMSEQ: int}}
-  WHODRUG: input/whodrug_extract.csv
+  CODING: {path: input/coding_output.csv, types: {CMSEQ: int, DRUG_RECORD_NO: int}}
+  WHODRUG: {path: input/whodrug_extract.csv, types: {DRUG_RECORD_NO: int}}
 metadata:
   dictionary: WHODrug
   dictionary_version: "C3 2024"
+
+intermediates:
+  - id: CODING_REC
+    dataset: CODING
+    key: {STUDYID: ODM.StudyOID, USUBJID: ODM.SubjectKey, CMSEQ: ODM.ItemGroupRepeatKey}
+  - id: WHODRUG_CODING
+    dataset: WHODRUG
+    key: {DRUG_RECORD_NO: DRUG_RECORD_NO, ATC_CODE: ATC_CODE}
 
 output:
   path: cm.csv
@@ -39,35 +47,31 @@ columns:
     type: str
     label: Reported Name of the Medication
 
+  # Working keys for the WHODRUG lookup; not in the output.
+  - name: DRUG_RECORD_NO
+    type: int
+    label: Drug Record Number
+  - name: ATC_CODE
+    type: str
+    label: ATC Code
+
   # CODING is read at the same subject and sequence number. Its drug record
   # and ATC code pick one dictionary row (a drug has one row per ATC code);
   # a record with no coding, or a code not in the extract, stays blank.
   - name: CMDECOD
     type: str
     label: Standardized Medication Name
-    derivation:
-      lookup:
-        dataset: WHODRUG
-        key: {DRUG_RECORD_NO: CODING.DRUG_RECORD_NO, ATC_CODE: CODING.ATC_CODE}
-        value: PREFERRED_NAME
+    derivation: WHODRUG_CODING.PREFERRED_NAME
 
   - name: CMCLAS
     type: str
     label: Medication Class
-    derivation:
-      lookup:
-        dataset: WHODRUG
-        key: {DRUG_RECORD_NO: CODING.DRUG_RECORD_NO, ATC_CODE: CODING.ATC_CODE}
-        value: ATC_CLASS_NAME
+    derivation: WHODRUG_CODING.ATC_CLASS_NAME
 
   - name: CMCLASCD
     type: str
     label: Medication Class Code
-    derivation:
-      lookup:
-        dataset: WHODRUG
-        key: {DRUG_RECORD_NO: CODING.DRUG_RECORD_NO, ATC_CODE: CODING.ATC_CODE}
-        value: ATC_CLASS_CODE
+    derivation: WHODRUG_CODING.ATC_CLASS_CODE
 
 rows:
   - id: medication
@@ -78,3 +82,5 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.CM.CMTRT'"
           expr: "ONLY(ODM.Value)"
+      DRUG_RECORD_NO: CODING_REC.DRUG_RECORD_NO
+      ATC_CODE: CODING_REC.ATC_CODE

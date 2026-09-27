@@ -17,6 +17,30 @@ input:
     types:
       StudyEventRepeatKey: int
       ItemGroupRepeatKey: int
+
+intermediates:
+  - id: SIBLING_FAOBJ
+    dataset: ODM_SIBLING
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      StudyEventRepeatKey: ODM.StudyEventRepeatKey
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
+    filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
+    strict: true
+  - id: SIBLING_FADTC
+    dataset: ODM_SIBLING
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      StudyEventRepeatKey: ODM.StudyEventRepeatKey
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
+    filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
+    strict: true
 output:
   path: fa.csv
   columns:
@@ -67,19 +91,7 @@ columns:
   - name: FAOBJ
     type: str
     label: Object of the Observation
-    derivation:
-      lookup:
-        dataset: ODM_SIBLING
-        key:
-          StudyOID: ODM.StudyOID
-          SubjectKey: ODM.SubjectKey
-          StudyEventOID: ODM.StudyEventOID
-          StudyEventRepeatKey: ODM.StudyEventRepeatKey
-          ItemGroupOID: ODM.ItemGroupOID
-          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
-        filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
-        value: Value
-        strict: true
+    derivation: SIBLING_FAOBJ.Value
     verifications:
       not_missing: {}
 
@@ -129,19 +141,7 @@ columns:
   - name: FADTC
     type: str
     label: Date/Time of Collection
-    derivation:
-      lookup:
-        dataset: ODM_SIBLING
-        key:
-          StudyOID: ODM.StudyOID
-          SubjectKey: ODM.SubjectKey
-          StudyEventOID: ODM.StudyEventOID
-          StudyEventRepeatKey: ODM.StudyEventRepeatKey
-          ItemGroupOID: ODM.ItemGroupOID
-          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
-        filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
-        value: Value
-        strict: true
+    derivation: SIBLING_FADTC.Value
 
   # Diary day, day repeat, reaction repeat and test order number the findings
   # for FASEQ. A diary day not listed here or in FATPT stops the run.

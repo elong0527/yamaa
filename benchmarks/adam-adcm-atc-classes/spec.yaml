@@ -7,6 +7,36 @@ input:
   ATCDICT: input/atc_dict.csv
 base: CM
 
+intermediates:
+  - id: FACM_ATC1
+    dataset: FACM
+    key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
+    filter: "FACM.FATESTCD = 'ATC1'"
+  - id: FACM_ATC2
+    dataset: FACM
+    key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
+    filter: "FACM.FATESTCD = 'ATC2'"
+  - id: FACM_ATC3
+    dataset: FACM
+    key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
+    filter: "FACM.FATESTCD = 'ATC3'"
+  - id: FACM_ATC4
+    dataset: FACM
+    key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
+    filter: "FACM.FATESTCD = 'ATC4'"
+  - id: ATC1_DICT
+    dataset: ATCDICT
+    key: {ATCCODE: ATC1CD}
+  - id: ATC2_DICT
+    dataset: ATCDICT
+    key: {ATCCODE: ATC2CD}
+  - id: ATC3_DICT
+    dataset: ATCDICT
+    key: {ATCCODE: ATC3CD}
+  - id: ATC4_DICT
+    dataset: ATCDICT
+    key: {ATCCODE: ATC4CD}
+
 output:
   path: adcm.csv
   columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, ATC1, ATC2, ATC3, ATC4, ATC1CD, ATC2CD, ATC3CD, ATC4CD]
@@ -44,42 +74,22 @@ columns:
   - name: ATC1CD
     type: str
     label: ATC Level 1 Code
-    derivation:
-      lookup:
-        dataset: FACM
-        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
-        filter: "FACM.FATESTCD = 'ATC1'"
-        value: FAORRES
+    derivation: FACM_ATC1.FAORRES
 
   - name: ATC2CD
     type: str
     label: ATC Level 2 Code
-    derivation:
-      lookup:
-        dataset: FACM
-        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
-        filter: "FACM.FATESTCD = 'ATC2'"
-        value: FAORRES
+    derivation: FACM_ATC2.FAORRES
 
   - name: ATC3CD
     type: str
     label: ATC Level 3 Code
-    derivation:
-      lookup:
-        dataset: FACM
-        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
-        filter: "FACM.FATESTCD = 'ATC3'"
-        value: FAORRES
+    derivation: FACM_ATC3.FAORRES
 
   - name: ATC4CD
     type: str
     label: ATC Level 4 Code
-    derivation:
-      lookup:
-        dataset: FACM
-        key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
-        filter: "FACM.FATESTCD = 'ATC4'"
-        value: FAORRES
+    derivation: FACM_ATC4.FAORRES
 
   # The ATC class names, decoded from the codes through the small
   # ATC dictionary. A medication with no ATC assignment (no FACM
@@ -87,38 +97,22 @@ columns:
   - name: ATC1
     type: str
     label: ATC Level 1 Text
-    derivation:
-      lookup:
-        dataset: ATCDICT
-        key: {ATCCODE: ATC1CD}
-        value: ATCNAME
+    derivation: ATC1_DICT.ATCNAME
 
   - name: ATC2
     type: str
     label: ATC Level 2 Text
-    derivation:
-      lookup:
-        dataset: ATCDICT
-        key: {ATCCODE: ATC2CD}
-        value: ATCNAME
+    derivation: ATC2_DICT.ATCNAME
 
   - name: ATC3
     type: str
     label: ATC Level 3 Text
-    derivation:
-      lookup:
-        dataset: ATCDICT
-        key: {ATCCODE: ATC3CD}
-        value: ATCNAME
+    derivation: ATC3_DICT.ATCNAME
 
   - name: ATC4
     type: str
     label: ATC Level 4 Text
-    derivation:
-      lookup:
-        dataset: ATCDICT
-        key: {ATCCODE: ATC4CD}
-        value: ATCNAME
+    derivation: ATC4_DICT.ATCNAME
 
 verifications:
   - unique:

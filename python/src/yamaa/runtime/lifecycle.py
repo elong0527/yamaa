@@ -109,13 +109,7 @@ class HandlerCounter:
         if not isinstance(payload, Mapping):
             return
         for handler in DECLARED_HANDLERS.get(operation, ()):
-            # A lookup declares its selection handler with `keep` rather than
-            # naming it: the choice exists exactly where keep does.
-            if handler in payload or (
-                operation == "lookup"
-                and handler == "multiple_matches"
-                and "keep" in payload
-            ):
+            if handler in payload:
                 self.register(f"{operation_path}.{handler}", handler)
         if operation == "str_concat":
             self._register_nested(payload.get("sources"), operation_path, "sources")

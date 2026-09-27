@@ -5,6 +5,11 @@ input:
   LB: {path: input/lb.csv, types: {LBSTRESN: float}}
   ADLB: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
 
+intermediates:
+  - id: ADLB_LOOKUP
+    dataset: ADLB
+    key: {USUBJID: USUBJID, ADT: ADT, PARAMCD: ASTCODE}
+
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, ADT, PARAMCD, PARAM, AVAL]
@@ -54,11 +59,7 @@ columns:
   - name: ASTVAL
     type: float
     label: Aspartate Aminotransferase Analysis Value
-    derivation:
-      lookup:
-        dataset: ADLB
-        key: {USUBJID: USUBJID, ADT: ADT, PARAMCD: ASTCODE}
-        value: AVAL
+    derivation: ADLB_LOOKUP.AVAL
 
   - name: AVAL
     type: float

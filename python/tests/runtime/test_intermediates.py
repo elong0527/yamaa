@@ -261,7 +261,7 @@ def test_key_match_expression_missing_result_matches_nothing() -> None:
     assert answered.record is None
 
 
-def inline_payload() -> dict[str, object]:
+def expression_key_payload() -> dict[str, object]:
     return {
         "dataset": "EX",
         "key": {"USUBJID": {"double": {"source": "SUBJECT"}}},
@@ -271,17 +271,17 @@ def inline_payload() -> dict[str, object]:
     }
 
 
-def test_an_inline_key_match_expression_uses_the_configured_dispatcher() -> None:
-    # REQ-1189/REQ-1259: an inline lookup's expression match value evaluates
-    # through the caller's configured dispatcher, so an R018 function
-    # operation resolves there instead of failing as unsupported.
+def test_a_key_match_expression_uses_the_configured_dispatcher() -> None:
+    # REQ-1189/REQ-1259: an expression match value in an evaluate_intermediate
+    # payload evaluates through the caller's configured dispatcher, so an R018
+    # function operation resolves there instead of failing as unsupported.
 
     def double(payload, resolver):
         return ValueResult(value="S1")
 
     dispatcher = ExpressionDispatcher(extensions={"double": double})
     result = evaluate_intermediate(
-        inline_payload(),
+        expression_key_payload(),
         ex(),
         lambda name: ResolvedValue(value="s1"),
         evaluate=dispatcher.evaluate,
@@ -291,11 +291,11 @@ def test_an_inline_key_match_expression_uses_the_configured_dispatcher() -> None
     assert result.value == "VITAMIN D3"
 
 
-def test_an_inline_key_match_expression_without_a_dispatcher_is_a_condition() -> None:
+def test_a_key_match_expression_without_a_dispatcher_is_a_condition() -> None:
     # REQ-1259: without a configured dispatcher an unsupported operation
     # yields a clean condition, never an AttributeError on the result.
     result = evaluate_intermediate(
-        inline_payload(), ex(), lambda name: ResolvedValue(value="s1")
+        expression_key_payload(), ex(), lambda name: ResolvedValue(value="s1")
     )
 
     assert isinstance(result, ConditionResult)
@@ -385,7 +385,7 @@ def test_a_named_key_match_expression_reads_its_source_when_selecting() -> None:
 
 def test_key_match_window_expression_uses_the_current_row_partition() -> None:
     # REQ-1259: a window expression as a key match value needs the row's relational
-    # resolver, for both a named intermediate and an inline lookup.
+    # resolver, for a named intermediate.
     def read(variable: str) -> HandledExpression:
         return HandledExpression(value=Expression(root={"source": variable}))
 
@@ -403,47 +403,30 @@ def test_key_match_window_expression_uses_the_current_row_partition() -> None:
             [["Y", "baseline"]],
         ),
     }
-    for named in (True, False):
-        value = (
-            read("T.VAL")
-            if named
-            else HandledExpression(
-                value=Expression(
-                    root={
-                        "lookup": {
-                            "dataset": "TAB",
-                            "key": key,
-                            "value": "VAL",
-                        }
-                    }
-                )
-            )
-        )
-        spec = Specification(
-            schema_version="1.0",
-            domain="OUT",
-            input={
-                "DM": DatasetSource(path="dm.csv"),
-                "TAB": DatasetSource(path="tab.csv"),
-            },
-            base="DM",
-            keys=["USUBJID"],
-            intermediates=(
-                [Intermediate(id="T", dataset="TAB", key=key)] if named else None
-            ),
-            columns=[
-                Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
-                Column(name="ADT", type="date", derivation=read("DM.ADT")),
-                Column(name="TRTSDT", type="date", derivation=read("DM.ADT")),
-                Column(name="VAL", type="str", derivation=value),
-            ],
-            output=Output(path="out.csv", columns=["USUBJID", "VAL"]),
-        )
+    value = read("T.VAL")
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "DM": DatasetSource(path="dm.csv"),
+            "TAB": DatasetSource(path="tab.csv"),
+        },
+        base="DM",
+        keys=["USUBJID"],
+        intermediates=[Intermediate(id="T", dataset="TAB", key=key)],
+        columns=[
+            Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+            Column(name="ADT", type="date", derivation=read("DM.ADT")),
+            Column(name="TRTSDT", type="date", derivation=read("DM.ADT")),
+            Column(name="VAL", type="str", derivation=value),
+        ],
+        output=Output(path="out.csv", columns=["USUBJID", "VAL"]),
+    )
 
-        result = execute_specification(spec, sources)
+    result = execute_specification(spec, sources)
 
-        assert isinstance(result, ExecutionSuccess), (named, result)
-        assert result.artifact.frame.to_dicts()[0]["VAL"] == "baseline"
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame.to_dicts()[0]["VAL"] == "baseline"
 
 
 def epochs() -> RelationIndex:
@@ -1336,3 +1319,57 @@ def test_a_scalar_derivation_with_a_nested_window_partitions_once(monkeypatch) -
     assert outcome.record.values["_SHIFTED"] == 3
     # Four donor records, one partition build for the nested window.
     assert len(builds) == 1
+
+
+def test_an_unread_strict_intermediate_never_fails_as_unmatched_key() -> None:
+    # REQ-1264: a named lookup matches only when it is read. An intermediate
+    # that no column reads for a row is never matched, so a strict:true
+    # lookup never fails as unmatched_key on a row that did not read it.
+    def read(variable: str) -> HandledExpression:
+        return HandledExpression(value=Expression(root={"source": variable}))
+
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "DM": DatasetSource(path="dm.csv"),
+            "REF": DatasetSource(path="ref.csv"),
+        },
+        base="DM",
+        keys=["USUBJID"],
+        intermediates=[
+            Intermediate(
+                id="STRICT_REF",
+                dataset="REF",
+                key={"PARAMCD": "DM.PARAMCD"},
+                strict=True,
+            )
+        ],
+        columns=[
+            Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
+            # No column reads STRICT_REF: the lazy match never runs, so the
+            # strict lookup cannot fail even though P2 has no match in REF.
+        ],
+        output=Output(path="out.csv", columns=["USUBJID"]),
+    )
+    sources = {
+        "DM": frame_from_values(
+            (
+                TypedColumn(name="USUBJID", type="str"),
+                TypedColumn(name="PARAMCD", type="str"),
+            ),
+            [["s1", "P2"]],
+        ),
+        "REF": frame_from_values(
+            (
+                TypedColumn(name="PARAMCD", type="str"),
+                TypedColumn(name="VALUE", type="str"),
+            ),
+            [["P1", "V1"]],
+        ),
+    }
+
+    result = execute_specification(spec, sources)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert [row["USUBJID"] for row in result.artifact.frame.to_dicts()] == ["s1"]

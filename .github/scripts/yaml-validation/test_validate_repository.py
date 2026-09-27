@@ -2760,46 +2760,6 @@ class TestSpecificationInheritance(unittest.TestCase):
             result['derivation'], {'value': {'literal': 'parent-b'}}
         )
 
-    def test_a_child_lookup_key_replaces_the_inherited_key_whole(self):
-        # REQ-0630: the key states one match, so a child's pairs replace the
-        # parent's instead of composing with them key by key.
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            (root / 'parent.yaml').write_text(
-                'schema_version: "1.0"\n'
-                'input: {SRC: input.csv, REF: ref.csv}\n'
-                'base: SRC\n'
-                'columns:\n'
-                '  - name: VALUE\n'
-                '    type: str\n'
-                '    label: Value\n'
-                '    derivation:\n'
-                '      lookup:\n'
-                '        dataset: REF\n'
-                '        key: {REFID: SRC.ID, KIND: SRC.KIND}\n'
-                '        value: VALUE\n'
-            )
-            spec_path = root / 'spec.yaml'
-            spec_path.write_text(
-                'schema_version: "1.0"\n'
-                'parents: parent.yaml\n'
-                'domain: TEST\n'
-                'keys: [VALUE]\n'
-                'output: {path: out.csv, columns: [VALUE]}\n'
-                'columns:\n'
-                '  - name: VALUE\n'
-                '    derivation:\n'
-                '      lookup:\n'
-                '        key: {REFID: SRC.ID}\n'
-            )
-
-            resolved, errors, _ = self.resolve(spec_path)
-
-        self.assertEqual(errors, [])
-        lookup = resolved['columns'][0]['derivation']['value']['lookup']
-        self.assertEqual(lookup['key'], {'REFID': 'SRC.ID'})
-        self.assertEqual(lookup['dataset'], 'REF')
-
     def test_merges_each_keyed_collection_at_the_member_boundary(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -7497,54 +7457,41 @@ class TestRowPhaseDatasetReads(unittest.TestCase):
             errors,
         )
 class TestCorrelatedLookupFilters(unittest.TestCase):
-    def specification(self, predicate, *, inline=False, grouped=False):
+    def specification(self, predicate, *, grouped=False):
         lookup = {
             'id': 'PRIOR', 'dataset': 'OBS', 'key': ['ID'],
             'filter': predicate,
         }
-        expression = {'lookup': {
-            'dataset': 'OBS', 'key': ['ID'], 'filter': predicate, 'value': 'AVAL',
-        }} if inline else 'PRIOR.AVAL'
         spec = {
             'input': {'PLAN': 'plan.csv', 'OBS': 'obs.csv', 'OTHER': 'other.csv'},
             'base': 'PLAN',
-            'columns': [{'name': 'AVAL', 'type': 'float', 'derivation': expression}],
-            'intermediates': [] if inline else [lookup],
+            'columns': [{'name': 'AVAL', 'type': 'float', 'derivation': 'PRIOR.AVAL'}],
+            'intermediates': [lookup],
         }
         if grouped:
             spec['columns'][0].pop('derivation')
             spec['rows'] = [{
                 'id': 'planned', 'dataset': 'PLAN',
-                'group_by': ['PLAN.ID'], 'derivations': {'AVAL': expression},
+                'group_by': ['PLAN.ID'], 'derivations': {'AVAL': 'PRIOR.AVAL'},
             }]
         return spec
 
     def test_only_current_driver_can_correlate(self):
-        for inline in (False, True):
-            for qualifier, condition in [('PLAN', None), ('OTHER', 'unknown_field')]:
-                with self.subTest(inline=inline, qualifier=qualifier):
-                    errors = VALIDATOR.validate_lookup_filter_scopes(
-                        self.specification(f'OBS.VISIT < {qualifier}.VISIT',
-                                           inline=inline), 'spec', None,
-                    )
-                    self.assertEqual([e.condition for e in errors],
-                                     [] if condition is None else [condition])
+        for qualifier, condition in [('PLAN', None), ('OTHER', 'unknown_field')]:
+            with self.subTest(qualifier=qualifier):
+                errors = VALIDATOR.validate_lookup_filter_scopes(
+                    self.specification(f'OBS.VISIT < {qualifier}.VISIT'),
+                    'spec', None,
+                )
+                self.assertEqual([e.condition for e in errors],
+                                 [] if condition is None else [condition])
 
     def test_grouped_correlation_requires_a_group_key(self):
-        for inline in (False, True):
-            errors = VALIDATOR.validate_lookup_filter_scopes(
-                self.specification('OBS.VISIT < PLAN.VISIT',
-                                   inline=inline, grouped=True), 'spec', None,
-            )
-            self.assertEqual([e.condition for e in errors], ['ungrouped_driver_field'])
-
-    def test_correlated_predicate_type_checks_both_sides(self):
-        datasets = {'OBS': {'VISIT': 'int'}, 'PLAN': {'VISIT': 'str'}}
-        errors = VALIDATOR.validate_expression_predicates(
-            {'lookup': {'dataset': 'OBS', 'filter': 'OBS.VISIT < PLAN.VISIT'}},
-            'spec.columns.AVAL.derivation', VALIDATOR.predicate_resolver(), datasets,
+        errors = VALIDATOR.validate_lookup_filter_scopes(
+            self.specification('OBS.VISIT < PLAN.VISIT', grouped=True),
+            'spec', None,
         )
-        self.assertEqual([e.condition for e in errors], ['incompatible_input_type'])
+        self.assertEqual([e.condition for e in errors], ['ungrouped_driver_field'])
 
 
 class TestFlagPredicates(unittest.TestCase):

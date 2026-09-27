@@ -736,5 +736,4 @@ def aggregate_handlers() -> dict[str, ExpressionHandler]:
     """
     return {
         "aggregate": relational_handler("aggregate"),
-        "lookup": relational_handler("lookup"),
     }

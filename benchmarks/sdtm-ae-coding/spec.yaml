@@ -9,6 +9,12 @@ metadata:
   dictionary: MedDRA
   dictionary_version: "26.1"
 
+intermediates:
+  - id: MEDDRA_CODING
+    dataset: MEDDRA
+    key: {LLTNAME: AE_RAW.AETERM}
+    missing: NOT CODED
+
 output:
   path: ae.csv
   columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
@@ -45,22 +51,12 @@ columns:
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
-    derivation:
-      lookup:
-        dataset: MEDDRA
-        key: {LLTNAME: AE_RAW.AETERM}
-        value: PTNAME
-        missing: NOT CODED
+    derivation: MEDDRA_CODING.PTNAME
 
   - name: AEBODSYS
     type: str
     label: Body System or Organ Class
-    derivation:
-      lookup:
-        dataset: MEDDRA
-        key: {LLTNAME: AE_RAW.AETERM}
-        value: SOCNAME
-        missing: NOT CODED
+    derivation: MEDDRA_CODING.SOCNAME
 
 verifications:
   - unique:

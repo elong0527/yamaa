@@ -28,11 +28,11 @@ treatment. If multiple records are legitimate, add a field that expresses the
 choice, such as an effective timestamp, and select by it explicitly:
 
 ```yaml
-lookup:
-  dataset: ADSL_RAW
-  value: TRT01A
-  order_by: [ADSL_RAW.EFFECTIVEDTC]
-  keep: last
+intermediates:
+  - id: ADSL_LOOKUP
+    dataset: ADSL_RAW
+    order_by: [ADSL_RAW.EFFECTIVEDTC]
+    keep: last
 ```
 
 Do not use file order or treatment text as a substitute for a study rule.

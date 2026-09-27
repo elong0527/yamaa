@@ -827,7 +827,6 @@ _IDENTIFIER_DATASET_FIELDS = frozenset(
         ("root_class", "base"),
         ("row_class", "dataset"),
         ("intermediate_class", "dataset"),
-        ("lookup", "dataset"),
     }
 )
 

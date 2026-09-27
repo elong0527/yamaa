@@ -17,6 +17,9 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEDY]
     keep: last
+  - id: MEDDRA_PT
+    dataset: MEDDRA
+    key: {LLTNAME: DTHCAUS}
 
 output:
   path: adsl.csv
@@ -40,17 +43,13 @@ columns:
     label: Cause of Death
     derivation: DEATHEV.AEDECOD
 
-  # The coded cause of death: an inline lookup into the dictionary on
+  # The coded cause of death: MEDDRA_PT matches the dictionary on
   # differently named key columns. A missing or unlisted cause selects
   # nothing and gives the default missing value.
   - name: DTHPTERM
     type: str
     label: Cause of Death Preferred Term
-    derivation:
-      lookup:
-        dataset: MEDDRA
-        key: {LLTNAME: DTHCAUS}
-        value: PTNAME
+    derivation: MEDDRA_PT.PTNAME
 
 verifications:
   - unique:

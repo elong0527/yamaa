@@ -297,15 +297,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.mapping.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.unmapped` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.strict` | `"bool"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
-| `expressions.lookup.value` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.key` | `"match_key"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.between` | `"intermediate_between_class"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.keep` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
-| `expressions.lookup.strict` | `"bool"` | `false` | `false` | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.cut.source` | `"variable"` | `true` | Absent | -- | [REQ-1118](../operations/computation.md#req-1118) |
 | `expressions.cut.breaks` | `"list[float]"` | `true` | Absent | -- | [REQ-1118](../operations/computation.md#req-1118) |
 | `expressions.cut.labels` | `"list[str]"` | `true` | Absent | -- | [REQ-1118](../operations/computation.md#req-1118) |

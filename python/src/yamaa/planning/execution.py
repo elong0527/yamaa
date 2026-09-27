@@ -193,10 +193,10 @@ class PlannedIntermediate(_FrozenModel):
 class ResolvedJoin(_FrozenModel):
     """The key pairs one intermediate-like resolution matches on.
 
-    R003 makes validation report the pairs for every named intermediate, inline
-    intermediate, dataset-qualified aggregate, and implicit join, so a reviewer
-    sees which columns the resolution matches on rather than having to
-    infer them from two schemas. `inferred` marks the pairs REQ-0150 infers
+    R003 makes validation report the pairs for every named intermediate,
+    dataset-qualified aggregate, and implicit join, so a reviewer sees which
+    columns the resolution matches on rather than having to infer them from
+    two schemas. `inferred` marks the pairs REQ-0150 infers
     from the applicable keys; the rest are declared by the author.
     """
 
@@ -597,17 +597,6 @@ def _expression_info(
                 unsupported,
             )
         )
-    elif operation == "lookup" and isinstance(payload, Mapping):
-        _lookup_references(
-            payload,
-            operation_path,
-            references,
-            diagnostics,
-            supported_operations,
-            unsupported,
-            scope=scope,
-            dataset_fields=dataset_fields,
-        )
     elif operation == "str_template":
         template = payload if isinstance(payload, str) else None
         if isinstance(payload, Mapping):
@@ -886,259 +875,6 @@ def _match_value_result_type(
     return _MATCH_VALUE_RESULT_TYPES.get(operation)
 
 
-def _lookup_references(
-    payload: Mapping[str, object],
-    operation_path: str,
-    references: list[_Reference],
-    diagnostics: list[ExecutionDiagnostic],
-    supported_operations: Collection[str],
-    unsupported: list[UnsupportedFeature],
-    *,
-    scope: _Scope,
-    dataset_fields: Mapping[str, Collection[str]] | None = None,
-) -> None:
-    """Collect the declared key pairs R007 makes this intermediate match on.
-
-    An inline `lookup:` is the same explicit declared-key mechanism as a
-    named `intermediates` entry, written where it is read: REQ-0130 through REQ-0134
-    hold it to the same validation the named declaration gets. Field
-    existence rides on the declared references below, which
-    `_validate_qualified_reference` resolves against the bindings; the
-    between's type comparability is checked when the intermediate runs, as with
-    an unplanned path.
-    """
-    written = payload.get("key")
-    dataset = payload.get("dataset")
-    value = payload.get("value")
-    if written is None:
-        # REQ-0153: the planner fills an omitted key before reference
-        # collection, or records no_applicable_keys when no key applies.
-        # Either way there is nothing left to collect here.
-        return
-    pairs = key_pairs(written)
-    if pairs is None or not pairs[0]:
-        # REQ-0115: a key that names no column and match value is reported
-        # here rather than reaching the runtime as an unvalidated payload;
-        # REQ-0321 owns a key of the wrong shape.
-        diagnostics.append(
-            _diagnostic(
-                "invalid_field_type",
-                operation_path,
-                {"operation": "lookup", "expected": _KEY_EXPECTED},
-                requirement="REQ-0115" if pairs is not None else "REQ-0321",
-            )
-        )
-        return
-    if not isinstance(dataset, str):
-        diagnostics.append(
-            _diagnostic(
-                "invalid_field_type",
-                operation_path,
-                {"operation": "lookup", "expected": "dataset and key"},
-                requirement="REQ-0321",
-            )
-        )
-        return
-    keys, raw_entries = pairs
-    entries = _match_value_entries(raw_entries)
-    for key, entry in zip(keys, entries, strict=True):
-        entry_path = f"{operation_path}.key.{key}"
-        if isinstance(entry, str):
-            references.append(
-                _Reference(
-                    entry,
-                    entry_path,
-                    # REQ-0305: each source and its key column must have the
-                    # same comparable type, so the pair is checked rather
-                    # than coerced.
-                    same_type_as=f"{dataset}.{key}",
-                    requirement="REQ-0305",
-                )
-            )
-        else:
-            # REQ-1259: an expression match value evaluates against the
-            # current row. The inner references validate as ordinary reads;
-            # the synthetic match name only carries the paired-type check.
-            info = _expression_info(
-                entry,
-                entry_path,
-                supported_operations,
-                scope=scope,
-                dataset_fields=dataset_fields,
-            )
-            keyed = MatchValueExpression(
-                column=key,
-                name=_match_name(key),
-                expression=entry,
-                # The expression's current-row dependencies are exactly the
-                # identifiers its references read -- not every string leaf.
-                variables=tuple(dict.fromkeys(ref.name for ref in info.references)),
-            )
-            references.extend(info.references)
-            unsupported.extend(info.unsupported)
-            diagnostics.extend(info.diagnostics)
-            references.append(
-                _Reference(
-                    keyed.name,
-                    entry_path,
-                    same_type_as=f"{dataset}.{key}",
-                    requirement="REQ-0305",
-                    key_expression=keyed,
-                )
-            )
-        references.append(
-            _Reference(
-                f"{dataset}.{key}",
-                f"{operation_path}.key.{key}",
-                reach="declared",
-            )
-        )
-    if not isinstance(value, str):
-        diagnostics.append(
-            _diagnostic(
-                "invalid_field_type",
-                operation_path,
-                {"operation": "lookup", "expected": "a value column"},
-                requirement="REQ-0321",
-            )
-        )
-        return
-    references.append(
-        _Reference(
-            f"{dataset}.{value}",
-            f"{operation_path}.value",
-            reach="declared",
-        )
-    )
-
-    def scoped(identifier: str, path: str) -> bool:
-        """Keep the intermediate's clauses on its own dataset (REQ-0120)."""
-        if identifier.split(".", 1)[0] != dataset:
-            context: dict[str, JsonValue] = {
-                "identifier": identifier,
-                "dataset": dataset,
-            }
-            fields = (
-                (dataset_fields or {}).get(dataset)
-                if isinstance(dataset, str)
-                else None
-            )
-            suggestion = (
-                _qualification_suggestion(identifier, dataset, fields)
-                if fields is not None and isinstance(dataset, str)
-                else None
-            )
-            if suggestion is not None:
-                context["suggestion"] = suggestion
-            diagnostics.append(
-                _diagnostic(
-                    "unknown_field",
-                    path,
-                    context,
-                    requirement="REQ-0120",
-                )
-            )
-            return False
-        return True
-
-    predicate_text = payload.get("filter")
-    if isinstance(predicate_text, str):
-        filter_path = f"{operation_path}.filter"
-        predicate = _parse_predicate_at(predicate_text, filter_path, diagnostics)
-        if predicate is not None:
-            for identifier in predicate_identifiers(predicate):
-                qualifier, separator, field = identifier.partition(".")
-                if (
-                    separator
-                    and qualifier != dataset
-                    and field in (dataset_fields or {}).get(qualifier, ())
-                ):
-                    references.append(
-                        _Reference(identifier, filter_path, current_driver=True)
-                    )
-                elif scoped(identifier, filter_path):
-                    references.append(
-                        _Reference(identifier, filter_path, reach="declared")
-                    )
-
-    order_by = payload.get("order_by")
-    keep = payload.get("keep")
-    if (order_by is None) != (keep is None):
-        # REQ-0119: the ordered choice is declared as a pair, like the named
-        # intermediate's.
-        diagnostics.append(
-            _diagnostic(
-                "unpaired_fields",
-                operation_path,
-                {
-                    "declared": ["order_by"] if order_by is not None else ["keep"],
-                    "missing": ["keep"] if order_by is not None else ["order_by"],
-                },
-                requirement="REQ-0119",
-            )
-        )
-    elif isinstance(order_by, Sequence) and not isinstance(order_by, str):
-        for index, term in enumerate(order_by):
-            variable = term if isinstance(term, str) else None
-            if isinstance(term, Mapping):
-                raw_variable = term.get("variable")
-                variable = raw_variable if isinstance(raw_variable, str) else None
-            if not isinstance(variable, str):
-                continue
-            order_path = f"{operation_path}.order_by[{index}]"
-            if scoped(variable, order_path):
-                references.append(_Reference(variable, order_path, reach="declared"))
-
-    between = payload.get("between")
-    if between is not None and not (
-        isinstance(between, Mapping)
-        and all(
-            isinstance(between.get(name), str) for name in ("value", "lower", "upper")
-        )
-    ):
-        # The named form's `between` requires all three, so the inline form
-        # states the same range or none at all: a partial one narrows by a
-        # bound the record has no column for.
-        diagnostics.append(
-            _diagnostic(
-                "invalid_field_type",
-                f"{operation_path}.between",
-                {"operation": "lookup", "expected": "value, lower, and upper"},
-                requirement="REQ-0321",
-            )
-        )
-    elif isinstance(between, Mapping):
-        between_value = between.get("value")
-        if isinstance(between_value, str):
-            references.append(
-                _Reference(between_value, f"{operation_path}.between.value")
-            )
-        for bound in ("lower", "upper"):
-            raw = between.get(bound)
-            if isinstance(raw, str):
-                references.append(
-                    _Reference(
-                        f"{dataset}.{raw}",
-                        f"{operation_path}.between.{bound}",
-                        reach="declared",
-                    )
-                )
-
-    if payload.get("strict") is True and "missing" in payload:
-        # REQ-0123: a failing absence and a declared literal contradict, even
-        # when the declared literal is null.
-        diagnostics.append(
-            _diagnostic(
-                "conflicting_absent_policy",
-                operation_path,
-                {"missing": payload.get("missing")},
-                requirement="REQ-0123",
-            )
-        )
-
-
-# REQ-0297 types each window field as a variable, so each may name a current
-# output column or a qualified source variable of the row's driver.
 _WINDOW_VARIABLES: dict[str, tuple[str, ...]] = {
     "row_number": (),
     "rank": (),
@@ -1403,23 +1139,6 @@ def _derive_reference_names(derivation: object) -> list[str]:
                         else payload.get("condition")
                     )
                     add_predicate_names(condition)
-                    return
-                if operation == "lookup" and isinstance(payload, Mapping):
-                    written = payload.get("key")
-                    for entry in (
-                        written.values() if isinstance(written, Mapping) else ()
-                    ):
-                        if isinstance(entry, str):
-                            names.append(entry)
-                        elif isinstance(entry, Mapping):
-                            # REQ-1259: an expression match value reads what
-                            # its own derivation names.
-                            visit(entry)
-                    add_predicate_names(payload.get("filter"))
-                    add_order_by_names(payload.get("order_by"))
-                    between = payload.get("between")
-                    if isinstance(between, Mapping):
-                        add_variable_field(between.get("value"))
                     return
                 if operation == "first_available" and isinstance(payload, Mapping):
                     sources = payload.get("sources")
@@ -1955,13 +1674,13 @@ def _fill_omitted_lookup_keys(
 ) -> tuple[HandledExpression, frozenset[str]]:
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
-    REQ-0153 lets a named intermediate, an inline `lookup:`, or a qualified
-    aggregate omit `key`, inferring the applicable output keys, and REQ-0115
-    lets a key name its columns alone, matching same-named current-row
-    values. The planner and the runtime downstream only understand a
-    complete mapping of columns to match values, so both are resolved here,
-    before reference collection. Returns the rewritten declaration and the
-    operation paths where a key was inferred.
+    REQ-0153 lets a named intermediate or a qualified aggregate omit `key`,
+    inferring the applicable output keys, and REQ-0115 lets a key name its
+    columns alone, matching same-named current-row values. The planner and
+    the runtime downstream only understand a complete mapping of columns to
+    match values, so both are resolved here, before reference collection.
+    Returns the rewritten declaration and the operation paths where a key
+    was inferred.
     """
     inferred: set[str] = set()
 
@@ -1987,15 +1706,6 @@ def _fill_omitted_lookup_keys(
                 # Present but malformed; downstream validation reports it.
                 return None
         return {**payload, "key": {key: key for key in keys}}
-
-    def fill_intermediate(payload: object, operation_path: str) -> object:
-        if not isinstance(payload, Mapping):
-            return payload
-        dataset = payload.get("dataset")
-        if not isinstance(dataset, str):
-            return payload
-        filled = fill_pairs(payload, dataset, operation_path)
-        return payload if filled is None else filled
 
     def qualified_relation(payload: Mapping[str, object]) -> str | None:
         """Mirror _aggregate_references' join detection for the fill."""
@@ -2047,12 +1757,6 @@ def _fill_omitted_lookup_keys(
 
     def walk(node: object, operation_path: str) -> object:
         if isinstance(node, Mapping):
-            if set(node) == {"lookup"}:
-                return {
-                    "lookup": fill_intermediate(
-                        node["lookup"], f"{operation_path}.lookup"
-                    )
-                }
             if set(node) == {"aggregate"}:
                 return {
                     "aggregate": fill_aggregate(
@@ -2285,8 +1989,8 @@ def _row_join_reference(
     """Tell whether a row-phase read reaches another dataset legitimately.
 
     REQ-0156/REQ-0157 let a row derivation read a non-driver dataset through
-    a planned implicit join, and name relation-internal fields of inline
-    lookups and source filters directly. Such references skip the row-phase
+    a planned implicit join, and name relation-internal fields of lookups
+    and source filters directly. Such references skip the row-phase
     gate; existence and types are still checked. A scalar read the
     key-inference pre-pass left unannotated already carries its own
     REQ-0151/REQ-0152 diagnostic, so it reports no knock-on phase error;
@@ -2939,7 +2643,7 @@ def _plan_lookups(
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
-    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # REQ-0120: a named intermediate's filter/order_by suggests the qualified
     # spelling, so the lookup datasets' columns ride along for suggestions.
     dataset_fields = {
         name: _dataset_types(bindings, name) for name in bindings.datasets
@@ -4229,7 +3933,7 @@ def preflight_execution(
 # REQ-1260: operations that read beyond the current row -- another dataset's
 # records, or the completed rows a window partitions. A derivation using one
 # keeps its column-phase meaning.
-_DATASET_LEVEL_OPERATIONS = frozenset({"lookup", "aggregate", *WINDOW_OPERATIONS})
+_DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", *WINDOW_OPERATIONS})
 
 
 def _column_level_reads(
@@ -4692,7 +4396,7 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
-    # REQ-0120: an inline lookup's filter/order_by suggests the qualified
+    # REQ-0120: a named intermediate's filter/order_by suggests the qualified
     # spelling, so the lookup datasets' columns ride along for suggestions.
     dataset_fields = {
         name: _dataset_types(bindings, name) for name in bindings.datasets

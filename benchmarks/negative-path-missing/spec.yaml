@@ -7,6 +7,11 @@ input:
   LBREF: input/lbref.csv
 base: LB
 
+intermediates:
+  - id: LBREF_LOOKUP
+    dataset: LBREF
+    key: {LBTESTCD: PARAMCD, SEX: SEX}
+
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, SEX, AVAL, ANRHI]
@@ -42,8 +47,4 @@ columns:
     label: Analysis Normal Range Upper Limit
     # The reference limit for the record's test code and sex; missing when
     # the table has no row for that pair or the sex is missing.
-    derivation:
-      lookup:
-        dataset: LBREF
-        key: {LBTESTCD: PARAMCD, SEX: SEX}
-        value: ANRHI
+    derivation: LBREF_LOOKUP.ANRHI

@@ -325,10 +325,9 @@ def lookup_default_specification(
     "default",
     [
         {"source": "LOOK.V"},
-        {"lookup": {"dataset": "RIGHT", "key": ["X"], "value": "V"}},
         {"row_number": {"window": {"order_by": ["X"]}}},
     ],
-    ids=["named-intermediate", "inline-lookup", "window"],
+    ids=["named-intermediate", "window"],
 )
 def test_a_dataset_level_column_derivation_is_not_an_overridable_default(
     default: dict[str, object],
@@ -1248,38 +1247,6 @@ def test_a_datetime_precision_key_match_expression_pairs_with_a_str_key() -> Non
     assert planned.match_fields == ("X",)
 
 
-def test_an_inline_lookup_key_match_expression_plans() -> None:
-    # REQ-1259: an inline lookup accepts an expression match value; the planner
-    # validates it as an expression model, not a raw mapping.
-    spec = specification(
-        [
-            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="str",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "SRC",
-                            "key": {"X": {"str_upper": {"source": "A"}}},
-                            "value": "X",
-                        }
-                    }
-                ),
-            ),
-        ]
-    )
-
-    plan = plan_execution(
-        spec,
-        {"SRC": source_table()},
-        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
-    )
-
-    # A clean return means no diagnostics: plan_execution raises otherwise.
-    assert plan.columns[-1].column == "V"
-
-
 def test_a_qualified_aggregate_key_match_expression_plans() -> None:
     # REQ-1259: a qualified aggregate accepts an expression match value; the
     # planner normalizes it to an expression model before rendering.
@@ -1463,42 +1430,6 @@ def test_a_named_key_match_expression_checks_its_input_types() -> None:
     assert diagnostic.requirement == "REQ-0308"
     assert diagnostic.spec_paths == ("intermediates[0].key.X.str_upper.source",)
     assert diagnostic.context == {"source": "A", "expected": "str", "actual": "int"}
-
-
-@pytest.mark.parametrize(
-    ("operation", "payload", "condition"),
-    [
-        ("lookup", {"dataset": "SRC", "value": "X"}, "invalid_field_type"),
-        ("aggregate", {"expr": "COUNT(SRC.*)"}, "missing_aggregate_keys"),
-    ],
-)
-def test_a_key_match_value_of_two_operations_is_a_diagnostic(
-    operation: str, payload: dict[str, object], condition: str
-) -> None:
-    # REQ-1259: an expression match value names exactly one operation; a
-    # malformed value is reported, never raised out of the planner.
-    malformed = {"str_upper": {"source": "X"}, "literal": "A"}
-    spec = specification(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="str" if operation == "lookup" else "int",
-                derivation=derivation(
-                    {operation: {**payload, "key": {"X": malformed}}}
-                ),
-            ),
-        ]
-    )
-
-    with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(
-            spec,
-            {"SRC": source_table()},
-            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
-        )
-
-    assert [item.condition for item in raised.value.diagnostics] == [condition]
 
 
 def test_a_lookup_defaults_to_missing_on_absence() -> None:
@@ -1739,40 +1670,6 @@ def test_a_named_lookup_with_an_empty_key_fails() -> None:
     assert diagnostic.spec_paths == ("intermediates[0].key",)
 
 
-@pytest.mark.parametrize(
-    ("operation", "payload", "condition"),
-    [
-        ("lookup", {"dataset": "RIGHT", "value": "V"}, "invalid_field_type"),
-        ("aggregate", {"expr": "COUNT(RIGHT.*)"}, "missing_aggregate_keys"),
-    ],
-)
-@pytest.mark.parametrize("empty", [[], {}])
-def test_an_empty_written_key_names_no_match(
-    operation: str, payload: dict[str, object], condition: str, empty: object
-) -> None:
-    # REQ-0115: an empty list or mapping names no pair; a lookup reports it as
-    # an invalid key and an aggregate as missing keys (REQ-0140).
-    spec = two_dataset_specification(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float" if operation == "lookup" else "int",
-                derivation=derivation({operation: {**payload, "key": empty}}),
-            ),
-        ]
-    )
-
-    with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(
-            spec,
-            {"SRC": source_table(), "RIGHT": right_table()},
-            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
-        )
-
-    assert [item.condition for item in raised.value.diagnostics] == [condition]
-
-
 def test_a_lookup_filter_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
     None
 ):
@@ -1900,153 +1797,6 @@ def test_a_lookup_order_by_with_an_unqualified_field_suggests_the_qualified_spel
     assert diagnostic.context["suggestion"] == "RIGHT.V"
 
 
-def test_an_inline_lookup_filter_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
-    None
-):
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": {"X": "SRC.X"},
-                            "value": "V",
-                            "filter": "V > 0",
-                        }
-                    }
-                ),
-            ),
-        ]
-    )
-
-    # REQ-0120/REQ-0137: the inline filter keeps the mandatory qualifier and
-    # suggests it, exactly like the named form.
-    assert diagnostic.condition == "unknown_field"
-    assert diagnostic.requirement == "REQ-0120"
-    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.filter",)
-    assert diagnostic.context["identifier"] == "V"
-    assert diagnostic.context["suggestion"] == "RIGHT.V"
-
-
-def test_an_inline_lookup_filter_with_a_genuinely_unknown_field_suggests_nothing() -> (
-    None
-):
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": {"X": "SRC.X"},
-                            "value": "V",
-                            "filter": "NOPE > 0",
-                        }
-                    }
-                ),
-            ),
-        ]
-    )
-
-    # REQ-0120: a field the dataset does not have gets no suggestion.
-    assert diagnostic.condition == "unknown_field"
-    assert diagnostic.requirement == "REQ-0120"
-    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.filter",)
-    assert diagnostic.context["identifier"] == "NOPE"
-    assert "suggestion" not in diagnostic.context
-
-
-def test_an_inline_lookup_order_by_with_an_unqualified_field_suggests_the_qualified_spelling() -> (
-    None
-):
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": {"X": "SRC.X"},
-                            "value": "V",
-                            "order_by": ["V"],
-                            "keep": "first",
-                        }
-                    }
-                ),
-            ),
-        ]
-    )
-
-    # REQ-0120/REQ-0137: order_by carries the same mandatory qualifier.
-    assert diagnostic.condition == "unknown_field"
-    assert diagnostic.requirement == "REQ-0120"
-    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.order_by[0]",)
-    assert diagnostic.context["identifier"] == "V"
-    assert diagnostic.context["suggestion"] == "RIGHT.V"
-
-
-def test_an_inline_lookup_with_a_key_naming_no_identifiers_is_reported() -> None:
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {"lookup": {"dataset": "RIGHT", "key": 5, "value": "V"}}
-                ),
-            ),
-        ]
-    )
-
-    # REQ-0321: a written key that names no identifiers is not an omitted key,
-    # so it is reported here instead of reaching the runtime unvalidated.
-    assert diagnostic.condition == "invalid_field_type"
-    assert diagnostic.requirement == "REQ-0321"
-
-
-def test_an_inline_lookup_with_strict_true_and_explicit_missing_null_is_rejected() -> (
-    None
-):
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="str",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": {"X": "SRC.X"},
-                            "value": "V",
-                            "strict": True,
-                            "missing": None,
-                        }
-                    }
-                ),
-            ),
-        ]
-    )
-
-    # REQ-0123: the inline form is the same explicit declared-key mechanism as
-    # the named one, so an explicit `missing: null` contradicts `strict: true`.
-    assert diagnostic.condition == "conflicting_absent_policy"
-    assert diagnostic.requirement == "REQ-0123"
-    assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
-    assert diagnostic.context == {"missing": None}
-
-
 def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
     diagnostic = first_diagnostic(
         [
@@ -2065,88 +1815,6 @@ def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
     # reduce over the whole relation unkeyed.
     assert diagnostic.condition == "missing_aggregate_keys"
     assert diagnostic.requirement == "REQ-0140"
-
-
-def test_an_inline_lookup_with_an_incomplete_between_is_reported() -> None:
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": ["X"],
-                            "value": "V",
-                            "between": {"value": "X"},
-                        }
-                    }
-                ),
-            ),
-        ]
-    )
-
-    # REQ-0321: the named form requires value, lower and upper together, so a
-    # partial inline range is reported before it reaches the runtime.
-    assert diagnostic.condition == "invalid_field_type"
-    assert diagnostic.requirement == "REQ-0321"
-    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.between",)
-
-
-def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
-    plan = plan_two(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
-            ),
-        ]
-    )
-
-    # REQ-0153/REQ-0115: the inline lookup omits its key. The inferred
-    # match value becomes a dependency of the column.
-    [derived] = [column for column in plan.columns if column.column == "V"]
-    assert "X" in derived.dependencies
-
-
-def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() -> None:
-    plan = plan_two(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            aggregate_column({"expr": "SUM(RIGHT.V)"}),
-        ]
-    )
-
-    # REQ-0153/REQ-0115: the aggregate omits its key and groups on X.
-    [join] = [
-        join
-        for join in plan.resolved_joins
-        if join.spec_path == "columns.V.derivation.aggregate.expr"
-    ]
-    assert join.source == ("X",)
-    assert join.key == ("X",)
-    assert join.inferred is True
-
-
-def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> None:
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
-            ),
-        ],
-        right="int",
-    )
-
-    # REQ-0151: an inferred key must compare equal on both sides.
-    assert diagnostic.condition == "incompatible_input_type"
 
 
 def test_a_cross_dataset_source_with_clear_keys_uses_the_implicit_join() -> None:
@@ -2194,7 +1862,7 @@ def test_a_cross_dataset_source_without_applicable_keys_requires_a_lookup() -> N
         )
 
     # REQ-0152: no output key exists on RIGHT, so the intended match is
-    # unclear and the author must declare it with an explicit `lookup:`.
+    # unclear and the author must declare it with a named intermediate.
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "no_applicable_keys"
     assert diagnostic.requirement == "REQ-0152"
@@ -2215,57 +1883,6 @@ def test_an_implicit_join_key_typed_differently_on_each_side_is_reported() -> No
     # REQ-0151: an inferred key must compare equal on both sides.
     assert diagnostic.condition == "incompatible_input_type"
     assert diagnostic.requirement == "REQ-0151"
-
-
-def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:
-    # REQ-0004 performs no implicit conversion, so a type-mismatched
-    # explicit lookup key is reported.
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": {"V": "X"},
-                            "value": "V",
-                        }
-                    }
-                ),
-            ),
-        ],
-        right="int",
-    )
-
-    assert diagnostic.condition == "incompatible_input_type"
-
-
-def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
-    diagnostic = first_diagnostic(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V",
-                type="float",
-                derivation=derivation(
-                    {
-                        "lookup": {
-                            "dataset": "RIGHT",
-                            "key": {"V": "X"},
-                            "value": "V",
-                        }
-                    }
-                ),
-            ),
-        ],
-        right="int",
-    )
-
-    assert diagnostic.condition == "incompatible_input_type"
-    assert diagnostic.requirement == "REQ-0305"
 
 
 def aggregate_column(payload: dict[str, object]) -> Column:
@@ -2854,39 +2471,6 @@ def test_a_column_level_group_key_echo_on_a_grouped_row_plans() -> None:
     plan = plan_execution(spec, {"SRC": source})
 
     assert [planned.column for planned in plan.columns] == ["K"]
-
-
-def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
-    spec = row_two_dataset_specification(
-        [
-            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
-            Column(name="V", type="float"),
-        ],
-        [
-            Row(
-                id="r",
-                dataset="SRC",
-                derivations={
-                    "V": derivation(
-                        {
-                            "lookup": {
-                                "dataset": "RIGHT",
-                                "key": {"K": "SRC.K"},
-                                "value": "V",
-                            }
-                        }
-                    )
-                },
-            )
-        ],
-    )
-
-    # REQ-0156: an explicit lookup states the same driver-side match.
-    plan_execution(
-        spec,
-        row_tables(),
-        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
-    )
 
 
 def test_a_grouped_row_lookup_keyed_on_group_keys_is_planned() -> None:
@@ -3990,3 +3574,22 @@ def test_intermediate_verification_rejects_a_correlated_filter() -> None:
     assert diagnostic.condition == "correlated_filter_with_unique_verification"
     assert diagnostic.requirement == "REQ-1245"
     assert diagnostic.spec_paths == ("intermediates[0].verification",)
+
+
+def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    # REQ-0153/REQ-0115: the aggregate omits its key and groups on X.
+    [join] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "columns.V.derivation.aggregate.expr"
+    ]
+    assert join.source == ("X",)
+    assert join.key == ("X",)
+    assert join.inferred is True
