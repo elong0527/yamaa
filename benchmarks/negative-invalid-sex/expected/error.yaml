@@ -5,7 +5,11 @@ spec_paths:
 requirement: REQ-0376
 context:
   column: SEX
-  failure_count: 1
+  failure_count: 3
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-952
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-104
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-105
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-106

@@ -121,12 +121,19 @@ def test_nonfinite_float_is_missing_before_column_verification() -> None:
 def test_allowed_values_failure_reproduces_the_committed_error_contract() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("SEX", "str")],
-        [["PILOT7", "P7-951", "M"], ["PILOT7", "P7-952", "X"]],
+        [
+            ["YAMAA-01", "YAMAA-01-101", "M"],
+            ["YAMAA-01", "YAMAA-01-102", "F"],
+            ["YAMAA-01", "YAMAA-01-103", None],
+            ["YAMAA-01", "YAMAA-01-104", "m"],
+            ["YAMAA-01", "YAMAA-01-105", "X"],
+            ["YAMAA-01", "YAMAA-01-106", "U"],
+        ],
     )
 
     failures = check_column(
         completed,
-        column("SEX", "str", {"allowed_values": {"values": ["M", "F", "U"]}}),
+        column("SEX", "str", {"allowed_values": {"values": ["M", "F"]}}),
         KEYS,
     )
 
