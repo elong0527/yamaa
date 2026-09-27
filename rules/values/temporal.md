@@ -187,11 +187,8 @@ representation:
 
 <a id="req-0564"></a>
 
-**REQ-0564.** Integral seconds below 2^53 are exact in R's binary64
-representation, which covers all years above. R's `tzone` is a carrier, not a
-value claim. `UTC` has no offset or daylight-saving rule. It cannot shift a
-value or make one ambiguous, and it keeps the machine's timezone out of the
-result. An implementation must set it rather than leave it empty.
+**REQ-0564.** An implementation must set `tzone` to `UTC` rather than leave
+it empty.
 
 <a id="req-0565"></a>
 
