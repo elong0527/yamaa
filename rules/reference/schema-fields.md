@@ -45,6 +45,11 @@ requirement link for behavior. It is not an additional semantic contract.
 | `record_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.lower` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.upper` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
+| `match_key_range_fields.key` | `"match_key"` | `false` | Absent | -- | Schema constraint |
+| `match_key_range_fields.between` | `"record_between_class"` | `false` | Absent | -- | Schema constraint |
+| `match_filter_fields.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
+| `match_selection_fields.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | Schema constraint |
+| `match_selection_fields.keep` | `"keep_policy"` | `false` | Absent | -- | Schema constraint |
 | `column_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.label` | `"str"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
@@ -203,10 +208,10 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `expressions.aggregate` | `["aggregate_expression", "aggregate_class"]` | `false` | Absent | -- | Schema constraint |
-| `aggregate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.between` | `"record_between_class"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key` | `"match_key"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.between` | `"record_between_class"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | [REQ-1189](../operations/aggregation.md#req-1189) |
 | `aggregate_class.expr` | `"aggregate_expression"` | `true` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `derive_binding_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
@@ -228,9 +233,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.flag` | `["predicate", "flag_class"]` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `source_binding_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `source_binding_class.absent` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.keep` | `"keep_policy"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
+| `source_binding_class.absent` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `flag_class.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.false_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |

@@ -23,10 +23,9 @@ derivation:
   source: ADSL.TRTSDTM
 ```
 
-A structured `source:` keeps its `filter` and `multiple_matches` on the
-implicit join: the filter narrows the eligible records and
-`multiple_matches` chooses among the survivors exactly as an explicit
-lookup would.
+A structured `source:` keeps its `filter`, `order_by`, and `keep` on the
+implicit join: the filter narrows the eligible records and the ordered
+selection chooses among the survivors exactly as an explicit lookup would.
 
 ### Terminology
 

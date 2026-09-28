@@ -37,17 +37,10 @@ source_binding_class:
         type: variable
         required: true
         description: See REQ-1051.
-    - filter:
-        type: predicate
-        description: See REQ-1051.
+    - fields_from: match_filter_fields
+    - fields_from: match_selection_fields
     - absent:
         type: literal_value
-        description: See REQ-1051.
-    - order_by:
-        type: "list[order_by_term]"
-        description: See REQ-1051.
-    - keep:
-        type: keep_policy
         description: See REQ-1051.
 
 flag_class:

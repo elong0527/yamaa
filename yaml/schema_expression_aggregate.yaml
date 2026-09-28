@@ -8,18 +8,10 @@ expressions:
         type: [aggregate_expression, aggregate_class]
 
 aggregate_class:
-    - filter:
-        type: predicate
-        description: See REQ-1088.
-    - between:
-        type: record_between_class
-        description: See REQ-1088.
+    - fields_from: match_key_range_fields
+    - fields_from: match_filter_fields
     - group_by:
         type: "list[variable]"
-        description: See REQ-1088.
-    - key:
-        type: match_key
-        required: false
         description: See REQ-1088.
     - derive:
         type: "list[derive_binding_class]"

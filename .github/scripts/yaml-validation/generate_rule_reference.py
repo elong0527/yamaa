@@ -10,16 +10,24 @@ from check_rule_rewrite import UniqueLoader, load_migration
 import yaml
 
 
-def descriptors(node, parts=()):
+def descriptors(node, parts=(), classes=None, active=()):
     if isinstance(node, dict):
         if "type" in node and not isinstance(node["type"], dict):
             yield ".".join(parts), node
         for key, value in node.items():
             if isinstance(value, (dict, list)):
-                yield from descriptors(value, (*parts, key))
+                yield from descriptors(value, (*parts, key), classes, active)
     elif isinstance(node, list):
         for value in node:
-            yield from descriptors(value, parts)
+            if isinstance(value, dict) and "fields_from" in value:
+                name = value["fields_from"]
+                if not isinstance(name, str) or classes is None or name not in classes:
+                    raise ValueError(f"unknown fields_from class {name!r}")
+                if name in active:
+                    raise ValueError(f"class fields_from cycle at {name!r}")
+                yield from descriptors(classes[name], parts, classes, (*active, name))
+            else:
+                yield from descriptors(value, parts, classes, active)
 
 
 def cell(value):
@@ -46,7 +54,17 @@ def generated(root):
         "requirement link for behavior. It is not an additional semantic contract.",
         "",
     ]
-    for path in sorted((root / "yaml").glob("schema*.yaml")):
+    documents = {
+        path: yaml.load(path.read_text(encoding="ascii"), Loader=UniqueLoader)
+        for path in sorted((root / "yaml").glob("schema*.yaml"))
+    }
+    classes = {
+        name: definition
+        for document in documents.values()
+        for name, definition in document.items()
+        if isinstance(definition, list)
+    }
+    for path, document in documents.items():
         fields.extend(
             [
                 f"## {path.name}",
@@ -55,8 +73,7 @@ def generated(root):
                 "| --- | --- | --- | --- | --- | --- |",
             ]
         )
-        document = yaml.load(path.read_text(encoding="ascii"), Loader=UniqueLoader)
-        for name, descriptor in descriptors(document):
+        for name, descriptor in descriptors(document, classes=classes):
             target = prose.get(f"{path.name}:{name}.description")
             entry = migration["requirements"].get(target, {})
             if entry.get("retired"):

@@ -20,7 +20,7 @@ unless its behavior says otherwise:
 | Stage | Local declaration | Behavior |
 |---|---|---|
 | bind | `source.absent` | Absent source variable or ODM item |
-| join | `source.multiple_matches` | Choose one `source.filter` result |
+| join | `source.order_by` and `source.keep` | Choose one `source.filter` result |
 | join | `intermediates[].no_match` | The intermediate selects no record ([REQ-0129](../operations/lookup.md#req-0129)) |
 | mapping | `missing` | Missing input |
 | mapping | `unmapped` | Non-missing value with no mapping |
@@ -191,7 +191,7 @@ fail with both the handler and original context.
 
 <a id="req-0365"></a>
 
-**REQ-0365.** `multiple_matches.keep` outside `first` or `last`: schema
+**REQ-0365.** `source.keep` outside `first` or `last`: schema
 failure.
 
 <a id="req-0366"></a>

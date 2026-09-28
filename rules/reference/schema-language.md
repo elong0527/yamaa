@@ -79,21 +79,30 @@ type.
 <a id="req-0251"></a>
 
 **REQ-0251.** A class is an ordered list of one-entry mappings. Each entry
-maps an allowed field name to a descriptor:
+maps an allowed field name to a descriptor, or uses `fields_from` to copy
+the fields of another named class in the same bundle:
 
 ```yaml
+shared_fields:
+    - filter: {type: predicate}
 example_class:
     - name:
         type: str
         required: true
         description: Name of the example.
+    - fields_from: shared_fields
     - values: {type: "list[str]", required: false}
 ```
 
 <a id="req-0252"></a>
 
 **REQ-0252.** Class fields are closed. Field order is descriptive and has no
-execution meaning. Duplicate class field names are errors.
+execution meaning. `fields_from` is reserved for class field reuse and its
+value must name a class, not a value type or registry. Implementations resolve
+it after loading the complete bundle, including cross-module references.
+Unknown references, reuse cycles, and duplicate field names after expansion
+are errors. The copied fields keep their descriptors; a class cannot override
+one by repeating its name.
 
 <a id="req-0253"></a>
 

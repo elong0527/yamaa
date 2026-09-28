@@ -74,6 +74,45 @@ def _is_alias_declaration(definition: dict[object, object]) -> bool:
     )
 
 
+def _expand_class_fields(
+    classes: dict[str, list[dict[str, dict[str, Any]]]], path: Path
+) -> dict[str, list[dict[str, dict[str, Any]]]]:
+    """Resolve schema field reuse before validating or reading class fields."""
+    expanded: dict[str, list[dict[str, dict[str, Any]]]] = {}
+
+    def expand(name: str, stack: tuple[str, ...]) -> list[dict[str, dict[str, Any]]]:
+        if name in expanded:
+            return expanded[name]
+        if name in stack:
+            raise _schema_failure(
+                path, f"class fields_from cycle: {' -> '.join((*stack, name))}"
+            )
+        if name not in classes:
+            raise _schema_failure(path, f"unknown fields_from class {name!r}")
+        fields: list[dict[str, dict[str, Any]]] = []
+        for entry in classes[name]:
+            if isinstance(entry, dict) and "fields_from" in entry:
+                if (
+                    len(entry) != 1
+                    or not isinstance(entry["fields_from"], str)
+                    or not entry["fields_from"]
+                ):
+                    raise _schema_failure(
+                        path, f"{name}: fields_from must name one class"
+                    )
+                fields.extend(
+                    copy.deepcopy(expand(entry["fields_from"], (*stack, name)))
+                )
+            else:
+                fields.append(entry)
+        expanded[name] = fields
+        return fields
+
+    for name in classes:
+        expand(name, ())
+    return expanded
+
+
 def load_schema_bundle(
     schema_root: str | Path,
     *,
@@ -183,7 +222,7 @@ def load_schema_bundle(
     bundle = SchemaBundle(
         version=version,
         path=entrypoint,
-        classes=classes,
+        classes=_expand_class_fields(classes, entrypoint),
         aliases=aliases,
         registries=registries,
     )
