@@ -600,6 +600,7 @@ class Engine:
         self._eligible = {}
         self._self_marks = []
         self._row_phase = True
+        self._verify_input_intermediates()
         self._build_rows()
         self._derive_columns()
         self._verify()
@@ -1057,13 +1058,12 @@ class Engine:
             )
 
     def _verify(self):
-        seen_ids = set()
         for i, v in enumerate(self.verifications):
-            self._verify_one(v, f"verifications[{i}]", None, seen_ids)
+            self._verify_one(v, f"verifications[{i}]", None)
         for name in self.col_order:
             for i, v in enumerate(_vlist(self.colspecs[name].get("verifications"))):
                 where = f"columns.{name}.verifications[{i}]"
-                self._verify_one(v, where, name, seen_ids)
+                self._verify_one(v, where, name)
 
     def _verify_self_uniques(self):
         """REQ-0120/1245: uniqueness over the current completed donor pool."""
@@ -1072,67 +1072,68 @@ class Engine:
             if self._row_phase and self._self_marks
             else self.rows
         )
-        for lid, decl in self.lookups_decl.items():
-            if decl.get("dataset") != "SELF":
-                continue
-            uniq = (decl.get("verification") or {}).get("unique")
-            if not uniq:
-                continue
-            if isinstance(uniq, str):
-                uniq = [uniq]
-            seen = set()
-            for r in pool:
-                tup = tuple(_hashable(r.get(u)) for u in uniq)
-                if tup in seen:
-                    _fail(
-                        f"{self.lookup_paths[lid]}.verification",
-                        "verification",
-                        "duplicate_intermediate_records",
-                        "REQ-1245",
-                        {"intermediate": lid, "unique": uniq},
-                    )
-                seen.add(tup)
+        for decl in self.lookups_decl.values():
+            if decl.get("dataset") == "SELF" and decl.get("verifications"):
+                self._check_intermediate_uniques(decl, pool)
 
-    def _verify_one(self, v, where, col, seen_ids):
+    def _verify_input_intermediates(self):
+        """REQ-1245: an input-backed check runs before any row is built,
+        whether or not a row reads the intermediate, so a filter or
+        derivation that fails to materialize fails here as well."""
+        ctx = _BaseCtx(self, "<intermediates>")
+        for decl in self.lookups_decl.values():
+            if decl.get("dataset") != "SELF" and decl.get("verifications"):
+                ctx.where = self.lookup_paths[decl["id"]]
+                ctx._eligible(decl)
+
+    def _check_intermediate_uniques(self, decl, recs):
+        """REQ-1245: each `unique` check holds over the filtered donor
+        records; a repeated combination fails at the check's own path."""
+        where = self.lookup_paths[decl["id"]]
+        for path, cols in _validate.intermediate_uniques(decl, where):
+            seen, repeated = set(), set()
+            for r in recs:
+                tup = tuple(_hashable(r.get(c)) for c in cols)
+                if tup in seen:
+                    repeated.add(tup)
+                seen.add(tup)
+            if repeated:
+                _fail(
+                    path,
+                    "verification",
+                    "duplicate_intermediate_records",
+                    "REQ-1245",
+                    {
+                        "intermediate": decl["id"],
+                        "dataset": decl["dataset"],
+                        "columns": list(cols),
+                        "duplicate_count": len(repeated),
+                    },
+                )
+
+    def _verify_one(self, v, where, col):
         if not isinstance(v, dict) or len(v) != 1:
             _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
         kind, payload = next(iter(v.items()))
         where = f"{where}.{kind}"
         payload = payload or {}
+        if kind == "unique" and isinstance(payload, list):
+            payload = {"columns": payload}  # REQ-0381: the unnamed form
         if not isinstance(payload, dict):
             _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
-        vid = payload.get("id")
-        if vid is not None:
-            if vid in seen_ids:
-                _fail(
-                    where, "validation", "duplicate_identifier", "REQ-0398", {"id": vid}
-                )
-            seen_ids.add(vid)
-        if kind in ("all_or_none", "implies", "assert") and vid is None:
-            _fail(
-                where,
-                "validation",
-                "missing_verification_id",
-                "REQ-0374",
-                {"verification": kind},
-            )
-        if kind == "row_count" and payload.get("group_by") and vid is None:
-            _fail(
-                where,
-                "validation",
-                "missing_verification_id",
-                "REQ-0402",
-                {"verification": kind},
-            )
         severity = payload.get("severity", "error")
         failed = self._check_verification(kind, payload, col, where)
+        failed, detail = failed if isinstance(failed, tuple) else (failed, {})
         if failed and severity == "error":
+            report = {"verification": kind}
+            if payload.get("id") is not None:
+                report["verification_id"] = payload["id"]  # REQ-0374
             _fail(
                 where,
                 "verification",
                 failed,
                 _VERIFICATION_REQUIREMENTS.get(failed, "REQ-0406"),
-                {"verification": kind},
+                {**report, **detail},
             )
 
     def _check_verification(self, kind, payload, col, where):
@@ -1224,7 +1225,7 @@ class Engine:
             )
 
         filt, when = payload.get("filter"), payload.get("when")
-        group_by = payload.get("group_by")
+        group_by = payload.get("group_by") or []
         groups = [list(range(len(self.rows)))]
         if group_by:
             parts = {}
@@ -1232,6 +1233,7 @@ class Engine:
                 tup = tuple(_hashable(self.rows[i].get(g)) for g in group_by)
                 parts.setdefault(tup, []).append(i)
             groups = list(parts.values())
+        keys, counts = [], []
         for g in groups:
             if when is not None and not any(admits(when, i) for i in g):
                 continue
@@ -1245,8 +1247,15 @@ class Engine:
             ):
                 b = payload.get(bound)
                 if b is not None and (value < b if low else value > b):
-                    return "row_count_failed"
-        return None
+                    keys.append({c: self.rows[g[0]].get(c) for c in group_by})
+                    counts.append(n)
+                    break
+        if not keys:
+            return None
+        # REQ-0402: the report names each failing group and its count; the
+        # bounds are in the declaration at the reported path.
+        detail = {"failure_count": len(keys), "keys": keys, "counts": counts}
+        return "row_count_failed", detail
 
     def _render(self):
         seen = set()
@@ -1527,20 +1536,7 @@ class _BaseCtx:
                 recs = out
             else:
                 recs = [dict(r, _ds=table.name) for r in recs]
-            uniq = (decl.get("verification") or {}).get("unique")
-            if uniq:
-                seen = set()
-                for r in recs:
-                    tup = tuple(_hashable(r.get(u)) for u in uniq)
-                    if tup in seen:
-                        _fail(
-                            f"{self.e.lookup_paths[lid]}.verification",
-                            "verification",
-                            "duplicate_intermediate_records",
-                            "REQ-1245",
-                            {"intermediate": decl["id"], "unique": uniq},
-                        )
-                    seen.add(tup)
+            self.e._check_intermediate_uniques(decl, recs)
             self.e._eligible[lid] = recs
         return self.e._eligible[lid]
 
