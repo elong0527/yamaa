@@ -1063,34 +1063,53 @@ def _narrowed(
     if plan.between_value is None:
         return list(matched)
     value = current.get(plan.between_value, MISSING)
-    assert plan.between_lower is not None
-    assert plan.between_upper is not None
     kept: list[IndexedRecord] = []
     for record in matched:
-        lower = record.values[plan.between_lower]
-        upper = record.values[plan.between_upper]
-        # REQ-0128: both endpoints are inclusive, and a record missing a
-        # stated bound is ineligible rather than open.
-        if lower is MISSING or upper is MISSING:
-            continue
-        try:
-            if compare_values(lower, value) <= 0 and compare_values(value, upper) <= 0:
-                kept.append(record)
-        except TypeError:
-            return IntermediateOutcome(
-                condition=_condition(
-                    "incomparable_range_types",
-                    "REQ-0121",
-                    {
-                        "intermediate": plan.identifier,
-                        "value_type": runtime_type_name(value),
-                        "lower_type": runtime_type_name(lower),
-                        "upper_type": runtime_type_name(upper),
-                    },
-                    phase="validation",
-                ),
-                spec_path=f"{plan.path}.between",
-            )
+        admitted = True
+        edges: dict[str, RuntimeValue] = {}
+        for side, bound in (
+            ("lower", plan.between_lower),
+            ("upper", plan.between_upper),
+        ):
+            if bound is None:
+                continue
+            edge = record.values[bound]
+            # REQ-0128: both endpoints are inclusive, and a record missing a
+            # stated bound is ineligible rather than open.
+            if edge is MISSING:
+                admitted = False
+                break
+            edges[side] = edge
+        if admitted:
+            try:
+                if "lower" in edges and compare_values(edges["lower"], value) > 0:
+                    admitted = False
+                if (
+                    admitted
+                    and "upper" in edges
+                    and compare_values(value, edges["upper"]) > 0
+                ):
+                    admitted = False
+            except TypeError:
+                return IntermediateOutcome(
+                    condition=_condition(
+                        "incomparable_range_types",
+                        "REQ-0121",
+                        {
+                            "intermediate": plan.identifier,
+                            "value_type": runtime_type_name(value),
+                            **{
+                                f"{side}_type": runtime_type_name(edges[side])
+                                for side in ("lower", "upper")
+                                if side in edges
+                            },
+                        },
+                        phase="validation",
+                    ),
+                    spec_path=f"{plan.path}.between",
+                )
+        if admitted:
+            kept.append(record)
     return kept
 
 
@@ -1311,27 +1330,37 @@ def evaluate_intermediate(
     between_lower: str | None = None
     between_upper: str | None = None
     if between is not None:
-        # The planner requires all three together; a payload that reached
-        # here without them narrows by a bound it cannot read, so answer the
-        # declaration rather than raising on the missing one.
-        bounds = (
-            [between.get(name) for name in ("value", "lower", "upper")]
-            if isinstance(between, Mapping)
-            else []
-        )
-        if len(bounds) != 3 or not all(isinstance(bound, str) for bound in bounds):
+        # The named form requires `value` plus at least one bound (REQ-1049); a
+        # payload that reached here without them narrows by a bound it
+        # cannot read, so answer the declaration rather than raising on
+        # the missing one.
+        raw = between if isinstance(between, Mapping) else {}
+        value_raw = raw.get("value")
+        lower_raw = raw.get("lower")
+        upper_raw = raw.get("upper")
+        if not (
+            isinstance(value_raw, str)
+            and (lower_raw is not None or upper_raw is not None)
+            and all(
+                isinstance(bound, str)
+                for bound in (lower_raw, upper_raw)
+                if bound is not None
+            )
+        ):
             return ConditionResult(
                 condition=RuntimeCondition(
                     phase="validation",
                     condition="invalid_field_type",
                     context={
                         "operation": "lookup",
-                        "expected": "between value, lower, and upper",
+                        "expected": "between value with at least one bound",
                     },
                     requirement="REQ-0321",
                 )
             )
-        between_value, between_lower, between_upper = (str(bound) for bound in bounds)
+        between_value = value_raw
+        between_lower = lower_raw
+        between_upper = upper_raw
         names.append(between_value)
     predicate = None
     filter_text = payload.get("filter")

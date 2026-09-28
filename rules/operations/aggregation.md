@@ -156,10 +156,10 @@ yet; it is Python-only for now.
 
 **REQ-0472.** A qualified aggregate may declare `between` to narrow right-side
 records for each current row. `value` is a variable the current row can read.
-`lower` and `upper` are qualified columns of the aggregate expression's one
-right-side relation, and at least one is required. Every declared comparison is
-inclusive: `lower <= value` and `value <= upper`. Omitting one bound makes the
-match one-sided without excluding the stated endpoint.
+`lower` and `upper` are bare donor-record fields of the aggregate expression's
+one right-side relation, and at least one is required. Every declared
+comparison is inclusive: `lower <= value` and `value <= upper`. Omitting one
+bound makes the match one-sided without excluding the stated endpoint.
 
 <a id="req-0473"></a>
 
@@ -383,7 +383,8 @@ algebraically simplify a written expression.
 consume relation record order as specified above. `COUNT`, `MIN`, and `MAX` are
 independent of that order, while `ONLY` accepts no group in which an order
 could choose among records. A rule that needs one record chosen by value order
-still uses a window or `multiple_matches`, where the value order is declared.
+still uses a window or the `order_by` plus `keep` selection, where the value
+order is declared.
 
 ### Interface behavior
 
@@ -394,7 +395,7 @@ still uses a window or `multiple_matches`, where the value order is declared.
 | Field | Meaning |
 | --- | --- |
 | `aggregate_class.filter` | Predicate selecting records before reduction. |
-| `aggregate_class.between` | Current-row value matched inclusively against one or two columns of a qualified right-side relation. |
+| `aggregate_class.between` | Current-row value matched inclusively against the stated donor-record bounds of a qualified right-side relation ([REQ-1049](lookup.md#req-1049)). |
 | `aggregate_class.group_by` | Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys. |
 | `aggregate_class.key` | Relation columns, each paired with its current-row match value ([REQ-0115](lookup.md#req-0115)); omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)) when the expression reads a qualified dataset relation. |
 | `aggregate_class.derive` | Per-record intermediate variable bindings evaluated before reduction ([REQ-1189](aggregation.md#req-1189)). |
@@ -407,16 +408,6 @@ still uses a window or `multiple_matches`, where the value order is declared.
 | Field | Meaning |
 | --- | --- |
 | `aggregate_expression` | Reducer expression in the portable grammar defined by [Aggregation](aggregation.md). |
-
-<a id="req-1090"></a>
-
-**REQ-1090.** The `aggregate_between_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `aggregate_between_class.value` | Value read from the current row. |
-| `aggregate_between_class.lower` | Qualified right-side variable serving as an inclusive lower bound. |
-| `aggregate_between_class.upper` | Qualified right-side variable serving as an inclusive upper bound. |
 
 <a id="req-1091"></a>
 

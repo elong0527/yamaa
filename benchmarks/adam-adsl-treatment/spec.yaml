@@ -32,9 +32,8 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
-        multiple_matches:
-          order_by: [EX.EXSTDTC, EX.EXSEQ]
-          keep: first
+        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        keep: first
 
   - name: TRT01SRC
     type: str

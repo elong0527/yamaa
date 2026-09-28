@@ -37,14 +37,10 @@ source_binding_class:
         type: variable
         required: true
         description: See REQ-1051.
-    - filter:
-        type: predicate
-        description: See REQ-1051.
+    - fields_from: match_filter_fields
+    - fields_from: match_selection_fields
     - absent:
         type: literal_value
-        description: See REQ-1051.
-    - multiple_matches:
-        type: multiple_matches_class
         description: See REQ-1051.
 
 flag_class:
@@ -77,16 +73,10 @@ filtered_source_class:
         required: true
         description: See REQ-1053.
 
-multiple_matches_class:
-    - order_by:
-        type: "list[order_by_term]"
-        required: true
-        description: See REQ-1054.
-    - keep:
-        type: str
-        required: true
-        values: [first, last]
-        description: See REQ-1054.
+keep_policy:
+    type: str
+    values: [first, last]
+    description: See REQ-0119.
 
 order_by_term:
     type: [variable, order_term_class]

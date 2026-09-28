@@ -40,9 +40,8 @@ rather than leaving the choice to file order:
   derivation:
     source:
       variable: DM.AGE
-      multiple_matches:
-        order_by: [DM.DMDTC]
-        keep: last
+      order_by: [DM.DMDTC]
+      keep: last
 ```
 
 The sample records carry no collection date (`DMDTC` here), so the source has

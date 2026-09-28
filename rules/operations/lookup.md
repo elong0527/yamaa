@@ -23,10 +23,9 @@ derivation:
   source: ADSL.TRTSDTM
 ```
 
-A structured `source:` keeps its `filter` and `multiple_matches` on the
-implicit join: the filter narrows the eligible records and
-`multiple_matches` chooses among the survivors exactly as an explicit
-lookup would.
+A structured `source:` keeps its `filter`, `order_by`, and `keep` on the
+implicit join: the filter narrows the eligible records and the ordered
+selection chooses among the survivors exactly as an explicit lookup would.
 
 ### Terminology
 
@@ -663,7 +662,7 @@ paired key column to have the same comparable type.
 | `intermediate_class.id` | Name through which the looked-up record is read. |
 | `intermediate_class.dataset` | Declared input dataset, or `SELF` for completed derived rows ([REQ-0120](lookup.md#req-0120)). |
 | `intermediate_class.key` | Dataset columns, each paired with its current-row match value ([REQ-0115](lookup.md#req-0115)); omit to match on the applicable output keys ([REQ-0150](lookup.md#req-0150)). |
-| `intermediate_class.between` | Current-row value matched inclusively against lower and upper dataset bounds. |
+| `intermediate_class.between` | Current-row value matched inclusively against the stated donor-record bounds ([REQ-1049](lookup.md#req-1049)). |
 | `intermediate_class.filter` | Predicate selecting donor records; it may correlate with the current driver under REQ-0120. |
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
@@ -674,13 +673,16 @@ paired key column to have the same comparable type.
 
 <a id="req-1049"></a>
 
-**REQ-1049.** The `intermediate_between_class` fields have these meanings:
+**REQ-1049.** The `record_between_class` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
-| `intermediate_between_class.value` | Value read from the current row. |
-| `intermediate_between_class.lower` | Dataset column whose value is an inclusive lower bound. |
-| `intermediate_between_class.upper` | Dataset column whose value is an inclusive upper bound. |
+| `record_between_class.value` | Value read from the current row. |
+| `record_between_class.lower` | Donor-record field whose value is an inclusive lower bound; omit for no lower bound. |
+| `record_between_class.upper` | Donor-record field whose value is an inclusive upper bound; omit for no upper bound. |
+
+At least one of `lower`, `upper` is present; a `between` with neither bound
+fails validation. Bounds are bare donor-record field identifiers.
 
 <a id="req-1050"></a>
 
@@ -699,7 +701,8 @@ paired key column to have the same comparable type.
 | `source_binding_class.variable` | Variable to copy. |
 | `source_binding_class.filter` | Predicate selecting the right-side records this source reads; [Lookup and joins](lookup.md) defines the selection. |
 | `source_binding_class.missing` | Value used when the source variable or item is absent. |
-| `source_binding_class.multiple_matches` | Rule for selecting one of several right-side matches. |
+| `source_binding_class.order_by` | Terms ordering eligible right-side matches; declared with keep ([REQ-0119](lookup.md#req-0119)). |
+| `source_binding_class.keep` | Ordered match to retain; declared with order_by ([REQ-0119](lookup.md#req-0119)). |
 
 <a id="req-1052"></a>
 
@@ -717,12 +720,3 @@ paired key column to have the same comparable type.
 | --- | --- |
 | `filtered_source_class.variable` | Variable to copy. |
 | `filtered_source_class.filter` | Predicate selecting the right-side records this source reads; [Lookup and joins](lookup.md) defines the selection. |
-
-<a id="req-1054"></a>
-
-**REQ-1054.** The `multiple_matches_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `multiple_matches_class.order_by` | Terms used to order eligible right-side matches. |
-| `multiple_matches_class.keep` | Ordered match to retain. |

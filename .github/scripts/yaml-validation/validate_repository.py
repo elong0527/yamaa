@@ -1462,6 +1462,38 @@ def check_descriptor(desc, is_class_field, path):
     return errors
 
 
+def expand_schema_class_fields(classes):
+    """Resolve fields_from entries after every schema module has loaded."""
+    expanded = {}
+    errors = []
+
+    def expand(name, stack):
+        if name in expanded:
+            return expanded[name]
+        if name in stack:
+            errors.append(f"ERROR: class fields_from cycle: {' -> '.join((*stack, name))}")
+            return []
+        if name not in classes:
+            errors.append(f"ERROR: unknown fields_from class '{name}'")
+            return []
+        fields = []
+        for entry in classes[name]:
+            if isinstance(entry, dict) and 'fields_from' in entry:
+                target = entry['fields_from']
+                if len(entry) != 1 or not isinstance(target, str) or not target:
+                    errors.append(f"ERROR: {name}: fields_from must name one class")
+                    continue
+                fields.extend(copy.deepcopy(expand(target, (*stack, name))))
+            else:
+                fields.append(entry)
+        expanded[name] = fields
+        return fields
+
+    for name in classes:
+        expand(name, ())
+    return expanded, errors
+
+
 def build_schema_env(root: Path, entrypoint='schema.yaml'):
     errors = []
     schema_dir = root / 'yaml'
@@ -1602,7 +1634,6 @@ def build_schema_env(root: Path, entrypoint='schema.yaml'):
             if declaration_kind in {'class', 'alias'}:
                 if isinstance(v, list): # Class definition
                     env['classes'][k] = v
-                    class_fields = set()
                     for field in v:
                         if not isinstance(field, dict) or len(field) != 1:
                             errors.append(
@@ -1611,9 +1642,13 @@ def build_schema_env(root: Path, entrypoint='schema.yaml'):
                             )
                             continue
                         for fname, fdesc in field.items():
-                            if fname in class_fields:
-                                errors.append(f"ERROR: {current.name}: duplicate class field '{fname}' in '{k}'")
-                            class_fields.add(fname)
+                            if fname == 'fields_from':
+                                if not isinstance(fdesc, str) or not fdesc:
+                                    errors.append(
+                                        f"ERROR: {current.name}:{k}: fields_from "
+                                        "must name one class"
+                                    )
+                                continue
                             errors.extend(
                                 check_descriptor(
                                     fdesc,
@@ -1695,6 +1730,20 @@ def build_schema_env(root: Path, entrypoint='schema.yaml'):
                             f"ERROR: {current.name}: registry entry "
                             f"'{k}.{reg_k}' must be a class or descriptor"
                         )
+
+    env['classes'], expansion_errors = expand_schema_class_fields(env['classes'])
+    errors.extend(expansion_errors)
+    for class_name, fields in env['classes'].items():
+        seen = set()
+        for field in fields:
+            if not isinstance(field, dict) or len(field) != 1:
+                continue
+            name = next(iter(field))
+            if name in seen:
+                errors.append(
+                    f"ERROR: duplicate class field '{name}' in '{class_name}'"
+                )
+            seen.add(name)
 
     for t in all_type_refs:
         if t not in known_types:
@@ -7361,17 +7410,17 @@ def validate_aggregate_between(
             operand_types.append((value, value_type))
 
     for name, bound in bounds:
-        if not isinstance(bound, str) or not bound.startswith(relation + '.'):
+        if not isinstance(bound, str) or '.' in bound:
             errors.append(
                 validation_diagnostic(
                     f"{path}.{name}",
                     'invalid_aggregate_context',
-                    f"aggregate {name} must be qualified by {relation!r}",
-                    context={'reason': 'wrong_between_bound_relation'},
+                    f"aggregate {name} must be a bare donor-record field, not qualified",
+                    context={'reason': 'qualified_between_bound'},
                 )
             )
             continue
-        field = bound.split('.', 1)[1]
+        field = bound
         bound_type = fields.get(field)
         if bound_type is None:
             if not fields:

@@ -65,9 +65,8 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EPOCH = 'TREATMENT 1'"
-        multiple_matches:
-          order_by: [EX.EXSTDTC, EX.EXSEQ]
-          keep: first
+        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        keep: first
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]
@@ -79,9 +78,8 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EPOCH = 'TREATMENT 2'"
-        multiple_matches:
-          order_by: [EX.EXSTDTC, EX.EXSEQ]
-          keep: first
+        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        keep: first
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]

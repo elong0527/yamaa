@@ -12,6 +12,7 @@ from yamaa.specification import (
 )
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.schema import (
+    class_fields,
     load_schema_bundle,
     normalize_specification,
 )
@@ -376,6 +377,51 @@ def test_rejects_invalid_schema_declarations(
     diagnostic = caught.value.diagnostics[0]
     assert diagnostic.condition == "invalid_schema_bundle"
     assert reason in diagnostic.context["reason"]
+
+
+def test_record_matching_fields_expand_into_only_the_owning_classes() -> None:
+    bundle = load_schema_bundle(SCHEMA_ROOT)
+    intermediate = class_fields(bundle, "intermediate_class")
+    aggregate = class_fields(bundle, "aggregate_class")
+    source = class_fields(bundle, "source_binding_class")
+
+    for name in ("key", "between", "filter"):
+        assert intermediate[name] == aggregate[name]
+    for name in ("filter", "order_by", "keep"):
+        assert intermediate[name] == source[name]
+    assert "key" not in source and "between" not in source
+    assert "order_by" not in aggregate and "keep" not in aggregate
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "reason"),
+    [
+        (
+            "- fields_from: match_filter_fields",
+            "- fields_from: missing_fields",
+            "unknown fields_from class 'missing_fields'",
+        ),
+        (
+            "match_filter_fields:\n    - filter: {type: predicate}",
+            "match_filter_fields:\n    - fields_from: match_filter_fields",
+            "class fields_from cycle",
+        ),
+        (
+            "- fields_from: match_filter_fields",
+            "- fields_from: match_key_range_fields",
+            "duplicate class field",
+        ),
+    ],
+)
+def test_rejects_invalid_class_field_reuse(
+    tmp_path: Path, old: str, new: str, reason: str
+) -> None:
+    schema_root = _mutate_schema(tmp_path, "schema.yaml", old, new)
+
+    with pytest.raises(SpecificationError) as caught:
+        load_schema_bundle(schema_root)
+
+    assert reason in caught.value.diagnostics[0].context["reason"]
 
 
 def test_allows_registry_operations_named_type_and_registry(tmp_path: Path) -> None:

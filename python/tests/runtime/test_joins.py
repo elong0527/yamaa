@@ -413,7 +413,7 @@ def test_implicit_join_reports_duplicate_right_side_matches() -> None:
 
 def test_a_structured_implicit_source_filters_and_selects_before_reading() -> None:
     # REQ-0111: a structured cross-dataset source keeps its filter and
-    # multiple_matches on the implicit join.
+    # order_by/keep on the implicit join.
     left = frame_from_values(
         (
             TypedColumn(name="STUDYID", type="str"),
@@ -464,10 +464,8 @@ def test_a_structured_implicit_source_filters_and_selects_before_reading() -> No
                             "source": {
                                 "variable": "RIGHT.V",
                                 "filter": "RIGHT.FLAG = 'Y'",
-                                "multiple_matches": {
-                                    "order_by": ["RIGHT.V"],
-                                    "keep": "last",
-                                },
+                                "order_by": ["RIGHT.V"],
+                                "keep": "last",
                             }
                         }
                     )

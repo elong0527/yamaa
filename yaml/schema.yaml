@@ -105,27 +105,9 @@ intermediate_class:
         type: identifier
         required: true
         description: See REQ-1048.
-    - key:
-        type: match_key
-        required: false
-        description: See REQ-1048.
-    - between:
-        type: intermediate_between_class
-        required: false
-        description: See REQ-1048.
-    - filter:
-        type: predicate
-        required: false
-        description: See REQ-1048.
-    - order_by:
-        type: "list[order_by_term]"
-        required: false
-        description: See REQ-1048.
-    - keep:
-        type: str
-        required: false
-        values: [first, last]
-        description: See REQ-1048.
+    - fields_from: match_key_range_fields
+    - fields_from: match_filter_fields
+    - fields_from: match_selection_fields
     - columns:
         type: "list[identifier]"
         required: false
@@ -149,19 +131,31 @@ intermediate_verification_class:
         required: true
         description: See REQ-1245.
 
-intermediate_between_class:
+record_between_class:
     - value:
         type: variable
         required: true
         description: See REQ-1049.
     - lower:
         type: identifier
-        required: true
+        required: false
         description: See REQ-1049.
     - upper:
         type: identifier
-        required: true
+        required: false
         description: See REQ-1049.
+
+# See REQ-0251.
+match_key_range_fields:
+    - key: {type: match_key}
+    - between: {type: record_between_class}
+
+match_filter_fields:
+    - filter: {type: predicate}
+
+match_selection_fields:
+    - order_by: {type: "list[order_by_term]"}
+    - keep: {type: keep_policy}
 
 column_class:
     - name:

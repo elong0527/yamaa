@@ -163,8 +163,8 @@ resolver = index.context({"ODM": current_odm_row}, {"STUDYID": "STUDY01"})
 The resolver implements the scalar expression protocol. Direct qualified
 fields read the supplied source record, unqualified names read completed output
 values, and a long-form ODM item uses every context column present in the ODM
-projection. Duplicate ODM items require a structured R008 `multiple_matches`
-policy; successful duplicate selection is returned with
+projection. Duplicate ODM items require flat R008 `order_by`/`keep`
+siblings; successful duplicate selection is returned with
 `handled_by="multiple_matches"` so the executor can count that path.
 Implicit cross-dataset row selection remains the keyed-join component's
 responsibility; this context resolves only source records its caller has
@@ -323,7 +323,8 @@ the output keys both sides carry, in `keys` order:
   derivation:
     source:
       variable: EX.EXTRT
-      multiple_matches: {order_by: [EX.EXSTDTC, EX.EXSEQ], keep: first}
+      order_by: [EX.EXSTDTC, EX.EXSEQ]
+      keep: first
 ```
 
 `yamaa.runtime.joins` reads each declared source once into ordered typed

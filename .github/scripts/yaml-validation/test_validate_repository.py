@@ -899,10 +899,10 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
             path,
             self.context(),
         )
-        wrong_relation = VALIDATOR.validate_aggregate_at(
+        qualified = VALIDATOR.validate_aggregate_at(
             {
                 'expr': 'SUM(EX.DOSE)',
-                'between': {'value': 'VALUE', 'lower': 'AE.DOSE'},
+                'between': {'value': 'VALUE', 'lower': 'EX.DOSE'},
             },
             path,
             self.context(),
@@ -910,7 +910,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
         incomparable = VALIDATOR.validate_aggregate_at(
             {
                 'expr': 'SUM(EX.DOSE)',
-                'between': {'value': 'TERM', 'lower': 'EX.DOSE'},
+                'between': {'value': 'TERM', 'lower': 'DOSE'},
             },
             path,
             self.context(),
@@ -918,8 +918,8 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 
         self.assertEqual(missing[0].context['reason'], 'missing_between_bound')
         self.assertEqual(
-            wrong_relation[0].context['reason'],
-            'wrong_between_bound_relation',
+            qualified[0].context['reason'],
+            'qualified_between_bound',
         )
         self.assertEqual(incomparable[0].condition, 'incompatible_input_type')
 
@@ -6073,6 +6073,44 @@ class TestValidatorCLI(unittest.TestCase):
 
     def tearDown(self):
         self.test_dir.cleanup()
+
+    def test_schema_fields_from_expands_and_rejects_duplicates(self):
+        schema_path = self.root_dir / 'yaml' / 'schema.yaml'
+        schema_path.write_text(
+            'version: "1.0"\n'
+            'shared_fields:\n  - filter: {type: str}\n'
+            'root_class:\n  - id: {type: str}\n'
+            '  - fields_from: shared_fields\n',
+            encoding='ascii',
+        )
+        env, errors = VALIDATOR.build_schema_env(self.root_dir)
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            set(VALIDATOR.schema_class_fields(env, 'root_class')),
+            {'id', 'filter'},
+        )
+
+        schema_path.write_text(
+            schema_path.read_text(encoding='ascii')
+            + '  - filter: {type: str}\n',
+            encoding='ascii',
+        )
+        _, errors = VALIDATOR.build_schema_env(self.root_dir)
+        self.assertTrue(any('duplicate class field' in error for error in errors))
+
+        for target, expected in (
+            ('missing_fields', 'unknown fields_from class'),
+            ('root_class', 'class fields_from cycle'),
+        ):
+            with self.subTest(target=target):
+                schema_path.write_text(
+                    'version: "1.0"\n'
+                    'root_class:\n'
+                    f'  - fields_from: {target}\n',
+                    encoding='ascii',
+                )
+                _, errors = VALIDATOR.build_schema_env(self.root_dir)
+                self.assertTrue(any(expected in error for error in errors))
 
     def test_cli_help(self):
         result = subprocess.run([sys.executable, str(self.tool_path), '--help'], capture_output=True, text=True)

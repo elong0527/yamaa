@@ -33,18 +33,23 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.id` | `"intermediate_id"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.key` | `"match_key"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.between` | `"intermediate_between_class"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
+| `intermediate_class.between` | `"record_between_class"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.keep` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1048](../operations/lookup.md#req-1048) |
+| `intermediate_class.keep` | `"keep_policy"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.no_match` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
 | `intermediate_class.verification` | `"intermediate_verification_class"` | `false` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
 | `intermediate_verification_class.unique` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
-| `intermediate_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
-| `intermediate_between_class.lower` | `"identifier"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
-| `intermediate_between_class.upper` | `"identifier"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
+| `record_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
+| `record_between_class.lower` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
+| `record_between_class.upper` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
+| `match_key_range_fields.key` | `"match_key"` | `false` | Absent | -- | Schema constraint |
+| `match_key_range_fields.between` | `"record_between_class"` | `false` | Absent | -- | Schema constraint |
+| `match_filter_fields.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
+| `match_selection_fields.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | Schema constraint |
+| `match_selection_fields.keep` | `"keep_policy"` | `false` | Absent | -- | Schema constraint |
 | `column_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
 | `column_class.label` | `"str"` | `false` | Absent | -- | [REQ-1043](../specification/structure.md#req-1043) |
@@ -203,19 +208,16 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `expressions.aggregate` | `["aggregate_expression", "aggregate_class"]` | `false` | Absent | -- | Schema constraint |
-| `aggregate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.between` | `"aggregate_between_class"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key` | `"match_key"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.between` | `"record_between_class"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
+| `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | [REQ-1189](../operations/aggregation.md#req-1189) |
 | `aggregate_class.expr` | `"aggregate_expression"` | `true` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `derive_binding_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
 | `derive_binding_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
 | `derive_binding_class.derivation` | `"derivation"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
 | `aggregate_expression` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1089](../operations/aggregation.md#req-1089) |
-| `aggregate_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1090](../operations/aggregation.md#req-1090) |
-| `aggregate_between_class.lower` | `"variable"` | `false` | Absent | -- | [REQ-1090](../operations/aggregation.md#req-1090) |
-| `aggregate_between_class.upper` | `"variable"` | `false` | Absent | -- | [REQ-1090](../operations/aggregation.md#req-1090) |
 
 ## schema_expression_core.yaml
 
@@ -231,8 +233,9 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.flag` | `["predicate", "flag_class"]` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `source_binding_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
+| `source_binding_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
+| `source_binding_class.keep` | `"keep_policy"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.absent` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `source_binding_class.multiple_matches` | `"multiple_matches_class"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `flag_class.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.false_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |
@@ -240,8 +243,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `filtered_source` | `["variable", "filtered_source_class"]` | `false` | Absent | -- | [REQ-1052](../operations/lookup.md#req-1052) |
 | `filtered_source_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1053](../operations/lookup.md#req-1053) |
 | `filtered_source_class.filter` | `"predicate"` | `true` | Absent | -- | [REQ-1053](../operations/lookup.md#req-1053) |
-| `multiple_matches_class.order_by` | `"list[order_by_term]"` | `true` | Absent | -- | [REQ-1054](../operations/lookup.md#req-1054) |
-| `multiple_matches_class.keep` | `"str"` | `true` | Absent | `{"values": ["first", "last"]}` | [REQ-1054](../operations/lookup.md#req-1054) |
+| `keep_policy` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-0119](../operations/lookup.md#req-0119) |
 | `order_by_term` | `["variable", "order_term_class"]` | `false` | Absent | -- | [REQ-1102](../execution/ordering.md#req-1102) |
 | `order_term_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1103](../execution/ordering.md#req-1103) |
 | `order_term_class.direction` | `"str"` | `false` | `"asc"` | `{"values": ["asc", "desc"]}` | [REQ-1103](../execution/ordering.md#req-1103) |

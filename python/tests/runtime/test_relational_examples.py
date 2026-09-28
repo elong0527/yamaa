@@ -475,7 +475,7 @@ columns:
     derivation:
       aggregate:
         key: [STUDYID, USUBJID]
-        between: {value: ADY, lower: EX.STARTDY, upper: EX.ENDDY}
+        between: {value: ADY, lower: STARTDY, upper: ENDDY}
         expr: "SUM(EX.EXDOSE)"
   - name: EPOCH
     type: str
@@ -567,8 +567,8 @@ def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
 @pytest.mark.parametrize(
     ("bound", "expected"),
     [
-        ("{value: ADY, lower: EX.STARTDY}", [10.0, 30.0]),
-        ("{value: ADY, upper: EX.ENDDY}", [30.0, 20.0]),
+        ("{value: ADY, lower: STARTDY}", [10.0, 30.0]),
+        ("{value: ADY, upper: ENDDY}", [30.0, 20.0]),
     ],
     ids=["lower only", "upper only"],
 )
@@ -594,6 +594,103 @@ def test_one_stated_bound_narrows_on_that_side_alone(
 
     assert isinstance(result, ExecutionSuccess), result
     assert [row["EXPDOSE"] for row in result.artifact.frame.to_dicts()] == expected
+
+
+@pytest.mark.parametrize(
+    ("bound", "ady", "expected"),
+    [
+        ("{value: ADY, lower: LO}", 5, "A"),
+        ("{value: ADY, upper: HI}", 15, "B"),
+    ],
+    ids=["lower only", "upper only"],
+)
+def test_a_named_intermediate_with_one_bound_narrows_on_that_side_alone(
+    tmp_path: Path, bound: str, ady: int, expected: str
+) -> None:
+    # REQ-1049: a named intermediate between with one bound narrows on that
+    # side alone; the unstated side does not filter.
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(
+        textwrap.dedent(_ONE_SIDED_INTERMEDIATE_SPEC).replace("{{BETWEEN}}", bound),
+        encoding="utf-8",
+    )
+    (tmp_path / "input/vs.csv").write_text(
+        f"STUDYID,USUBJID,VSSEQ,ADY\nS1,P1,1,{ady}\n", encoding="utf-8"
+    )
+    (tmp_path / "input/epochs.csv").write_text(
+        "STUDYID,EPOCH,LO,HI\nS1,A,1,10\nS1,B,11,20\n", encoding="utf-8"
+    )
+
+    result = _run(tmp_path)
+
+    assert isinstance(result, ExecutionSuccess), result
+    rows = result.artifact.frame.to_dicts()
+    assert len(rows) == 1
+    assert rows[0]["EPOCH"] == expected
+
+
+def test_a_named_intermediate_between_with_no_bound_is_refused(
+    tmp_path: Path,
+) -> None:
+    # REQ-1049: a between with neither bound narrows by nothing; the
+    # declaration is refused as invalid_field_type rather than silently
+    # ignored.
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(
+        textwrap.dedent(_ONE_SIDED_INTERMEDIATE_SPEC).replace(
+            "{{BETWEEN}}", "{value: ADY}"
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "input/vs.csv").write_text(
+        "STUDYID,USUBJID,VSSEQ,ADY\nS1,P1,1,5\n", encoding="utf-8"
+    )
+    (tmp_path / "input/epochs.csv").write_text(
+        "STUDYID,EPOCH,LO,HI\nS1,A,1,10\nS1,B,11,20\n", encoding="utf-8"
+    )
+
+    result = _run(tmp_path)
+
+    assert isinstance(result, ExecutionFailure), result
+    assert result.diagnostics[0].condition == "invalid_field_type"
+
+
+_ONE_SIDED_INTERMEDIATE_SPEC = """\
+schema_version: "1.0"
+domain: ADVS
+input:
+  VS: {path: input/vs.csv, types: {VSSEQ: int, ADY: int}}
+  EPOCHS: {path: input/epochs.csv, types: {EPOCH: str, LO: int, HI: int}}
+base: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+
+intermediates:
+  - id: EPOCHDEF
+    dataset: EPOCHS
+    key: [STUDYID]
+    between: {{BETWEEN}}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, ADY, EPOCH]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation: {source: VS.STUDYID}
+  - name: USUBJID
+    type: str
+    derivation: {source: VS.USUBJID}
+  - name: VSSEQ
+    type: int
+    derivation: {source: VS.VSSEQ}
+  - name: ADY
+    type: int
+    derivation: {source: VS.ADY}
+  - name: EPOCH
+    type: str
+    derivation: {source: EPOCHDEF.EPOCH}
+"""
 
 
 _OPEN_RANGE_SPEC = """\

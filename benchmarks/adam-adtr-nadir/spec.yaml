@@ -80,7 +80,7 @@ columns:
         filter: "ADTR_RAW.ANL01FL = 'Y'"
         between:
           value: ADT
-          lower: ADTR_RAW.ADT
+          lower: ADT
         group_by: [ADTR_RAW.STUDYID, ADTR_RAW.USUBJID]
         expr: "MIN(ADTR_RAW.AVAL)"
         key: [STUDYID, USUBJID]

@@ -199,7 +199,8 @@ unless a structured source declares `absent`, under [Local handlers](../executio
 
 **REQ-0101.** More than one match after applying every available context
 column is a multiple right-side match. The reference fails unless a
-structured source declares `multiple_matches`, also under [Local handlers](../execution/handlers.md).
+structured source declares `order_by` and `keep` to handle
+`multiple_matches` under [Local handlers](../execution/handlers.md).
 
 <a id="req-0102"></a>
 
