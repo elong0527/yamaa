@@ -158,8 +158,8 @@ def handler_value(
 def source_operand(value: object) -> tuple[str, str | None] | None:
     """Split an operand naming a source into its variable and its filter.
 
-    R003-21b types the operand of every operation that names a source as a
-    variable or a variable with the `filter` selecting the records it reads.
+    REQ-1052/REQ-1053 type the operand of every operation that names a source
+    as a variable or a variable with the `filter` selecting the records it reads.
     The binding handlers stay on the `source` expression, so nothing else is
     accepted here.
     """

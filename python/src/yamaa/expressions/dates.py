@@ -159,7 +159,7 @@ def collected_precision(text: str) -> Precision | None:
 
 
 def collected_datetime_precision(text: str) -> DateTimePrecision | None:
-    """Return whether collected text supplied a time of day (R016-53)."""
+    """Return whether collected text supplied a time of day (REQ-0589)."""
     if _DATETIME_TEXT.fullmatch(text) is not None:
         try:
             DateTimeValue.parse(text)
