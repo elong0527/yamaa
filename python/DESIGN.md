@@ -30,14 +30,19 @@ box. This is a documented deviation; a Polars rewrite remains future work.
 - `errors.py`  --  `YamaaError` with phase/condition/requirement/spec_paths.
 - `values.py`  --  scalar model: `YDate`, `YDateTime`, missing/present,
   comparison and equality.
-- `csv_io.py`  --  R023-strict CSV scanner and R020 serializer.
-- `pred.py`  --  R004 predicate tokenizer/parser/evaluator.
-- `numeric.py`  --  R010 numeric expression parser/evaluator.
-- `agg.py`  --  R013 aggregate expression parser and reduction evaluator.
-- `expr.py`  --  expression registry: one function per R007 keyword.
-- `engine.py`  --  spec loading, input binding, row construction (R001),
-  column derivation in dependency order, lookups (R003), windows,
-  conversion (R011), verification (R009), output rendering (R020).
+- `csv_io.py`  --  CSV profile scanner and serializer (storage/csv),
+  Parquet reader (storage/parquet).
+- `pred.py`  --  predicate tokenizer/parser/evaluator (operations/predicates).
+- `numeric.py`  --  numeric expression parser/evaluator
+  (operations/computation).
+- `agg.py`  --  aggregate expression parser and reduction evaluator
+  (operations/aggregation).
+- `expr.py`  --  expression registry: one function per registered
+  expression (operations/expressions).
+- `engine.py`  --  spec loading, input binding, row construction
+  (execution/rows), column derivation in dependency order, lookups
+  (operations/lookup), windows, conversion (values/types), verification
+  (execution/verification), output rendering (storage/publication).
 - `validate.py`  --  Stage-1 shape validation: inputs, columns, output,
   lookups, rows, expressions, dependencies, regex, verifications, paths.
 
@@ -54,13 +59,13 @@ spec.yaml  ==>  engine.py (load, bind inputs)
   engine.py: row construction  ->  column DAG  ->  evaluate  ->  verify  ->  CSV
 ```
 
-Row construction without `rows` (R001-12) is two-phase:
+Row construction without `rows` (REQ-0042) is two-phase:
 - Phase A: per input record, derive the key columns whose derivations
   contain no window function (`_KeyCtx`: base-qualified sources only).
 - Phase B: derive window-based key columns over the phase-A key table
   (`_KeyWinCtx`): unqualified variables read phase-A key values,
   base-qualified variables read the input record; anything else is a
-  forward reference (R001-43). Then dedupe on the full key combination
+  forward reference (REQ-0074). Then dedupe on the full key combination
   in first-appearance order.
 Window evaluation itself is phase-agnostic: `_BaseCtx.window_value`
 partitions/orders whatever rows the context exposes via `_win_n()` and
@@ -107,19 +112,19 @@ fail validation as `window_order_by_required` (REQ-0340) when
 - No reading of the existing implementation; no `yamaa` import.
 - Approved data roots (REQ-0769..0772): the clean-room runs in the
   REQ-0771 "packaging or conformance" mode  --  no runner-supplied roots,
-  so every `project_path` (input paths, `dict_yaml`) resolves inside
+  so every `project_path` (input paths, a `mapping.dict` path) resolves inside
   the spec's directory as the single approved root. A runner that
   passes roots would select among them before spec reading; the
   resolution call is the one place that change lands.
 
 ## Vocabulary notes (schema catch-up, same architecture)
 
-- `mapping.dict_yaml` (REQ-1110): the dictionary may live in a YAML
-  project resource instead of inline. Read once per run, cached on the
-  engine; content must satisfy the `dict` contract. Exactly one of
-  `dict`/`dict_yaml` is present.
+- `mapping.dict` (REQ-1110): the dictionary is written inline or as the
+  path of a YAML project resource holding it. A path is read once per
+  run, cached on the engine; its content must satisfy the inline `dict`
+  contract.
 - Driver-correlated lookup filters (REQ-0120/0132/0133): an
-  intermediate/inline-lookup `filter` may qualify fields with the
+  intermediate `filter` may qualify fields with the
   current driver dataset (root `base`, or the sole input). Donor-only
   filters still evaluate once per run; a correlated filter evaluates
   per current row against the equality-matched donor records, before
@@ -128,23 +133,39 @@ fail validation as `window_order_by_required` (REQ-0340) when
   anything outside donor+driver scopes fails `unknown_field`.
 - Bare-string case results (`case_result: [str, expression]`): a `then:`
   / `otherwise:` written as a bare string normalizes to `{source: ...}`,
-  exactly like a bare column derivation (R006-25/R007-57).
+  exactly like a bare column derivation (REQ-0266/REQ-0319).
 - `COUNT(D.*)` (REQ-0484/0505): the star names its relation explicitly,
   so it dispatches through the qualified aggregate path with the named
   dataset as the relation; the star name is never a value identifier.
-- `str_sentence`/`str_title` (REQ-1240/1241): ASCII-only casing via the
-  REQ-0708 substitutions  --  never a host `capitalize` routine; a
-  non-string source fails `incompatible_input_type` like every other
-  text operation.
-- Match values are scalars (REQ-0142 adjacent): a lookup's `key_base`,
-  an aggregate's `key`/`key_base`, and a `between` value resolve through
-  the context's scalar value semantics. A qualified variable naming the
-  row's own input group collapses to its single carried value (R001-44);
-  it never reads a record list, so `_match_value` delegates to
-  `value()`, not `source_records`.
+- `str_case` (REQ-1114, `to: sentence`/`title` under REQ-1240/1241):
+  ASCII-only casing via the REQ-0708 substitutions  --  never a host
+  `capitalize` routine; a non-string source fails
+  `incompatible_input_type` like every other text operation.
+- Match values are scalars (REQ-0115): the current-row side of a
+  lookup's or an aggregate's `key` pairs (the same-named value for a
+  list, the value beside each column for a mapping) and a `between`
+  value resolve through the context's scalar value semantics. A
+  qualified variable naming the row's own input group collapses to its
+  single carried value (REQ-0075), and a joined read with more than one
+  record and no `order_by`/`keep` fails `join/multiple_matches`
+  (REQ-0127). A key column is a bare column of the relation (REQ-0116,
+  REQ-0141).
+- Implicit join (REQ-0111/0133/0136): a structured `source` keeps its
+  `filter` and `order_by`/`keep` on the join. The join reads through an
+  equality index built once per dataset and key list (`_join_records`),
+  whose keys equal exactly when REQ-0005 compares the values equal, so a
+  read costs one probe rather than a scan (issue #1485).
+- Ungrouped row filters (REQ-0036/0068): the filter reads the driver
+  record, the candidate's derived columns, and lookup state. It gates the
+  record once the derivations it reads are complete; a discarded record
+  derives nothing else.
+- Field types (REQ-0517/1032): the Parquet schema types its fields through
+  the exact closed mapping (anything else fails
+  `source_field_type_unsupported`); an undeclared CSV field is `str`, never
+  inferred from its values.
 - Grouped row-template aggregates declare no key pairs (REQ-0142): a
   grouped row aggregate reads its own input group  --  the group is the
-  match  --  so `key`/`key_base` there fail validation as
+  match  --  so `key` there fails validation as
   `invalid_aggregate_context`.
 - Intermediate derivations (REQ-1185, amended by #1072): an intermediate's
   `derivations:` map evaluates in declaration order: each derivation is
@@ -153,9 +174,13 @@ fail validation as `window_order_by_required` (REQ-0340) when
   dataset-qualified). A derivation may use a window function; the window
   partitions the donor records as augmented by every earlier derivation,
   so its `group_by`, `order_by`, and `filter` may read a stored field or
-  an earlier derived name. A reference to a driver field, another
-  intermediate, a derivation declared later in the same map, or an
-  unstored name fails `unknown_field`, and shadowing a stored column
+  an earlier derived name. A non-window derivation may read another
+  input-backed intermediate's column (REQ-1263): the read runs that
+  intermediate's match from the donor record, once per record. A
+  reference to a driver field, a derivation declared later in the same
+  map, or an unstored name fails `unknown_field`; reading a `SELF`
+  intermediate fails `phase_boundary`, and intermediates that read each
+  other fail `dependency_cycle`. Shadowing a stored column
   fails `duplicate_derivation`. Derived values augment the donor record
   before `filter`, matching, `order_by`, `columns`, and
   `verification.unique`, behaving like stored fields downstream.
@@ -182,37 +207,28 @@ fail validation as `window_order_by_required` (REQ-0340) when
   own constructed rows included). An undeclared name fails `unknown_window`
   at the expression's `window` field with the name in context `window`.
   Names compare exactly.
-- Row-construction inline lookups (REQ-0126): an inline `lookup:` in a row
-  template may read an input dataset during row construction. Every match
-  variable must be available while rows are built: a qualified name of the
-  template's own dataset resolves to a group key (grouped) or the driver
-  record's field (ungrouped); a bare name resolves to an already-derived
-  template value or a group key. Anything else  --  another dataset's field,
-  a not-yet-derived template variable, a named intermediate as the lookup
-  dataset  --  fails `phase_boundary`. Matching (filter/order/keep/strict/
-  missing/between) reuses the column-phase machinery with a row-scoped
-  cache identity.
 - `date_impute` month policy (REQ-0592): `month` is required when
   `minimum_source_precision` is `year` (the default) and must be absent
   when it is `month`; violations fail validation as `month_required`
   (context `minimum_source_precision`) / `month_not_permitted` (context
   `month`), checked before range checks.
 - Rename-only intermediates (REQ-1248): an intermediate declaring only
-  `id` and `dataset` merely renames the dataset qualifier and fails
+  `id`, `dataset`, and at most `no_match: null` merely renames the
+  dataset qualifier and fails
   validation as `rename_only_intermediate` at `intermediates[i]`.
 - `cut` missing-input phase (REQ-0334): a `cut` whose numeric source is
   missing with no `missing` handler fails as `cut`/`missing_input`, not
   `mapping`/`missing_input`.
 - `flag` (REQ-1256/1257/1258): shorthand for the common one-branch `case`.
   Payload is a bare predicate string (condition; `true_value` defaults to
-  `"Y"`, `false_value`/`missing_value` absent) or a mapping with
+  `"Y"`, `false_value`/`missing` absent) or a mapping with
   `condition` (required, a valid predicate), `true_value` (default `"Y"`),
-  `false_value`, `missing_value`. TRUE selects `true_value`, FALSE
-  `false_value` (missing when absent), UNKNOWN `missing_value` (missing
+  `false_value`, `missing`. TRUE selects `true_value`, FALSE
+  `false_value` (missing when absent), UNKNOWN `missing` (missing
   when absent)  --  an unknown condition never falls through to
   `false_value`, unlike `case` with `otherwise`. A `false_value` without
-  `missing_value` fails validation as `missing_value_required` at
-  `missing_value` (REQ-1258). Neither a predicate string nor a mapping,
+  `missing` fails validation as `missing_value_required` at
+  `missing` (REQ-1258). Neither a predicate string nor a mapping,
   a missing/non-predicate `condition`, or an invalid predicate fails
   validation (`invalid_field_type` / `invalid_predicate`).
 - `str_pad` (REQ-1261): `source` (any present scalar) plus a positive
@@ -222,8 +238,9 @@ fail validation as `window_order_by_required` (REQ-0340) when
   least `width` characters, never truncating. Missing source yields
   missing; a non-integer width or a width below one fails
   `invalid_field_type`.
-- `key_base` expressions (REQ-1259): a `key_base` entry may be an
-  expression mapping instead of a variable; it evaluates against the
+- `key` expressions (REQ-1259): the match value beside a column in a
+  `key` mapping may be an expression instead of a variable; it evaluates
+  against the
   current row and its value is the match operand for that position (a
   missing result matches nothing, REQ-0131). The pair's REQ-0118
   comparison uses the expression's statically known result type, or no
@@ -245,9 +262,8 @@ fail validation as `window_order_by_required` (REQ-0340) when
   field fails `unknown_row_catalog_column`. All catalog failures surface
   at `rows[i].catalog`.
 - `mapping` unmapped result (REQ-1110): a present source with no
-  dictionary entry returns the `unmapped` result when declared, else the
-  `missing` literal (which covers unmapped only when `unmapped` is absent
-  and `strict` is not true).
+  dictionary entry returns the `unmapped` result when declared and
+  otherwise fails `mapping/unmapped_value`; `missing` never answers it.
 - `unresolvable_name` diagnostic (REQ-0189): an unqualified identifier
   naming a field of an in-scope dataset fails `unresolvable_name` with
   the qualified spelling as `suggestion`; any other unavailable
@@ -261,7 +277,7 @@ fail validation as `window_order_by_required` (REQ-0340) when
   for ungrouped templates  --  the driver record's own fields; qualified
   names of the template's dataset read the driver record or group key).
   Matching reuses `_match_lookup_row` with a row-scoped cache identity.
-- `key_base` expression operands in row construction (REQ-0126/1259):
+- `key` expression operands in row construction (REQ-0126/1259):
   expression entries evaluate with match-operand semantics  --  bare operands
   resolve through `_row_match_value` (row, group keys, driver-record
   fields) rather than the REQ-0189 `value()` path. `_BaseCtx`

@@ -3,8 +3,8 @@
 Covers the normative changes that landed after the clean-room's last
 sync: named windows (REQ-1251/1252/1253), the date_impute month policy
 (REQ-0592), rename-only intermediates (REQ-1248), cut missing input
-(REQ-0334), row-construction inline lookups (REQ-0126), row catalogs
-(REQ-1249), and the mapping unmapped result (REQ-1110).
+(REQ-0334), row catalogs (REQ-1249), and the mapping unmapped result
+(REQ-1110).
 """
 
 import os
@@ -194,27 +194,7 @@ def test_cut_missing_handler_still_answers(tmp_path):
     assert lines[2].endswith(",high")
 
 
-# -- row-construction inline lookups (REQ-0126) ------------------------------
-
-
-def _row_spec(derivations, rows_extra=None):
-    spec = {
-        "schema_version": "1.0",
-        "domain": "DMX",
-        "keys": ["USUBJID"],
-        "input": {"DM": {"path": "input/dm.csv"}, "SUPP": {"path": "input/supp.csv"}},
-        "output": {"path": "dmx.csv", "columns": ["USUBJID", "X"]},
-        "columns": [
-            {"name": "USUBJID", "type": "str", "derivation": "DM.USUBJID"},
-            {"name": "X", "type": "str"},
-        ],
-        "rows": [
-            {"id": "dm", "dataset": "DM", "derivations": derivations},
-        ],
-    }
-    if rows_extra:
-        spec["rows"][0].update(rows_extra)
-    return spec
+# -- row catalogs (REQ-1249) -------------------------------------------------
 
 
 def _catalog_spec(tmp_path, csv_text, derivations, template_filter=None):

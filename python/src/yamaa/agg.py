@@ -1,4 +1,5 @@
-"""R013 aggregate_expression: R010's grammar plus reduction nodes."""
+"""aggregate_expression (operations/aggregation): the numeric grammar plus
+reduction nodes."""
 
 from . import numeric as _num
 from .errors import YamaaError
