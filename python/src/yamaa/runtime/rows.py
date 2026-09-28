@@ -115,6 +115,16 @@ class CandidateRow:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class _OrderedPartition:
+    """One window partition in declared order, read once for a window pass."""
+
+    rows: tuple[dict[str, object], ...]
+    eligible: tuple[bool, ...]
+    # Each member row's index in `rows`, by row identity.
+    positions: dict[int, int]
+
+
 @dataclass(slots=True)
 class RelationalContext:
     """The relations, intermediates, and constructed rows one run shares."""
@@ -130,6 +140,9 @@ class RelationalContext:
     _odm_scopes: dict[
         tuple[str, tuple[str, ...]], dict[tuple[object, ...], tuple[IndexedRecord, ...]]
     ] = field(default_factory=dict)
+    # One ordered window partition per derived column, partition, and window
+    # ordering; see `RowResolver._ordered`.
+    _windows: dict[tuple[object, ...], _OrderedPartition] = field(default_factory=dict)
 
     def odm_records(
         self,
@@ -643,19 +656,8 @@ class RowResolver:
         located = self._locate(payload)
         if isinstance(located, ConditionResult):
             return located
-        members, current, partition_keys = located
-        eligible = self._eligible(payload, members)
-        if isinstance(eligible, ConditionResult):
-            return eligible
-        result = evaluate_window(
-            operation,
-            payload,
-            Partition(
-                rows=tuple(values for _, values in members),
-                current=current,
-                eligible=eligible,
-            ),
-        )
+        partition, partition_keys = located
+        result = evaluate_window(operation, payload, partition)
         if isinstance(result, ConditionResult):
             # A window failure is a property of the partition rather than of
             # one row, so it names the partition it could not answer for.
@@ -672,10 +674,7 @@ class RowResolver:
     def _locate(
         self,
         payload: Mapping[str, object],
-    ) -> (
-        tuple[list[tuple[CandidateRow, dict[str, object]]], int, dict[str, JsonValue]]
-        | ConditionResult
-    ):
+    ) -> tuple[Partition, dict[str, JsonValue]] | ConditionResult:
         """Return this row's partition in declared order, and its place in it."""
         window = window_spec(payload)
         fields = _names(window.get("group_by"))
@@ -689,11 +688,62 @@ class RowResolver:
                 condition=_condition("unknown_field", {"identifier": unavailable[0]})
             )
         key = tuple(readable[name] for name in fields)
+        ordered = self._ordered(window, fields, key)
+        if isinstance(ordered, ConditionResult):
+            return ordered
+        partition_keys = {
+            name: json_value(readable[name])  # type: ignore[arg-type]
+            for name in fields
+        }
+        index = ordered.positions.get(id(self._candidate))
+        if index is None:
+            return ConditionResult(
+                condition=_condition(
+                    "unknown_field",
+                    {"identifier": "the current row is absent from its partition"},
+                )
+            )
+        partition = Partition(
+            rows=ordered.rows, current=index, eligible=ordered.eligible
+        )
+        return partition, partition_keys
+
+    def _ordered(
+        self,
+        window: Mapping[str, object],
+        fields: tuple[str, ...],
+        key: tuple[object, ...],
+    ) -> _OrderedPartition | ConditionResult:
+        """Order one partition and apply the window's filter, once per window pass.
+
+        The executor completes a window's column across every row of its
+        scope before the next column, and REQ-0326 completes every
+        dependency of the window in that scope first, so each row of one
+        partition would order and filter the same rows by the same values.
+        The pass is identified by the column being derived, so a later
+        window over the same partition reads the columns completed since;
+        without the cache every row re-sorts its whole partition.
+        """
+        terms = _order_terms(window.get("order_by"))
+        declared_filter = window.get("filter")
+        identity: tuple[object, ...] | None = None
+        if self._column is not None and (
+            declared_filter is None or isinstance(declared_filter, str)
+        ):
+            identity = (
+                self._column,
+                fields,
+                key,
+                tuple((term.variable, term.direction, term.nulls) for term, _ in terms),
+                declared_filter,
+            )
+            cached = self._context._windows.get(identity)
+            if cached is not None:
+                return cached
         members = [
             (row, _readable(row))
             for row in self._context.partition(fields).get(key, ())
         ]
-        terms = _order_terms(window.get("order_by"))
         if terms:
             indexed = [
                 IndexedRecord(position=row.output_position, values=values)
@@ -715,27 +765,25 @@ class RowResolver:
                 row.output_position: entry for entry in members for row in (entry[0],)
             }
             members = [by_position[record.position] for record in ordered]
-        partition_keys = {
-            name: json_value(readable[name])  # type: ignore[arg-type]
-            for name in fields
-        }
-        for index, (row, _) in enumerate(members):
-            if row is self._candidate:
-                return members, index, partition_keys
-        return ConditionResult(
-            condition=_condition(
-                "unknown_field",
-                {"identifier": "the current row is absent from its partition"},
-            )
+        eligible = self._eligible(declared_filter, members)
+        if isinstance(eligible, ConditionResult):
+            return eligible
+        located = _OrderedPartition(
+            rows=tuple(values for _, values in members),
+            eligible=eligible,
+            positions={id(row): index for index, (row, _) in enumerate(members)},
         )
+        if identity is not None:
+            self._context._windows[identity] = located
+        return located
 
     def _eligible(
         self,
-        payload: Mapping[str, object],
+        declared_filter: object,
         members: Sequence[tuple[CandidateRow, dict[str, object]]],
     ) -> tuple[bool, ...] | ConditionResult:
         """Say which partition rows the window's filter retained (REQ-0294)."""
-        predicate = self._predicate(window_spec(payload).get("filter"))
+        predicate = self._predicate(declared_filter)
         if isinstance(predicate, ConditionResult):
             return predicate
         if predicate is None:

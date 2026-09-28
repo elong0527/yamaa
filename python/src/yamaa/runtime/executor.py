@@ -484,13 +484,16 @@ def _grouped_filter(
 def _partition_scope(context: RelationalContext, rows: list[CandidateRow]):
     saved_rows = context.rows
     saved_partitions = context._partitions
+    saved_windows = context._windows
     context.rows = list(rows)
     context._partitions = {}
+    context._windows = {}
     try:
         yield
     finally:
         context.rows = saved_rows
         context._partitions = saved_partitions
+        context._windows = saved_windows
 
 
 def _key_space(

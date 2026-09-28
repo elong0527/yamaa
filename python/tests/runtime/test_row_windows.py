@@ -521,3 +521,66 @@ def test_row_window_group_by_accepts_a_qualified_source_variable() -> None:
 
     assert isinstance(result, ExecutionSuccess)
     assert [row[3] for row in result.artifact.frame.rows()] == [1, 2, 3, 1, 2]
+
+
+def test_row_window_orders_each_partition_once_per_pass(monkeypatch) -> None:
+    # Issue #1484: every row of one partition reads the same ordered rows, so
+    # a window pass orders each partition once rather than once per row.
+    from yamaa.runtime import rows
+
+    orderings: list[int] = []
+    real_order = rows.order_records
+
+    def counting_order(records, terms):
+        orderings.append(len(records))
+        return real_order(records, terms)
+
+    monkeypatch.setattr(rows, "order_records", counting_order)
+    specification = make_spec(
+        [lag_template({"group_by": ["GRP"], "order_by": ["SEQ"]})],
+        COLUMNS,
+        ["GRP", "SEQ", "VAL", "PREV"],
+    )
+
+    result = execute_specification(specification, visits_source())
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame["PREV"].to_list() == [None, 1.0, 2.0, None, 10.0]
+    # Two partitions (a: 3 rows, b: 2 rows), one ordering each.
+    assert orderings == [3, 2]
+
+
+def test_windows_in_one_column_keep_their_own_order() -> None:
+    # Two windows of one derivation share the column being derived and the
+    # partition but not the order, so neither reuses the other's ordering.
+    ascending = {"group_by": ["GRP"], "order_by": ["SEQ"]}
+    descending = {
+        "group_by": ["GRP"],
+        "order_by": [{"variable": "SEQ", "direction": "desc"}],
+    }
+    row = Row(
+        id="visits",
+        derivations={
+            "GRP": derive({"source": "SRC.G"}),
+            "SEQ": derive({"source": "SRC.S"}),
+            "VAL": derive({"source": "SRC.X"}),
+        },
+    )
+    specification = make_spec(
+        [row],
+        COLUMNS,
+        ["GRP", "SEQ", "VAL", "PREV"],
+        column_derivations={
+            "PREV": {
+                "case": [
+                    {"when": "SEQ = 1", "then": lag_window(ascending, offset=1)},
+                    {"otherwise": lag_window(descending, offset=1)},
+                ]
+            }
+        },
+    )
+
+    result = execute_specification(specification, visits_source())
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame["PREV"].to_list() == [2.0, 1.0, 2.0, 20.0, 10.0]
