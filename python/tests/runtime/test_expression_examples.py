@@ -110,6 +110,15 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
                 ("columns.AGEGR1.derivation.cut.missing", "missing", 2),
             ],
         ),
+        (
+            # REQ-0345: the structured source states its absent answer, but
+            # every row reads a present variable, so the path fires zero
+            # times and stays reportable under REQ-0361.
+            "schema-handlers",
+            [
+                ("columns.LASTDOSE.derivation.source.absent", "absent", 0),
+            ],
+        ),
     ],
 )
 def test_every_declared_handler_path_is_reported_with_its_count(

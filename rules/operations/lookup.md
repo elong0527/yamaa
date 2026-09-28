@@ -706,7 +706,7 @@ fails validation. Bounds are bare donor-record field identifiers.
 | --- | --- |
 | `source_binding_class.variable` | Variable to copy. |
 | `source_binding_class.filter` | Predicate selecting the right-side records this source reads; [Lookup and joins](lookup.md) defines the selection. |
-| `source_binding_class.missing` | Value used when the source variable or item is absent. |
+| `source_binding_class.absent` | Value used when the source variable or item is absent. |
 | `source_binding_class.order_by` | Terms ordering eligible right-side matches; declared with keep ([REQ-0119](lookup.md#req-0119)). |
 | `source_binding_class.keep` | Ordered match to retain; declared with order_by ([REQ-0119](lookup.md#req-0119)). |
 
