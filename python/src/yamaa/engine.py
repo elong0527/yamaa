@@ -12,9 +12,10 @@ import yaml
 
 from . import agg as _agg
 from . import expr as _expr
+from . import odm as _odm
 from . import pred as _pred
 from . import validate as _validate
-from .csv_io import read_csv, read_parquet, write_csv_text
+from .csv_io import parquet_field_types, read_csv, read_parquet, write_csv_text
 from .errors import YamaaError
 from .values import (
     INT64_MAX,
@@ -74,6 +75,18 @@ def _only_error(e, where):
             },
         )
     return e
+
+
+def _odm_no_scope(where, payload):
+    """REQ-1277: an `odm` read evaluated where no row has an ODM scope."""
+    read = _odm.parse_odm_read(payload)
+    _fail(
+        f"{where}.odm",
+        "validation",
+        "invalid_odm_context",
+        "REQ-1277",
+        {"dataset": read.dataset if read is not None else None},
+    )
 
 
 def _uses_function(node):
@@ -151,6 +164,7 @@ class Engine:
                 _fail(req, "validation", "missing_required_field", None, {"field": req})
         self.domain = s["domain"]
         self.keys = list(s["keys"])
+        self.odm_inputs = _odm.odm_inputs(s)
         self.inputs = {}
         for name, decl in s["input"].items():
             self.inputs[name] = self._load_input(name, decl)
@@ -182,10 +196,12 @@ class Engine:
         self._origins = []  # list[str|None]
         self._recs = []  # list[dict[str, list[record]]]
         self._derived = []  # list[set[str]] columns derived per row
+        self._built = []  # per row: (how it was built, its row template)
         self._lookups = {}  # (lid, row_idx) -> record | None
         self._eligible = {}  # lid -> eligible records (computed once)
         self._dict_cache = {}  # written mapping.dict path -> loaded dict
         self._join_indexes = {}  # (dataset, keys) -> implicit-join index
+        self._odm_indexes = {}  # (dataset, fields) -> ODM scope index
         self._self_marks = []  # row counts after each completed template
         self._row_phase = True  # False once column derivation starts
 
@@ -548,25 +564,30 @@ class Engine:
                 )
         seen.pop()
 
+    def _input_profile(self, name, path):
+        """The storage profile a written input path selects (REQ-0852)."""
+        lower = path.lower()
+        if lower.endswith(".csv"):
+            return "csv"
+        if lower.endswith(".parquet"):
+            return "parquet"
+        _fail(
+            f"input.{name}.path",
+            "validation",
+            "source_profile_unknown",
+            "REQ-0852",
+            {"dataset": name, "path": path},
+        )
+
     def _load_input(self, name, decl):
+        if name in self.odm_inputs:
+            return self._load_odm_input(name, decl)
         if isinstance(decl, str):
             path, types = decl, {}
         else:
             path, types = decl["path"], decl.get("types") or {}
         _validate.check_resource_path(self, name, path)  # storage/resources
-        lower = path.lower()
-        if lower.endswith(".csv"):
-            profile = "csv"
-        elif lower.endswith(".parquet"):
-            profile = "parquet"
-        else:
-            _fail(
-                f"input.{name}.path",
-                "validation",
-                "source_profile_unknown",
-                "REQ-0852",
-                {"dataset": name, "path": path},
-            )
+        profile = self._input_profile(name, path)
         full = os.path.normpath(os.path.join(self.spec_dir, path))
         if profile == "parquet":
             # REQ-0517: the Parquet schema is the field's type authority.
@@ -591,11 +612,103 @@ class Engine:
                 )
         return Table(name, full, {**stored, **types}, fields, records)
 
+    def _load_odm_input(self, name, decl):
+        """REQ-1266..REQ-1268: read an ODM input under its fixed schema.
+
+        The stored fields bind to the schema at validation, from the header
+        or the Parquet schema; only the bound fields are read, as text under
+        the schema's names, so a vendor field is neither typed nor exposed.
+        The records are verified at ingest.
+        """
+        if isinstance(decl, dict):
+            declared = next((k for k in ("types", "schema") if k in decl), None)
+            if declared is not None:
+                _fail(
+                    f"input.{name}.{declared}",
+                    "validation",
+                    "odm_schema_field_type",
+                    "REQ-1275",
+                    {"dataset": name, "declared": declared},
+                )
+            path = decl["path"]
+        else:
+            path = decl
+        _validate.check_resource_path(self, name, path)
+        profile = self._input_profile(name, path)
+        full = os.path.normpath(os.path.join(self.spec_dir, path))
+        where = f"input.{name}.path"
+        read = {"spec_path": f"input.{name}", "dataset": name, "written_path": path}
+        if profile == "parquet":
+            kinds = dict(parquet_field_types(full, **read))
+            names = list(kinds)
+        else:
+            names, raw = read_csv(full, {}, **read)
+        binding = _odm.bind_fields(names)
+        if binding.missing:
+            _fail(
+                where,
+                "validation",
+                "odm_schema_field_missing",
+                "REQ-1275",
+                {"dataset": name, "fields": list(binding.missing)},
+            )
+        for field, found in binding.ambiguous.items():
+            _fail(
+                where,
+                "validation",
+                "odm_schema_field_ambiguous",
+                "REQ-1275",
+                {"dataset": name, "field": field, "stored": list(found)},
+            )
+        bound = [binding.stored[f] for f in _odm.ODM_SCHEMA_FIELDS]
+        if profile == "parquet":
+            for field, stored in zip(_odm.ODM_SCHEMA_FIELDS, bound):
+                if kinds[stored] != "str":
+                    _fail(
+                        where,
+                        "validation",
+                        "odm_schema_field_type",
+                        "REQ-1275",
+                        {
+                            "dataset": name,
+                            "field": field,
+                            "stored_field": stored,
+                            "stored_type": kinds[stored] or "unsupported",
+                        },
+                    )
+            _, raw, _ = read_parquet(full, {}, select=bound, **read)
+            first = 1
+        else:
+            first = 2  # CSV records are numbered from the header, record one
+        records = [
+            dict(zip(_odm.ODM_SCHEMA_FIELDS, (r[b] for b in bound))) for r in raw
+        ]
+        for field in _odm.ODM_REQUIRED_VALUES:
+            lacking = [
+                n for n, r in enumerate(records, start=first) if is_missing(r[field])
+            ]
+            if lacking:
+                _fail(
+                    where,
+                    "ingest",
+                    "odm_schema_value_missing",
+                    "REQ-1276",
+                    {
+                        "dataset": name,
+                        "field": field,
+                        "record": lacking[0],
+                        "records": len(lacking),
+                    },
+                )
+        fields = list(_odm.ODM_SCHEMA_FIELDS)
+        return Table(name, full, {f: "str" for f in fields}, fields, records)
+
     def run(self):
         self.rows = []
         self._origins = []
         self._recs = []
         self._derived = []
+        self._built = []
         self._lookups = {}
         self._eligible = {}
         self._self_marks = []
@@ -801,7 +914,7 @@ class Engine:
             for name in phase_c:
                 self._eval_row_deriv(t, name, nodes[name], ctx)
         for row, rec in zip(rows, recs):
-            self._append_row(row, ds, {ds: [rec]}, set(derivs))
+            self._append_row(row, ds, {ds: [rec]}, set(derivs), ("record", t))
 
     def _build_grouped(self, t, table, group_by, filt, derivs):
         ds = table.name
@@ -839,7 +952,7 @@ class Engine:
                         is not True
                     ):
                         continue
-                self._append_row(row, ds, {ds: grecords}, derived)
+                self._append_row(row, ds, {ds: grecords}, derived, ("group", t))
             return
         pairs = []  # (row, ctx, grecords)
         for _, keydict, grecords in groups:
@@ -880,7 +993,7 @@ class Engine:
                 if name in self.colspecs:
                     v = self._convert(v, self.colspecs[name], ctx.where)
                 row[name] = v
-            self._append_row(row, ds, {ds: grecords}, set(derivs))
+            self._append_row(row, ds, {ds: grecords}, set(derivs), ("group", t))
 
     def _eval_row_derivs(self, t, derivs, ctx):
         order = _validate._topo_order(
@@ -968,6 +1081,7 @@ class Engine:
                 self._origins.append(base)
                 self._recs.append({base: []})
                 self._derived.append(set(self.keys))
+                self._built.append(("key", None))
             self._recs[seen[tup]][base].append(krecs[i])
         self.rows = order
 
@@ -989,11 +1103,117 @@ class Engine:
             self._join_indexes[ck] = index
         return list(index.get(probe, ()))
 
-    def _append_row(self, row, origin, recs, derived):
+    def _append_row(self, row, origin, recs, derived, built):
         self.rows.append(row)
         self._origins.append(origin)
         self._recs.append(recs)
         self._derived.append(set(derived))
+        self._built.append(built)
+
+    def _odm_scope(self, ds, built, recs, row, item_oid):
+        """REQ-1269: the records of a row's ODM scope that carry an item,
+        and the values that scope is taken on.
+
+        A key combination reads the records it was derived from, a grouped
+        row the records equal to it on the hierarchy fields of its template's
+        `group_by`, and a record-driven row the records equal to its driver
+        record on all eight. Missing equals missing, as REQ-0037 groups.
+        """
+        kind, t = built
+        if kind == "key":
+            scope = {k: row.get(k) for k in self.keys}
+            return [r for r in recs if r.get("ItemOID") == item_oid], scope
+        if kind == "group":
+            group_by = set(t.get("group_by") or ())
+            fields = tuple(
+                f for f in _odm.ODM_HIERARCHY_FIELDS if f"{ds}.{f}" in group_by
+            )
+        else:
+            fields = _odm.ODM_HIERARCHY_FIELDS
+        ck = (ds, fields)
+        index = self._odm_indexes.get(ck)
+        if index is None:
+            index = {}
+            for r in self.inputs[ds].records:
+                tup = tuple(_hashable(r.get(f)) for f in (*fields, "ItemOID"))
+                index.setdefault(tup, []).append(r)
+            self._odm_indexes[ck] = index
+        anchor = recs[0]
+        probe = tuple(_hashable(anchor.get(f)) for f in fields)
+        scope = {f: anchor.get(f) for f in fields}
+        return list(index.get((*probe, _hashable(item_oid)), ())), scope
+
+    def _odm_read(self, payload, ds_of_row, built, recs, row, where, phase):
+        """REQ-1271/REQ-1272: read the one record an `odm` expression
+        identifies in the row's scope. None identified gives missing, one its
+        Value, and two or more fail even when their values agree."""
+        read = _odm.parse_odm_read(payload)
+        if read is None or read.dataset != ds_of_row or not recs:
+            _fail(
+                where,
+                "validation",
+                "invalid_odm_context",
+                "REQ-1277",
+                {"dataset": getattr(read, "dataset", None)},
+            )
+        ds = read.dataset
+        found, scope = self._odm_scope(ds, built, recs, row, read.item_oid)
+        for level, wanted in (
+            ("StudyEventOID", read.events),
+            ("FormOID", read.forms),
+            ("ItemGroupOID", read.item_groups),
+        ):
+            if wanted is not None:
+                found = [r for r in found if r.get(level) in wanted]
+        if read.filter is not None:
+            node, _ = _pred.parse(read.filter, f"{where}.filter")
+
+            def resolve(name, _r=None):
+                head, _, field = name.partition(".")
+                if head != ds or field not in _odm.ODM_SCHEMA_FIELDS:
+                    _fail(
+                        f"{where}.filter",
+                        "validation",
+                        "unknown_field",
+                        "REQ-1271",
+                        {"identifier": name, "dataset": ds},
+                    )
+                return _r.get(field)
+
+            found = [
+                r
+                for r in found
+                if _pred.evaluate(
+                    node, lambda n, _r=r: resolve(n, _r), f"{where}.filter"
+                )
+                is True
+            ]
+        if not found:
+            return None
+        if len(found) == 1:
+            return found[0].get("Value")
+        differ = {}
+        for field in _odm.ODM_IDENTIFYING_FIELDS:
+            seen = []
+            for r in found:
+                if r.get(field) not in seen:
+                    seen.append(r.get(field))
+            if len(seen) > 1:
+                differ[field] = seen
+        _fail(
+            where,
+            phase,
+            "odm_not_unique",
+            "REQ-1278",
+            {
+                "item": read.item,
+                "row": (built[1] or {}).get("id"),
+                "scope": scope,
+                "records": len(found),
+                "differ": differ,
+                "repeated": not differ,
+            },
+        )
 
     def _derive_columns(self):
         self._row_phase = False
@@ -1439,6 +1659,11 @@ class _BaseCtx:
         """Number of rows the window machinery partitions. Overridden by
         contexts whose window rows are not the output rows (key phase)."""
         return len(self.e.rows)
+
+    def odm_value(self, payload):
+        """REQ-1270/REQ-1277: only a row built from an ODM input has a
+        scope; a named intermediate's record has none."""
+        _odm_no_scope(self.where, payload)
 
     def record_predicate(self, text, record, default_ds=None):
         node, _ = _pred.parse(text, self.where)
@@ -2304,6 +2529,21 @@ class _ColCtx(_BaseCtx):
             )
         return self.value(name)
 
+    def odm_value(self, payload):
+        """REQ-1270: a column derivation reads the scope of the row
+        template that built the row."""
+        e, i = self.e, self.i
+        origin = e._origins[i]
+        return e._odm_read(
+            payload,
+            origin,
+            e._built[i],
+            e._recs[i].get(origin, []),
+            e.rows[i],
+            f"{self.where}.odm",
+            "derivation",
+        )
+
 
 class _RowCtx(_BaseCtx):
     """Row-construction context: record-driven or grouped."""
@@ -2662,6 +2902,21 @@ class _RowCtx(_BaseCtx):
             )
         return self.value(name)
 
+    def odm_value(self, payload):
+        if self.group is not None:
+            built, recs = ("group", self.template), self.group
+        else:
+            built, recs = ("record", self.template), [self.record]
+        return self.e._odm_read(
+            payload,
+            self.ds,
+            built,
+            recs,
+            self.row,
+            f"{self.where}.odm",
+            "row_construction",
+        )
+
 
 class _RowWinCtx(_BaseCtx):
     """Row-template window phase (REQ-0326): windows over one template's"""
@@ -2751,6 +3006,11 @@ class _KeyCtx(_BaseCtx):
         _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
 
     def aggregate_value(self, payload):
+        _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
+
+    def odm_value(self, payload):
+        # REQ-1269: the scope is the records a key combination was derived
+        # from, so no key can be derived from it.
         _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
 
 
@@ -2875,6 +3135,9 @@ class _DeriveCtx:
 
     def aggregate_value(self, payload):
         _fail(self.where, "validation", "prohibited_construct", "REQ-1191", {})
+
+    def odm_value(self, payload):
+        _odm_no_scope(self.where, payload)
 
     def compute_ident(self, name):
         return self.value(name)

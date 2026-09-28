@@ -273,30 +273,11 @@ def _fixed_point(x, n):
     return ("-" if neg else "") + s[:-n] + "." + s[-n:]
 
 
-def read_parquet(
-    path, types, spec_path="<input>", dataset="<input>", written_path=None
-):
-    """Read a Parquet source per the Parquet profile. Returns the fields, the
-    records, and each field's type from the Parquet schema (REQ-0517)."""
-    import datetime as _datetime
-
+def _parquet_kinds():
+    """REQ-1032/REQ-1033: the closed, exact Parquet -> column_type mapping."""
     import pyarrow as pa
-    import pyarrow.parquet as pq
 
-    written_path = written_path if written_path is not None else path
-    try:
-        table = pq.read_table(path)
-    except Exception as exc:  # noqa: BLE001 -- any read failure is REQ-1038
-        raise _phase_condition(
-            "ingest",
-            "source_parquet_invalid",
-            requirement="REQ-1038",
-            spec_paths=[spec_path],
-            context={"dataset": dataset, "path": written_path, "error": str(exc)},
-        )
-    fields = table.schema.names
-    # REQ-1032/REQ-1033: the closed, exact Parquet -> column_type mapping.
-    kinds = {
+    return {
         pa.string(): "str",
         pa.large_string(): "str",
         pa.int64(): "int",
@@ -304,6 +285,51 @@ def read_parquet(
         pa.date32(): "date",
         pa.timestamp("us"): "datetime",
     }
+
+
+def _parquet_invalid(exc, spec_path, dataset, written_path):
+    return _phase_condition(
+        "ingest",
+        "source_parquet_invalid",
+        requirement="REQ-1038",
+        spec_paths=[spec_path],
+        context={"dataset": dataset, "path": written_path, "error": str(exc)},
+    )
+
+
+def parquet_field_types(
+    path, spec_path="<input>", dataset="<input>", written_path=None
+):
+    """Each stored field and its column type, None where the closed mapping
+    has none, read from the Parquet schema without reading a record."""
+    import pyarrow.parquet as pq
+
+    written_path = written_path if written_path is not None else path
+    try:
+        schema = pq.read_schema(path)
+    except Exception as exc:  # noqa: BLE001 -- any read failure is REQ-1038
+        raise _parquet_invalid(exc, spec_path, dataset, written_path)
+    kinds = _parquet_kinds()
+    return [(f.name, kinds.get(f.type)) for f in schema]
+
+
+def read_parquet(
+    path, types, spec_path="<input>", dataset="<input>", written_path=None, select=None
+):
+    """Read a Parquet source per the Parquet profile. Returns the fields, the
+    records, and each field's type from the Parquet schema (REQ-0517).
+    `select` reads only the named fields, so no other field is typed."""
+    import datetime as _datetime
+
+    import pyarrow.parquet as pq
+
+    written_path = written_path if written_path is not None else path
+    try:
+        table = pq.read_table(path, columns=select)
+    except Exception as exc:  # noqa: BLE001 -- any read failure is REQ-1038
+        raise _parquet_invalid(exc, spec_path, dataset, written_path)
+    fields = table.schema.names
+    kinds = _parquet_kinds()
     ftypes = {}
     for f in table.schema:
         if f.type not in kinds:
