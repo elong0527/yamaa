@@ -381,9 +381,10 @@ def test_no_match_literal_is_not_rename_only(tmp_path):
     assert out.splitlines() == ["USUBJID,X", "S1,A", "S2,NONE"]
 
 
-def test_a_structured_source_answers_absence_with_absent(tmp_path):
-    # REQ-1051/REQ-0342: `absent` answers a variable no record supplies;
-    # S3 has no EX record, so its read takes the declared literal.
+def test_absent_does_not_answer_a_join_that_reaches_no_record(tmp_path):
+    # REQ-0345: `absent` answers a variable absent from context. S3 has no
+    # EX record, but EX.EXTRT still exists, so the read is missing exactly
+    # as the main engine answers it (REQ-0111/REQ-0355).
     dm = "USUBJID\nS1\nS3\n"
     out = run(
         tmp_path,
@@ -399,4 +400,4 @@ def test_a_structured_source_answers_absence_with_absent(tmp_path):
         ),
         {"dm.csv": dm, "ex.csv": EX},
     )
-    assert out.splitlines() == ["USUBJID,X", "S1,A", "S3,NONE"]
+    assert out.splitlines() == ["USUBJID,X", "S1,A", "S3,"]
