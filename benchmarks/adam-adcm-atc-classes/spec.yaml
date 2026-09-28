@@ -12,30 +12,38 @@ intermediates:
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC1'"
+    no_match: null
   - id: FACM_ATC2
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC2'"
+    no_match: null
   - id: FACM_ATC3
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC3'"
+    no_match: null
   - id: FACM_ATC4
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC4'"
+    no_match: null
   - id: ATC1_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC1CD}
+    no_match: null
   - id: ATC2_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC2CD}
+    no_match: null
   - id: ATC3_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC3CD}
+    no_match: null
   - id: ATC4_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC4CD}
+    no_match: null
 
 output:
   path: adcm.csv

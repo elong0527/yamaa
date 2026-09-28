@@ -64,6 +64,7 @@ intermediates:
     filter: >-
       LBRANGE.EFFSTDT <= ODM.Value
       AND (LBRANGE.EFFENDT IS NULL OR ODM.Value <= LBRANGE.EFFENDT)
+    no_match: null
 
 output:
   path: lb.csv

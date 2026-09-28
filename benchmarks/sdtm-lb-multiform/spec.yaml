@@ -139,7 +139,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: LBORRES}
-      missing: null
+      unconvertible: null
     verifications:
       range:
         min: 0

@@ -109,10 +109,10 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Type` (Char / Num) | `column.type` | Closed set of five: `str` `int` `float` `date` `datetime` |
 | `Length` | a `max_length` verification | It is a constraint, so it becomes an executed one. Add `column.metadata.length` when define.xml needs to show it |
 | Significant digits / display format | *project setting* | Decimal places belong to the project, not the spec (Types and conversion) |
-| `Controlled Terms or Format` | `mapping` / `lookup` / `allowed_values`, plus `column.metadata.codelist` | Translation and enforcement separate here too |
+| `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `column.metadata.codelist` | Translation and enforcement separate here too |
 | `Origin` = Assigned | `literal: DM` | |
 | `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from |
-| `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name performs a declared-key `lookup` (Lookup and joins) |
+| `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name reads that dataset through the implicit join on the output keys (Lookup and joins) |
 | `Origin` = Derived | a specific expression | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
 | `Core` (Req / Exp / Perm) | `column.metadata` | Conformance classification; it says nothing about derivation |
 | `Conversion Definition` | `derivation:` | From a sentence a person reads to an expression a machine runs |
@@ -120,7 +120,7 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Comments for Define` | `column.metadata` | Free key-value, never validated, for define generation |
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
 | "if not collected then U" | the `missing:` handler | |
-| "if not in codelist then 99" | the `unmapped:` handler | Without `unmapped:`, `missing:` answers this too |
+| "if not in codelist then 99" | the `unmapped:` handler | Without `unmapped:`, an unlisted value stops the run |
 | "subject X was corrected to 99" | a `case` branch | |
 
 ### 2.3 Codelist splits into three constructs
@@ -130,7 +130,7 @@ Excel has one Codelist column. yamaa separates by where the vocabulary lives:
 | Situation | yamaa | Example |
 |---|---|---|
 | Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
-| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) |
+| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | a named intermediate | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
 | Numeric banding (AGEGR1, BMI categories) | `cut` | [Example 1](#example-1-direct-mapping-a-codelist-and-numeric-banding) |
 
@@ -186,6 +186,7 @@ yamaa:
         case_sensitive: false
         dict: {M: M, F: F, U: U}
         missing: U
+        unmapped: U
 
   - name: AGEGR1
     type: str
@@ -201,10 +202,9 @@ yamaa:
 What changed:
 
 - Excel packs "if not collected -> U" and "if unrecognised -> U" into one
-  sentence. yamaa answers both with the one `missing` handler. Two
-  conditions stay two conditions: when the answers differ, `unmapped` gives
-  "unrecognised" its own, and `strict: true` makes a condition with no
-  handler of its own fail instead.
+  sentence. yamaa keeps them two conditions: `missing` answers "not
+  collected" and `unmapped` answers "unrecognised". A condition with no
+  handler stops the run instead of turning into a blank.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.
@@ -291,5 +291,5 @@ benchmark for the full side-by-side:
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
 | [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
-| [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) | Coding against MedDRA with `lookup`; named `intermediates` when several columns must come from one record |
+| [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) | Coding against MedDRA with a named intermediate; several columns read the one record it selects |
 | [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |

@@ -28,17 +28,17 @@ template may read; otherwise all stored and derived fields are visible. The
 row template reads those fields through the intermediate's qualifier as its
 current driver record, not through a keyed lookup. Records retain source
 order. A driver intermediate must read an `input` dataset and may not declare
-`key`, `between`, `order_by`, `keep`, `missing`, or `strict: true`.
+`key`, `between`, `order_by`, `keep`, or `no_match`.
 Its filter may read only its own donor fields and earlier derived names; it
 may not reference a current row.
 An exposed derived field must have a determinable type: `source` keeps its
 source type, including a read of another intermediate's column under
 [REQ-1263](../operations/lookup.md#req-1263), a string/integer/float
 `literal` has that type, `row_number` and
-`rank` are integer, and `str_upper`, `str_lower`, `str_sentence`, and
-`str_title` are string. A `case` has a type only when all nonmissing branches
-have the same determinable type. Other exposed derived fields fail row-driver
-validation as `unknown_intermediate_driver_type`.
+`rank` are integer, and `str_case` is string. A `case` has a type only when
+all nonmissing branches have the same determinable type. Other exposed
+derived fields fail row-driver validation as
+`unknown_intermediate_driver_type`.
 An ineligible intermediate fails as `invalid_intermediate_driver` at the row
 template's `dataset` field.
 

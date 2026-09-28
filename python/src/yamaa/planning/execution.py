@@ -148,9 +148,12 @@ class PlannedIntermediate(_FrozenModel):
     between_lower: str | None = None
     between_upper: str | None = None
     readable_columns: tuple[str, ...] = ()
-    missing: Any = None
-    strict: bool = False
-    missing_declared: bool = False
+    # REQ-0129: the declared `no_match` literal answers absence; without it
+    # absence fails as unmatched_key, except on an implicit join (REQ-0111),
+    # which registers no handler and answers absence as missing.
+    no_match: Any = None
+    no_match_declared: bool = False
+    implicit_join: bool = False
     # REQ-1185: derivations are computed per record before matching; the map
     # is empty when the author declared none.
     derived: tuple[tuple[str, HandledExpression], ...] = ()
@@ -377,7 +380,7 @@ def _diagnostic(
 
 def expression_path(path: str, derivation: HandledExpression) -> str:
     """Recover the authored bare-expression path where normalization permits it."""
-    handled = {"missing", "strict"} & derivation.model_fields_set
+    handled = {"unconvertible"} & derivation.model_fields_set
     return f"{path}.value" if handled else path
 
 
@@ -407,10 +410,7 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
 _TYPED_SOURCES: dict[str, tuple[ColumnType | None, str]] = {
     "mapping": ("str", "REQ-0304"),
     "str_extract": ("str", "REQ-0308"),
-    "str_upper": ("str", "REQ-0308"),
-    "str_lower": ("str", "REQ-0308"),
-    "str_sentence": ("str", "REQ-0308"),
-    "str_title": ("str", "REQ-0308"),
+    "str_case": ("str", "REQ-0308"),
     "cut": (None, "REQ-0306"),
 }
 
@@ -655,13 +655,13 @@ def _expression_info(
         if (
             isinstance(payload, Mapping)
             and "false_value" in payload
-            and "missing_value" not in payload
+            and "missing" not in payload
         ):
             # REQ-1258: a flag that names its false value names its unknown one.
             diagnostics.append(
                 _diagnostic(
                     "missing_value_required",
-                    f"{operation_path}.missing_value",
+                    f"{operation_path}.missing",
                     {"false_value": payload["false_value"]},
                     requirement="REQ-1258",
                 )
@@ -820,15 +820,12 @@ _MATCH_VALUE_RESULT_TYPES: dict[str, ColumnType] = {
     "datetime_precision": "str",
     "rank": "int",
     "row_number": "int",
+    "str_case": "str",
     "str_concat": "str",
     "str_contains": "bool",
     "str_extract": "str",
     "str_pad": "str",
-    "str_lower": "str",
-    "str_sentence": "str",
     "str_template": "str",
-    "str_title": "str",
-    "str_upper": "str",
     "study_day": "int",
     "to_date": "date",
     "to_epoch_day": "int",
@@ -994,12 +991,9 @@ _DERIVE_VARIABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "locf": ("source",),
     "round_half_away_from_zero": ("source",),
     "row_value": ("source",),
+    "str_case": ("source",),
     "str_extract": ("source",),
     "str_pad": ("source",),
-    "str_lower": ("source",),
-    "str_upper": ("source",),
-    "str_sentence": ("source",),
-    "str_title": ("source",),
     "study_day": ("date", "reference"),
     "to_date": ("source",),
     "to_epoch_day": ("source",),
@@ -1175,9 +1169,9 @@ def _derive_reference_names(derivation: object) -> list[str]:
                     # names record fields (the rank method is an enum).
                     add_window_names(payload.get("window"))
                     return
-            elif set(node) <= {"value", "missing", "strict"} and "value" in node:
-                # A handled expression wraps one derivation; missing and
-                # strict are literals and name nothing.
+            elif set(node) <= {"value", "unconvertible"} and "value" in node:
+                # A handled expression wraps one derivation; unconvertible
+                # is a literal and names nothing.
                 visit(node["value"])
                 return
             for value in node.values():
@@ -2689,16 +2683,16 @@ def _plan_lookups(
                     "verification",
                 )
             )
-            and intermediate.missing is None
-            and not intermediate.strict
+            and "no_match" in intermediate.model_fields_set
+            and intermediate.no_match is None
         ):
-            # REQ-1248: a named intermediate must narrow, derive, or reshape
-            # its dataset; a bare id+dataset only renames the qualifier, so
-            # the author should read the input dataset directly instead.
-            # Value-based (not declaration-based): the schema materializes
-            # defaults such as strict:false, which change no behavior. A
-            # written key has no default, so even an empty one is declared
-            # and REQ-0115 reports it.
+            # REQ-1248: an intermediate declaring nothing beyond id, dataset,
+            # and `no_match: null` reads exactly what the implicit join
+            # reads, so the author should read the input dataset directly
+            # instead. Without `no_match` the intermediate requires a match,
+            # which the implicit join cannot state. A written key has no
+            # default, so even an empty one is declared and REQ-0115
+            # reports it.
             diagnostics.append(
                 _diagnostic(
                     "rename_only_intermediate",
@@ -3000,20 +2994,6 @@ def _plan_lookups(
                     )
                     failed = True
 
-        if intermediate.strict and "missing" in intermediate.model_fields_set:
-            # REQ-0123: a failing absence and a declared literal contradict,
-            # even when the declared literal is null: the check is
-            # declaration-based, not value-based.
-            diagnostics.append(
-                _diagnostic(
-                    "conflicting_absent_policy",
-                    path,
-                    {"intermediate": intermediate.id, "missing": intermediate.missing},
-                    requirement="REQ-0123",
-                )
-            )
-            failed = True
-
         unique_columns: tuple[str, ...] = ()
         if intermediate.verification is not None:
             unique_columns = tuple(intermediate.verification.unique)
@@ -3093,9 +3073,8 @@ def _plan_lookups(
             readable_columns=tuple(intermediate.columns)
             if intermediate.columns
             else (),
-            missing=intermediate.missing,
-            strict=intermediate.strict,
-            missing_declared="missing" in intermediate.model_fields_set,
+            no_match=intermediate.no_match,
+            no_match_declared="no_match" in intermediate.model_fields_set,
             derived=tuple(derived.items()),
             unique_columns=unique_columns,
         )
@@ -3208,10 +3187,7 @@ def _validate_intermediate_reads(
 # derivation may use, so a derived target-side key field type-checks
 # against its driver-side match value.
 _DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
-    "str_upper": "str",
-    "str_lower": "str",
-    "str_sentence": "str",
-    "str_title": "str",
+    "str_case": "str",
 }
 
 
@@ -4335,8 +4311,8 @@ def _bind_intermediate_drivers(
                 filter_names = ()
             if any(name.partition(".")[0] != item.dataset for name in filter_names):
                 prohibited.append("filter")
-        if item.strict or "missing" in item.model_fields_set:
-            prohibited.append("absence_policy")
+        if "no_match" in item.model_fields_set:
+            prohibited.append("no_match")
         if prohibited:
             diagnostics.append(
                 _diagnostic(

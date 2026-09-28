@@ -19,6 +19,7 @@ intermediates:
       IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
     verification:
       unique: [STUDYID, USUBJID, IDVARVAL]
+    no_match: null
 
   # Every laboratory record carries its own endpoint qualifier before the
   # window ranks the records of each subject and test: the endpoint

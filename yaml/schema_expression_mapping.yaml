@@ -20,11 +20,6 @@ expressions:
         - unmapped:
             type: literal_value
             description: See REQ-1110.
-        - strict:
-            type: bool
-            required: false
-
-            description: See REQ-1110.
     cut: # See REQ-1118.
 
         - source:

@@ -26,8 +26,8 @@ reports its existing condition. A width below one fails as
 
 <a id="req-0308"></a>
 
-**REQ-0308.** `str_extract`, `str_concat`, `str_template`, `str_upper`, and
-`str_lower` require string sources.
+**REQ-0308.** `str_extract`, `str_concat`, `str_template`, and `str_case`
+require string sources.
 
 ### Templates: Written forms
 
@@ -136,22 +136,42 @@ template itself is empty.
 
 <a id="req-0706"></a>
 
-**REQ-0706.** `str_upper` replaces each scalar from `U+0061` through `U+007A`
-with the scalar 32 positions earlier, from `U+0041` through `U+005A`.
-Every other scalar is unchanged.
+**REQ-0706.** `str_case` with `to: upper` replaces each scalar from `U+0061`
+through `U+007A` with the scalar 32 positions earlier, from `U+0041` through
+`U+005A`. Every other scalar is unchanged.
 
 <a id="req-0707"></a>
 
-**REQ-0707.** `str_lower` replaces each scalar from `U+0041` through `U+005A`
-with the scalar 32 positions later, from `U+0061` through `U+007A`. Every
-other scalar is unchanged.
+**REQ-0707.** `str_case` with `to: lower` replaces each scalar from `U+0041`
+through `U+005A` with the scalar 32 positions later, from `U+0061` through
+`U+007A`. Every other scalar is unchanged.
 
 <a id="req-0708"></a>
 
-**REQ-0708.** Both operations preserve scalar count. They have no
+**REQ-0708.** Both substitutions preserve scalar count. They have no
 one-to-many mapping, context rule, language tailoring, or Unicode-version
 dependency. A host uppercase or lowercase routine is conforming only when
 its result is exactly the ASCII transformation above for every input.
+
+<a id="req-1240"></a>
+
+**REQ-1240.** `str_case` with `to: sentence` uppercases the first scalar and
+lowercases every later scalar, ASCII-only: the first scalar gets the upward
+substitution of [REQ-0706](text.md#req-0706) and every later scalar the
+downward substitution of [REQ-0707](text.md#req-0707). Non-ASCII scalars pass
+through unchanged, so the scalar count is preserved. A host `capitalize`
+routine must not be used: host Unicode behavior can expand or alter non-ASCII
+scalars (e.g. U+00DF or U+0130).
+
+<a id="req-1241"></a>
+
+**REQ-1241.** `str_case` with `to: title` title-cases each maximal run of
+ASCII letters `[A-Za-z]+`: the first letter of the run is uppercased and the
+remaining letters of the run are lowercased, both with the same ASCII
+substitutions. Every other scalar -- including non-ASCII letters -- passes
+through unchanged, so the scalar count is preserved. Word detection is
+ASCII-only: no locale, no Unicode word-break rule, and no Unicode-version
+dependency.
 
 ### Case-insensitive inline mapping
 
@@ -433,9 +453,8 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 | `expressions.mapping.source` | String variable used as the dictionary key. |
 | `expressions.mapping.dict` | Source-value to result-value dictionary, written inline or as the path of a YAML file holding it. A path is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the inline dictionary contract. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
-| `expressions.mapping.missing` | Value returned when the source is missing. Also covers a source with no dictionary entry when `unmapped` is absent and `strict` is not true. |
-| `expressions.mapping.unmapped` | Value returned when the source is present but has no dictionary entry. |
-| `expressions.mapping.strict` | When true, a missing source with no `missing` handler, or a source with no dictionary entry and no `unmapped` handler, is an error instead of returning missing; `missing` no longer covers a source with no dictionary entry. Defaults to false. |
+| `expressions.mapping.missing` | Value returned when the source is missing; without it, a missing source fails ([REQ-0344](../execution/handlers.md#req-0344)). |
+| `expressions.mapping.unmapped` | Value returned when the source is present but has no dictionary entry; without it, such a source fails. `missing` never answers it. |
 | `Result` | Looks up a string source in a dictionary, given inline or loaded from a YAML file. Case-insensitive lookup folds ASCII a-z to A-Z under [Text values](../values/text.md); folded keys must be unique. |
 
 <a id="req-1111"></a>
@@ -483,43 +502,14 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 
 <a id="req-1114"></a>
 
-**REQ-1114.** The `expressions.str_upper` fields have these meanings:
+**REQ-1114.** The `expressions.str_case` fields have these meanings:
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.str_upper.source` | String variable whose ASCII letters are uppercased under [Text values](../values/text.md). |
-| `expressions.str_upper.missing` | Value returned when source is missing. |
-| `Result` | Converts ASCII a-z to A-Z and preserves every other scalar. |
-
-<a id="req-1115"></a>
-
-**REQ-1115.** The `expressions.str_lower` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.str_lower.source` | String variable whose ASCII letters are lowercased under [Text values](../values/text.md). |
-| `expressions.str_lower.missing` | Value returned when source is missing. |
-| `Result` | Converts ASCII A-Z to a-z and preserves every other scalar. |
-
-<a id="req-1240"></a>
-
-**REQ-1240.** The `expressions.str_sentence` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.str_sentence.source` | String variable converted to sentence case under [Text values](../values/text.md). |
-| `expressions.str_sentence.missing` | Value returned when source is missing. |
-| `Result` | Uppercases the first scalar and lowercases every later scalar, ASCII-only: the first scalar gets the REQ-0708 upward substitution and every later scalar gets the downward substitution. Non-ASCII scalars pass through unchanged, so the scalar count is preserved. A host `capitalize` routine must not be used: host Unicode behavior can expand or alter non-ASCII scalars (e.g. U+00DF or U+0130). |
-
-<a id="req-1241"></a>
-
-**REQ-1241.** The `expressions.str_title` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.str_title.source` | String variable converted to title case under [Text values](../values/text.md). |
-| `expressions.str_title.missing` | Value returned when source is missing. |
-| `Result` | Title-cases each maximal run of ASCII letters `[A-Za-z]+`: the first letter of the run is uppercased and the remaining letters of the run are lowercased, both via the REQ-0708 ASCII substitutions. Every other scalar -- including non-ASCII letters -- passes through unchanged, so the scalar count is preserved. Word detection is ASCII-only: no locale, no Unicode word-break rule, and no Unicode-version dependency. |
+| `expressions.str_case.source` | String variable whose ASCII letters change case under [Text values](../values/text.md). |
+| `expressions.str_case.to` | Case to produce: `upper` ([REQ-0706](text.md#req-0706)), `lower` ([REQ-0707](text.md#req-0707)), `sentence` ([REQ-1240](text.md#req-1240)), or `title` ([REQ-1241](text.md#req-1241)). |
+| `expressions.str_case.missing` | Value returned when source is missing. |
+| `Result` | Applies the ASCII substitution `to` names and preserves every other scalar. |
 
 <a id="req-1116"></a>
 

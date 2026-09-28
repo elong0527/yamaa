@@ -446,11 +446,7 @@ def test_a_read_through_self_promotes_the_donor_column() -> None:
             ),
         ],
     ).model_copy(
-        update={
-            "intermediates": [
-                Intermediate(id="DONOR", dataset="SELF", key=["K"], strict=True)
-            ]
-        }
+        update={"intermediates": [Intermediate(id="DONOR", dataset="SELF", key=["K"])]}
     )
 
     plan = plan_execution(spec, {"SRC": source_table()})
@@ -1006,9 +1002,7 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
         ]
     ).model_copy(
         update={
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="SRC", key={"X": "A"}, strict=True)
-            ]
+            "intermediates": [Intermediate(id="LOOK", dataset="SRC", key={"X": "A"})]
         }
     )
 
@@ -1016,8 +1010,8 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
 
     assert plan.intermediates[0].match_variables == ("A",)
     assert plan.intermediates[0].match_fields == ("X",)
-    # A declared source and key with strict: true makes an unmatched key fatal.
-    assert plan.intermediates[0].strict is True
+    # A declared key with no `no_match` makes an unmatched key fatal.
+    assert plan.intermediates[0].no_match_declared is False
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
 
 
@@ -1035,7 +1029,7 @@ def test_key_match_expression_plans_with_synthetic_name() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key={"X": {"str_upper": {"source": "A"}}},
+                    key={"X": {"str_case": {"source": "A", "to": "upper"}}},
                 )
             ]
         }
@@ -1044,7 +1038,7 @@ def test_key_match_expression_plans_with_synthetic_name() -> None:
     plan = plan_execution(
         spec,
         {"SRC": source_table()},
-        supported_operations=("source", "literal", "mapping", "str_upper"),
+        supported_operations=("source", "literal", "mapping", "str_case"),
     )
 
     planned = plan.intermediates[0]
@@ -1057,7 +1051,7 @@ def test_key_match_expression_plans_with_synthetic_name() -> None:
     assert planned.dependencies == ("A",)
 
 
-@pytest.mark.parametrize("operation", ["str_upper", "to_date"])
+@pytest.mark.parametrize("operation", ["str_case", "to_date"])
 def test_key_match_expression_type_mismatch_fails(operation: str) -> None:
     # REQ-1259: a statically known expression result type checks against the
     # donor key type with the existing comparability rules.
@@ -1260,7 +1254,7 @@ def test_a_qualified_aggregate_key_match_expression_plans() -> None:
                     {
                         "aggregate": {
                             "dataset": "SRC",
-                            "key": {"X": {"str_upper": {"source": "A"}}},
+                            "key": {"X": {"str_case": {"source": "A", "to": "upper"}}},
                             "expr": "COUNT(SRC.*)",
                         }
                     }
@@ -1414,7 +1408,7 @@ def test_a_named_key_match_expression_checks_its_input_types() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key={"X": {"str_upper": {"source": "A"}}},
+                    key={"X": {"str_case": {"source": "A", "to": "upper"}}},
                 )
             ]
         }
@@ -1428,11 +1422,11 @@ def test_a_named_key_match_expression_checks_its_input_types() -> None:
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "incompatible_input_type"
     assert diagnostic.requirement == "REQ-0308"
-    assert diagnostic.spec_paths == ("intermediates[0].key.X.str_upper.source",)
+    assert diagnostic.spec_paths == ("intermediates[0].key.X.str_case.source",)
     assert diagnostic.context == {"source": "A", "expected": "str", "actual": "int"}
 
 
-def test_a_lookup_defaults_to_missing_on_absence() -> None:
+def test_a_lookup_without_no_match_requires_a_match() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
     ).model_copy(
@@ -1441,74 +1435,52 @@ def test_a_lookup_defaults_to_missing_on_absence() -> None:
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
-    # Absence defaults to missing: strict is false and no missing literal.
-    assert plan.intermediates[0].strict is False
-    assert plan.intermediates[0].missing is None
+    # REQ-0124 and REQ-0344: with no `no_match`, absence is fatal.
+    assert plan.intermediates[0].no_match_declared is False
+    assert plan.intermediates[0].implicit_join is False
 
 
-def test_a_named_lookup_with_strict_true_and_missing_literal_is_rejected() -> None:
+def test_a_declared_null_no_match_is_planned_as_a_handler() -> None:
     spec = specification(
-        [
-            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
-        ]
+        [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
     ).model_copy(
         update={
             "intermediates": [
-                Intermediate(
-                    id="LOOK",
-                    dataset="SRC",
-                    key={"X": "A"},
-                    strict=True,
-                    missing="n/a",
-                )
+                Intermediate(id="LOOK", dataset="SRC", key=["X"], no_match=None)
             ]
         }
     )
 
-    with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(spec, {"SRC": source_table()})
+    plan = plan_execution(spec, {"SRC": source_table()})
 
-    diagnostic = raised.value.diagnostics[0]
-    # REQ-0123: a failing absence and a returned literal contradict.
-    assert diagnostic.condition == "conflicting_absent_policy"
-    assert diagnostic.requirement == "REQ-0123"
-    assert diagnostic.spec_paths == ("intermediates[0]",)
-    assert diagnostic.context == {"intermediate": "LOOK", "missing": "n/a"}
+    # REQ-0129: `no_match: null` is declared, and answers absence with missing.
+    assert plan.intermediates[0].no_match_declared is True
+    assert plan.intermediates[0].no_match is None
 
 
-def test_a_named_lookup_with_strict_true_and_explicit_missing_null_is_rejected() -> (
-    None
-):
-    spec = specification(
-        [
-            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
-        ]
-    ).model_copy(
+def test_only_a_null_no_match_beside_id_and_dataset_is_a_rename() -> None:
+    columns = [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
+    renamed = specification(columns).model_copy(
         update={
-            "intermediates": [
-                Intermediate(
-                    id="LOOK",
-                    dataset="SRC",
-                    key={"X": "A"},
-                    strict=True,
-                    missing=None,
-                )
-            ]
+            "intermediates": [Intermediate(id="LOOK", dataset="SRC", no_match=None)]
         }
     )
 
     with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(spec, {"SRC": source_table()})
+        plan_execution(renamed, {"SRC": source_table()})
 
     diagnostic = raised.value.diagnostics[0]
-    # REQ-0123: the check is declaration-based, so an explicit `missing: null`
-    # contradicts `strict: true` even though the literal is null.
-    assert diagnostic.condition == "conflicting_absent_policy"
-    assert diagnostic.requirement == "REQ-0123"
+    assert diagnostic.condition == "rename_only_intermediate"
+    assert diagnostic.requirement == "REQ-1248"
     assert diagnostic.spec_paths == ("intermediates[0]",)
-    assert diagnostic.context == {"intermediate": "LOOK", "missing": None}
+
+    # REQ-1248: without `no_match` the intermediate requires a match, which
+    # the implicit join cannot state, so it is not a rename.
+    required = specification(columns).model_copy(
+        update={"intermediates": [Intermediate(id="LOOK", dataset="SRC")]}
+    )
+    plan = plan_execution(required, {"SRC": source_table()})
+    assert plan.intermediates[0].no_match_declared is False
 
 
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
@@ -1517,7 +1489,7 @@ def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
             Column(
                 name="A",
                 type="str",
-                derivation=derivation({"str_upper": {"source": "SRC.X"}}),
+                derivation=derivation({"str_case": {"source": "SRC.X", "to": "upper"}}),
             )
         ]
     )
@@ -1525,7 +1497,7 @@ def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
     with pytest.raises(UnsupportedPlanningError) as raised:
         plan_execution(spec, {"SRC": source_table()})
 
-    assert raised.value.features[0].operation == "str_upper"
+    assert raised.value.features[0].operation == "str_case"
 
 
 def two_dataset_specification(columns: list[Column]) -> Specification:
@@ -2786,7 +2758,7 @@ def _src_table() -> object:
 def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
     # REQ-1185: the derived name is a legal target-side key field.
     spec = _intermediate_spec(
-        {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
+        {"IDVARVAL_U": {"str_case": {"source": "IDVARVAL", "to": "upper"}}},
         key={
             "STUDYID": "SRC.STUDYID",
             "USUBJID": "SRC.USUBJID",
@@ -2806,7 +2778,7 @@ def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
 
 def test_intermediate_clauses_may_read_a_derived_name() -> None:
     spec = _intermediate_spec(
-        {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
+        {"IDVARVAL_U": {"str_case": {"source": "IDVARVAL", "to": "upper"}}},
         key={"STUDYID": "SRC.STUDYID", "USUBJID": "SRC.USUBJID"},
         read_field="IDVARVAL_U",
         filter="SUPP.IDVARVAL_U IS NOT NULL",
@@ -2829,7 +2801,7 @@ def test_intermediate_clauses_may_read_a_derived_name() -> None:
 
 def test_an_unqualified_derived_order_field_suggests_its_qualified_name() -> None:
     spec = _intermediate_spec(
-        {"QVAL_U": {"str_upper": {"source": "QVAL"}}},
+        {"QVAL_U": {"str_case": {"source": "QVAL", "to": "upper"}}},
         key=["STUDYID"],
         order_by=[OrderTerm(variable="QVAL_U")],
         keep="first",
@@ -2853,7 +2825,7 @@ def test_an_unqualified_derived_order_field_suggests_its_qualified_name() -> Non
 
 def test_a_failed_derivation_does_not_repeat_as_an_unknown_order_field() -> None:
     spec = _intermediate_spec(
-        {"QVAL_U": {"str_upper": {"source": "NOPE"}}},
+        {"QVAL_U": {"str_case": {"source": "NOPE", "to": "upper"}}},
         key=["STUDYID"],
         order_by=[OrderTerm(variable="SUPP.QVAL_U")],
         keep="first",
@@ -2867,7 +2839,7 @@ def test_a_failed_derivation_does_not_repeat_as_an_unknown_order_field() -> None
         )
 
     assert any(
-        d.spec_paths == ("intermediates[0].derivations.QVAL_U.str_upper.source",)
+        d.spec_paths == ("intermediates[0].derivations.QVAL_U.str_case.source",)
         for d in raised.value.diagnostics
     )
     assert all(
@@ -2898,19 +2870,21 @@ def _derivation_diagnostic(
 def test_an_intermediate_derivation_rejects_a_driver_reference() -> None:
     # REQ-1185: the driver is out of scope for an intermediate derivation.
     diagnostic = _derivation_diagnostic(
-        {"IDVARVAL_U": {"str_upper": {"source": "SRC.LBSEQ"}}}, "unknown_field"
+        {"IDVARVAL_U": {"str_case": {"source": "SRC.LBSEQ", "to": "upper"}}},
+        "unknown_field",
     )
 
     assert diagnostic.requirement == "REQ-1185"
     assert diagnostic.spec_paths == (
-        "intermediates[0].derivations.IDVARVAL_U.str_upper.source",
+        "intermediates[0].derivations.IDVARVAL_U.str_case.source",
     )
 
 
 def test_an_intermediate_derivation_rejects_another_dataset_reference() -> None:
     # REQ-1185: a qualified name must name the intermediate's own dataset.
     diagnostic = _derivation_diagnostic(
-        {"IDVARVAL_U": {"str_upper": {"source": "SRC.IDVARVAL"}}}, "unknown_field"
+        {"IDVARVAL_U": {"str_case": {"source": "SRC.IDVARVAL", "to": "upper"}}},
+        "unknown_field",
     )
 
     assert diagnostic.requirement == "REQ-1185"
@@ -2921,8 +2895,8 @@ def test_an_intermediate_derivation_reads_an_earlier_sibling() -> None:
     # may read a sibling declared before it.
     spec = _intermediate_spec(
         {
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
-            "SECOND_N": {"str_upper": {"source": "FIRST_N"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
+            "SECOND_N": {"str_case": {"source": "FIRST_N", "to": "upper"}},
         },
         key=["STUDYID"],
     )
@@ -2940,8 +2914,8 @@ def test_an_intermediate_derivation_reads_a_qualified_earlier_sibling() -> None:
     # and an earlier derived name qualifies there too.
     spec = _intermediate_spec(
         {
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
-            "SECOND_N": {"str_upper": {"source": "SUPP.FIRST_N"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
+            "SECOND_N": {"str_case": {"source": "SUPP.FIRST_N", "to": "upper"}},
         },
         key=["STUDYID"],
     )
@@ -2959,7 +2933,7 @@ def test_a_window_derivation_reads_earlier_derived_window_fields() -> None:
     # fields and earlier derived names of the intermediate's dataset.
     spec = _intermediate_spec(
         {
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
             "_RN": {
                 "row_number": {
                     "window": {
@@ -2994,7 +2968,7 @@ def test_a_window_derivation_rejects_a_later_derived_window_field() -> None:
                     }
                 }
             },
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
         },
         "unknown_field",
     )
@@ -3008,7 +2982,8 @@ def test_a_window_derivation_rejects_a_later_derived_window_field() -> None:
 def test_an_intermediate_derivation_rejects_a_stored_column_shadow() -> None:
     # REQ-1185: the derived name would hide the stored column.
     diagnostic = _derivation_diagnostic(
-        {"IDVARVAL": {"str_upper": {"source": "IDVARVAL"}}}, "duplicate_derivation"
+        {"IDVARVAL": {"str_case": {"source": "IDVARVAL", "to": "upper"}}},
+        "duplicate_derivation",
     )
 
     assert diagnostic.requirement == "REQ-1185"
@@ -3356,7 +3331,7 @@ def test_a_column_case_predicate_with_a_qualified_source_field_plans() -> None:
 
 def _flag_field(condition: str) -> HandledExpression:
     return derivation(
-        {"flag": {"condition": condition, "false_value": "N", "missing_value": "N"}}
+        {"flag": {"condition": condition, "false_value": "N", "missing": "N"}}
     )
 
 
@@ -3418,7 +3393,7 @@ def test_a_bare_string_flag_condition_names_predicate_identifiers() -> None:
     }
 
 
-def test_a_column_flag_with_false_value_requires_missing_value() -> None:
+def test_a_column_flag_with_false_value_requires_missing() -> None:
     # REQ-1258: the rule is checked before any data is read.
     spec = specification(
         [
@@ -3443,7 +3418,7 @@ def test_a_column_flag_with_false_value_requires_missing_value() -> None:
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "missing_value_required"
     assert diagnostic.requirement == "REQ-1258"
-    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.missing_value",)
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.missing",)
     assert diagnostic.context == {"false_value": "N"}
 
 

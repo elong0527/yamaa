@@ -43,7 +43,7 @@ fixtures:
   negative-flag-missing-value:
     rule: R007
     condition: missing_value_required
-    spec_paths: ["columns.ELDFL.derivation.flag.missing_value"]
+    spec_paths: ["columns.ELDFL.derivation.flag.missing"]
     validator: static_semantics
   negative-dose-intensity:
     rule: R013
@@ -340,26 +340,21 @@ fixtures:
     condition: invalid_predicate
     spec_paths: ["columns.AESEV.derivation.case[0].when"]
     validator: predicate
-  negative-str-lowercase-number:
+  negative-str-case-number:
     rule: R007
     condition: incompatible_input_type
-    spec_paths: [columns.SITE.derivation.str_lower.source]
+    spec_paths: [columns.SITE.derivation.str_case.source]
     validator: expression_contract
+  negative-str-case-unknown:
+    rule: R006
+    condition: value_not_permitted
+    spec_paths: [columns.SITE.derivation.str_case.to]
+    validator: schema
   negative-str-pad-width:
     rule: R006
     condition: invalid_field_type
     spec_paths: [columns.IDVARVAL.derivation.str_pad.width]
     validator: schema
-  negative-str-sentence-number:
-    rule: R007
-    condition: incompatible_input_type
-    spec_paths: [columns.SITE.derivation.str_sentence.source]
-    validator: expression_contract
-  negative-str-title-number:
-    rule: R007
-    condition: incompatible_input_type
-    spec_paths: [columns.SITE.derivation.str_title.source]
-    validator: expression_contract
   negative-study-day-datetime:
     rule: R016
     condition: incompatible_input_type
@@ -388,7 +383,7 @@ fixtures:
   negative-variable-nested:
     rule: R006
     condition: invalid_field_type
-    spec_paths: [columns.COUNTRY.derivation.str_upper.source]
+    spec_paths: [columns.COUNTRY.derivation.str_case.source]
     validator: schema
   negative-locf-no-order:
     rule: R007

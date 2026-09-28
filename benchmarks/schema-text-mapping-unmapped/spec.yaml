@@ -35,9 +35,8 @@ columns:
         missing: null
         unmapped: Outside codelist
 
-  # One named result for both events: with no separate result for unlisted
-  # codes (and no strict check), the missing code and the unlisted code both
-  # read as the declared missing value.
+  # One result for both events, stated for each: the missing code and the
+  # unlisted code both read Unknown.
   - name: SEXC_SINGLE
     type: str
     label: Sex Decoded With One Result
@@ -48,3 +47,4 @@ columns:
           M: Male
           F: Female
         missing: Unknown
+        unmapped: Unknown

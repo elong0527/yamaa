@@ -69,7 +69,7 @@ def _resolve(
     *,
     filtered: bool = False,
 ) -> ValueResult | ConditionResult:
-    """Read one operand, which R003-21b lets `first_available` narrow to records."""
+    """Read an operand REQ-1052/REQ-1053 let `first_available` filter."""
     operand = source_operand(variable) if filtered else None
     if operand is None:
         if not isinstance(variable, str):
@@ -245,11 +245,11 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
 
     # REQ-1256: the one-predicate flag shorthand. A bare predicate string is
     # the condition with the default values; a mapping names condition and
-    # any of true_value, false_value, missing_value. REQ-1257 gives the
+    # any of true_value, false_value, missing. REQ-1257 gives the
     # three-valued semantics: only TRUE takes true_value; FALSE takes
-    # false_value when present; UNKNOWN takes missing_value when present.
+    # false_value when present; UNKNOWN takes missing when present.
     # Either absent value is missing, which is exactly the one-branch
-    # `case` the shorthand replaces; REQ-1258 lets missing_value be absent
+    # `case` the shorthand replaces; REQ-1258 lets missing be absent
     # only when false_value is absent too.
     if isinstance(payload, str):
         payload = {"condition": payload}
@@ -270,13 +270,13 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
             requirement="REQ-0188",
             field="condition",
         )
-    if "false_value" in payload and "missing_value" not in payload:
+    if "false_value" in payload and "missing" not in payload:
         return expression_condition(
             "validation",
             "missing_value_required",
             {"false_value": payload["false_value"]},
             requirement="REQ-1258",
-            field="missing_value",
+            field="missing",
         )
     decided = evaluate_predicate(ast, resolver)
     if isinstance(decided, ConditionResult):
@@ -293,7 +293,7 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
         return handler_value_or_missing(payload.get("true_value", "Y"))
     if decided.value is TruthValue.FALSE:
         return handler_value_or_missing(payload.get("false_value"))
-    return handler_value_or_missing(payload.get("missing_value"))
+    return handler_value_or_missing(payload.get("missing"))
 
 
 def _cut(payload: object, resolver: Resolver) -> EvaluationResult:

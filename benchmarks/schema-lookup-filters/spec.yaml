@@ -26,6 +26,7 @@ intermediates:
       - variable: LB.VISITN
         direction: asc
     keep: last
+    no_match: null
 
 columns:
   - name: STUDYID

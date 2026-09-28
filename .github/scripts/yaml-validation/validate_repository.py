@@ -369,6 +369,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'intermediate', 'dataset',
     },
     ('R006', 'missing_required_field'): {'class', 'field'},
+    ('R006', 'value_not_permitted'): {'permitted', 'value'},
     ('R016', 'month_out_of_range'): {'month'},
     ('R016', 'month_not_permitted'): {'month'},
     ('R016', 'month_required'): {'minimum_source_precision'},
@@ -6069,7 +6070,7 @@ def derivation_operations(derivation):
     """
     if not isinstance(derivation, dict):
         return
-    if 'value' in derivation and set(derivation) <= {'value', 'missing', 'strict'}:
+    if 'value' in derivation and set(derivation) <= {'value', 'unconvertible'}:
         yield from derivation_operations(derivation['value'])
         return
     if len(derivation) != 1:
@@ -7425,12 +7426,9 @@ _DERIVE_VARIABLE_FIELDS = {
     'locf': ('source',),
     'round_half_away_from_zero': ('source',),
     'row_value': ('source',),
+    'str_case': ('source',),
     'str_extract': ('source',),
     'str_pad': ('source',),
-    'str_lower': ('source',),
-    'str_upper': ('source',),
-    'str_sentence': ('source',),
-    'str_title': ('source',),
     'study_day': ('date', 'reference'),
     'to_date': ('source',),
     'to_epoch_day': ('source',),
@@ -7580,9 +7578,9 @@ def derive_binding_reference_names(derivation):
                     # names record fields (the rank method is an enum).
                     add_window_names(payload.get('window'))
                     return
-            elif set(node) <= {'value', 'missing', 'strict'} and 'value' in node:
-                # A handled expression wraps one derivation; missing and
-                # strict are literals and name nothing.
+            elif set(node) <= {'value', 'unconvertible'} and 'value' in node:
+                # A handled expression wraps one derivation; unconvertible
+                # is a literal and names nothing.
                 visit(node['value'])
                 return
             for value in node.values():
@@ -8390,14 +8388,14 @@ def validate_expression_static_semantics(expression, path, context):
         keyword == 'flag'
         and isinstance(payload, dict)
         and 'false_value' in payload
-        and 'missing_value' not in payload
+        and 'missing' not in payload
     ):
         # REQ-1258: a flag that names its false value names its unknown one.
         errors.append(
             validation_diagnostic(
-                f"{path}.flag.missing_value",
+                f"{path}.flag.missing",
                 'missing_value_required',
-                'missing_value is required with false_value',
+                'missing is required with false_value',
                 context={'false_value': payload['false_value']},
             )
         )
@@ -8501,7 +8499,7 @@ def validate_expression_static_semantics(expression, path, context):
             )
         return errors
 
-    if keyword in {'str_extract', 'str_upper', 'str_lower', 'str_sentence', 'str_title'}:
+    if keyword in {'str_extract', 'str_case'}:
         errors.extend(
             validate_named_input_type(
                 payload,
@@ -8599,8 +8597,8 @@ def validate_intermediate_static_semantics(
             and intermediate.get('columns') is None
             and intermediate.get('derivations') is None
             and intermediate.get('verification') is None
-            and intermediate.get('missing') is None
-            and not intermediate.get('strict', False)
+            and 'no_match' in intermediate
+            and intermediate['no_match'] is None
         ):
             errors.append(
                 validation_diagnostic(

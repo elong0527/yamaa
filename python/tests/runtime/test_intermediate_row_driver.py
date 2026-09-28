@@ -297,6 +297,7 @@ def test_another_lookup_can_match_against_the_intermediate_driver() -> None:
         order_by=[OrderTerm(variable="LB.VISITNUM")],
         keep="last",
         columns=["LBSTRESN"],
+        no_match=None,
     )
     row = specification.rows[0].model_copy(
         update={
@@ -326,7 +327,7 @@ def test_another_lookup_can_match_against_the_intermediate_driver() -> None:
 @pytest.mark.parametrize(
     "change, field",
     [
-        ({"missing": "NA"}, "absence_policy"),
+        ({"no_match": "NA"}, "no_match"),
         ({"dataset": "SELF"}, "dataset"),
         ({"key": ["STUDYID"]}, "key"),
         ({"keep": "first", "order_by": [{"variable": "LB.LBSEQ"}]}, "keep"),

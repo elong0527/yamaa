@@ -16,6 +16,7 @@ intermediates:
       STUDYID: LB.STUDYID
       USUBJID: LB.USUBJID
       IDVARVAL: {str_pad: {source: LBSEQ, width: 8}}
+    no_match: null
 
 rows:
   - id: low_sequence

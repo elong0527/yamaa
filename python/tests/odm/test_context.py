@@ -84,7 +84,7 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
     # The benchmark spec no longer carries the ODM contextual reference
     # (migrated to column-only source semantics under #506); the form-scoped
     # resolution the ODM layer still provides is pinned inline here.
-    expression = {"source": {"variable": "ODM.IT.LB.LBDTC", "missing": None}}
+    expression = {"source": {"variable": "ODM.IT.LB.LBDTC", "absent": None}}
 
     results = [
         evaluate_expression(expression, index.context({"ODM": row})) for row in rows
@@ -98,7 +98,7 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
         MISSING,
     ]
     assert isinstance(results[-1], ValueResult)
-    assert results[-1].handled_by == "missing"
+    assert results[-1].handled_by == "absent"
 
 
 def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() -> None:
@@ -119,7 +119,7 @@ def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() 
     ]
     # As above: the migrated benchmark spec no longer carries the ODM
     # contextual reference, so the expression under test is pinned inline.
-    collected = {"source": {"variable": "ODM.IT.LB.LBDTC", "missing": None}}
+    collected = {"source": {"variable": "ODM.IT.LB.LBDTC", "absent": None}}
 
     dates = [
         evaluate_expression(collected, index.context({"ODM": row})) for row in rows
@@ -132,7 +132,7 @@ def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() 
         ValueResult(value="2025-01-03"),
         ValueResult(value="2025-01-04"),
         ValueResult(value="2025-01-05"),
-        ValueResult(value=MISSING, handled_by="missing"),
+        ValueResult(value=MISSING, handled_by="absent"),
     ]
 
 
@@ -204,7 +204,7 @@ def test_unknown_names_and_item_references_without_context_are_failures() -> Non
         assert result.condition.context == {"identifier": variable}
 
     handled = evaluate_expression(
-        {"source": {"variable": "ODM.IT.TEST.VALUE", "missing": "fallback"}},
+        {"source": {"variable": "ODM.IT.TEST.VALUE", "absent": "fallback"}},
         context,
     )
     assert isinstance(handled, ConditionResult)
@@ -227,7 +227,7 @@ def test_absent_item_and_matched_missing_value_take_different_paths(
     )
     index = _index(loaded.table)
     first, _, second = runtime_rows(loaded.table)
-    expression = {"source": {"variable": "ODM.IT.TEST.VALUE", "missing": "fallback"}}
+    expression = {"source": {"variable": "ODM.IT.TEST.VALUE", "absent": "fallback"}}
 
     present_missing = evaluate_expression(
         expression,
@@ -236,7 +236,7 @@ def test_absent_item_and_matched_missing_value_take_different_paths(
     absent = evaluate_expression(expression, index.context({"ODM": second}))
 
     assert present_missing == ValueResult(value=MISSING)
-    assert absent == ValueResult(value="fallback", handled_by="missing")
+    assert absent == ValueResult(value="fallback", handled_by="absent")
 
 
 def test_duplicate_context_requires_or_reports_multiple_match_selection() -> None:
@@ -383,7 +383,7 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
         {
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
-                "missing": "fallback",
+                "absent": "fallback",
                 "filter": "ODM.Rank > 9",
                 **policy,
             }
@@ -445,7 +445,7 @@ def test_a_filter_selecting_no_contextual_match_is_not_an_absent_item() -> None:
         {
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
-                "missing": "fallback",
+                "absent": "fallback",
                 "filter": "ODM.Include = 'Y'",
             }
         },
@@ -643,7 +643,7 @@ def test_a_filter_selecting_no_record_is_missing_and_fires_no_handler() -> None:
             "source": {
                 "variable": "ODM.Value",
                 "filter": "ODM.ItemOID = 'IT.DM.RACE'",
-                "missing": "fallback",
+                "absent": "fallback",
             }
         },
         context,

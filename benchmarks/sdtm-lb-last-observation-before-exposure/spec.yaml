@@ -15,6 +15,7 @@ intermediates:
   - id: LB_MAP
     dataset: LB_MAPPING
     key: {ItemOID: ODM.ItemOID}
+    no_match: null
 
 output:
   path: lb.csv

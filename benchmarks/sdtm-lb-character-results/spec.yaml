@@ -96,8 +96,9 @@ columns:
     type: str
     label: Collected Result Uppercased
     derivation:
-      str_upper:
+      str_case:
         source: LBORRES
+        to: upper
 
   - name: LBSTRESC
     type: str
@@ -130,7 +131,7 @@ columns:
     derivation:
       value:
         source: LBSTRESC
-      missing: null
+      unconvertible: null
 
   - name: LBSTRESU
     type: str

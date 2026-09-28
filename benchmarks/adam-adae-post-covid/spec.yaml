@@ -13,6 +13,7 @@ intermediates:
     filter: "AE.AEDECOD = 'COVID-19'"
     order_by: [AE.AESTDTC, AE.AESEQ]
     keep: first
+    no_match: null
 
 output:
   path: adae.csv

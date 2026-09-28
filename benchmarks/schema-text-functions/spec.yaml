@@ -49,16 +49,18 @@ columns:
     type: str
     label: Uppercase ASCII Text
     derivation:
-      str_upper:
+      str_case:
         source: RAWTXT
+        to: upper
         missing: MISSING
 
   - name: LOWERTXT
     type: str
     label: Lowercase ASCII Text
     derivation:
-      str_lower:
+      str_case:
         source: RAWTXT
+        to: lower
         missing: MISSING
 
   # Two missing texts count as equal. With only one side missing the
@@ -88,9 +90,9 @@ columns:
       greatest:
         sources: [RAWTXT, PEERTXT]
 
-  # Missing text is answered by the first branch, so the mapping's missing
-  # value (with no unmapped value declared) answers only text that has no
-  # dictionary entry after ASCII case folding.
+  # Missing text is answered by the first branch, so the mapping needs only
+  # an unmapped value, which answers text that has no dictionary entry
+  # after ASCII case folding.
   - name: MAPCAT
     type: str
     label: ASCII Folded Mapping Category
@@ -105,7 +107,7 @@ columns:
               dict:
                 ABC: ASCII
                 I: ASCII_I
-              missing: OTHER
+              unmapped: OTHER
 
   # One sequence over the whole study: text order, then subject; missing
   # text sorts last.

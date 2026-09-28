@@ -40,5 +40,5 @@ Carry the day count in its own column and compare the named value:
     flag:
       condition: "WINDOWDY <= 30"
       false_value: "N"
-      missing_value: "N"
+      missing: "N"
 ```

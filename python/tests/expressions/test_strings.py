@@ -238,38 +238,39 @@ def test_a_group_outside_the_pattern_fails_validation(group: int) -> None:
 
 
 @pytest.mark.parametrize(
-    ("operation", "value", "expected"),
+    ("to", "value", "expected"),
     [
-        ("str_upper", "abcZ", "ABCZ"),
-        ("str_lower", "ABCz", "abcz"),
-        ("str_upper", "a1!_", "A1!_"),
-        ("str_lower", "A1!_", "a1!_"),
+        ("upper", "abcZ", "ABCZ"),
+        ("lower", "ABCz", "abcz"),
+        ("upper", "a1!_", "A1!_"),
+        ("lower", "A1!_", "a1!_"),
         # REQ-0708: no one-to-many mapping, so scalar count is preserved.
-        ("str_upper", "\u00df", "\u00df"),
-        ("str_lower", "\u0130", "\u0130"),
-        ("str_upper", "\u00e9", "\u00e9"),
-        ("str_lower", "\u00c9", "\u00c9"),
+        ("upper", "\u00df", "\u00df"),
+        ("lower", "\u0130", "\u0130"),
+        ("upper", "\u00e9", "\u00e9"),
+        ("lower", "\u00c9", "\u00c9"),
         # REQ-1240: first scalar up, the rest down (ASCII-only).
-        ("str_sentence", "WEEK 8", "Week 8"),
-        ("str_sentence", "WeEk 8", "Week 8"),
-        ("str_sentence", "", ""),
-        ("str_sentence", "8-WEEK", "8-week"),
-        ("str_sentence", "a", "A"),
-        ("str_sentence", "\u00dfTRA\u00dfe", "\u00dftra\u00dfe"),
+        ("sentence", "WEEK 8", "Week 8"),
+        ("sentence", "WeEk 8", "Week 8"),
+        ("sentence", "", ""),
+        ("sentence", "8-WEEK", "8-week"),
+        ("sentence", "a", "A"),
+        ("sentence", "\u00dfTRA\u00dfe", "\u00dftra\u00dfe"),
         # REQ-1241: first ASCII letter of each [A-Za-z]+ run up, rest down.
-        ("str_title", "END OF TREATMENT", "End Of Treatment"),
-        ("str_title", "WEEK 8", "Week 8"),
-        ("str_title", "follow-up", "Follow-Up"),
-        ("str_title", "", ""),
-        ("str_title", "8-WEEK", "8-Week"),
-        ("str_title", "\u00e9COLE", "\u00e9Cole"),
+        ("title", "END OF TREATMENT", "End Of Treatment"),
+        ("title", "WEEK 8", "Week 8"),
+        ("title", "follow-up", "Follow-Up"),
+        ("title", "", ""),
+        ("title", "8-WEEK", "8-Week"),
+        ("title", "\u00e9COLE", "\u00e9Cole"),
     ],
 )
 def test_casing_is_the_ascii_substitution_and_nothing_else(
-    operation: str, value: str, expected: str
+    to: str, value: str, expected: str
 ) -> None:
     result = evaluate_expression(
-        {operation: {"source": "VALUE"}}, MappingResolver({"VALUE": value})
+        {"str_case": {"source": "VALUE", "to": to}},
+        MappingResolver({"VALUE": value}),
     )
 
     assert result == ValueResult(value=expected)
@@ -325,14 +326,20 @@ def test_ascii_casing_moves_only_the_ascii_letters_of_a_mixed_value() -> None:
     assert len(ascii_upper(mixed)) == len(mixed)
 
 
+CASES = ["upper", "lower", "sentence", "title"]
+
+
 @pytest.mark.parametrize(
-    "operation",
-    ["str_upper", "str_lower", "str_sentence", "str_title", "str_extract"],
+    ("operation", "fields"),
+    [
+        *(("str_case", {"to": to}) for to in CASES),
+        ("str_extract", {"pattern": "(.*)", "group": 1}),
+    ],
 )
-def test_a_missing_input_uses_the_declared_handler(operation: str) -> None:
-    payload: dict[str, object] = {"source": "VALUE", "missing": "UNKNOWN"}
-    if operation == "str_extract":
-        payload |= {"pattern": "(.*)", "group": 1}
+def test_a_missing_input_uses_the_declared_handler(
+    operation: str, fields: dict[str, object]
+) -> None:
+    payload: dict[str, object] = {"source": "VALUE", "missing": "UNKNOWN", **fields}
 
     result = evaluate_expression(
         {operation: payload}, MappingResolver({"VALUE": MISSING})
@@ -342,12 +349,15 @@ def test_a_missing_input_uses_the_declared_handler(operation: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "operation", ["str_upper", "str_lower", "str_sentence", "str_title", "str_template"]
+    ("operation", "payload"),
+    [
+        *(("str_case", {"source": "VALUE", "to": to}) for to in CASES),
+        ("str_template", {"template": "{VALUE}"}),
+    ],
 )
-def test_an_undeclared_missing_handler_is_fatal(operation: str) -> None:
-    payload: object = {"source": "VALUE"}
-    if operation == "str_template":
-        payload = {"template": "{VALUE}"}
+def test_an_undeclared_missing_handler_is_fatal(
+    operation: str, payload: dict[str, object]
+) -> None:
 
     result = evaluate_expression(
         {operation: payload}, MappingResolver({"VALUE": MISSING})
@@ -373,12 +383,11 @@ def test_an_unhandled_no_match_is_distinct_from_an_unhandled_missing() -> None:
     }
 
 
-@pytest.mark.parametrize("operation", ["str_upper", "str_lower"])
-def test_a_non_string_source_is_refused_rather_than_converted(
-    operation: str,
-) -> None:
+@pytest.mark.parametrize("to", CASES)
+def test_a_non_string_source_is_refused_rather_than_converted(to: str) -> None:
+    # REQ-0308 holds every case the same way, not just upper and lower.
     result = evaluate_expression(
-        {operation: {"source": "VALUE"}}, MappingResolver({"VALUE": 7})
+        {"str_case": {"source": "VALUE", "to": to}}, MappingResolver({"VALUE": 7})
     )
 
     assert isinstance(result, ConditionResult)
@@ -389,6 +398,21 @@ def test_a_non_string_source_is_refused_rather_than_converted(
         "expected": "str",
         "actual": "int",
     }
+
+
+@pytest.mark.parametrize("to", ["capitalize", "UPPER", None])
+def test_a_case_outside_the_four_names_is_refused(to: object) -> None:
+    payload: dict[str, object] = {"source": "VALUE"}
+    if to is not None:
+        payload["to"] = to
+
+    result = evaluate_expression(
+        {"str_case": payload}, MappingResolver({"VALUE": "abc"})
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "value_not_permitted"
+    assert result.condition.context["permitted"] == CASES
 
 
 @pytest.mark.parametrize(
@@ -490,7 +514,7 @@ def test_a_handler_inside_a_nested_source_is_observed_at_its_own_path() -> None:
         {
             "str_concat": {
                 "sources": [
-                    {"source": {"variable": "ABSENT", "missing": "NA"}},
+                    {"source": {"variable": "ABSENT", "absent": "NA"}},
                     {"literal": "!"},
                 ]
             }
@@ -501,7 +525,7 @@ def test_a_handler_inside_a_nested_source_is_observed_at_its_own_path() -> None:
     assert isinstance(result, ValueResult)
     assert result.value == "NA!"
     assert [(item.path, item.handler) for item in result.observations] == [
-        ("sources[0].source", "missing")
+        ("sources[0].source", "absent")
     ]
 
 

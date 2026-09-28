@@ -12,7 +12,6 @@ intermediates:
   - id: TEST
     dataset: TESTS
     key: VSTESTCD
-    strict: true
     verification:
       unique: [VSTESTCD]
 
@@ -174,7 +173,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: VSORRES}
-      missing: null
+      unconvertible: null
 
   - name: VSSTRESC
     type: str

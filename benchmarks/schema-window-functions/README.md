@@ -5,8 +5,9 @@
 
 **Goal:** compute visit-level measures with every window expression over
 one shared ordering: sequence numbering with a filter, competition and
-dense ranking, reading a neighboring row, the last non-missing value, the
-carried-forward value, and the baseline visit flag.
+dense ranking, reading a neighboring row with and without a filter, the
+last non-missing value, the carried-forward value, and the baseline visit
+flag.
 
 **Input:** `VS` carries one row per visit: subject, visit number
 (`VISITN`), visit date (`VSDTC`), treatment start date (`TRTSDT`), the
@@ -28,6 +29,10 @@ carried through unchanged.
   visit's. A missing result is not skipped: subject `01` visit 4 gets a
   missing previous result because visit 3's result is missing, just as
   a first visit does because nothing precedes it.
+- `EVALPREV` reads the previous evaluable visit's result. The visits
+  that are not evaluable are left out before stepping back, so subject
+  `01` visit 4 reads visit 2's result across visit 3, and a visit that
+  is not evaluable gets missing.
 - `LASTRES` is the closest strictly earlier non-missing result, crossing
   any number of consecutive gaps: subject `02` visit 4 reads the visit 1
   result across two missing visits. The current visit is never a
@@ -42,8 +47,9 @@ carried through unchanged.
   visit 2); a subject with no visit on or before treatment start
   (subject `04`) has no baseline.
 
-**Note:** only `VSSEQ` leaves out the visits that are not evaluable.
-Every other measure sees every visit, so a visit that is not evaluable
-is still ranked, read as a neighbor, and can be the baseline visit.
+**Note:** only `VSSEQ` and `EVALPREV` leave out the visits that are not
+evaluable. Every other measure sees every visit, so a visit that is not
+evaluable is still ranked, read as a neighbor, and can be the baseline
+visit.
 
 **Standard:** ADaM | **Domain:** ADVS

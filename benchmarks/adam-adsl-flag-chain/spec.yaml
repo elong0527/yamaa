@@ -27,7 +27,7 @@ columns:
       flag:
         condition: "TRTSDT IS NOT NULL"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"
 
   - name: RANDDT
     type: date
@@ -43,7 +43,7 @@ columns:
       flag:
         condition: "RANDDT IS NOT NULL"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"
 
   - name: ITTFL
     type: str
@@ -52,7 +52,7 @@ columns:
       flag:
         condition: "RANDFL = 'Y'"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"
 
   - name: POPFL
     type: str
@@ -61,7 +61,7 @@ columns:
       flag:
         condition: "SAFFL = 'Y' AND ITTFL = 'Y'"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"
 
   - name: STUDYID
     type: str

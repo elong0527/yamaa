@@ -19,7 +19,7 @@ from yamaa.specification.models import Expression, HandledExpression
 def test_failed_conversion_is_replaced_and_counted() -> None:
     declaration = HandledExpression(
         value=Expression(root={"source": "RAW.X"}),
-        missing=7,
+        unconvertible=7,
     )
     planned = PlannedDerivation(
         column="A",
@@ -43,8 +43,8 @@ def test_failed_conversion_is_replaced_and_counted() -> None:
     assert value == 7
     assert [count.model_dump() for count in counter.snapshot()] == [
         {
-            "spec_path": "columns.A.derivation.missing",
-            "handler": "missing",
+            "spec_path": "columns.A.derivation.unconvertible",
+            "handler": "unconvertible",
             "count": 1,
         }
     ]

@@ -1,7 +1,7 @@
 phase: validation
 condition: incompatible_input_type
 spec_paths:
-  - columns.SITE.derivation.str_title.source
+  - columns.SITE.derivation.str_case.source
 requirement: REQ-0308
 context:
   source: SITENUM

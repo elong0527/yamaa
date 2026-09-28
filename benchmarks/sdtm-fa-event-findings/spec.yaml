@@ -16,6 +16,7 @@ intermediates:
       SubjectKey: ODM.SubjectKey
       StudyEventOID: ODM.StudyEventOID
       StudyEventRepeatKey: ODM.StudyEventRepeatKey
+    no_match: null
 
 output:
   path: fa.csv

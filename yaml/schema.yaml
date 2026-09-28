@@ -129,14 +129,9 @@ intermediate_class:
         type: "list[identifier]"
         required: false
         description: See REQ-1048.
-    - missing:
+    - no_match:
         type: literal_value
         required: false
-        description: See REQ-1048.
-    - strict:
-        type: bool
-        required: false
-        default: false
         description: See REQ-1048.
     - derivations:
         type: "dict[identifier, derivation]"

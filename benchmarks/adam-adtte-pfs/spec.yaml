@@ -17,11 +17,13 @@ intermediates:
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: first
+    no_match: null
   - id: DEATH
     dataset: DS
     filter: "DS.DSDECOD = 'DEATH' AND DS.DSDTC IS NOT NULL"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
+    no_match: null
   - id: LASTASSESS
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"

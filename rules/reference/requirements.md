@@ -125,13 +125,12 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0120](../operations/lookup.md#req-0120) | `operations/lookup.md` | R003-10 |
 | [REQ-0121](../operations/lookup.md#req-0121) | `operations/lookup.md` | R003-11 |
 | [REQ-0122](../operations/lookup.md#req-0122) | `operations/lookup.md` | R003-12 |
-| [REQ-0123](../operations/lookup.md#req-0123) | `operations/lookup.md` | R003-13 |
 | [REQ-0124](../operations/lookup.md#req-0124) | `operations/lookup.md` | R003-14 |
 | [REQ-0125](../operations/lookup.md#req-0125) | `operations/lookup.md` | R003-15 |
 | [REQ-0126](../operations/lookup.md#req-0126) | `operations/lookup.md` | R003-16 |
 | [REQ-0127](../operations/lookup.md#req-0127) | `operations/lookup.md` | R003-17 |
 | [REQ-0128](../operations/lookup.md#req-0128) | `operations/lookup.md` | R003-18 |
-| [REQ-0129](../operations/lookup.md#req-0129) | `operations/lookup.md` | R003-19 |
+| [REQ-0129](../operations/lookup.md#req-0129) | `operations/lookup.md` | R003-19, R003-13 |
 | [REQ-0130](../operations/lookup.md#req-0130) | `operations/lookup.md` | R003-20 |
 | [REQ-0131](../operations/lookup.md#req-0131) | `operations/lookup.md` | R003-21 |
 | [REQ-0132](../operations/lookup.md#req-0132) | `operations/lookup.md` | R003-22 |
@@ -912,8 +911,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0939](../submission/terminology.md#req-0939) | `submission/terminology.md` | R025-14 |
 | [REQ-0940](../submission/terminology.md#req-0940) | `submission/terminology.md` | R025-15 |
 | [REQ-0941](../submission/terminology.md#req-0941) | `submission/terminology.md` | R025-16 |
-| [REQ-0942](../submission/terminology.md#req-0942) | `submission/terminology.md` | R025-17 |
-| [REQ-0943](../submission/terminology.md#req-0943) | `submission/terminology.md` | R025-18 |
+| [REQ-0942](../submission/terminology.md#req-0942) | `submission/terminology.md` | R025-17, R025-18 |
 | [REQ-0944](../submission/terminology.md#req-0944) | `submission/terminology.md` | R025-19 |
 | [REQ-0945](../submission/terminology.md#req-0945) | `submission/terminology.md` | R025-20 |
 | [REQ-0946](../submission/terminology.md#req-0946) | `submission/terminology.md` | R025-21 |
@@ -1082,7 +1080,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1112](../operations/text.md#req-1112) | `operations/text.md` | Schema prose |
 | [REQ-1113](../operations/text.md#req-1113) | `operations/text.md` | Schema prose |
 | [REQ-1114](../operations/text.md#req-1114) | `operations/text.md` | Schema prose |
-| [REQ-1115](../operations/text.md#req-1115) | `operations/text.md` | Schema prose |
 | [REQ-1116](../operations/text.md#req-1116) | `operations/text.md` | Schema prose |
 | [REQ-1117](../operations/text.md#req-1117) | `operations/text.md` | Schema prose |
 | [REQ-1118](../operations/computation.md#req-1118) | `operations/computation.md` | Schema prose |

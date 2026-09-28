@@ -19,9 +19,10 @@ unless its behavior says otherwise:
 
 | Stage | Local declaration | Behavior |
 |---|---|---|
-| bind | `source.missing` | Absent source variable or ODM item |
+| bind | `source.absent` | Absent source variable or ODM item |
 | join | `source.multiple_matches` | Choose one `source.filter` result |
-| mapping | `missing` | Missing input; also covers a non-missing value with no mapping when `unmapped` is absent and `strict` is not true |
+| join | `intermediates[].no_match` | The intermediate selects no record ([REQ-0129](../operations/lookup.md#req-0129)) |
+| mapping | `missing` | Missing input |
 | mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
 | extract | `missing` | Missing string input |
@@ -29,7 +30,7 @@ unless its behavior says otherwise:
 | template | `missing` | Any placeholder value is missing |
 | impute | `date_impute.missing`, `date_precision.missing`, `datetime_impute.missing`, `datetime_precision.missing` | See [Temporal values](../values/temporal.md) |
 | impute | `date_impute.invalid`, `date_precision.invalid`, `datetime_impute.invalid`, `datetime_precision.invalid` | See [Temporal values](../values/temporal.md) |
-| convert | `missing` | Failed output conversion |
+| convert | `unconvertible` | Failed output conversion |
 
 <a id="req-0343"></a>
 
@@ -39,31 +40,33 @@ handler value is a literal.
 <a id="req-0344"></a>
 
 **REQ-0344.** Omitting an applicable handler field makes its condition
-fatal, except where the owning rule gives the omission a `strict: false`
-default; there `strict: true` restores the fatal behavior.
+fatal at every site. A handler written as `null` answers with missing. A
+condition that registers no handler is answered by its owning rule: an
+implicit join that finds no record yields missing under
+[REQ-0111](../operations/lookup.md#req-0111).
 
-### What `missing` means, by stage
+### What `missing` and `absent` mean
 
 <a id="req-0345"></a>
 
-**REQ-0345.** `missing` names two related conditions, distinguished by
-where it is declared. On a `source` binding, it applies when the
-variable or ODM item **does not exist in context**. It does not apply
-when the variable exists and holds a missing value.
+**REQ-0345.** `absent` on a `source` binding applies when the variable or
+ODM item **does not exist in context**. It does not apply when the
+variable exists and holds a missing value.
 
 <a id="req-0346"></a>
 
-**REQ-0346.** On every other expression, `missing` applies when the named
-**input value is missing**. On `mapping` it additionally applies when a
-non-missing input has no dictionary entry, no `unmapped` handler is
-declared, and `strict` is not true; see [REQ-1110](../operations/text.md#req-1110).
+**REQ-0346.** `missing` applies when the named **input value is missing**,
+on every expression that declares it. On `mapping` it never answers a
+non-missing input with no dictionary entry; that is `unmapped`'s
+condition ([REQ-1110](../operations/text.md#req-1110)).
 
 ### Present but unusable
 
 <a id="req-0347"></a>
 
-**REQ-0347.** `no_match`, `invalid`, and `unmapped` fire only when every
-input is present.
+**REQ-0347.** `invalid`, `unmapped`, and `str_extract`'s `no_match` fire
+only when every input is present. An intermediate's `no_match` also answers
+a missing match value ([REQ-0131](../operations/lookup.md#req-0131)).
 
 <a id="req-0348"></a>
 
@@ -79,7 +82,7 @@ invalid conditions. Thus, all four use `impute` in structured errors.
 
 <a id="req-0350"></a>
 
-**REQ-0350.** Where an operation has several inputs, such as `lookup`,
+**REQ-0350.** Where an operation has several inputs, such as `str_concat`,
 `missing` fires when any input is missing ([REQ-0347](handlers.md#req-0347)
 states the present-but-unusable condition).
 
@@ -94,7 +97,7 @@ when handling is required:
 ```yaml
 source:
   variable: RAW.AGE
-  missing: null
+  absent: null
 ```
 
 <a id="req-0352"></a>
@@ -147,11 +150,11 @@ expression in `value`.
 
 <a id="req-0359"></a>
 
-**REQ-0359.** `missing` on a result wrapper supplies a literal replacement only
-when conversion to the declared column type fails. Convert the replacement
-to that same column type. [Types and conversion](../values/types.md) defines which
+**REQ-0359.** `unconvertible` on a result wrapper supplies a literal
+replacement only when conversion to the declared column type fails. Convert
+the replacement to that same column type. [Types and conversion](../values/types.md) defines which
 conversions fail and states that a missing input is not converted at
-all, so `missing` never fires for one.
+all, so `unconvertible` never fires for one.
 
 ### Dependencies and audit
 
@@ -168,8 +171,8 @@ A handler firing zero times is reportable and is not an error.
 
 <a id="req-0334"></a>
 
-**REQ-0334.** An unhandled local missing, mapping, or extraction condition:
-fail under [Local handlers](handlers.md).
+**REQ-0334.** An unhandled local absent, missing, mapping, or extraction
+condition: fail under [Local handlers](handlers.md).
 
 <a id="req-0362"></a>
 
@@ -178,8 +181,8 @@ schema failure.
 
 <a id="req-0363"></a>
 
-**REQ-0363.** A result wrapper with no `missing` and without `strict: true`:
-a failed output conversion is fatal under [Execution lifecycle](lifecycle.md).
+**REQ-0363.** A result wrapper with no `unconvertible`: a failed output
+conversion is fatal under [Execution lifecycle](lifecycle.md).
 
 <a id="req-0364"></a>
 

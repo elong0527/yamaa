@@ -7,25 +7,30 @@
 visit with the value collected there, or carry forward the latest
 earlier collected value for the same subject and parameter.
 
-**Input:** planned vital-sign assessments, one record for each subject,
+**Input:** planned vital-sign assessments, one record per subject,
 parameter, and planned visit number (`AVISITN`), each holding a
 collected value or a gap.
 
 **Variables:**
 
 - `AVAL` would be the value collected at the visit when there is one,
-  otherwise the closest earlier collected value for the same subject
+  otherwise the latest earlier collected value for the same subject
   and parameter, and blank when no earlier value exists. Zero is a
-  collected value, not a gap. Nothing says which visits count as
-  earlier, so the run is rejected before any data is read and no
-  artifact is accepted.
+  collected value, not a gap.
+
+The input covers the cases that matter: a leading gap at visit 0, a
+trailing gap after the last collected value, a collected zero that
+must not be confused with a gap, and a parameter collected nowhere.
+But carrying a value forward needs an order that says which visits
+count as earlier, and the window names none, so the run is rejected
+before any data is read and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 
-Specify the clinical order in which an earlier assessment is selected, here
-the planned visit number:
+Name the assessment order in the window, here the planned visit
+number:
 
 ```yaml
 locf:

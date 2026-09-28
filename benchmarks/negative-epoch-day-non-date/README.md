@@ -40,7 +40,7 @@ conversion, and count from that column:
   derivation:
     value:
       source: EX.EXSTDT
-    missing: null
+    unconvertible: null
 
 - name: EXSTDY
   type: int

@@ -309,7 +309,7 @@ def test_derive_binding_enum_args_are_not_variables(tmp_path) -> None:
     ]
 
 
-def test_derive_missing_handler_supplies_fallback(tmp_path) -> None:
+def test_derive_unconvertible_handler_supplies_fallback(tmp_path) -> None:
     """A binding conversion failure falls back to the declared handler value."""
     result = _run_inline(
         tmp_path,
@@ -318,7 +318,7 @@ def test_derive_missing_handler_supplies_fallback(tmp_path) -> None:
         "  derivation:\n"
         "    value:\n"
         "      source: QS.QSORRES\n"
-        "    missing: 0",
+        "    unconvertible: 0",
         csv_text=_INLINE_QS_WITH_TEXT,
     )
 

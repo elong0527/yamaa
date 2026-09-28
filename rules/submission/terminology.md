@@ -128,15 +128,6 @@ constraint that never fires.
 two value sets must be equal: same values, no more and no fewer, compared
 under the equality [REQ-0935](terminology.md#req-0935) uses. A difference is rejected.
 
-<a id="req-0943"></a>
-
-**REQ-0943.** Equality is required rather than containment in either
-direction. A specification listing fewer values than its terminology asserts a
-narrowing that the document does not report, and a specification listing
-more asserts values the terminology does not admit. Either way the document
-and the run would state different things about the same column, which is the
-failure this requirement exists to prevent.
-
 <a id="req-0944"></a>
 
 **REQ-0944.** Binding an extensible or `external` codelist beside an
@@ -157,9 +148,7 @@ terminology.
 
 **REQ-0946.** Every codelist the study document declares must be named by at
 least one binding among the datasets the study document represents. An
-unreferenced codelist is rejected rather than emitted. The codelist
-would put terminology into a submission that no column carries. The
-usual cause is a binding that misspells its identifier.
+unreferenced codelist is rejected rather than emitted.
 
 ### Study-inventory vocabulary
 

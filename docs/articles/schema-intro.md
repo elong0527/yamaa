@@ -44,8 +44,8 @@ write them in a specification.
   `predicate` to constrain what each field may hold.
 - **A derivation says how a value is produced. An expression is the one
   registered keyword that produces it.** A derivation is an expression
-  plus what happens when it goes wrong (`missing`, `strict`,
-  ...). An expression is a mapping with exactly
+  plus what happens when its value cannot take the column type
+  (`unconvertible`). An expression is a mapping with exactly
   one entry: the key is the registered verb, the value is its
   parameters.
 - **A registry is the list of permitted verbs.** Adding a verb costs one
@@ -61,7 +61,7 @@ family:
 |---|---|---|
 | Core selection | `schema_expression_core.yaml` | `source`, `literal`, `first_available`, `case` |
 | Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
-| Strings | `schema_expression_str.yaml` | `str_extract`, `str_concat`, `str_template`, `str_upper`, `str_lower`, `str_sentence`, `str_title` |
+| Strings | `schema_expression_str.yaml` | `str_extract`, `str_concat`, `str_template`, `str_case` |
 | Arithmetic | `schema_expression_numeric.yaml` | `compute`, `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
 | Dates | `schema_expression_date.yaml` | `date_diff`, `study_day`, `date_impute`, `date_precision` |

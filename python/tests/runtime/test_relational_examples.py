@@ -264,15 +264,17 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [EX.EXSEQ]
     keep: last
+    no_match: null
   - id: REF_LOOKUP
     dataset: REF
     key: [PARAMCD, SEX]
-    missing: null
+    no_match: null
   - id: EX_LOOKUP
     dataset: EX
     key: [STUDYID, USUBJID]
     order_by: [EX.EXSEQ]
     keep: first
+    no_match: null
 
 output:
   path: adlb.csv
@@ -414,7 +416,7 @@ def test_that_study_reports_the_selection_handler_only_where_it_chose(
         counts[("columns.TRT.derivation.source.multiple_matches", "multiple_matches")]
         == 3
     )
-    assert counts[("columns.ANRHI.derivation.source.missing", "missing")] == 1
+    assert counts[("columns.ANRHI.derivation.source.no_match", "no_match")] == 1
 
 
 def test_that_study_is_reproduced_exactly_on_a_second_run(
@@ -446,6 +448,7 @@ intermediates:
     dataset: EPOCHS
     key: [STUDYID]
     between: {value: ADY, lower: LO, upper: HI}
+    no_match: null
 
 output:
   path: advs.csv
@@ -542,8 +545,8 @@ def test_range_narrowing_and_a_coarser_grain_reach_their_own_records(
 def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
     range_study: Path,
 ) -> None:
-    # REQ-0124: a missing current-row value leaves the lookup with nothing to
-    # match, so the absent policy (default missing) answers without narrowing.
+    # REQ-0131: a missing current-row value leaves the lookup with nothing to
+    # match, so the declared `no_match` answers without narrowing.
     (range_study / "input/vs.csv").write_text(
         "STUDYID,USUBJID,VSSEQ,ADY,AVAL\nS1,P1,1,,120\n", encoding="utf-8"
     )

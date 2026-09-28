@@ -72,7 +72,6 @@ columns:
         dict:
           SCREENING: 1
           BASELINE: 2
-        strict: true
 
   - name: EVENTREPEAT
     type: int

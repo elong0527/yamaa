@@ -167,14 +167,12 @@ class Intermediate(_StrictModel):
     columns: list[str] | None = None
     derivations: dict[str, HandledExpression] | None = None
     verification: IntermediateVerification | None = None
-    missing: JsonValue = None
-    strict: bool = False
+    no_match: JsonValue = None
 
 
 class HandledExpression(_StrictModel):
     value: Expression
-    missing: JsonValue = None
-    strict: bool = False
+    unconvertible: JsonValue = None
 
 
 class PageReference(_StrictModel):

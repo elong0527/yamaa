@@ -322,7 +322,7 @@ the [local-handlers contract](../yaml/rules/execution/handlers.md):
 | Phase | Rejects |
 |---|---|
 | `bind` | an absent source variable or ODM item |
-| `join` | an unresolved multiple match |
+| `join` | an unresolved multiple match, or an intermediate that selects no record |
 | `mapping` | a missing or unmapped lookup input |
 | `cut` | a missing numeric classification input |
 | `extract` | a missing string or unmatched pattern |

@@ -16,6 +16,7 @@ intermediates:
   - id: GROWTH
     dataset: LMS
     key: {PARAMCD: ADVS_RAW.PARAMCD, SEX: ADVS_RAW.SEX, AGE: ADVS_RAW.AGE}
+    no_match: null
 
 output:
   path: advs.csv

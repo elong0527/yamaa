@@ -204,6 +204,27 @@
   padding: 2px;
 }
 
+/* title-slide logo after the subtitle; hidden until moved into #title-slide */
+img.title-logo {
+  display: none;
+}
+#title-slide img.title-logo {
+  display: block;
+  /* height matches two lines of the title (see #title-slide .title) */
+  height: calc(2 * 2.75rem);
+  width: auto;
+  margin: 0.9rem auto 0;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.4rem;
+}
+
+/* centered one-line formula, e.g. output_dataset = derive(...) */
+.formula {
+  text-align: center;
+  margin: 0.8rem 0;
+}
+
 /* larger footnote text, e.g. under embedded dashboards */
 .footnote {
   color: var(--yamaa-muted);

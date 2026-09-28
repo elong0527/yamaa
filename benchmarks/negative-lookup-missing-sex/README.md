@@ -26,16 +26,17 @@ accepted.
 ## How to fix
 
 Recover the missing sex when possible. If an incomplete lookup key is
-intended to leave the upper limit missing, omit `strict:`; a result with a
-blank sex then gets a missing `LBSTNRHI`:
+intended to leave the upper limit missing, declare `no_match: null`; a result
+with a blank sex then gets a missing `LBSTNRHI`:
 
 ```yaml
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
+    no_match: null
 ```
 
 An incomplete key and a complete key the table does not contain share one
-absence policy (REQ-0129, REQ-0131): both yield nothing, and `strict:`
-decides whether that fails or answers `missing:`.
+absence policy (REQ-0129, REQ-0131): both yield nothing, and `no_match`
+decides whether that fails or answers with a value.

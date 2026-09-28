@@ -974,7 +974,7 @@ sources:
   R025-15: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0940"]}
   R025-16: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0941"]}
   R025-17: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0942"]}
-  R025-18: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0943"]}
+  R025-18: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0942"]}
   R025-19: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0944"]}
   R025-20: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0945"]}
   R025-21: {"file": "R025-controlled-terminology.md", "targets": ["REQ-0946"]}
@@ -1196,13 +1196,13 @@ requirements:
   REQ-0120: {"file": "operations/lookup.md", "sources": ["R003-10"]}
   REQ-0121: {"file": "operations/lookup.md", "sources": ["R003-11"]}
   REQ-0122: {"file": "operations/lookup.md", "sources": ["R003-12"]}
-  REQ-0123: {"file": "operations/lookup.md", "sources": ["R003-13"]}
+  REQ-0123: {"file": "operations/lookup.md", "sources": ["R003-13"], "retired": true, "replacement": ["REQ-0129"]}
   REQ-0124: {"file": "operations/lookup.md", "sources": ["R003-14"]}
   REQ-0125: {"file": "operations/lookup.md", "sources": ["R003-15"]}
   REQ-0126: {"file": "operations/lookup.md", "sources": ["R003-16"]}
   REQ-0127: {"file": "operations/lookup.md", "sources": ["R003-17"]}
   REQ-0128: {"file": "operations/lookup.md", "sources": ["R003-18"]}
-  REQ-0129: {"file": "operations/lookup.md", "sources": ["R003-19"]}
+  REQ-0129: {"file": "operations/lookup.md", "sources": ["R003-19", "yamaa:issue-1318:intermediate-no-match"]}
   REQ-0130: {"file": "operations/lookup.md", "sources": ["R003-20"]}
   REQ-0131: {"file": "operations/lookup.md", "sources": ["R003-21"]}
   REQ-0132: {"file": "operations/lookup.md", "sources": ["R003-22"]}
@@ -1412,9 +1412,9 @@ requirements:
   REQ-0339: {"file": "operations/expressions.md", "sources": ["R007-54"]}
   REQ-0340: {"file": "operations/windows.md", "sources": ["R007-55"]}
   REQ-0341: {"file": "operations/windows.md", "sources": ["R007-56"]}
-  REQ-0342: {"file": "execution/handlers.md", "sources": ["R008-1"]}
+  REQ-0342: {"file": "execution/handlers.md", "sources": ["R008-1", "yamaa:issue-1317:one-name-per-condition"]}
   REQ-0343: {"file": "execution/handlers.md", "sources": ["R008-2"]}
-  REQ-0344: {"file": "execution/handlers.md", "sources": ["R008-3"]}
+  REQ-0344: {"file": "execution/handlers.md", "sources": ["R008-3", "yamaa:issue-1318:omitted-handler-fatal"]}
   REQ-0345: {"file": "execution/handlers.md", "sources": ["R008-4"]}
   REQ-0346: {"file": "execution/handlers.md", "sources": ["R008-5"]}
   REQ-0347: {"file": "execution/handlers.md", "sources": ["R008-6"]}
@@ -2008,8 +2008,8 @@ requirements:
   REQ-0939: {"file": "submission/terminology.md", "sources": ["R025-14"]}
   REQ-0940: {"file": "submission/terminology.md", "sources": ["R025-15"]}
   REQ-0941: {"file": "submission/terminology.md", "sources": ["R025-16"]}
-  REQ-0942: {"file": "submission/terminology.md", "sources": ["R025-17"]}
-  REQ-0943: {"file": "submission/terminology.md", "sources": ["R025-18"]}
+  REQ-0942: {"file": "submission/terminology.md", "sources": ["R025-17", "R025-18"]}
+  REQ-0943: {"file": "submission/terminology.md", "sources": ["R025-18"], "retired": true, "replacement": ["REQ-0942"]}
   REQ-0944: {"file": "submission/terminology.md", "sources": ["R025-19"]}
   REQ-0945: {"file": "submission/terminology.md", "sources": ["R025-20"]}
   REQ-0946: {"file": "submission/terminology.md", "sources": ["R025-21"]}
@@ -2114,10 +2114,10 @@ requirements:
   REQ-1045: {"file": "specification/structure.md", "sources": ["schema.yaml:comment:3"]}
   REQ-1046: {"file": "specification/structure.md", "sources": ["schema_shared.yaml:identifier.description"]}
   REQ-1047: {"file": "storage/publication.md", "sources": ["schema.yaml:output_class.path.description", "schema.yaml:output_class.decimals.description", "schema.yaml:output_class.columns.description", "schema.yaml:output_class.warning_log.description", "schema.yaml:output_class.verification_log.description", "schema.yaml:output_class.order_by.description"]}
-  REQ-1048: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.id.description", "schema.yaml:intermediate_class.dataset.description", "schema.yaml:intermediate_class.key.description", "schema.yaml:intermediate_class.key_base.description", "schema.yaml:intermediate_class.between.description", "schema.yaml:intermediate_class.filter.description", "schema.yaml:intermediate_class.order_by.description", "schema.yaml:intermediate_class.keep.description", "schema.yaml:intermediate_class.columns.description", "schema.yaml:intermediate_class.missing.description", "schema.yaml:intermediate_class.strict.description"]}
+  REQ-1048: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.id.description", "schema.yaml:intermediate_class.dataset.description", "schema.yaml:intermediate_class.key.description", "schema.yaml:intermediate_class.key_base.description", "schema.yaml:intermediate_class.between.description", "schema.yaml:intermediate_class.filter.description", "schema.yaml:intermediate_class.order_by.description", "schema.yaml:intermediate_class.keep.description", "schema.yaml:intermediate_class.columns.description", "schema.yaml:intermediate_class.missing.description", "schema.yaml:intermediate_class.no_match.description"]}
   REQ-1049: {"file": "operations/lookup.md", "sources": ["schema.yaml:record_between_class.value.description", "schema.yaml:record_between_class.lower.description", "schema.yaml:record_between_class.upper.description", "schema.yaml:intermediate_between_class.value.description", "schema.yaml:intermediate_between_class.lower.description", "schema.yaml:intermediate_between_class.upper.description", "yamaa:issue-1321:record-between"]}
   REQ-1050: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_id.description"]}
-  REQ-1051: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:source_binding_class.variable.description", "schema_expression_core.yaml:source_binding_class.filter.description", "schema_expression_core.yaml:source_binding_class.missing.description", "schema_expression_core.yaml:source_binding_class.order_by.description", "schema_expression_core.yaml:source_binding_class.keep.description", "schema_expression_core.yaml:source_binding_class.multiple_matches.description"]}
+  REQ-1051: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:source_binding_class.variable.description", "schema_expression_core.yaml:source_binding_class.filter.description", "schema_expression_core.yaml:source_binding_class.missing.description", "schema_expression_core.yaml:source_binding_class.absent.description", "schema_expression_core.yaml:source_binding_class.order_by.description", "schema_expression_core.yaml:source_binding_class.keep.description", "schema_expression_core.yaml:source_binding_class.multiple_matches.description"]}
   REQ-1052: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:filtered_source.description"]}
   REQ-1053: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:filtered_source_class.variable.description", "schema_expression_core.yaml:filtered_source_class.filter.description"]}
   REQ-1054: {"file": "operations/lookup.md", "sources": ["schema_expression_core.yaml:multiple_matches_class.order_by.description", "schema_expression_core.yaml:multiple_matches_class.keep.description"], "retired": true, "replacement": ["REQ-1051"]}
@@ -2175,12 +2175,12 @@ requirements:
   REQ-1107: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:expressions.to_date.source.description", "schema_expression_date.yaml:comment:98"]}
   REQ-1108: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:expressions.study_day.date.description", "schema_expression_date.yaml:expressions.study_day.reference.description", "schema_expression_date.yaml:comment:105"]}
   REQ-1109: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:day_rule.description"]}
-  REQ-1110: {"file": "operations/text.md", "sources": ["schema_expression_mapping.yaml:expressions.mapping.source.description", "schema_expression_mapping.yaml:expressions.mapping.dict.description", "yamaa:issue-1373:dict-path", "schema_expression_mapping.yaml:expressions.mapping.case_sensitive.description", "schema_expression_mapping.yaml:expressions.mapping.missing.description", "schema_expression_mapping.yaml:expressions.mapping.unmapped.description", "schema_expression_mapping.yaml:expressions.mapping.strict.description", "schema_expression_mapping.yaml:comment:4"]}
+  REQ-1110: {"file": "operations/text.md", "sources": ["schema_expression_mapping.yaml:expressions.mapping.source.description", "schema_expression_mapping.yaml:expressions.mapping.dict.description", "yamaa:issue-1373:dict-path", "schema_expression_mapping.yaml:expressions.mapping.case_sensitive.description", "schema_expression_mapping.yaml:expressions.mapping.missing.description", "schema_expression_mapping.yaml:expressions.mapping.unmapped.description", "schema_expression_mapping.yaml:comment:4", "yamaa:issue-1318:mapping-handlers"]}
   REQ-1111: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_extract.source.description", "schema_expression_str.yaml:expressions.str_extract.pattern.description", "schema_expression_str.yaml:expressions.str_extract.group.description", "schema_expression_str.yaml:expressions.str_extract.missing.description", "schema_expression_str.yaml:expressions.str_extract.no_match.description", "schema_expression_str.yaml:comment:4"]}
   REQ-1112: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_concat.sources.description", "schema_expression_str.yaml:expressions.str_concat.missing.description", "schema_expression_str.yaml:comment:23"]}
   REQ-1113: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_template.description", "schema_expression_str.yaml:comment:31"]}
-  REQ-1114: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_upper.source.description", "schema_expression_str.yaml:expressions.str_upper.missing.description", "schema_expression_str.yaml:comment:34"]}
-  REQ-1115: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_lower.source.description", "schema_expression_str.yaml:expressions.str_lower.missing.description", "schema_expression_str.yaml:comment:42"]}
+  REQ-1114: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_upper.source.description", "schema_expression_str.yaml:expressions.str_upper.missing.description", "schema_expression_str.yaml:comment:34", "yamaa:issue-1322:str-case", "schema_expression_str.yaml:expressions.str_case.source.description", "schema_expression_str.yaml:expressions.str_case.to.description", "schema_expression_str.yaml:expressions.str_case.missing.description"]}
+  REQ-1115: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_lower.source.description", "schema_expression_str.yaml:expressions.str_lower.missing.description", "schema_expression_str.yaml:comment:42"], "retired": true, "replacement": ["REQ-1114"]}
   REQ-1116: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:string_template.description"]}
   REQ-1117: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:str_template_class.template.description", "schema_expression_str.yaml:str_template_class.missing.description"]}
   REQ-1118: {"file": "operations/computation.md", "sources": ["schema_expression_mapping.yaml:expressions.cut.source.description", "schema_expression_mapping.yaml:expressions.cut.breaks.description", "schema_expression_mapping.yaml:expressions.cut.labels.description", "schema_expression_mapping.yaml:expressions.cut.right.description", "schema_expression_mapping.yaml:expressions.cut.missing.description", "schema_expression_mapping.yaml:comment:73"]}
@@ -2323,7 +2323,7 @@ requirements:
   REQ-1232: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-failed"]}
   REQ-1233: {"file": "storage/publication.md", "sources": ["yamaa:issue-494:dataset-json-not-an-artifact-profile"]}
   REQ-1256: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:expressions.flag.description", "schema_expression_core.yaml:flag_class.condition.description", "schema_expression_core.yaml:flag_class.true_value.description", "yamaa:issue-881:flag-shorthand"]}
-  REQ-1257: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:flag_class.false_value.description", "schema_expression_core.yaml:flag_class.missing_value.description", "yamaa:issue-881:flag-semantics"]}
+  REQ-1257: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:flag_class.false_value.description", "schema_expression_core.yaml:flag_class.missing_value.description", "yamaa:issue-881:flag-semantics", "schema_expression_core.yaml:flag_class.missing.description"]}
   REQ-1258: {"file": "operations/expressions.md", "sources": ["yamaa:issue-881:flag-missing-value-required"]}
   REQ-1259: {"file": "operations/lookup.md", "sources": ["schema.yaml:key_base_entry.description", "yamaa:issue-994:key-base-expressions", "schema.yaml:match_value.description"]}
 schema_prose:
@@ -2355,7 +2355,6 @@ schema_prose:
   - {"source": "schema.yaml:intermediate_class.keep.description", "text": "Ordered record to retain; declared with order_by.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
   - {"source": "schema.yaml:intermediate_class.columns.description", "text": "Dataset columns the lookup may read; defaults to every dataset column.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
   - {"source": "schema.yaml:intermediate_class.missing.description", "text": "Value returned when the lookup yields nothing; defaults to missing.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
-  - {"source": "schema.yaml:intermediate_class.strict.description", "text": "Fail when the lookup yields nothing.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
   - {"source": "schema.yaml:intermediate_between_class.value.description", "text": "Value read from the current row.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1049"}
   - {"source": "schema.yaml:intermediate_between_class.lower.description", "text": "Dataset column whose value is an inclusive lower bound.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1049"}
   - {"source": "schema.yaml:intermediate_between_class.upper.description", "text": "Dataset column whose value is an inclusive upper bound.", "owner": "operations/lookup", "group": "intermediate_between_class", "target": "REQ-1049"}
@@ -2681,7 +2680,6 @@ provenance_addenda:
   - {"source": "yamaa:issue-629:root-filter-conflict", "text": "A root filter declared together with rows fails; the lifted filter and explicit row templates cannot both drive row construction.", "owner": "execution/rows", "group": "root_filter", "target": "REQ-1171"}
   - {"source": "schema.yaml:root_class.filter.description", "text": "Predicate selecting base input records for row construction when rows is absent; the filter-only row template lifted to root.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema_expression_core.yaml:expressions.first_available.missing.description", "text": "See REQ-1095 in rules/operations/expressions.md.", "owner": "operations/expressions", "group": "expressions.first_available", "target": "REQ-1095"}
-  - {"source": "schema_expression_mapping.yaml:expressions.mapping.strict.description", "text": "See REQ-1110 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
   - {"source": "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.source.description", "text": "Numeric variable to round with ties half away from zero.", "owner": "operations/computation", "group": "round_half_away_from_zero", "target": "REQ-1172"}
   - {"source": "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.digits.description", "text": "Integer decimal places; negative rounds left of the decimal point.", "owner": "operations/computation", "group": "round_half_away_from_zero", "target": "REQ-1172"}
   - {"source": "schema.yaml:output_class.verification_log.description", "text": "See REQ-1047 in rules/storage/publication.md.", "owner": "storage/publication", "group": "output_class", "target": "REQ-1047"}
@@ -2820,3 +2818,14 @@ provenance_addenda:
   - {"source": "yamaa:issue-1369:intermediate-reads-intermediate", "text": "Issue #1369: an intermediate derivation may read another input-backed named intermediate, matched against the donor record being augmented, so a supplemental qualifier can feed a window over the donor records.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1263"}
   - {"source": "yamaa:issue-1316:lazy-intermediate-match", "text": "Issue #1316: a named lookup matches only when read; an intermediate no column reads for a row is never matched, and a strict lookup never fails on an unread row.", "owner": "operations/lookup", "group": "lazy-intermediate-match", "target": "REQ-1264"}
   - {"source": "yamaa:issue-1373:dict-path", "text": "Issue #1373: one `dict` field takes the mapping dictionary inline or as a project path read during workflow planning; `dict_yaml` is retired.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
+  - {"source": "schema.yaml:intermediate_class.no_match.description", "text": "See REQ-1048 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1048"}
+  - {"source": "schema_expression_core.yaml:source_binding_class.absent.description", "text": "See REQ-1051 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "source_binding_class", "target": "REQ-1051"}
+  - {"source": "schema_expression_core.yaml:flag_class.missing.description", "text": "See REQ-1257 in rules/operations/expressions.md.", "owner": "operations/expressions", "group": "flag_class", "target": "REQ-1257"}
+  - {"source": "yamaa:issue-1317:one-name-per-condition", "text": "Issue #1317: each handler condition has its own field name. missing answers only a missing input; a source binding answers an absent variable with absent, an intermediate answers selecting no record with no_match, a result wrapper answers failed conversion with unconvertible, and flag spells its unknown value missing.", "owner": "execution/handlers", "group": "handler-names", "target": "REQ-0342"}
+  - {"source": "yamaa:issue-1318:omitted-handler-fatal", "text": "Issue #1318: strict is removed; omitting an applicable handler makes its condition fatal at every site, with no strict: false default.", "owner": "execution/handlers", "group": "omitted-handler-fatal", "target": "REQ-0344"}
+  - {"source": "yamaa:issue-1318:intermediate-no-match", "text": "Issue #1318: an intermediate that selects no record fails as unmatched_key unless it declares no_match; a lenient answer is written as no_match: null.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-0129"}
+  - {"source": "yamaa:issue-1318:mapping-handlers", "text": "Issue #1318: mapping answers a missing input only with missing and an unmapped value only with unmapped; either omitted is fatal, and missing no longer covers an unmapped value.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
+  - {"source": "yamaa:issue-1322:str-case", "text": "Issue #1322: str_upper, str_lower, str_sentence and str_title merge into one str_case whose required `to` names the case; str_lower's field table folds into REQ-1114.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
+  - {"source": "schema_expression_str.yaml:expressions.str_case.source.description", "text": "See REQ-1114 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
+  - {"source": "schema_expression_str.yaml:expressions.str_case.to.description", "text": "See REQ-1114 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
+  - {"source": "schema_expression_str.yaml:expressions.str_case.missing.description", "text": "See REQ-1114 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}

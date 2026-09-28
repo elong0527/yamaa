@@ -16,6 +16,7 @@ intermediates:
   - id: KITMAP
     dataset: KITLIST
     key: [KIT]
+    no_match: null
   # Body weight is collected on the VS form at the same visit. The lookup
   # is keyed at the visit level; the weight item filter is what makes the
   # long-form ODM key unique (the HEIGHT item on the same form is ignored).
@@ -68,6 +69,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.TABLETS'"
+    no_match: null
   - id: EC_STRENGTHMG
     dataset: ODM
     key:
@@ -77,6 +79,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.STRENGTHMG'"
+    no_match: null
   - id: EC_DOSEMKG
     dataset: ODM
     key:
@@ -86,6 +89,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.DOSEMKG'"
+    no_match: null
   - id: EC_AUCTARGET
     dataset: ODM
     key:
@@ -95,6 +99,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.AUCTARGET'"
+    no_match: null
   - id: EC_KIT
     dataset: ODM
     key:
@@ -104,6 +109,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.KIT'"
+    no_match: null
   - id: EC_ECSTDTC
     dataset: ODM
     key:

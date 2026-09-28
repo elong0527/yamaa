@@ -14,11 +14,13 @@ intermediates:
     filter: "DS.DSDECOD = 'DEATH' AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC]
     keep: last
+    no_match: null
   - id: DTHAE
     dataset: AE
     filter: "AE.AEOUT = 'FATAL' AND AE.AEENDTC IS NOT NULL"
     order_by: [AE.AEENDTC]
     keep: last
+    no_match: null
 
 output:
   path: dm.csv

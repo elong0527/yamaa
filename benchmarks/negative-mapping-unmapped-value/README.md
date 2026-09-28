@@ -34,7 +34,6 @@ mapping:
     SD: STABLE DISEASE
     PD: PROGRESSIVE DISEASE
     NE: NOT EVALUABLE
-  strict: true
 ```
 
 If an unknown response should instead produce a missing result, state that

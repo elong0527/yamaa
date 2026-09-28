@@ -18,6 +18,7 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [ADRS.ADT, ADRS.ASEQ]
     keep: first
+    no_match: null
 
 output:
   path: adtte.csv

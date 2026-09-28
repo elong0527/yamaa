@@ -82,7 +82,7 @@ project environment, and not before.
 | `str_extract` | R022 | one capture group of the leftmost match |
 | `str_concat` | R007 | its nested expression results, in order |
 | `str_template` | R012 | literal text with its placeholders interpolated |
-| `str_upper`, `str_lower` | R019 | the exact ASCII casing substitution |
+| `str_case` | R019 | the exact ASCII casing substitution |
 | `lookup` | R003, R007 | one right-side column reached by declared key pairs |
 | `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
 | `date_diff` | R016 | whole calendar units between two dates |
@@ -382,7 +382,7 @@ a template a driver field is a scalar only when the keys declare it; every
 other field is read through an aggregate over the group's records.
 
 An output key and the same-named right-side column must already carry one
-comparable type. R003-13a requires it of an inferred key and R015-8a of a
+comparable type. REQ-0151 requires it of an inferred key and REQ-0305 of a
 declared pair, REQ-0004 converts no operand between an operation's inputs,
 and REQ-0005 makes comparability a property of the runtime type, so a
 disagreement is reported under REQ-0323 rather than quietly matching

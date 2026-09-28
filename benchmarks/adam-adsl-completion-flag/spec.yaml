@@ -13,6 +13,7 @@ intermediates:
   - id: COMPLT
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP' AND DS.DSDECOD = 'COMPLETED'"
+    no_match: null
 
 output:
   path: adsl.csv
@@ -48,7 +49,7 @@ columns:
       flag:
         condition: "COMPREC IS NOT NULL"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"
     verifications:
       allowed_values:
         values: [Y, N]

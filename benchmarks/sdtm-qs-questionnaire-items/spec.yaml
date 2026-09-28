@@ -11,11 +11,9 @@ intermediates:
   - id: VISIT
     dataset: VISITS
     key: {SubjectKey: VISIT_SUBJECT, StudyEventOID: VISIT_EVENT}
-    strict: true
   - id: ITEM
     dataset: ITEMS
     key: {ItemOID: ITEM_OID}
-    strict: true
 
 output:
   path: qs.csv

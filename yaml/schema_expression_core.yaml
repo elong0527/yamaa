@@ -40,7 +40,7 @@ source_binding_class:
     - filter:
         type: predicate
         description: See REQ-1051.
-    - missing:
+    - absent:
         type: literal_value
         description: See REQ-1051.
     - order_by:
@@ -62,7 +62,7 @@ flag_class:
     - false_value:
         type: literal_value
         description: See REQ-1257.
-    - missing_value:
+    - missing:
         type: literal_value
         description: See REQ-1257.
 
