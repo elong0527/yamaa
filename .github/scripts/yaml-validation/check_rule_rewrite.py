@@ -90,10 +90,11 @@ def check(root):
     # its 4 schema prose entries going with it; 317 after the inline
     # `lookup:` operation retired (#1316), its 11 schema prose entries
     # going with it; 316 after `intermediate_class.strict` was removed
-    # (#1318). The legacy sources above stay untouched.
-    if len(prose) != 316:
+    # (#1318); 327 after restoring those 11 as retired REQ-1055 provenance
+    # (#1460). The legacy sources above stay untouched.
+    if len(prose) != 327:
         errors.append(
-            "migration.yaml: baseline must retain all 316 schema prose entries"
+            "migration.yaml: baseline must retain all 327 schema prose entries"
         )
     # Post-rewrite requirements register provenance in the addenda. The
     # baseline above stays immutable; the duplicate check below rejects an
