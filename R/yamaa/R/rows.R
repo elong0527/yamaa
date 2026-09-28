@@ -364,10 +364,10 @@ validate_row_window_deps <- function(t) {
 
 # ---- REQ-1260: row-local column defaults ------------------------------------
 # Structural scan of a derivation: named intermediates read (as "ID.field"),
-# and whether it uses a lookup, an aggregate, or a window expression.
+# and whether it uses an aggregate or a window expression.
 deriv_flags <- function(deriv, inter_ids) {
   inter <- character(0)
-  lookup <- FALSE; aggregate <- FALSE; window <- FALSE
+  aggregate <- FALSE; window <- FALSE
   add_str <- function(x) {
     q <- split_qual(x)
     if (!is.null(q$q) && q$q %in% inter_ids)
@@ -398,15 +398,13 @@ deriv_flags <- function(deriv, inter_ids) {
     if (is.null(nm)) { for (e in x) walk(e); return() }
     for (i in seq_along(x)) {
       k <- nm[i]
-      if (k == "lookup") lookup <<- TRUE
       if (k == "aggregate") aggregate <<- TRUE
       if (k %in% WINDOW_KINDS) window <<- TRUE
       walk(x[[i]], key = if (nzchar(k)) k else NULL)
     }
   }
   walk(deriv)
-  list(inter = unique(inter), lookup = lookup, aggregate = aggregate,
-    window = window)
+  list(inter = unique(inter), aggregate = aggregate, window = window)
 }
 
 # donor fields of a SELF intermediate that name output columns: the fields
@@ -477,12 +475,12 @@ plan_row_defaults <- function(spec, ctx0) {
     f
   })
   names(flags) <- colnames
-  # row-local unless it uses a lookup/aggregate/window, reads a named
+  # row-local unless it uses an aggregate/window, reads a named
   # intermediate, or reads a non-row-local column (fixed-point)
   row_local <- vapply(colnames, function(nm) {
     f <- flags[[nm]]
     if (is.null(f)) return(FALSE)
-    !(f$lookup || f$aggregate || f$window || length(f$inter) > 0)
+    !(f$aggregate || f$window || length(f$inter) > 0)
   }, logical(1))
   repeat {
     changed <- FALSE

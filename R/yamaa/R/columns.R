@@ -159,10 +159,14 @@ deriv_refs <- function(deriv, colnames) {
       # unified match key (REQ-0115): a named `key` mapping's values are
       # current-row match entries -- walk them with the `key` marker so
       # bare-string entries resolve as column references; expressions walk
-      # normally
+      # normally. Bare-string / character-vector shorthands (`key: USUBJID`,
+      # `key: [A, B]`) are current-row match entries too: walk each element
+      # with the `key` marker.
       if (identical(k, "key") && is.list(x[[i]]) && !is.null(names(x[[i]])) &&
           all(nzchar(names(x[[i]])))) {
         for (j in seq_along(x[[i]])) walk(x[[i]][[j]], names(x[[i]])[j], "key")
+      } else if (identical(k, "key") && is.character(x[[i]])) {
+        for (s in x[[i]]) walk_string(s, NULL, "key")
       } else {
         walk(x[[i]], if (nzchar(k)) k else NULL, pk)
       }
