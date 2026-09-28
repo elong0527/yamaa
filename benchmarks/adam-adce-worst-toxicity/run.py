@@ -1,4 +1,4 @@
 import yamaa
 
-adce = yamaa.yamaa_domain("spec.yaml").output
+adce = yamaa.derive("spec.yaml")
 adce
