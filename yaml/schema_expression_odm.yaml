@@ -1,0 +1,36 @@
+version: "1.0"
+
+# See REQ-1265.
+
+expressions:
+    odm: # See REQ-1265.
+        type: [odm_item, odm_class]
+        description: See REQ-1274.
+
+odm_item:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$'
+    description: See REQ-1265.
+
+odm_oid:
+    type: str
+    pattern: '^[!-~]+$'
+    description: See REQ-1271.
+
+odm_class:
+    - item:
+        type: odm_item
+        required: true
+        description: See REQ-1274.
+    - event:
+        type: [odm_oid, "list[odm_oid]"]
+        description: See REQ-1274.
+    - form:
+        type: [odm_oid, "list[odm_oid]"]
+        description: See REQ-1274.
+    - item_group:
+        type: [odm_oid, "list[odm_oid]"]
+        description: See REQ-1274.
+    - filter:
+        type: predicate
+        description: See REQ-1274.

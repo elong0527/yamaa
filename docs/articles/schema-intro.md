@@ -66,6 +66,7 @@ family:
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
 | Dates | `schema_expression_date.yaml` | `date_diff`, `study_day`, `date_impute`, `date_precision` |
 | Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `previous_non_missing`, `locf`, `baseline_flag` |
+| Collected data | `schema_expression_odm.yaml` | `odm` |
 | Extension | `schema_function.yaml` | `function` |
 
 Two composition rules keep dependencies visible: operands are named

@@ -111,7 +111,7 @@ Going the other way, two of the eleven columns have no yamaa field:
 | Significant digits / display format | *project setting* | Decimal places belong to the project, not the spec (Types and conversion) |
 | `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `column.metadata.codelist` | Translation and enforcement separate here too |
 | `Origin` = Assigned | `literal: DM` | |
-| `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from |
+| `Origin` = Collected (CRF / eDT) | `odm: ODM.IT.DM.AGE` | Reads the one record of the item among the ODM records the row was built from; `event`, `form`, `item_group`, and `filter` narrow it (Name binding) |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name reads that dataset through the implicit join on the output keys (Lookup and joins) |
 | `Origin` = Derived | a specific expression | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
 | `Core` (Req / Exp / Perm) | `column.metadata` | Conformance classification; it says nothing about derivation |

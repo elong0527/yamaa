@@ -8,13 +8,14 @@ base: DM
 
 intermediates:
   # Each subject's end-of-study record: a disposition event other than a
-  # screen failure, asserted unique per subject. P01 carries two of them,
-  # so the run fails before any output row is built.
+  # screen failure, asserted unique per subject. YAMAA-01-101 carries two
+  # of them (a screen-failure record beside them is filtered out and does
+  # not count), so the run fails before any output row is built.
   - id: DS_EOS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
-    verification:
-      unique: [STUDYID, USUBJID]
+    verifications:
+      - unique: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv

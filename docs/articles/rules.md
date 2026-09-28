@@ -15,7 +15,7 @@ owns the sequence of a run.
 | --- | --- | --- |
 | [Specification structure](https://github.com/elong0527/yamaa/blob/main/rules/specification/structure.md) | normative | Declare identifiers, columns, derivation coverage, and source notation. |
 | [Specification composition](https://github.com/elong0527/yamaa/blob/main/rules/specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
-| [Name binding](https://github.com/elong0527/yamaa/blob/main/rules/specification/binding.md) | normative | Resolve input datasets, current-output columns, and contextual ODM references. |
+| [Name binding](https://github.com/elong0527/yamaa/blob/main/rules/specification/binding.md) | normative | Resolve input datasets, current-output columns, and ODM item reads. |
 
 ## Values
 

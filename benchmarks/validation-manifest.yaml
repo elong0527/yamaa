@@ -198,11 +198,6 @@ fixtures:
     condition: incomparable_sources
     spec_paths: [columns.LSTALVDT.derivation.greatest]
     validator: expression_contract
-  negative-count-unnamed:
-    rule: R009
-    condition: missing_verification_id
-    spec_paths: ["verifications[1].row_count"]
-    validator: spec_contract
   negative-least-mixed:
     rule: R007
     condition: incomparable_sources
@@ -390,3 +385,23 @@ fixtures:
     condition: window_order_by_required
     spec_paths: [columns.AVAL.derivation.locf.window]
     validator: static_semantics
+  negative-odm-context:
+    rule: R002
+    condition: invalid_odm_context
+    spec_paths: [columns.SEX.derivation.odm]
+    validator: odm_contract
+  negative-odm-schema-ambiguous:
+    rule: R002
+    condition: odm_schema_field_ambiguous
+    spec_paths: [input.ODM.path]
+    validator: odm_contract
+  negative-odm-schema-missing:
+    rule: R002
+    condition: odm_schema_field_missing
+    spec_paths: [input.ODM.path]
+    validator: odm_contract
+  negative-odm-schema-type:
+    rule: R002
+    condition: odm_schema_field_type
+    spec_paths: [input.ODM.types]
+    validator: odm_contract

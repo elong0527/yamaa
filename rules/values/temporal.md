@@ -143,9 +143,7 @@ two spellings disagree about the day.
 table. Every other row spells a value one of these two types holds; a clock
 reading carrying no date is not one. Both types name a position on the
 calendar. A study that collects one, as the `--TM` family does, keeps the
-collected text as `str`. A time-only value would be a third temporal type, not
-a wider `datetime` -- a new [Types and conversion](types.md) vocabulary entry.
-The type enters when an example needs a time of day with no date.
+collected text as `str`.
 
 ### No zone, no offset
 

@@ -1169,21 +1169,21 @@ requirements:
   REQ-0093: {"file": "specification/binding.md", "sources": ["R002-18"]}
   REQ-0094: {"file": "specification/binding.md", "sources": ["R002-19"]}
   REQ-0095: {"file": "specification/binding.md", "sources": ["R002-19a"]}
-  REQ-0096: {"file": "specification/binding.md", "sources": ["R002-20"], "retired": true, "replacement": ["REQ-0098"]}
-  REQ-0097: {"file": "specification/binding.md", "sources": ["R002-21"]}
-  REQ-0098: {"file": "specification/binding.md", "sources": ["R002-22", "R002-20"]}
-  REQ-0099: {"file": "specification/binding.md", "sources": ["R002-23"]}
-  REQ-0100: {"file": "specification/binding.md", "sources": ["R002-24"]}
-  REQ-0101: {"file": "specification/binding.md", "sources": ["R002-25"]}
-  REQ-0102: {"file": "specification/binding.md", "sources": ["R002-26"]}
+  REQ-0096: {"file": "specification/binding.md", "sources": ["R002-20"], "retired": true, "replacement": ["REQ-1269"]}
+  REQ-0097: {"file": "specification/binding.md", "sources": ["R002-21"], "retired": true, "replacement": ["REQ-1269"]}
+  REQ-0098: {"file": "specification/binding.md", "sources": ["R002-22", "R002-20"], "retired": true, "replacement": ["REQ-1269", "REQ-1271"]}
+  REQ-0099: {"file": "specification/binding.md", "sources": ["R002-23"], "retired": true, "replacement": ["REQ-1266", "REQ-1269"]}
+  REQ-0100: {"file": "specification/binding.md", "sources": ["R002-24"], "retired": true, "replacement": ["REQ-1272"]}
+  REQ-0101: {"file": "specification/binding.md", "sources": ["R002-25"], "retired": true, "replacement": ["REQ-1272"]}
+  REQ-0102: {"file": "specification/binding.md", "sources": ["R002-26"], "retired": true, "replacement": ["REQ-1272"]}
   REQ-0103: {"file": "specification/binding.md", "sources": ["R002-27"]}
   REQ-0104: {"file": "specification/binding.md", "sources": ["R002-28"], "retired": true, "replacement": ["REQ-0080"]}
   REQ-0105: {"file": "specification/binding.md", "sources": ["R002-29"]}
   REQ-0106: {"file": "specification/binding.md", "sources": ["R002-30"]}
   REQ-0107: {"file": "specification/binding.md", "sources": ["R002-31"]}
-  REQ-0108: {"file": "specification/binding.md", "sources": ["R002-32"]}
-  REQ-0109: {"file": "specification/binding.md", "sources": ["R002-33"]}
-  REQ-0110: {"file": "specification/binding.md", "sources": ["R002-34"]}
+  REQ-0108: {"file": "specification/binding.md", "sources": ["R002-32"], "retired": true, "replacement": ["REQ-1275"]}
+  REQ-0109: {"file": "specification/binding.md", "sources": ["R002-33"], "retired": true, "replacement": ["REQ-1278"]}
+  REQ-0110: {"file": "specification/binding.md", "sources": ["R002-34"], "retired": true, "replacement": ["REQ-1272"]}
   REQ-0111: {"file": "operations/lookup.md", "sources": ["R003-1"]}
   REQ-0112: {"file": "operations/lookup.md", "sources": ["R003-2"]}
   REQ-0113: {"file": "operations/lookup.md", "sources": ["R003-3"]}
@@ -2266,7 +2266,7 @@ requirements:
   REQ-1239: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.locf.source.description", "schema_expression_window.yaml:expressions.locf.window.description"]}
   REQ-1240: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_sentence.source.description", "schema_expression_str.yaml:expressions.str_sentence.missing.description"]}
   REQ-1241: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_title.source.description", "schema_expression_str.yaml:expressions.str_title.missing.description"]}
-  REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description"]}
+  REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verifications.description"]}
   REQ-1246: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:project-root-anchor"]}
   REQ-1247: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:produced-artifact-anchor"]}
   REQ-1248: {"file": "operations/lookup.md", "sources": ["yamaa:issue-371:rename-only-intermediate"]}
@@ -2326,6 +2326,20 @@ requirements:
   REQ-1257: {"file": "operations/expressions.md", "sources": ["schema_expression_core.yaml:flag_class.false_value.description", "schema_expression_core.yaml:flag_class.missing_value.description", "yamaa:issue-881:flag-semantics", "schema_expression_core.yaml:flag_class.missing.description"]}
   REQ-1258: {"file": "operations/expressions.md", "sources": ["yamaa:issue-881:flag-missing-value-required"]}
   REQ-1259: {"file": "operations/lookup.md", "sources": ["schema.yaml:key_base_entry.description", "yamaa:issue-994:key-base-expressions", "schema.yaml:match_value.description"]}
+  REQ-1265: {"file": "specification/binding.md", "sources": ["schema_expression_odm.yaml:odm_item.description", "yamaa:issue-1438:odm-expression"]}
+  REQ-1266: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-schema"]}
+  REQ-1267: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-binding"]}
+  REQ-1268: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-verification"]}
+  REQ-1269: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-scope"]}
+  REQ-1270: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-context"]}
+  REQ-1271: {"file": "specification/binding.md", "sources": ["schema_expression_odm.yaml:odm_oid.description", "yamaa:issue-1438:odm-identification"]}
+  REQ-1272: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-uniqueness"]}
+  REQ-1273: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-type"]}
+  REQ-1274: {"file": "specification/binding.md", "sources": ["schema_expression_odm.yaml:expressions.odm.description", "schema_expression_odm.yaml:odm_class.item.description", "schema_expression_odm.yaml:odm_class.event.description", "schema_expression_odm.yaml:odm_class.form.description", "schema_expression_odm.yaml:odm_class.item_group.description", "schema_expression_odm.yaml:odm_class.filter.description"]}
+  REQ-1275: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-schema-field-errors"]}
+  REQ-1276: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-schema-value-errors"]}
+  REQ-1277: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-context-errors"]}
+  REQ-1278: {"file": "specification/binding.md", "sources": ["yamaa:issue-1438:odm-not-unique"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2775,8 +2789,6 @@ provenance_addenda:
   - {"source": "schema_expression_str.yaml:expressions.str_contains.missing.description", "text": "See REQ-1243 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_contains", "target": "REQ-1243"}
   - {"source": "yamaa:issue-778:str-contains-predicate-call", "text": "Issue #778: str_contains(source, pattern) is the one function call the predicate grammar admits; Python-only, the R engine does not parse predicate function calls.", "owner": "operations/predicates", "group": "predicate-call", "target": "REQ-1244"}
   - {"source": "yamaa:issue-777:intermediate-unique-verification", "text": "Issue #777: an intermediate may declare verification.unique asserting its filtered donor records carry each key combination once; duplicates fail the run, correlated filters are rejected, and keep stays positional.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
-  - {"source": "schema.yaml:intermediate_class.verification.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
-  - {"source": "schema.yaml:intermediate_verification_class.unique.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_verification_class", "target": "REQ-1245"}
   - {"source": "yamaa:issue-845:entry-inherits-output", "text": "Issue #845: an entry file may omit output and inherit it whole like any other replaced root field, so a shared layer can own the artifact membership and order.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0623"}
   - {"source": "yamaa:issue-845:inherited-output-paths", "text": "Issue #845: an inherited output publishes where the layer that wrote it names; path, warning_log, and verification_log keep that layer's provenance.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0629"}
   - {"source": "yamaa:issue-845:resolved-output-required", "text": "Issue #845: missing_entry_output is retired; a resolved specification no layer gave an output fails as missing_required_field at output.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0657"}
@@ -2825,7 +2837,29 @@ provenance_addenda:
   - {"source": "yamaa:issue-1318:omitted-handler-fatal", "text": "Issue #1318: strict is removed; omitting an applicable handler makes its condition fatal at every site, with no strict: false default.", "owner": "execution/handlers", "group": "omitted-handler-fatal", "target": "REQ-0344"}
   - {"source": "yamaa:issue-1318:intermediate-no-match", "text": "Issue #1318: an intermediate that selects no record fails as unmatched_key unless it declares no_match; a lenient answer is written as no_match: null.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-0129"}
   - {"source": "yamaa:issue-1318:mapping-handlers", "text": "Issue #1318: mapping answers a missing input only with missing and an unmapped value only with unmapped; either omitted is fatal, and missing no longer covers an unmapped value.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
+  - {"source": "schema.yaml:intermediate_class.verifications.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "yamaa:issue-1322:str-case", "text": "Issue #1322: str_upper, str_lower, str_sentence and str_title merge into one str_case whose required `to` names the case; str_lower's field table folds into REQ-1114.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
   - {"source": "schema_expression_str.yaml:expressions.str_case.source.description", "text": "See REQ-1114 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
   - {"source": "schema_expression_str.yaml:expressions.str_case.to.description", "text": "See REQ-1114 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
   - {"source": "schema_expression_str.yaml:expressions.str_case.missing.description", "text": "See REQ-1114 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.str_case", "target": "REQ-1114"}
+  - {"source": "schema_expression_odm.yaml:expressions.odm.description", "text": "One collected item read from the row's ODM scope; a bare string is the item.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1274"}
+  - {"source": "schema_expression_odm.yaml:odm_item.description", "text": "DATASET.ItemOID; the qualifier ends at the first period and the rest is the complete ItemOID.", "owner": "specification/binding", "group": "odm_item", "target": "REQ-1265"}
+  - {"source": "schema_expression_odm.yaml:odm_oid.description", "text": "One ODM OID an identified record's level field carries.", "owner": "specification/binding", "group": "odm_oid", "target": "REQ-1271"}
+  - {"source": "schema_expression_odm.yaml:odm_class.item.description", "text": "The ODM input and the complete ItemOID.", "owner": "specification/binding", "group": "odm_class", "target": "REQ-1274"}
+  - {"source": "schema_expression_odm.yaml:odm_class.event.description", "text": "StudyEventOID values an identified record carries.", "owner": "specification/binding", "group": "odm_class", "target": "REQ-1274"}
+  - {"source": "schema_expression_odm.yaml:odm_class.form.description", "text": "FormOID values an identified record carries.", "owner": "specification/binding", "group": "odm_class", "target": "REQ-1274"}
+  - {"source": "schema_expression_odm.yaml:odm_class.item_group.description", "text": "ItemGroupOID values an identified record carries.", "owner": "specification/binding", "group": "odm_class", "target": "REQ-1274"}
+  - {"source": "schema_expression_odm.yaml:odm_class.filter.description", "text": "Predicate over the ODM input's schema fields that an identified record satisfies.", "owner": "specification/binding", "group": "odm_class", "target": "REQ-1274"}
+  - {"source": "yamaa:issue-1438:odm-expression", "text": "odm reads one collected item; item is DATASET.ItemOID and a bare string is the item.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1265"}
+  - {"source": "yamaa:issue-1438:odm-schema", "text": "An ODM input has a fixed, vendor-neutral schema of eleven text fields, eight of them hierarchy fields.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1266"}
+  - {"source": "yamaa:issue-1438:odm-binding", "text": "Stored field names bind to the schema by ASCII case-insensitive comparison; any other field is a vendor field that is never read.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1267"}
+  - {"source": "yamaa:issue-1438:odm-verification", "text": "The implementation verifies the schema before any read: fields at validation, then records at ingest.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1268"}
+  - {"source": "yamaa:issue-1438:odm-scope", "text": "A row's scope is fixed by how the specification builds the row: key combination, grouped template, or driver record occurrence.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1269"}
+  - {"source": "yamaa:issue-1438:odm-context", "text": "odm evaluates for rows with a scope over its input; a named intermediate or a row from another dataset has none.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1270"}
+  - {"source": "yamaa:issue-1438:odm-identification", "text": "The read identifies the scope's records for the item, narrowed by event, form, item_group, and filter.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1271"}
+  - {"source": "yamaa:issue-1438:odm-uniqueness", "text": "Unique means one record identified: none gives missing, one gives its Value, two or more fail; values take no part.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1272"}
+  - {"source": "yamaa:issue-1438:odm-type", "text": "The result is text and converts to the column type at completion.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1273"}
+  - {"source": "yamaa:issue-1438:odm-schema-field-errors", "text": "A missing, ambiguous, or mistyped schema field, or declared types, fails at validation.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1275"}
+  - {"source": "yamaa:issue-1438:odm-schema-value-errors", "text": "A record without a required identifier fails at ingest.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1276"}
+  - {"source": "yamaa:issue-1438:odm-context-errors", "text": "odm outside its contexts fails with invalid_odm_context.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1277"}
+  - {"source": "yamaa:issue-1438:odm-not-unique", "text": "Two or more identified records fail with odm_not_unique, naming the identifying fields that differ.", "owner": "specification/binding", "group": "expressions.odm", "target": "REQ-1278"}

@@ -100,19 +100,10 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0093](../specification/binding.md#req-0093) | `specification/binding.md` | R002-18 |
 | [REQ-0094](../specification/binding.md#req-0094) | `specification/binding.md` | R002-19 |
 | [REQ-0095](../specification/binding.md#req-0095) | `specification/binding.md` | R002-19a |
-| [REQ-0097](../specification/binding.md#req-0097) | `specification/binding.md` | R002-21 |
-| [REQ-0098](../specification/binding.md#req-0098) | `specification/binding.md` | R002-22, R002-20 |
-| [REQ-0099](../specification/binding.md#req-0099) | `specification/binding.md` | R002-23 |
-| [REQ-0100](../specification/binding.md#req-0100) | `specification/binding.md` | R002-24 |
-| [REQ-0101](../specification/binding.md#req-0101) | `specification/binding.md` | R002-25 |
-| [REQ-0102](../specification/binding.md#req-0102) | `specification/binding.md` | R002-26 |
 | [REQ-0103](../specification/binding.md#req-0103) | `specification/binding.md` | R002-27 |
 | [REQ-0105](../specification/binding.md#req-0105) | `specification/binding.md` | R002-29 |
 | [REQ-0106](../specification/binding.md#req-0106) | `specification/binding.md` | R002-30 |
 | [REQ-0107](../specification/binding.md#req-0107) | `specification/binding.md` | R002-31 |
-| [REQ-0108](../specification/binding.md#req-0108) | `specification/binding.md` | R002-32 |
-| [REQ-0109](../specification/binding.md#req-0109) | `specification/binding.md` | R002-33 |
-| [REQ-0110](../specification/binding.md#req-0110) | `specification/binding.md` | R002-34 |
 | [REQ-0111](../operations/lookup.md#req-0111) | `operations/lookup.md` | R003-1 |
 | [REQ-0112](../operations/lookup.md#req-0112) | `operations/lookup.md` | R003-2 |
 | [REQ-0113](../operations/lookup.md#req-0113) | `operations/lookup.md` | R003-3 |
@@ -1223,3 +1214,17 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1257](../operations/expressions.md#req-1257) | `operations/expressions.md` | Schema prose |
 | [REQ-1258](../operations/expressions.md#req-1258) | `operations/expressions.md` | Schema prose |
 | [REQ-1259](../operations/lookup.md#req-1259) | `operations/lookup.md` | Schema prose |
+| [REQ-1265](../specification/binding.md#req-1265) | `specification/binding.md` | Schema prose |
+| [REQ-1266](../specification/binding.md#req-1266) | `specification/binding.md` | R002-23 |
+| [REQ-1267](../specification/binding.md#req-1267) | `specification/binding.md` | Schema prose |
+| [REQ-1268](../specification/binding.md#req-1268) | `specification/binding.md` | Schema prose |
+| [REQ-1269](../specification/binding.md#req-1269) | `specification/binding.md` | R002-20, R002-21, R002-22, R002-23 |
+| [REQ-1270](../specification/binding.md#req-1270) | `specification/binding.md` | Schema prose |
+| [REQ-1271](../specification/binding.md#req-1271) | `specification/binding.md` | R002-22, R002-20 |
+| [REQ-1272](../specification/binding.md#req-1272) | `specification/binding.md` | R002-24, R002-25, R002-26, R002-34 |
+| [REQ-1273](../specification/binding.md#req-1273) | `specification/binding.md` | Schema prose |
+| [REQ-1274](../specification/binding.md#req-1274) | `specification/binding.md` | Schema prose |
+| [REQ-1275](../specification/binding.md#req-1275) | `specification/binding.md` | R002-32 |
+| [REQ-1276](../specification/binding.md#req-1276) | `specification/binding.md` | Schema prose |
+| [REQ-1277](../specification/binding.md#req-1277) | `specification/binding.md` | Schema prose |
+| [REQ-1278](../specification/binding.md#req-1278) | `specification/binding.md` | R002-33 |

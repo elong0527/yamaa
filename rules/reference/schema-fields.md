@@ -40,8 +40,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.no_match` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
-| `intermediate_class.verification` | `"intermediate_verification_class"` | `false` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
-| `intermediate_verification_class.unique` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
+| `intermediate_class.verifications` | `"list[intermediate_verification]"` | `false` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
 | `record_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.lower` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `record_between_class.upper` | `"identifier"` | `false` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
@@ -310,6 +309,19 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.round_half_away_from_zero.digits` | `"int"` | `true` | Absent | -- | [REQ-1172](../operations/computation.md#req-1172) |
 | `numeric_expression` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1120](../operations/computation.md#req-1120) |
 
+## schema_expression_odm.yaml
+
+| Field or value type | Type | Required | Default | Constraints | Contract |
+| --- | --- | --- | --- | --- | --- |
+| `expressions.odm` | `["odm_item", "odm_class"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_item` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[!-~]+$"}` | [REQ-1265](../specification/binding.md#req-1265) |
+| `odm_oid` | `"str"` | `false` | Absent | `{"pattern": "^[!-~]+$"}` | [REQ-1271](../specification/binding.md#req-1271) |
+| `odm_class.item` | `"odm_item"` | `true` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.event` | `["odm_oid", "list[odm_oid]"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.form` | `["odm_oid", "list[odm_oid]"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.item_group` | `["odm_oid", "list[odm_oid]"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+
 ## schema_expression_str.yaml
 
 | Field or value type | Type | Required | Default | Constraints | Contract |
@@ -438,26 +450,30 @@ requirement link for behavior. It is not an additional semantic contract.
 
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
+| `column_verifications.not_missing.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.not_missing.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `column_verifications.allowed_values.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.allowed_values.values` | `"list[literal_value]"` | `true` | Absent | -- | Schema constraint |
 | `column_verifications.allowed_values.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `column_verifications.range.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.range.min` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.range.max` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.range.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `column_verifications.max_length.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.max_length.max` | `"int"` | `true` | Absent | -- | Schema constraint |
 | `column_verifications.max_length.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `column_verifications.matches.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.matches.pattern` | `"regex"` | `true` | Absent | -- | Schema constraint |
 | `column_verifications.matches.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.unique.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
-| `dataset_verifications.unique.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.all_or_none.id` | `"verification_id"` | `true` | Absent | -- | Schema constraint |
+| `dataset_verifications.unique` | `["list[variable]", "dataset_unique_arguments"]` | `false` | Absent | -- | Schema constraint |
+| `dataset_verifications.all_or_none.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.implies.id` | `"verification_id"` | `true` | Absent | -- | Schema constraint |
+| `dataset_verifications.implies.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.implies.when` | `"predicate"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.implies.then` | `"predicate"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.implies.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.assert.id` | `"verification_id"` | `true` | Absent | -- | Schema constraint |
+| `dataset_verifications.assert.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.assert.expr` | `"predicate"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.assert.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
 | `dataset_verifications.row_count.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
@@ -469,5 +485,11 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_verifications.row_count.min_fraction` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.max_fraction` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `intermediate_verifications.unique` | `["list[variable]", "intermediate_unique_arguments"]` | `false` | Absent | -- | Schema constraint |
+| `dataset_unique_arguments.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
+| `dataset_unique_arguments.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
+| `dataset_unique_arguments.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `intermediate_unique_arguments.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_unique_arguments.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
 | `verification_id` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `verification_severity` | `"str"` | `false` | Absent | `{"values": ["error", "warning"]}` | Schema constraint |

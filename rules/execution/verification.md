@@ -79,10 +79,13 @@ change pass or fail. A `warning` violation records every offending key under
 
 <a id="req-0374"></a>
 
-**REQ-0374.** `all_or_none`, `implies`, `assert`, and a `row_count`
-declaring `group_by` require an `id`. These IDs must be unique across the
-dataset verifications that declare them. Implementations must include the ID in failure reports in
-addition to the stable specification path.
+**REQ-0374.** Every column, dataset, and intermediate verification may
+declare a nonempty `id`. A declared ID names the check for readers and is
+included in failure reports; column and dataset IDs also appear in governed
+logs. When it is omitted, the verification's specification path identifies
+the check; the `VERIFICATION_ID` field stays missing rather than copying
+the path. An explicit ID remains
+useful when a check needs a name that survives reordering of a specification.
 
 ### Column verifications
 
@@ -128,7 +131,10 @@ not by regular-expression matching.
 
 **REQ-0381.** `unique` requires the listed columns to exist and their
   combined values to be unique. Missing values participate as values; use
-  column `not_missing` when they are prohibited.
+  column `not_missing` when they are prohibited. Write an unnamed check as
+  `unique: [STUDYID, USUBJID]`. The mapping form
+  `unique: {columns: [STUDYID, USUBJID], id: subject-key}` also admits an
+  optional `severity`.
 
 <a id="req-0382"></a>
 
@@ -428,7 +434,7 @@ execution defect, not a finding that can be recorded inside itself.
 
 | Field | Meaning |
 | --- | --- |
-| `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies each bound to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. Fraction bounds divide this count by all rows in the group. A grouped count requires id, which an ungrouped count does not. |
+| `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies each bound to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. Fraction bounds divide this count by all rows in the group. The id is optional for either form. |
 | `dataset_verifications.row_count.when` | A predicate over one constructed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt. |
 
 ## Error conditions
@@ -440,7 +446,9 @@ fraction bound outside 0 through 1 also fails.
 
 <a id="req-0398"></a>
 
-**REQ-0398.** A duplicate dataset-verification `id`: fail.
+**REQ-0398.** A duplicate declared `id` within one dataset verification
+list, one column's verification list, or one intermediate's verification
+list: fail. The same ID may be used in a different list.
 
 <a id="req-0399"></a>
 
@@ -457,7 +465,9 @@ fraction bound outside 0 through 1 also fails.
 
 <a id="req-0402"></a>
 
-**REQ-0402.** A `row_count` declaring `group_by` without an `id`: fail.
+**REQ-0402.** An unnamed grouped `row_count` is valid. Its failure report
+contains the specification path, grouping columns, and observed counts;
+the bounds are in the declaration at that path.
 
 <a id="req-0403"></a>
 

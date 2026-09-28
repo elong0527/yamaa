@@ -426,9 +426,7 @@ generated identifier, a `Description` child holding the comment text, and one
 
 **REQ-1001.** Every `Description` and `Decode` holds exactly one
 `TranslatedText` whose `xml:lang` is the document's `language`. One document
-carries one language. A multilingual document would need a language-keyed text
-object in every place this design carries a string, which is a change to [Submission metadata](metadata.md)
-and [Controlled terminology](terminology.md) as much as to this contract.
+carries one language.
 
 #### Transport names
 
@@ -503,10 +501,7 @@ places on a regulatory submission:
 <a id="req-1007"></a>
 
 **REQ-1007.** `U+000D` and `U+0009` must not appear in any generated attribute
-value or text, and `U+000A` must not appear in an attribute value. An XML
-parser normalizes each forbidden character on the way back in, so a document
-carrying one does not read back as written, and a byte contract over text
-that does not survive parsing is not a contract.
+value or text, and `U+000A` must not appear in an attribute value.
 
 <a id="req-1008"></a>
 

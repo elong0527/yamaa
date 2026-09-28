@@ -160,52 +160,99 @@ them and [Lookup and joins](../operations/lookup.md) defines the join uniqueness
 source may read, and [Lookup and joins](../operations/lookup.md) defines that selection. Reading no record is an
 absent match rather than a handled condition.
 
-### ODM contextual references
+### ODM item reads
 
-<a id="req-0097"></a>
+<a id="req-1265"></a>
 
-**REQ-0097.** An ODM context is the current row's values for the
-following columns, in this order, when those columns exist in the
-declared ODM projection:
+**REQ-1265.** The `odm` expression reads one collected item from an ODM
+input. `item` names the input and the item as `DATASET.ItemOID`. A dataset
+identifier holds no period, so the qualifier ends at the first period and
+the rest is the complete `ItemOID`, periods included. A bare string is the
+[Schema language](../reference/schema-language.md) shorthand for `{item: ...}`:
 
-1. `StudyOID`;
-2. `MetaDataVersionOID`;
-3. `SubjectKey`;
-4. `StudyEventOID`;
-5. `StudyEventRepeatKey`;
-6. `FormOID`;
-7. `FormRepeatKey`;
-8. `ItemGroupOID`;
-9. `ItemGroupRepeatKey`.
+```yaml
+derivation: {odm: ODM.IT.DM.AGE}
+```
 
-<a id="req-0098"></a>
+<a id="req-1266"></a>
 
-**REQ-0098.** ODM resolution first matches every available context column,
-then matches the complete `ItemOID`. A projection may omit a context
-column only when the projection's source does not carry that level.
+**REQ-1266.** An ODM input is an input dataset an `odm` expression names.
+Its schema is fixed: the eleven fields `StudyOID`, `MetaDataVersionOID`,
+`SubjectKey`, `StudyEventOID`, `StudyEventRepeatKey`, `FormOID`,
+`FormRepeatKey`, `ItemGroupOID`, `ItemGroupRepeatKey`, `ItemOID`, and
+`Value`, each of type `str`. Eight of them are the hierarchy fields:
+`StudyOID`, `SubjectKey`, `StudyEventOID`, `StudyEventRepeatKey`,
+`FormOID`, `FormRepeatKey`, `ItemGroupOID`, and `ItemGroupRepeatKey`.
+Every field but `Value` is an identifying field.
 
-<a id="req-0099"></a>
+<a id="req-1267"></a>
 
-**REQ-0099.** A projection that carries `FormOID` must use that column.
-Identical item identifiers in two forms are different contextual values.
-Those values must not be collapsed.
+**REQ-1267.** A stored field binds to the schema field whose name it
+equals under ASCII case folding, which maps `A` through `Z` to `a` through
+`z` and leaves every other character unchanged. The binding does not
+rename the stored bytes, which the storage profile reads as it always
+does; the specification spells the schema's names. A stored field that
+binds to no schema field is a vendor field. An ODM input does not expose a
+vendor field, and an `odm` expression never reads one.
 
-<a id="req-0100"></a>
+<a id="req-1268"></a>
 
-**REQ-0100.** No contextual match is an absent item. The reference fails
-unless a structured source declares `absent`, under [Local handlers](../execution/handlers.md).
+**REQ-1268.** An ODM input is verified before any expression reads it.
+Its fields are verified at validation, from the CSV header or the Parquet
+schema, without reading a record: exactly one stored field binds to each
+schema field, and each bound field is stored as text. Its records are
+verified at ingest: every record carries `StudyOID`, `MetaDataVersionOID`,
+`SubjectKey`, `StudyEventOID`, `FormOID`, `ItemGroupOID`, and `ItemOID`.
+The repeat keys and `Value` may be missing. An ODM input declares no
+`types` and no `schema`.
 
-<a id="req-0101"></a>
+<a id="req-1269"></a>
 
-**REQ-0101.** More than one match after applying every available context
-column is a multiple right-side match. The reference fails unless a
-structured source declares `order_by` and `keep` to handle
-`multiple_matches` under [Local handlers](../execution/handlers.md).
+**REQ-1269.** A row's ODM scope is the set of ODM input records the row
+was built from:
 
-<a id="req-0102"></a>
+| The row was built by | Its ODM scope |
+| --- | --- |
+| no `rows`, with the ODM input as the base | the records its key combination was derived from ([REQ-0042](../execution/rows.md#req-0042)) |
+| a row template grouped over the ODM input | the records equal to the row on every hierarchy field in the template's `group_by` |
+| a record-driven row template over the ODM input | the records equal to the driver record on all eight hierarchy fields |
 
-**REQ-0102.** A matched row with missing `Value` returns missing. It does
-not invoke the absent-item handler.
+Equality on a hierarchy field treats missing as equal to missing, as
+[REQ-0037](../execution/rows.md#req-0037) does. `ItemOID`, `Value`, and
+every field outside the hierarchy never narrow a scope, so a row built for
+one item reads the other items of its own item group occurrence.
+
+<a id="req-1270"></a>
+
+**REQ-1270.** An `odm` expression evaluates for a row that has an ODM
+scope over the input it names, in a column derivation or in a row
+derivation. The scope belongs to the row: a column derivation reads, for
+each row, the scope of the row template that built it. An `odm`
+expression in a named intermediate, or one a row built from another
+dataset would read, has no scope.
+
+<a id="req-1271"></a>
+
+**REQ-1271.** The read identifies the records of the row's scope whose
+`ItemOID` is the named item, whose `StudyEventOID`, `FormOID`, and
+`ItemGroupOID` are among the OIDs that `event`, `form`, and `item_group`
+list, when they list any, and for which `filter` is `TRUE` under
+[Predicates](../operations/predicates.md). `filter` names only schema
+fields, qualified with the ODM input.
+
+<a id="req-1272"></a>
+
+**REQ-1272.** No identified record gives missing. One identified record
+gives its `Value`, which may itself be missing. Two or more identified
+records fail. Values take no part in identification: two records that
+carry one value are still two. The read is a lookup, not a reduction;
+nothing is counted, ordered, or chosen.
+
+<a id="req-1273"></a>
+
+**REQ-1273.** The result of an `odm` expression is `str`, and converts to
+the column's declared type at completion under
+[Types and conversion](../values/types.md), as any derivation result does.
 
 ### Interface behavior
 
@@ -224,6 +271,20 @@ not invoke the absent-item handler.
 | Field | Meaning |
 | --- | --- |
 | `regex` | Regular expression applied to a string value under [Text operations](../operations/text.md). |
+
+<a id="req-1274"></a>
+
+**REQ-1274.** The `expressions.odm` fields have these meanings:
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.odm` | One collected item read from the row's ODM scope ([REQ-1269](binding.md#req-1269)). A bare string is the `item`. |
+| `expressions.odm.item` | The ODM input and the complete `ItemOID`, as `DATASET.ItemOID` ([REQ-1265](binding.md#req-1265)). |
+| `expressions.odm.event` | `StudyEventOID` values an identified record carries; one OID or a list. |
+| `expressions.odm.form` | `FormOID` values an identified record carries; one OID or a list. |
+| `expressions.odm.item_group` | `ItemGroupOID` values an identified record carries; one OID or a list. |
+| `expressions.odm.filter` | Predicate over the ODM input's schema fields that an identified record satisfies. |
+| `Result` | The `Value` of the one identified record, or missing when none is identified ([REQ-1272](binding.md#req-1272)). |
 
 ## Error conditions
 
@@ -250,16 +311,29 @@ fail. At column level the source is read by every constructed row, so the
 variable must appear in the `group_by` of every grouped row template
 driven by its dataset.
 
-<a id="req-0108"></a>
+<a id="req-1275"></a>
 
-**REQ-0108.** An ODM contextual reference with no available context
-column: fail.
+**REQ-1275.** An ODM input that lacks a schema field
+(`odm_schema_field_missing`), binds two stored fields to one schema field
+(`odm_schema_field_ambiguous`), stores a schema field as anything but text,
+or declares `types` or `schema` (`odm_schema_field_type`): fail at
+validation, naming the input and the fields.
 
-<a id="req-0109"></a>
+<a id="req-1276"></a>
 
-**REQ-0109.** More than one ODM contextual match: fail unless locally
-handled.
+**REQ-1276.** An ODM input record that lacks a required identifier: fail
+at ingest with `odm_schema_value_missing`, naming the field and the first
+record that lacks it.
 
-<a id="req-0110"></a>
+<a id="req-1277"></a>
 
-**REQ-0110.** No ODM contextual match: fail unless locally handled.
+**REQ-1277.** An `odm` expression in a named intermediate, or one a row
+with no ODM scope over its input would read: fail at validation with
+`invalid_odm_context`.
+
+<a id="req-1278"></a>
+
+**REQ-1278.** An `odm` read that identifies two or more records: fail with
+`odm_not_unique`, reporting the row, the item, the number of records, and
+each identifying field whose values differ among them, or reporting that
+no identifying field tells them apart.

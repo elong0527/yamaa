@@ -12,8 +12,8 @@ intermediates:
   - id: TEST
     dataset: TESTS
     key: VSTESTCD
-    verification:
-      unique: [VSTESTCD]
+    verifications:
+      - unique: [VSTESTCD]
 
 output:
   path: vs.csv
@@ -49,57 +49,27 @@ columns:
   - name: VSDTC
     type: date
     label: Date/Time of Measurements
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
-        filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.VS.VSDTC}
 
   - name: POSITION
     type: str
     label: Body Position Collected on the Form
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
-        filter: "ODM.ItemOID = 'IT.VS.POSITION'"
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.VS.POSITION}
 
   - name: TEMPMETHOD
     type: str
     label: Temperature Method Collected on the Form
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
-        filter: "ODM.ItemOID = 'IT.VS.TEMPMETHOD'"
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.VS.TEMPMETHOD}
 
   - name: BPNOTDONE
     type: str
     label: Blood Pressure Not-Done Flag Collected on the Form
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
-        filter: "ODM.ItemOID = 'IT.VS.BPNOTDONE'"
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.VS.BPNOTDONE}
 
   - name: BPREASND
     type: str
     label: Blood Pressure Not-Done Reason Collected on the Form
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey}
-        filter: "ODM.ItemOID = 'IT.VS.BPREASND'"
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.VS.BPREASND}
 
   - name: VSTESTCD
     type: str
@@ -114,17 +84,6 @@ columns:
     type: int
     label: Test Order Within Visit
     derivation: TEST.TESTORD
-
-  # The form items that hold the test's result and its unit.
-  - name: RESULT_ITEM
-    type: str
-    label: Result Item Identifier
-    derivation: TEST.RESULT_ITEM
-
-  - name: UNIT_ITEM
-    type: str
-    label: Unit Item Identifier
-    derivation: TEST.UNIT_ITEM
 
   # Test table flags, 1 or 0: whether the test uses the form's body
   # position, its temperature method, or its blood pressure not-done flag.
@@ -146,24 +105,10 @@ columns:
   - name: VSORRES
     type: str
     label: Result or Finding in Original Units
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey,
-          ItemOID: RESULT_ITEM}
-        expr: "ONLY(ODM.Value)"
 
   - name: VSORRESU
     type: str
     label: Original Units
-    derivation:
-      aggregate:
-        key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey,
-          StudyEventOID: ODM.StudyEventOID, StudyEventRepeatKey: ODM.StudyEventRepeatKey,
-          ItemGroupOID: ODM.ItemGroupOID, ItemGroupRepeatKey: ODM.ItemGroupRepeatKey,
-          ItemOID: UNIT_ITEM}
-        expr: "ONLY(ODM.Value)"
 
   # The form collects standard units, so this is the collected result read
   # as a number. A result that is not a number becomes missing here, and the
@@ -234,44 +179,63 @@ columns:
       not_missing: {}
 
 # One row template per test, so every visit form group yields one record
-# per test even when the test's items are absent. Each template names only
-# its test; the test table supplies the rest.
+# per test even when the test's items are absent. Each template names its
+# test and the form items holding its result and unit; the test table
+# supplies the rest.
 rows:
   - id: sysbp
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    derivations: {VSTESTCD: {literal: SYSBP}}
+    derivations:
+      VSTESTCD: {literal: SYSBP}
+      VSORRES: {odm: ODM.IT.VS.SYSBP}
+      VSORRESU: {odm: ODM.IT.VS.SYSBPU}
 
   - id: diabp
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    derivations: {VSTESTCD: {literal: DIABP}}
+    derivations:
+      VSTESTCD: {literal: DIABP}
+      VSORRES: {odm: ODM.IT.VS.DIABP}
+      VSORRESU: {odm: ODM.IT.VS.DIABPU}
 
   - id: pulse
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    derivations: {VSTESTCD: {literal: PULSE}}
+    derivations:
+      VSTESTCD: {literal: PULSE}
+      VSORRES: {odm: ODM.IT.VS.PULSE}
+      VSORRESU: {odm: ODM.IT.VS.PULSEU}
 
   - id: resp
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    derivations: {VSTESTCD: {literal: RESP}}
+    derivations:
+      VSTESTCD: {literal: RESP}
+      VSORRES: {odm: ODM.IT.VS.RESP}
+      VSORRESU: {odm: ODM.IT.VS.RESPU}
 
   - id: temp
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    derivations: {VSTESTCD: {literal: TEMP}}
+    derivations:
+      VSTESTCD: {literal: TEMP}
+      VSORRES: {odm: ODM.IT.VS.TEMP}
+      VSORRESU: {odm: ODM.IT.VS.TEMPU}
 
   - id: weight
     dataset: ODM
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
-    derivations: {VSTESTCD: {literal: WEIGHT}}
+    derivations:
+      VSTESTCD: {literal: WEIGHT}
+      VSORRES: {odm: ODM.IT.VS.WEIGHT}
+      VSORRESU: {odm: ODM.IT.VS.WEIGHTU}
 
 verifications:
   - unique:

@@ -1,0 +1,8 @@
+phase: validation
+condition: invalid_odm_context
+spec_paths:
+  - columns.SEX.derivation.odm
+requirement: REQ-1277
+context:
+  dataset: ODM
+  location: column

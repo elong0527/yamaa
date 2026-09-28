@@ -1,5 +1,17 @@
-phase: validation
-condition: missing_verification_id
+phase: verification
+condition: row_count_failed
 spec_paths:
   - verifications[1].row_count
-requirement: REQ-0402
+requirement: REQ-0385
+context:
+  failure_count: 2
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
+      PARAMCD: ALT
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
+      PARAMCD: ALT
+  counts:
+    - 2
+    - 0
