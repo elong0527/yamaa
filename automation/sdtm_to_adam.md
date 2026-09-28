@@ -2,9 +2,13 @@
 
 Canonical recipe for deriving ADaM datasets from SDTM with the yamaa engine.
 
-- create one spec per dataset (e.g. adsl.yaml)
+- create exactly one spec per output dataset (e.g. `adsl.yaml`); keep temporary
+  values and ordered calculation steps as derivations in that spec, not as
+  `adsl-s1.yaml`, `adsl-final.yaml`, or other staged dataset files
 - establish dependency to avoid duplicate logic (e.g. the rest of the ADaM specs should depend on adsl.yaml)
 - create `run.py` to run the pipeline within 30 lines of code using the yamaa Python engine.
+- keep study-owned orchestration beside the study; do not add renderers,
+  conversion utilities, or other study support files under `.github/scripts`
 - verify equivalence of all data with a tolerance at 1e-10.
 - Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
 - Comparison lives in a separate `compare.py` (not in `run.py`), which reports matched/total columns and cells per dataset and exits nonzero on any mismatch.
@@ -28,6 +32,11 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   should be minimized for section level details. 
 - **Declaration order is load-bearing.** A column must be declared after any
   column its derivation references.
+- **Ordered window chains stay in the dataset spec.** A later window derivation
+  may read an earlier window result, including through intervening scalar
+  derivations. For example, `rank` -> `case` -> `previous_non_missing` is one
+  ordered derivation chain in one row template; it does not require staging
+  files.
 - **ADSL is derived once and consumed downstream.** Subject-level variables
   are derived only in the ADSL spec; the other specs read them from the
   derived `adsl-yamaa.parquet` predecessor.
@@ -45,7 +54,15 @@ Derive in dependency order; every predecessor is staged before it is read:
    `adsl-yamaa.parquet`, and any derived predecessors it needs (e.g. ADTTE reads
    the derived ADAE; ADLBC reads the derived ADSL).
 
-## 4. File github issues 
+## 4. When one specification is blocked
 
- 1. explore areas to improve yamaa schema to simplify development
- 2. create github issues in yamaa repo with tag: pilot-dry-run 
+Do not work around a missing language or runtime capability by committing
+multiple YAML files for one output dataset. Instead:
+
+1. Reduce the blocker to the smallest single-spec example and verify it against
+   the latest yamaa revision.
+2. If it still fails, create a yamaa GitHub issue with the `pilot-dry-run`
+   label. Include the reduced specification, the diagnostic or timeout, and
+   the required before/after behavior.
+3. Leave the output dataset out of the study run until that issue is resolved;
+   do not commit its staged workaround as the intended derivation.
