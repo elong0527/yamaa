@@ -122,6 +122,12 @@ def _match_name(column: str) -> str:
     return f"key[{column}]"
 
 
+class PlannedIntermediateUnique(_FrozenModel):
+    columns: tuple[str, ...]
+    spec_path: str
+    verification_id: str | None = None
+
+
 class PlannedIntermediate(_FrozenModel):
     """One validated `intermediates` entry, ready to select a record.
 
@@ -157,9 +163,8 @@ class PlannedIntermediate(_FrozenModel):
     # REQ-1185: derivations are computed per record before matching; the map
     # is empty when the author declared none.
     derived: tuple[tuple[str, HandledExpression], ...] = ()
-    # REQ-1245: donor columns asserted unique across the source-only
-    # filtered records; empty when the author declared no verification.
-    unique_columns: tuple[str, ...] = ()
+    # REQ-1245: checks over the source-only filtered donor records.
+    unique_checks: tuple[PlannedIntermediateUnique, ...] = ()
 
     @property
     def filter_variables(self) -> tuple[str, ...]:
@@ -2680,7 +2685,7 @@ def _plan_lookups(
                     "keep",
                     "columns",
                     "derivations",
-                    "verification",
+                    "verifications",
                 )
             )
             and "no_match" in intermediate.model_fields_set
@@ -2994,16 +2999,32 @@ def _plan_lookups(
                     )
                     failed = True
 
-        unique_columns: tuple[str, ...] = ()
-        if intermediate.verification is not None:
-            unique_columns = tuple(intermediate.verification.unique)
-            for unique_index, field in enumerate(unique_columns):
+        unique_checks: list[PlannedIntermediateUnique] = []
+        verification_ids: set[str] = set()
+        for verification_index, verification in enumerate(
+            intermediate.verifications or ()
+        ):
+            unique = verification.unique
+            check_path = f"{path}.verifications[{verification_index}].unique"
+            if unique.id is not None:
+                if unique.id in verification_ids:
+                    diagnostics.append(
+                        _diagnostic(
+                            "duplicate_identifier",
+                            f"{check_path}.id",
+                            {"identifier": unique.id},
+                            requirement="REQ-0398",
+                        )
+                    )
+                    failed = True
+                verification_ids.add(unique.id)
+            for unique_index, field in enumerate(unique.columns):
                 if field in derived or field in fields:
                     continue
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
-                        f"{path}.verification.unique[{unique_index}]",
+                        f"{check_path}.columns[{unique_index}]",
                         {
                             "intermediate": intermediate.id,
                             "identifier": f"{intermediate.dataset}.{field}",
@@ -3016,18 +3037,22 @@ def _plan_lookups(
                 identifier.split(".", 1)[0] != intermediate.dataset
                 for identifier in predicate_identifiers(predicate)
             ):
-                # REQ-1245: a correlated filter is evaluated per current
-                # row, so no single run-wide donor set exists to check
-                # uniqueness over; the combination fails validation.
                 diagnostics.append(
                     _diagnostic(
                         "correlated_filter_with_unique_verification",
-                        f"{path}.verification",
+                        check_path,
                         {"intermediate": intermediate.id},
                         requirement="REQ-1245",
                     )
                 )
                 failed = True
+            unique_checks.append(
+                PlannedIntermediateUnique(
+                    columns=tuple(unique.columns),
+                    spec_path=check_path,
+                    verification_id=unique.id,
+                )
+            )
 
         between = intermediate.between
         if between is not None:
@@ -3076,7 +3101,7 @@ def _plan_lookups(
             no_match=intermediate.no_match,
             no_match_declared="no_match" in intermediate.model_fields_set,
             derived=tuple(derived.items()),
-            unique_columns=unique_columns,
+            unique_checks=tuple(unique_checks),
         )
         if intermediate_reads:
             reads[intermediate.id] = tuple(intermediate_reads)
@@ -4150,9 +4175,10 @@ def _row_phase_default_columns(
                 )
                 if bound is not None
             )
-        if intermediate.verification is not None:
+        if intermediate.verifications:
             # REQ-1245: the asserted-unique columns are donor fields.
-            names.extend(intermediate.verification.unique)
+            for verification in intermediate.verifications:
+                names.extend(verification.unique.columns)
         if intermediate.filter is not None:
             try:
                 names.extend(

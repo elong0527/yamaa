@@ -628,14 +628,11 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
         check_dataset(completed, [Expression(root={"row_count": {}})], KEYS)
     assert no_bound.value.requirement == "REQ-0399"
 
-    with pytest.raises(DeclarationError) as grouped:
-        check_dataset(
-            completed,
-            [Expression(root={"row_count": {"group_by": ["STUDYID"], "min": 1}})],
-            KEYS,
-        )
-    assert grouped.value.condition == "missing_verification_id"
-    assert grouped.value.requirement == "REQ-0402"
+    assert not check_dataset(
+        completed,
+        [Expression(root={"row_count": {"group_by": ["STUDYID"], "min": 1}})],
+        KEYS,
+    )
 
     with pytest.raises(DeclarationError) as unknown:
         check_dataset(
@@ -685,6 +682,80 @@ def test_duplicate_verification_identifiers_are_refused() -> None:
 
     assert raised.value.condition == "duplicate_identifier"
     assert raised.value.requirement == "REQ-0398"
+
+
+def test_column_identifiers_are_optional_and_unique_per_column() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", "S-1", 214]],
+    )
+    records: list[VerificationRecord] = []
+    (failure,) = check_column(
+        completed,
+        column(
+            "AGE",
+            "int",
+            {"not_missing": {}},
+            {"range": {"id": "adult-age", "max": 100}},
+        ),
+        KEYS,
+        records=records,
+    )
+    assert records[0].verification_id is None
+    assert records[1].verification_id == "adult-age"
+    assert failure.context["verification_id"] == "adult-age"
+
+    with pytest.raises(DeclarationError) as repeated:
+        check_column(
+            completed,
+            column(
+                "AGE",
+                "int",
+                {"not_missing": {"id": "adult-age"}},
+                {"range": {"id": "adult-age", "max": 100}},
+            ),
+            KEYS,
+        )
+    assert repeated.value.requirement == "REQ-0398"
+
+
+def test_unique_accepts_an_explicit_identifier() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str")],
+        [["S", "S-1"], ["S", "S-1"]],
+    )
+    (failure,) = check_dataset(
+        completed,
+        [Expression(root={"unique": {"id": "subject-key", "columns": ["USUBJID"]}})],
+        KEYS,
+    )
+    assert failure.context["verification_id"] == "subject-key"
+
+    with pytest.raises(DeclarationError) as null_id:
+        check_dataset(
+            completed,
+            [Expression(root={"unique": {"id": None, "columns": ["USUBJID"]}})],
+            KEYS,
+        )
+    assert null_id.value.requirement == "REQ-0374"
+
+
+def test_every_dataset_check_can_use_its_path_without_an_id() -> None:
+    completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
+    declarations = [
+        Expression(root={"unique": {"columns": ["USUBJID"]}}),
+        Expression(root={"all_or_none": {"columns": ["STUDYID", "USUBJID"]}}),
+        Expression(
+            root={"implies": {"when": "STUDYID = 'S'", "then": "USUBJID = 'S-1'"}}
+        ),
+        Expression(root={"assert": {"expr": "USUBJID IS NOT NULL"}}),
+        Expression(root={"row_count": {"group_by": ["STUDYID"], "min": 1}}),
+    ]
+    records: list[VerificationRecord] = []
+
+    assert check_dataset(completed, declarations, KEYS, records=records) == ()
+    assert [record.verification_id for record in records] == [None] * 5
+    assert len({record.spec_path for record in records}) == 5
 
 
 def test_an_unevaluable_predicate_fails_instead_of_satisfying_a_verification() -> None:

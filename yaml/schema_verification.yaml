@@ -5,18 +5,23 @@ column_verification:
 
 column_verifications:
     not_missing:
+        - id: {type: verification_id, required: false}
         - severity: {type: verification_severity, required: false, default: error}
     allowed_values:
+        - id: {type: verification_id, required: false}
         - values: {type: "list[literal_value]", required: true}
         - severity: {type: verification_severity, required: false, default: error}
     range:
+        - id: {type: verification_id, required: false}
         - min: {type: float, required: false}
         - max: {type: float, required: false}
         - severity: {type: verification_severity, required: false, default: error}
     max_length:
+        - id: {type: verification_id, required: false}
         - max: {type: int, required: true}
         - severity: {type: verification_severity, required: false, default: error}
     matches:
+        - id: {type: verification_id, required: false}
         - pattern: {type: regex, required: true}
         - severity: {type: verification_severity, required: false, default: error}
 
@@ -25,19 +30,20 @@ dataset_verification:
 
 dataset_verifications:
     unique:
+        - id: {type: verification_id, required: false}
         - columns: {type: "list[variable]", required: true}
         - severity: {type: verification_severity, required: false, default: error}
     all_or_none:
-        - id: {type: verification_id, required: true}
+        - id: {type: verification_id, required: false}
         - columns: {type: "list[variable]", required: true}
         - severity: {type: verification_severity, required: false, default: error}
     implies:
-        - id: {type: verification_id, required: true}
+        - id: {type: verification_id, required: false}
         - when: {type: predicate, required: true}
         - then: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
     assert:
-        - id: {type: verification_id, required: true}
+        - id: {type: verification_id, required: false}
         - expr: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
     row_count: # See REQ-1152.
@@ -53,6 +59,14 @@ dataset_verifications:
         - min_fraction: {type: float, required: false}
         - max_fraction: {type: float, required: false}
         - severity: {type: verification_severity, required: false, default: error}
+
+intermediate_verification:
+    registry: intermediate_verifications
+
+intermediate_verifications:
+    unique:
+        - id: {type: verification_id, required: false}
+        - columns: {type: "list[variable]", required: true}
 
 verification_id:
     type: str

@@ -37,8 +37,9 @@ intermediates:
     order_by:
       - SELF.AESEQ
     keep: first
-    verification:
-      unique: [STUDYID, USUBJID, AESEQ]
+    verifications:
+      - unique:
+          columns: [STUDYID, USUBJID, AESEQ]
     no_match: null
 
   # The subject's immediately preceding event, serious or not. Only a

@@ -162,7 +162,11 @@ def test_self_uniqueness_checks_completed_derived_rows() -> None:
     donor = spec.intermediates[0].model_copy(
         update={
             "filter": None,
-            "verification": IntermediateVerification(unique=["USUBJID", "AVISITN"]),
+            "verifications": [
+                IntermediateVerification.model_validate(
+                    {"unique": {"columns": ["USUBJID", "AVISITN"]}}
+                )
+            ],
         }
     )
     spec = spec.model_copy(update={"intermediates": [donor]})
@@ -172,7 +176,7 @@ def test_self_uniqueness_checks_completed_derived_rows() -> None:
     assert isinstance(result, ExecutionFailure)
     assert any(
         diagnostic.condition == "duplicate_intermediate_records"
-        and diagnostic.spec_paths == ("intermediates[0].verification",)
+        and diagnostic.spec_paths == ("intermediates[0].verifications[0].unique",)
         for diagnostic in result.diagnostics
     )
 

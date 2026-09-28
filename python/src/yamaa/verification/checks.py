@@ -66,8 +66,6 @@ _DATASET_REQUIREMENTS = {
     "assert": ("assert_failed", "REQ-0384"),
     "row_count": ("row_count_failed", "REQ-0385"),
 }
-_IDENTIFIED = frozenset({"all_or_none", "implies", "assert"})
-
 KeyMap = dict[str, JsonValue]
 
 
@@ -352,6 +350,7 @@ def check_column(
     values = _values(table, column.name)
     key_maps = _key_maps(table, keys)
     failures: list[VerificationFailure] = []
+    identifiers: dict[str, str] = {}
     for index, declaration in enumerate(declarations):
         path = f"columns.{column.name}.verifications[{index}]"
         keyword, arguments, severity = _operation(declaration, path)
@@ -363,12 +362,24 @@ def check_column(
             )
         condition, requirement = _COLUMN_REQUIREMENTS[keyword]
         spec_path = f"{path}.{keyword}"
+        identifier = _identifier(arguments, spec_path)
+        if identifier is not None:
+            if identifier in identifiers:
+                raise DeclarationError(
+                    spec_path,
+                    "REQ-0398",
+                    f"verification id {identifier!r} repeats {identifiers[identifier]}",
+                    condition="duplicate_identifier",
+                )
+            identifiers[identifier] = spec_path
         offending = _column_offenders(
             keyword, arguments, column, values, key_maps, spec_path
         )
         failure: VerificationFailure | None = None
         if offending:
             context: dict[str, JsonValue] = {"column": column.name}
+            if identifier is not None:
+                context["verification_id"] = identifier
             if keyword == "max_length":
                 context["max"] = arguments["max"]
             failure = _failure(
@@ -387,7 +398,7 @@ def check_column(
                     check=keyword,
                     target=column.name,
                     requirement=requirement,
-                    verification_id=None,
+                    verification_id=identifier,
                     severity=severity,
                     evaluated_count=len(values),
                     failure=failure,
@@ -606,7 +617,7 @@ def check_dataset(
                 f"{path}.{keyword}", "REQ-0397", "unknown dataset verification"
             )
         spec_path = f"{path}.{keyword}"
-        identifier = _identifier(keyword, arguments, spec_path)
+        identifier = _identifier(arguments, spec_path)
         if identifier is not None:
             if identifier in identifiers:
                 raise DeclarationError(
@@ -646,20 +657,10 @@ def check_dataset(
     return tuple(failures)
 
 
-def _identifier(
-    keyword: str, arguments: Mapping[str, JsonValue], spec_path: str
-) -> str | None:
-    identifier = arguments.get("id")
-    grouped = keyword == "row_count" and arguments.get("group_by") is not None
-    if identifier is None:
-        if keyword in _IDENTIFIED or grouped:
-            raise DeclarationError(
-                spec_path,
-                "REQ-0402" if grouped else "REQ-0374",
-                f"{keyword} requires a verification id",
-                condition="missing_verification_id",
-            )
+def _identifier(arguments: Mapping[str, JsonValue], spec_path: str) -> str | None:
+    if "id" not in arguments:
         return None
+    identifier = arguments["id"]
     if not isinstance(identifier, str) or not identifier:
         raise DeclarationError(spec_path, "REQ-0374", "a verification id is text")
     return identifier
