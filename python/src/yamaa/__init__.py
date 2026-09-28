@@ -1,9 +1,6 @@
-"""Python helpers for the yamaa clinical data specification."""
+"""yamaa clean-room derivation engine (Stage 1)."""
 
-from importlib.metadata import version as _distribution_version
+from .api import derive
+from .errors import YamaaError
 
-from yamaa.domain import DomainRun, DomainRunError, yamaa_domain
-
-__version__ = _distribution_version("yamaa")
-
-__all__ = ["DomainRun", "DomainRunError", "__version__", "yamaa_domain"]
+__all__ = ["YamaaError", "derive"]

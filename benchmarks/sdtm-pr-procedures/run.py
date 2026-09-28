@@ -1,4 +1,4 @@
 import yamaa
 
-pr = yamaa.yamaa_domain("spec.yaml").output
+pr = yamaa.derive("spec.yaml")
 pr
