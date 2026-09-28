@@ -20,8 +20,9 @@ weights, any of which may be blank.
   column alone.
 - `AGEGRP` places each age in a band: under 18, 18 to 64, or 65 and
   over. Each band includes its lower edge, so an age of exactly 65 is
-  in the oldest band; a subject with no age carries the fallback text
-  `NOT REPORTED`.
+  in the oldest band and an age of exactly 18 is in the middle band;
+  a 12-year-old exercises the youngest band. A subject with no age
+  carries the fallback text `NOT REPORTED`.
 - `SAFFL` flags the safety population: `Y` for a subject with a
   first-dose date, `N` for a subject without one.
 - `COUNTRY` takes the subject's own country, or the site country when
