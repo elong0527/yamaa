@@ -188,7 +188,7 @@ def tokenize(text, where="<predicate>"):
             raise YamaaError(
                 phase="validation",
                 condition="invalid_predicate",
-                requirement="R004-31",
+                requirement="REQ-0188",
                 spec_paths=[where],
                 context={"text": text, "at": text[pos : pos + 20]},
             )
@@ -232,7 +232,7 @@ class Parser:
         raise YamaaError(
             phase="validation",
             condition="invalid_predicate",
-            requirement="R004-31",
+            requirement="REQ-0188",
             spec_paths=[self.where],
             context={"text": self.text, "detail": msg},
         )
@@ -356,7 +356,7 @@ class Parser:
                 raise YamaaError(
                     phase="derivation",
                     condition="invalid_date_text",
-                    requirement="R004-35",
+                    requirement="REQ-0192",
                     spec_paths=[self.where],
                     context={"text": self.text, "literal": text},
                 )
@@ -411,7 +411,7 @@ class Parser:
                         raise YamaaError(
                             phase="validation",
                             condition="invalid_predicate",
-                            requirement="R004-34",
+                            requirement="REQ-0191",
                             spec_paths=[self.where],
                             context={"text": self.text},
                         )
@@ -451,7 +451,7 @@ def _or(a, b):
 
 
 def _like_match(value, pattern, escape):
-    # R004-19/20: % any sequence, _ one scalar, case-sensitive; ESCAPE one scalar.
+    # REQ-0176/20: % any sequence, _ one scalar, case-sensitive; ESCAPE one scalar.
     i, j = 0, 0
     star = -1
     match = 0
@@ -465,7 +465,7 @@ def _like_match(value, pattern, escape):
                     raise YamaaError(
                         phase="validation",
                         condition="invalid_predicate",
-                        requirement="R004-34",
+                        requirement="REQ-0191",
                         context={"pattern": pattern},
                     )
                 if value[i] == pattern[j]:
@@ -516,12 +516,12 @@ def evaluate(node, resolve, where="<predicate>"):
         _, op, l, r = node
         lv, rv = evaluate(l, resolve, where), evaluate(r, resolve, where)
         if is_missing(lv) or is_missing(rv):
-            return None  # R004-13
+            return None  # REQ-0166
         if not comparable(lv, rv):
             raise YamaaError(
                 phase="derivation",
                 condition="incompatible_input_type",
-                requirement="R004-33",
+                requirement="REQ-0190",
                 spec_paths=[where],
                 context={"op": op},
             )
@@ -556,7 +556,7 @@ def evaluate(node, resolve, where="<predicate>"):
             raise YamaaError(
                 phase="derivation",
                 condition="incompatible_input_type",
-                requirement="R004-33",
+                requirement="REQ-0190",
                 spec_paths=[where],
             )
         return _like_match(sv, pv, esc)

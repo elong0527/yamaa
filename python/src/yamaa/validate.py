@@ -95,28 +95,28 @@ def check_resource_path(e, name, path):
     if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", path) or re.match(
         r"^[A-Za-z][A-Za-z0-9+.-]*:", path
     ):
-        _fail(where, "validation", "resource_path_uri_scheme", "R021-9", ctx)
+        _fail(where, "validation", "resource_path_uri_scheme", "REQ-0775", ctx)
     if os.path.isabs(path):
-        _fail(where, "validation", "resource_path_not_relative", "R021-15", ctx)
+        _fail(where, "validation", "resource_path_not_relative", "REQ-0781", ctx)
     full = os.path.normpath(os.path.join(e.spec_dir, path))
     if os.path.commonpath([e.spec_dir, full]) != e.spec_dir:
-        _fail(where, "validation", "resource_path_outside_project", "R021-18", ctx)
+        _fail(where, "validation", "resource_path_outside_project", "REQ-0784", ctx)
     if os.path.islink(full):
-        _fail(where, "validation", "resource_path_symlink", "R021-17", ctx)
+        _fail(where, "validation", "resource_path_symlink", "REQ-0783", ctx)
     if not os.path.lexists(full):
-        _fail(where, "validation", "resource_path_missing", "R021-19", ctx)
+        _fail(where, "validation", "resource_path_missing", "REQ-0785", ctx)
     if not os.path.isfile(full):
         _fail(where, "validation", "resource_path_not_regular_file", "REQ-0785", ctx)
 
 
 def _check_portable_pattern(pattern, where):
-    """R022-27/34: fail validation with invalid_regex when the portable"""
+    """REQ-0827/34: fail validation with invalid_regex when the portable"""
     if not isinstance(pattern, str):
         _fail(
             where,
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "str", "actual": _type_name(pattern)},
         )
     bad = _pred.portable_pattern_error(pattern)
@@ -125,7 +125,7 @@ def _check_portable_pattern(pattern, where):
             where,
             "validation",
             "invalid_regex",
-            "R022-27",
+            "REQ-0827",
             {"pattern": pattern, "detail": bad},
         )
 
@@ -156,7 +156,7 @@ def _check_inputs(e):
                 ["input." + name, "domain"],
                 "validation",
                 "duplicate_identifier",
-                "R002-28",
+                "REQ-0080",
                 {"identifier": name},
             )
         if isinstance(decl, dict) and "schema" in decl:
@@ -167,7 +167,7 @@ def _check_inputs(e):
                         f"input.{name}.types.{fname}",
                         "validation",
                         "redundant_field_type",
-                        "R014-10",
+                        "REQ-0523",
                         {"dataset": name, "field": fname, "type": ftype},
                     )
 
@@ -180,7 +180,7 @@ def _check_columns(e):
                 f"columns.{c['name']}.type",
                 "validation",
                 "value_not_permitted",
-                "R011-29",
+                "REQ-0012",
                 {"value": t, "permitted": sorted(COLUMN_TYPES)},
             )
 
@@ -215,7 +215,7 @@ def _check_output(e):
                 f"keys[{idx}]",
                 "validation",
                 "internal_column_in_keys",
-                "R005-44",
+                "REQ-0233",
                 {"column": k},
             )
     seen = set()
@@ -234,7 +234,7 @@ def _check_output(e):
                 f"output.order_by[{i}]",
                 "validation",
                 "duplicate_order_term",
-                "R005-48",
+                "REQ-0237",
                 {"column": var},
             )
         seen.add(var)
@@ -317,7 +317,7 @@ def _check_intermediates(e):
                 [where + ".id", other],
                 "validation",
                 "duplicate_identifier",
-                "R003-3",
+                "REQ-0113",
                 {"identifier": lid},
             )
         seen[lid] = i
@@ -343,39 +343,68 @@ def _check_intermediates(e):
                 {"intermediate": lid, "dataset": ds},
             )
         key = d.get("key")
-        key_base = d.get("key_base")
         if isinstance(key, str):
             key = [key]
-        if isinstance(key_base, str):
-            key_base = [key_base]
-        if key is not None and key_base is not None:
-            if len(key) != len(key_base):
-                _fail(where, "validation", "source_key_length_mismatch", "R003-5", {})
-            if list(key_base) == list(key):
+        if key is not None:
+            if isinstance(key, dict):
+                # REQ-0115 mapping form: donor field -> driver match expression.
+                driver_vals = list(key.values())
+                for kf in key:
+                    if not isinstance(kf, str):
+                        _fail(
+                            where + ".key",
+                            "validation",
+                            "invalid_field_type",
+                            "REQ-0115",
+                            {"expected": "field name", "actual": _type_name(kf)},
+                        )
+            elif isinstance(key, list):
+                driver_vals = list(key)
+                for kf in key:
+                    if not isinstance(kf, str):
+                        _fail(
+                            where + ".key",
+                            "validation",
+                            "invalid_field_type",
+                            "REQ-0115",
+                            {"expected": "field name", "actual": _type_name(kf)},
+                        )
+            else:
                 _fail(
-                    where, "validation", "redundant_key_base", "R003-45", {"key": key}
-                )
-        if key_base is not None:
-            for v in key_base:
-                if isinstance(v, str):
-                    continue
-                if isinstance(v, dict) and len(v) == 1:
-                    _check_tree(e, v, where + ".key_base", "col")
-                    continue
-                _fail(
-                    where + ".key_base",
+                    where + ".key",
                     "validation",
                     "invalid_field_type",
-                    "R007-37",
-                    {"expected": "variable or expression", "actual": _type_name(v)},
+                    "REQ-0115",
+                    {"expected": "list or mapping", "actual": _type_name(key)},
                 )
+            # REQ-0117: plain-name match values must name known current-row values.
+            for v in driver_vals:
+                if isinstance(v, str):
+                    if "." not in v and v not in e.donor_fields:
+                        _fail(
+                            where + ".key",
+                            "validation",
+                            "unknown_field",
+                            "REQ-0117",
+                            {"identifier": v, "intermediate": lid},
+                        )
+                elif isinstance(v, dict) and len(v) == 1:
+                    _check_tree(e, v, where + ".key", "col")
+                else:
+                    _fail(
+                        where + ".key",
+                        "validation",
+                        "invalid_field_type",
+                        "REQ-0322",
+                        {"expected": "variable or expression", "actual": _type_name(v)},
+                    )
         ob, keep = d.get("order_by"), d.get("keep")
         if bool(ob) != bool(keep):
             _fail(
                 where,
                 "validation",
                 "unpaired_fields",
-                "R003-9",
+                "REQ-0119",
                 {
                     "intermediate": lid,
                     "declared": ["order_by"] if ob else ["keep"],
@@ -388,7 +417,7 @@ def _check_intermediates(e):
                 where + ".filter",
                 "validation",
                 "invalid_field_type",
-                "R006-46",
+                "REQ-0287",
                 {"expected": "str", "actual": _type_name(filt)},
             )
         if isinstance(filt, str):
@@ -444,7 +473,7 @@ def _check_intermediates(e):
                     where + ".between." + f,
                     "validation",
                     "invalid_field_type",
-                    "R007-37",
+                    "REQ-0322",
                     {"expected": "variable", "actual": _type_name(b[f])},
                 )
         if is_self:
@@ -479,7 +508,7 @@ def _check_intermediate_derivations(e, d, where, ds):
             where + ".derivations",
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "map", "actual": _type_name(derivs)},
         )
     for name in derivs:
@@ -522,7 +551,7 @@ def _check_intermediate_verification(e, d, where, ds):
             where + ".verification",
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "map", "actual": _type_name(ver)},
         )
     uniq = ver.get("unique")
@@ -539,7 +568,7 @@ def _check_intermediate_verification(e, d, where, ds):
             where + ".verification.unique",
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "non-empty list[str]", "actual": _type_name(uniq)},
         )
     for u in uniq:
@@ -597,7 +626,7 @@ def _check_rows(e):
                 where + ".dataset",
                 "validation",
                 "unknown_field",
-                "R002-27",
+                "REQ-0103",
                 {"dataset": ds},
             )
         for g in t.get("group_by", []) or []:
@@ -606,7 +635,7 @@ def _check_rows(e):
                     where + ".group_by",
                     "validation",
                     "unknown_field",
-                    "R001-35",
+                    "REQ-0066",
                     {"group_by": g},
                 )
 
@@ -699,7 +728,7 @@ def _check_tree(e, node, path, phase, row_grouped=False):
     if (
         isinstance(node, dict)
         and "value" in node
-        and set(node) <= {"value", "missing", "strict"}
+        and set(node) <= {"value", "missing", "strict", "unconvertible"}
     ):
         if "strict" in node and not isinstance(node["strict"], bool):
             _fail(
@@ -716,6 +745,14 @@ def _check_tree(e, node, path, phase, row_grouped=False):
                 "invalid_field_type",
                 "R007",
                 {"expected": "literal", "actual": _type_name(node["missing"])},
+            )
+        if "unconvertible" in node and isinstance(node["unconvertible"], (dict, list)):
+            _fail(
+                path + ".unconvertible",
+                "validation",
+                "invalid_field_type",
+                "R007",
+                {"expected": "literal", "actual": _type_name(node["unconvertible"])},
             )
         _check_tree(e, node["value"], path + ".value", phase, row_grouped=row_grouped)
         return
@@ -747,9 +784,9 @@ def _check_flag(e, payload, path, phase, row_grouped=False):
                 "REQ-1257",
                 {"expected": "predicate", "actual": _type_name(cond)},
             )
-        if "false_value" in payload and "missing_value" not in payload:
+        if "false_value" in payload and "missing" not in payload:
             _fail(
-                path + ".missing_value",
+                path + ".missing",
                 "validation",
                 "missing_value_required",
                 "REQ-1258",
@@ -835,7 +872,7 @@ def _operand_static_type(e, operand):
 
 
 def _check_predicate_types(e, text, path):
-    """R004-33: operands of a comparison must have comparable static types."""
+    """REQ-0190: operands of a comparison must have comparable static types."""
     try:
         ast, _ = _pred.parse(text, path)
     except YamaaError:
@@ -849,7 +886,7 @@ def _check_predicate_types(e, text, path):
                 path,
                 "validation",
                 "incompatible_input_type",
-                "R004-33",
+                "REQ-0190",
                 {"left_type": lt, "right_type": rt},
             )
 
@@ -872,7 +909,7 @@ def _check_predicate_types(e, text, path):
                     path,
                     "validation",
                     "incompatible_input_type",
-                    "R004-33",
+                    "REQ-0190",
                     {"left_type": lt, "right_type": "str"},
                 )
         else:
@@ -884,15 +921,15 @@ def _check_predicate_types(e, text, path):
 
 def _check_case(e, payload, path, phase, row_grouped=False):
     if not isinstance(payload, list) or not payload:
-        _fail(path, "validation", "invalid_field_type", "R007-54", {})
+        _fail(path, "validation", "invalid_field_type", "REQ-0339", {})
     seen_otherwise = False
     for i, item in enumerate(payload):
         ip = f"{path}[{i}]"
         if not isinstance(item, dict):
-            _fail(ip, "validation", "invalid_field_type", "R007-54", {})
+            _fail(ip, "validation", "invalid_field_type", "REQ-0339", {})
         if "otherwise" in item:
             if seen_otherwise or i != len(payload) - 1 or len(item) != 1:
-                _fail(ip, "validation", "invalid_field_type", "R007-54", {})
+                _fail(ip, "validation", "invalid_field_type", "REQ-0339", {})
             seen_otherwise = True
             _check_tree(
                 e, item["otherwise"], ip + ".otherwise", phase, row_grouped=row_grouped
@@ -904,14 +941,14 @@ def _check_case(e, payload, path, phase, row_grouped=False):
                     ip + ".when",
                     "validation",
                     "invalid_field_type",
-                    "R006-46",
+                    "REQ-0287",
                     {"expected": "str", "actual": _type_name(w)},
                 )
             _pred.parse(w, ip + ".when")
             _check_predicate_types(e, w, ip + ".when")
             _check_tree(e, item["then"], ip + ".then", phase, row_grouped=row_grouped)
         else:
-            _fail(ip, "validation", "invalid_field_type", "R007-54", {})
+            _fail(ip, "validation", "invalid_field_type", "REQ-0339", {})
 
 
 def _check_expr(e, key, payload, path, phase, row_grouped=False):
@@ -926,7 +963,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     f"{path}.{f}",
                     "validation",
                     "invalid_field_type",
-                    "R007-37",
+                    "REQ-0322",
                     {"expected": "variable", "actual": _type_name(payload[f])},
                 )
     if key == "source" and isinstance(payload, dict) and "filter" in payload:
@@ -936,7 +973,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 f"{path}.filter",
                 "validation",
                 "invalid_field_type",
-                "R006-46",
+                "REQ-0287",
                 {"expected": "str", "actual": _type_name(f)},
             )
         else:
@@ -946,7 +983,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     f"{path}.filter",
                     "validation",
                     "prohibited_construct",
-                    "R003-38",
+                    "REQ-0148",
                     {"identifier": var},
                 )
             ds = var.split(".")[0] if isinstance(var, str) else None
@@ -969,22 +1006,15 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                         f"{path}.filter",
                         "validation",
                         "unknown_field",
-                        "R003-22",
+                        "REQ-0132",
                         {"identifier": nm, "dataset": ds},
                     )
     if key in _WINDOW_KINDS and isinstance(payload, dict):
         _check_window(e, key, payload, path)
     if key == "aggregate" and isinstance(payload, dict):
-        if (
-            phase == "row"
-            and row_grouped
-            and (payload.get("key") is not None or payload.get("key_base") is not None)
-        ):
-            paths = [
-                f"{path}.{f}" for f in ("key", "key_base") if payload.get(f) is not None
-            ]
+        if phase == "row" and row_grouped and payload.get("key") is not None:
             _fail(
-                paths,
+                f"{path}.key",
                 "validation",
                 "invalid_aggregate_context",
                 "REQ-0142",
@@ -997,7 +1027,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     f"{path}.between.{f}",
                     "validation",
                     "invalid_field_type",
-                    "R007-37",
+                    "REQ-0322",
                     {"expected": "variable", "actual": _type_name(b[f])},
                 )
         ex = payload.get("expr")
@@ -1015,13 +1045,17 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                             path + ".expr",
                             "validation",
                             "qualified_identifier",
-                            "R010-38",
+                            "REQ-0442",
                             {"expr": ex, "identifier": n},
                         )
     if isinstance(payload, dict):
         if key == "cut":
             _check_input_type(
-                e, payload.get("source"), "numeric", path + ".source", "R007-22"
+                e, payload.get("source"), "numeric", path + ".source", "REQ-0306"
+            )
+        elif key == "str_case":
+            _check_input_type(
+                e, payload.get("source"), "str", path + ".source", "REQ-0308"
             )
         elif key == "round_half_away_from_zero":
             _check_input_type(
@@ -1039,7 +1073,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 )
         elif key in ("str_upper", "str_lower", "str_extract", "str_contains"):
             _check_input_type(
-                e, payload.get("source"), "str", path + ".source", "R007-24"
+                e, payload.get("source"), "str", path + ".source", "REQ-0308"
             )
             if (
                 key == "str_contains"
@@ -1058,7 +1092,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     path + ".source",
                     "validation",
                     "invalid_field_type",
-                    "R007-37",
+                    "REQ-0322",
                     {"expected": "variable", "actual": _type_name(src)},
                 )
             w = payload.get("width")
@@ -1076,17 +1110,19 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 payload.get("source"),
                 ["datetime", "str"],
                 path + ".source",
-                "R016-66",
+                "REQ-0607",
             )
         elif key == "date_diff":
             _check_input_type(
-                e, payload.get("start"), "date", path + ".start", "R016-65"
+                e, payload.get("start"), "date", path + ".start", "REQ-0606"
             )
-            _check_input_type(e, payload.get("end"), "date", path + ".end", "R016-65")
+            _check_input_type(e, payload.get("end"), "date", path + ".end", "REQ-0606")
         elif key == "study_day":
-            _check_input_type(e, payload.get("date"), "date", path + ".date", "R016-65")
             _check_input_type(
-                e, payload.get("reference"), "date", path + ".reference", "R016-65"
+                e, payload.get("date"), "date", path + ".date", "REQ-0606"
+            )
+            _check_input_type(
+                e, payload.get("reference"), "date", path + ".reference", "REQ-0606"
             )
         elif key == "aggregate":
             ex = payload.get("expr")
@@ -1122,7 +1158,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                         _num_idents(nd[2], names)
                         for nm in names:
                             _check_input_type(
-                                e, nm, "numeric", path + ".expr", "R013-45"
+                                e, nm, "numeric", path + ".expr", "REQ-0510"
                             )
                     else:
                         for c in nd[1:]:
@@ -1147,7 +1183,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     path,
                     "validation",
                     "incomparable_sources",
-                    "R007-39",
+                    "REQ-0324",
                     {"sources": list(kinds), "types": list(kinds.values())},
                 )
     if key == "literal" and isinstance(payload, (dict, list)):
@@ -1155,7 +1191,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
             path,
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "literal_value", "actual": _type_name(payload)},
         )
     if key == "str_extract" and isinstance(payload, dict):
@@ -1169,7 +1205,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     f"{path}.group",
                     "validation",
                     "regex_group_out_of_range",
-                    "R022-28",
+                    "REQ-0828",
                     {"group": g, "groups": rx.groups},
                 )
     if key == "str_template":
@@ -1179,7 +1215,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 path,
                 "validation",
                 "invalid_field_type",
-                "R006-46",
+                "REQ-0287",
                 {"expected": "str", "actual": _type_name(t)},
             )
     if key == "date_impute" and isinstance(payload, dict):
@@ -1208,7 +1244,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 f"{path}.month",
                 "validation",
                 "month_out_of_range",
-                "R016-67",
+                "REQ-0608",
                 {"month": m},
             )
         day = payload.get("day")
@@ -1218,7 +1254,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     f"{path}.day",
                     "validation",
                     "value_not_permitted",
-                    "R016-68",
+                    "REQ-0609",
                     {"value": day, "permitted": ["first", "last"]},
                 )
         elif isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 31:
@@ -1226,7 +1262,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 f"{path}.day",
                 "validation",
                 "value_not_permitted",
-                "R016-68",
+                "REQ-0609",
                 {"value": day, "permitted": ["first", "last", "1-31"]},
             )
     if key == "row_value" and isinstance(payload, dict):
@@ -1236,7 +1272,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 f"{path}.offset",
                 "validation",
                 "zero_offset",
-                "R007-43",
+                "REQ-0328",
                 {"offset": off},
             )
     if key == "rank" and isinstance(payload, dict):
@@ -1246,7 +1282,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 f"{path}.method",
                 "validation",
                 "invalid_field_type",
-                "R006-46",
+                "REQ-0287",
                 {"expected": "str", "actual": _type_name(m)},
             )
         if m not in ("competition", "dense"):
@@ -1257,80 +1293,32 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 "R007",
                 {"value": m, "permitted": ["competition", "dense"]},
             )
-    if key == "lookup" and isinstance(payload, dict):
-        ds = payload.get("dataset")
-        if ds not in e.inputs:
-            _fail(path, "validation", "unknown_field", "R003", {"dataset": ds})
-        if payload.get("strict") and payload.get("missing") is not None:
-            _fail(path, "validation", "conflicting_absent_policy", "R003-13", {})
-        kb = payload.get("key_base")
-        k = payload.get("key")
-        if isinstance(kb, str):
-            kb = [kb]
-        if isinstance(k, str):
-            k = [k]
-        if kb is not None:
-            for v in kb:
-                if isinstance(v, str):
-                    continue
-                if isinstance(v, dict) and len(v) == 1:
-                    _check_tree(
-                        e, v, f"{path}.key_base", phase, row_grouped=row_grouped
-                    )
-                    continue
-                _fail(
-                    f"{path}.key_base",
-                    "validation",
-                    "invalid_field_type",
-                    "R007-37",
-                    {"expected": "variable or expression", "actual": _type_name(v)},
-                )
-        if k is not None and kb is not None:
-            if len(k) != len(kb):
-                _fail(path, "validation", "source_key_length_mismatch", "R003-5", {})
-            if list(kb) == list(k):
-                _fail(path, "validation", "redundant_key_base", "R003-45", {"key": k})
-        filt = payload.get("filter")
-        if filt is not None and not isinstance(filt, str):
-            _fail(
-                f"{path}.filter",
-                "validation",
-                "invalid_field_type",
-                "R006-46",
-                {"expected": "str", "actual": _type_name(filt)},
-            )
     if key == "mapping" and isinstance(payload, dict):
-        has_dict = "dict" in payload
-        has_yaml = "dict_yaml" in payload
-        if has_dict == has_yaml:
+        # REQ-1110: dict is inline or a YAML path; dict_yaml is dropped.
+        if "dict_yaml" in payload:
+            _fail(
+                path,
+                "validation",
+                "unknown_field",
+                "REQ-1110",
+                {"field": "dict_yaml"},
+            )
+        if "dict" not in payload:
             _fail(
                 path,
                 "validation",
                 "invalid_field_type",
                 "REQ-1110",
-                {
-                    "expected": "exactly one of dict, dict_yaml",
-                    "actual": [k for k in ("dict", "dict_yaml") if k in payload],
-                },
+                {"expected": "dict", "actual": "absent"},
             )
-        if has_dict and not isinstance(payload["dict"], dict):
+        d = payload["dict"]
+        if not isinstance(d, (dict, str)):
             _fail(
                 f"{path}.dict",
                 "validation",
                 "invalid_field_type",
                 "REQ-1110",
-                {"expected": "dict", "actual": _type_name(payload["dict"])},
-            )
-        if has_yaml and not isinstance(payload["dict_yaml"], str):
-            _fail(
-                f"{path}.dict_yaml",
-                "validation",
-                "invalid_field_type",
-                "REQ-1110",
-                {
-                    "expected": "project_path",
-                    "actual": _type_name(payload["dict_yaml"]),
-                },
+                {"expected": "dict or path", "actual": _type_name(d)},
             )
 
 
@@ -1341,7 +1329,7 @@ def check_window_shape(w, where):
             where,
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "object", "actual": _type_name(w)},
         )
     gb = w.get("group_by", [])
@@ -1350,7 +1338,7 @@ def check_window_shape(w, where):
             where + ".group_by",
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "list[variable]", "actual": _type_name(gb)},
         )
     for g in gb:
@@ -1359,7 +1347,7 @@ def check_window_shape(w, where):
                 where + ".group_by",
                 "validation",
                 "invalid_field_type",
-                "R007-37",
+                "REQ-0322",
                 {"expected": "variable", "actual": _type_name(g)},
             )
     ob = w.get("order_by", [])
@@ -1368,7 +1356,7 @@ def check_window_shape(w, where):
             where + ".order_by",
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "list[order_by_term]", "actual": _type_name(ob)},
         )
     for i, t in enumerate(ob):
@@ -1382,7 +1370,7 @@ def check_window_shape(w, where):
                 f"{where}.order_by[{i}]",
                 "validation",
                 "invalid_field_type",
-                "R007-37",
+                "REQ-0322",
                 {"expected": "variable", "actual": _type_name(t)},
             )
     filt = w.get("filter")
@@ -1391,7 +1379,7 @@ def check_window_shape(w, where):
             where + ".filter",
             "validation",
             "invalid_field_type",
-            "R006-46",
+            "REQ-0287",
             {"expected": "str", "actual": _type_name(filt)},
         )
 
@@ -1441,7 +1429,7 @@ def _check_window(e, key, payload, path):
             path,
             "validation",
             "prohibited_construct",
-            "R007-56",
+            "REQ-0341",
             {"field": "window.order_by"},
         )
 
@@ -1543,15 +1531,6 @@ def _ident_refs(node):
             for f in ("source", "date", "reference_date", "value", "flag"):
                 if f in payload:
                     add(payload[f])
-        elif key == "lookup":
-            kb = payload.get("key_base") or []
-            if isinstance(kb, str):
-                kb = [kb]
-            for v in kb:
-                if isinstance(v, dict):
-                    walk(v)  # REQ-1259: expression entry identifiers
-                else:
-                    add(v)
             b = payload.get("between") or {}
             add(b.get("value"))
 
@@ -1665,18 +1644,6 @@ def _unqualified_refs(node, phase="col"):
         for f in ("source", "date", "reference_date", "value", "flag"):
             if f in payload and isinstance(payload[f], str) and "." not in payload[f]:
                 refs.add(payload[f])
-    elif key == "lookup":
-        kb = payload.get("key_base") or []
-        if isinstance(kb, str):
-            kb = [kb]
-        for v in kb:
-            if isinstance(v, dict):
-                refs.update(_unqualified_refs(v, phase))
-            elif isinstance(v, str) and "." not in v:
-                refs.add(v)
-        b = payload.get("between") or {}
-        if b.get("value") and "." not in b["value"]:
-            refs.add(b["value"])
     return refs
 
 
@@ -1689,7 +1656,7 @@ def _topo_order(derivs, ref_fn, where):
         if s == "perm":
             return
         if s == "temp":
-            _fail(where, "validation", "dependency_cycle", "R001-41", {"column": n})
+            _fail(where, "validation", "dependency_cycle", "REQ-0072", {"column": n})
         state[n] = "temp"
         for r in ref_fn(derivs[n]):
             if r in derivs:
@@ -1757,7 +1724,7 @@ def _check_dependencies(e):
                 cyc = stack[stack.index(r) :] + [r]
                 paths = [f"columns.{c}.derivation.{keys[c]}" for c in cyc]
                 _fail(
-                    paths, "validation", "dependency_cycle", "R001-41", {"cycle": cyc}
+                    paths, "validation", "dependency_cycle", "REQ-0072", {"cycle": cyc}
                 )
             if state.get(r) is None:
                 visit(r)
@@ -1774,7 +1741,7 @@ def _check_dependencies(e):
                     f"columns.{n}.derivation.{keys[n]}",
                     "validation",
                     "forward_reference",
-                    "R001-40",
+                    "REQ-0071",
                     {"column": n, "dependency": r},
                 )
     if not (e.spec.get("rows") or []):
@@ -1787,7 +1754,7 @@ def _check_dependencies(e):
                             f"columns.{n}.derivation",
                             "validation",
                             "key_dependency",
-                            "R001-43",
+                            "REQ-0074",
                             {"column": n, "dependency": r},
                         )
 
@@ -1817,7 +1784,7 @@ def _check_verifications(e):
                         where + "." + f,
                         "validation",
                         "invalid_field_type",
-                        "R006-46",
+                        "REQ-0287",
                         {"expected": "str", "actual": _type_name(payload[f])},
                     )
     for i, v in enumerate(e.spec.get("verifications") or []):
@@ -1832,6 +1799,6 @@ def _check_verifications(e):
                     where + "." + f,
                     "validation",
                     "invalid_field_type",
-                    "R006-46",
+                    "REQ-0287",
                     {"expected": "str", "actual": _type_name(payload[f])},
                 )
