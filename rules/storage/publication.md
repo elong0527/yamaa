@@ -166,8 +166,7 @@ complete new one, and never a prefix of the new one.
 **REQ-0755.** Publication happens once, after the whole artifact is complete:
 after every value's lifecycle, key validation, and verification under [Execution lifecycle](../execution/lifecycle.md), and
 after its rows are ordered. Rows are not streamed to the target as they are
-constructed. A partially constructed dataset is not yet ordered, and a
-run that fails midway would already have published part of it.
+constructed.
 
 ### Warning-log publication
 
