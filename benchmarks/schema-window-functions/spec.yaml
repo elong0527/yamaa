@@ -8,8 +8,8 @@ base: VS
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, VISITN, VISIT, VSDTC, TRTSDT, VSSTRESN, VSEVAL,
-            VSSEQ, SEVRANKC, SEVRANKD, PREVRES, NEXTRES, LASTRES, CARRYRES,
-            BLFL]
+            VSSEQ, SEVRANKC, SEVRANKD, PREVRES, NEXTRES, EVALPREV, LASTRES,
+            CARRYRES, BLFL]
 
 windows:
   RESULT_ORDER:
@@ -117,6 +117,22 @@ columns:
         source: VSSTRESN
         offset: 1
         window: VISIT_ORDER
+
+  # The result from the previous evaluable visit. The filter leaves the
+  # visits that are not evaluable out before the offset is counted:
+  # subject 01 visit 4 reads visit 2 across the unevaluable visit 3, and a
+  # visit that is not evaluable receives missing.
+  - name: EVALPREV
+    type: float
+    label: Previous Evaluable Visit Result
+    derivation:
+      row_value:
+        source: VSSTRESN
+        offset: -1
+        window:
+          group_by: [USUBJID]
+          order_by: [VISITN]
+          filter: "VSEVAL = 'Y'"
 
   # The closest strictly earlier non-missing result; the current row is
   # never a candidate. Crosses any number of consecutive gaps: subject 02

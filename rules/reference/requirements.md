@@ -1083,7 +1083,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1112](../operations/text.md#req-1112) | `operations/text.md` | Schema prose |
 | [REQ-1113](../operations/text.md#req-1113) | `operations/text.md` | Schema prose |
 | [REQ-1114](../operations/text.md#req-1114) | `operations/text.md` | Schema prose |
-| [REQ-1115](../operations/text.md#req-1115) | `operations/text.md` | Schema prose |
 | [REQ-1116](../operations/text.md#req-1116) | `operations/text.md` | Schema prose |
 | [REQ-1117](../operations/text.md#req-1117) | `operations/text.md` | Schema prose |
 | [REQ-1118](../operations/computation.md#req-1118) | `operations/computation.md` | Schema prose |

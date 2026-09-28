@@ -202,7 +202,7 @@ def test_negative_nested_expression_matches_committed_diagnostic() -> None:
     assert caught.value.diagnostics[0].model_dump(mode="json") == {
         "phase": "validation",
         "condition": "invalid_field_type",
-        "spec_paths": ["columns.COUNTRY.derivation.str_upper.source"],
+        "spec_paths": ["columns.COUNTRY.derivation.str_case.source"],
         "requirement": "REQ-0287",
         "context": {"expected": "variable", "actual": "mapping"},
     }
@@ -664,8 +664,9 @@ def test_non_string_scalar_derivation_names_the_dict_form(
 
 
 def test_intermediate_derivation_call_shorthand_normalizes(tmp_path: Path) -> None:
-    # REQ-1185: `str_upper(IDVARVAL)` in an intermediate's derivations reads
-    # as the one-argument operation call `{str_upper: {source: IDVARVAL}}`.
+    # REQ-1185: `date_precision(IDVARVAL)` in an intermediate's derivations
+    # reads as the one-argument operation call
+    # `{date_precision: {source: IDVARVAL}}`.
     path = tmp_path / "spec.yaml"
     path.write_text(
         """schema_version: "1.0"
@@ -679,7 +680,7 @@ intermediates:
   - id: LOOK
     dataset: SRC
     derivations:
-      IDVARVAL_U: str_upper(IDVARVAL)
+      IDVARVAL_U: date_precision(IDVARVAL)
     key: {IDVARVAL_U: STUDYID}
 output:
   path: out.csv
@@ -697,5 +698,5 @@ columns:
 
     assert intermediate.derivations is not None
     assert intermediate.derivations["IDVARVAL_U"].value.root == {
-        "str_upper": {"source": "IDVARVAL"}
+        "date_precision": {"source": "IDVARVAL"}
     }

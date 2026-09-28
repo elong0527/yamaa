@@ -38,8 +38,9 @@ uppercasing step:
 - name: COUNTRY
   type: str
   derivation:
-    str_upper:
+    str_case:
       source: COUNTRYSRC
+      to: upper
 ```
 
 Keep the helper column out of the artifact by leaving it off the artifact

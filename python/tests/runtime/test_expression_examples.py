@@ -46,7 +46,7 @@ ERROR_EXAMPLES = [
     "negative-formula-flag",
     "negative-direct-dose-read",
     "negative-cut-coded",
-    "negative-str-lowercase-number",
+    "negative-str-case-number",
     "negative-str-uncaptured-group",
     "negative-subject-reference",
     "negative-greatest-mixed",
@@ -101,7 +101,7 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
             [
                 ("columns.AEREFNUM.derivation.str_extract.missing", "missing", 2),
                 ("columns.AEREFNUM.derivation.str_extract.no_match", "no_match", 3),
-                ("columns.AERELLC.derivation.str_lower.missing", "missing", 2),
+                ("columns.AERELLC.derivation.str_case.missing", "missing", 2),
             ],
         ),
         (

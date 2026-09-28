@@ -223,7 +223,7 @@ def test_key_match_expression_evaluates_against_current_row() -> None:
                 column="USUBJID",
                 name="key[USUBJID]",
                 expression=Expression.model_validate(
-                    {"str_upper": {"source": "SUBJECT"}}
+                    {"str_case": {"source": "SUBJECT", "to": "upper"}}
                 ),
                 variables=("SUBJECT",),
             ),
@@ -538,7 +538,9 @@ def derived_plan(**extra: object) -> PlannedIntermediate:
             (
                 "QVAL_U",
                 HandledExpression(
-                    value=Expression(root={"str_upper": {"source": "QVAL"}})
+                    value=Expression(
+                        root={"str_case": {"source": "QVAL", "to": "upper"}}
+                    )
                 ),
             ),
         ),
@@ -859,7 +861,9 @@ def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> 
             (
                 "QVAL_U",
                 HandledExpression(
-                    value=Expression(root={"str_upper": {"source": "NOPE"}})
+                    value=Expression(
+                        root={"str_case": {"source": "NOPE", "to": "upper"}}
+                    )
                 ),
             ),
         ),
@@ -962,7 +966,7 @@ def test_a_window_derivation_reads_an_earlier_derived_name() -> None:
         derived=(
             (
                 "_TRT_U",
-                _window_handled({"str_upper": {"source": "EXTRT"}}),
+                _window_handled({"str_case": {"source": "EXTRT", "to": "upper"}}),
             ),
             (
                 "_RN",

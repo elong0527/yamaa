@@ -407,10 +407,7 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
 _TYPED_SOURCES: dict[str, tuple[ColumnType | None, str]] = {
     "mapping": ("str", "REQ-0304"),
     "str_extract": ("str", "REQ-0308"),
-    "str_upper": ("str", "REQ-0308"),
-    "str_lower": ("str", "REQ-0308"),
-    "str_sentence": ("str", "REQ-0308"),
-    "str_title": ("str", "REQ-0308"),
+    "str_case": ("str", "REQ-0308"),
     "cut": (None, "REQ-0306"),
 }
 
@@ -820,15 +817,12 @@ _MATCH_VALUE_RESULT_TYPES: dict[str, ColumnType] = {
     "datetime_precision": "str",
     "rank": "int",
     "row_number": "int",
+    "str_case": "str",
     "str_concat": "str",
     "str_contains": "bool",
     "str_extract": "str",
     "str_pad": "str",
-    "str_lower": "str",
-    "str_sentence": "str",
     "str_template": "str",
-    "str_title": "str",
-    "str_upper": "str",
     "study_day": "int",
     "to_date": "date",
     "to_epoch_day": "int",
@@ -994,12 +988,9 @@ _DERIVE_VARIABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "locf": ("source",),
     "round_half_away_from_zero": ("source",),
     "row_value": ("source",),
+    "str_case": ("source",),
     "str_extract": ("source",),
     "str_pad": ("source",),
-    "str_lower": ("source",),
-    "str_upper": ("source",),
-    "str_sentence": ("source",),
-    "str_title": ("source",),
     "study_day": ("date", "reference"),
     "to_date": ("source",),
     "to_epoch_day": ("source",),
@@ -3195,10 +3186,7 @@ def _validate_intermediate_reads(
 # derivation may use, so a derived target-side key field type-checks
 # against its driver-side match value.
 _DERIVED_RESULT_TYPES: dict[str, ColumnType] = {
-    "str_upper": "str",
-    "str_lower": "str",
-    "str_sentence": "str",
-    "str_title": "str",
+    "str_case": "str",
 }
 
 

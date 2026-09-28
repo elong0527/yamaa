@@ -1,6 +1,6 @@
 # Reject Numeric Lowercase
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-str-lowercase-number.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-str-case-number.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** fold `SITE` to lower case for analysis use.
@@ -24,6 +24,7 @@ Fold the collected site name rather than its number, once `SITENM` is
 present in the demographics extract:
 
 ```yaml
-str_lower:
+str_case:
   source: DM.SITENM
+  to: lower
 ```

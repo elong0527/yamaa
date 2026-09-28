@@ -56,8 +56,9 @@ columns:
     type: str
     label: Reported Term in Lower Case
     derivation:
-      str_lower:
+      str_case:
         source: AETERM
+        to: lower
     verifications:
       not_missing: {}
 
@@ -65,8 +66,9 @@ columns:
     type: str
     label: Causality in Lower Case
     derivation:
-      str_lower:
+      str_case:
         source: AE.AEREL
+        to: lower
         missing: not reported
 
   # Upper-cases the lower-cased causality, so the "not reported" fill for a
@@ -75,8 +77,9 @@ columns:
     type: str
     label: Analysis Causality
     derivation:
-      str_upper:
+      str_case:
         source: AERELLC
+        to: upper
     verifications:
       - not_missing: {}
       - allowed_values:
