@@ -1,4 +1,5 @@
-"""Expression registry evaluation (R007). One function per expression family."""
+"""Expression registry evaluation (operations/expressions). One function per
+expression family."""
 
 import calendar
 import copy
@@ -28,6 +29,15 @@ from .values import (
 
 _ABSENT = object()  # lookup selected nothing
 
+# REQ-0358/REQ-0359: the handled_expression_class fields.
+HANDLED_FIELDS = {"value", "unconvertible"}
+
+
+def derivation_requirement(d):
+    """REQ-0286 for a mapping naming no single registered keyword, REQ-0320
+    for a derivation that is not a mapping or string at all."""
+    return "REQ-0286" if isinstance(d, dict) else "REQ-0320"
+
 
 def _fail(where, phase, condition, requirement, context=None):
     raise YamaaError(
@@ -41,37 +51,38 @@ def _fail(where, phase, condition, requirement, context=None):
 
 def eval_expr(node, ctx):
     """node: a derivation mapping (one registry key) or {'value':...} handled form."""
-    if (
-        isinstance(node, dict)
-        and "value" in node
-        and set(node) <= {"value", "missing", "strict", "unconvertible"}
-    ):
+    if isinstance(node, dict) and "value" in node and set(node) <= HANDLED_FIELDS:
         return eval_expr(node["value"], ctx)
     if not isinstance(node, dict) or len(node) != 1:
         _fail(
-            ctx.where, "validation", "invalid_field_type", "R007", {"derivation": node}
+            ctx.where,
+            "validation",
+            "invalid_field_type",
+            derivation_requirement(node),
+            {"derivation": node},
         )
     key = next(iter(node))
-    if key == "value":  # handled_expression_class wrapper (R008)
-        return eval_expr(node["value"], ctx)
     fn = _REGISTRY.get(key)
     if fn is None:
-        _fail(ctx.where, "validation", "unknown_field", "R007", {"expression": key})
+        _fail(ctx.where, "validation", "unknown_field", "REQ-0321", {"expression": key})
     return fn(node[key], ctx)
 
 
 def _source_var_payload(payload):
     """Normalize the `source` expression payload to (variable, filter, missing,
-    multiple_matches)."""
+    selection). REQ-0111: a structured source keeps its `order_by`/`keep`."""
     if isinstance(payload, str):
         return payload, None, _ABSENT, None
     if not isinstance(payload, dict):
-        _fail("<source>", "validation", "invalid_field_type", "R007", {})
+        _fail("<source>", "validation", "invalid_field_type", "REQ-1051", {})
+    sel = None
+    if "order_by" in payload or "keep" in payload:
+        sel = {"order_by": payload.get("order_by"), "keep": payload.get("keep")}
     return (
         payload.get("variable"),
         payload.get("filter"),
         payload.get("missing", _ABSENT),
-        payload.get("multiple_matches"),
+        sel,
     )
 
 
@@ -91,8 +102,21 @@ def _distinct_key(v):
     return ("repr", repr(v))
 
 
-def _one_record(var, filt, missing, mult, ctx, stage):
-    """Resolve a filtered source to one value (R002/R003/R008)."""
+def _reads_origin(ctx, var):
+    """True when a column-phase read names the dataset the row was built
+    from: its records are the ones the key combination was derived from."""
+    if not getattr(ctx, "_col_phase", False):
+        return False
+    return var.split(".")[0] == ctx.e._origins[ctx.i]
+
+
+def _one_record(var, filt, missing, sel, ctx, site=None):
+    """Resolve a qualified source to one value. The filter narrows the
+    records (REQ-0355) and `order_by`/`keep` chooses among the survivors
+    (REQ-0354). Without a selection, the records a key combination was
+    derived from must agree on one value (REQ-0075), and more than one
+    joined record is an unhandled multiple match (REQ-0127)."""
+    site = site or ctx.where
     recs = ctx.source_records(var)
     if filt is not None:
         recs = [
@@ -112,60 +136,76 @@ def _one_record(var, filt, missing, mult, ctx, stage):
                 return decl["no_match"]
         return None
     if len(recs) > 1:
-        if mult is None:
-            if getattr(ctx, "_col_phase", False):
-                present = [
-                    r.get(value_field)
-                    for r in recs
-                    if not is_missing(r.get(value_field))
-                ]
-                seen_h, distinct = set(), []
-                for v in present:
-                    h = _distinct_key(v)
-                    if h not in seen_h:
-                        seen_h.add(h)
-                        distinct.append(v)
-                if len(distinct) > 1:
-                    e = ctx.e
-                    _fail(
-                        ctx.where,
-                        "derivation",
-                        "multiple_values_per_key",
-                        "REQ-0075",
-                        {
-                            "identifier": var,
-                            "value_count": len(distinct),
-                            "keys": [{k: e.rows[ctx.i].get(k) for k in e.keys}],
-                        },
-                    )
-                return distinct[0] if distinct else None
+        if sel is not None:
+            recs = _choose(recs, sel, ctx)
+        elif _reads_origin(ctx, var):
+            present = [
+                r.get(value_field) for r in recs if not is_missing(r.get(value_field))
+            ]
+            seen_h, distinct = set(), []
+            for v in present:
+                h = _distinct_key(v)
+                if h not in seen_h:
+                    seen_h.add(h)
+                    distinct.append(v)
+            if len(distinct) > 1:
+                e = ctx.e
+                _fail(
+                    site,
+                    "derivation",
+                    "multiple_values_per_key",
+                    "REQ-0075",
+                    {
+                        "identifier": var,
+                        "value_count": len(distinct),
+                        "keys": [{k: e.rows[ctx.i].get(k) for k in e.keys}],
+                    },
+                )
+            return distinct[0] if distinct else None
+        else:
             _fail(
-                ctx.where,
-                stage,
+                site,
+                "join",
                 "multiple_matches",
                 "REQ-0127",
-                {"variable": var, "records": len(recs)},
+                _multiple_match_context(var, recs, ctx),
             )
-        recs = _choose(recs, mult, ctx)
     rec = recs[0]
     if value_field not in rec:
         _fail(ctx.where, "validation", "unknown_field", "REQ-0103", {"variable": var})
     return rec[value_field]
 
 
-def _choose(recs, mult, ctx):
-    order_by = mult.get("order_by", [])
-    keep = mult.get("keep")
-    if not order_by or keep is None:
-        _fail(ctx.where, "join", "unpaired_fields", "REQ-0119", {})
-    ordered = ctx.order_records(recs, order_by)
-    return [ordered[0] if keep == "first" else ordered[-1]]
+def _multiple_match_context(var, recs, ctx):
+    """REQ-0143: report the implicit join's match the way a named lookup
+    reports its own."""
+    e = ctx.e
+    ds = var.split(".")[0]
+    table = e.inputs.get(ds)
+    key = [k for k in e.keys if table is not None and k in table.fields]
+    out = {
+        "intermediate": f"intermediate({ds})",
+        "dataset": ds,
+        "key": key,
+        "intermediate_key": {k: recs[0].get(k) for k in key},
+        "match_count": len(recs),
+    }
+    if getattr(ctx, "_col_phase", False):
+        out["keys"] = [{k: e.rows[ctx.i].get(k) for k in e.keys}]
+    return out
+
+
+def _choose(recs, sel, ctx):
+    """REQ-0354: order the survivors and retain `first` or `last`; ties
+    keep record order (a stable sort)."""
+    ordered = ctx.order_records(recs, sel["order_by"])
+    return [ordered[0] if sel["keep"] == "first" else ordered[-1]]
 
 
 def ev_source(payload, ctx):
-    var, filt, missing, mult = _source_var_payload(payload)
+    var, filt, missing, sel = _source_var_payload(payload)
     if "." in var:
-        return _one_record(var, filt, missing, mult, ctx, "join")
+        return _one_record(var, filt, missing, sel, ctx, site=f"{ctx.where}.source")
     return ctx.value(var)
 
 
@@ -176,11 +216,7 @@ def ev_literal(payload, ctx):
 def ev_first_available(payload, ctx):
     for s in payload["sources"]:
         var, filt = _filtered_source_payload(s)
-        v = (
-            _one_record(var, filt, _ABSENT, None, ctx, "mapping")
-            if "." in var
-            else ctx.value(var)
-        )
+        v = _one_record(var, filt, _ABSENT, None, ctx) if "." in var else ctx.value(var)
         if not is_missing(v):
             return v
     return payload.get("missing")
@@ -207,7 +243,7 @@ def ev_greatest_least(payload, ctx, which):
 
 def ev_flag(payload, ctx):
     if isinstance(payload, str):
-        cond_text, site = payload, ctx.where
+        cond_text, site = payload, ctx.where + ".flag"
         tv, fv, mv = "Y", _ABSENT, _ABSENT
     elif isinstance(payload, dict):
         cond = payload.get("condition")
@@ -219,7 +255,7 @@ def ev_flag(payload, ctx):
                 "REQ-1257",
                 {"expected": "predicate", "field": "condition"},
             )
-        cond_text, site = cond, ctx.where + ".condition"
+        cond_text, site = cond, ctx.where + ".flag.condition"
         tv = payload.get("true_value", "Y")
         fv = payload.get("false_value", _ABSENT)
         mv = payload.get("missing", _ABSENT)
@@ -240,7 +276,7 @@ def ev_flag(payload, ctx):
                 phase=e.phase,
                 condition=e.condition,
                 requirement="REQ-0189",
-                spec_paths=e.spec_paths,
+                spec_paths=[site],
                 context={"identifier": e.context.get("name")},
             ) from e
         raise
@@ -251,11 +287,11 @@ def ev_flag(payload, ctx):
     return None if mv is _ABSENT else mv
 
 
-def _raw_operand(var, ctx, stage="extract"):
+def _raw_operand(var, ctx):
     """Resolve an operand without handler substitution or type check."""
     if "." not in var:
         return ctx._match_operand(var)
-    return _one_record(var, None, _ABSENT, None, ctx, stage)
+    return _one_record(var, None, _ABSENT, None, ctx)
 
 
 def _canonical_text(v, var, ctx):
@@ -312,7 +348,7 @@ def ev_str_pad(payload, ctx):
 def ev_case(payload, ctx):
     for n, item in enumerate(payload):
         if not isinstance(item, dict):
-            _fail(ctx.where, "validation", "invalid_field_type", "R007", {})
+            _fail(ctx.where, "validation", "invalid_field_type", "REQ-0339", {})
         if "when" in item:
             site = f"{ctx.where}.case[{n}].when"
             site_ctx = copy.copy(ctx)
@@ -341,31 +377,33 @@ def ev_case(payload, ctx):
                 other = {"source": other}
             return eval_expr(other, ctx)
         else:
-            _fail(ctx.where, "validation", "invalid_field_type", "R007", {})
+            _fail(ctx.where, "validation", "invalid_field_type", "REQ-0339", {})
     return None
 
 
 def ev_mapping(payload, ctx):
+    """REQ-1110: look a string source up in the dictionary. `missing` answers
+    a missing source and `unmapped` a present one with no entry; without
+    its handler, each condition fails (REQ-0344)."""
+    site = f"{ctx.where}.mapping"
     var, filt = _filtered_source_payload(payload["source"])
     v = (
-        _one_record(var, filt, _ABSENT, None, ctx, "mapping")
+        _one_record(var, filt, _ABSENT, None, ctx, site=site)
         if "." in var
         else ctx.value(var)
     )
-    strict = payload.get("strict", False) is True
     if is_missing(v):
-        if strict:
-            e = ctx.e
-            _fail(
-                ctx.where,
-                "mapping",
-                "missing_input",
-                "REQ-0334",
-                {"variable": var, "keys": [{k: e.rows[ctx.i].get(k) for k in e.keys}]},
-            )
-        return payload.get("missing")
+        if "missing" in payload:
+            return payload["missing"]
+        _fail(
+            site,
+            "mapping",
+            "missing_input",
+            "REQ-0334",
+            {"variable": var, "keys": _keys_ctx(ctx)},
+        )
     if not isinstance(v, str):
-        _fail(ctx.where, "mapping", "incompatible_input_type", "R007", {})
+        _fail(site, "mapping", "incompatible_input_type", "REQ-0323", {})
     # REQ-1110: dict is inline or a YAML path loaded via project resources.
     d = payload["dict"]
     if isinstance(d, str):
@@ -381,58 +419,42 @@ def ev_mapping(payload, ctx):
         d = {ascii_fold(k): val for k, val in d.items()}
     if key in d:
         return d[key]
-    if strict:
-        e = ctx.e
-        _fail(
-            ctx.where,
-            "mapping",
-            "unmapped_value",
-            "REQ-0334",
-            {
-                "source": var,
-                "value": v,
-                "keys": [{k: e.rows[ctx.i].get(k) for k in e.keys}],
-            },
-        )
     if "unmapped" in payload:
         return payload["unmapped"]
-    # REQ-1110: source present but unlisted, no unmapped -> fail.
-    # `missing` never answers it.
-    e = ctx.e
+    # `missing` never answers a present source with no entry.
     _fail(
-        ctx.where,
+        site,
         "mapping",
         "unmapped_value",
         "REQ-0334",
-        {
-            "source": var,
-            "value": v,
-            "keys": [{k: e.rows[ctx.i].get(k) for k in e.keys}],
-        },
+        {"source": var, "value": v, "keys": _keys_ctx(ctx)},
     )
 
 
 def ev_cut(payload, ctx):
     src = payload["source"]
-    v = (
-        ctx.value(src)
-        if "." not in src
-        else _one_record(src, None, _ABSENT, None, ctx, "mapping")
-    )
+    v = ctx.value(src) if "." not in src else _one_record(src, None, _ABSENT, None, ctx)
     if is_missing(v):
         if "missing" in payload:
             return payload["missing"]
         _fail(
-            ctx.where,
+            f"{ctx.where}.cut",
             "cut",
             "missing_input",
             "REQ-0334",
             {"variable": src.split(".")[-1]},
         )
     if isinstance(v, bool) or not isinstance(v, (int, float)):
-        # REQ-0306: validation catches declared non-numeric sources; this is
-        # a backstop for undeclared types or dynamic values.
-        _fail(ctx.where, "cut", "incompatible_input_type", "REQ-0306", {})
+        # REQ-0306: validation catches every statically typed source; a
+        # source with no static type (an intermediate's column) reports the
+        # same validation condition when its value arrives.
+        _fail(
+            f"{ctx.where}.cut.source",
+            "validation",
+            "incompatible_input_type",
+            "REQ-0306",
+            {"source": src, "expected": "numeric", "actual": type(v).__name__},
+        )
     breaks = payload["breaks"]
     labels = payload["labels"]
     right = payload.get("right", False)
@@ -456,11 +478,7 @@ def ev_cut(payload, ctx):
 def ev_round_half_away_from_zero(payload, ctx):
     """REQ-0418/REQ-1172: SAS-style rounding, ties half away from zero."""
     src = payload["source"]
-    v = (
-        ctx.value(src)
-        if "." not in src
-        else _one_record(src, None, _ABSENT, None, ctx, "round")
-    )
+    v = ctx.value(src) if "." not in src else _one_record(src, None, _ABSENT, None, ctx)
     if is_missing(v):
         return None
     if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -476,13 +494,11 @@ def ev_round_half_away_from_zero(payload, ctx):
 
 def _str_operand(var, ctx, stage="extract"):
     """Resolve a string operand WITHOUT handler substitution."""
-    v = (
-        ctx.value(var)
-        if "." not in var
-        else _one_record(var, None, _ABSENT, None, ctx, stage)
-    )
+    v = ctx.value(var) if "." not in var else _one_record(var, None, _ABSENT, None, ctx)
     if not is_missing(v) and not isinstance(v, str):
-        _fail(ctx.where, stage, "incompatible_input_type", "R007", {"variable": var})
+        _fail(
+            ctx.where, stage, "incompatible_input_type", "REQ-0308", {"variable": var}
+        )
     return v
 
 
@@ -497,7 +513,7 @@ def ev_str_extract(payload, ctx):
             ctx.where,
             "validation",
             "invalid_regex",
-            "R022",
+            "REQ-0827",
             {"pattern": payload["pattern"]},
         )
     m = rx.search(v)
@@ -511,7 +527,7 @@ def ev_str_extract(payload, ctx):
             ctx.where,
             "extract",
             "regex_group_out_of_range",
-            "R022",
+            "REQ-0828",
             {"pattern": payload["pattern"], "group": g},
         )
 
@@ -523,7 +539,7 @@ def ev_str_concat(payload, ctx):
         if is_missing(v):
             return payload.get("missing")  # fatal when omitted
         if not isinstance(v, str):
-            _fail(ctx.where, "extract", "incompatible_input_type", "R007", {})
+            _fail(ctx.where, "extract", "incompatible_input_type", "REQ-0308", {})
         parts.append(v)
     return "".join(parts)
 
@@ -557,7 +573,7 @@ def ev_str_template(payload, ctx):
             v = (
                 ctx.value(name)
                 if "." not in name
-                else _one_record(name, None, _ABSENT, None, ctx, "template")
+                else _one_record(name, None, _ABSENT, None, ctx)
             )
             if is_missing(v):
                 return missing  # fatal when omitted (REQ-0344)
@@ -634,7 +650,7 @@ def ev_str_contains(payload, ctx):
             ctx.where,
             "validation",
             "invalid_regex",
-            "R022",
+            "REQ-0827",
             {"pattern": payload["pattern"]},
         )
     return rx.search(v) is not None
@@ -645,12 +661,10 @@ def ev_compute(payload, ctx):
     return _numeric.evaluate(node, ctx.compute_ident, ctx.where, payload["expr"])
 
 
-def _date_operand(var, ctx, stage="impute"):
+def _date_operand(var, ctx):
     """Resolve a date operand WITHOUT handler substitution (cf. _str_operand)."""
     return (
-        ctx.value(var)
-        if "." not in var
-        else _one_record(var, None, _ABSENT, None, ctx, stage)
+        ctx.value(var) if "." not in var else _one_record(var, None, _ABSENT, None, ctx)
     )
 
 
@@ -658,12 +672,12 @@ def ev_date_diff(payload, ctx):
     s = (
         ctx.value(payload["start"])
         if "." not in payload["start"]
-        else _one_record(payload["start"], None, _ABSENT, None, ctx, "derivation")
+        else _one_record(payload["start"], None, _ABSENT, None, ctx)
     )
     e = (
         ctx.value(payload["end"])
         if "." not in payload["end"]
-        else _one_record(payload["end"], None, _ABSENT, None, ctx, "derivation")
+        else _one_record(payload["end"], None, _ABSENT, None, ctx)
     )
     if is_missing(s) or is_missing(e):
         return None
@@ -676,7 +690,7 @@ def ev_date_diff(payload, ctx):
             ctx.where,
             "validation",
             "value_not_permitted",
-            "R016",
+            "REQ-0613",
             {"unit": unit, "bounds": bounds},
         )
     if unit == "day":
@@ -700,7 +714,7 @@ def ev_date_diff(payload, ctx):
         m = _whole_months(s, e)
         q = abs(m) // 12
         return q if m >= 0 else -q
-    _fail(ctx.where, "validation", "value_not_permitted", "R016", {"unit": unit})
+    _fail(ctx.where, "validation", "value_not_permitted", "REQ-0287", {"unit": unit})
 
 
 def _whole_months(s, e):
@@ -736,7 +750,13 @@ def ev_date_impute(payload, ctx):
         parts = date_prefix_parts(src)
         if parts is None:
             if "invalid" not in payload:
-                _fail(ctx.where, "impute", "invalid_date_text", "R016", {"source": src})
+                _fail(
+                    ctx.where,
+                    "impute",
+                    "invalid_date_text",
+                    "REQ-0588",
+                    {"source": src},
+                )
             return payload["invalid"]
         year, month, day = parts
         if day is not None:
@@ -748,7 +768,7 @@ def ev_date_impute(payload, ctx):
                         ctx.where,
                         "impute",
                         "invalid_calendar_date",
-                        "R016",
+                        "REQ-0608",
                         {"source": src},
                     )
                 return payload["invalid"]
@@ -771,7 +791,7 @@ def ev_date_impute(payload, ctx):
                         ctx.where,
                         "impute",
                         "invalid_calendar_date",
-                        "R016",
+                        "REQ-0608",
                         {"source": src},
                     )
                 return payload["invalid"]
@@ -781,7 +801,7 @@ def ev_date_impute(payload, ctx):
             ctx.where,
             "impute",
             "incompatible_input_type",
-            "R016",
+            "REQ-0606" if isinstance(src, YDateTime) else "REQ-0323",
             {"source": type(src).__name__},
         )
     nb = payload.get("not_before")
@@ -789,11 +809,11 @@ def ev_date_impute(payload, ctx):
         bound = (
             ctx.value(nb)
             if "." not in nb
-            else _one_record(nb, None, _ABSENT, None, ctx, "impute")
+            else _one_record(nb, None, _ABSENT, None, ctx)
         )
         if not is_missing(bound):
             if type(bound) is not YDate:
-                _fail(ctx.where, "impute", "incompatible_input_type", "R016", {})
+                _fail(ctx.where, "impute", "incompatible_input_type", "REQ-0337", {})
             if precision != "D" and completed < bound:
                 lo = (
                     YDate(completed.year, completed.month, 1)
@@ -827,18 +847,30 @@ def ev_date_precision(payload, ctx):
         parts = date_prefix_parts(src)
         if parts is None:
             if "invalid" not in payload:
-                _fail(ctx.where, "impute", "invalid_date_text", "R016", {"source": src})
+                _fail(
+                    ctx.where,
+                    "impute",
+                    "invalid_date_text",
+                    "REQ-0588",
+                    {"source": src},
+                )
             return payload["invalid"]
         _, month, day = parts
         return "D" if day is not None else ("M" if month is not None else "Y")
-    _fail(ctx.where, "impute", "incompatible_input_type", "R016", {})
+    _fail(
+        ctx.where,
+        "impute",
+        "incompatible_input_type",
+        "REQ-0606" if isinstance(src, YDateTime) else "REQ-0337",
+        {},
+    )
 
 
 def ev_to_date(payload, ctx):
     v = (
         ctx.value(payload["source"])
         if "." not in payload["source"]
-        else _one_record(payload["source"], None, _ABSENT, None, ctx, "derivation")
+        else _one_record(payload["source"], None, _ABSENT, None, ctx)
     )
     if is_missing(v):
         return None
@@ -855,19 +887,19 @@ def ev_to_date(payload, ctx):
                 "REQ-1107",
                 {"source": payload["source"], "text": v},
             )
-    _fail(ctx.where, "derivation", "incompatible_input_type", "R016", {})
+    _fail(ctx.where, "derivation", "incompatible_input_type", "REQ-0607", {})
 
 
 def ev_study_day(payload, ctx):
     d = (
         ctx.value(payload["date"])
         if "." not in payload["date"]
-        else _one_record(payload["date"], None, _ABSENT, None, ctx, "derivation")
+        else _one_record(payload["date"], None, _ABSENT, None, ctx)
     )
     r = (
         ctx.value(payload["reference"])
         if "." not in payload["reference"]
-        else _one_record(payload["reference"], None, _ABSENT, None, ctx, "derivation")
+        else _one_record(payload["reference"], None, _ABSENT, None, ctx)
     )
     if is_missing(d) or is_missing(r):
         return None
@@ -931,11 +963,7 @@ def ev_datetime_impute(payload, ctx):
             {"field": "time", "value": str(time_rule), "permitted": ["first", "last"]},
         )
     var = payload["source"]
-    v = (
-        ctx.value(var)
-        if "." not in var
-        else _one_record(var, None, _ABSENT, None, ctx, "impute")
-    )
+    v = ctx.value(var) if "." not in var else _one_record(var, None, _ABSENT, None, ctx)
     if is_missing(v):
         if "missing" in payload:
             return payload["missing"]
@@ -987,11 +1015,7 @@ def ev_datetime_impute(payload, ctx):
 
 def ev_datetime_precision(payload, ctx):
     var = payload["source"]
-    v = (
-        ctx.value(var)
-        if "." not in var
-        else _one_record(var, None, _ABSENT, None, ctx, "impute")
-    )
+    v = ctx.value(var) if "." not in var else _one_record(var, None, _ABSENT, None, ctx)
     if is_missing(v):
         if "missing" in payload:
             return payload["missing"]
@@ -1038,11 +1062,7 @@ def ev_datetime_precision(payload, ctx):
 
 def ev_to_epoch_day(payload, ctx):
     var = payload["source"]
-    v = (
-        ctx.value(var)
-        if "." not in var
-        else _one_record(var, None, _ABSENT, None, ctx, "derivation")
-    )
+    v = ctx.value(var) if "." not in var else _one_record(var, None, _ABSENT, None, ctx)
     if is_missing(v):
         return None
     if isinstance(v, YDateTime) or not isinstance(v, YDate):
@@ -1090,8 +1110,8 @@ def _resolve_function_arg(spec, ctx):
     if isinstance(spec, dict) and "literal" in spec:
         return spec["literal"]
     if isinstance(spec, str):
-        if "." in spec:
-            return ctx.compute_ident(spec)
+        # REQ-0679: a named variable, qualified or not, is read as a scalar
+        # source; `compute`'s identifier restrictions do not apply here.
         return ctx.value(spec)
     return spec
 

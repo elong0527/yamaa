@@ -1,4 +1,5 @@
-"""Clean-room derivation engine: spec loading, row construction (R001),"""
+"""Clean-room derivation engine: spec loading, row construction, column
+derivation, verification, and rendering."""
 
 import copy
 import csv
@@ -95,6 +96,20 @@ class Table:
         self.records = records
 
 
+# The requirement each failed check reports; REQ-0406 covers the rest.
+_VERIFICATION_REQUIREMENTS = {
+    "not_missing_failed": "REQ-0375",
+    "allowed_values_failed": "REQ-0376",
+    "range_failed": "REQ-0377",
+    "matches_failed": "REQ-0379",
+    "unique_failed": "REQ-0381",
+    "all_or_none_failed": "REQ-0382",
+    "implication_failed": "REQ-0383",
+    "assert_failed": "REQ-0384",
+    "row_count_failed": "REQ-0385",
+}
+
+
 def _vlist(v):
     """A verifications field is one verification mapping or a list of them."""
     if v is None:
@@ -113,11 +128,17 @@ class Engine:
             self.spec = yaml.safe_load(f)
         s = self.spec
         if not isinstance(s, dict):
-            _fail("root", "validation", "invalid_field_type", "R006", {})
+            _fail("root", "validation", "invalid_field_type", "REQ-0622", {})
         self._expand_catalogs()
         self._expand_named_windows()
         if s.get("schema_version") != "1.0":
-            _fail("schema_version", "validation", "schema_version_mismatch", "R006", {})
+            _fail(
+                "schema_version",
+                "validation",
+                "schema_version_mismatch",
+                "REQ-0656",
+                {},
+            )
         if s.get("parents"):
             self._reject_parents(s["parents"])
         self.functions = None
@@ -127,15 +148,17 @@ class Engine:
             self.functions = _functions.load_environment(project_root)
         for req in ("domain", "keys", "input", "output", "columns"):
             if req not in s:
-                _fail(
-                    req, "validation", "missing_required_field", "R006", {"field": req}
-                )
+                _fail(req, "validation", "missing_required_field", None, {"field": req})
         self.domain = s["domain"]
         self.keys = list(s["keys"])
         self.inputs = {}
         for name, decl in s["input"].items():
             self.inputs[name] = self._load_input(name, decl)
         self.lookups_decl = {d["id"]: d for d in s.get("intermediates", []) or []}
+        self.lookup_paths = {
+            d["id"]: f"intermediates[{i}]"
+            for i, d in enumerate(s.get("intermediates", []) or [])
+        }
         self.colspecs = {}
         self.col_order = []
         for c in s["columns"]:
@@ -161,7 +184,8 @@ class Engine:
         self._derived = []  # list[set[str]] columns derived per row
         self._lookups = {}  # (lid, row_idx) -> record | None
         self._eligible = {}  # lid -> eligible records (computed once)
-        self._dict_cache = {}  # written dict_yaml path -> loaded dict
+        self._dict_cache = {}  # written mapping.dict path -> loaded dict
+        self._join_indexes = {}  # (dataset, keys) -> implicit-join index
         self._self_marks = []  # row counts after each completed template
         self._row_phase = True  # False once column derivation starts
 
@@ -441,7 +465,8 @@ class Engine:
                     expand(dd, f"intermediates[{i}].derivations.{dn}")
 
     def _reject_parents(self, parents):
-        """R017 failure surface for the clean-room (no composition)."""
+        """Composition failure surface (specification/composition); the
+        clean-room resolves no parents."""
         if isinstance(parents, str):
             parents = [parents]
         for p in parents:
@@ -464,21 +489,18 @@ class Engine:
                 os.path.normpath(os.path.join(self.spec_dir, p)), seen
             )
         if "output" not in self.spec:
-            inherited = []
+            # REQ-0657: an entry omitting `output` inherits it; only a
+            # resolution to which no layer contributed one fails.
+            inherited = False
             for p in parents:
                 full = os.path.normpath(os.path.join(self.spec_dir, p))
                 with open(full, "r", encoding="utf-8") as f:
                     doc = yaml.safe_load(f) or {}
                 if isinstance(doc, dict) and doc.get("output"):
-                    inherited = (doc["output"] or {}).get("columns") or []
+                    inherited = True
                     break
-            _fail(
-                "output",
-                "validation",
-                "missing_entry_output",
-                "REQ-0657",
-                {"inherited_columns": inherited},
-            )
+            if not inherited:
+                _fail("output", "validation", "missing_required_field", None, {})
         for c in self.spec.get("columns") or []:
             if isinstance(c, dict) and "type" in c and c["type"] is None:
                 _fail(
@@ -513,7 +535,7 @@ class Engine:
                 "parents",
                 "validation",
                 "schema_version_mismatch",
-                "REQ-0622",
+                "REQ-0656",
                 {"parent": full},
             )
         sub = doc.get("parents")
@@ -526,46 +548,12 @@ class Engine:
                 )
         seen.pop()
 
-    def _infer_column_types(self, fields, records, declared):
-        """Infer column types from data values; declared types take precedence.
-
-        Returns a dict mapping field name -> inferred type ("int", "float", or
-        "str"). Used so validation can resolve qualified input references
-        (e.g. DM.SEX) when the spec does not declare input types.
-        """
-        inferred = {}
-        for f in fields:
-            if f in declared:
-                continue
-            vals = [r.get(f) for r in records if r.get(f) not in (None, "")]
-            if not vals:
-                inferred[f] = "str"
-                continue
-            try:
-                for v in vals:
-                    int(str(v))
-                inferred[f] = "int"
-                continue
-            except (ValueError, TypeError):
-                pass
-            try:
-                for v in vals:
-                    float(str(v))
-                inferred[f] = "float"
-                continue
-            except (ValueError, TypeError):
-                pass
-            inferred[f] = "str"
-        merged = dict(inferred)
-        merged.update(declared)
-        return merged
-
     def _load_input(self, name, decl):
         if isinstance(decl, str):
             path, types = decl, {}
         else:
             path, types = decl["path"], decl.get("types") or {}
-        _validate.check_resource_path(self, name, path)  # R021
+        _validate.check_resource_path(self, name, path)  # storage/resources
         lower = path.lower()
         if lower.endswith(".csv"):
             profile = "csv"
@@ -581,13 +569,17 @@ class Engine:
             )
         full = os.path.normpath(os.path.join(self.spec_dir, path))
         if profile == "parquet":
-            fields, records = read_parquet(
+            # REQ-0517: the Parquet schema is the field's type authority.
+            fields, records, stored = read_parquet(
                 full, types, spec_path=f"input.{name}", dataset=name, written_path=path
             )
         else:
+            # REQ-0517/REQ-0518: a delimited file carries no types; an
+            # undeclared field is `str`, never inferred from its values.
             fields, records = read_csv(
                 full, types, spec_path=f"input.{name}", dataset=name, written_path=path
             )
+            stored = {f: "str" for f in fields}
         for f in types:
             if f not in fields:
                 _fail(
@@ -597,8 +589,7 @@ class Engine:
                     "REQ-0532",
                     {"dataset": name, "field": f},
                 )
-        all_types = self._infer_column_types(fields, records, types)
-        return Table(name, full, all_types, fields, records)
+        return Table(name, full, {**stored, **types}, fields, records)
 
     def run(self):
         self.rows = []
@@ -696,49 +687,118 @@ class Engine:
         phase_c = [n for n in order if n in closure and n not in winset]
         return nodes, phase_a, phase_b, phase_c
 
-    def _build_record_driven(self, t, table, filt, derivs):
-        ds = table.name
+    def _row_filter(self, t, filt, ctx):
+        """REQ-0036/REQ-0068: an ungrouped filter reads the driver record,
+        the candidate's derived columns, and lookup state."""
         where = f"rows.{t['id']}.filter"
-        recs = [
-            rec
-            for rec in table.records
-            if filt is None or self._rec_pred(filt, rec, ds, where) is True
-        ]
+        node, _ = _pred.parse(filt, where)
+        ctx.where = where
+
+        def resolve(name):
+            head, dot, field = name.partition(".")
+            if dot and head == ctx.ds:
+                if field not in ctx.record:
+                    _fail(
+                        where, "validation", "unknown_field", "REQ-0103", {"name": name}
+                    )
+                return ctx.record[field]
+            if dot and head in self.lookups_decl:
+                return ctx.value(name)
+            if not dot and name in ctx.row:
+                return ctx.row[name]
+            _fail(where, "validation", "unknown_field", "REQ-0068", {"name": name})
+
+        return _pred.evaluate(node, resolve, where)
+
+    def _lookup_match_names(self, decl):
+        """Bare current-row names a lookup's match reads (REQ-0115/REQ-0121)."""
+        key = decl.get("key")
+        if key is None:
+            vals = list(self.keys)
+        elif isinstance(key, str):
+            vals = [key]
+        elif isinstance(key, dict):
+            vals = list(key.values())
+        else:
+            vals = list(key)
+        between = decl.get("between") or {}
+        if isinstance(between.get("value"), str):
+            vals.append(between["value"])
+        out = set()
+        for v in vals:
+            if isinstance(v, str):
+                if "." not in v:
+                    out.add(v)
+            else:
+                out |= _validate._ident_refs(v)[0]
+        return out
+
+    def _filter_reads(self, t, filt, names, nodes):
+        """The template derivations an ungrouped filter needs: the names it
+        reads, the match values of the lookups it reads, and their
+        dependencies among `names`."""
+        _, idents = _pred.parse(filt, f"rows.{t['id']}.filter")
+        need = set()
+        for ident in idents:
+            head, dot, _ = ident.partition(".")
+            if not dot:
+                need.add(ident)
+            elif head in self.lookups_decl:
+                need |= self._lookup_match_names(self.lookups_decl[head])
+        todo = [n for n in need if n in nodes]
+        while todo:
+            n = todo.pop()
+            refs = set(_validate._unqualified_refs(nodes[n]))
+            for q in _validate._ident_refs(nodes[n])[1]:
+                if q.split(".")[0] in self.lookups_decl:
+                    refs |= self._lookup_match_names(self.lookups_decl[q.split(".")[0]])
+            for r in refs:
+                if r in nodes and r not in need:
+                    need.add(r)
+                    todo.append(r)
+        return {n for n in names if n in need}
+
+    def _eval_row_deriv(self, t, name, node, ctx):
+        ctx.where = f"rows.{t['id']}.derivations.{name}"
+        v = _expr.eval_expr(node, ctx)
+        cs = self.colspecs.get(name)
+        ctx.row[name] = v if cs is None else self._convert(v, cs, ctx.where, node)
+
+    def _build_record_driven(self, t, table, filt, derivs):
+        """REQ-0036: every driver record builds a candidate row; the filter
+        gates it once the derivations it reads are complete, before the
+        window pass. A discarded record derives nothing else."""
+        ds = table.name
         nodes, phase_a, phase_b, phase_c = self._template_phases(t, derivs)
-        if not phase_b:
-            for rec in recs:
-                ctx = _RowCtx(self, "row", t, ds, record=rec)
-                row, derived = self._eval_row_derivs(t, derivs, ctx)
-                self._append_row(row, ds, {ds: [rec]}, derived)
-            return
-        rows, ctxs = [], []
-        for rec in recs:
+        gate = set()
+        if filt is not None:
+            gate = self._filter_reads(t, filt, phase_a, nodes)
+        first = [n for n in phase_a if n in gate]
+        rest = [n for n in phase_a if n not in gate]
+        rows, ctxs, recs = [], [], []
+        for rec in table.records:
             ctx = _RowCtx(self, "row", t, ds, record=rec)
-            row = {}
-            ctx.row = row
-            for name in phase_a:
-                ctx.where = f"rows.{t['id']}.derivations.{name}"
-                v = _expr.eval_expr(nodes[name], ctx)
-                if name in self.colspecs:
-                    v = self._convert(v, self.colspecs[name], ctx.where)
-                row[name] = v
-            rows.append(row)
+            ctx.row = {}
+            for name in first:
+                self._eval_row_deriv(t, name, nodes[name], ctx)
+            if filt is not None and self._row_filter(t, filt, ctx) is not True:
+                continue
+            for name in rest:
+                self._eval_row_deriv(t, name, nodes[name], ctx)
+            rows.append(ctx.row)
             ctxs.append(ctx)
-        wctx = _RowWinCtx(self, t, ds, rows, recs)
-        for name in phase_b:
-            wctx.where = f"rows.{t['id']}.derivations.{name}"
-            kind = next(iter(nodes[name]))
-            vec = wctx.window_value(kind, nodes[name][kind])
-            for i, v in enumerate(vec):
-                rows[i][name] = v
-        for row, ctx in zip(rows, ctxs):
-            ctx.row = row
+            recs.append(rec)
+        if phase_b:
+            wctx = _RowWinCtx(self, t, ds, rows, recs)
+            for name in phase_b:
+                wctx.where = f"rows.{t['id']}.derivations.{name}"
+                kind = next(iter(nodes[name]))
+                vec = wctx.window_value(kind, nodes[name][kind])
+                for i, v in enumerate(vec):
+                    rows[i][name] = v
+        for ctx in ctxs:
             for name in phase_c:
-                ctx.where = f"rows.{t['id']}.derivations.{name}"
-                v = _expr.eval_expr(nodes[name], ctx)
-                if name in self.colspecs:
-                    v = self._convert(v, self.colspecs[name], ctx.where)
-                row[name] = v
+                self._eval_row_deriv(t, name, nodes[name], ctx)
         for row, rec in zip(rows, recs):
             self._append_row(row, ds, {ds: [rec]}, set(derivs))
 
@@ -861,7 +921,7 @@ class Engine:
         for k in self.keys:
             cs = self.colspecs.get(k)
             if cs is None:
-                _fail("keys", "validation", "unknown_field", "R005", {"key": k})
+                _fail("keys", "validation", "unknown_field", "REQ-0220", {"key": k})
             d = cs.get("derivation")
             if d is None:
                 _fail(
@@ -909,6 +969,24 @@ class Engine:
                 self._derived.append(set(self.keys))
             self._recs[seen[tup]][base].append(krecs[i])
         self.rows = order
+
+    def _join_records(self, table, keys, match_vals):
+        """REQ-0133/REQ-0136: the implicit join's records for one current
+        row, through an equality index built once per dataset and key list
+        instead of a scan per read (issue #1485)."""
+        probe = _join_key(match_vals)
+        if probe is None:
+            return []
+        ck = (table.name, tuple(keys))
+        index = self._join_indexes.get(ck)
+        if index is None:
+            index = {}
+            for r in table.records:
+                tup = _join_key([r.get(k) for k in keys])
+                if tup is not None:
+                    index.setdefault(tup, []).append(r)
+            self._join_indexes[ck] = index
+        return list(index.get(probe, ()))
 
     def _append_row(self, row, origin, recs, derived):
         self.rows.append(row)
@@ -980,11 +1058,12 @@ class Engine:
 
     def _verify(self):
         seen_ids = set()
-        for v in self.verifications:
-            self._verify_one(v, "verifications", None, seen_ids)
+        for i, v in enumerate(self.verifications):
+            self._verify_one(v, f"verifications[{i}]", None, seen_ids)
         for name in self.col_order:
-            for v in _vlist(self.colspecs[name].get("verifications")):
-                self._verify_one(v, f"columns.{name}.verifications", name, seen_ids)
+            for i, v in enumerate(_vlist(self.colspecs[name].get("verifications"))):
+                where = f"columns.{name}.verifications[{i}]"
+                self._verify_one(v, where, name, seen_ids)
 
     def _verify_self_uniques(self):
         """REQ-0120/1245: uniqueness over the current completed donor pool."""
@@ -1006,7 +1085,7 @@ class Engine:
                 tup = tuple(_hashable(r.get(u)) for u in uniq)
                 if tup in seen:
                     _fail(
-                        f"intermediates.{lid}.verification",
+                        f"{self.lookup_paths[lid]}.verification",
                         "verification",
                         "duplicate_intermediate_records",
                         "REQ-1245",
@@ -1016,22 +1095,25 @@ class Engine:
 
     def _verify_one(self, v, where, col, seen_ids):
         if not isinstance(v, dict) or len(v) != 1:
-            _fail(where, "validation", "invalid_field_type", "R009", {})
+            _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
         kind, payload = next(iter(v.items()))
+        where = f"{where}.{kind}"
         payload = payload or {}
         if not isinstance(payload, dict):
-            _fail(where, "validation", "invalid_field_type", "R009", {})
+            _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
         vid = payload.get("id")
         if vid is not None:
             if vid in seen_ids:
-                _fail(where, "validation", "duplicate_identifier", "R009", {"id": vid})
+                _fail(
+                    where, "validation", "duplicate_identifier", "REQ-0398", {"id": vid}
+                )
             seen_ids.add(vid)
         if kind in ("all_or_none", "implies", "assert") and vid is None:
             _fail(
                 where,
                 "validation",
                 "missing_verification_id",
-                "R009",
+                "REQ-0374",
                 {"verification": kind},
             )
         if kind == "row_count" and payload.get("group_by") and vid is None:
@@ -1039,13 +1121,19 @@ class Engine:
                 where,
                 "validation",
                 "missing_verification_id",
-                "REQ-0387",
+                "REQ-0402",
                 {"verification": kind},
             )
         severity = payload.get("severity", "error")
         failed = self._check_verification(kind, payload, col, where)
         if failed and severity == "error":
-            _fail(where, "verification", failed, "R009", {"verification": kind})
+            _fail(
+                where,
+                "verification",
+                failed,
+                _VERIFICATION_REQUIREMENTS.get(failed, "REQ-0406"),
+                {"verification": kind},
+            )
 
     def _check_verification(self, kind, payload, col, where):
         if kind == "row_count":
@@ -1085,7 +1173,9 @@ class Engine:
             return None
         col = col or payload.get("column")
         if col is None or col not in self.colspecs:
-            _fail(where, "validation", "unknown_field", "R009", {"verification": kind})
+            _fail(
+                where, "validation", "unknown_field", "REQ-0405", {"verification": kind}
+            )
         if kind == "not_missing":
             if any(is_missing(r.get(col)) for r in self.rows):
                 return "not_missing_failed"
@@ -1120,40 +1210,42 @@ class Engine:
                 if not is_missing(v) and not rx.search(v):
                     return "matches_failed"
             return None
-        _fail(
-            "verifications",
-            "validation",
-            "unknown_field",
-            "R009",
-            {"verification": kind},
-        )
+        _fail(where, "validation", "unknown_field", "REQ-0397", {"verification": kind})
 
     def _check_row_count(self, payload, where):
-        filt = payload.get("filter")
+        """REQ-0385/0386/0387/1154: group the artifact's rows, count the
+        rows `filter` admits in each group, and bound the groups `when`
+        binds. The denominator of a fraction is the unfiltered group."""
+
+        def admits(text, i):
+            node, _ = _pred.parse(text, where)
+            return (
+                _pred.evaluate(node, lambda n, i=i: self.rows[i].get(n), where) is True
+            )
+
+        filt, when = payload.get("filter"), payload.get("when")
         group_by = payload.get("group_by")
-        if filt is not None:
-            node, _ = _pred.parse(filt, where)
-            idxs = [
-                i
-                for i in range(len(self.rows))
-                if _pred.evaluate(node, lambda n, i=i: self.rows[i].get(n), where)
-                is True
-            ]
-        else:
-            idxs = list(range(len(self.rows)))
-        groups = [idxs]
+        groups = [list(range(len(self.rows)))]
         if group_by:
             parts = {}
-            for i in idxs:
+            for i in range(len(self.rows)):
                 tup = tuple(_hashable(self.rows[i].get(g)) for g in group_by)
                 parts.setdefault(tup, []).append(i)
             groups = list(parts.values())
         for g in groups:
-            n = len(g)
-            if "min" in payload and payload["min"] is not None and n < payload["min"]:
-                return "row_count_failed"
-            if "max" in payload and payload["max"] is not None and n > payload["max"]:
-                return "row_count_failed"
+            if when is not None and not any(admits(when, i) for i in g):
+                continue
+            n = sum(1 for i in g if filt is None or admits(filt, i))
+            frac = n / len(g) if g else 0.0
+            for bound, value, low in (
+                ("min", n, True),
+                ("max", n, False),
+                ("min_fraction", frac, True),
+                ("max_fraction", frac, False),
+            ):
+                b = payload.get(bound)
+                if b is not None and (value < b if low else value > b):
+                    return "row_count_failed"
         return None
 
     def _render(self):
@@ -1165,7 +1257,7 @@ class Engine:
                     "output",
                     "output",
                     "missing_key",
-                    "R005",
+                    "REQ-0240",
                     {"row": i, "keys": self.keys},
                 )
             if tup in seen:
@@ -1189,7 +1281,7 @@ class Engine:
                     "output.columns",
                     "validation",
                     "undeclared_column",
-                    "R005",
+                    "REQ-0234",
                     {"column": c},
                 )
         ctypes = {c: self.colspecs[c]["type"] for c in cols}
@@ -1200,6 +1292,30 @@ class Engine:
 
 
 _ABSENT = _expr._ABSENT
+
+
+def _join_key(values):
+    """A hashable image of match values that equal exactly when REQ-0005
+    compares them equal: numbers by value across int and float, strings
+    exactly, and each temporal type only with itself. None when a value is
+    missing or has no equality at all (a Boolean), so nothing matches."""
+    out = []
+    for v in values:
+        if is_missing(v) or isinstance(v, bool):
+            return None
+        if isinstance(v, (int, float)):
+            out.append(("num", float(v)))
+        elif isinstance(v, str):
+            out.append(("str", v))
+        elif isinstance(v, YDateTime):
+            out.append(
+                ("datetime", (v.year, v.month, v.day, v.hour, v.minute, v.second))
+            )
+        elif isinstance(v, YDate):
+            out.append(("date", v.toordinal()))
+        else:
+            return None
+    return tuple(out)
 
 
 def _hashable(v):
@@ -1250,24 +1366,27 @@ def _norm_derivation(d, where):
     """REQ-0266/REQ-0319: bare string -> {source: s}; {value:} handled wrapper."""
     if isinstance(d, str):
         return {"source": d}
-    if isinstance(d, dict) and len(d) == 1 and "value" in d:
-        return d
     if isinstance(d, dict) and len(d) == 1:
         return d
-    if (
-        isinstance(d, dict)
-        and "value" in d
-        and set(d) <= {"value", "missing", "strict", "unconvertible"}
-    ):
+    if isinstance(d, dict) and "value" in d and set(d) <= _expr.HANDLED_FIELDS:
         return d
-    _fail(where, "validation", "invalid_field_type", "R007", {"derivation": d})
+    _fail(
+        where,
+        "validation",
+        "invalid_field_type",
+        _expr.derivation_requirement(d),
+        {"derivation": d},
+    )
 
 
-def _eval_intermediate_derivs(e, ds, recs, derivs, where):
+def _eval_intermediate_derivs(e, decl, recs):
     """REQ-1185: derivations in declaration order; windows compute over the
-    full donor set as augmented by earlier derivations."""
+    full donor set as augmented by earlier derivations. A failing derivation
+    fails at its own path."""
+    ds = decl["dataset"]
     augmented = [dict(r) for r in recs]
-    for dname, dnode in derivs.items():
+    for dname, dnode in decl["derivations"].items():
+        where = f"{e.lookup_paths[decl['id']]}.derivations.{dname}"
         node = _norm_derivation(dnode, where)
         kind = next(iter(node)) if isinstance(node, dict) and len(node) == 1 else None
         if kind in _validate._WINDOW_KINDS:
@@ -1276,9 +1395,8 @@ def _eval_intermediate_derivs(e, ds, recs, derivs, where):
             for rr, v in zip(augmented, vec):
                 rr[dname] = v
         else:
-            for rr in augmented:
-                dctx = _DeriveCtx(e, ds, rr, rr, where, -1)
-                rr[dname] = _expr.eval_expr(node, dctx)
+            for j, rr in enumerate(augmented):
+                rr[dname] = _expr.eval_expr(node, _DonorCtx(e, decl, rr, j, where))
     return augmented
 
 
@@ -1342,6 +1460,13 @@ class _BaseCtx:
         ins = list(self.e.inputs)
         return ins[0] if len(ins) == 1 else None
 
+    def _correlated_record(self, driver, i):
+        """The current driver record a correlated filter reads for row i."""
+        if not (isinstance(i, int) and 0 <= i < len(self.e._recs)):
+            return None
+        ds_recs = (self.e._recs[i] or {}).get(driver, [])
+        return ds_recs[0] if ds_recs else None
+
     def _correlated_filter(self, decl):
         """Parse a correlated intermediate filter once."""
         filt = decl.get("filter")
@@ -1371,9 +1496,7 @@ class _BaseCtx:
             recs = table.records
             ds = table.name
             if decl.get("derivations"):
-                recs = _eval_intermediate_derivs(
-                    self.e, ds, recs, decl["derivations"], self.where
-                )
+                recs = _eval_intermediate_derivs(self.e, decl, recs)
             corr = self._correlated_filter(decl)
             if decl.get("filter") and corr is None:
                 node, _ = _pred.parse(decl["filter"], self.where)
@@ -1411,7 +1534,7 @@ class _BaseCtx:
                     tup = tuple(_hashable(r.get(u)) for u in uniq)
                     if tup in seen:
                         _fail(
-                            self.where,
+                            f"{self.e.lookup_paths[lid]}.verification",
                             "verification",
                             "duplicate_intermediate_records",
                             "REQ-1245",
@@ -1431,9 +1554,7 @@ class _BaseCtx:
             else [dict(r) for r in self.e.rows]
         )
         if decl.get("derivations"):
-            donors = _eval_intermediate_derivs(
-                self.e, "SELF", donors, decl["derivations"], self.where
-            )
+            donors = _eval_intermediate_derivs(self.e, decl, donors)
         corr = self._correlated_filter(decl)
         filt = decl.get("filter")
         if filt and corr is None:
@@ -1462,9 +1583,9 @@ class _BaseCtx:
 
         REQ-0115: key is a list of donor fields matched by same-named
         current-row values, or a mapping of donor field -> driver match
-        expression. key_base is retired; the mapping form carries the
-        driver operands in its values.
+        expression. REQ-1185: a derived name is a donor field too.
         """
+        where = self.e.lookup_paths[decl["id"]]
         if decl["dataset"] == "SELF":
             fields = set(getattr(self.e, "donor_fields", None) or set())
             ds_label = "SELF"
@@ -1472,16 +1593,17 @@ class _BaseCtx:
             table = self.e.inputs[decl["dataset"]]
             fields = set(table.fields)
             ds_label = decl["dataset"]
+        fields |= set(decl.get("derivations") or {})
         key = decl.get("key")
         if key is None:
             key = [k for k in self.e.keys if k in fields]
             if not key:
                 _fail(
-                    self.where,
+                    where,
                     "validation",
                     "no_applicable_keys",
                     "REQ-0153",
-                    {"dataset": ds_label},
+                    {"intermediate": decl["id"], "dataset": ds_label},
                 )
         elif isinstance(key, str):
             key = [key]
@@ -1493,12 +1615,34 @@ class _BaseCtx:
             key_exprs = list(key)
         if not key_fields:
             _fail(
-                self.where, "validation", "source_key_length_mismatch", "REQ-0115", {}
+                where + ".key",
+                "validation",
+                "invalid_field_type",
+                "REQ-0115",
+                {"expected": "at least one key pair"},
             )
         for k in key_fields:
             if k not in fields:
-                _fail(self.where, "validation", "unknown_field", "REQ-0116", {"key": k})
+                _fail(
+                    where + ".key",
+                    "validation",
+                    "unknown_field",
+                    "REQ-0116",
+                    {"intermediate": decl["id"], "key": k},
+                )
         return key_fields, key_exprs
+
+    def _match_context(self, decl, key_fields, match_vals, i):
+        """REQ-0143/REQ-0144: the match a lookup failure reports."""
+        out = {
+            "intermediate": decl["id"],
+            "dataset": decl["dataset"],
+            "key": list(key_fields),
+            "intermediate_key": dict(zip(key_fields, match_vals)),
+        }
+        if isinstance(i, int) and 0 <= i < len(self.e.rows):
+            out["keys"] = [{k: self.e.rows[i].get(k) for k in self.e.keys}]
+        return out
 
     def _match_lookup(self, decl, i):
         cache_key = (decl["id"], i)
@@ -1519,14 +1663,11 @@ class _BaseCtx:
                 if ok:
                     cands.append(r)
             if decl.get("between"):
-                cands = self._apply_between(cands, decl["between"], i)
+                cands = self._apply_between(cands, decl, i)
             corr = self._correlated_filter(decl)
             if corr is not None:
                 node, driver, donor = corr
-                drec = None
-                if 0 <= i < len(self.e._recs):
-                    ds_recs = (self.e._recs[i] or {}).get(driver, [])
-                    drec = ds_recs[0] if ds_recs else None
+                drec = self._correlated_record(driver, i)
 
                 def resolve(name, _r=None):
                     parts = name.split(".")
@@ -1556,12 +1697,14 @@ class _BaseCtx:
             if len(cands) > 1:
                 ob, keep = decl.get("order_by"), decl.get("keep")
                 if not ob or not keep:
+                    ctx = self._match_context(decl, key_fields, match_vals, i)
+                    ctx["match_count"] = len(cands)
                     _fail(
-                        self.where,
+                        self.e.lookup_paths[decl["id"]],
                         "join",
                         "multiple_matches",
                         "REQ-0127",
-                        {"lookup": decl["id"]},
+                        ctx,
                     )
                 cands = _order_records(cands, ob, self.where)
                 cands = [cands[0] if keep == "first" else cands[-1]]
@@ -1571,14 +1714,12 @@ class _BaseCtx:
                 self.e._lookups[cache_key] = None
                 return None
             _fail(
-                self.where,
+                self.e.lookup_paths[decl["id"]],
                 "join",
                 "unmatched_key",
                 "REQ-0124",
-                {"lookup": decl["id"], "key": key_fields},
+                self._match_context(decl, key_fields, match_vals, i),
             )
-        if decl.get("strict") and decl.get("missing") is not None:
-            _fail(self.where, "validation", "conflicting_absent_policy", "REQ-0123", {})
         self.e._lookups[cache_key] = cands[0]
         return cands[0]
 
@@ -1592,7 +1733,8 @@ class _BaseCtx:
     def _row_value(self, i, name):
         raise NotImplementedError
 
-    def _apply_between(self, cands, between, i):
+    def _apply_between(self, cands, decl, i):
+        between = decl["between"]
         val = self._match_value(between["value"], i)
         if is_missing(val):
             return []
@@ -1614,7 +1756,11 @@ class _BaseCtx:
                 continue  # REQ-0128: missing bound -> ineligible
             if not comparable(val, lo or hi or val):
                 _fail(
-                    self.where, "validation", "incomparable_range_types", "REQ-0121", {}
+                    f"{self.e.lookup_paths[decl['id']]}.between",
+                    "validation",
+                    "incomparable_range_types",
+                    "REQ-0121",
+                    {},
                 )
             if between.get("lower") and compare(lo, val) > 0:
                 continue
@@ -1760,10 +1906,12 @@ class _BaseCtx:
                 latest = max(c for c, _ in cands)
                 winners = [i for c, i in cands if compare(c, latest) == 0]
                 if len(winners) > 1:
-                    _fail(self.where, "derivation", "ambiguous_baseline", "R007", {})
+                    _fail(
+                        self.where, "derivation", "ambiguous_baseline", "REQ-0322", {}
+                    )
                 out[ordered.index(winners[0])] = "Y"
             return out
-        _fail(self.where, "validation", "unknown_field", "R007", {"window": kind})
+        _fail(self.where, "validation", "unknown_field", "REQ-0321", {"window": kind})
 
     def aggregate_value(self, payload):
         if isinstance(payload, str):
@@ -2094,35 +2242,8 @@ class _ColCtx(_BaseCtx):
             parts = name.split(".")
             if parts[0] in e.lookups_decl:
                 return self.lookup_value(parts[0], parts[1])
-            recs = self.source_records(name)
-            field = self.value_field(name)
-            vals = [r.get(field) for r in recs]
-            present = [v for v in vals if not is_missing(v)]
-            seen_h, distinct = set(), []
-            for v in present:
-                h = (
-                    ("num", float(v))
-                    if isinstance(v, (int, float)) and not isinstance(v, bool)
-                    else _hashable(v)
-                )
-                if h not in seen_h:
-                    seen_h.add(h)
-                    distinct.append(v)
-            if len(distinct) > 1:
-                _fail(
-                    self.where,
-                    "derivation",
-                    "multiple_values_per_key",
-                    "REQ-0075",
-                    {
-                        "identifier": name,
-                        "value_count": len(distinct),
-                        "keys": [{k: e.rows[self.i].get(k) for k in e.keys}],
-                    },
-                )
-            if not recs:
-                return None
-            return distinct[0] if distinct else None
+            # REQ-0075 for the row's own records, REQ-0127 for a joined read.
+            return _expr._one_record(name, None, _ABSENT, None, self)
         row = e.rows[self.i]
         if name not in row:
             origin = e._origins[self.i]
@@ -2170,22 +2291,7 @@ class _ColCtx(_BaseCtx):
                 {"variable": var},
             )
         row = e.rows[i]
-        out = []
-        for r in table.records:
-            ok = True
-            for k in applicable:
-                mv, rv = row.get(k), r.get(k)
-                if (
-                    is_missing(mv)
-                    or is_missing(rv)
-                    or not comparable(mv, rv)
-                    or compare(mv, rv) != 0
-                ):
-                    ok = False
-                    break
-            if ok:
-                out.append(r)
-        return out
+        return e._join_records(table, applicable, [row.get(k) for k in applicable])
 
     def compute_ident(self, name):
         e = self.e
@@ -2245,18 +2351,8 @@ class _RowCtx(_BaseCtx):
                         {"column": col},
                     )
                 return rec.get(col)
-            recs = self.source_records(name)
-            if len(recs) == 1:
-                return recs[0].get(self.value_field(name))
-            if not recs:
-                return None
-            _fail(
-                self.where,
-                "row_construction",
-                "multiple_matches",
-                "REQ-0127",
-                {"variable": name},
-            )
+            # REQ-0156: the implicit join binds one value per row.
+            return _expr._one_record(name, None, _ABSENT, None, self)
         if name in self.row:
             return self.row[name]
         if name in self.groupkeys:
@@ -2312,31 +2408,18 @@ class _RowCtx(_BaseCtx):
                 {"variable": var},
             )
         anchor = self.record if self.record is not None else self.groupkeys
-        out = []
-        for r in table.records:
-            ok = True
-            for k in applicable:
-                mv = anchor.get(k)
-                rv = r.get(k)
-                if self.group is not None and k not in self.groupkeys:
-                    _fail(
-                        self.where,
-                        "row_construction",
-                        "ungrouped_driver_field",
-                        "REQ-0067",
-                        {"key": k},
-                    )
-                if (
-                    is_missing(mv)
-                    or is_missing(rv)
-                    or not comparable(mv, rv)
-                    or compare(mv, rv) != 0
-                ):
-                    ok = False
-                    break
-            if ok:
-                out.append(r)
-        return out
+        for k in applicable:
+            if self.group is not None and k not in self.groupkeys:
+                _fail(
+                    self.where,
+                    "row_construction",
+                    "ungrouped_driver_field",
+                    "REQ-0067",
+                    {"key": k},
+                )
+        return self.e._join_records(
+            table, applicable, [anchor.get(k) for k in applicable]
+        )
 
     def record_predicate(self, text, record, default_ds=None):
         record = dict(record)
@@ -2427,7 +2510,7 @@ class _RowCtx(_BaseCtx):
                 if ok:
                     cands.append(r)
             if decl.get("between"):
-                cands = self._apply_between(cands, decl["between"], -1)
+                cands = self._apply_between(cands, decl, -1)
             if corr is not None:
                 node, driver, donor = corr
                 drec = self._row_driver_record(driver)
@@ -2460,12 +2543,15 @@ class _RowCtx(_BaseCtx):
             if len(cands) > 1:
                 ob, keep = decl.get("order_by"), decl.get("keep")
                 if not ob or not keep:
+                    # REQ-0145: at the join phase, before any column.
+                    ctx = self._match_context(decl, key, match_vals, None)
+                    ctx["match_count"] = len(cands)
                     _fail(
-                        self.where,
+                        self.e.lookup_paths[decl["id"]],
                         "join",
                         "multiple_matches",
                         "REQ-0127",
-                        {"lookup": decl["id"]},
+                        ctx,
                     )
                 cands = _order_records(cands, ob, self.where)
                 cands = [cands[0] if keep == "first" else cands[-1]]
@@ -2475,14 +2561,12 @@ class _RowCtx(_BaseCtx):
                 self.e._lookups[ck] = None
                 return None
             _fail(
-                self.where,
+                self.e.lookup_paths[decl["id"]],
                 "join",
                 "unmatched_key",
                 "REQ-0124",
-                {"lookup": decl["id"], "key": key},
+                self._match_context(decl, key, match_vals, None),
             )
-        if decl.get("strict") and decl.get("missing") is not None:
-            _fail(self.where, "validation", "conflicting_absent_policy", "REQ-0123", {})
         self.e._lookups[ck] = cands[0]
         return cands[0]
 
@@ -2490,7 +2574,7 @@ class _RowCtx(_BaseCtx):
         return self._row_match_value(var)
 
     def window_value(self, kind, payload):
-        _fail(self.where, "row_construction", "phase_boundary", "R007", {})
+        _fail(self.where, "validation", "phase_boundary", "REQ-0326", {})
 
     def aggregate_value(self, payload):
         if self.group is None:
@@ -2667,9 +2751,6 @@ class _KeyCtx(_BaseCtx):
             {"identifier": name},
         )
 
-    def inline_lookup(self, payload):
-        _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
-
     def window_value(self, kind, payload):
         _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
 
@@ -2756,7 +2837,9 @@ class _DeriveCtx:
             return self.record[f]
         if name in self.scope:
             return self.scope[name]
-        _fail(self.where, "validation", "unknown_field", "R002", {"identifier": name})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-1189", {"identifier": name}
+        )
 
     def source_records(self, var):
         d, _, _ = var.partition(".")
@@ -2796,6 +2879,69 @@ class _DeriveCtx:
 
     def aggregate_value(self, payload):
         _fail(self.where, "validation", "prohibited_construct", "REQ-1191", {})
+
+    def compute_ident(self, name):
+        return self.value(name)
+
+
+class _DonorCtx(_BaseCtx):
+    """REQ-1185/REQ-1263: one donor record being augmented. A bare name, or
+    one qualified by the intermediate's dataset, reads the record's stored
+    fields and earlier derivations. A name qualified by another intermediate
+    reads that intermediate's selection, matched from this donor record and
+    shared by every derivation of the record."""
+
+    def __init__(self, engine, decl, record, j, where):
+        super().__init__(engine, where)
+        self.decl = decl
+        self.ds = decl["dataset"]
+        self.record = record
+        self.j = j
+
+    def _row_index(self):
+        return ("donor", self.decl["id"], self.j)
+
+    def _row_value(self, i, name):
+        return self._field(name)
+
+    def _driver_ds(self):
+        return self.ds
+
+    def _correlated_record(self, driver, i):
+        return self.record
+
+    def _field(self, name):
+        if name not in self.record:
+            _fail(self.where, "validation", "unknown_field", "REQ-1185", {"name": name})
+        return self.record[name]
+
+    def _other(self, head):
+        other = self.e.lookups_decl.get(head)
+        if other is None or other is self.decl:
+            return None
+        return other
+
+    def value(self, name):
+        head, dot, field = name.partition(".")
+        if not dot:
+            return self._field(name)
+        if head == self.ds:
+            return self._field(field)
+        if self._other(head) is not None:
+            return self.lookup_value(head, field)
+        _fail(self.where, "validation", "unknown_field", "REQ-1185", {"name": name})
+
+    def source_records(self, var):
+        head, _, field = var.partition(".")
+        if head == self.ds:
+            self._field(field)
+            return [self.record]
+        other = self._other(head)
+        if other is not None:
+            self.lookup_value(head, field)  # REQ-0125: a readable column
+            rec = self._match_lookup(other, self._row_index())
+            return [rec] if rec is not None else []
+        _fail(self.where, "validation", "unknown_field", "REQ-1185", {"name": var})
 
     def compute_ident(self, name):
         return self.value(name)

@@ -1,4 +1,4 @@
-"""R004 predicate language: tokenizer, recursive-descent parser, evaluator."""
+"""Predicate language (operations/predicates): tokenizer, parser, evaluator."""
 
 import re
 
@@ -28,7 +28,7 @@ KEYWORDS = {
     "DATETIME",
 }
 
-# ------------------------------------------------- portable regex (R022)
+# ------------------------------------ portable regex (operations/text)
 # Shared with validate.py: the pure grammar test and the Python-`re`
 # normalization live here so both the predicate grammar (REQ-1244) and
 # the schema-level pattern checks use one definition.
@@ -37,7 +37,7 @@ _ESCAPE_OK = set("dDsSwWbBnrtfvxu0123456789") | set("^$\\.*+?()[]{}|/-'\" ")
 
 
 def portable_pattern_error(pattern):
-    """R022: return a detail string when the portable regex grammar rejects
+    """REQ-0827: return a detail string when the portable regex grammar rejects
     `pattern`, else None."""
     bad = None
     if "(?P<" in pattern:
@@ -101,7 +101,7 @@ _ECMA_S = "\\t\\v\\f \\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000\\uFEFF\\
 
 
 def normalize_pattern(pattern):
-    """Apply R022's normalization for Python's re: (?<name>) groups, \\u{...},
+    """Apply the portable-regex normalization for Python's re: (?<name>) groups, \\u{...},
     '.' excluding U+2028/29, '$' at end only. Returns the compiled pattern."""
     out = []
     i, n = 0, len(pattern)

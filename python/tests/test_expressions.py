@@ -2,7 +2,7 @@
 
 The benchmark corpus covers the golden paths; these pin the boundary
 conditions the rules text calls out explicitly (locf value semantics,
-ASCII-only casing, dict_yaml contract, correlated-filter qualification,
+ASCII-only casing, mapping.dict path contract, correlated-filter qualification,
 window order requirement, bare-string case results).
 """
 
@@ -126,7 +126,7 @@ def test_window_order_by_required_applies_to_all_window_kinds(tmp_path):
         assert e.requirement == "REQ-0340", kind
 
 
-def test_str_sentence_ascii_only(tmp_path):
+def test_str_case_sentence_ascii_only(tmp_path):
     # REQ-1240: first scalar up, rest down; non-ASCII passes through.
     rows = "USUBJID,VAL\nS1,hELLO w\u00d6RLD\n"
     spec = base_spec(derivation={"str_case": {"source": "DM.VAL", "to": "sentence"}})
@@ -134,7 +134,7 @@ def test_str_sentence_ascii_only(tmp_path):
     assert "S1,Hello w\u00d6rld" in out.splitlines()
 
 
-def test_str_title_ascii_only(tmp_path):
+def test_str_case_title_ascii_only(tmp_path):
     # REQ-1241: each [A-Za-z]+ run titled; digits/separators untouched.
     rows = "USUBJID,VAL\nS1,o'neil-2x SMITH\n"
     spec = base_spec(derivation={"str_case": {"source": "DM.VAL", "to": "title"}})
@@ -142,7 +142,7 @@ def test_str_title_ascii_only(tmp_path):
     assert "S1,O'Neil-2X Smith" in out.splitlines()
 
 
-def test_str_sentence_rejects_non_str_source(tmp_path):
+def test_str_case_rejects_non_str_source(tmp_path):
     # REQ-0308: static type check against the declared column type.
     spec = {
         "schema_version": "1.0",
@@ -173,7 +173,7 @@ def test_str_sentence_rejects_non_str_source(tmp_path):
     assert e.context == {"source": "SITENUM", "expected": "str", "actual": "int"}
 
 
-def test_dict_yaml_missing_file(tmp_path):
+def test_mapping_dict_path_missing_file(tmp_path):
     # A dict YAML path that reaches no entry fails resource_path_missing.
     spec = base_spec(
         derivation={"mapping": {"source": "DM.VAL", "dict": "input/nope.yaml"}}
@@ -184,7 +184,7 @@ def test_dict_yaml_missing_file(tmp_path):
     assert (e.phase, e.condition) == ("validation", "resource_path_missing")
 
 
-def test_dict_yaml_exactly_one_of(tmp_path):
+def test_mapping_dict_yaml_is_retired(tmp_path):
     # REQ-1110: dict_yaml is retired; using it fails as unknown_field.
     spec = base_spec(
         derivation={

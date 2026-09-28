@@ -1,4 +1,5 @@
-"""R010 numeric_expression: closed arithmetic grammar over named variables."""
+"""numeric_expression (operations/computation): closed arithmetic grammar over
+named variables."""
 
 import math
 import re
