@@ -541,3 +541,30 @@ def test_normalize_pattern_unclosed_lookbehind_raises():
             pass
         else:
             raise AssertionError(f"expected re.error for {bad!r}")
+
+
+def test_normalize_pattern_in_class_s_excludes_u0085():
+    # 2026-09-25: in-class \s passed straight through to host re, so [\s]
+    # matched U+0085 while bare \s did not (REQ-0823). Both now spell the
+    # ECMA-262 whitespace set.
+    from yamaa.pred import normalize_pattern
+
+    rx = normalize_pattern(r"[\s]")
+    assert rx.search("\x85") is None
+    assert rx.search(" ") is not None
+    assert rx.search("\ufeff") is not None
+    assert normalize_pattern(r"[a\sz]").search("b") is None
+
+
+def test_portable_pattern_error_rejects_lone_closing_brace():
+    # 2026-09-25: a lone "}" outside a class was silently accepted as a
+    # literal; the replaced engine rejected it as a malformed quantifier.
+    from yamaa.pred import portable_pattern_error
+
+    assert portable_pattern_error("a}") is not None
+    assert portable_pattern_error("a{") is not None
+    # Valid quantifiers and in-class / escaped braces stay accepted.
+    assert portable_pattern_error("a{2}") is None
+    assert portable_pattern_error("a{2,3}") is None
+    assert portable_pattern_error("[}]") is None
+    assert portable_pattern_error("a\\}") is None
