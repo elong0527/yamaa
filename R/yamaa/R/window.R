@@ -6,6 +6,7 @@
 # on another window's result fails during row construction.
 
 eval_window_expr <- function(kind, payload, ctx) {
+  if (!is.null(ctx$inter_ds)) ctx$inter_window <- TRUE
   w <- payload$window
   # REQ-1251: window accepts an inline mapping or a named reference string
   if (is.character(w) && length(w) == 1) {

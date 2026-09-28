@@ -1,6 +1,6 @@
 # lookup.R -- named intermediates (rules/operations/lookup.md).
 #
-# An intermediate selects one record per output row from its dataset.
+# An intermediate selects one record per output row or augmented donor record.
 # Selection is lazy: ensure_intermediate(ctx, id) computes and caches the
 # per-row selection the first time the intermediate is read. The cache lives
 # in an environment (reference semantics) inside ctx.
@@ -9,30 +9,37 @@
 # computed once per record of the intermediate's dataset, and the derived
 # values augment the donor records before filter, matching, order_by
 # selection, and column reads. The derivation context sees only the
-# dataset's stored fields: a bare name reads a stored field and a qualified
-# name must name the dataset; anything else (a driver field, another
-# intermediate, a sibling derivation) fails as unknown_field. A derived
-# name shadowing a stored column fails as duplicate_derivation.
+# dataset's stored fields and earlier derivations. Under REQ-1263, a qualified
+# name may read another input-backed intermediate matched to each donor record.
+# A derived name shadowing a stored column fails as duplicate_derivation.
 derive_intermediate_frame <- function(ctx, spec, ds) {
-  ydf <- ctx$inputs[[ds]]
+  source_inputs <- if (is.null(ctx$raw_inputs)) ctx$inputs else ctx$raw_inputs
+  ydf <- source_inputs[[ds]]
   derivs <- spec$derivations
   if (is.null(derivs) || length(derivs) == 0) return(ydf)
   cts <- attr(ydf, "coltypes")
   stored <- names(ydf)
   dcol <- lapply(stored, function(v) tv(ydf[[v]], cts[[v]]))
   names(dcol) <- stored
+  cache <- new.env(parent = emptyenv())
   dctx <- list(
     n = nrow(ydf),
     col = dcol,
-    inputs = setNames(list(ydf), ds),
-    inter_specs = list(),
-    inter = new.env(parent = emptyenv()),
+    inputs = source_inputs,
+    raw_inputs = source_inputs,
+    inter_specs = ctx$inter_specs,
+    inter_cache = cache,
+    inter = cache,
+    inter_stack = c(ctx$inter_stack, spec$id),
+    driver_ds = rep(ds, nrow(ydf)),
+    driver_rec = lapply(seq_len(nrow(ydf)), as.integer),
     keys = character(0),
     phase = "derivation",
     # REQ-1185: the dataset qualifier inside an intermediate's derivations
     # names the derivation-augmented donor frame (stored + earlier-derived
     # names in col); resolve_name short-circuits on this marker.
     inter_ds = ds,
+    named_windows = ctx$named_windows,
     spec = ctx$spec,
     spec_dir = ctx$spec_dir,
     project_fns = ctx$project_fns,
@@ -54,6 +61,8 @@ derive_intermediate_frame <- function(ctx, spec, ds) {
     # later derivations (and their windows) read earlier-derived names
     # bare through the context, alongside the stored fields
     dctx$col[[nm]] <- val
+    attr(ydf, "coltypes") <- cts
+    dctx$inputs[[ds]] <- ydf
   }
   attr(ydf, "coltypes") <- cts
   ydf
@@ -98,6 +107,12 @@ init_intermediates <- function(spec, ctx) {
 ensure_intermediate <- function(ctx, id) {
   spec <- ctx$inter_specs[[id]]
   if (is.null(spec)) yamaa_error("unknown_field", paste0("unknown intermediate: ", id))
+  if (id %in% ctx$inter_stack)
+    yamaa_error("dependency_cycle", paste0("intermediate cycle: ",
+      paste(c(ctx$inter_stack, id), collapse = " -> ")))
+  if (!is.null(ctx$inter_ds) && identical(spec$dataset, "SELF"))
+    yamaa_error("phase_boundary", paste0("SELF intermediate ", id,
+      " cannot be read while donor records are augmented"))
   if (identical(spec$dataset, "SELF")) {
     # REQ-0120: the donor set is the completed row records, which grows as
     # row construction proceeds -- a cached selection would go stale, so a
@@ -136,7 +151,8 @@ compute_intermediate_sel <- function(ctx, spec) {
   if (length(corr_q) == 0)
     recs <- apply_record_filter(ctx, ds, recs, spec$filter)
 
-  # key pairs: key (dataset cols) with key_base (row vars).
+  # key pairs: a list matches like-named fields; a map supplies current-row
+  # expressions for the looked-up dataset fields.
   # Exact name match: `$key` would partially match `key_base`.
   dkey <- if ("key" %in% names(spec)) spec[["key"]] else NULL
   bkey <- spec$key_base
@@ -149,7 +165,12 @@ compute_intermediate_sel <- function(ctx, spec) {
         paste0("intermediate ", spec$id, " has no applicable keys"))
     if (is.null(bkey)) bkey <- dkey
   } else {
-    if (is.null(bkey)) bkey <- dkey
+    if (!is.null(names(dkey)) && all(nzchar(names(dkey)))) {
+      if (!is.null(bkey))
+        yamaa_error("invalid_spec", "mapped key cannot use key_base")
+      bkey <- unname(dkey)
+      dkey <- names(dkey)
+    } else if (is.null(bkey)) bkey <- dkey
   }
   dkey <- as.character(dkey); bkey <- normalize_key_base(bkey)
   if (length(dkey) == 0 || length(dkey) != length(bkey))

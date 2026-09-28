@@ -69,6 +69,12 @@ split_qual <- function(name) {
   else list(q = parts[1], v = paste(parts[-1], collapse = "."))
 }
 
+check_donor_qualifier <- function(ctx, qualifier, name) {
+  if (!is.null(ctx$inter_ds) && qualifier != ctx$inter_ds &&
+      !qualifier %in% names(ctx$inter_specs))
+    yamaa_error("unknown_field", paste0(name, ": outside intermediate donor scope"))
+}
+
 resolve_name <- function(name, ctx) {
   s <- split_qual(name)
   if (is.null(s$q)) {
@@ -86,25 +92,32 @@ resolve_name <- function(name, ctx) {
       paste0("unknown field: ", name, " (intermediate derivation context)"))
   }
   if (q %in% names(ctx$inter_specs)) return(inter_read(ctx, q, v))
+  check_donor_qualifier(ctx, q, name)
   if (q %in% names(ctx$inputs)) return(dataset_scalar_read(ctx, q, v, NULL))
   yamaa_error("unknown_field", paste0("unknown qualifier: ", q, " in ", name))
 }
 
 # read of V from an intermediate's selected record (per row)
 inter_read <- function(ctx, id, v) {
+  if (isTRUE(ctx$inter_window))
+    yamaa_error("unknown_field", paste0(id, ".", v, ": intermediate read in window"))
   ensure_intermediate(ctx, id)
   spec <- ctx$inter_specs[[id]]
   entry <- get(id, envir = ctx$inter_cache, inherits = FALSE)
   # REQ-1185: use the derivation-augmented frame cached with the selection
   ydf <- if (!is.null(entry$ydf)) entry$ydf else ctx$inputs[[spec$dataset]]
+  if (!is.null(spec$columns) && !v %in% as.character(spec$columns))
+    yamaa_error("unknown_field", paste0(id, ".", v, ": not exposed by columns"))
   if (!v %in% names(ydf)) yamaa_error("unknown_field", paste0(id, ".", v, ": no such field"))
   t <- attr(ydf, "coltypes")[[v]]
   sel <- entry$sel; absent <- entry$absent
-  if (isTRUE(spec$strict) && any(absent))
-    yamaa_error("unmatched_key", paste0("strict intermediate ", id, " has no record for some row"))
+  if (any(absent) && (isTRUE(spec$strict) || !is.null(ctx$inter_ds)) &&
+      !"no_match" %in% names(spec) && is.null(spec$missing))
+    yamaa_error("unmatched_key", paste0("intermediate ", id,
+      " has no record for some row"))
   vals <- ydf[[v]][sel]  # NA where sel is NA
   vals[absent] <- NA
-  missing_lit <- spec$missing
+  missing_lit <- if ("no_match" %in% names(spec)) spec$no_match else spec$missing
   if (!is.null(missing_lit) && any(absent)) {
     lit <- literal_to_tv(missing_lit, t, sum(absent))
     vals[absent] <- lit$v
@@ -356,6 +369,7 @@ eval_source_expr <- function(payload, ctx) {
       yamaa_error("invalid_expression", "source filter/multiple_matches do not apply to intermediates")
     return(inter_read(ctx, s$q, s$v))
   }
+  check_donor_qualifier(ctx, s$q, binding$variable)
   dataset_scalar_read(ctx, s$q, s$v, binding)
 }
 
@@ -659,6 +673,7 @@ resolve_source_binding <- function(binding, ctx) {
   s <- split_qual(binding$variable)
   if (is.null(s$q)) return(resolve_name(binding$variable, ctx))
   if (s$q %in% names(ctx$inter_specs)) return(inter_read(ctx, s$q, s$v))
+  check_donor_qualifier(ctx, s$q, binding$variable)
   dataset_scalar_read(ctx, s$q, s$v, binding)
 }
 
