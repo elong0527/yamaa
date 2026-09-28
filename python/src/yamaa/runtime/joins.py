@@ -64,6 +64,12 @@ class IndexedRecord:
     values: Mapping[str, RuntimeValue]
 
 
+# One implicit join's eligible records and their match-key index.
+ImplicitSelection: TypeAlias = tuple[
+    tuple[IndexedRecord, ...], dict[PartitionKey, tuple[IndexedRecord, ...]]
+]
+
+
 class OrderError(ValueError):
     """One order term compares values whose types are not mutually comparable."""
 
@@ -164,6 +170,13 @@ class RelationIndex:
         self._matched: dict[
             tuple[str, ...], dict[PartitionKey, tuple[IndexedRecord, ...]]
         ] = {}
+        # REQ-0150: implicit-join selections keyed by the source-only filter
+        # applied (or `None`) and the matched fields. The records never
+        # change once read, so a selection built from them alone holds for
+        # the run.
+        self.implicit_selections: dict[
+            tuple[str | None, tuple[str, ...]], ImplicitSelection | ConditionResult
+        ] = {}
 
     @classmethod
     def from_records(
@@ -184,6 +197,7 @@ class RelationIndex:
             for record in records
         )
         relation._matched = {}
+        relation.implicit_selections = {}
         return relation
 
     @property
