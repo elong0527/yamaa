@@ -381,7 +381,7 @@ a template a driver field is a scalar only when the keys declare it; every
 other field is read through an aggregate over the group's records.
 
 An output key and the same-named right-side column must already carry one
-comparable type. R003-13a requires it of an inferred key and R015-8a of a
+comparable type. REQ-0151 requires it of an inferred key and REQ-0305 of a
 declared pair, REQ-0004 converts no operand between an operation's inputs,
 and REQ-0005 makes comparability a property of the runtime type, so a
 disagreement is reported under REQ-0323 rather than quietly matching

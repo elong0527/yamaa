@@ -29,5 +29,6 @@ no collected score there, and a collected record with an empty score is
 left out, so at a scheduled visit it counts as missed. Subjects outside
 the efficacy population keep their collected records and gain none, and
 baseline is not a scheduled visit, so a missing baseline adds nothing.
+The input carries at most one score per subject per visit.
 
 **Standard:** ADaM | **Domain:** ADQS

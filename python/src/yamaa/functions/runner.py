@@ -1,6 +1,6 @@
 """Run a domain specification against an explicitly selected project root.
 
-This module is the runner R018-2 describes, and it lives outside the engine:
+This module is the runner REQ-0663 describes, and it lives outside the engine:
 it names the project root, settles everything the project claims before the
 engine reads any source, then hands the engine a dispatcher carrying the
 activated bindings. The engine itself never imports this module.
@@ -44,7 +44,7 @@ def run_with_project_functions(
 ) -> DomainRun:
     """Load, activate, and execute one domain specification against a project root.
 
-    The root is keyword-only because R018-2 makes it the runner's choice: a
+    The root is keyword-only because REQ-0663 makes it the runner's choice: a
     specification can neither name it nor override what it says. Everything
     the project claims is settled before any source is read, and a failure
     at any of those stages raises carrying the diagnostics R018 names. A

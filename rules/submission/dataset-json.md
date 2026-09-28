@@ -40,9 +40,7 @@ writer, and a path with two is a document that overwrites its own package.
 <a id="req-1196"></a>
 
 **REQ-1196.** An entry declaring `has_no_data` must not declare
-`dataset_json`. The entry states that the dataset holds no records, and a
-data file beside it would assert the opposite. [REQ-0989](define-xml.md#req-0989) already requires that
-entry to say in a comment why the dataset is empty.
+`dataset_json`.
 
 ### Version
 
