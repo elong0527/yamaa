@@ -379,3 +379,25 @@ def test_no_match_literal_is_not_rename_only(tmp_path):
     ex = "USUBJID,EXSEQ,EXTRT\nS1,1,A\n"
     out = run(tmp_path, spec, {"dm.csv": DM, "ex.csv": ex})
     assert out.splitlines() == ["USUBJID,X", "S1,A", "S2,NONE"]
+
+
+def test_absent_does_not_answer_a_join_that_reaches_no_record(tmp_path):
+    # REQ-0345: `absent` answers a variable absent from context. S3 has no
+    # EX record, but EX.EXTRT still exists, so the read is missing exactly
+    # as the main engine answers it (REQ-0111/REQ-0355).
+    dm = "USUBJID\nS1\nS3\n"
+    out = run(
+        tmp_path,
+        join_spec(
+            {
+                "source": {
+                    "variable": "EX.EXTRT",
+                    "order_by": ["EX.EXSEQ"],
+                    "keep": "first",
+                    "absent": "NONE",
+                }
+            }
+        ),
+        {"dm.csv": dm, "ex.csv": EX},
+    )
+    assert out.splitlines() == ["USUBJID,X", "S1,A", "S3,"]
