@@ -9,6 +9,7 @@ for NJSUG (2026-10-09).
 
 - `index.qmd` -- the deck
 - `custom.css` -- the deck's single style file (copied from yamaa-pilot7-2026-09-25)
+- `title-logo.html` -- title-slide logo, included via `include-after-body` and moved right after the subtitle at runtime
 
 ## Build
 
