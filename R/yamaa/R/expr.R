@@ -111,8 +111,10 @@ inter_read <- function(ctx, id, v) {
   if (!v %in% names(ydf)) yamaa_error("unknown_field", paste0(id, ".", v, ": no such field"))
   t <- attr(ydf, "coltypes")[[v]]
   sel <- entry$sel; absent <- entry$absent
-  if (any(absent) && (isTRUE(spec$strict) || !is.null(ctx$inter_ds)) &&
-      !"no_match" %in% names(spec) && is.null(spec$missing))
+  # strict stays fatal regardless of any declared fill (REQ-0123); the
+  # donor-context fatality for REQ-1263 reads still yields to no_match/missing.
+  if (any(absent) && (isTRUE(spec$strict) ||
+      (!is.null(ctx$inter_ds) && !"no_match" %in% names(spec) && is.null(spec$missing))))
     yamaa_error("unmatched_key", paste0("intermediate ", id,
       " has no record for some row"))
   vals <- ydf[[v]][sel]  # NA where sel is NA
