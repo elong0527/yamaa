@@ -35,7 +35,12 @@ intermediates:
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
     order_by: [DS.DSSTDTC]
     keep: last
+    no_match: null
 ```
+
+The `no_match` line leaves `EOSDT` blank for a subject with no
+eligible record, one whose only disposition records are screen
+failures, instead of failing the lookup.
 
 Keep the uniqueness assertion only for eligible sets that truly
 carry each key once.
