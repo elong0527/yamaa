@@ -25,7 +25,7 @@ columns:
     derivation: VS.VSSEQ
 
   # No rounding rule is stated, so a fractional result has no int form.
-  # With no missing handler declared, the failed conversion is fatal.
+  # With no unconvertible handler declared, the failed conversion is fatal.
   - name: AVAL
     type: int
     label: Analysis Value

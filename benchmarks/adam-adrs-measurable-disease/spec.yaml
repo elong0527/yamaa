@@ -16,6 +16,7 @@ intermediates:
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
+    no_match: null
 
 output:
   path: adrs.csv
@@ -49,7 +50,7 @@ columns:
       flag:
         condition: "TU_TARGET.TUSTRESC IS NOT NULL"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"
     verifications:
       - not_missing: {}
       - allowed_values:

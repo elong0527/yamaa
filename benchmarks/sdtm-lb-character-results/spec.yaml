@@ -131,7 +131,7 @@ columns:
     derivation:
       value:
         source: LBSTRESC
-      missing: null
+      unconvertible: null
 
   - name: LBSTRESU
     type: str

@@ -18,6 +18,7 @@ intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
+    no_match: null
 
 output:
   path: lb.csv

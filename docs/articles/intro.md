@@ -80,13 +80,13 @@ derivation:
   mapping:
     source: DM.SEX
     dict: {M: M, F: F}
-    missing: U      # "if not collected, or not in codelist, set to U"
+    missing: U      # "if not collected, set to U"
+    unmapped: U     # "if not in codelist, set to U"
 ```
 
-**Omit the handlers and the value is missing at runtime.** "Not collected"
-and "collected but unrecognised" are two conditions. `missing` answers both
-unless `unmapped` gives the second its own answer; add `strict: true` to make
-a condition with no handler of its own fail instead.
+**Omit a handler and its condition stops the run.** "Not collected" and
+"collected but unrecognised" are two conditions, answered by `missing` and
+`unmapped`. Write `null` as the answer to leave the value missing instead.
 
 ## Where to go next
 

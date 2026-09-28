@@ -45,4 +45,4 @@ columns:
       flag:
         condition: "ASTDT <= TRTEDT + 30"
         false_value: "N"
-        missing_value: "N"
+        missing: "N"

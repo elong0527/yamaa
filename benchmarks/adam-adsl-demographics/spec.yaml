@@ -76,7 +76,7 @@ columns:
     derivation:
       value:
         source: DM.AGE
-      missing: null
+      unconvertible: null
     verifications:
       - range:
           min: 0

@@ -29,15 +29,15 @@ def test_source_distinguishes_absence_present_missing_and_resolution_failure() -
     absent = evaluate_expression({"source": "ABSENT"}, resolver)
     assert isinstance(absent, ConditionResult)
     assert absent.condition.condition == "missing_input"
-    assert absent.condition.applicable_handler == "missing"
+    assert absent.condition.applicable_handler == "absent"
 
     handled = evaluate_expression(
-        {"source": {"variable": "ABSENT", "missing": None}},
+        {"source": {"variable": "ABSENT", "absent": None}},
         resolver,
     )
     assert isinstance(handled, ValueResult)
     assert handled.value is MISSING
-    assert handled.handled_by == "missing"
+    assert handled.handled_by == "absent"
 
     failure = RuntimeCondition(
         phase="join",
@@ -105,14 +105,14 @@ def test_mapping_handles_missing_unlisted_and_ascii_case() -> None:
             "mapping": {
                 "source": "CODE",
                 "dict": {"N": "No"},
-                "missing": None,
+                "unmapped": None,
             }
         },
         resolver,
     )
     assert isinstance(unlisted, ValueResult)
     assert unlisted.value is MISSING
-    assert unlisted.handled_by == "missing"
+    assert unlisted.handled_by == "unmapped"
 
 
 def test_mapping_distinguishes_absent_source_from_unmapped_value() -> None:
@@ -148,7 +148,9 @@ def test_mapping_distinguishes_absent_source_from_unmapped_value() -> None:
     assert absent.value == "Not collected"
     assert absent.handled_by == "missing"
 
-    fallback = evaluate_expression(
+    # REQ-0346 and REQ-1110: `missing` never answers an unmapped value, so a
+    # mapping that states only `missing` still fails on one.
+    missing_only = evaluate_expression(
         {
             "mapping": {
                 "source": "CODE",
@@ -158,83 +160,32 @@ def test_mapping_distinguishes_absent_source_from_unmapped_value() -> None:
         },
         resolver,
     )
-    assert isinstance(fallback, ValueResult)
-    assert fallback.value == "Unknown"
-    assert fallback.handled_by == "missing"
+    assert isinstance(missing_only, ConditionResult)
+    assert missing_only.condition.condition == "unmapped_value"
+    assert missing_only.condition.applicable_handler == "unmapped"
 
-    strict_absent = evaluate_expression(
+    # REQ-0344: an omitted handler makes its condition fatal.
+    absent_unhandled = evaluate_expression(
         {
             "mapping": {
                 "source": "ABSENT",
                 "dict": {"L": "Left"},
-                "strict": True,
                 "unmapped": "Outside codelist",
             }
         },
         resolver,
     )
-    assert isinstance(strict_absent, ConditionResult)
-    assert strict_absent.condition.condition == "missing_input"
+    assert isinstance(absent_unhandled, ConditionResult)
+    assert absent_unhandled.condition.condition == "missing_input"
+    assert absent_unhandled.condition.applicable_handler == "missing"
 
-    strict_absent_handled = evaluate_expression(
-        {
-            "mapping": {
-                "source": "ABSENT",
-                "dict": {"L": "Left"},
-                "strict": True,
-                "missing": "Not collected",
-            }
-        },
+    unmapped_bare = evaluate_expression(
+        {"mapping": {"source": "CODE", "dict": {"L": "Left"}}},
         resolver,
     )
-    assert isinstance(strict_absent_handled, ValueResult)
-    assert strict_absent_handled.value == "Not collected"
-    assert strict_absent_handled.handled_by == "missing"
-
-    strict_unmapped_handled = evaluate_expression(
-        {
-            "mapping": {
-                "source": "CODE",
-                "dict": {"L": "Left"},
-                "strict": True,
-                "unmapped": "Outside codelist",
-            }
-        },
-        resolver,
-    )
-    assert isinstance(strict_unmapped_handled, ValueResult)
-    assert strict_unmapped_handled.value == "Outside codelist"
-
-    strict_missing_only = evaluate_expression(
-        {
-            "mapping": {
-                "source": "CODE",
-                "dict": {"L": "Left"},
-                "strict": True,
-                "missing": "Not collected",
-            }
-        },
-        resolver,
-    )
-    # Under strict, `missing` answers only the absent source: an unmapped
-    # value still needs its own `unmapped` handler.
-    assert isinstance(strict_missing_only, ConditionResult)
-    assert strict_missing_only.condition.condition == "unmapped_value"
-    assert strict_missing_only.condition.applicable_handler == "unmapped"
-
-    strict_unmapped_bare = evaluate_expression(
-        {
-            "mapping": {
-                "source": "CODE",
-                "dict": {"L": "Left"},
-                "strict": True,
-            }
-        },
-        resolver,
-    )
-    assert isinstance(strict_unmapped_bare, ConditionResult)
-    assert strict_unmapped_bare.condition.condition == "unmapped_value"
-    assert strict_unmapped_bare.condition.applicable_handler == "unmapped"
+    assert isinstance(unmapped_bare, ConditionResult)
+    assert unmapped_bare.condition.condition == "unmapped_value"
+    assert unmapped_bare.condition.applicable_handler == "unmapped"
 
 
 def test_mapping_resolver_failures_do_not_fire_data_handlers() -> None:

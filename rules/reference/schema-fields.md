@@ -38,8 +38,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.order_by` | `"list[order_by_term]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.keep` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
-| `intermediate_class.strict` | `"bool"` | `false` | `false` | -- | [REQ-1048](../operations/lookup.md#req-1048) |
+| `intermediate_class.no_match` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
 | `intermediate_class.verification` | `"intermediate_verification_class"` | `false` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
 | `intermediate_verification_class.unique` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1245](../operations/lookup.md#req-1245) |
@@ -150,8 +149,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | --- | --- | --- | --- | --- | --- |
 | `derivation` | `["str", "expression", "handled_expression_class"]` | `false` | Absent | -- | Schema constraint |
 | `handled_expression_class.value` | `"expression"` | `true` | Absent | -- | Schema constraint |
-| `handled_expression_class.missing` | `"literal_value"` | `false` | Absent | -- | Schema constraint |
-| `handled_expression_class.strict` | `"bool"` | `false` | Absent | -- | Schema constraint |
+| `handled_expression_class.unconvertible` | `"literal_value"` | `false` | Absent | -- | Schema constraint |
 
 ## schema_environment.yaml
 
@@ -233,12 +231,12 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.flag` | `["predicate", "flag_class"]` | `false` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `source_binding_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
-| `source_binding_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
+| `source_binding_class.absent` | `"literal_value"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `source_binding_class.multiple_matches` | `"multiple_matches_class"` | `false` | Absent | -- | [REQ-1051](../operations/lookup.md#req-1051) |
 | `flag_class.condition` | `"predicate"` | `true` | Absent | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.true_value` | `"literal_value"` | `false` | `"Y"` | -- | [REQ-1256](../operations/expressions.md#req-1256) |
 | `flag_class.false_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |
-| `flag_class.missing_value` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |
+| `flag_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1257](../operations/expressions.md#req-1257) |
 | `filtered_source` | `["variable", "filtered_source_class"]` | `false` | Absent | -- | [REQ-1052](../operations/lookup.md#req-1052) |
 | `filtered_source_class.variable` | `"variable"` | `true` | Absent | -- | [REQ-1053](../operations/lookup.md#req-1053) |
 | `filtered_source_class.filter` | `"predicate"` | `true` | Absent | -- | [REQ-1053](../operations/lookup.md#req-1053) |
@@ -295,7 +293,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.mapping.case_sensitive` | `"bool"` | `false` | `true` | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.unmapped` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
-| `expressions.mapping.strict` | `"bool"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.cut.source` | `"variable"` | `true` | Absent | -- | [REQ-1118](../operations/computation.md#req-1118) |
 | `expressions.cut.breaks` | `"list[float]"` | `true` | Absent | -- | [REQ-1118](../operations/computation.md#req-1118) |
 | `expressions.cut.labels` | `"list[str]"` | `true` | Absent | -- | [REQ-1118](../operations/computation.md#req-1118) |

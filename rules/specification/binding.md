@@ -14,7 +14,7 @@ status: normative
 
 **REQ-0076.** `input` maps dataset identifiers to source data
 declarations. Identifiers are used by `base`, `rows.dataset`, qualified
-source variables, and `lookup`. A row template may also name a named
+source variables, and named intermediates. A row template may also name a named
 intermediate under [REQ-1262](../execution/rows.md#req-1262).
 
 <a id="req-0077"></a>
@@ -146,12 +146,12 @@ when an output column has no derivation.
 ```yaml
 source:
   variable: ADSL.TRTSDT
-  missing: null
+  absent: null
 ```
 
 <a id="req-0094"></a>
 
-**REQ-0094.** `missing` and `multiple_matches` are handlers; [Local handlers](../execution/handlers.md) defines
+**REQ-0094.** `absent` and `multiple_matches` are handlers; [Local handlers](../execution/handlers.md) defines
 them and [Lookup and joins](../operations/lookup.md) defines the join uniqueness `multiple_matches` relaxes.
 
 <a id="req-0095"></a>
@@ -193,7 +193,7 @@ Those values must not be collapsed.
 <a id="req-0100"></a>
 
 **REQ-0100.** No contextual match is an absent item. The reference fails
-unless a structured source declares `missing`, under [Local handlers](../execution/handlers.md).
+unless a structured source declares `absent`, under [Local handlers](../execution/handlers.md).
 
 <a id="req-0101"></a>
 

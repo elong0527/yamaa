@@ -22,6 +22,7 @@ intermediates:
     order_by: [DS.EOT_FALLBACK]
     keep: first
     columns: [DSDECOD, DSVALUE, EOT_FALLBACK]
+    no_match: null
 
 output:
   path: adsl.csv

@@ -13,9 +13,11 @@ intermediates:
   - id: CODING_REC
     dataset: CODING
     key: {STUDYID: ODM.StudyOID, USUBJID: ODM.SubjectKey, CMSEQ: ODM.ItemGroupRepeatKey}
+    no_match: null
   - id: WHODRUG_CODING
     dataset: WHODRUG
     key: {DRUG_RECORD_NO: DRUG_RECORD_NO, ATC_CODE: ATC_CODE}
+    no_match: null
 
 output:
   path: cm.csv

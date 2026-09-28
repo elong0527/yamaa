@@ -446,11 +446,7 @@ def test_a_read_through_self_promotes_the_donor_column() -> None:
             ),
         ],
     ).model_copy(
-        update={
-            "intermediates": [
-                Intermediate(id="DONOR", dataset="SELF", key=["K"], strict=True)
-            ]
-        }
+        update={"intermediates": [Intermediate(id="DONOR", dataset="SELF", key=["K"])]}
     )
 
     plan = plan_execution(spec, {"SRC": source_table()})
@@ -1006,9 +1002,7 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
         ]
     ).model_copy(
         update={
-            "intermediates": [
-                Intermediate(id="LOOK", dataset="SRC", key={"X": "A"}, strict=True)
-            ]
+            "intermediates": [Intermediate(id="LOOK", dataset="SRC", key={"X": "A"})]
         }
     )
 
@@ -1016,8 +1010,8 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
 
     assert plan.intermediates[0].match_variables == ("A",)
     assert plan.intermediates[0].match_fields == ("X",)
-    # A declared source and key with strict: true makes an unmatched key fatal.
-    assert plan.intermediates[0].strict is True
+    # A declared key with no `no_match` makes an unmatched key fatal.
+    assert plan.intermediates[0].no_match_declared is False
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
 
 
@@ -1432,7 +1426,7 @@ def test_a_named_key_match_expression_checks_its_input_types() -> None:
     assert diagnostic.context == {"source": "A", "expected": "str", "actual": "int"}
 
 
-def test_a_lookup_defaults_to_missing_on_absence() -> None:
+def test_a_lookup_without_no_match_requires_a_match() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
     ).model_copy(
@@ -1441,74 +1435,52 @@ def test_a_lookup_defaults_to_missing_on_absence() -> None:
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
-    # Absence defaults to missing: strict is false and no missing literal.
-    assert plan.intermediates[0].strict is False
-    assert plan.intermediates[0].missing is None
+    # REQ-0124 and REQ-0344: with no `no_match`, absence is fatal.
+    assert plan.intermediates[0].no_match_declared is False
+    assert plan.intermediates[0].implicit_join is False
 
 
-def test_a_named_lookup_with_strict_true_and_missing_literal_is_rejected() -> None:
+def test_a_declared_null_no_match_is_planned_as_a_handler() -> None:
     spec = specification(
-        [
-            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
-        ]
+        [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
     ).model_copy(
         update={
             "intermediates": [
-                Intermediate(
-                    id="LOOK",
-                    dataset="SRC",
-                    key={"X": "A"},
-                    strict=True,
-                    missing="n/a",
-                )
+                Intermediate(id="LOOK", dataset="SRC", key=["X"], no_match=None)
             ]
         }
     )
 
-    with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(spec, {"SRC": source_table()})
+    plan = plan_execution(spec, {"SRC": source_table()})
 
-    diagnostic = raised.value.diagnostics[0]
-    # REQ-0123: a failing absence and a returned literal contradict.
-    assert diagnostic.condition == "conflicting_absent_policy"
-    assert diagnostic.requirement == "REQ-0123"
-    assert diagnostic.spec_paths == ("intermediates[0]",)
-    assert diagnostic.context == {"intermediate": "LOOK", "missing": "n/a"}
+    # REQ-0129: `no_match: null` is declared, and answers absence with missing.
+    assert plan.intermediates[0].no_match_declared is True
+    assert plan.intermediates[0].no_match is None
 
 
-def test_a_named_lookup_with_strict_true_and_explicit_missing_null_is_rejected() -> (
-    None
-):
-    spec = specification(
-        [
-            Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(name="B", type="str", derivation=derivation({"source": "LOOK.X"})),
-        ]
-    ).model_copy(
+def test_only_a_null_no_match_beside_id_and_dataset_is_a_rename() -> None:
+    columns = [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
+    renamed = specification(columns).model_copy(
         update={
-            "intermediates": [
-                Intermediate(
-                    id="LOOK",
-                    dataset="SRC",
-                    key={"X": "A"},
-                    strict=True,
-                    missing=None,
-                )
-            ]
+            "intermediates": [Intermediate(id="LOOK", dataset="SRC", no_match=None)]
         }
     )
 
     with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(spec, {"SRC": source_table()})
+        plan_execution(renamed, {"SRC": source_table()})
 
     diagnostic = raised.value.diagnostics[0]
-    # REQ-0123: the check is declaration-based, so an explicit `missing: null`
-    # contradicts `strict: true` even though the literal is null.
-    assert diagnostic.condition == "conflicting_absent_policy"
-    assert diagnostic.requirement == "REQ-0123"
+    assert diagnostic.condition == "rename_only_intermediate"
+    assert diagnostic.requirement == "REQ-1248"
     assert diagnostic.spec_paths == ("intermediates[0]",)
-    assert diagnostic.context == {"intermediate": "LOOK", "missing": None}
+
+    # REQ-1248: without `no_match` the intermediate requires a match, which
+    # the implicit join cannot state, so it is not a rename.
+    required = specification(columns).model_copy(
+        update={"intermediates": [Intermediate(id="LOOK", dataset="SRC")]}
+    )
+    plan = plan_execution(required, {"SRC": source_table()})
+    assert plan.intermediates[0].no_match_declared is False
 
 
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
@@ -3330,7 +3302,7 @@ def test_a_column_case_predicate_with_a_qualified_source_field_plans() -> None:
 
 def _flag_field(condition: str) -> HandledExpression:
     return derivation(
-        {"flag": {"condition": condition, "false_value": "N", "missing_value": "N"}}
+        {"flag": {"condition": condition, "false_value": "N", "missing": "N"}}
     )
 
 
@@ -3392,7 +3364,7 @@ def test_a_bare_string_flag_condition_names_predicate_identifiers() -> None:
     }
 
 
-def test_a_column_flag_with_false_value_requires_missing_value() -> None:
+def test_a_column_flag_with_false_value_requires_missing() -> None:
     # REQ-1258: the rule is checked before any data is read.
     spec = specification(
         [
@@ -3417,7 +3389,7 @@ def test_a_column_flag_with_false_value_requires_missing_value() -> None:
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "missing_value_required"
     assert diagnostic.requirement == "REQ-1258"
-    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.missing_value",)
+    assert diagnostic.spec_paths == ("columns.DTHFL.derivation.flag.missing",)
     assert diagnostic.context == {"false_value": "N"}
 
 

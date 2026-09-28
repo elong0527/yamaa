@@ -68,6 +68,7 @@ def explicit_keys(**extra: object) -> PlannedIntermediate:
         path="intermediates[0]",
         match_variables=("STUDYID", "USUBJID"),
         match_fields=("STUDYID", "USUBJID"),
+        no_match_declared=extra.pop("no_match_declared", True),
         **extra,
     )
 
@@ -118,6 +119,7 @@ def test_a_tie_on_every_term_is_resolved_by_record_order() -> None:
         match_fields=("USUBJID",),
         order_terms=((OrderTerm(variable="EX.USUBJID"), "USUBJID"),),
         keep="first",
+        no_match_declared=True,
     )
 
     outcome = IntermediateSelector([plan], {"EX": tied}).select(
@@ -142,7 +144,7 @@ def test_several_surviving_records_with_no_order_fail() -> None:
 
 
 def test_matching_on_explicit_keys_answers_an_absent_record_with_missing() -> None:
-    # REQ-0129: R003 treats an absent right-side record as ordinary missing.
+    # REQ-0129: a declared `no_match` answers an absent right-side record.
     outcome = selector(explicit_keys()).select(
         "LASTEX", {"STUDYID": "CATH", "USUBJID": "S9"}
     )
@@ -151,14 +153,14 @@ def test_matching_on_explicit_keys_answers_an_absent_record_with_missing() -> No
     assert outcome.condition is None
 
 
-def declared(strict: bool = True, **extra: object) -> PlannedIntermediate:
+def declared(no_match_declared: bool = False, **extra: object) -> PlannedIntermediate:
     return PlannedIntermediate(
         identifier="REFRANGE",
         dataset="EX",
         path="intermediates[0]",
         match_variables=("SUBJECT",),
         match_fields=("USUBJID",),
-        strict=strict,
+        no_match_declared=no_match_declared,
         **extra,
     )
 
@@ -190,7 +192,9 @@ def test_an_unhandled_multiple_match_names_the_key_it_matched_on() -> None:
 
 
 def test_a_declared_unmatched_answer_replaces_the_failure() -> None:
-    outcome = selector(declared(strict=False)).select("REFRANGE", {"SUBJECT": "S9"})
+    outcome = selector(declared(no_match_declared=True)).select(
+        "REFRANGE", {"SUBJECT": "S9"}
+    )
 
     assert outcome.condition is None
     assert outcome.record is None
@@ -198,10 +202,12 @@ def test_a_declared_unmatched_answer_replaces_the_failure() -> None:
 
 def test_a_missing_match_value_is_answered_before_a_record_is_looked_for() -> None:
     # The unified absence model: a missing source value and an unmatched
-    # key are one category. strict: true fails on either; otherwise the
-    # lookup answers missing.
-    fatal = selector(declared(strict=True)).select("REFRANGE", {"SUBJECT": MISSING})
-    answered = selector(declared(strict=False)).select("REFRANGE", {"SUBJECT": MISSING})
+    # key are one category. Without `no_match` either one fails; with it the
+    # lookup answers its literal.
+    fatal = selector(declared()).select("REFRANGE", {"SUBJECT": MISSING})
+    answered = selector(declared(no_match_declared=True)).select(
+        "REFRANGE", {"SUBJECT": MISSING}
+    )
 
     assert fatal.condition is not None
     assert fatal.condition.condition.condition == "unmatched_key"
@@ -230,6 +236,7 @@ def test_key_match_expression_evaluates_against_current_row() -> None:
         ),
         order_terms=((OrderTerm(variable="EX.EXSEQ"), "EXSEQ"),),
         keep="first",
+        no_match_declared=True,
     )
     chosen = selector(plan).select("UPPER", {"SUBJECT": "s1"})
 
@@ -254,6 +261,7 @@ def test_key_match_expression_missing_result_matches_nothing() -> None:
                 variables=(),
             ),
         ),
+        no_match_declared=True,
     )
     answered = selector(plan).select("UPPER", {"SUBJECT": "s1"})
 
@@ -320,6 +328,7 @@ def test_a_select_key_match_expression_without_a_dispatcher_is_a_condition() -> 
                 variables=("SUBJECT",),
             ),
         ),
+        no_match_declared=True,
     )
     answered = selector(plan).select("UPPER", {"SUBJECT": "s1"})
 
@@ -451,7 +460,7 @@ def between(**extra: object) -> PlannedIntermediate:
         between_value="ADY",
         between_lower="LO",
         between_upper="HI",
-        strict=extra.pop("strict", False),
+        no_match_declared=extra.pop("no_match_declared", True),
         **extra,
     )
 
@@ -481,7 +490,7 @@ def test_a_record_missing_a_stated_bound_is_ineligible() -> None:
 def test_a_missing_range_value_is_an_absence_not_an_unmatched_key() -> None:
     # The unified absence model: a missing between value yields nothing
     # before any record is read, like a missing key.
-    plan = between(strict=True)
+    plan = between(no_match_declared=False)
 
     outcome = IntermediateSelector([plan], {"EPOCHS": epochs()}).select(
         "EPOCHDEF", {"STUDYID": "CATH", "ADY": MISSING}
@@ -544,6 +553,7 @@ def derived_plan(**extra: object) -> PlannedIntermediate:
                 ),
             ),
         ),
+        no_match_declared=extra.pop("no_match_declared", True),
         **extra,
     )
 
@@ -696,6 +706,7 @@ def test_the_match_index_agrees_with_the_record_scan() -> None:
         match_fields=("A", "B", "C", "D"),
         keep="first",
         order_terms=((OrderTerm(variable="K.E"), "E"),),
+        no_match_declared=True,
     )
     sel = IntermediateSelector([plan], {"K": rel})
     records = list(rel.records)
@@ -736,6 +747,7 @@ def test_the_match_index_agrees_with_the_scan_under_between() -> None:
         between_upper="HI",
         keep="first",
         order_terms=((OrderTerm(variable="R.V"), "V"),),
+        no_match_declared=True,
     )
     sel = IntermediateSelector([plan], {"R": rel})
     records = list(rel.records)
@@ -775,6 +787,7 @@ def ds_plan(**extra: object) -> PlannedIntermediate:
         path="intermediates[0]",
         match_variables=("STUDYID", "USUBJID"),
         match_fields=("STUDYID", "USUBJID"),
+        no_match_declared=extra.pop("no_match_declared", True),
         **extra,
     )
 
@@ -868,6 +881,7 @@ def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> 
             ),
         ),
         unique_columns=("STUDYID", "USUBJID"),
+        no_match_declared=True,
     )
     selector = IntermediateSelector([plan], {"SUPPLB": supp()})
 
@@ -891,6 +905,7 @@ def _dosing_plan(**extra: object) -> PlannedIntermediate:
         path="intermediates[0]",
         match_variables=("STUDYID", "USUBJID"),
         match_fields=("STUDYID", "USUBJID"),
+        no_match_declared=extra.pop("no_match_declared", True),
         **extra,
     )
 
@@ -1099,6 +1114,7 @@ def _supp_endpoint_plan(**extra: object) -> PlannedIntermediate:
                 variables=("LB.LBSEQ",),
             ),
         ),
+        no_match_declared=extra.pop("no_match_declared", True),
         **extra,
     )
 
@@ -1116,6 +1132,7 @@ def _endpoint_reader_plan(
             (name, HandledExpression(value=Expression(root=expression)))
             for name, expression in derived
         ),
+        no_match_declared=True,
     )
 
 
@@ -1172,11 +1189,11 @@ def test_a_read_shares_one_selection_per_donor_record() -> None:
 
 
 def test_a_failed_read_names_the_read_intermediate() -> None:
-    # REQ-1263: a strict read that finds nothing fails as the read
-    # intermediate's unmatched key, at that intermediate's path.
+    # REQ-1263: a read with no `no_match` that finds nothing fails as the
+    # read intermediate's unmatched key, at that intermediate's path.
     selector = IntermediateSelector(
         [
-            _supp_endpoint_plan(strict=True),
+            _supp_endpoint_plan(no_match_declared=False),
             _endpoint_reader_plan(("ENDPOINT", {"source": "SUP_EP.QVAL"})),
         ],
         _endpoint_relations(),
@@ -1256,6 +1273,7 @@ def test_an_intermediate_rank_then_filter_matches_issue_964() -> None:
         filter_predicate=parse_predicate("LB._RN = 1 AND LB._EOT_AWARE <> 99"),
         order_terms=((OrderTerm(variable="LB._RN"), "_RN"),),
         keep="first",
+        no_match_declared=True,
     )
     outcome = IntermediateSelector([plan], {"LB": lb}).select(
         "EOT", {"STUDYID": "CATH", "USUBJID": "S1", "LBTESTCD": "CHOL"}
@@ -1325,10 +1343,10 @@ def test_a_scalar_derivation_with_a_nested_window_partitions_once(monkeypatch) -
     assert len(builds) == 1
 
 
-def test_an_unread_strict_intermediate_never_fails_as_unmatched_key() -> None:
+def test_an_unread_intermediate_never_fails_as_unmatched_key() -> None:
     # REQ-1264: a named lookup matches only when it is read. An intermediate
-    # that no column reads for a row is never matched, so a strict:true
-    # lookup never fails as unmatched_key on a row that did not read it.
+    # that no column reads for a row is never matched, so one without
+    # `no_match` never fails as unmatched_key on a row that did not read it.
     def read(variable: str) -> HandledExpression:
         return HandledExpression(value=Expression(root={"source": variable}))
 
@@ -1346,13 +1364,12 @@ def test_an_unread_strict_intermediate_never_fails_as_unmatched_key() -> None:
                 id="STRICT_REF",
                 dataset="REF",
                 key={"PARAMCD": "DM.PARAMCD"},
-                strict=True,
             )
         ],
         columns=[
             Column(name="USUBJID", type="str", derivation=read("DM.USUBJID")),
             # No column reads STRICT_REF: the lazy match never runs, so the
-            # strict lookup cannot fail even though P2 has no match in REF.
+            # lookup cannot fail even though P2 has no match in REF.
         ],
         output=Output(path="out.csv", columns=["USUBJID"]),
     )

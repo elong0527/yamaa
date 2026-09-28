@@ -18,6 +18,7 @@ intermediates:
   - id: COLLECTED
     dataset: VS
     key: {STUDYID: STUDYID, USUBJID: USUBJID, VSTESTCD: PARAMCD, VSDTC: ADT}
+    no_match: null
 
 output:
   path: advs.csv

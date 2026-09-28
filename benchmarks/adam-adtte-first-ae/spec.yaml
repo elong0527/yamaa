@@ -15,6 +15,7 @@ intermediates:
     dataset: ADAE
     order_by: [ADAE.ASTDT, ADAE.AESEQ]
     keep: first
+    no_match: null
 
 output:
   path: adtte.csv

@@ -33,4 +33,3 @@ columns:
     derivation:
       value:
         source: AE.AESTDTC
-      strict: true

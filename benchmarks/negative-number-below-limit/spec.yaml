@@ -32,4 +32,3 @@ columns:
         source: LB.LBSTRESC
       # Text that is not a number (such as <50) stops the run; an empty
       # result is not converted and gives a missing AVAL.
-      strict: true

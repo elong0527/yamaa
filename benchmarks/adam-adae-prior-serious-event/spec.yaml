@@ -26,6 +26,7 @@ intermediates:
     order_by:
       - {variable: SELF.AESEQ, direction: desc}
     keep: first
+    no_match: null
 
   # The subject's first serious event. The donor records are checked
   # for unique event sequences after each completed row template.
@@ -38,6 +39,7 @@ intermediates:
     keep: first
     verification:
       unique: [STUDYID, USUBJID, AESEQ]
+    no_match: null
 
   # The subject's immediately preceding event, serious or not. Only a
   # column derivation reads it, after both row templates have completed,
@@ -50,6 +52,7 @@ intermediates:
     order_by:
       - {variable: AESEQ, direction: desc}
     keep: first
+    no_match: null
 
 columns:
   # Each is copied from the event record the same way in both row

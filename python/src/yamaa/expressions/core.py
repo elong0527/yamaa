@@ -249,13 +249,14 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
         return normalized
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
-    if "missing" in options:
-        return handler_value(options, "missing")
+    # REQ-0345: `absent` answers a variable or ODM item that does not exist.
+    if "absent" in options:
+        return handler_value(options, "absent")
     return expression_condition(
         "mapping",
         "missing_input",
         {"variable": variable},
-        "missing",
+        "absent",
         requirement="REQ-0334",
     )
 
@@ -284,12 +285,10 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
             },
         )
     case_sensitive = payload.get("case_sensitive", True)
-    strict = payload.get("strict", False)
     if (
         operand is None
         or not isinstance(dictionary, Mapping)
         or type(case_sensitive) is not bool
-        or type(strict) is not bool
     ):
         return expression_condition(
             "validation",
@@ -342,18 +341,18 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     if not isinstance(normalized, ValueResult):
         return normalized
     value = normalized.value
+    # REQ-0344 and REQ-1110: each condition has its own handler, and an
+    # omitted handler makes its condition fatal.
     if value is MISSING:
         if "missing" in payload:
             return handler_value(payload, "missing")
-        if strict:
-            return expression_condition(
-                "mapping",
-                "missing_input",
-                {"variable": variable},
-                "missing",
-                requirement="REQ-0334",
-            )
-        return ValueResult(value=MISSING)
+        return expression_condition(
+            "mapping",
+            "missing_input",
+            {"variable": variable},
+            "missing",
+            requirement="REQ-0334",
+        )
     if not isinstance(value, str):
         return expression_condition(
             "validation",
@@ -370,19 +369,13 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         return normalize_runtime_value(dictionary[matched])
     if "unmapped" in payload:
         return handler_value(payload, "unmapped")
-    if strict:
-        return expression_condition(
-            "mapping",
-            "unmapped_value",
-            {"source": variable, "value": value},
-            "unmapped",
-            requirement="REQ-0334",
-        )
-    # Without `unmapped`, the non-strict default lets `missing` answer both
-    # events, as it did before the two were separated.
-    if "missing" in payload:
-        return handler_value(payload, "missing")
-    return ValueResult(value=MISSING)
+    return expression_condition(
+        "mapping",
+        "unmapped_value",
+        {"source": variable, "value": value},
+        "unmapped",
+        requirement="REQ-0334",
+    )
 
 
 CORE_EXPRESSION_HANDLERS: dict[str, ExpressionHandler] = {

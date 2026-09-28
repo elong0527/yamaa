@@ -30,8 +30,7 @@ ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 # it a schema failure, so this map is the one place a new operation declares
 # its handler paths.
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
-    "source": ("missing", "multiple_matches"),
-    "intermediate": ("missing", "multiple_matches"),
+    "source": ("absent", "multiple_matches"),
     "mapping": ("missing", "unmapped"),
     "cut": ("missing",),
     "date_impute": ("missing", "invalid"),
@@ -71,8 +70,8 @@ class HandlerCounter:
     def register_derivation(self, planned: PlannedDerivation) -> None:
         self._register_expression(planned.declaration.value, planned.expression_path)
         declaration = planned.declaration
-        if "missing" in declaration.model_fields_set:
-            self.register(f"{planned.path}.missing", "missing")
+        if "unconvertible" in declaration.model_fields_set:
+            self.register(f"{planned.path}.unconvertible", "unconvertible")
 
     def _register_expression(self, expression: Expression, path: str) -> None:
         operation = expression.operation
@@ -251,17 +250,17 @@ def evaluate_derivation(
 
     converted = convert_value(raw, target)
     if isinstance(converted, ConditionResult):
-        if declaration.strict or "missing" not in declaration.model_fields_set:
+        if "unconvertible" not in declaration.model_fields_set:
             raise LifecycleCondition(
                 _condition_diagnostic(
                     converted.condition,
                     f"columns.{planned.column}",
                 )
             )
-        handler_path = f"{planned.path}.missing"
-        counter.increment(handler_path, "missing")
+        handler_path = f"{planned.path}.unconvertible"
+        counter.increment(handler_path, "unconvertible")
         current = _converted_or_raise(
-            declaration.missing,
+            declaration.unconvertible,
             target,
             handler_path,
         )

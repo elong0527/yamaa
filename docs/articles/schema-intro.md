@@ -44,8 +44,8 @@ write them in a specification.
   `predicate` to constrain what each field may hold.
 - **A derivation says how a value is produced. An expression is the one
   registered keyword that produces it.** A derivation is an expression
-  plus what happens when it goes wrong (`missing`, `strict`,
-  ...). An expression is a mapping with exactly
+  plus what happens when its value cannot take the column type
+  (`unconvertible`). An expression is a mapping with exactly
   one entry: the key is the registered verb, the value is its
   parameters.
 - **A registry is the list of permitted verbs.** Adding a verb costs one

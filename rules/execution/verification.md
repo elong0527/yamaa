@@ -43,8 +43,8 @@ needs that shape and the shape cannot be written as a producer and a consumer.
 **REQ-0369.** A supplemental qualifier record points to its parent domain
 record. The derivation that produces the cross-dataset link asserts the link.
 A verification over the finished artifact does not assert the link.
-A `lookup`'s `strict: true` rejects a value matching no record, and a
-`lookup` result carried by a `not_missing` column does the same.
+An intermediate without `no_match` rejects a value matching no record, and
+an intermediate read carried by a `not_missing` column does the same.
 `sdtm-suppmh-linkage` links `IDVARVAL` to its medical-history
 record that way.
 

@@ -26,14 +26,14 @@ reference table carrying test code, sex, and upper limit
 
 Add the governed `AST/M` reference range to the reference table when one
 exists. If the analysis intentionally leaves the limit missing when a complete
-key is not in the table, replace `strict: true` with that missing-value
-answer:
+key is not in the table, declare that missing-value answer:
 
 ```yaml
 intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
+    no_match: null
 ```
 
 The same answer also covers a result whose test code or sex is blank: both

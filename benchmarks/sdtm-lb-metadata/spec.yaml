@@ -90,7 +90,7 @@ rows:
           expr: "ONLY(ODM.Value)"
       LBSTRESN:
         value: {source: LBORRES}
-        missing: null
+        unconvertible: null
       LBSTRESU: {literal: mg/dL}
     submission:
       LBORRESU:
@@ -116,7 +116,7 @@ rows:
           expr: "ONLY(ODM.Value)"
       LBSTRESN:
         value: {source: LBORRES}
-        missing: null
+        unconvertible: null
       LBSTRESU: {literal: mg/dL}
     submission:
       LBORRESU:

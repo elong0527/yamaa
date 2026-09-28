@@ -12,6 +12,7 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.ASTDT, AE.AESEQ]
     keep: last
+    no_match: null
 
 output:
   path: adae.csv

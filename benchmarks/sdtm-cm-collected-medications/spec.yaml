@@ -87,7 +87,6 @@ columns:
           Once daily: QD
           Twice daily: BID
         missing: null
-        strict: true
 
   - name: ROUTELBL
     type: str
@@ -102,7 +101,6 @@ columns:
         dict:
           By mouth: ORAL
         missing: null
-        strict: true
 
   - name: CMSTDTC
     type: str

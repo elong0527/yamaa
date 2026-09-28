@@ -24,6 +24,7 @@ intermediates:
     dataset: QS
     filter: "QS.AVAL IS NOT NULL"
     key: [STUDYID, USUBJID, PARAMCD, AVISITN]
+    no_match: null
 
 output:
   path: adqs.csv
