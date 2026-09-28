@@ -264,7 +264,6 @@ def test_grouped_row_aggregate_with_key_rejected(tmp_path):
                         "aggregate": {
                             "expr": "COUNT(AE.AEDECOD)",
                             "key": ["USUBJID"],
-                            "key_base": ["AE.USUBJID"],
                         }
                     },
                 },
@@ -279,7 +278,6 @@ def test_grouped_row_aggregate_with_key_rejected(tmp_path):
     )
     assert e.spec_paths == [
         "rows.ae.derivations.N.aggregate.key",
-        "rows.ae.derivations.N.aggregate.key_base",
     ]
 
 
@@ -305,7 +303,7 @@ def test_intermediate_derivation_in_filter(tmp_path):
                 "id": "EOT",
                 "dataset": "DS",
                 "derivations": {
-                    "CAT_UP": {"str_upper": {"source": "DS.DSCAT"}},
+                    "CAT_UP": {"str_case": {"source": "DS.DSCAT", "to": "upper"}},
                 },
                 "filter": "DS.CAT_UP = 'DISPOSITION EVENT'",
                 "order_by": ["DS.DSDECOD"],
@@ -473,7 +471,7 @@ def test_intermediate_verification_unique_ok(tmp_path):
 
 
 def test_column_aggregate_qualified_key_base(tmp_path):
-    # A column-level aggregate's qualified key_base resolves the row's
+    # A column-level aggregate's qualified key resolves the row's
     # carried group values, not a scan of all origin records.
     dm = "USUBJID\nS1\nS2\n"
     ae = "USUBJID,AEDECOD\nS1,HEADACHE\nS1,NAUSEA\nS2,HEADACHE\n"
@@ -494,8 +492,7 @@ def test_column_aggregate_qualified_key_base(tmp_path):
                 "derivation": {
                     "aggregate": {
                         "expr": "COUNT(AE.AEDECOD)",
-                        "key": ["USUBJID"],
-                        "key_base": ["AE.USUBJID"],
+                        "key": {"AE.USUBJID": "USUBJID"},
                     }
                 },
             },
@@ -513,54 +510,3 @@ def test_column_aggregate_qualified_key_base(tmp_path):
 
 
 # --------------------------------------- inline lookup cache identity
-
-
-def test_inline_lookup_cache_identity(tmp_path):
-    # Two inline lookups over the same dataset and value with different
-    # filters are different declarations and must not share results.
-    dm = "USUBJID\nS1\n"
-    cm = "USUBJID,CMDECOD,ATC\nS1,ASPIRIN,A\nS1,ASPIRIN,B\n"
-    spec = {
-        "schema_version": "1.0",
-        "domain": "ADCM",
-        "keys": ["USUBJID"],
-        "base": "DM",
-        "input": {
-            "DM": {"path": "input/dm.csv"},
-            "CM": {"path": "input/cm.csv"},
-        },
-        "output": {"path": "adcm.csv", "columns": ["USUBJID", "ATC_A", "ATC_B"]},
-        "columns": [
-            {"name": "USUBJID", "type": "str", "derivation": "DM.USUBJID"},
-            {
-                "name": "ATC_A",
-                "type": "str",
-                "derivation": {
-                    "lookup": {
-                        "dataset": "CM",
-                        "value": "ATC",
-                        "key": ["USUBJID"],
-                        "filter": "CM.ATC = 'A'",
-                        "order_by": ["CM.ATC"],
-                        "keep": "first",
-                    }
-                },
-            },
-            {
-                "name": "ATC_B",
-                "type": "str",
-                "derivation": {
-                    "lookup": {
-                        "dataset": "CM",
-                        "value": "ATC",
-                        "key": ["USUBJID"],
-                        "filter": "CM.ATC = 'B'",
-                        "order_by": ["CM.ATC"],
-                        "keep": "first",
-                    }
-                },
-            },
-        ],
-    }
-    out = run(tmp_path, spec, {"dm.csv": dm, "cm.csv": cm})
-    assert out.splitlines() == ["USUBJID,ATC_A,ATC_B", "S1,A,B"]

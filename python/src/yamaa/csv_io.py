@@ -20,14 +20,14 @@ def _phase_condition(phase, condition, **kw):
 
 
 def _scan_records(text, path, written_path, spec_path, dataset):
-    """Split text into records per R023-9/22. Raises YamaaError with the
+    """Split text into records per REQ-0838/22. Raises YamaaError with the
     record/field where a quoting or carriage-return failure was decided."""
 
     def fail(condition, record, field):
         raise _phase_condition(
             "ingest",
             condition,
-            requirement="R023-22",
+            requirement="REQ-0851",
             spec_paths=[spec_path],
             context={
                 "dataset": dataset,
@@ -117,7 +117,7 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
         raise _phase_condition(
             "ingest",
             "source_byte_order_mark",
-            requirement="R023-22",
+            requirement="REQ-0851",
             spec_paths=[spec_path],
             context={"dataset": dataset, "path": written_path},
         )
@@ -127,17 +127,17 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
         raise _phase_condition(
             "ingest",
             "invalid_text",
-            requirement="R023-7",
+            requirement="REQ-0836",
             spec_paths=[spec_path],
             context={"dataset": dataset, "path": written_path, "detail": str(e)},
         )
-    # R023-9: records split on \n, optional preceding \r; final record may omit terminator.
+    # REQ-0838: records split on \n, optional preceding \r; final record may omit terminator.
     rows = _scan_records(text, path, written_path, spec_path, dataset)
     if not rows:
         raise _phase_condition(
             "ingest",
             "source_header_absent",
-            requirement="R023-22",
+            requirement="REQ-0851",
             spec_paths=[spec_path],
             context={"dataset": dataset, "path": written_path},
         )
@@ -146,7 +146,7 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
         raise _phase_condition(
             "ingest",
             "source_field_name_empty",
-            requirement="R023-13",
+            requirement="REQ-0842",
             spec_paths=[spec_path],
             context={"dataset": dataset, "path": written_path},
         )
@@ -154,7 +154,7 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
         raise _phase_condition(
             "ingest",
             "source_field_name_duplicate",
-            requirement="R023-14",
+            requirement="REQ-0843",
             spec_paths=[spec_path],
             context={"dataset": dataset, "path": written_path},
         )
@@ -164,7 +164,7 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
             raise _phase_condition(
                 "ingest",
                 "source_record_width",
-                requirement="R023-15",
+                requirement="REQ-0844",
                 spec_paths=[spec_path],
                 context={"dataset": dataset, "path": written_path, "record": lineno},
             )
@@ -180,7 +180,7 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
 
 def _parse_cell(cell, t, path, lineno, name, spec_path, dataset="<input>"):
     if cell == "":
-        return None  # R023-16: an empty field is missing for every type
+        return None  # REQ-0845: an empty field is missing for every type
     try:
         if t == "str":
             return cell
@@ -196,7 +196,7 @@ def _parse_cell(cell, t, path, lineno, name, spec_path, dataset="<input>"):
         raise _phase_condition(
             "ingest",
             "field_parse_failed",
-            requirement="R014-13",
+            requirement="REQ-0526",
             spec_paths=[spec_path],
             context={
                 "dataset": dataset,
@@ -230,8 +230,8 @@ def _csv_record(fields):
     out = []
     for f in fields:
         if any(c in f for c in '",\r\n'):
-            # R020-14/15: quote when containing '"', ',', CR, LF.
-            # R020-17: missing renders as no characters, unquoted.
+            # REQ-0728/15: quote when containing '"', ',', CR, LF.
+            # REQ-0731: missing renders as no characters, unquoted.
             out.append('"' + f.replace('"', '""') + '"')
         else:
             out.append(f)
@@ -240,7 +240,7 @@ def _csv_record(fields):
 
 def _field_text(v, t, decimals):
     if is_missing(v):
-        return ""  # R020-17: missing is no characters, unquoted
+        return ""  # REQ-0731: missing is no characters, unquoted
     if t == "str":
         return v
     if t == "int":
@@ -259,7 +259,7 @@ def _field_text(v, t, decimals):
 
 
 def _fixed_point(x, n):
-    """R020-33/34: exact scaling, tie away from zero, no host rounding."""
+    """REQ-0747/34: exact scaling, tie away from zero, no host rounding."""
     from decimal import ROUND_HALF_UP, Decimal
 
     d = Decimal(x)  # exact binary64 value

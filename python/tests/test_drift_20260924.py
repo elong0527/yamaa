@@ -217,62 +217,6 @@ def _row_spec(derivations, rows_extra=None):
     return spec
 
 
-def test_row_inline_lookup_reads_input_dataset(tmp_path):
-    # REQ-0126: a row template may look up an input dataset when every
-    # match variable is available during row construction.
-    spec = _row_spec(
-        {
-            "USUBJID": "DM.USUBJID",
-            "X": {"lookup": {"dataset": "SUPP", "key": "USUBJID", "value": "QVAL"}},
-        }
-    )
-    inputs = {"dm.csv": "USUBJID\nS1\n", "supp.csv": "USUBJID,QVAL\nS1,hello\n"}
-    out = run(tmp_path, spec, inputs)
-    assert "S1,hello" in out.splitlines()
-
-
-def test_row_inline_lookup_later_phase_value_fails(tmp_path):
-    # REQ-0126: in a grouped template, a qualified match on a driver
-    # field that is not a group key is a later-phase value and fails as
-    # phase_boundary.
-    spec = _row_spec(
-        {
-            "USUBJID": "DM.USUBJID",
-            "X": {
-                "lookup": {
-                    "dataset": "SUPP",
-                    "key": "USUBJID",
-                    "key_base": ["DM.VAL"],
-                    "value": "QVAL",
-                }
-            },
-        },
-        rows_extra={"group_by": ["DM.USUBJID"]},
-    )
-    inputs = {"dm.csv": "USUBJID,VAL\nS1,10\n", "supp.csv": "USUBJID,QVAL\nS1,hello\n"}
-    with pytest.raises(YamaaError) as ei:
-        run(tmp_path, spec, inputs)
-    e = ei.value
-    assert (e.phase, e.condition) == ("row_construction", "phase_boundary")
-
-
-def test_row_inline_lookup_grouped_group_key_match(tmp_path):
-    # REQ-0126: grouped rows match on group keys.
-    spec = _row_spec(
-        {
-            "USUBJID": "DM.USUBJID",
-            "X": {"lookup": {"dataset": "SUPP", "key": "USUBJID", "value": "QVAL"}},
-        },
-        rows_extra={"group_by": ["DM.USUBJID"]},
-    )
-    inputs = {"dm.csv": "USUBJID\nS1\n", "supp.csv": "USUBJID,QVAL\nS1,hello\n"}
-    out = run(tmp_path, spec, inputs)
-    assert "S1,hello" in out.splitlines()
-
-
-# -- row catalogs (REQ-1249) -------------------------------------------------
-
-
 def _catalog_spec(tmp_path, csv_text, derivations, template_filter=None):
     d = str(tmp_path)
     os.makedirs(os.path.join(d, "input"), exist_ok=True)

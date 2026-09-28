@@ -44,7 +44,7 @@ def eval_expr(node, ctx):
     if (
         isinstance(node, dict)
         and "value" in node
-        and set(node) <= {"value", "missing", "strict"}
+        and set(node) <= {"value", "missing", "strict", "unconvertible"}
     ):
         return eval_expr(node["value"], ctx)
     if not isinstance(node, dict) or len(node) != 1:
@@ -99,11 +99,17 @@ def _one_record(var, filt, missing, mult, ctx, stage):
             r for r in recs if ctx.record_predicate(filt, r, var.split(".")[0]) is True
         ]
         if not recs:
-            return None  # R008-14: empty filtered result is an absent match
+            return None  # REQ-0355: empty filtered result is an absent match
     value_field = ctx.value_field(var)
     if not recs:
         if missing is not _ABSENT:
-            return missing  # R003-19 / R008-4
+            return missing  # REQ-0129 / REQ-0345
+        # REQ-0124: lookup with no_match declared returns its literal.
+        ds = var.split(".")[0] if "." in var else None
+        if ds is not None:
+            decl = ctx.e.lookups_decl.get(ds)
+            if decl is not None and "no_match" in decl:
+                return decl["no_match"]
         return None
     if len(recs) > 1:
         if mult is None:
@@ -125,7 +131,7 @@ def _one_record(var, filt, missing, mult, ctx, stage):
                         ctx.where,
                         "derivation",
                         "multiple_values_per_key",
-                        "R001-44",
+                        "REQ-0075",
                         {
                             "identifier": var,
                             "value_count": len(distinct),
@@ -137,13 +143,13 @@ def _one_record(var, filt, missing, mult, ctx, stage):
                 ctx.where,
                 stage,
                 "multiple_matches",
-                "R003-17",
+                "REQ-0127",
                 {"variable": var, "records": len(recs)},
             )
         recs = _choose(recs, mult, ctx)
     rec = recs[0]
     if value_field not in rec:
-        _fail(ctx.where, "validation", "unknown_field", "R002-27", {"variable": var})
+        _fail(ctx.where, "validation", "unknown_field", "REQ-0103", {"variable": var})
     return rec[value_field]
 
 
@@ -151,7 +157,7 @@ def _choose(recs, mult, ctx):
     order_by = mult.get("order_by", [])
     keep = mult.get("keep")
     if not order_by or keep is None:
-        _fail(ctx.where, "join", "unpaired_fields", "R003-9", {})
+        _fail(ctx.where, "join", "unpaired_fields", "REQ-0119", {})
     ordered = ctx.order_records(recs, order_by)
     return [ordered[0] if keep == "first" else ordered[-1]]
 
@@ -191,7 +197,7 @@ def ev_greatest_least(payload, ctx, which):
                 ctx.where,
                 "derivation",
                 "incompatible_input_type",
-                "R007-38",
+                "REQ-0323",
                 {"sources": payload["sources"]},
             )
         if best is None or (compare(v, best) > 0) == (which == "greatest"):
@@ -216,7 +222,7 @@ def ev_flag(payload, ctx):
         cond_text, site = cond, ctx.where + ".condition"
         tv = payload.get("true_value", "Y")
         fv = payload.get("false_value", _ABSENT)
-        mv = payload.get("missing_value", _ABSENT)
+        mv = payload.get("missing", _ABSENT)
     else:
         _fail(
             ctx.where,
@@ -360,17 +366,17 @@ def ev_mapping(payload, ctx):
         return payload.get("missing")
     if not isinstance(v, str):
         _fail(ctx.where, "mapping", "incompatible_input_type", "R007", {})
-    if "dict" in payload:
-        d = payload["dict"]
-    else:
-        d = ctx.e._load_dict_yaml(payload["dict_yaml"], ctx.where)
+    # REQ-1110: dict is inline or a YAML path loaded via project resources.
+    d = payload["dict"]
+    if isinstance(d, str):
+        d = ctx.e._load_dict_yaml(d, ctx.where)
     case_sensitive = payload.get("case_sensitive", True)
     if case_sensitive:
         key = v
     else:
         folded = {ascii_fold(k): k for k in d}
         if len(folded) != len(d):
-            _fail(ctx.where, "validation", "ambiguous_dictionary", "R019-22", {})
+            _fail(ctx.where, "validation", "ambiguous_dictionary", "REQ-0714", {})
         key = ascii_fold(v)
         d = {ascii_fold(k): val for k, val in d.items()}
     if key in d:
@@ -390,11 +396,20 @@ def ev_mapping(payload, ctx):
         )
     if "unmapped" in payload:
         return payload["unmapped"]
-    return payload.get("missing")
-
-
-def ev_lookup(payload, ctx):
-    return ctx.inline_lookup(payload)
+    # REQ-1110: source present but unlisted, no unmapped -> fail.
+    # `missing` never answers it.
+    e = ctx.e
+    _fail(
+        ctx.where,
+        "mapping",
+        "unmapped_value",
+        "REQ-0334",
+        {
+            "source": var,
+            "value": v,
+            "keys": [{k: e.rows[ctx.i].get(k) for k in e.keys}],
+        },
+    )
 
 
 def ev_cut(payload, ctx):
@@ -415,7 +430,9 @@ def ev_cut(payload, ctx):
             {"variable": src.split(".")[-1]},
         )
     if isinstance(v, bool) or not isinstance(v, (int, float)):
-        _fail(ctx.where, "mapping", "incompatible_input_type", "R007", {})
+        # REQ-0306: validation catches declared non-numeric sources; this is
+        # a backstop for undeclared types or dynamic values.
+        _fail(ctx.where, "cut", "incompatible_input_type", "REQ-0306", {})
     breaks = payload["breaks"]
     labels = payload["labels"]
     right = payload.get("right", False)
@@ -485,7 +502,7 @@ def ev_str_extract(payload, ctx):
         )
     m = rx.search(v)
     if not m:
-        return payload.get("no_match")  # fatal when omitted (R008-3)
+        return payload.get("no_match")  # fatal when omitted (REQ-0344)
     g = payload.get("group", 0)
     try:
         return m.group(g)
@@ -526,7 +543,7 @@ def ev_str_template(payload, ctx):
                 ctx.where,
                 "validation",
                 "invalid_string_template",
-                "R012-16",
+                "REQ-0461",
                 {"template": template},
             )
         out.append(literal)  # literal text between tokens
@@ -543,13 +560,13 @@ def ev_str_template(payload, ctx):
                 else _one_record(name, None, _ABSENT, None, ctx, "template")
             )
             if is_missing(v):
-                return missing  # fatal when omitted (R008-3)
+                return missing  # fatal when omitted (REQ-0344)
             if not isinstance(v, str):
                 _fail(
                     ctx.where,
                     "template",
                     "incompatible_input_type",
-                    "R012-13",
+                    "REQ-0458",
                     {"variable": name},
                 )
             out.append(v)
@@ -560,18 +577,50 @@ def ev_str_template(payload, ctx):
             ctx.where,
             "validation",
             "invalid_string_template",
-            "R012-16",
+            "REQ-0461",
             {"template": template},
         )
     out.append(tail)
     return "".join(out)
 
 
-def ev_str_upper(payload, ctx):
+def ev_str_case(payload, ctx):
+    """REQ-1114: change ASCII letter case per `to` (upper/lower/sentence/title)."""
     v = _str_operand(payload["source"], ctx)
     if is_missing(v):
         return payload.get("missing")
-    return ascii_upper(v)
+    to = payload.get("to")
+    if to == "upper":
+        return ascii_upper(v)
+    if to == "lower":
+        return ascii_lower(v)
+    if to == "sentence":
+        if not v:
+            return v
+        return ascii_upper(v[0]) + ascii_lower(v[1:])
+    if to == "title":
+        out = []
+        i, n = 0, len(v)
+        while i < n:
+            c = v[i]
+            if "A" <= c <= "Z" or "a" <= c <= "z":
+                j = i + 1
+                while j < n and ("A" <= v[j] <= "Z" or "a" <= v[j] <= "z"):
+                    j += 1
+                run = v[i:j]
+                out.append(ascii_upper(run[0]) + ascii_lower(run[1:]))
+                i = j
+            else:
+                out.append(c)
+                i += 1
+        return "".join(out)
+    _fail(
+        ctx.where,
+        "validation",
+        "value_not_permitted",
+        "REQ-0287",
+        {"value": to, "permitted": ["upper", "lower", "sentence", "title"]},
+    )
 
 
 def ev_str_contains(payload, ctx):
@@ -589,43 +638,6 @@ def ev_str_contains(payload, ctx):
             {"pattern": payload["pattern"]},
         )
     return rx.search(v) is not None
-
-
-def ev_str_lower(payload, ctx):
-    v = _str_operand(payload["source"], ctx)
-    if is_missing(v):
-        return payload.get("missing")
-    return ascii_lower(v)
-
-
-def ev_str_sentence(payload, ctx):
-    v = _str_operand(payload["source"], ctx)
-    if is_missing(v):
-        return payload.get("missing")
-    if not v:
-        return v
-    return ascii_upper(v[0]) + ascii_lower(v[1:])
-
-
-def ev_str_title(payload, ctx):
-    v = _str_operand(payload["source"], ctx)
-    if is_missing(v):
-        return payload.get("missing")
-    out = []
-    i, n = 0, len(v)
-    while i < n:
-        c = v[i]
-        if "A" <= c <= "Z" or "a" <= c <= "z":
-            j = i + 1
-            while j < n and ("A" <= v[j] <= "Z" or "a" <= v[j] <= "z"):
-                j += 1
-            run = v[i:j]
-            out.append(ascii_upper(run[0]) + ascii_lower(run[1:]))
-            i = j
-        else:
-            out.append(c)
-            i += 1
-    return "".join(out)
 
 
 def ev_compute(payload, ctx):
@@ -656,7 +668,7 @@ def ev_date_diff(payload, ctx):
     if is_missing(s) or is_missing(e):
         return None
     if type(s) is not type(e) or not isinstance(s, (YDate, YDateTime)):
-        _fail(ctx.where, "derivation", "incompatible_input_type", "R016-38", {})
+        _fail(ctx.where, "derivation", "incompatible_input_type", "REQ-0004", {})
     unit = payload["unit"]
     bounds = payload.get("bounds", "exclusive")
     if unit != "day" and bounds != "exclusive":
@@ -692,7 +704,7 @@ def ev_date_diff(payload, ctx):
 
 
 def _whole_months(s, e):
-    """R016-73: count monthly anniversaries of s on or before e, with the
+    """REQ-0595: count monthly anniversaries of s on or before e, with the
     anniversary day clamped to the month length."""
     import calendar
 
@@ -860,7 +872,7 @@ def ev_study_day(payload, ctx):
     if is_missing(d) or is_missing(r):
         return None
     if type(d) is not type(r) or not isinstance(d, (YDate, YDateTime)):
-        _fail(ctx.where, "derivation", "incompatible_input_type", "R016-38", {})
+        _fail(ctx.where, "derivation", "incompatible_input_type", "REQ-0004", {})
     delta = (d - r).days
     return delta + 1 if delta >= 0 else delta
 
@@ -1094,16 +1106,12 @@ _REGISTRY = {
     "flag": ev_flag,
     "str_pad": ev_str_pad,
     "mapping": ev_mapping,
-    "lookup": ev_lookup,
     "cut": ev_cut,
     "str_extract": ev_str_extract,
     "str_concat": ev_str_concat,
     "str_template": ev_str_template,
-    "str_upper": ev_str_upper,
-    "str_lower": ev_str_lower,
+    "str_case": ev_str_case,
     "str_contains": ev_str_contains,
-    "str_sentence": ev_str_sentence,
-    "str_title": ev_str_title,
     "compute": ev_compute,
     "round_half_away_from_zero": ev_round_half_away_from_zero,
     "date_diff": ev_date_diff,

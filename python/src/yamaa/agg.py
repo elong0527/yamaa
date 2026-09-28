@@ -51,7 +51,7 @@ def _reject_nested(node, parser):
         raise YamaaError(
             phase="validation",
             condition="prohibited_construct",
-            requirement="R013-37",
+            requirement="REQ-0502",
             spec_paths=[parser.where],
             context={"text": parser.text},
         )
@@ -73,7 +73,7 @@ def parse(text, where="<aggregate>"):
 def _reduction_value(rname, argnode, records, field_of, where, expr_text):
     """Evaluate one reduction over a record list. field_of(record, name)->value."""
     if rname == "__STAR__":
-        # R013-27: no record in the group -> missing (not zero)
+        # REQ-0492: no record in the group -> missing (not zero)
         return len(records) if records else None
     vals = []
     for rec in records:
@@ -81,7 +81,7 @@ def _reduction_value(rname, argnode, records, field_of, where, expr_text):
         vals.append(v)
     present = [v for v in vals if not is_missing(v)]
     if rname == "COUNT" and argnode == ("star",):
-        return len(records) if records else None  # R013-27
+        return len(records) if records else None  # REQ-0492
     if rname == "ONLY":
         if len(records) > 1:
             raise YamaaError(
@@ -95,7 +95,7 @@ def _reduction_value(rname, argnode, records, field_of, where, expr_text):
             return None
         return vals[0]
     if not records:
-        return None  # R013-27: no record in the group -> missing
+        return None  # REQ-0492: no record in the group -> missing
     if rname == "COUNT":
         return len(present)  # 0 when records exist but all missing
     if not present:
@@ -112,7 +112,7 @@ def _reduction_value(rname, argnode, records, field_of, where, expr_text):
                 raise YamaaError(
                     phase="derivation",
                     condition="incompatible_input_type",
-                    requirement="R013-46",
+                    requirement="REQ-0511",
                     spec_paths=[where],
                     context={"expr": expr_text},
                 )
@@ -211,7 +211,7 @@ def eval_over_records(
             raise YamaaError(
                 phase="validation",
                 condition="aggregate_identifier_not_grouped",
-                requirement="R013-38",
+                requirement="REQ-0503",
                 spec_paths=[where],
                 context={"identifier": n},
             )
