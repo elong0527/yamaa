@@ -48,8 +48,9 @@ columns:
     type: str
     label: Actual Treatment for Period 01
     derivation:
-      str_upper:
+      str_case:
         source: TRT01SRC
+        to: upper
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO, NOT TREATED]

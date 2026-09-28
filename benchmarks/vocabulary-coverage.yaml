@@ -33,16 +33,14 @@ coverage:
   row_number: [negative-row-number-filter]
   row_value: [negative-row-no-prior]
   source: [negative-source-undeclared-field]
+  str_case: [negative-str-case-number, negative-str-case-unknown,
+    negative-variable-nested]
   str_concat: [negative-usubjid-length]
   str_contains: [negative-str-contains-invalid-regex,
     negative-str-contains-bool-result]
   str_extract: [negative-str-uncaptured-group]
-  str_lower: [negative-str-lowercase-number]
   str_pad: [negative-str-pad-width]
-  str_sentence: [negative-str-sentence-number]
-  str_title: [negative-str-title-number]
   str_template: [negative-subject-reference]
-  str_upper: [negative-variable-nested]
   study_day: [negative-study-day-datetime]
   to_date: [negative-date-conversion]
   to_epoch_day: [negative-epoch-day-non-date]

@@ -10,7 +10,7 @@ case table.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
 from typing import Any, TypeAlias
 
@@ -218,20 +218,35 @@ def _str_pad(payload: object, resolver: Resolver) -> EvaluationResult:
     return ValueResult(value=converted.value.rjust(width))
 
 
-def _cased(operation: str, transform: object) -> ExpressionHandler:
-    def handler(payload: object, resolver: Resolver) -> EvaluationResult:
-        if not isinstance(payload, Mapping):
-            return _invalid_payload(operation, "a mapping")
-        variable = payload.get("source")
-        resolved = _resolve_string(variable, resolver, operation)
-        if not isinstance(resolved, ValueResult):
-            return resolved
-        if resolved.value is MISSING:
-            return _missing_input(payload, str(variable))
-        assert isinstance(resolved.value, str)
-        return ValueResult(value=transform(resolved.value))  # type: ignore[operator]
+_CASES: dict[str, Callable[[str], str]] = {
+    "upper": ascii_upper,
+    "lower": ascii_lower,
+    "sentence": ascii_sentence,
+    "title": ascii_title,
+}
+"""The R019 ASCII substitution each `str_case.to` value names."""
 
-    return handler
+
+def _str_case(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return _invalid_payload("str_case", "a mapping")
+    target = payload.get("to")
+    transform = _CASES.get(target) if isinstance(target, str) else None
+    if transform is None:
+        return expression_condition(
+            "validation",
+            "value_not_permitted",
+            {"field": "to", "value": str(target), "permitted": list(_CASES)},
+            requirement="REQ-0322",
+        )
+    variable = payload.get("source")
+    resolved = _resolve_string(variable, resolver, "str_case")
+    if not isinstance(resolved, ValueResult):
+        return resolved
+    if resolved.value is MISSING:
+        return _missing_input(payload, str(variable))
+    assert isinstance(resolved.value, str)
+    return ValueResult(value=transform(resolved.value))
 
 
 def _str_extract(payload: object, resolver: Resolver) -> EvaluationResult:
@@ -408,8 +423,5 @@ def string_handlers(dispatcher: NestedDispatcher) -> dict[str, ExpressionHandler
         "str_contains": _str_contains,
         "str_concat": _concat(dispatcher),
         "str_template": _template,
-        "str_upper": _cased("str_upper", ascii_upper),
-        "str_lower": _cased("str_lower", ascii_lower),
-        "str_sentence": _cased("str_sentence", ascii_sentence),
-        "str_title": _cased("str_title", ascii_title),
+        "str_case": _str_case,
     }

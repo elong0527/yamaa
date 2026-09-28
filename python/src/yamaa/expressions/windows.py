@@ -122,17 +122,24 @@ def rank(
 
 
 def row_value(partition: Partition, source: str, offset: int) -> WindowResult:
-    """Read one source from the row `offset` places along the declared order."""
+    """Read one source from the row `offset` places along the declared order.
+
+    REQ-0294 selects rows before partitioning, so the places are counted over
+    the rows the window's `filter` kept, and a row it excluded reads missing.
+    """
     if offset == 0:
         # REQ-0328: the current row's own value is `source`, and a window must
         # not be a second spelling of it.
         return _condition("zero_offset", {"offset": offset}, requirement="REQ-0328")
-    target = partition.current + offset
-    if not 0 <= target < len(partition.rows):
+    if not partition.eligible[partition.current]:
+        return _missing()
+    numbered = partition.numbered()
+    target = numbered.index(partition.current) + offset
+    if not 0 <= target < len(numbered):
         # REQ-0294: a row that does not exist reads the same as a present row
         # whose value is missing.
         return _missing()
-    return ValueResult(value=_read(partition.rows[target], source))
+    return ValueResult(value=_read(partition.rows[numbered[target]], source))
 
 
 def previous_non_missing(partition: Partition, source: str) -> WindowResult:

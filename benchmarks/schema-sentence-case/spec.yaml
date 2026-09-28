@@ -36,8 +36,9 @@ columns:
     type: str
     label: Analysis Visit
     derivation:
-      str_sentence:
+      str_case:
         source: LB.VISIT
+        to: sentence
 
   # Each run of ASCII letters starts uppercase, so a hyphen starts a new
   # word: FOLLOW-UP -> Follow-Up, where sentence case gives Follow-up.
@@ -45,5 +46,6 @@ columns:
     type: str
     label: Analysis Visit Title Case
     derivation:
-      str_title:
+      str_case:
         source: LB.VISIT
+        to: title

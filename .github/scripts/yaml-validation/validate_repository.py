@@ -369,6 +369,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'intermediate', 'dataset',
     },
     ('R006', 'missing_required_field'): {'class', 'field'},
+    ('R006', 'value_not_permitted'): {'permitted', 'value'},
     ('R016', 'month_out_of_range'): {'month'},
     ('R016', 'month_not_permitted'): {'month'},
     ('R016', 'month_required'): {'minimum_source_precision'},
@@ -7425,12 +7426,9 @@ _DERIVE_VARIABLE_FIELDS = {
     'locf': ('source',),
     'round_half_away_from_zero': ('source',),
     'row_value': ('source',),
+    'str_case': ('source',),
     'str_extract': ('source',),
     'str_pad': ('source',),
-    'str_lower': ('source',),
-    'str_upper': ('source',),
-    'str_sentence': ('source',),
-    'str_title': ('source',),
     'study_day': ('date', 'reference'),
     'to_date': ('source',),
     'to_epoch_day': ('source',),
@@ -8501,7 +8499,7 @@ def validate_expression_static_semantics(expression, path, context):
             )
         return errors
 
-    if keyword in {'str_extract', 'str_upper', 'str_lower', 'str_sentence', 'str_title'}:
+    if keyword in {'str_extract', 'str_case'}:
         errors.extend(
             validate_named_input_type(
                 payload,

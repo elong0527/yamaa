@@ -1029,7 +1029,7 @@ def test_key_match_expression_plans_with_synthetic_name() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key={"X": {"str_upper": {"source": "A"}}},
+                    key={"X": {"str_case": {"source": "A", "to": "upper"}}},
                 )
             ]
         }
@@ -1038,7 +1038,7 @@ def test_key_match_expression_plans_with_synthetic_name() -> None:
     plan = plan_execution(
         spec,
         {"SRC": source_table()},
-        supported_operations=("source", "literal", "mapping", "str_upper"),
+        supported_operations=("source", "literal", "mapping", "str_case"),
     )
 
     planned = plan.intermediates[0]
@@ -1051,7 +1051,7 @@ def test_key_match_expression_plans_with_synthetic_name() -> None:
     assert planned.dependencies == ("A",)
 
 
-@pytest.mark.parametrize("operation", ["str_upper", "to_date"])
+@pytest.mark.parametrize("operation", ["str_case", "to_date"])
 def test_key_match_expression_type_mismatch_fails(operation: str) -> None:
     # REQ-1259: a statically known expression result type checks against the
     # donor key type with the existing comparability rules.
@@ -1254,7 +1254,7 @@ def test_a_qualified_aggregate_key_match_expression_plans() -> None:
                     {
                         "aggregate": {
                             "dataset": "SRC",
-                            "key": {"X": {"str_upper": {"source": "A"}}},
+                            "key": {"X": {"str_case": {"source": "A", "to": "upper"}}},
                             "expr": "COUNT(SRC.*)",
                         }
                     }
@@ -1408,7 +1408,7 @@ def test_a_named_key_match_expression_checks_its_input_types() -> None:
                 Intermediate(
                     id="LOOK",
                     dataset="SRC",
-                    key={"X": {"str_upper": {"source": "A"}}},
+                    key={"X": {"str_case": {"source": "A", "to": "upper"}}},
                 )
             ]
         }
@@ -1422,7 +1422,7 @@ def test_a_named_key_match_expression_checks_its_input_types() -> None:
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "incompatible_input_type"
     assert diagnostic.requirement == "REQ-0308"
-    assert diagnostic.spec_paths == ("intermediates[0].key.X.str_upper.source",)
+    assert diagnostic.spec_paths == ("intermediates[0].key.X.str_case.source",)
     assert diagnostic.context == {"source": "A", "expected": "str", "actual": "int"}
 
 
@@ -1489,7 +1489,7 @@ def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
             Column(
                 name="A",
                 type="str",
-                derivation=derivation({"str_upper": {"source": "SRC.X"}}),
+                derivation=derivation({"str_case": {"source": "SRC.X", "to": "upper"}}),
             )
         ]
     )
@@ -1497,7 +1497,7 @@ def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
     with pytest.raises(UnsupportedPlanningError) as raised:
         plan_execution(spec, {"SRC": source_table()})
 
-    assert raised.value.features[0].operation == "str_upper"
+    assert raised.value.features[0].operation == "str_case"
 
 
 def two_dataset_specification(columns: list[Column]) -> Specification:
@@ -2729,7 +2729,7 @@ def _src_table() -> object:
 def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
     # REQ-1185: the derived name is a legal target-side key field.
     spec = _intermediate_spec(
-        {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
+        {"IDVARVAL_U": {"str_case": {"source": "IDVARVAL", "to": "upper"}}},
         key={
             "STUDYID": "SRC.STUDYID",
             "USUBJID": "SRC.USUBJID",
@@ -2749,7 +2749,7 @@ def test_an_intermediate_derivation_may_feed_a_target_side_key() -> None:
 
 def test_intermediate_clauses_may_read_a_derived_name() -> None:
     spec = _intermediate_spec(
-        {"IDVARVAL_U": {"str_upper": {"source": "IDVARVAL"}}},
+        {"IDVARVAL_U": {"str_case": {"source": "IDVARVAL", "to": "upper"}}},
         key={"STUDYID": "SRC.STUDYID", "USUBJID": "SRC.USUBJID"},
         read_field="IDVARVAL_U",
         filter="SUPP.IDVARVAL_U IS NOT NULL",
@@ -2772,7 +2772,7 @@ def test_intermediate_clauses_may_read_a_derived_name() -> None:
 
 def test_an_unqualified_derived_order_field_suggests_its_qualified_name() -> None:
     spec = _intermediate_spec(
-        {"QVAL_U": {"str_upper": {"source": "QVAL"}}},
+        {"QVAL_U": {"str_case": {"source": "QVAL", "to": "upper"}}},
         key=["STUDYID"],
         order_by=[OrderTerm(variable="QVAL_U")],
         keep="first",
@@ -2796,7 +2796,7 @@ def test_an_unqualified_derived_order_field_suggests_its_qualified_name() -> Non
 
 def test_a_failed_derivation_does_not_repeat_as_an_unknown_order_field() -> None:
     spec = _intermediate_spec(
-        {"QVAL_U": {"str_upper": {"source": "NOPE"}}},
+        {"QVAL_U": {"str_case": {"source": "NOPE", "to": "upper"}}},
         key=["STUDYID"],
         order_by=[OrderTerm(variable="SUPP.QVAL_U")],
         keep="first",
@@ -2810,7 +2810,7 @@ def test_a_failed_derivation_does_not_repeat_as_an_unknown_order_field() -> None
         )
 
     assert any(
-        d.spec_paths == ("intermediates[0].derivations.QVAL_U.str_upper.source",)
+        d.spec_paths == ("intermediates[0].derivations.QVAL_U.str_case.source",)
         for d in raised.value.diagnostics
     )
     assert all(
@@ -2841,19 +2841,21 @@ def _derivation_diagnostic(
 def test_an_intermediate_derivation_rejects_a_driver_reference() -> None:
     # REQ-1185: the driver is out of scope for an intermediate derivation.
     diagnostic = _derivation_diagnostic(
-        {"IDVARVAL_U": {"str_upper": {"source": "SRC.LBSEQ"}}}, "unknown_field"
+        {"IDVARVAL_U": {"str_case": {"source": "SRC.LBSEQ", "to": "upper"}}},
+        "unknown_field",
     )
 
     assert diagnostic.requirement == "REQ-1185"
     assert diagnostic.spec_paths == (
-        "intermediates[0].derivations.IDVARVAL_U.str_upper.source",
+        "intermediates[0].derivations.IDVARVAL_U.str_case.source",
     )
 
 
 def test_an_intermediate_derivation_rejects_another_dataset_reference() -> None:
     # REQ-1185: a qualified name must name the intermediate's own dataset.
     diagnostic = _derivation_diagnostic(
-        {"IDVARVAL_U": {"str_upper": {"source": "SRC.IDVARVAL"}}}, "unknown_field"
+        {"IDVARVAL_U": {"str_case": {"source": "SRC.IDVARVAL", "to": "upper"}}},
+        "unknown_field",
     )
 
     assert diagnostic.requirement == "REQ-1185"
@@ -2864,8 +2866,8 @@ def test_an_intermediate_derivation_reads_an_earlier_sibling() -> None:
     # may read a sibling declared before it.
     spec = _intermediate_spec(
         {
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
-            "SECOND_N": {"str_upper": {"source": "FIRST_N"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
+            "SECOND_N": {"str_case": {"source": "FIRST_N", "to": "upper"}},
         },
         key=["STUDYID"],
     )
@@ -2883,8 +2885,8 @@ def test_an_intermediate_derivation_reads_a_qualified_earlier_sibling() -> None:
     # and an earlier derived name qualifies there too.
     spec = _intermediate_spec(
         {
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
-            "SECOND_N": {"str_upper": {"source": "SUPP.FIRST_N"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
+            "SECOND_N": {"str_case": {"source": "SUPP.FIRST_N", "to": "upper"}},
         },
         key=["STUDYID"],
     )
@@ -2902,7 +2904,7 @@ def test_a_window_derivation_reads_earlier_derived_window_fields() -> None:
     # fields and earlier derived names of the intermediate's dataset.
     spec = _intermediate_spec(
         {
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
             "_RN": {
                 "row_number": {
                     "window": {
@@ -2937,7 +2939,7 @@ def test_a_window_derivation_rejects_a_later_derived_window_field() -> None:
                     }
                 }
             },
-            "FIRST_N": {"str_upper": {"source": "IDVARVAL"}},
+            "FIRST_N": {"str_case": {"source": "IDVARVAL", "to": "upper"}},
         },
         "unknown_field",
     )
@@ -2951,7 +2953,8 @@ def test_a_window_derivation_rejects_a_later_derived_window_field() -> None:
 def test_an_intermediate_derivation_rejects_a_stored_column_shadow() -> None:
     # REQ-1185: the derived name would hide the stored column.
     diagnostic = _derivation_diagnostic(
-        {"IDVARVAL": {"str_upper": {"source": "IDVARVAL"}}}, "duplicate_derivation"
+        {"IDVARVAL": {"str_case": {"source": "IDVARVAL", "to": "upper"}}},
+        "duplicate_derivation",
     )
 
     assert diagnostic.requirement == "REQ-1185"

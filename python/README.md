@@ -82,7 +82,7 @@ project environment, and not before.
 | `str_extract` | R022 | one capture group of the leftmost match |
 | `str_concat` | R007 | its nested expression results, in order |
 | `str_template` | R012 | literal text with its placeholders interpolated |
-| `str_upper`, `str_lower` | R019 | the exact ASCII casing substitution |
+| `str_case` | R019 | the exact ASCII casing substitution |
 | `lookup` | R003, R007 | one right-side column reached by declared key pairs |
 | `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
 | `date_diff` | R016 | whole calendar units between two dates |

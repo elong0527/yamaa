@@ -40,10 +40,7 @@ DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "str_extract": ("missing", "no_match"),
     "str_concat": ("missing",),
     "str_template": ("missing",),
-    "str_upper": ("missing",),
-    "str_lower": ("missing",),
-    "str_sentence": ("missing",),
-    "str_title": ("missing",),
+    "str_case": ("missing",),
 }
 
 
