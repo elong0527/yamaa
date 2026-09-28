@@ -173,6 +173,8 @@ class Engine:
             d["id"]: f"intermediates[{i}]"
             for i, d in enumerate(s.get("intermediates", []) or [])
         }
+        # REQ-1262: named intermediates that drive a row template, as tables.
+        self.drivers = {}
         self.colspecs = {}
         self.col_order = []
         for c in s["columns"]:
@@ -739,11 +741,14 @@ class Engine:
 
     def _build_template(self, t):
         ds = t.get("dataset") or self._default_dataset()
-        if ds not in self.inputs:
+        if ds in self.inputs:
+            table = self.inputs[ds]
+        elif ds in self.lookups_decl:
+            table = self._driver_table(t, ds)
+        else:
             _fail(
                 f"rows.{t['id']}.dataset", "validation", "unknown_field", "REQ-0103", {}
             )
-        table = self.inputs[ds]
         group_by = t.get("group_by")
         filt = t.get("filter")
         derivs = t.get("derivations") or {}
@@ -758,6 +763,21 @@ class Engine:
             self._build_grouped(t, table, group_by, filt, derivs)
         else:
             self._build_record_driven(t, table, filt, derivs)
+
+    def _driver_table(self, t, lid):
+        """REQ-1262: a named intermediate drives a template with its
+        source-only filtered records after its derivations, in source order,
+        exposing its `columns` when declared and every field otherwise."""
+        if lid not in self.drivers:
+            decl = self.lookups_decl[lid]
+            types = _validate.intermediate_driver_types(
+                self, decl, f"rows.{t['id']}.dataset"
+            )
+            recs = _BaseCtx(self, self.lookup_paths[lid])._eligible(decl)
+            fields = list(types)
+            records = [{f: r.get(f) for f in fields} for r in recs]
+            self.drivers[lid] = Table(lid, None, types, fields, records)
+        return self.drivers[lid]
 
     def _rec_pred(self, text, record, ds, where):
         node, _ = _pred.parse(text, where)
@@ -852,12 +872,13 @@ class Engine:
         reads, the match values of the lookups it reads, and their
         dependencies among `names`."""
         _, idents = _pred.parse(filt, f"rows.{t['id']}.filter")
+        driver = t.get("dataset") or self._default_dataset()
         need = set()
         for ident in idents:
             head, dot, _ = ident.partition(".")
             if not dot:
                 need.add(ident)
-            elif head in self.lookups_decl:
+            elif head in self.lookups_decl and head != driver:
                 need |= self._lookup_match_names(self.lookups_decl[head])
         todo = [n for n in need if n in nodes]
         while todo:
@@ -1685,6 +1706,21 @@ class _BaseCtx:
     def _row_index(self):
         raise NotImplementedError
 
+    def _driver_intermediate(self):
+        """The named intermediate driving the current row, if any."""
+
+    def _is_lookup(self, ds):
+        """An intermediate's qualifier reads a keyed lookup, except for the
+        intermediate driving the current row, which reads that row's driver
+        record (REQ-1262)."""
+        return ds in self.e.lookups_decl and ds != self._driver_intermediate()
+
+    def _table(self, ds):
+        """The input `ds` names, or the current row's driver intermediate."""
+        if ds is not None and ds == self._driver_intermediate():
+            return self.e.drivers[ds]
+        return self.e.inputs.get(ds)
+
     def _driver_ds(self):
         """REQ-0120: the driver dataset is the root base, or the sole input
         when no base is declared."""
@@ -2457,18 +2493,22 @@ class _ColCtx(_BaseCtx):
     def _row_value(self, i, name):
         return self.e.rows[i].get(name)
 
+    def _driver_intermediate(self):
+        origin = self.e._origins[self.i]
+        return origin if origin in self.e.drivers else None
+
     def value(self, name):
         e = self.e
         if "." in name:
             parts = name.split(".")
-            if parts[0] in e.lookups_decl:
+            if self._is_lookup(parts[0]):
                 return self.lookup_value(parts[0], parts[1])
             # REQ-0075 for the row's own records, REQ-0127 for a joined read.
             return _expr._one_record(name, None, _ABSENT, None, self)
         row = e.rows[self.i]
         if name not in row:
             origin = e._origins[self.i]
-            table = e.inputs.get(origin) if origin else None
+            table = self._table(origin) if origin else None
             if table is not None and name in table.fields:
                 _fail(
                     self.where,
@@ -2485,10 +2525,10 @@ class _ColCtx(_BaseCtx):
         parts = var.split(".")
         ds = parts[0]
         i = self.i
-        if ds in e.lookups_decl:
+        if self._is_lookup(ds):
             rec = self._match_lookup(e.lookups_decl[ds], i)
             return [rec] if rec is not None else []
-        table = e.inputs.get(ds)
+        table = self._table(ds)
         if table is None:
             _fail(
                 self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
@@ -2515,10 +2555,9 @@ class _ColCtx(_BaseCtx):
         return e._join_records(table, applicable, [row.get(k) for k in applicable])
 
     def compute_ident(self, name):
-        e = self.e
         if "." in name:
             parts = name.split(".")
-            if parts[0] in e.lookups_decl:
+            if self._is_lookup(parts[0]):
                 return self.lookup_value(parts[0], parts[1])
             _fail(
                 self.where,
@@ -2566,10 +2605,13 @@ class _RowCtx(_BaseCtx):
     def _row_value(self, i, name):
         _fail(self.where, "row_construction", "phase_boundary", "REQ-0126", {})
 
+    def _driver_intermediate(self):
+        return self.ds if self.ds in self.e.drivers else None
+
     def value(self, name):
         if "." in name:
             parts = name.split(".")
-            if parts[0] in self.e.lookups_decl:
+            if self._is_lookup(parts[0]):
                 decl = self.e.lookups_decl[parts[0]]
                 key_fields, key_exprs = self._lookup_keys(decl)
                 match_vals = [self._row_match_value(v) for v in key_exprs]
@@ -2593,7 +2635,7 @@ class _RowCtx(_BaseCtx):
             return self.row[name]
         if name in self.groupkeys:
             return self.groupkeys[name]
-        table = self.e.inputs.get(self.ds)
+        table = self._table(self.ds)
         if table is not None and name in table.fields:
             _fail(
                 self.where,
@@ -2607,13 +2649,13 @@ class _RowCtx(_BaseCtx):
     def source_records(self, var):
         parts = var.split(".")
         ds = parts[0]
-        if ds in self.e.lookups_decl:
+        if self._is_lookup(ds):
             decl = self.e.lookups_decl[ds]
             key_fields, key_exprs = self._lookup_keys(decl)
             match_vals = [self._row_match_value(v) for v in key_exprs]
             rec = self._match_lookup_row(decl, key_fields, match_vals)
             return [rec] if rec is not None else []
-        table = self.e.inputs.get(ds)
+        table = self._table(ds)
         if table is None:
             _fail(
                 self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}

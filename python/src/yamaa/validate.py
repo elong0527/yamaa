@@ -671,6 +671,122 @@ def intermediate_uniques(d, where):
     return out
 
 
+# REQ-1262: a driver is read record by record, so it neither matches nor
+# selects a record of its own.
+_DRIVER_FORBIDDEN = ("key", "between", "order_by", "keep", "no_match")
+
+
+def intermediate_driver_types(e, d, where):
+    """REQ-1262: check that intermediate `d` may drive a row template and
+    return the type of each field it exposes, in field order. A driver
+    reads an input dataset through a filter over its own donor fields and
+    derived names, and every exposed derived field has a type the template
+    can rely on."""
+    lid = d["id"]
+
+    def ineligible(reason):
+        _fail(
+            where,
+            "validation",
+            "invalid_intermediate_driver",
+            "REQ-1262",
+            {"intermediate": lid, "reason": reason},
+        )
+
+    ds = d.get("dataset")
+    if ds not in e.inputs:
+        ineligible("it does not read an input dataset")
+    for name in _DRIVER_FORBIDDEN:
+        if name in d:
+            ineligible(f"it declares {name}")
+    if d.get("filter") is not None:
+        _, names = _pred.parse(d["filter"], where)
+        if any(n.partition(".")[1] and n.partition(".")[0] != ds for n in names):
+            ineligible("its filter reads a current row")
+    derived = d.get("derivations") or {}
+    types = _intermediate_types(e, d, ())
+    exposed = d.get("columns")
+    if exposed is None:
+        exposed = [*e.inputs[ds].fields, *derived]
+    out = {}
+    for name in exposed:
+        if name not in types:
+            _fail(
+                f"{e.lookup_paths[lid]}.columns",
+                "validation",
+                "unknown_field",
+                "REQ-0125",
+                {"intermediate": lid, "column": name},
+            )
+        if types[name] is None:
+            _fail(
+                where,
+                "validation",
+                "unknown_intermediate_driver_type",
+                "REQ-1262",
+                {"intermediate": lid, "field": name},
+            )
+        out[name] = types[name]
+    return out
+
+
+def _intermediate_types(e, d, seen):
+    """The stored and derived field types of input-backed intermediate `d`;
+    a derived field whose type is not determinable maps to None."""
+    ds = d["dataset"]
+    types = dict(e.inputs[ds].types)
+    for name, node in (d.get("derivations") or {}).items():
+        types[name] = _driver_expression_type(e, _norm(node, ""), d, types, seen)
+    return types
+
+
+def _driver_expression_type(e, node, d, known, seen):
+    """REQ-1262's determinable types: a `source` keeps its source type, a
+    string/integer/float `literal` has that type, `row_number` and `rank`
+    are integer, `str_case` is string, and a `case` has the one type its
+    nonmissing branches share. Anything else is not determinable."""
+    if not isinstance(node, dict) or len(node) != 1:
+        return None
+    ((kind, payload),) = node.items()
+    if kind == "source":
+        var = payload.get("variable") if isinstance(payload, dict) else payload
+        if not isinstance(var, str):
+            return None
+        head, dot, field = var.partition(".")
+        if not dot:
+            return known.get(var)
+        if head == d["dataset"]:
+            return known.get(field)
+        other = e.lookups_decl.get(head)
+        # REQ-1263: a read of another input-backed intermediate's column.
+        if other is None or other.get("dataset") not in e.inputs or head in seen:
+            return None
+        return _intermediate_types(e, other, (*seen, d["id"])).get(field)
+    if kind == "literal":
+        if isinstance(payload, bool):
+            return None
+        if isinstance(payload, str):
+            return "str"
+        if isinstance(payload, int):
+            return "int"
+        return "float" if isinstance(payload, float) else None
+    if kind in ("row_number", "rank"):
+        return "int"
+    if kind == "str_case":
+        return "str"
+    if kind == "case" and isinstance(payload, list):
+        found = set()
+        for item in payload:
+            if not isinstance(item, dict):
+                return None
+            branch = item["then"] if "then" in item else item.get("otherwise")
+            if branch is None or branch == {"literal": None}:
+                continue
+            found.add(_driver_expression_type(e, _norm(branch, ""), d, known, seen))
+        return found.pop() if len(found) == 1 else None
+    return None
+
+
 def _check_intermediate_verification(e, d, where, ds):
     """REQ-1245: `verifications` lists `unique` checks over the donor
     records. A declared id is unique within the list (REQ-0398), and a
@@ -802,7 +918,10 @@ def _check_rows(e):
     for t in e.spec.get("rows", []) or []:
         ds = t.get("dataset") or e._default_dataset()
         where = f"rows.{t['id']}"
-        if ds not in e.inputs:
+        if ds in e.lookups_decl and ds not in e.inputs:
+            # REQ-1262: an eligible named intermediate may drive the rows.
+            intermediate_driver_types(e, e.lookups_decl[ds], where + ".dataset")
+        elif ds not in e.inputs:
             _fail(
                 where + ".dataset",
                 "validation",
