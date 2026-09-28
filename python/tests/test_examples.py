@@ -168,7 +168,7 @@ def _reported_frame(frame: pl.DataFrame, decimals: int) -> pl.DataFrame:
 
     The committed CSV carries reported values (rounded once, at write,
     half away from zero); the run.py frame carries the unrounded engine
-    values R011-28 requires. Reusing ``fixed_point`` keeps the test's
+    values REQ-0019 requires. Reusing ``fixed_point`` keeps the test's
     rounding identical to the artifact writer's.
     """
     return frame.with_columns(

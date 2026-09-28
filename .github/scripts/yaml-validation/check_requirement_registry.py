@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Requirement registry check for the rules/ tree.
+"""Requirement registry and canonical-citation check for the repository.
 
 Every requirement ID is defined exactly once, as a bold dotted marker
 ``**REQ-0001.**`` in a markdown contract. Retired IDs live only in
@@ -8,7 +8,9 @@ resolve to a definition. Fails
 on:
 
 - a requirement ID defined more than once;
-- a citation that references an ID with no definition.
+- a citation that references an ID with no definition;
+- a historical numbered requirement citation outside compatibility records and
+  tests that deliberately exercise those records.
 
 Fenced code blocks and inline code are stripped before scanning, so
 examples and quoted syntax do not count as definitions or citations.
@@ -24,9 +26,19 @@ import yaml
 
 DEFINITION = re.compile(r"\*\*(REQ-[0-9]{4,})\.\*\*")
 REFERENCE = re.compile(r"\bREQ-[0-9]{4,}\b")
+LEGACY_REFERENCE = re.compile(r"\bR[0-9]{3}-[0-9]+[a-z]?\b")
 FENCE_RUN = re.compile(r"```+|~~~+")
 INLINE_CODE = re.compile(r"`[^`\n]*`")
 FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+TEXT_SUFFIXES = {".md", ".py", ".r", ".yaml", ".yml"}
+LEGACY_ALLOWLIST = {
+    Path("rules/migration.yaml"),
+    Path("rules/reference/requirements.md"),
+    Path(".github/scripts/yaml-validation/test_requirement_registry.py"),
+    Path(".github/scripts/yaml-validation/test_rule_rewrite.py"),
+    Path(".github/scripts/yaml-validation/test_validate_repository.py"),
+    Path("python/tests/models/test_values.py"),
+}
 
 
 def strip_code(text):
@@ -96,6 +108,22 @@ def check(root):
         )
     for identifier in sorted(retired & defined.keys()):
         errors.append(f"retired requirement still defined: {identifier}")
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
+            continue
+        relative = path.relative_to(root)
+        if relative in LEGACY_ALLOWLIST or any(
+            part in {".git", ".venv"} for part in relative.parts
+        ):
+            continue
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            for identifier in LEGACY_REFERENCE.findall(line):
+                errors.append(
+                    "historical requirement citation outside compatibility "
+                    f"records: {relative.as_posix()}:{line_number}: {identifier}"
+                )
     return errors
 
 
@@ -114,7 +142,7 @@ def main():
     if errors:
         print(f"FAIL: {len(errors)} requirement-registry violation(s).")
         return 1
-    print("PASS: active requirements resolve; retired IDs stay in migration.")
+    print("PASS: active requirements resolve; historical IDs stay in compatibility records.")
     return 0
 
 

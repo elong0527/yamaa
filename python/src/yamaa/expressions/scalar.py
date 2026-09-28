@@ -69,7 +69,7 @@ def _resolve(
     *,
     filtered: bool = False,
 ) -> ValueResult | ConditionResult:
-    """Read one operand, which R003-21b lets `first_available` narrow to records."""
+    """Read an operand REQ-1052/REQ-1053 let `first_available` filter."""
     operand = source_operand(variable) if filtered else None
     if operand is None:
         if not isinstance(variable, str):

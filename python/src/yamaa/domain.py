@@ -231,7 +231,7 @@ def yamaa_domain(
     does not implement (project functions, for example) build the dispatcher
     and hand it in. The engine itself never imports or orchestrates such an
     extension. Without it, a specification calling project functions reports
-    ``function`` as an unimplemented operation (R018-1).
+    ``function`` as an unimplemented operation (REQ-0662).
     """
     entry = Path(entry_path)
     if not entry.is_file():
