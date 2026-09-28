@@ -130,9 +130,6 @@ under the equality [REQ-0935](terminology.md#req-0935) uses. A difference is rej
 
 **REQ-0944.** Binding an extensible or `external` codelist beside an
 `allowed_values` verification is accepted, and the verification stands alone.
-The terminology admits values outside its list, so there is no set for the
-verification to disagree with; narrowing an extensible list for one study's
-data is what the standard allows.
 
 <a id="req-0945"></a>
 
