@@ -53,5 +53,5 @@ coverage:
   verify:max_length: [negative-usubjid-length]
   verify:not_missing: [negative-not-missing-age]
   verify:range: [negative-implausible-age]
-  verify:row_count: [negative-adlb-two-baselines]
+  verify:row_count: [negative-count-unnamed]
   verify:unique: [negative-unique-duplicate]

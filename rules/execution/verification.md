@@ -462,7 +462,8 @@ fraction bound outside 0 through 1 also fails.
 
 **REQ-0402.** Omitting a verification `id`, including from a grouped
 `row_count`, is valid. The check retains its stable specification path and
-reports the grouping columns and bounds that give it meaning.
+reports the grouping columns and observed counts; the stable specification
+path carries the bounds.
 
 <a id="req-0403"></a>
 
