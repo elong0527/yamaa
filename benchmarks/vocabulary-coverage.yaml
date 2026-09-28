@@ -53,5 +53,5 @@ coverage:
   verify:max_length: [negative-usubjid-length]
   verify:not_missing: [negative-not-missing-age]
   verify:range: [negative-implausible-age]
-  verify:row_count: [adam-adae-prior-serious-event]
+  verify:row_count: [negative-adlb-two-baselines]
   verify:unique: [negative-unique-duplicate]
