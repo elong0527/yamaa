@@ -129,7 +129,7 @@ def test_window_order_by_required_applies_to_all_window_kinds(tmp_path):
 def test_str_sentence_ascii_only(tmp_path):
     # REQ-1240: first scalar up, rest down; non-ASCII passes through.
     rows = "USUBJID,VAL\nS1,hELLO w\u00d6RLD\n"
-    spec = base_spec(derivation={"str_sentence": {"source": "DM.VAL"}})
+    spec = base_spec(derivation={"str_case": {"source": "DM.VAL", "to": "sentence"}})
     out = run(tmp_path, spec, {"dm.csv": rows})
     assert "S1,Hello w\u00d6rld" in out.splitlines()
 
@@ -137,7 +137,7 @@ def test_str_sentence_ascii_only(tmp_path):
 def test_str_title_ascii_only(tmp_path):
     # REQ-1241: each [A-Za-z]+ run titled; digits/separators untouched.
     rows = "USUBJID,VAL\nS1,o'neil-2x SMITH\n"
-    spec = base_spec(derivation={"str_title": {"source": "DM.VAL"}})
+    spec = base_spec(derivation={"str_case": {"source": "DM.VAL", "to": "title"}})
     out = run(tmp_path, spec, {"dm.csv": rows})
     assert "S1,O'Neil-2X Smith" in out.splitlines()
 
@@ -156,7 +156,7 @@ def test_str_sentence_rejects_non_str_source(tmp_path):
             {
                 "name": "X",
                 "type": "str",
-                "derivation": {"str_title": {"source": "SITENUM"}},
+                "derivation": {"str_case": {"source": "SITENUM", "to": "title"}},
             },
         ],
     }
@@ -169,14 +169,14 @@ def test_str_sentence_rejects_non_str_source(tmp_path):
         "incompatible_input_type",
         "REQ-0308",
     )
-    assert e.spec_paths == ["columns.X.derivation.str_title.source"]
+    assert e.spec_paths == ["columns.X.derivation.str_case.source"]
     assert e.context == {"source": "SITENUM", "expected": "str", "actual": "int"}
 
 
 def test_dict_yaml_missing_file(tmp_path):
-    # A dict_yaml path that reaches no entry fails resource_path_missing.
+    # A dict YAML path that reaches no entry fails resource_path_missing.
     spec = base_spec(
-        derivation={"mapping": {"source": "DM.VAL", "dict_yaml": "input/nope.yaml"}}
+        derivation={"mapping": {"source": "DM.VAL", "dict": "input/nope.yaml"}}
     )
     with pytest.raises(YamaaError) as ei:
         run(tmp_path, spec, {"dm.csv": DM})
@@ -185,7 +185,7 @@ def test_dict_yaml_missing_file(tmp_path):
 
 
 def test_dict_yaml_exactly_one_of(tmp_path):
-    # REQ-1110: dict and dict_yaml together are rejected.
+    # REQ-1110: dict_yaml is retired; using it fails as unknown_field.
     spec = base_spec(
         derivation={
             "mapping": {
@@ -200,7 +200,7 @@ def test_dict_yaml_exactly_one_of(tmp_path):
     e = ei.value
     assert (e.phase, e.condition, e.requirement) == (
         "validation",
-        "invalid_field_type",
+        "unknown_field",
         "REQ-1110",
     )
 

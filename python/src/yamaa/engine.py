@@ -3,7 +3,6 @@
 import copy
 import csv
 import io
-import json
 import os
 import re
 from functools import cmp_to_key
@@ -145,7 +144,7 @@ class Engine:
                     f"columns.{c['name']}",
                     "validation",
                     "duplicate_identifier",
-                    "R005-38",
+                    "REQ-0227",
                     {},
                 )
             self.colspecs[c["name"]] = c
@@ -456,7 +455,7 @@ class Engine:
                     "parents",
                     "validation",
                     "invalid_parent_path",
-                    "R017-15",
+                    "REQ-0628",
                     {"parent": p},
                 )
         seen = [os.path.normpath(self.spec_path)]
@@ -477,7 +476,7 @@ class Engine:
                 "output",
                 "validation",
                 "missing_entry_output",
-                "R017-44",
+                "REQ-0657",
                 {"inherited_columns": inherited},
             )
         for c in self.spec.get("columns") or []:
@@ -486,14 +485,14 @@ class Engine:
                     f"columns.{c.get('name')}.type",
                     "validation",
                     "invalid_clear",
-                    "R017-47",
+                    "REQ-0660",
                     {"field": "type"},
                 )
         _fail(
             "parents",
             "validation",
             "invalid_clear",
-            "R017-19",
+            "REQ-0632",
             {"detail": "spec composition is not implemented in the clean-room"},
         )
 
@@ -503,7 +502,7 @@ class Engine:
                 "parents",
                 "validation",
                 "inheritance_cycle",
-                "R017-42",
+                "REQ-0655",
                 {"reason": "parent_chain_returns_to_entry"},
             )
         seen.append(full)
@@ -514,7 +513,7 @@ class Engine:
                 "parents",
                 "validation",
                 "schema_version_mismatch",
-                "R017-9",
+                "REQ-0622",
                 {"parent": full},
             )
         sub = doc.get("parents")
@@ -526,6 +525,40 @@ class Engine:
                     os.path.normpath(os.path.join(os.path.dirname(full), p)), seen
                 )
         seen.pop()
+
+    def _infer_column_types(self, fields, records, declared):
+        """Infer column types from data values; declared types take precedence.
+
+        Returns a dict mapping field name -> inferred type ("int", "float", or
+        "str"). Used so validation can resolve qualified input references
+        (e.g. DM.SEX) when the spec does not declare input types.
+        """
+        inferred = {}
+        for f in fields:
+            if f in declared:
+                continue
+            vals = [r.get(f) for r in records if r.get(f) not in (None, "")]
+            if not vals:
+                inferred[f] = "str"
+                continue
+            try:
+                for v in vals:
+                    int(str(v))
+                inferred[f] = "int"
+                continue
+            except (ValueError, TypeError):
+                pass
+            try:
+                for v in vals:
+                    float(str(v))
+                inferred[f] = "float"
+                continue
+            except (ValueError, TypeError):
+                pass
+            inferred[f] = "str"
+        merged = dict(inferred)
+        merged.update(declared)
+        return merged
 
     def _load_input(self, name, decl):
         if isinstance(decl, str):
@@ -561,10 +594,11 @@ class Engine:
                     f"input.{name}.types.{f}",
                     "validation",
                     "unknown_field",
-                    "R014-19",
+                    "REQ-0532",
                     {"dataset": name, "field": f},
                 )
-        return Table(name, full, types, fields, records)
+        all_types = self._infer_column_types(fields, records, types)
+        return Table(name, full, all_types, fields, records)
 
     def run(self):
         self.rows = []
@@ -585,7 +619,7 @@ class Engine:
             return self.spec["base"]
         if len(self.inputs) == 1:
             return next(iter(self.inputs))
-        _fail("base", "validation", "missing_required_field", "R001-33", {})
+        _fail("base", "validation", "missing_required_field", "REQ-0064", {})
 
     def _build_rows(self):
         if self.templates:
@@ -602,7 +636,7 @@ class Engine:
         ds = t.get("dataset") or self._default_dataset()
         if ds not in self.inputs:
             _fail(
-                f"rows.{t['id']}.dataset", "validation", "unknown_field", "R002-27", {}
+                f"rows.{t['id']}.dataset", "validation", "unknown_field", "REQ-0103", {}
             )
         table = self.inputs[ds]
         group_by = t.get("group_by")
@@ -628,12 +662,12 @@ class Engine:
             if len(parts) == 2 and parts[0] == ds:
                 if parts[1] not in record:
                     _fail(
-                        where, "validation", "unknown_field", "R002-27", {"name": name}
+                        where, "validation", "unknown_field", "REQ-0103", {"name": name}
                     )
                 return record[parts[1]]
             if len(parts) == 1 and parts[0] in record:
                 return record[parts[0]]
-            _fail(where, "validation", "unknown_field", "R004-32", {"name": name})
+            _fail(where, "validation", "unknown_field", "REQ-0189", {"name": name})
 
         return _pred.evaluate(node, resolve, where)
 
@@ -717,7 +751,7 @@ class Engine:
                     f"rows.{t['id']}.group_by",
                     "validation",
                     "unknown_field",
-                    "R001-35",
+                    "REQ-0066",
                     {"group_by": g},
                 )
         groups = []  # (key_tuple, key_dict, records)
@@ -834,7 +868,7 @@ class Engine:
                     f"columns.{k}",
                     "validation",
                     "missing_required_field",
-                    "R001-12",
+                    "REQ-0042",
                     {"key": k},
                 )
             keyderivs[k] = d
@@ -920,29 +954,29 @@ class Engine:
     def _convert(self, v, cs, where, deriv=None):
         target = cs["type"]
         node = deriv if deriv is not None else cs.get("derivation")
-        strict = isinstance(node, dict) and node.get("strict", False) is True
-        has_missing = isinstance(node, dict) and "missing" in node
         try:
             return _convert_value(v, target)
-        except _ConvertFail as cf:
-            if strict or not has_missing:
-                raise YamaaError(
-                    phase="convert",
-                    condition="conversion_failed",
-                    requirement=cf.requirement,
-                    spec_paths=[where],
-                    context={"column": cs["name"], "type": target},
-                )
-            try:
-                return _convert_value(node["missing"], target)
-            except _ConvertFail as mf:
-                raise YamaaError(
-                    phase="convert",
-                    condition="conversion_failed",
-                    requirement=mf.requirement,
-                    spec_paths=[where],
-                    context={"column": cs["name"], "type": target},
-                )
+        except _ConvertFail:
+            # REQ-0359: unconvertible supplies a literal replacement, converted
+            # to the column type. REQ-0363: no unconvertible -> fatal.
+            if isinstance(node, dict) and "unconvertible" in node:
+                try:
+                    return _convert_value(node["unconvertible"], target)
+                except _ConvertFail as uf:
+                    raise YamaaError(
+                        phase="convert",
+                        condition="conversion_failed",
+                        requirement=uf.requirement,
+                        spec_paths=[where],
+                        context={"column": cs["name"], "type": target},
+                    )
+            raise YamaaError(
+                phase="convert",
+                condition="conversion_failed",
+                requirement="REQ-0363",
+                spec_paths=[where],
+                context={"column": cs["name"], "type": target},
+            )
 
     def _verify(self):
         seen_ids = set()
@@ -1005,7 +1039,7 @@ class Engine:
                 where,
                 "validation",
                 "missing_verification_id",
-                "R009-21",
+                "REQ-0387",
                 {"verification": kind},
             )
         severity = payload.get("severity", "error")
@@ -1139,7 +1173,7 @@ class Engine:
                     "output",
                     "output",
                     "duplicate_key",
-                    "R005-51",
+                    "REQ-0240",
                     {"row": i, "keys": self.keys},
                 )
             seen.add(tup)
@@ -1213,7 +1247,7 @@ def _derive_var_names(node, out):
 
 
 def _norm_derivation(d, where):
-    """R006-25/R007-57: bare string -> {source: s}; {value:} handled wrapper."""
+    """REQ-0266/REQ-0319: bare string -> {source: s}; {value:} handled wrapper."""
     if isinstance(d, str):
         return {"source": d}
     if isinstance(d, dict) and len(d) == 1 and "value" in d:
@@ -1223,7 +1257,7 @@ def _norm_derivation(d, where):
     if (
         isinstance(d, dict)
         and "value" in d
-        and set(d) <= {"value", "missing", "strict"}
+        and set(d) <= {"value", "missing", "strict", "unconvertible"}
     ):
         return d
     _fail(where, "validation", "invalid_field_type", "R007", {"derivation": d})
@@ -1289,50 +1323,12 @@ class _BaseCtx:
                 return record.get(parts[1])
             if len(parts) == 1:
                 return record.get(name)
-            _fail(self.where, "validation", "unknown_field", "R004-32", {"name": name})
+            _fail(self.where, "validation", "unknown_field", "REQ-0189", {"name": name})
 
         return _pred.evaluate(node, resolve, self.where)
 
     def order_records(self, recs, order_by):
         return _order_records(recs, order_by, self.where)
-
-    def inline_lookup(self, payload):
-        sig = json.dumps(
-            {
-                f: payload.get(f)
-                for f in (
-                    "key",
-                    "key_base",
-                    "between",
-                    "filter",
-                    "order_by",
-                    "keep",
-                    "strict",
-                )
-            },
-            sort_keys=True,
-            default=str,
-        )
-        decl = {
-            "id": f"<inline:{payload['dataset']}:{payload['value']}:{sig}>",
-            "dataset": payload["dataset"],
-            "key": payload.get("key"),
-            "key_base": payload.get("key_base"),
-            "between": payload.get("between"),
-            "filter": payload.get("filter"),
-            "order_by": payload.get("order_by"),
-            "keep": payload.get("keep"),
-            "columns": None,
-            "missing": payload.get("missing"),
-            "strict": payload.get("strict", False),
-        }
-        rec = self._match_lookup(decl, self._row_index())
-        if rec is None:
-            return decl["missing"]
-        col = payload["value"]
-        if col not in rec:
-            _fail(self.where, "validation", "unknown_field", "R003-15", {"column": col})
-        return rec[col]
 
     def _row_index(self):
         raise NotImplementedError
@@ -1392,7 +1388,7 @@ class _BaseCtx:
                         self.where,
                         "validation",
                         "unknown_field",
-                        "R003-22",
+                        "REQ-0132",
                         {"name": name},
                     )
 
@@ -1459,9 +1455,16 @@ class _BaseCtx:
             return record.get(parts[1])
         if len(parts) == 1:
             return record.get(name)
-        _fail(self.where, "validation", "unknown_field", "R003-22", {"name": name})
+        _fail(self.where, "validation", "unknown_field", "REQ-0132", {"name": name})
 
     def _lookup_keys(self, decl):
+        """Return (donor_fields, driver_exprs) for a lookup key.
+
+        REQ-0115: key is a list of donor fields matched by same-named
+        current-row values, or a mapping of donor field -> driver match
+        expression. key_base is retired; the mapping form carries the
+        driver operands in its values.
+        """
         if decl["dataset"] == "SELF":
             fields = set(getattr(self.e, "donor_fields", None) or set())
             ds_label = "SELF"
@@ -1477,35 +1480,38 @@ class _BaseCtx:
                     self.where,
                     "validation",
                     "no_applicable_keys",
-                    "R003-43",
+                    "REQ-0153",
                     {"dataset": ds_label},
                 )
         elif isinstance(key, str):
             key = [key]
-        key_base = decl.get("key_base")
-        if key_base is None:
-            key_base = list(key)
-        elif isinstance(key_base, str):
-            key_base = [key_base]
-        if len(key) != len(key_base) or not key:
-            _fail(self.where, "validation", "source_key_length_mismatch", "R003-5", {})
-        for k in key:
+        if isinstance(key, dict):
+            key_fields = list(key.keys())
+            key_exprs = list(key.values())
+        else:
+            key_fields = list(key)
+            key_exprs = list(key)
+        if not key_fields:
+            _fail(
+                self.where, "validation", "source_key_length_mismatch", "REQ-0115", {}
+            )
+        for k in key_fields:
             if k not in fields:
-                _fail(self.where, "validation", "unknown_field", "R003-6", {"key": k})
-        return key, key_base
+                _fail(self.where, "validation", "unknown_field", "REQ-0116", {"key": k})
+        return key_fields, key_exprs
 
     def _match_lookup(self, decl, i):
         cache_key = (decl["id"], i)
         if cache_key in self.e._lookups:
             return self.e._lookups[cache_key]
         recs = self._eligible(decl)
-        key, key_base = self._lookup_keys(decl)
-        match_vals = [self._match_value(v, i) for v in key_base]
+        key_fields, key_exprs = self._lookup_keys(decl)
+        match_vals = [self._match_value(v, i) for v in key_exprs]
         cands = []
         if not any(is_missing(v) for v in match_vals):
             for r in recs:
                 ok = True
-                for k, mv in zip(key, match_vals):
+                for k, mv in zip(key_fields, match_vals):
                     rv = r.get(k)
                     if is_missing(rv) or not comparable(mv, rv) or compare(mv, rv) != 0:
                         ok = False
@@ -1554,24 +1560,25 @@ class _BaseCtx:
                         self.where,
                         "join",
                         "multiple_matches",
-                        "R003-17",
+                        "REQ-0127",
                         {"lookup": decl["id"]},
                     )
                 cands = _order_records(cands, ob, self.where)
                 cands = [cands[0] if keep == "first" else cands[-1]]
         if not cands:
-            if decl.get("strict"):
-                _fail(
-                    self.where,
-                    "join",
-                    "unmatched_key",
-                    "R003-14",
-                    {"lookup": decl["id"], "key": key},
-                )
-            self.e._lookups[cache_key] = None
-            return None
+            # REQ-0124: no_match answers the read; without it, fail.
+            if "no_match" in decl:
+                self.e._lookups[cache_key] = None
+                return None
+            _fail(
+                self.where,
+                "join",
+                "unmatched_key",
+                "REQ-0124",
+                {"lookup": decl["id"], "key": key_fields},
+            )
         if decl.get("strict") and decl.get("missing") is not None:
-            _fail(self.where, "validation", "conflicting_absent_policy", "R003-13", {})
+            _fail(self.where, "validation", "conflicting_absent_policy", "REQ-0123", {})
         self.e._lookups[cache_key] = cands[0]
         return cands[0]
 
@@ -1604,10 +1611,10 @@ class _BaseCtx:
             if (between.get("lower") and is_missing(lo)) or (
                 between.get("upper") and is_missing(hi)
             ):
-                continue  # R003-18: missing bound -> ineligible
+                continue  # REQ-0128: missing bound -> ineligible
             if not comparable(val, lo or hi or val):
                 _fail(
-                    self.where, "validation", "incomparable_range_types", "R003-11", {}
+                    self.where, "validation", "incomparable_range_types", "REQ-0121", {}
                 )
             if between.get("lower") and compare(lo, val) > 0:
                 continue
@@ -1620,12 +1627,17 @@ class _BaseCtx:
         decl = self.e.lookups_decl[lid]
         rec = self._match_lookup(decl, self._row_index())
         if rec is None:
-            return decl.get("missing")
+            # REQ-0124: _match_lookup returns None only when no_match is declared.
+            return decl["no_match"]
         cols = decl.get("columns")
         if cols is not None and col not in cols:
-            _fail(self.where, "validation", "unknown_field", "R003-15", {"column": col})
+            _fail(
+                self.where, "validation", "unknown_field", "REQ-0125", {"column": col}
+            )
         if col not in rec:
-            _fail(self.where, "validation", "unknown_field", "R003-15", {"column": col})
+            _fail(
+                self.where, "validation", "unknown_field", "REQ-0125", {"column": col}
+            )
         return rec[col]
 
     def window_value(self, kind, payload):
@@ -1738,7 +1750,7 @@ class _BaseCtx:
                         self.where,
                         "derivation",
                         "incompatible_input_type",
-                        "R016-38",
+                        "REQ-0004",
                         {},
                     )
                 if compare(d, r) <= 0:
@@ -1772,7 +1784,7 @@ class _BaseCtx:
                 self.where,
                 "validation",
                 "prohibited_construct",
-                "R013-39",
+                "REQ-0504",
                 {"expr": payload["expr"]},
             )
         if stars and not qualified:
@@ -1781,7 +1793,7 @@ class _BaseCtx:
                     self.where,
                     "validation",
                     "prohibited_construct",
-                    "R013-39",
+                    "REQ-0504",
                     {"expr": payload["expr"]},
                 )
             try:
@@ -1840,15 +1852,16 @@ class _BaseCtx:
                 )
         ds = next(iter(rel_quals))
         key = payload.get("key") or list(e.keys)
-        key_base = payload.get("key_base") or list(key)
         if isinstance(key, str):
             key = [key]
-        if isinstance(key_base, str):
-            key_base = [key_base]
-        if len(key) != len(key_base):
-            _fail(self.where, "validation", "source_key_length_mismatch", "R003-5", {})
+        if isinstance(key, dict):
+            key_fields = list(key.keys())
+            key_exprs = list(key.values())
+        else:
+            key_fields = list(key)
+            key_exprs = list(key)
         i = self._row_index()
-        base_vals = [self._match_value(kb, i) for kb in key_base]
+        base_vals = [self._match_value(ke, i) for ke in key_exprs]
         matched = []
         if not any(is_missing(v) for v in base_vals):
             table = e.inputs[ds]
@@ -1857,7 +1870,7 @@ class _BaseCtx:
                 for r in table.records
                 if all(
                     _hashable(r.get(kf)) == _hashable(bv)
-                    for kf, bv in zip(key, base_vals)
+                    for kf, bv in zip(key_fields, base_vals)
                 )
             ]
         if payload.get("filter"):
@@ -1904,12 +1917,14 @@ class _BaseCtx:
                 self.where,
                 "validation",
                 "prohibited_construct",
-                "R013-39",
+                "REQ-0504",
                 {"expr": payload["expr"]},
             )
         table = e.inputs.get(ds)
         if table is None:
-            _fail(self.where, "validation", "unknown_field", "R002-27", {"dataset": ds})
+            _fail(
+                self.where, "validation", "unknown_field", "REQ-0103", {"dataset": ds}
+            )
         recs = table.records
         if payload.get("filter"):
             node_f, _ = _pred.parse(payload["filter"], self.where)
@@ -1935,7 +1950,7 @@ class _BaseCtx:
                         self.where,
                         "validation",
                         "prohibited_construct",
-                        "R013-42",
+                        "REQ-0507",
                         {"group_by": g},
                     )
             parts = {}
@@ -1958,10 +1973,13 @@ class _BaseCtx:
         if key is not None:
             if isinstance(key, str):
                 key = [key]
-            kb = payload.get("key_base") or list(key)
-            if isinstance(kb, str):
-                kb = [kb]
-            mvals = [self._match_value(v, i) for v in kb]
+            if isinstance(key, dict):
+                key_fields = list(key.keys())
+                key_exprs = list(key.values())
+            else:
+                key_fields = list(key)
+                key_exprs = list(key)
+            mvals = [self._match_value(v, i) for v in key_exprs]
             if any(is_missing(v) for v in mvals):
                 return None
             matched = [
@@ -1971,7 +1989,7 @@ class _BaseCtx:
                     not is_missing(r.get(k))
                     and comparable(mv, r.get(k))
                     and compare(mv, r.get(k)) == 0
-                    for k, mv in zip(key, mvals)
+                    for k, mv in zip(key_fields, mvals)
                 )
             ]
             if payload.get("between"):
@@ -2030,7 +2048,7 @@ class _BaseCtx:
                 self.where,
                 "validation",
                 "prohibited_construct",
-                "R013-42",
+                "REQ-0507",
                 {"expr": payload["expr"]},
             )
         if payload.get("filter"):
@@ -2062,7 +2080,7 @@ class _ColCtx(_BaseCtx):
     def __init__(self, engine, i, where):
         super().__init__(engine, where)
         self.i = i
-        self._col_phase = True  # R001-44 applies to column derivations
+        self._col_phase = True  # REQ-0075 applies to column derivations
 
     def _row_index(self):
         return self.i
@@ -2095,7 +2113,7 @@ class _ColCtx(_BaseCtx):
                     self.where,
                     "derivation",
                     "multiple_values_per_key",
-                    "R001-44",
+                    "REQ-0075",
                     {
                         "identifier": name,
                         "value_count": len(distinct),
@@ -2117,7 +2135,7 @@ class _ColCtx(_BaseCtx):
                     "REQ-0189",
                     {"identifier": name, "suggestion": f"{origin}.{name}"},
                 )
-            _fail(self.where, "validation", "unknown_field", "R001-39", {"name": name})
+            _fail(self.where, "validation", "unknown_field", "REQ-0070", {"name": name})
         return row[name]
 
     def source_records(self, var):
@@ -2131,12 +2149,12 @@ class _ColCtx(_BaseCtx):
         table = e.inputs.get(ds)
         if table is None:
             _fail(
-                self.where, "validation", "unknown_field", "R002-27", {"variable": var}
+                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
             )
         field = parts[-1]
         if field not in table.fields:
             _fail(
-                self.where, "validation", "unknown_field", "R002-27", {"variable": var}
+                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
             )
         origin = e._origins[i]
         if ds == origin:
@@ -2148,7 +2166,7 @@ class _ColCtx(_BaseCtx):
                 self.where,
                 "validation",
                 "no_applicable_keys",
-                "R003-42",
+                "REQ-0152",
                 {"variable": var},
             )
         row = e.rows[i]
@@ -2179,7 +2197,7 @@ class _ColCtx(_BaseCtx):
                 self.where,
                 "validation",
                 "prohibited_construct",
-                "R010-38",
+                "REQ-0442",
                 {"identifier": name},
             )
         return self.value(name)
@@ -2201,21 +2219,21 @@ class _RowCtx(_BaseCtx):
         self.row = {}
 
     def _row_index(self):
-        _fail(self.where, "row_construction", "phase_boundary", "R003-16", {})
+        _fail(self.where, "row_construction", "phase_boundary", "REQ-0126", {})
 
     def _row_value(self, i, name):
-        _fail(self.where, "row_construction", "phase_boundary", "R003-16", {})
+        _fail(self.where, "row_construction", "phase_boundary", "REQ-0126", {})
 
     def value(self, name):
         if "." in name:
             parts = name.split(".")
             if parts[0] in self.e.lookups_decl:
                 decl = self.e.lookups_decl[parts[0]]
-                key, key_base = self._lookup_keys(decl)
-                match_vals = [self._row_match_value(v) for v in key_base]
-                rec = self._match_lookup_row(decl, key, match_vals)
+                key_fields, key_exprs = self._lookup_keys(decl)
+                match_vals = [self._row_match_value(v) for v in key_exprs]
+                rec = self._match_lookup_row(decl, key_fields, match_vals)
                 if rec is None:
-                    return decl.get("missing")
+                    return decl["no_match"]
                 col = parts[1]
                 cols = decl.get("columns")
                 if (cols is not None and col not in cols) or col not in rec:
@@ -2223,7 +2241,7 @@ class _RowCtx(_BaseCtx):
                         self.where,
                         "validation",
                         "unknown_field",
-                        "R003-15",
+                        "REQ-0125",
                         {"column": col},
                     )
                 return rec.get(col)
@@ -2236,7 +2254,7 @@ class _RowCtx(_BaseCtx):
                 self.where,
                 "row_construction",
                 "multiple_matches",
-                "R003-17",
+                "REQ-0127",
                 {"variable": name},
             )
         if name in self.row:
@@ -2252,25 +2270,25 @@ class _RowCtx(_BaseCtx):
                 "REQ-0189",
                 {"identifier": name, "suggestion": f"{self.ds}.{name}"},
             )
-        _fail(self.where, "validation", "unknown_field", "R001-39", {"name": name})
+        _fail(self.where, "validation", "unknown_field", "REQ-0070", {"name": name})
 
     def source_records(self, var):
         parts = var.split(".")
         ds = parts[0]
         if ds in self.e.lookups_decl:
             decl = self.e.lookups_decl[ds]
-            key, key_base = self._lookup_keys(decl)
-            match_vals = [self._row_match_value(v) for v in key_base]
-            rec = self._match_lookup_row(decl, key, match_vals)
+            key_fields, key_exprs = self._lookup_keys(decl)
+            match_vals = [self._row_match_value(v) for v in key_exprs]
+            rec = self._match_lookup_row(decl, key_fields, match_vals)
             return [rec] if rec is not None else []
         table = self.e.inputs.get(ds)
         if table is None:
             _fail(
-                self.where, "validation", "unknown_field", "R002-27", {"variable": var}
+                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
             )
         if len(parts) >= 3 and parts[1] not in table.fields:
             _fail(
-                self.where, "validation", "unknown_field", "R002-27", {"variable": var}
+                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
             )
         if ds == self.ds:
             if self.record is not None:
@@ -2281,7 +2299,7 @@ class _RowCtx(_BaseCtx):
                 self.where,
                 "row_construction",
                 "ungrouped_driver_field",
-                "R001-36",
+                "REQ-0067",
                 {"variable": var},
             )
         applicable = [k for k in self.e.keys if k in table.fields]
@@ -2290,7 +2308,7 @@ class _RowCtx(_BaseCtx):
                 self.where,
                 "validation",
                 "no_applicable_keys",
-                "R003-42",
+                "REQ-0152",
                 {"variable": var},
             )
         anchor = self.record if self.record is not None else self.groupkeys
@@ -2305,7 +2323,7 @@ class _RowCtx(_BaseCtx):
                         self.where,
                         "row_construction",
                         "ungrouped_driver_field",
-                        "R001-36",
+                        "REQ-0067",
                         {"key": k},
                     )
                 if (
@@ -2328,55 +2346,6 @@ class _RowCtx(_BaseCtx):
     def order_records(self, recs, order_by):
         return _order_records(recs, order_by, self.where)
 
-    def inline_lookup(self, payload):
-        ds = payload.get("dataset")
-        if ds not in self.e.inputs:
-            _fail(
-                self.where,
-                "row_construction",
-                "phase_boundary",
-                "R003-16",
-                {"lookup": ds},
-            )
-        sig = json.dumps(
-            {
-                f: payload.get(f)
-                for f in (
-                    "key",
-                    "key_base",
-                    "between",
-                    "filter",
-                    "order_by",
-                    "keep",
-                    "strict",
-                )
-            },
-            sort_keys=True,
-            default=str,
-        )
-        decl = {
-            "id": f"<inline:{ds}:{payload.get('value')}:{sig}>",
-            "dataset": ds,
-            "key": payload.get("key"),
-            "key_base": payload.get("key_base"),
-            "between": payload.get("between"),
-            "filter": payload.get("filter"),
-            "order_by": payload.get("order_by"),
-            "keep": payload.get("keep"),
-            "columns": None,
-            "missing": payload.get("missing"),
-            "strict": payload.get("strict", False),
-        }
-        key, key_base = self._lookup_keys(decl)
-        match_vals = [self._row_match_value(v) for v in key_base]
-        rec = self._match_lookup_row(decl, key, match_vals)
-        if rec is None:
-            return decl["missing"]
-        col = payload.get("value")
-        if col not in rec:
-            _fail(self.where, "validation", "unknown_field", "R003-15", {"column": col})
-        return rec[col]
-
     def _row_match_value(self, var):
         """REQ-0126 match-value resolution during row construction."""
         if isinstance(var, dict):
@@ -2390,7 +2359,7 @@ class _RowCtx(_BaseCtx):
                             self.where,
                             "validation",
                             "unknown_field",
-                            "R002-27",
+                            "REQ-0103",
                             {"variable": var},
                         )
                     return self.record.get(field)
@@ -2400,7 +2369,7 @@ class _RowCtx(_BaseCtx):
                 self.where,
                 "row_construction",
                 "phase_boundary",
-                "R003-16",
+                "REQ-0126",
                 {"variable": var},
             )
         if var in self.row:
@@ -2412,12 +2381,12 @@ class _RowCtx(_BaseCtx):
                 self.where,
                 "row_construction",
                 "phase_boundary",
-                "R003-16",
+                "REQ-0126",
                 {"variable": var},
             )
         if self.record is not None and var in self.record:
             return self.record[var]
-        _fail(self.where, "validation", "unknown_field", "R001-39", {"name": var})
+        _fail(self.where, "validation", "unknown_field", "REQ-0070", {"name": var})
 
     def _match_operand(self, name):
         return self._row_match_value(name)
@@ -2495,24 +2464,25 @@ class _RowCtx(_BaseCtx):
                         self.where,
                         "join",
                         "multiple_matches",
-                        "R003-17",
+                        "REQ-0127",
                         {"lookup": decl["id"]},
                     )
                 cands = _order_records(cands, ob, self.where)
                 cands = [cands[0] if keep == "first" else cands[-1]]
         if not cands:
-            if decl.get("strict"):
-                _fail(
-                    self.where,
-                    "join",
-                    "unmatched_key",
-                    "R003-14",
-                    {"lookup": decl["id"], "key": key},
-                )
-            self.e._lookups[ck] = None
-            return None
+            # REQ-0124: no_match answers the read; without it, fail.
+            if "no_match" in decl:
+                self.e._lookups[ck] = None
+                return None
+            _fail(
+                self.where,
+                "join",
+                "unmatched_key",
+                "REQ-0124",
+                {"lookup": decl["id"], "key": key},
+            )
         if decl.get("strict") and decl.get("missing") is not None:
-            _fail(self.where, "validation", "conflicting_absent_policy", "R003-13", {})
+            _fail(self.where, "validation", "conflicting_absent_policy", "REQ-0123", {})
         self.e._lookups[ck] = cands[0]
         return cands[0]
 
@@ -2524,7 +2494,9 @@ class _RowCtx(_BaseCtx):
 
     def aggregate_value(self, payload):
         if self.group is None:
-            _fail(self.where, "row_construction", "prohibited_construct", "R013-43", {})
+            _fail(
+                self.where, "row_construction", "prohibited_construct", "REQ-0508", {}
+            )
         if isinstance(payload, str):
             payload = {"expr": payload}
         node, names = _agg.parse(payload["expr"], self.where)
@@ -2535,7 +2507,7 @@ class _RowCtx(_BaseCtx):
                     self.where,
                     "validation",
                     "prohibited_construct",
-                    "R013-43",
+                    "REQ-0508",
                     {"identifier": n},
                 )
         if payload.get("filter"):
@@ -2598,14 +2570,14 @@ class _RowCtx(_BaseCtx):
                     self.where,
                     "row_construction",
                     "ungrouped_driver_field",
-                    "R001-36",
+                    "REQ-0067",
                     {"identifier": name},
                 )
             _fail(
                 self.where,
                 "validation",
                 "prohibited_construct",
-                "R010-38",
+                "REQ-0442",
                 {"identifier": name},
             )
         return self.value(name)
@@ -2634,19 +2606,21 @@ class _RowWinCtx(_BaseCtx):
                     self.where,
                     "row_construction",
                     "ungrouped_driver_field",
-                    "R001-36",
+                    "REQ-0067",
                     {"identifier": var},
                 )
             _fail(
                 self.where,
                 "validation",
                 "unknown_field",
-                "R001-39",
+                "REQ-0070",
                 {"identifier": var},
             )
         if var in self.trows[i]:
             return self.trows[i][var]
-        _fail(self.where, "validation", "unknown_field", "R001-39", {"identifier": var})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-0070", {"identifier": var}
+        )
 
 
 class _KeyCtx(_BaseCtx):
@@ -2658,23 +2632,23 @@ class _KeyCtx(_BaseCtx):
         self.record = record
 
     def _row_index(self):
-        _fail(self.where, "row_construction", "phase_boundary", "R001-38", {})
+        _fail(self.where, "row_construction", "phase_boundary", "REQ-0069", {})
 
     def _row_value(self, i, name):
-        _fail(self.where, "row_construction", "phase_boundary", "R001-38", {})
+        _fail(self.where, "row_construction", "phase_boundary", "REQ-0069", {})
 
     def value(self, name):
         parts = name.split(".")
         if len(parts) == 2 and parts[0] == self.base:
             return self.record.get(parts[1])
-        _fail(self.where, "validation", "forward_reference", "R001-43", {"name": name})
+        _fail(self.where, "validation", "forward_reference", "REQ-0074", {"name": name})
 
     def source_records(self, var):
         parts = var.split(".")
         if len(parts) == 2 and parts[0] == self.base:
             return [self.record]
         _fail(
-            self.where, "validation", "forward_reference", "R001-43", {"variable": var}
+            self.where, "validation", "forward_reference", "REQ-0074", {"variable": var}
         )
 
     def record_predicate(self, text, record):
@@ -2689,18 +2663,18 @@ class _KeyCtx(_BaseCtx):
             self.where,
             "validation",
             "forward_reference",
-            "R001-43",
+            "REQ-0074",
             {"identifier": name},
         )
 
     def inline_lookup(self, payload):
-        _fail(self.where, "validation", "forward_reference", "R001-43", {})
+        _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
 
     def window_value(self, kind, payload):
-        _fail(self.where, "validation", "forward_reference", "R001-43", {})
+        _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
 
     def aggregate_value(self, payload):
-        _fail(self.where, "validation", "forward_reference", "R001-43", {})
+        _fail(self.where, "validation", "forward_reference", "REQ-0074", {})
 
 
 class _KeyWinCtx(_BaseCtx):
@@ -2724,7 +2698,7 @@ class _KeyWinCtx(_BaseCtx):
                 self.where,
                 "validation",
                 "forward_reference",
-                "R001-43",
+                "REQ-0074",
                 {"identifier": var},
             )
         if var in self.krows[i]:
@@ -2733,16 +2707,16 @@ class _KeyWinCtx(_BaseCtx):
             self.where,
             "validation",
             "forward_reference",
-            "R001-43",
+            "REQ-0074",
             {"identifier": var},
         )
 
     def value(self, name):
-        _fail(self.where, "validation", "forward_reference", "R001-43", {"name": name})
+        _fail(self.where, "validation", "forward_reference", "REQ-0074", {"name": name})
 
     def source_records(self, var):
         _fail(
-            self.where, "validation", "forward_reference", "R001-43", {"variable": var}
+            self.where, "validation", "forward_reference", "REQ-0074", {"variable": var}
         )
 
 
@@ -2768,7 +2742,7 @@ class _DeriveCtx:
                     self.where,
                     "validation",
                     "unknown_field",
-                    "R002-27",
+                    "REQ-0103",
                     {"variable": name},
                 )
             if f not in self.record:
@@ -2776,7 +2750,7 @@ class _DeriveCtx:
                     self.where,
                     "validation",
                     "unknown_field",
-                    "R002-27",
+                    "REQ-0103",
                     {"variable": name},
                 )
             return self.record[f]
@@ -2790,7 +2764,7 @@ class _DeriveCtx:
             if var in self.inter:
                 return [{var.split(".")[-1]: self.inter[var]}]
             _fail(
-                self.where, "validation", "unknown_field", "R002-27", {"variable": var}
+                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
             )
         return [self.record]
 
@@ -2804,7 +2778,7 @@ class _DeriveCtx:
                 return record.get(parts[1])
             if len(parts) == 1:
                 return record.get(name)
-            _fail(self.where, "validation", "unknown_field", "R004-32", {"name": name})
+            _fail(self.where, "validation", "unknown_field", "REQ-0189", {"name": name})
 
         return _pred.evaluate(node, resolve, self.where)
 
@@ -2846,7 +2820,7 @@ class _DonorWinCtx(_BaseCtx):
                     self.where,
                     "validation",
                     "unknown_field",
-                    "R002-27",
+                    "REQ-0103",
                     {"variable": var},
                 )
             return self.recs[i].get(f)
@@ -2879,7 +2853,7 @@ def _order_cmp(ta, tb, get_a, get_b, where):
                 where,
                 "derivation",
                 "incompatible_input_type",
-                "R007-38",
+                "REQ-0323",
                 {"term": term},
             )
         c = compare(va, vb)

@@ -38,7 +38,7 @@ class YDateTime(datetime.datetime):
 
 
 def normalize_number(v):
-    """R011-9: a non-finite float becomes missing."""
+    """REQ-0006: a non-finite float becomes missing."""
     if isinstance(v, float) and not math.isfinite(v):
         return None
     return v
@@ -53,7 +53,7 @@ def _is_num(v):
 
 
 def comparable(a, b):
-    """R011-35: int/float mutually comparable; every other type only with itself."""
+    """REQ-0005: int/float mutually comparable; every other type only with itself."""
     if is_missing(a) or is_missing(b):
         return True  # missing never reaches a comparison (UNKNOWN instead)
     if _is_num(a) and _is_num(b):
@@ -66,7 +66,7 @@ def comparable(a, b):
 
 
 def compare(a, b):
-    """Total order for mutually comparable non-missing values. R019-8 for str."""
+    """Total order for mutually comparable non-missing values. REQ-0026 for str."""
     if _is_num(a) and _is_num(b):
         fa, fb = float(a), float(b)
         return (fa > fb) - (fa < fb)
@@ -89,7 +89,7 @@ def parse_date(text):
 
 
 def parse_datetime(text):
-    """Strict datetime per R016-11/13: omitted ss names second 00."""
+    """Strict datetime per REQ-0549/13: omitted ss names second 00."""
     m = _DATETIME_RE.match(text)
     if not m:
         raise ValueError(f"not a datetime: {text!r}")
@@ -124,7 +124,7 @@ _NONFINITE_RE = re.compile(r"^[+-]?\.(?:inf|Inf|INF|nan|NaN|NAN)$")
 
 
 def parse_int_text(text):
-    """R011-21: R010 number with optional sign, no surrounding whitespace."""
+    """REQ-0015: R010 number with optional sign, no surrounding whitespace."""
     if _INT_RE.match(text):
         return int(text)
     raise ValueError(f"not an int: {text!r}")
@@ -139,7 +139,7 @@ def parse_float_text(text):
 
 
 def float_text(x):
-    """R011-26/27 + R020-19: shortest round-trip digits, positional, no exponent."""
+    """REQ-0018/27 + REQ-0733: shortest round-trip digits, positional, no exponent."""
     s = repr(float(x))
     if "e" not in s and "E" not in s:
         return s.removesuffix(".0")

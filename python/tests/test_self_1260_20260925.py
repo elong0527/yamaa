@@ -217,7 +217,7 @@ def test_self_filter_unknown_donor_field_rejected(tmp_path):
 
 
 def test_self_key_unknown_donor_field_rejected(tmp_path):
-    # R003-6: a SELF key must name a donor field.
+    # REQ-0116: a SELF key must name a donor field.
     spec = self_spec()
     spec["intermediates"][0]["key"] = ["USUBJID", "NOPE"]
     with pytest.raises(YamaaError) as ei:

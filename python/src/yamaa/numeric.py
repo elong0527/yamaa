@@ -43,7 +43,7 @@ def tokenize(text, where):
             raise YamaaError(
                 phase="validation",
                 condition="invalid_predicate",
-                requirement="R010-35",
+                requirement="REQ-0439",
                 spec_paths=[where],
                 context={"text": text},
             )
@@ -75,7 +75,7 @@ class Parser:
         raise YamaaError(
             phase="validation",
             condition="invalid_predicate",
-            requirement="R010-35",
+            requirement="REQ-0439",
             spec_paths=[self.where],
             context={"text": self.text, "detail": msg},
         )
@@ -83,11 +83,11 @@ class Parser:
     def parse(self):
         for kind, text in self.toks:
             if kind == "cmpop":
-                # R010-37: comparison operators are not numeric syntax.
+                # REQ-0441: comparison operators are not numeric syntax.
                 raise YamaaError(
                     phase="validation",
                     condition="prohibited_construct",
-                    requirement="R010-37",
+                    requirement="REQ-0441",
                     spec_paths=[self.where],
                     context={"expr": self.text, "operator": text},
                 )
@@ -144,7 +144,7 @@ class Parser:
             raise YamaaError(
                 phase="validation",
                 condition="prohibited_function",
-                requirement="R010-36",
+                requirement="REQ-0440",
                 spec_paths=[self.where],
                 context={"text": self.text, "function": name},
             )
@@ -163,7 +163,7 @@ class Parser:
             raise YamaaError(
                 phase="validation",
                 condition="prohibited_function",
-                requirement="R010-36",
+                requirement="REQ-0440",
                 spec_paths=[self.where],
                 context={"text": self.text, "function": name, "argc": len(args)},
             )
@@ -180,7 +180,7 @@ def _check_int(v, where, expr_text):
         raise YamaaError(
             phase="derivation",
             condition="integer_overflow",
-            requirement="R010-30",
+            requirement="REQ-0434",
             spec_paths=[where],
             context={"expr": expr_text},
         )
@@ -198,7 +198,7 @@ def _num(v, where, expr_text):
         raise YamaaError(
             phase="derivation",
             condition="incompatible_input_type",
-            requirement="R010-40",
+            requirement="REQ-0444",
             spec_paths=[where],
             context={"expr": expr_text},
         )
@@ -209,13 +209,13 @@ def _binop(op, a, b, where, expr_text):
     a = _num(a, where, expr_text)
     b = _num(b, where, expr_text)
     if a is None or b is None:
-        return None  # R010-22 NULL propagates
+        return None  # REQ-0427 NULL propagates
     if op == "/":
         if b == 0:
             raise YamaaError(
                 phase="derivation",
                 condition="division_by_zero",
-                requirement="R010-26",
+                requirement="REQ-0430",
                 spec_paths=[where],
                 context={"expr": expr_text},
             )
@@ -254,7 +254,7 @@ def _call(fname, args, where, expr_text):
             return None
         nums = [_num(v, where, expr_text) for v in present]
         best = max(nums) if fname == "GREATEST" else min(nums)
-        # R010-19: promoted type - int iff every argument int
+        # REQ-0424: promoted type - int iff every argument int
         if all(_is_int(v) for v in present):
             return best
         return normalize_number(float(best))
@@ -274,7 +274,7 @@ def _call(fname, args, where, expr_text):
             raise YamaaError(
                 phase="derivation",
                 condition="sqrt_of_negative",
-                requirement="R010-27",
+                requirement="REQ-0431",
                 spec_paths=[where],
                 context={"expr": expr_text},
             )
@@ -286,7 +286,7 @@ def _call(fname, args, where, expr_text):
             raise YamaaError(
                 phase="derivation",
                 condition="ln_of_nonpositive",
-                requirement="R010-28",
+                requirement="REQ-0432",
                 spec_paths=[where],
                 context={"expr": expr_text},
             )
@@ -299,7 +299,7 @@ def _call(fname, args, where, expr_text):
             raise YamaaError(
                 phase="derivation",
                 condition="division_by_zero",
-                requirement="R010-29",
+                requirement="REQ-0433",
                 spec_paths=[where],
                 context={"expr": expr_text},
             )
@@ -307,7 +307,7 @@ def _call(fname, args, where, expr_text):
             raise YamaaError(
                 phase="derivation",
                 condition="invalid_power",
-                requirement="R010-29",
+                requirement="REQ-0433",
                 spec_paths=[where],
                 context={"expr": expr_text},
             )
@@ -320,7 +320,7 @@ def _call(fname, args, where, expr_text):
             raise YamaaError(
                 phase="derivation",
                 condition="division_by_zero",
-                requirement="R010-26",
+                requirement="REQ-0430",
                 spec_paths=[where],
                 context={"expr": expr_text},
             )
