@@ -1,4 +1,4 @@
 import yamaa
 
-adlb = yamaa.yamaa_domain("spec_study.yaml").output
+adlb = yamaa.derive("spec_study.yaml")
 adlb
