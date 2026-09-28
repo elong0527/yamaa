@@ -5869,9 +5869,9 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
             # header this check cannot read is taken to carry the schema,
             # which ingestion verifies against the file itself.
             bound = (
-                odm_field_binding(header)[0]
+                bind_odm_fields(header).stored
                 if header is not None
-                else {field: field for field in ODM_SCHEMA_FIELDS}
+                else ODM_SCHEMA_FIELDS
             )
             catalog[dataset_id] = {field: 'str' for field in bound}
             continue
@@ -5888,69 +5888,50 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
     return catalog
 
 
-# REQ-1266: the vendor-neutral fields of an ODM input, in ODM order.
-ODM_SCHEMA_FIELDS = (
-    'StudyOID', 'MetaDataVersionOID', 'SubjectKey', 'StudyEventOID',
-    'StudyEventRepeatKey', 'FormOID', 'FormRepeatKey', 'ItemGroupOID',
-    'ItemGroupRepeatKey', 'ItemOID', 'Value',
-)
+# REQ-1265..REQ-1278's fixed ODM schema, its case-folding name binding, the
+# walk that finds an `odm` read, and the read's payload are the runtime's
+# own (`yamaa.odm.items`), so this file owns no second copy of the binding
+# rules. The import is lazy for the reason the predicate binding gives.
+ODM_SCHEMA_FIELDS = None
+bind_odm_fields = None
+iter_odm_payloads = None
+parse_odm_read = None
 
 
-def odm_fold(name):
-    """Fold A-Z to a-z and nothing else, as REQ-1267 compares names."""
-    return ''.join(
-        chr(ord(char) + 32) if 'A' <= char <= 'Z' else char for char in name
-    )
-
-
-def odm_field_binding(names):
-    """Return (bound, missing, ambiguous) for stored names under REQ-1267."""
-    canonical = {field.lower(): field for field in ODM_SCHEMA_FIELDS}
-    seen = {}
-    for name in names:
-        field = canonical.get(odm_fold(name)) if isinstance(name, str) else None
-        if field is not None:
-            seen.setdefault(field, []).append(name)
-    bound = {field: found[0] for field, found in seen.items() if len(found) == 1}
-    missing = [field for field in ODM_SCHEMA_FIELDS if field not in seen]
-    ambiguous = {field: found for field, found in seen.items() if len(found) > 1}
-    return bound, missing, ambiguous
-
-
-def iter_odm_reads(value, path, derive=False):
-    """Yield (path, payload, in_derive) for each `odm` expression in a tree."""
-    if isinstance(value, dict):
-        if len(value) == 1:
-            ((operation, payload),) = value.items()
-            if operation == 'odm':
-                yield f"{path}.odm", payload, derive
-                return
-            yield from iter_odm_reads(
-                payload, f"{path}.{operation}", derive or operation == 'aggregate'
+def _ensure_odm_binding():
+    """Import yamaa.odm.items on first use, or exit when unavailable."""
+    global ODM_SCHEMA_FIELDS, bind_odm_fields, iter_odm_payloads, parse_odm_read
+    if parse_odm_read is None:
+        try:
+            from yamaa.odm.items import (
+                ODM_SCHEMA_FIELDS as schema_fields,
+                bind_fields,
+                iter_odm_payloads as iter_payloads,
+                parse_odm_read as parse_read,
             )
-            return
-        for key, child in value.items():
-            yield from iter_odm_reads(child, f"{path}.{key}", derive)
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            yield from iter_odm_reads(child, f"{path}[{index}]", derive)
+        except ImportError as error:
+            raise SystemExit(
+                "validate_repository.py requires the yamaa package "
+                "(run: uv sync --project python --locked)"
+            ) from error
+        ODM_SCHEMA_FIELDS = schema_fields
+        bind_odm_fields = bind_fields
+        iter_odm_payloads = iter_payloads
+        parse_odm_read = parse_read
 
 
 def odm_read_sites(spec):
-    """Return (path, location, row_index, payload) for every `odm` read."""
+    """Return (path, location, row_index, read) for every `odm` read."""
+    _ensure_odm_binding()
     sites = []
 
     def add(derivation, path, location, row=None):
-        if (
-            isinstance(derivation, dict)
-            and 'value' in derivation
-            and set(derivation) <= {'value', 'unconvertible'}
-        ):
-            derivation, path = derivation['value'], f"{path}.value"
-        for read_path, payload, derive in iter_odm_reads(derivation, path):
-            sites.append(
-                (read_path, 'derive' if derive else location, row, payload)
-            )
+        for read_path, payload, derive in iter_odm_payloads(derivation, path):
+            read = parse_odm_read(payload)
+            if read is not None:
+                sites.append(
+                    (read_path, 'derive' if derive else location, row, read)
+                )
 
     for column in spec.get('columns') or []:
         if isinstance(column, dict) and 'derivation' in column:
@@ -5976,34 +5957,16 @@ def odm_read_sites(spec):
     return sites
 
 
-def odm_read_payload(payload):
-    """Return (dataset, item, filter) for an `odm` payload, or None."""
-    if isinstance(payload, str):
-        payload = {'item': payload}
-    if not isinstance(payload, dict):
-        return None
-    item = payload.get('item')
-    if not isinstance(item, str) or '.' not in item:
-        return None
-    selector = payload.get('filter')
-    return (
-        item.split('.', 1)[0],
-        item,
-        selector if isinstance(selector, str) else None,
-    )
-
-
 def odm_inputs(spec):
     """Return the declared inputs an `odm` read names (REQ-1266)."""
     declared = spec.get('input')
     if not isinstance(declared, dict):
         return frozenset()
-    names = set()
-    for _, _, _, payload in odm_read_sites(spec):
-        parsed = odm_read_payload(payload)
-        if parsed is not None and parsed[0] in declared:
-            names.add(parsed[0])
-    return frozenset(names)
+    return frozenset(
+        read.dataset
+        for _, _, _, read in odm_read_sites(spec)
+        if read.dataset in declared
+    )
 
 
 def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
@@ -6019,11 +5982,8 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
         dataset = row.get('dataset')
         return dataset if isinstance(dataset, str) else only
 
-    for path, location, row_index, payload in odm_read_sites(spec):
-        parsed = odm_read_payload(payload)
-        if parsed is None:
-            continue
-        dataset, item, selector = parsed
+    for path, location, row_index, read in odm_read_sites(spec):
+        dataset, item, selector = read.dataset, read.item, read.filter
         if dataset not in datasets:
             errors.append(validation_diagnostic(
                 f"{spec_label}.{path}.item",
@@ -6096,7 +6056,8 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
                 header = next(csv.reader(handle, strict=True), [])
         except (OSError, UnicodeError, csv.Error):
             continue
-        _, missing, ambiguous = odm_field_binding(header)
+        binding = bind_odm_fields(header)
+        missing = list(binding.missing)
         if missing:
             errors.append(validation_diagnostic(
                 f"{spec_label}.input.{dataset}.path",
@@ -6104,7 +6065,8 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
                 f"the ODM input lacks {', '.join(missing)}",
                 context={'dataset': dataset, 'fields': missing},
             ))
-        for field, stored in ambiguous.items():
+        for field, stored in binding.ambiguous.items():
+            stored = list(stored)
             errors.append(validation_diagnostic(
                 f"{spec_label}.input.{dataset}.path",
                 'odm_schema_field_ambiguous',

@@ -40,7 +40,7 @@ class _FrozenModel(BaseModel):
 
 
 class MultipleMatchSelection(_FrozenModel):
-    """The normalized R008 policy for choosing a duplicate contextual item."""
+    """The normalized R008 policy for keeping one of several matching records."""
 
     order_by: list[OrderTerm] = Field(min_length=1)
     keep: Literal["first", "last"]

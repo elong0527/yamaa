@@ -169,13 +169,15 @@ class OdmReadSite:
     row_index: int | None = None
 
 
-def _expressions(
-    node: object, path: str, derive: bool
+def iter_odm_payloads(
+    node: object, path: str, derive: bool = False
 ) -> Iterator[tuple[str, object, bool]]:
     """Yield every `odm` payload under a derivation, with its path.
 
     `derive` marks a payload inside an aggregate's derive step, which
-    evaluates per record of another relation and so has no row scope.
+    evaluates per record of another relation and so has no row scope. The
+    walk takes a loaded expression or the authored mapping alike, so the
+    repository validator finds the reads the planner does, at its paths.
     """
     if isinstance(node, Expression):
         node = node.root
@@ -183,7 +185,7 @@ def _expressions(
         # A nested derivation, such as a derive binding's, is stored in the
         # REQ-0358 wrapper, which the path names only where it was written.
         suffix = ".value" if "unconvertible" in node else ""
-        yield from _expressions(node["value"], f"{path}{suffix}", derive)
+        yield from iter_odm_payloads(node["value"], f"{path}{suffix}", derive)
         return
     if isinstance(node, Mapping):
         if len(node) == 1:
@@ -192,13 +194,13 @@ def _expressions(
                 yield f"{path}.odm", payload, derive
                 return
             inner = derive or operation == "aggregate"
-            yield from _expressions(payload, f"{path}.{operation}", inner)
+            yield from iter_odm_payloads(payload, f"{path}.{operation}", inner)
             return
         for key, value in node.items():
-            yield from _expressions(value, f"{path}.{key}", derive)
+            yield from iter_odm_payloads(value, f"{path}.{key}", derive)
     elif isinstance(node, Sequence) and not isinstance(node, str):
         for index, value in enumerate(node):
-            yield from _expressions(value, f"{path}[{index}]", derive)
+            yield from iter_odm_payloads(value, f"{path}[{index}]", derive)
 
 
 def _derivation_root(derivation: object, path: str) -> tuple[object, str]:
@@ -220,7 +222,7 @@ def odm_read_sites(specification: Specification) -> tuple[OdmReadSite, ...]:
         derivation: object, path: str, location: Location, row: int | None = None
     ) -> None:
         node, path = _derivation_root(derivation, path)
-        for site_path, payload, derive in _expressions(node, path, False):
+        for site_path, payload, derive in iter_odm_payloads(node, path, False):
             read = parse_odm_read(payload)
             if read is not None:
                 sites.append(
@@ -268,6 +270,7 @@ __all__ = [
     "OdmReadSite",
     "bind_fields",
     "fold_name",
+    "iter_odm_payloads",
     "odm_inputs",
     "odm_read_sites",
     "parse_odm_read",
