@@ -15,6 +15,7 @@ from yamaa.specification.schema import (
     class_fields,
     load_schema_bundle,
     normalize_specification,
+    validate_specification,
 )
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
@@ -73,6 +74,21 @@ def test_loads_and_normalizes_basic_specification() -> None:
     assert columns["AGE"].derivation.value.root == {
         "source": {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.AGE'"}
     }
+
+
+def test_named_unique_checks_remain_valid_in_both_scopes() -> None:
+    document = read_yaml_document(
+        EXAMPLES / "schema-lookup-intermediate-unique/spec.yaml"
+    )
+    assert isinstance(document, dict)
+    document["verifications"] = [
+        {"unique": {"id": "output-key", "columns": ["STUDYID", "USUBJID"]}}
+    ]
+    document["intermediates"][0]["verifications"] = [
+        {"unique": {"id": "donor-key", "columns": ["STUDYID", "USUBJID"]}}
+    ]
+
+    assert validate_specification(document, load_schema_bundle(SCHEMA_ROOT)) == []
 
 
 def test_recursive_alias_tries_a_later_union_member(tmp_path: Path) -> None:

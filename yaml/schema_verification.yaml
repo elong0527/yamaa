@@ -30,9 +30,7 @@ dataset_verification:
 
 dataset_verifications:
     unique:
-        - id: {type: verification_id, required: false}
-        - columns: {type: "list[variable]", required: true}
-        - severity: {type: verification_severity, required: false, default: error}
+        type: ["list[variable]", dataset_unique_arguments]
     all_or_none:
         - id: {type: verification_id, required: false}
         - columns: {type: "list[variable]", required: true}
@@ -65,8 +63,16 @@ intermediate_verification:
 
 intermediate_verifications:
     unique:
-        - id: {type: verification_id, required: false}
-        - columns: {type: "list[variable]", required: true}
+        type: ["list[variable]", intermediate_unique_arguments]
+
+dataset_unique_arguments:
+    - id: {type: verification_id, required: false}
+    - columns: {type: "list[variable]", required: true}
+    - severity: {type: verification_severity, required: false, default: error}
+
+intermediate_unique_arguments:
+    - id: {type: verification_id, required: false}
+    - columns: {type: "list[variable]", required: true}
 
 verification_id:
     type: str

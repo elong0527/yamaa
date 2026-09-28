@@ -452,9 +452,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `column_verifications.matches.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `column_verifications.matches.pattern` | `"regex"` | `true` | Absent | -- | Schema constraint |
 | `column_verifications.matches.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.unique.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
-| `dataset_verifications.unique.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
-| `dataset_verifications.unique.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `dataset_verifications.unique` | `["list[variable]", "dataset_unique_arguments"]` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
@@ -474,7 +472,11 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_verifications.row_count.min_fraction` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.max_fraction` | `"float"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `intermediate_verifications.unique.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
-| `intermediate_verifications.unique.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
+| `intermediate_verifications.unique` | `["list[variable]", "intermediate_unique_arguments"]` | `false` | Absent | -- | Schema constraint |
+| `dataset_unique_arguments.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
+| `dataset_unique_arguments.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
+| `dataset_unique_arguments.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
+| `intermediate_unique_arguments.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
+| `intermediate_unique_arguments.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
 | `verification_id` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `verification_severity` | `"str"` | `false` | Absent | `{"values": ["error", "warning"]}` | Schema constraint |

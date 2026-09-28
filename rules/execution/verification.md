@@ -131,7 +131,10 @@ not by regular-expression matching.
 
 **REQ-0381.** `unique` requires the listed columns to exist and their
   combined values to be unique. Missing values participate as values; use
-  column `not_missing` when they are prohibited.
+  column `not_missing` when they are prohibited. Write an unnamed check as
+  `unique: [STUDYID, USUBJID]`. The mapping form
+  `unique: {columns: [STUDYID, USUBJID], id: subject-key}` also admits an
+  optional `severity`.
 
 <a id="req-0382"></a>
 

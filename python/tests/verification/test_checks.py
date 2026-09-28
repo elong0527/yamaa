@@ -743,7 +743,7 @@ def test_unique_accepts_an_explicit_identifier() -> None:
 def test_every_dataset_check_can_use_its_path_without_an_id() -> None:
     completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
     declarations = [
-        Expression(root={"unique": {"columns": ["USUBJID"]}}),
+        Expression(root={"unique": ["USUBJID"]}),
         Expression(root={"all_or_none": {"columns": ["STUDYID", "USUBJID"]}}),
         Expression(
             root={"implies": {"when": "STUDYID = 'S'", "then": "USUBJID = 'S-1'"}}

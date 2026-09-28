@@ -3546,9 +3546,7 @@ def test_intermediate_verification_unique_columns_reach_the_plan() -> None:
     plan = _plan_verification_spec(
         filter="DS.DSCAT = 'DISPOSITION EVENT'",
         verifications=[
-            IntermediateVerification.model_validate(
-                {"unique": {"columns": ["STUDYID", "USUBJID"]}}
-            )
+            IntermediateVerification.model_validate({"unique": ["STUDYID", "USUBJID"]})
         ],
     )
 
@@ -3560,9 +3558,7 @@ def test_intermediate_verification_rejects_an_unknown_column() -> None:
     with pytest.raises(ExecutionPlanningError) as raised:
         _plan_verification_spec(
             verifications=[
-                IntermediateVerification.model_validate(
-                    {"unique": {"columns": ["STUDYID", "NOPE"]}}
-                )
+                IntermediateVerification.model_validate({"unique": ["STUDYID", "NOPE"]})
             ],
         )
 
@@ -3572,9 +3568,7 @@ def test_intermediate_verification_rejects_an_unknown_column() -> None:
         if diagnostic.condition == "unknown_field"
     ]
     assert diagnostic.requirement == "REQ-1245"
-    assert diagnostic.spec_paths == (
-        "intermediates[0].verifications[0].unique.columns[1]",
-    )
+    assert diagnostic.spec_paths == ("intermediates[0].verifications[0].unique[1]",)
     assert diagnostic.context["identifier"] == "DS.NOPE"
 
 

@@ -13,8 +13,7 @@ intermediates:
     dataset: TESTS
     key: VSTESTCD
     verifications:
-      - unique:
-          columns: [VSTESTCD]
+      - unique: [VSTESTCD]
 
 output:
   path: vs.csv

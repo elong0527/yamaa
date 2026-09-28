@@ -160,7 +160,13 @@ class IntermediateUnique(_StrictModel):
 
 
 class IntermediateVerification(_StrictModel):
-    unique: IntermediateUnique
+    unique: list[str] | IntermediateUnique
+
+    @model_validator(mode="after")
+    def require_unique_columns(self) -> IntermediateVerification:
+        if isinstance(self.unique, list) and not self.unique:
+            raise ValueError("a uniqueness check requires at least one column")
+        return self
 
 
 class Intermediate(_StrictModel):

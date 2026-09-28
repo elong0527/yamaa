@@ -16,8 +16,7 @@ intermediates:
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
     verifications:
-      - unique:
-          columns: [STUDYID, USUBJID]
+      - unique: [STUDYID, USUBJID]
     no_match: null
 
 output:

@@ -18,8 +18,7 @@ intermediates:
       USUBJID: LB.USUBJID
       IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
     verifications:
-      - unique:
-          columns: [STUDYID, USUBJID, IDVARVAL]
+      - unique: [STUDYID, USUBJID, IDVARVAL]
     no_match: null
 
   # Every laboratory record carries its own endpoint qualifier before the

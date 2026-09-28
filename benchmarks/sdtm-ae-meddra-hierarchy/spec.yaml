@@ -15,8 +15,7 @@ intermediates:
     key: {LLTCD: AE_RAW.AELLTCD}
     filter: "MEDDRA.PRIMARY_SOC = 'Y'"
     verifications:
-      - unique:
-          columns: [LLTCD]
+      - unique: [LLTCD]
     no_match: null
 
 output:

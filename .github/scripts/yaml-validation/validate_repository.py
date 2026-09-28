@@ -5505,6 +5505,9 @@ def validate_spec_contracts(
             if not isinstance(verification, dict) or len(verification) != 1:
                 continue
             keyword, payload = next(iter(verification.items()))
+            short_unique = keyword == 'unique' and isinstance(payload, list)
+            if short_unique:
+                payload = {'columns': payload}
             if not isinstance(payload, dict):
                 continue
             path = f"{spec_label}.verifications[{index}].{keyword}"
@@ -5516,10 +5519,14 @@ def validate_spec_contracts(
             if keyword in {'unique', 'all_or_none'}:
                 names = payload.get('columns')
                 if isinstance(names, list):
-                    for name in names:
+                    for column_index, name in enumerate(names):
                         if isinstance(name, str) and name not in declared:
+                            column_path = (
+                                f"{path}[{column_index}]"
+                                if short_unique else f"{path}.columns"
+                            )
                             errors.append(
-                                f"ERROR: {path}.columns: unknown column "
+                                f"ERROR: {column_path}: unknown column "
                                 f"{name!r}"
                             )
                 if (
@@ -6234,6 +6241,8 @@ def self_read_field_names(spec):
             for verification in verifications:
                 if isinstance(verification, dict):
                     unique = verification.get('unique')
+                    if isinstance(unique, list):
+                        unique = {'columns': unique}
                     if isinstance(unique, dict):
                         spelled += identifiers(unique.get('columns'))
         spelled += predicate_identifier_names(intermediate.get('filter'))

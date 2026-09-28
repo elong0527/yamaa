@@ -84,6 +84,8 @@ def _operation(
     arguments = expression.root[keyword]
     if arguments is None:
         arguments = {}
+    if keyword == "unique" and isinstance(arguments, list):
+        arguments = {"columns": arguments}
     if not isinstance(arguments, Mapping):
         raise DeclarationError(
             f"{spec_path}.{keyword}",

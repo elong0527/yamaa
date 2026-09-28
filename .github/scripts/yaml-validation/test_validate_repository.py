@@ -4257,6 +4257,23 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("duplicate dataset verification id", message)
         self.assertIn("range requires an int or float column", message)
 
+    def test_short_unique_still_checks_declared_columns(self):
+        spec = {
+            "domain": "ADSL",
+            "input": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}}
+            ],
+            "verifications": [{"unique": ["MISSING"]}],
+        }
+
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+
+        self.assertIn("unique[0]: unknown column 'MISSING'", "\n".join(errors))
+
     def test_accepts_grouped_row_count(self):
         spec = {
             "domain": "ADLB",

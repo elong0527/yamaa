@@ -3005,26 +3005,33 @@ def _plan_lookups(
             intermediate.verifications or ()
         ):
             unique = verification.unique
+            columns = unique if isinstance(unique, list) else unique.columns
+            verification_id = None if isinstance(unique, list) else unique.id
             check_path = f"{path}.verifications[{verification_index}].unique"
-            if unique.id is not None:
-                if unique.id in verification_ids:
+            if verification_id is not None:
+                if verification_id in verification_ids:
                     diagnostics.append(
                         _diagnostic(
                             "duplicate_identifier",
                             f"{check_path}.id",
-                            {"identifier": unique.id},
+                            {"identifier": verification_id},
                             requirement="REQ-0398",
                         )
                     )
                     failed = True
-                verification_ids.add(unique.id)
-            for unique_index, field in enumerate(unique.columns):
+                verification_ids.add(verification_id)
+            for unique_index, field in enumerate(columns):
                 if field in derived or field in fields:
                     continue
+                field_path = (
+                    f"{check_path}[{unique_index}]"
+                    if isinstance(unique, list)
+                    else f"{check_path}.columns[{unique_index}]"
+                )
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
-                        f"{check_path}.columns[{unique_index}]",
+                        field_path,
                         {
                             "intermediate": intermediate.id,
                             "identifier": f"{intermediate.dataset}.{field}",
@@ -3048,9 +3055,9 @@ def _plan_lookups(
                 failed = True
             unique_checks.append(
                 PlannedIntermediateUnique(
-                    columns=tuple(unique.columns),
+                    columns=tuple(columns),
                     spec_path=check_path,
-                    verification_id=unique.id,
+                    verification_id=verification_id,
                 )
             )
 
@@ -4178,7 +4185,8 @@ def _row_phase_default_columns(
         if intermediate.verifications:
             # REQ-1245: the asserted-unique columns are donor fields.
             for verification in intermediate.verifications:
-                names.extend(verification.unique.columns)
+                unique = verification.unique
+                names.extend(unique if isinstance(unique, list) else unique.columns)
         if intermediate.filter is not None:
             try:
                 names.extend(

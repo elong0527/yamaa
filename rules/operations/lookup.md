@@ -488,7 +488,7 @@ the window ranks the records of each subject and test on it.
 <a id="req-1245"></a>
 
 **REQ-1245.** An intermediate may declare a `verifications:` list of
-`unique: {columns: [...]}` checks. Each check asserts that its nonempty
+`unique: [...]` checks. Each check asserts that its nonempty
 column combination is unique across the intermediate's filtered donor records:
 
 ```yaml
@@ -496,9 +496,12 @@ column combination is unique across the intermediate's filtered donor records:
   dataset: DS
   filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
   verifications:
-    - unique:
-        columns: [STUDYID, USUBJID]
+    - unique: [STUDYID, USUBJID]
 ```
+
+The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}`
+names a check when an explicit ID is useful. Both forms test the same donor
+records.
 
 The check runs over the source-only filtered donor records with
 `derivations:` computed. Input-backed checks run before any row is built;
@@ -670,7 +673,7 @@ paired key column to have the same comparable type.
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
-| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verifications.unique.columns` ([REQ-1185](lookup.md#req-1185)). |
+| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verifications.unique` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.verifications` | Uniqueness checks over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.no_match` | Value returned when the lookup yields nothing; without it, yielding nothing fails ([REQ-0124](lookup.md#req-0124)). |
 
