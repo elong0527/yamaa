@@ -16,17 +16,17 @@ format:
     transition: fade
     background-transition: fade
     logo: ../../assets/logo.jpeg
+    include-after-body: title-logo.html
 title-slide-attributes:
   data-background-color: "#385898"
 ---
 
 ## Disclaimer {.center}
 
-::: {.center-body}
 The views and opinions expressed in this presentation are those of the
 individual presenter. They do not represent those of their affiliated
 organizations or institutions.
-:::
+
 
 ## Contributors {.center}
 
@@ -40,29 +40,28 @@ organizations or institutions.
 ## Motivation
 
 * Two AI agents use the same specification to derive ADaM data.
-* Both report completion, but their outputs differ.
-* A reviewer must resolve the difference before signing off.
+* Both report completion, but their source code and outputs differ.
+* A reviewer must make a non-trivial effort to resolve the difference before signing off.
 
-In a drug-manufacturing [warning letter](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/purolea-cosmetics-lab-722591-04022026), the FDA wrote:
+From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/purolea-cosmetics-lab-722591-04022026).
 
-> "you must review the AI generated documents to ensure they were accurate and actually compliant with CGMP."
+> "you must review the AI-generated documents to ensure they were accurate and actually compliant..."
 
-## Root cause
+## One root cause
 
-The specification leaves business rules implicit, so agents must infer them.
-
-Business rules can differ from language defaults:
-
-- [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round exact ties to even.
-- [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than nonmissing values.
+* The user prompt leaves business rules implicit, so agents must infer them.
+* Business rules can differ from language defaults, e.g.:
+  * [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round ties to even.
+  * [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than non-missing values.
 
 ## Goal
 
-- Reduce human review work
-- Leverage organization templates
-- Capture domain knowledge that agents can apply
+- Reduce human review effort.
+- Leverage organization templates.
+- Capture business rules that AI agents can apply.
+- Human and AI agents align at the planning stage.
 
-## yamaa: YAML specification
+## yamaa: YAML specification example
 
 ```yaml
 schema_version: "1.0"
@@ -98,17 +97,15 @@ verifications:
 :::
 :::
 
-Each benchmark includes a specification, input data, and an expected output or error.
-
-**[Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)**
+* [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
-Scroll inside the frame to explore the spec, inputs, and golden output
+Scroll inside the frame to explore the spec, inputs, and golden output.
 
 ## yamaa: full studies
 
-* Build ground truth once. Reuse it to evaluate every agentic workflow
+* Build publicly available ground truth.
   * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 * CDISC pilots (SDTM -> ADaM)
   * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
@@ -119,21 +116,24 @@ Scroll inside the frame to explore the spec, inputs, and golden output
 
 ## yamaa: core principle
 
-> **A yamaa specification has exactly one execution. Where it would have two,
-> yamaa fails instead of choosing.**
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
 
+::: {.formula}
 *`output_dataset = derive(input_datasets, spec)`*
+:::
 
 The design of yamaa is a contract between people and AI agents.
 
-- **spec**: the closed vocabulary.
-- **derive**: the derivation semantics.
+- **spec**: schema following closed vocabulary.
+- **derive**: business rules with derivation semantics.
 
 ## yamaa: inheritance
 
 ![](../../diagrams/design.svg)
 
 Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
+([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
 
 ## yamaa: four components
 
@@ -144,7 +144,8 @@ Inheritance reduces duplication while keeping every resolved study specification
 | Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
-## ODM XML
+
+## Recommendations: ODM XML
 
 - [CDISC ODM](https://www.cdisc.org/standards/data-exchange/odm) is an XML standard for clinical research data.
 - EDC systems can export study data in ODM XML.
@@ -152,34 +153,29 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 Learn with AI: [https://arena.ai/](https://arena.ai/)
 
-## Recommendations to work with AI agents
+## Recommendations: Input and Output
 
 - Plain text is the input.
-- Annotated CRF is not an input but output.
-- Excel specification is not an input but output.
+- Annotated CRF is not an input but an output.
+- Excel specification is not an input but an output.
 - Communication costs more than tokens.
 
 ## Call for help
 
-* Building benchmarks
+* Public benchmarks
   - **Review a benchmark**: inspect the specification and golden output
-  - **Add comments**: challenge assumptions, clarity, and conformance
+  - **Add comments**: question assumptions, clarity, and conformance
   - **File issues**: record anything ambiguous or incorrect
   - **Open pull requests**: contribute fixes and new benchmarks
-
-* Testing yamaa
-  - **Assess privately**: Run yamaa against a proprietary submission package inside your own environment.
-  - **Share safely**: Contribute a synthetic benchmark or an issue that captures the pattern without disclosing source data.
 
 ## Benchmark to deployment
 
 - **Benchmarks** help assess an AI agent before adoption.
-- **Deployment** also requires onboarding the agent to your environment.
+- **Deployment** also requires onboarding the agent to a specific organization environment.
 
 Collaborating with [keiji.ai](https://keiji.ai/) to test synthetic clinical trial data.
 
 [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
-
 
 ## Reference
 
