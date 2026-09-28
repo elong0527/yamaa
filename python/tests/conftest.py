@@ -20,6 +20,10 @@ if SRC not in sys.path:
 
 
 def benchmark_dirs():
+    if not os.path.isdir(BENCH):
+        # Fail collection loudly: a missing corpus must never read as "no
+        # benchmarks to run".
+        raise RuntimeError(f"benchmark corpus directory not found: {BENCH}")
     return sorted(
         d
         for d in glob.glob(os.path.join(BENCH, "*"))
