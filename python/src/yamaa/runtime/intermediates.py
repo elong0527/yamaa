@@ -30,6 +30,7 @@ from yamaa.expressions.core import (
 )
 from yamaa.expressions.dispatch import evaluate_expression
 from yamaa.expressions.predicates import (
+    PredicateAst,
     PredicateError,
     PredicateValue,
     TruthValue,
@@ -58,6 +59,7 @@ from yamaa.models import (
 )
 from yamaa.planning import MatchValueExpression, PlannedIntermediate
 from yamaa.runtime.joins import (
+    ImplicitSelection,
     IndexedRecord,
     OrderError,
     PartitionKey,
@@ -903,17 +905,49 @@ class IntermediateSelector:
         """
         cached = self._match_index.get(plan.identifier)
         if cached is None:
-            buckets: dict[tuple[RuntimeValue, ...], list[IndexedRecord]] = {}
-            for record in eligible:
-                key = _match_key(
-                    tuple(record.values[field] for field in plan.match_fields)
-                )
-                if key is None:
-                    continue
-                buckets.setdefault(key, []).append(record)
-            cached = {key: tuple(records) for key, records in buckets.items()}
+            cached = _build_match_index(eligible, plan.match_fields)
             self._match_index[plan.identifier] = cached
         return cached
+
+
+def _build_match_index(
+    eligible: Sequence[IndexedRecord],
+    fields: Sequence[str],
+) -> dict[tuple[RuntimeValue, ...], tuple[IndexedRecord, ...]]:
+    """Bucket the eligible records by their match key, keeping eligible order."""
+    buckets: dict[tuple[RuntimeValue, ...], list[IndexedRecord]] = {}
+    for record in eligible:
+        key = _match_key(tuple(record.values[field] for field in fields))
+        if key is None:
+            continue
+        buckets.setdefault(key, []).append(record)
+    return {key: tuple(records) for key, records in buckets.items()}
+
+
+def _implicit_selection(
+    relation: RelationIndex,
+    filter_text: str | None,
+    predicate: PredicateAst | None,
+    fields: Sequence[str],
+) -> ImplicitSelection | ConditionResult:
+    """Return an implicit join's eligible records and match index, once per run.
+
+    REQ-0150: the eligible records depend only on the relation and a
+    source-only filter, so every row of the run shares them and the index
+    over them, exactly as a named intermediate does (REQ-0134). Without it
+    each read would scan every record of the relation.
+    """
+    identity = (filter_text if predicate is not None else None, tuple(fields))
+    cached = relation.implicit_selections.get(identity)
+    if cached is None:
+        eligible = eligible_records(relation.records, predicate, relation)
+        cached = (
+            eligible
+            if isinstance(eligible, ConditionResult)
+            else (tuple(eligible), _build_match_index(eligible, fields))
+        )
+        relation.implicit_selections[identity] = cached
+    return cached
 
 
 def _match_key(
@@ -949,8 +983,8 @@ def _select_eligible(
     """Match, narrow, and choose one record from the eligible records.
 
     Named intermediates and implicit joins share these steps: the named
-    selector caches the eligible records per intermediate, while an implicit
-    join derives them from its payload on every row.
+    selector caches the eligible records per intermediate, and an implicit
+    join caches them on its relation per filter and matched fields.
     """
     values = [current.get(name, MISSING) for name in plan.match_variables]
     if any(value is MISSING for value in values):
@@ -1413,12 +1447,16 @@ def evaluate_intermediate(
         between_upper=between_upper,
         implicit_join=True,
     )
-    eligible = eligible_records(
-        relation.records, None if filter_variables else predicate, relation
+    selection = _implicit_selection(
+        relation,
+        filter_text if isinstance(filter_text, str) else None,
+        None if filter_variables else predicate,
+        keys,
     )
-    if isinstance(eligible, ConditionResult):
-        return eligible
-    outcome = _select_eligible(plan, eligible, current)
+    if isinstance(selection, ConditionResult):
+        return selection
+    eligible, index = selection
+    outcome = _select_eligible(plan, eligible, current, index=index)
     if outcome.condition is not None:
         return outcome.condition
     if outcome.record is not None:

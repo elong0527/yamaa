@@ -771,6 +771,50 @@ def test_the_match_index_agrees_with_the_scan_under_between() -> None:
         assert _outcome_summary(indexed) == _outcome_summary(scanned), current
 
 
+def test_an_implicit_join_indexes_its_relation_once_per_filter() -> None:
+    # REQ-0150/REQ-0134: every row shares one eligible set and match index
+    # per source-only filter instead of scanning the relation per read, and
+    # the indexed read answers duplicates, misses, int/float unification,
+    # and missing keys exactly as the scan did.
+    rel = relation(
+        "B",
+        [("K", "str"), ("N", "int"), ("SEQ", "int"), ("V", "str")],
+        [
+            ["s1", 1, 1, "a"],
+            ["s1", 1, 2, "b"],
+            ["s2", 2, 1, "c"],
+        ],
+    )
+    key = {"K": "K", "N": "N"}
+    selected = {"dataset": "B", "key": key, "value": "V"}
+    selected |= {"order_by": ["B.SEQ"], "keep": "last"}
+
+    def read(payload: dict[str, object], current: dict[str, object]) -> object:
+        result = evaluate_intermediate(
+            payload, rel, lambda name: ResolvedValue(value=current[name])
+        )
+        if isinstance(result, ConditionResult):
+            return result.condition.condition
+        return result.value
+
+    assert read(selected, {"K": "s1", "N": 1}) == "b"
+    shared = rel.implicit_selections[(None, ("K", "N"))]
+    assert read(selected, {"K": "s1", "N": 1.0}) == "b"
+    assert read(selected, {"K": "s2", "N": 2}) == "c"
+    assert read(selected, {"K": "s9", "N": 1}) is MISSING
+    assert read(selected, {"K": "s1", "N": MISSING}) is MISSING
+    unselected = {"dataset": "B", "key": key, "value": "V"}
+    assert read(unselected, {"K": "s1", "N": 1}) == "multiple_matches"
+    filtered = {"dataset": "B", "key": key, "value": "V", "filter": "B.SEQ = 1"}
+    assert read(filtered, {"K": "s1", "N": 1}) == "a"
+
+    assert rel.implicit_selections[(None, ("K", "N"))] is shared
+    assert set(rel.implicit_selections) == {
+        (None, ("K", "N")),
+        ("B.SEQ = 1", ("K", "N")),
+    }
+
+
 def ds() -> RelationIndex:
     return relation(
         "DS",
