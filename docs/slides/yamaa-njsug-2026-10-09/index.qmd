@@ -21,7 +21,7 @@ title-slide-attributes:
   data-background-color: "#385898"
 ---
 
-## Disclaimer {.center}
+## Disclaimer
 
 The views and opinions expressed in this presentation are those of the
 individual presenter. They do not represent those of their affiliated
@@ -41,7 +41,7 @@ organizations or institutions.
 
 * Two AI agents use the same specification to derive ADaM data.
 * Both report completion, but their source code and outputs differ.
-* A reviewer must make a non-trivial effort to resolve the difference before signing off.
+* A reviewer makes non-trivial efforts to resolve the difference before signing off.
 
 From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/purolea-cosmetics-lab-722591-04022026).
 
@@ -160,7 +160,11 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 - Excel specification is not an input but an output.
 - Communication costs more than tokens.
 
-## Call for help
+## How to contribute
+
+* RConsortium / BBSW
+  - [Submission working group Pilot7](https://rconsortium.github.io/submissions-wg/pilot7.html)
+  - [Slack channel / Regular Meetings](https://rconsortium.github.io/submissions-wg/join.html)
 
 * Public benchmarks
   - **Review a benchmark**: inspect the specification and golden output
