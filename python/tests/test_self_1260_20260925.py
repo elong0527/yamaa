@@ -169,7 +169,7 @@ def test_self_read_in_first_template_sees_no_donors(tmp_path):
 
 
 def test_self_unique_runs_over_completed_pool(tmp_path):
-    # REQ-0120/1245: verification.unique fails when the completed donor
+    # REQ-0120/1245: a verifications unique check fails when the completed donor
     # pool holds a repeated combination. (A donor-only filter keeps the
     # intermediate clear of the REQ-1245 correlated-filter ban.)
     spec = self_spec()
@@ -179,7 +179,7 @@ def test_self_unique_runs_over_completed_pool(tmp_path):
             "dataset": "SELF",
             "key": ["USUBJID"],
             "filter": "SELF.AESEQ <= 2",
-            "verification": {"unique": ["USUBJID"]},
+            "verifications": [{"unique": ["USUBJID"]}],
         },
     )
     with pytest.raises(YamaaError) as ei:

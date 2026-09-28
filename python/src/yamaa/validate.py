@@ -52,7 +52,7 @@ _INTERMEDIATE_FIELDS = {
     "columns",
     "no_match",
     "derivations",
-    "verification",
+    "verifications",
 }
 
 
@@ -652,48 +652,110 @@ def _check_intermediate_cycles(e):
             visit(n)
 
 
+def intermediate_uniques(d, where):
+    """REQ-1245: an intermediate's `unique` checks as (path, columns).
+    `unique: [...]` is an unnamed check; `unique: {columns: [...]}` may
+    name one with `id`."""
+    out = []
+    for j, v in enumerate(d.get("verifications") or ()):
+        uniq = v["unique"]
+        cols = uniq["columns"] if isinstance(uniq, dict) else uniq
+        out.append((f"{where}.verifications[{j}].unique", cols))
+    return out
+
+
 def _check_intermediate_verification(e, d, where, ds):
-    """REQ-1245: unique asserts over the donor records; a correlated
-    filter cannot combine with verification."""
-    ver = d.get("verification")
-    if ver is None:
+    """REQ-1245: `verifications` lists `unique` checks over the donor
+    records. A declared id is unique within the list (REQ-0398), and a
+    correlated filter cannot combine with any check."""
+    vers = d.get("verifications")
+    if vers is None:
         return
-    if not isinstance(ver, dict):
+    if not isinstance(vers, list):
         _fail(
-            where + ".verification",
+            where + ".verifications",
             "validation",
             "invalid_field_type",
             "REQ-0287",
-            {"expected": "map", "actual": _type_name(ver)},
+            {"expected": "list[intermediate_verification]", "actual": _type_name(vers)},
         )
-    uniq = ver.get("unique")
-    if uniq is None:
-        return
     fields = set(e.donor_fields) if ds == "SELF" else set(e.inputs[ds].fields)
     derived = set(d.get("derivations") or {})
-    if (
-        not isinstance(uniq, list)
-        or not uniq
-        or any(not isinstance(u, str) for u in uniq)
-    ):
-        _fail(
-            where + ".verification.unique",
-            "validation",
-            "invalid_field_type",
-            "REQ-0287",
-            {"expected": "non-empty list[str]", "actual": _type_name(uniq)},
-        )
-    for u in uniq:
-        if u not in fields and u not in derived:
+    ids = set()
+    for j, v in enumerate(vers):
+        vpath = f"{where}.verifications[{j}]"
+        if not isinstance(v, dict) or len(v) != 1:
             _fail(
-                where + ".verification.unique",
+                vpath,
+                "validation",
+                "invalid_field_type",
+                "REQ-0286",
+                {"expected": "one verification keyword", "actual": _type_name(v)},
+            )
+        if "unique" not in v:
+            _fail(
+                vpath,
                 "validation",
                 "unknown_field",
-                "REQ-1245",
-                {"name": u},
+                "REQ-0286",
+                {"verification": next(iter(v))},
             )
+        upath = vpath + ".unique"
+        uniq = v["unique"]
+        cols, cpath = uniq, upath
+        if isinstance(uniq, dict):
+            for f in uniq:
+                if f not in ("columns", "id"):
+                    _fail(
+                        f"{upath}.{f}",
+                        "validation",
+                        "unknown_field",
+                        "REQ-0285",
+                        {"field": f},
+                    )
+            cols, cpath = uniq.get("columns"), upath + ".columns"
+            if "id" in uniq:
+                vid = uniq["id"]
+                if not isinstance(vid, str) or not vid:
+                    _fail(
+                        upath + ".id",
+                        "validation",
+                        "invalid_field_type",
+                        "REQ-0287",
+                        {"expected": "verification_id", "actual": _type_name(vid)},
+                    )
+                if vid in ids:
+                    _fail(
+                        upath + ".id",
+                        "validation",
+                        "duplicate_identifier",
+                        "REQ-0398",
+                        {"identifier": vid, "intermediate": d.get("id")},
+                    )
+                ids.add(vid)
+        if (
+            not isinstance(cols, list)
+            or not cols
+            or any(not isinstance(c, str) for c in cols)
+        ):
+            _fail(
+                cpath,
+                "validation",
+                "invalid_field_type",
+                "REQ-0287",
+                {"expected": "non-empty list[str]", "actual": _type_name(cols)},
+            )
+        for k, c in enumerate(cols):
+            if c not in fields and c not in derived:
+                _fail(
+                    f"{cpath}[{k}]",
+                    "validation",
+                    "unknown_field",
+                    "REQ-1245",
+                    {"intermediate": d.get("id"), "name": c},
+                )
     filt = d.get("filter")
-    if isinstance(filt, str):
+    if vers and isinstance(filt, str):
         try:
             _, idents = _pred.parse(filt, where + ".filter")
         except YamaaError:
@@ -704,11 +766,11 @@ def _check_intermediate_verification(e, d, where, ds):
             correlated = any(i.split(".")[0] != ds for i in idents)
         if correlated:
             _fail(
-                where + ".verification",
+                where + ".verifications[0].unique",
                 "validation",
-                "prohibited_construct",
+                "correlated_filter_with_unique_verification",
                 "REQ-1245",
-                {"detail": "driver-correlated filter cannot combine with verification"},
+                {"intermediate": d.get("id")},
             )
 
 
@@ -1978,9 +2040,36 @@ def _vlist(v):
     return v
 
 
+def _check_verification_ids(entries, where):
+    """REQ-0374/REQ-0398: an optional id is nonempty text and unique within
+    its own verification list; another list may reuse it."""
+    seen = set()
+    for i, v in enumerate(entries):
+        if not isinstance(v, dict) or len(v) != 1:
+            continue
+        kind, payload = next(iter(v.items()))
+        if not isinstance(payload, dict) or "id" not in payload:
+            continue
+        vid = payload["id"]
+        path = f"{where}[{i}].{kind}.id"
+        if not isinstance(vid, str) or not vid:
+            _fail(
+                path,
+                "validation",
+                "invalid_field_type",
+                "REQ-0287",
+                {"expected": "verification_id", "actual": _type_name(vid)},
+            )
+        if vid in seen:
+            _fail(path, "validation", "duplicate_identifier", "REQ-0398", {"id": vid})
+        seen.add(vid)
+
+
 def _check_verifications(e):
     for name in e.col_order:
-        for i, v in enumerate(_vlist(e.colspecs[name].get("verifications"))):
+        entries = _vlist(e.colspecs[name].get("verifications"))
+        _check_verification_ids(entries, f"columns.{name}.verifications")
+        for i, v in enumerate(entries):
             if not isinstance(v, dict) or len(v) != 1:
                 continue
             kind, payload = next(iter(v.items()))
@@ -1998,12 +2087,36 @@ def _check_verifications(e):
                         "REQ-0287",
                         {"expected": "str", "actual": _type_name(payload[f])},
                     )
-    for i, v in enumerate(e.spec.get("verifications") or []):
+    entries = e.spec.get("verifications") or []
+    _check_verification_ids(entries, "verifications")
+    for i, v in enumerate(entries):
         if not isinstance(v, dict) or len(v) != 1:
             continue
         kind, payload = next(iter(v.items()))
         payload = payload or {}
         where = f"verifications[{i}].{kind}"
+        if kind == "unique" and isinstance(payload, list):
+            # REQ-0381: `unique: [...]` is the unnamed form of the check.
+            payload = {"columns": payload}
+        if kind == "unique":
+            cols = payload.get("columns") if isinstance(payload, dict) else None
+            if (
+                not isinstance(cols, list)
+                or not cols
+                or any(not isinstance(c, str) for c in cols)
+            ):
+                _fail(
+                    where,
+                    "validation",
+                    "invalid_field_type",
+                    "REQ-0287",
+                    {
+                        "expected": "non-empty list[variable]",
+                        "actual": _type_name(cols),
+                    },
+                )
+        if not isinstance(payload, dict):
+            continue
         for f in ("expr", "when", "then", "filter"):
             if f in payload and not isinstance(payload[f], str):
                 _fail(
