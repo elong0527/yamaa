@@ -628,14 +628,11 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
         check_dataset(completed, [Expression(root={"row_count": {}})], KEYS)
     assert no_bound.value.requirement == "REQ-0399"
 
-    with pytest.raises(DeclarationError) as grouped:
-        check_dataset(
-            completed,
-            [Expression(root={"row_count": {"group_by": ["STUDYID"], "min": 1}})],
-            KEYS,
-        )
-    assert grouped.value.condition == "missing_verification_id"
-    assert grouped.value.requirement == "REQ-0402"
+    assert not check_dataset(
+        completed,
+        [Expression(root={"row_count": {"group_by": ["STUDYID"], "min": 1}})],
+        KEYS,
+    )
 
     with pytest.raises(DeclarationError) as unknown:
         check_dataset(

@@ -448,14 +448,14 @@ requirement link for behavior. It is not an additional semantic contract.
 | `column_verifications.matches.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
 | `dataset_verifications.unique.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.unique.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.all_or_none.id` | `"verification_id"` | `true` | Absent | -- | Schema constraint |
+| `dataset_verifications.all_or_none.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.columns` | `"list[variable]"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.all_or_none.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.implies.id` | `"verification_id"` | `true` | Absent | -- | Schema constraint |
+| `dataset_verifications.implies.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.implies.when` | `"predicate"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.implies.then` | `"predicate"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.implies.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
-| `dataset_verifications.assert.id` | `"verification_id"` | `true` | Absent | -- | Schema constraint |
+| `dataset_verifications.assert.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.assert.expr` | `"predicate"` | `true` | Absent | -- | Schema constraint |
 | `dataset_verifications.assert.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |
 | `dataset_verifications.row_count.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |

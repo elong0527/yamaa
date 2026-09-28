@@ -66,8 +66,6 @@ _DATASET_REQUIREMENTS = {
     "assert": ("assert_failed", "REQ-0384"),
     "row_count": ("row_count_failed", "REQ-0385"),
 }
-_IDENTIFIED = frozenset({"all_or_none", "implies", "assert"})
-
 KeyMap = dict[str, JsonValue]
 
 
@@ -650,15 +648,7 @@ def _identifier(
     keyword: str, arguments: Mapping[str, JsonValue], spec_path: str
 ) -> str | None:
     identifier = arguments.get("id")
-    grouped = keyword == "row_count" and arguments.get("group_by") is not None
     if identifier is None:
-        if keyword in _IDENTIFIED or grouped:
-            raise DeclarationError(
-                spec_path,
-                "REQ-0402" if grouped else "REQ-0374",
-                f"{keyword} requires a verification id",
-                condition="missing_verification_id",
-            )
         return None
     if not isinstance(identifier, str) or not identifier:
         raise DeclarationError(spec_path, "REQ-0374", "a verification id is text")

@@ -79,10 +79,13 @@ change pass or fail. A `warning` violation records every offending key under
 
 <a id="req-0374"></a>
 
-**REQ-0374.** `all_or_none`, `implies`, `assert`, and a `row_count`
-declaring `group_by` require an `id`. These IDs must be unique across the
-dataset verifications that declare them. Implementations must include the ID in failure reports in
-addition to the stable specification path.
+**REQ-0374.** A dataset verification may declare an `id` when a short domain
+name communicates its intent better than the check and its arguments do.
+Declared IDs must be unique across the dataset verifications that declare
+them. Implementations must include a declared ID in failure reports in
+addition to the stable specification path. An ID is not required: the stable
+path identifies the declaration, while the check name, target columns, and
+arguments describe checks whose meaning is already evident.
 
 ### Column verifications
 
@@ -457,7 +460,9 @@ fraction bound outside 0 through 1 also fails.
 
 <a id="req-0402"></a>
 
-**REQ-0402.** A `row_count` declaring `group_by` without an `id`: fail.
+**REQ-0402.** Omitting a verification `id`, including from a grouped
+`row_count`, is valid. The check retains its stable specification path and
+reports the grouping columns and bounds that give it meaning.
 
 <a id="req-0403"></a>
 

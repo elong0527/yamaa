@@ -5503,15 +5503,6 @@ def validate_spec_contracts(
                     )
                 if 'group_by' in payload:
                     group_by = payload.get('group_by')
-                    if not isinstance(payload.get('id'), str):
-                        errors.append(
-                            validation_diagnostic(
-                                path,
-                                'missing_verification_id',
-                                'a grouped row_count requires a verification '
-                                'id',
-                            )
-                        )
                     if isinstance(group_by, list):
                         if not group_by:
                             errors.append(

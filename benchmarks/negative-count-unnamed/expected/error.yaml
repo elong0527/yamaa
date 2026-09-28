@@ -1,5 +1,0 @@
-phase: validation
-condition: missing_verification_id
-spec_paths:
-  - verifications[1].row_count
-requirement: REQ-0402

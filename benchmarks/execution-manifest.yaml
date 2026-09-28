@@ -417,9 +417,6 @@ examples:
   negative-greatest-mixed:
     status: executable
     runtimes: ['python']
-  negative-count-unnamed:
-    status: executable
-    runtimes: ['python']
   negative-ingest-unit:
     status: executable
     runtimes: ['python']
