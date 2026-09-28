@@ -36,6 +36,9 @@ examples:
   adam-adae-review-order:
     status: executable
     runtimes: ['python']
+  adam-adae-serious-events:
+    status: executable
+    runtimes: ['python']
   adam-adae-serious-sequence:
     status: executable
     runtimes: ['python']
