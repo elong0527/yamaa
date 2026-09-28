@@ -6,6 +6,7 @@ import re
 from . import agg as _agg
 from . import expr as _expr
 from . import numeric as _numeric
+from . import odm as _odm
 from . import pred as _pred
 from .errors import YamaaError
 from .values import YDate, YDateTime
@@ -54,6 +55,11 @@ _INTERMEDIATE_FIELDS = {
     "derivations",
     "verifications",
 }
+
+# REQ-1274: the odm_class fields, and the schema's item and OID patterns.
+_ODM_READ_FIELDS = ("item", "event", "form", "item_group", "filter")
+_ODM_ITEM = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$")
+_ODM_OID = re.compile(r"^[!-~]+$")
 
 
 def _fail(where, phase, condition, requirement=None, context=None):
@@ -146,6 +152,7 @@ def run(e):
     _check_row_windows(e)
     _check_cycles(e)
     _check_derivations(e)
+    _check_odm_reads(e)
     _check_functions(e)
     _check_dependencies(e)
     _check_verifications(e)
@@ -906,6 +913,122 @@ def _check_derivations(e):
                 "row",
                 row_grouped=grouped,
             )
+
+
+def _check_odm_payload(e, payload, path):
+    """REQ-1265/REQ-1274: an `odm` payload is an item, or an odm_class
+    mapping whose item is `DATASET.ItemOID`."""
+    if isinstance(payload, str):
+        payload = {"item": payload}
+    if not isinstance(payload, dict):
+        _fail(
+            path,
+            "validation",
+            "invalid_field_type",
+            "REQ-0287",
+            {"expected": "odm_item or odm_class", "actual": _type_name(payload)},
+        )
+    for f in payload:
+        if f not in _ODM_READ_FIELDS:
+            _fail(
+                f"{path}.{f}", "validation", "unknown_field", "REQ-0285", {"field": f}
+            )
+    if "item" not in payload:
+        _fail(
+            f"{path}.item",
+            "validation",
+            "missing_required_field",
+            "REQ-0285",
+            {"field": "item"},
+        )
+    item = payload["item"]
+    if not isinstance(item, str) or not _ODM_ITEM.match(item):
+        _fail(
+            f"{path}.item",
+            "validation",
+            "invalid_field_type",
+            "REQ-0287",
+            {"expected": "DATASET.ItemOID", "actual": item},
+        )
+    for f in ("event", "form", "item_group"):
+        if f not in payload:
+            continue
+        oids = payload[f]
+        listed = oids if isinstance(oids, list) else [oids]
+        if not listed or any(
+            not isinstance(o, str) or not _ODM_OID.match(o) for o in listed
+        ):
+            _fail(
+                f"{path}.{f}",
+                "validation",
+                "invalid_field_type",
+                "REQ-0287",
+                {"expected": "odm_oid or list[odm_oid]", "actual": _type_name(oids)},
+            )
+    if "filter" in payload and not isinstance(payload["filter"], str):
+        _fail(
+            f"{path}.filter",
+            "validation",
+            "invalid_field_type",
+            "REQ-0287",
+            {"expected": "predicate", "actual": _type_name(payload["filter"])},
+        )
+    return _odm.parse_odm_read(payload)
+
+
+def _check_odm_reads(e):
+    """REQ-1270/REQ-1271/REQ-1277: an `odm` read names a declared input,
+    filters on that input's schema fields, and is written where every row
+    that evaluates it was built from that input."""
+    rows = e.spec.get("rows") or []
+    base = e.spec.get("base")
+    if base is None and len(e.inputs) == 1:
+        base = next(iter(e.inputs))
+
+    def driver(t):
+        return t.get("dataset") or base
+
+    sites = _odm.odm_sites(e.spec, lambda i, t: f"rows.{t.get('id')}")
+    for path, location, owner, payload in sites:
+        read = _check_odm_payload(e, payload, path)
+        ds = read.dataset
+        if ds not in e.inputs:
+            _fail(
+                f"{path}.item",
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {"identifier": read.item},
+            )
+        if location == "row":
+            scoped = driver(rows[owner]) == ds
+        elif location == "column":
+            # A template that derives the column itself never reads this
+            # derivation, so only the others need a scope (REQ-1260).
+            readers = [t for t in rows if owner not in (t.get("derivations") or {})]
+            scoped = all(driver(t) == ds for t in readers) if rows else base == ds
+        else:
+            scoped = False
+        if not scoped:
+            _fail(
+                path,
+                "validation",
+                "invalid_odm_context",
+                "REQ-1277",
+                {"dataset": ds, "location": location},
+            )
+        if read.filter is not None:
+            _, names = _pred.parse(read.filter, f"{path}.filter")
+            for name in names:
+                head, _, field = name.partition(".")
+                if head != ds or field not in _odm.ODM_SCHEMA_FIELDS:
+                    _fail(
+                        f"{path}.filter",
+                        "validation",
+                        "unknown_field",
+                        "REQ-1271",
+                        {"identifier": name, "dataset": ds},
+                    )
 
 
 def _check_tree(e, node, path, phase, row_grouped=False):
