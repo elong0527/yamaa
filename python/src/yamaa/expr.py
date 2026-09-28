@@ -1089,6 +1089,11 @@ def ev_aggregate(payload, ctx):
     return ctx.aggregate_value(payload)
 
 
+def ev_odm(payload, ctx):
+    """REQ-1265: one collected item read from the row's ODM scope."""
+    return ctx.odm_value(payload)
+
+
 def ev_function(payload, ctx):
     """Stage 2: call a project function (REQ-1085)."""
     from . import functions as _functions
@@ -1148,5 +1153,6 @@ _REGISTRY = {
     "previous_non_missing": lambda p, c: ev_window(p, c, "previous_non_missing"),
     "baseline_flag": lambda p, c: ev_window(p, c, "baseline_flag"),
     "aggregate": ev_aggregate,
+    "odm": ev_odm,
     "function": ev_function,
 }

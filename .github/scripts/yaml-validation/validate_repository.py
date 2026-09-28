@@ -5945,8 +5945,9 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
 
 # REQ-1265..REQ-1278's fixed ODM schema, its case-folding name binding, the
 # walk that finds an `odm` read, and the read's payload are the runtime's
-# own (`yamaa.odm.items`), so this file owns no second copy of the binding
-# rules. The import is lazy for the reason the predicate binding gives.
+# own (`yamaa.odm`, via yamaa_compat), so this file owns no second copy of
+# the binding rules. The import is lazy for the reason the predicate binding
+# gives.
 ODM_SCHEMA_FIELDS = None
 bind_odm_fields = None
 iter_odm_payloads = None
@@ -5954,16 +5955,16 @@ parse_odm_read = None
 
 
 def _ensure_odm_binding():
-    """Import yamaa.odm.items on first use, or exit when unavailable."""
+    """Import yamaa.odm on first use, or exit when unavailable."""
     global ODM_SCHEMA_FIELDS, bind_odm_fields, iter_odm_payloads, parse_odm_read
     if parse_odm_read is None:
         try:
-            from yamaa.odm.items import (
-                ODM_SCHEMA_FIELDS as schema_fields,
-                bind_fields,
-                iter_odm_payloads as iter_payloads,
-                parse_odm_read as parse_read,
-            )
+            from yamaa_compat import odm_items as _odm_compat
+
+            schema_fields = _odm_compat.ODM_SCHEMA_FIELDS
+            bind_fields = _odm_compat.bind_fields
+            iter_payloads = _odm_compat.iter_odm_payloads
+            parse_read = _odm_compat.parse_odm_read
         except ImportError as error:
             raise SystemExit(
                 "validate_repository.py requires the yamaa package "

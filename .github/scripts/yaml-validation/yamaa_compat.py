@@ -1,8 +1,9 @@
 """Compatibility shims mapping the clean-room yamaa package onto the names
 `.github/scripts/yaml-validation/validate_repository.py` read from the old
 package (`yamaa.regex`, `yamaa.expressions.predicates`, `yamaa.io.csv`,
-`yamaa.models`). The shims preserve the validation outcomes; they are local
-to the yaml-validation scripts and are not part of the yamaa package.
+`yamaa.models`, `yamaa.odm.items`). The shims preserve the validation
+outcomes; they are local to the yaml-validation scripts and are not part of
+the yamaa package.
 """
 
 import copy as _copy
@@ -24,6 +25,7 @@ _sys.path.insert(
 )
 
 from yamaa import csv_io as _csv_io
+from yamaa import odm as _odm
 from yamaa import pred as _pred
 from yamaa import validate as _validate
 from yamaa import values as _values
@@ -368,6 +370,19 @@ class csv:
     render_records = staticmethod(render_records)
     fixed_point = staticmethod(fixed_point)
     record_coordinates = staticmethod(record_coordinates)
+
+
+# ---------------------------------------------------------------------------
+# yamaa.odm.items -> yamaa.odm
+# ---------------------------------------------------------------------------
+class odm_items:
+    """REQ-1265..REQ-1278's fixed ODM schema and `odm` read walk, as the
+    runtime owns them."""
+
+    ODM_SCHEMA_FIELDS = _odm.ODM_SCHEMA_FIELDS
+    bind_fields = staticmethod(_odm.bind_fields)
+    iter_odm_payloads = staticmethod(_odm.iter_odm_payloads)
+    parse_odm_read = staticmethod(_odm.parse_odm_read)
 
 
 # ---------------------------------------------------------------------------
