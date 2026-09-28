@@ -416,7 +416,7 @@ def test_intermediate_verification_unique_duplicate(tmp_path):
                 "id": "EOT",
                 "dataset": "DS",
                 "filter": "DS.DSCAT = 'DISPOSITION EVENT'",
-                "verification": {"unique": ["USUBJID"]},
+                "verifications": [{"unique": ["USUBJID"]}],
             }
         ],
         "output": {"path": "adsl.csv", "columns": ["USUBJID", "DSCAT"]},
@@ -450,7 +450,7 @@ def test_intermediate_verification_unique_ok(tmp_path):
                 "id": "EOT",
                 "dataset": "DS",
                 "filter": "DS.DSCAT = 'DISPOSITION EVENT'",
-                "verification": {"unique": ["USUBJID"]},
+                "verifications": [{"unique": ["USUBJID"]}],
                 "key": ["USUBJID"],
                 "columns": ["DSCAT"],
             }
