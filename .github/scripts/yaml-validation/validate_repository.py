@@ -329,7 +329,6 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R007', 'missing_value_required'): {'false_value'},
-    ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
     },
