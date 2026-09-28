@@ -20,9 +20,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # Inline dictionary, exact matching: 'M' and 'F' translate. With no
-  # unmapped value declared, the missing value answers both a missing sex
-  # and a code with no entry, such as 'U'.
+  # Inline dictionary, exact matching: 'M' and 'F' translate. The same
+  # fallback is stated for a missing sex and for a code with no entry,
+  # such as 'U'.
   - name: SEXC
     type: str
     label: Sex Decoded
@@ -33,6 +33,7 @@ columns:
           M: Male
           F: Female
         missing: Unknown
+        unmapped: Unknown
 
   # External dictionary loaded from a YAML project resource: the same
   # lookup contract, with the dictionary living outside the spec.

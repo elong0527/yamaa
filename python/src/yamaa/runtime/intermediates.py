@@ -1028,22 +1028,30 @@ def _absent(
     plan: PlannedIntermediate,
     values: Sequence[RuntimeValue],
 ) -> IntermediateOutcome:
-    """Answer an intermediate that yields nothing under REQ-0124."""
-    if plan.strict:
-        return IntermediateOutcome(
-            condition=_condition(
-                "unmatched_key",
-                "REQ-0124",
-                {
+    """Answer an intermediate that yields nothing under REQ-0129."""
+    if plan.no_match_declared:
+        return IntermediateOutcome(absent=plan.no_match, handled_by="no_match")
+    if plan.implicit_join:
+        # REQ-0111: the implicit join registers no handler and answers
+        # absence as a missing result.
+        return IntermediateOutcome(absent=None)
+    # REQ-0124 and REQ-0344: an omitted `no_match` makes absence fatal.
+    return IntermediateOutcome(
+        condition=ConditionResult(
+            condition=RuntimeCondition(
+                phase="join",
+                condition="unmatched_key",
+                context={
                     "intermediate": plan.identifier,
                     "dataset": plan.dataset,
                     **_matched_key(plan, values),
                 },
-            ),
-            spec_path=plan.path,
-        )
-    handled_by: HandlerName | None = "missing" if plan.missing_declared else None
-    return IntermediateOutcome(absent=plan.missing, handled_by=handled_by)
+                applicable_handler="no_match",
+                requirement="REQ-0124",
+            )
+        ),
+        spec_path=plan.path,
+    )
 
 
 def _narrowed(
@@ -1370,9 +1378,7 @@ def evaluate_intermediate(
         between_value=between_value,
         between_lower=between_lower,
         between_upper=between_upper,
-        missing=payload.get("missing"),
-        strict=bool(payload.get("strict", False)),
-        missing_declared="missing" in payload,
+        implicit_join=True,
     )
     eligible = eligible_records(
         relation.records, None if filter_variables else predicate, relation

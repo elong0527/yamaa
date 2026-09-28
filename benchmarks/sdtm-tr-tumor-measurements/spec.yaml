@@ -72,7 +72,7 @@ columns:
     derivation:
       value:
         source: TR_RAW.TRORRES
-      missing:
+      unconvertible:
 
   - name: TRSTRESN
     type: float

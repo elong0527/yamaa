@@ -24,6 +24,7 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
+    no_match: null
 
 output:
   path: vs.csv

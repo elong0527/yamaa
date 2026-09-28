@@ -17,9 +17,11 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEDY]
     keep: last
+    no_match: null
   - id: MEDDRA_PT
     dataset: MEDDRA
     key: {LLTNAME: DTHCAUS}
+    no_match: null
 
 output:
   path: adsl.csv

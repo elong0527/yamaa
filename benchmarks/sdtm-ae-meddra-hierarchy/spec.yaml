@@ -16,6 +16,7 @@ intermediates:
     filter: "MEDDRA.PRIMARY_SOC = 'Y'"
     verification:
       unique: [LLTCD]
+    no_match: null
 
 output:
   path: ae.csv

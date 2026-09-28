@@ -51,7 +51,12 @@ POSITIVE_HANDLERS = (
     HandlerObservation(
         spec_path="columns.SEX.derivation.mapping.missing",
         handler="missing",
-        count=2,
+        count=1,
+    ),
+    HandlerObservation(
+        spec_path="columns.SEX.derivation.mapping.unmapped",
+        handler="unmapped",
+        count=1,
     ),
 )
 

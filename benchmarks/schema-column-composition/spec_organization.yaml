@@ -32,7 +32,7 @@ columns:
     metadata:
       analysis_role: analysis-value
 
-  # Later levels add an entry to dict and a missing handler; source and
+  # Later levels add an entry to dict and the mapping handlers; source and
   # case_sensitive are inherited from here unchanged.
   - name: ANRIND
     type: str

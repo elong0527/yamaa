@@ -17,6 +17,7 @@ intermediates:
   - id: VS_MAP
     dataset: VS_MAPPING
     key: {ItemOID: ODM.ItemOID}
+    no_match: null
 
 output:
   path: vs.csv

@@ -35,11 +35,13 @@ ConditionPhase: TypeAlias = Literal[
     "output",
 ]
 HandlerName: TypeAlias = Literal[
+    "absent",
     "missing",
     "multiple_matches",
     "no_match",
     "invalid",
     "unmapped",
+    "unconvertible",
 ]
 
 INT64_MIN = -(2**63)
@@ -387,7 +389,7 @@ def _failed_conversion(
             "to": target,
             "value": _json_value(value),
         },
-        "missing",
+        "unconvertible",
         requirement,
     )
 

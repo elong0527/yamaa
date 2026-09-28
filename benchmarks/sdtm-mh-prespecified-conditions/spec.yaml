@@ -13,7 +13,6 @@ intermediates:
   - id: MH_MAP
     dataset: MH_ITEMS
     key: {ItemOID: ODM.ItemOID}
-    strict: true
 
 output:
   path: mh.csv
@@ -101,7 +100,7 @@ rows:
   # One record per checklist item recorded at screening, answered or not.
   # The term and form order come from the item-definition table; an item
   # it does not define stops the run. Derivations run before the row
-  # filter, so each strict operation is guarded by a case that only runs
+  # filter, so each unhandled operation is guarded by a case that only runs
   # it on the rows it is total over; the filter discards the rest.
   - id: checklist
     dataset: ODM
@@ -143,7 +142,6 @@ rows:
                 dict:
                   SCREENING: 1
                   BASELINE: 2
-                strict: true
           - otherwise: {literal: 99}
       EVENTREPEAT: ODM.StudyEventRepeatKey
       REPEATKEY: ODM.ItemGroupRepeatKey
@@ -165,7 +163,7 @@ rows:
       SORTORD: {literal: 4}
       EVENTORD:
         case:
-          # Guard the strict mapping with this template's filter. A retained
+          # Guard the unhandled mapping with this template's filter. A retained
           # free-text condition at an unknown visit still fails loudly.
           - when: >-
               ODM.ItemGroupOID = 'IG.MH.FREETEXT'
@@ -177,7 +175,6 @@ rows:
                 dict:
                   SCREENING: 1
                   BASELINE: 2
-                strict: true
           - otherwise: {literal: 99}
       EVENTREPEAT: ODM.StudyEventRepeatKey
       REPEATKEY: ODM.ItemGroupRepeatKey

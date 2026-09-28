@@ -30,8 +30,8 @@ to be 65 or older:
 flag:
   condition: AGE >= 65
   false_value: N
-  missing_value: N
+  missing: N
 ```
 
-Write `missing_value: null` instead to leave the flag missing when the age
+Write `missing: null` instead to leave the flag missing when the age
 is unknown.

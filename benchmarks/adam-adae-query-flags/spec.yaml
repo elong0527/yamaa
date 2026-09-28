@@ -13,14 +13,17 @@ intermediates:
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ01'"
+    no_match: null
   - id: SMQ2
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ02'"
+    no_match: null
   - id: CQ1
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'CQ01'"
+    no_match: null
 
 output:
   path: adae.csv

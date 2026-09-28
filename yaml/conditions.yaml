@@ -15,7 +15,6 @@ conditions:
   ambiguous_dictionary: {phases: [validation]}
   artifact_path_collision: {phases: [validation]}
   assert_failed: {phases: [verification]}
-  conflicting_absent_policy: {phases: [validation]}
   conversion_failed: {phases: [convert]}
   core_mandatory_conflict: {phases: [validation]}
   correlated_filter_with_unique_verification: {phases: [validation]}

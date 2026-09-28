@@ -15,6 +15,7 @@ intermediates:
   - id: PLANNEDVISIT
     dataset: TV
     key: VISIT
+    no_match: null
   # The subject's element whose dates SESTDTC..SEENDTC (both ends included)
   # hold the collection date; a day shared by two elements keeps the later
   # one, so the kept row is the element with the latest start.
@@ -27,6 +28,7 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
+    no_match: null
 
 output:
   path: vs.csv

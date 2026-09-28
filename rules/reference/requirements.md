@@ -125,13 +125,12 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0120](../operations/lookup.md#req-0120) | `operations/lookup.md` | R003-10 |
 | [REQ-0121](../operations/lookup.md#req-0121) | `operations/lookup.md` | R003-11 |
 | [REQ-0122](../operations/lookup.md#req-0122) | `operations/lookup.md` | R003-12 |
-| [REQ-0123](../operations/lookup.md#req-0123) | `operations/lookup.md` | R003-13 |
 | [REQ-0124](../operations/lookup.md#req-0124) | `operations/lookup.md` | R003-14 |
 | [REQ-0125](../operations/lookup.md#req-0125) | `operations/lookup.md` | R003-15 |
 | [REQ-0126](../operations/lookup.md#req-0126) | `operations/lookup.md` | R003-16 |
 | [REQ-0127](../operations/lookup.md#req-0127) | `operations/lookup.md` | R003-17 |
 | [REQ-0128](../operations/lookup.md#req-0128) | `operations/lookup.md` | R003-18 |
-| [REQ-0129](../operations/lookup.md#req-0129) | `operations/lookup.md` | R003-19 |
+| [REQ-0129](../operations/lookup.md#req-0129) | `operations/lookup.md` | R003-19, R003-13 |
 | [REQ-0130](../operations/lookup.md#req-0130) | `operations/lookup.md` | R003-20 |
 | [REQ-0131](../operations/lookup.md#req-0131) | `operations/lookup.md` | R003-21 |
 | [REQ-0132](../operations/lookup.md#req-0132) | `operations/lookup.md` | R003-22 |

@@ -79,36 +79,35 @@ intermediates:
 <a id="req-1248"></a>
 
 **REQ-1248.** A named intermediate must narrow, derive, or reshape its
-dataset. An intermediate that declares only `id` and `dataset` merely
-renames the dataset qualifier and fails as `rename_only_intermediate`:
-read the input dataset directly instead of aliasing it.
+dataset, or require that every read selects a record. An intermediate that
+declares nothing beyond `id`, `dataset`, and `no_match: null` reads exactly
+what the implicit join reads ([REQ-0111](lookup.md#req-0111)) and fails as
+`rename_only_intermediate`: read the input dataset directly instead of
+aliasing it.
 
 ```yaml
 # rejected: CODED adds nothing to CODING
 intermediates:
   - id: CODED
     dataset: CODING
+    no_match: null
 ```
 
-Instead, qualify the dataset in the lookup derivation:
+Instead, qualify the dataset where it is read:
+
+```yaml
+intermediates:
+  - id: DRUG
+    dataset: WHODRUG
+    key:
+      DRUG_RECORD_NO: CODING.DRUG_RECORD_NO
+      ATC_CODE: CODING.ATC_CODE
+    no_match: null
+```
 
 An implicit join to `CODING` also needs matching output-key types. When the
 output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
 `CODING.CMSEQ` as `int` on input before reading `CODING.DRUG_RECORD_NO`.
-
-```yaml
-columns:
-  - name: CMDECOD
-    type: str
-    label: Standardized Medication Name
-    derivation:
-      lookup:
-        dataset: WHODRUG
-        key:
-          DRUG_RECORD_NO: CODING.DRUG_RECORD_NO
-          ATC_CODE: CODING.ATC_CODE
-        value: PREFERRED_NAME
-```
 
 <a id="req-0115"></a>
 
@@ -270,19 +269,13 @@ three runtime types.
 the lookup may read. Naming a column the dataset does not have fails as
 `unknown_field`.
 
-<a id="req-0123"></a>
-
-**REQ-0123.** `strict: true` together with `missing:` is a contradiction --
-a failing absence and a returned literal -- and fails as
-`conflicting_absent_policy`.
-
 ### Matching
 
 <a id="req-0124"></a>
 
-**REQ-0124.** With `strict: true`, a lookup that yields nothing fails as
-`unmatched_key`, reporting the source values and the key columns it
-sought.
+**REQ-0124.** An intermediate that yields nothing and declares no
+`no_match` fails as `unmatched_key`, reporting the source values and the key
+columns it sought.
 
 <a id="req-0125"></a>
 
@@ -314,11 +307,11 @@ a stated bound is ineligible rather than open-ended.
 
 <a id="req-0129"></a>
 
-**REQ-0129.** Yielding nothing has one policy with two settings. `strict:
-true` fails as `unmatched_key` ([REQ-0124](lookup.md#req-0124)). Otherwise every column reading
-the lookup receives the `missing:` literal, which defaults to missing. A
-declared `missing:` that answered an absence is recorded under [Local handlers](../execution/handlers.md)'s
-`missing` handler.
+**REQ-0129.** Yielding nothing is answered by the intermediate's `no_match`
+handler, its absence policy. With `no_match` declared, every column reading
+the intermediate receives its literal, and `no_match: null` answers with
+missing. The answer is recorded under [Local handlers](../execution/handlers.md)'s `no_match` handler.
+Without `no_match`, the read fails as `unmatched_key` ([REQ-0124](lookup.md#req-0124)).
 
 <a id="req-0130"></a>
 
@@ -381,14 +374,14 @@ shared.
 first time a column reads the lookup for a row, and the selection is shared
 with every later read in that row ([REQ-0138](lookup.md#req-0138)). An
 intermediate that no column reads for a row is never matched for that row:
-no record is selected, and a `strict: true` lookup never fails as
-`unmatched_key` on a row that did not read it.
+no record is selected, and an intermediate without `no_match` never fails
+as `unmatched_key` on a row that did not read it.
 
 <a id="req-0139"></a>
 
 **REQ-0139.** Handler accounting follows [Local handlers](../execution/handlers.md): a `keep` that chose among
 surviving records counts one `multiple_matches` handling, and a declared
-`missing:` that answered an absence counts one `missing` handling.
+`no_match` that answered an absence counts one `no_match` handling.
 
 <a id="req-1185"></a>
 
@@ -452,9 +445,9 @@ Filtering, matching, range narrowing, ordered selection, and the absence
 policy apply exactly as for any other read of that intermediate. It is
 selected once per donor record, and every derivation of that record that
 reads it shares the selection ([REQ-0138](lookup.md#req-0138)). A read that
-fails, such as a `strict` intermediate that selects nothing, fails the run
-with that intermediate's condition at that intermediate's path, as a row
-reading it would. The read adds no current-row dependency and never changes
+fails, such as an intermediate without `no_match` that selects nothing,
+fails the run with that intermediate's condition at that intermediate's
+path, as a row reading it would. The read adds no current-row dependency and never changes
 the number of donor records ([REQ-0146](lookup.md#req-0146)).
 
 The other intermediate must read an `input` dataset. A `SELF` intermediate
@@ -570,13 +563,13 @@ join phase, before any column is derived.
 <a id="req-0146"></a>
 
 **REQ-0146.** A lookup never changes the row count. It answers one value
-per current row: the selected record's column, the `missing:` literal,
-or a `strict:` failure.
+per current row: the selected record's column, the `no_match` literal,
+or an `unmatched_key` failure.
 
 <a id="req-0147"></a>
 
 **REQ-0147.** The absence policy applies per column read. Every column
-reading an absent lookup receives the `missing:` literal independently;
+reading an absent lookup receives the `no_match` literal independently;
 one column's handling never answers for another.
 
 <a id="req-0148"></a>
@@ -637,7 +630,7 @@ with another input dataset joins that dataset on the applicable keys
 input record. Each retained input record builds one candidate row
 ([REQ-0036](../execution/rows.md#req-0036)). The input record's fields are the only single values the match
 can read. Values produced only by column derivation are not available
-then. An explicit `lookup:` states the same match with declared `key`
+then. A named intermediate states the same match with declared `key`
 pairs. Its match values have the same availability:
 input-record fields or columns in the same row template. The join binds
 one value per row. Later derivations in the same row template read that
@@ -657,8 +650,8 @@ carries fails as `unknown_field` ([REQ-0103](../specification/binding.md#req-010
 
 <a id="req-0305"></a>
 
-**REQ-0305.** `lookup` requires each match value and its paired key
-column to have the same comparable type.
+**REQ-0305.** An intermediate's `key` requires each match value and its
+paired key column to have the same comparable type.
 
 ### Interface behavior
 
@@ -678,8 +671,7 @@ column to have the same comparable type.
 | `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
 | `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verification.unique` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
-| `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |
-| `intermediate_class.strict` | Fail when the lookup yields nothing. |
+| `intermediate_class.no_match` | Value returned when the lookup yields nothing; without it, yielding nothing fails ([REQ-0124](lookup.md#req-0124)). |
 
 <a id="req-1049"></a>
 

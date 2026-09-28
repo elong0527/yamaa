@@ -1384,27 +1384,27 @@ class TestStaticSemanticContracts(unittest.TestCase):
             expression, 'spec.columns.X.derivation', self.context()
         )
 
-    def test_flag_false_value_requires_missing_value(self):
-        # REQ-1258: missing_value may repeat false_value, name another
-        # value, or be null; it may not be absent.
+    def test_flag_false_value_requires_missing(self):
+        # REQ-1258: missing may repeat false_value, name another value, or
+        # be null; it may not be absent.
         condition = {'condition': 'B > 1'}
         [error] = self.validate({'flag': {**condition, 'false_value': 'N'}})
         self.assertEqual(error.condition, 'missing_value_required')
         self.assertEqual(
-            error.path, 'spec.columns.X.derivation.flag.missing_value'
+            error.path, 'spec.columns.X.derivation.flag.missing'
         )
         self.assertEqual(error.context, {'false_value': 'N'})
-        for missing_value in ('N', 'U', None):
-            with self.subTest(missing_value=missing_value):
+        for missing in ('N', 'U', None):
+            with self.subTest(missing=missing):
                 self.assertEqual(
                     self.validate({'flag': {
                         **condition,
                         'false_value': 'N',
-                        'missing_value': missing_value,
+                        'missing': missing,
                     }}),
                     [],
                 )
-        for flag in ('B > 1', condition, {**condition, 'missing_value': 'U'}):
+        for flag in ('B > 1', condition, {**condition, 'missing': 'U'}):
             with self.subTest(flag=flag):
                 self.assertEqual(self.validate({'flag': flag}), [])
 
@@ -1530,6 +1530,24 @@ class TestStaticSemanticContracts(unittest.TestCase):
 
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'incomparable_range_types')
+
+    def test_only_a_null_no_match_beside_id_and_dataset_is_a_rename(self):
+        # REQ-1248: {id, dataset, no_match: null} reads what the implicit
+        # join reads; without no_match the intermediate requires a match.
+        def errors(intermediate):
+            return VALIDATOR.validate_intermediate_static_semantics(
+                {'intermediates': [intermediate]},
+                'spec.yaml',
+                {'REF': {'K': 'str'}},
+                {},
+            )
+
+        [renamed] = errors({'id': 'R', 'dataset': 'REF', 'no_match': None})
+        self.assertEqual(renamed.condition, 'rename_only_intermediate')
+        self.assertEqual(errors({'id': 'R', 'dataset': 'REF'}), [])
+        self.assertEqual(
+            errors({'id': 'R', 'dataset': 'REF', 'no_match': 'NA'}), []
+        )
 
     def test_intermediate_equality_key_types(self):
         spec = {
@@ -3000,7 +3018,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'output: {path: out.csv, columns: [X]}\n'
                 'intermediates:\n'
                 '  - id: ref\n'
-                '    missing: 0\n'
+                '    no_match: 0\n'
                 'rows:\n'
                 '  - id: main\n'
                 '    derivations:\n'
@@ -3016,7 +3034,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'id': 'ref',
                 'dataset': 'REF',
                 'key': {'KEY': 'DM.KEY'},
-                'missing': 0,
+                'no_match': 0,
             },
         )
         self.assertEqual(

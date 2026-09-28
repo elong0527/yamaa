@@ -29,7 +29,7 @@ columns:
         source: DM.COUNTRY
         missing: UNKNOWN
 
-  # The fallback answers an unlisted country as well as an empty one, so
+  # The same fallback answers an unlisted country and an empty one, so
   # UNKNOWN and countries outside the three listed below reach it.
   - name: REGION1
     type: str
@@ -42,6 +42,7 @@ columns:
           CAN: North America
           DEU: Europe
         missing: Rest of World
+        unmapped: Rest of World
     verifications:
       allowed_values:
         values: [North America, Europe, Rest of World]

@@ -13,7 +13,7 @@ intermediates:
   - id: MEDDRA_CODING
     dataset: MEDDRA
     key: {LLTNAME: AE_RAW.AETERM}
-    missing: NOT CODED
+    no_match: NOT CODED
 
 output:
   path: ae.csv

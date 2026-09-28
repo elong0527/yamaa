@@ -119,17 +119,17 @@ class SdtmMappingTests(unittest.TestCase):
         rule = {row[1]: row[6] for row in rows}
         self.assertEqual(
             "Recode DM.RACE using the dictionary in input/race_dict.yaml"
-            "; missing or unlisted values " + mapping_doc.ARROW + ' "Unknown".',
+            "; missing values " + mapping_doc.ARROW + ' "Unknown"'
+            "; unlisted values are errors.",
             rule["RACEC"],
         )
 
-    def test_strict_mapping_rule_names_the_event_that_errors(self):
+    def test_mapping_rule_names_the_event_with_no_handler_as_an_error(self):
         rule = mapping_doc.describe_mapping(
             {
                 "source": "RS.OVRLRESP",
                 "dict": {"CR": "COMPLETE RESPONSE"},
                 "missing": "NOT DONE",
-                "strict": True,
             }
         )
         self.assertIn(
@@ -138,6 +138,12 @@ class SdtmMappingTests(unittest.TestCase):
             + ' "NOT DONE"; unlisted values are errors.',
             rule,
         )
+
+    def test_mapping_rule_with_no_handlers_names_both_events_as_errors(self):
+        rule = mapping_doc.describe_mapping(
+            {"source": "RS.OVRLRESP", "dict": {"CR": "COMPLETE RESPONSE"}}
+        )
+        self.assertTrue(rule.endswith("; missing or unlisted values are errors."))
 
 
 class AdamMappingTests(unittest.TestCase):

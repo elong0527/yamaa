@@ -39,19 +39,20 @@ columns:
           DIABP: Diastolic Blood Pressure
           PULSE: Pulse Rate
         missing: Other measure
+        unmapped: Other measure
 
   # The collected result is entered as text. "ND" and the fractional
   # "98.6" cannot be read as whole numbers, so the stated fallback
   # leaves them blank; a record with no collected result is blank
-  # because there is nothing to read. This `missing` sits beside `value`
-  # and answers only a failed conversion to int.
+  # because there is nothing to read. This `unconvertible` sits beside
+  # `value` and answers only a failed conversion to int.
   - name: AVAL
     type: int
     label: Analysis Value
     derivation:
       value:
         source: VS.VSSTRESN
-      missing: null
+      unconvertible: null
 
   # A dosing record with no dose never qualifies; among the dosed
   # records the later start date wins. A subject with no dosing

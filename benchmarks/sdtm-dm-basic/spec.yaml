@@ -42,6 +42,7 @@ columns:
           Male: M
           Female: F
         missing: U
+        unmapped: U
 
   - name: AGE
     type: int

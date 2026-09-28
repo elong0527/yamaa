@@ -115,7 +115,8 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         == (DM_EXAMPLE / "expected/dm.csv").read_bytes()
     )
     assert [(item.spec_path, item.count) for item in result.handler_counts] == [
-        ("columns.SEX.derivation.mapping.missing", 2),
+        ("columns.SEX.derivation.mapping.missing", 1),
+        ("columns.SEX.derivation.mapping.unmapped", 1),
     ]
 
 
@@ -931,7 +932,9 @@ def test_an_ungrouped_filter_reads_lookup_state() -> None:
     # the issue #1124 donor-read shape.
     specification = _filtered_row_spec(
         "LOOK.FLAG = 'Y'",
-        intermediates=[Intermediate(id="LOOK", dataset="RIGHT", key={"K": "SRC.K"})],
+        intermediates=[
+            Intermediate(id="LOOK", dataset="RIGHT", key={"K": "SRC.K"}, no_match=None)
+        ],
     )
 
     result = execute_specification(specification, _filtered_row_sources())
@@ -943,7 +946,9 @@ def test_an_ungrouped_filter_reads_lookup_state() -> None:
 def test_an_ungrouped_filter_lookup_matches_a_derived_column() -> None:
     specification = _filtered_row_spec(
         "LOOK.FLAG = 'Y'",
-        intermediates=[Intermediate(id="LOOK", dataset="RIGHT", key={"K": "MATCH"})],
+        intermediates=[
+            Intermediate(id="LOOK", dataset="RIGHT", key={"K": "MATCH"}, no_match=None)
+        ],
     )
     specification = specification.model_copy(
         update={

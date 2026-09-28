@@ -29,7 +29,6 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
-    strict: true
   - id: SIBLING_FADTC
     dataset: ODM_SIBLING
     key:
@@ -40,7 +39,6 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
-    strict: true
 output:
   path: fa.csv
   columns:
@@ -136,7 +134,6 @@ columns:
         dict:
           DAY1: END DAY 1
           DAY2: END DAY 2
-        strict: true
 
   - name: FADTC
     type: str
@@ -154,7 +151,6 @@ columns:
         dict:
           DAY1: 1
           DAY2: 2
-        strict: true
 
   - name: EVENTREPEAT
     type: int

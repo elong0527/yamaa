@@ -14,8 +14,7 @@ code outside the dictionary.
 **Note:** a missing code means "not collected"; a collected code outside the
 dictionary means "outside the codelist" and is usually a data-quality
 finding. The `SEXC` column keeps the missing code missing and reads the
-outside code as `Outside codelist`. The `SEXC_SINGLE` column names no
-separate result for outside codes, so both events read as its one result,
-`Unknown`.
+outside code as `Outside codelist`. The `SEXC_SINGLE` column names the same
+result, `Unknown`, for both events.
 
 **Standard:** CDISC | **Domain:** ADSL

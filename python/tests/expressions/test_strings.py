@@ -490,7 +490,7 @@ def test_a_handler_inside_a_nested_source_is_observed_at_its_own_path() -> None:
         {
             "str_concat": {
                 "sources": [
-                    {"source": {"variable": "ABSENT", "missing": "NA"}},
+                    {"source": {"variable": "ABSENT", "absent": "NA"}},
                     {"literal": "!"},
                 ]
             }
@@ -501,7 +501,7 @@ def test_a_handler_inside_a_nested_source_is_observed_at_its_own_path() -> None:
     assert isinstance(result, ValueResult)
     assert result.value == "NA!"
     assert [(item.path, item.handler) for item in result.observations] == [
-        ("sources[0].source", "missing")
+        ("sources[0].source", "absent")
     ]
 
 

@@ -51,7 +51,7 @@ def _failed_conversion(result: object) -> ConditionResult:
     assert isinstance(result, ConditionResult)
     assert result.condition.phase == "convert"
     assert result.condition.condition == "conversion_failed"
-    assert result.condition.applicable_handler == "missing"
+    assert result.condition.applicable_handler == "unconvertible"
     return result
 
 
