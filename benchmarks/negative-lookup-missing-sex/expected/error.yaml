@@ -13,6 +13,6 @@ context:
     LBTESTCD: ALT
     SEX:
   keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-522
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
       LBSEQ: 1
