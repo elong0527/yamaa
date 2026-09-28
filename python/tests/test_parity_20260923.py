@@ -4,7 +4,7 @@ The benchmark corpus covers the golden paths; these pin the boundary
 conditions the new rules text calls out explicitly (REQ-0142 grouped-row
 aggregate key rejection, REQ-1185 intermediate derivations, REQ-1245
 uniqueness verification, REQ-1243/1244 str_contains, REQ-1107 to_date ISO
-text, qualified key_base scalar resolution, inline lookup cache identity).
+text, REQ-0115/0141 qualified-aggregate key pairs).
 """
 
 import os
@@ -189,7 +189,7 @@ def test_str_contains_predicate_rejects_nonliteral_pattern(tmp_path):
 
 def test_str_contains_expression_missing_handler(tmp_path):
     # REQ-1243: the missing handler answers a missing source. (A
-    # non-missing source yields bool, which R011 never converts.)
+    # non-missing source yields bool, which REQ-0010 never converts.)
     dm = "USUBJID,NAME\nS1,\n"
     spec = adsl_spec(
         derivation={
@@ -252,7 +252,7 @@ def test_grouped_row_aggregate_with_key_rejected(tmp_path):
         "output": {"path": "adae.csv", "columns": ["USUBJID", "N"]},
         "columns": [
             {"name": "USUBJID", "type": "str", "derivation": "DM.USUBJID"},
-            {"name": "N", "type": "int", "derivation": "N"},
+            {"name": "N", "type": "int"},
         ],
         "rows": [
             {
@@ -309,6 +309,8 @@ def test_intermediate_derivation_in_filter(tmp_path):
                 "order_by": ["DS.DSDECOD"],
                 "keep": "first",
                 "columns": ["DSDECOD", "CAT_UP"],
+                # S2's only record fails the filter; REQ-0124 needs no_match.
+                "no_match": None,
             }
         ],
         "output": {"path": "adsl.csv", "columns": ["USUBJID", "DSDECOD", "CAT_UP"]},
@@ -467,15 +469,11 @@ def test_intermediate_verification_unique_ok(tmp_path):
     ]
 
 
-# --------------------------------- qualified key_base scalar resolution
+# ------------------------------------------------------ REQ-0115/REQ-0141
 
 
-def test_column_aggregate_qualified_key_base(tmp_path):
-    # A column-level aggregate's qualified key resolves the row's
-    # carried group values, not a scan of all origin records.
-    dm = "USUBJID\nS1\nS2\n"
-    ae = "USUBJID,AEDECOD\nS1,HEADACHE\nS1,NAUSEA\nS2,HEADACHE\n"
-    spec = {
+def _aggregate_key_spec(key):
+    return {
         "schema_version": "1.0",
         "domain": "ADAE",
         "keys": ["USUBJID"],
@@ -489,24 +487,48 @@ def test_column_aggregate_qualified_key_base(tmp_path):
             {
                 "name": "N",
                 "type": "int",
-                "derivation": {
-                    "aggregate": {
-                        "expr": "COUNT(AE.AEDECOD)",
-                        "key": {"AE.USUBJID": "USUBJID"},
-                    }
-                },
+                "derivation": {"aggregate": {"expr": "COUNT(AE.AEDECOD)", "key": key}},
             },
         ],
-        "rows": [
-            {
-                "id": "dm",
-                "dataset": "DM",
-                "group_by": ["DM.USUBJID"],
-            }
-        ],
+        "rows": [{"id": "dm", "dataset": "DM", "group_by": ["DM.USUBJID"]}],
     }
-    out = run(tmp_path, spec, {"dm.csv": dm, "ae.csv": ae})
+
+
+AGG_INPUTS = {
+    "dm.csv": "USUBJID\nS1\nS2\n",
+    "ae.csv": "USUBJID,AEDECOD\nS1,HEADACHE\nS1,NAUSEA\nS2,HEADACHE\n",
+}
+
+
+def test_column_aggregate_mapping_key(tmp_path):
+    # REQ-0115: a mapping pairs each relation column (the mapping key) with
+    # the current-row value beside it, so each row counts its own records.
+    spec = _aggregate_key_spec({"USUBJID": "USUBJID"})
+    out = run(tmp_path, spec, AGG_INPUTS)
     assert out.splitlines() == ["USUBJID,N", "S1,2", "S2,1"]
 
 
-# --------------------------------------- inline lookup cache identity
+def test_column_aggregate_qualified_key_column_rejected(tmp_path):
+    # REQ-0141: a key column is a column of the relation, written bare. A
+    # qualified name is no such column and must not silently match nothing.
+    spec = _aggregate_key_spec({"AE.USUBJID": "USUBJID"})
+    e = expect_error(tmp_path, spec, AGG_INPUTS)
+    assert (e.phase, e.condition, e.requirement) == (
+        "validation",
+        "unknown_field",
+        "REQ-0141",
+    )
+    assert e.spec_paths == ["columns.N.derivation.aggregate.key"]
+    assert e.context == {"key": "AE.USUBJID", "dataset": "AE"}
+
+
+def test_column_aggregate_unknown_match_value_rejected(tmp_path):
+    # REQ-0141: a plain match value must name a known current-row value.
+    spec = _aggregate_key_spec({"USUBJID": "SUBJ"})
+    e = expect_error(tmp_path, spec, AGG_INPUTS)
+    assert (e.phase, e.condition, e.requirement) == (
+        "validation",
+        "unknown_field",
+        "REQ-0141",
+    )
+    assert e.context == {"identifier": "SUBJ"}

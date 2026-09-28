@@ -15,7 +15,7 @@ def is_missing(v):
 
 
 class YDate(datetime.date):
-    """A date carrying its collected precision ('D', 'M', or 'Y'). R016."""
+    """A date carrying its collected precision ('D', 'M', or 'Y')."""
 
     def __new__(cls, year, month, day, precision="D"):
         self = super().__new__(cls, year, month, day)
@@ -27,7 +27,7 @@ class YDate(datetime.date):
 
 
 class YDateTime(datetime.datetime):
-    """A local civil datetime (no zone), whole-second resolution. R016."""
+    """A local civil datetime (no zone), whole-second resolution (values/temporal)."""
 
     def __new__(
         cls, year, month, day, hour=0, minute=0, second=0, collected_precision="second"
@@ -124,7 +124,7 @@ _NONFINITE_RE = re.compile(r"^[+-]?\.(?:inf|Inf|INF|nan|NaN|NAN)$")
 
 
 def parse_int_text(text):
-    """REQ-0015: R010 number with optional sign, no surrounding whitespace."""
+    """REQ-0015: a numeric literal with optional sign, no surrounding whitespace."""
     if _INT_RE.match(text):
         return int(text)
     raise ValueError(f"not an int: {text!r}")
@@ -175,5 +175,5 @@ def ascii_lower(s):
 
 
 def ascii_fold(s):
-    """R019 ASCII case folding (a-z -> A-Z)."""
+    """REQ-0706 ASCII case folding (a-z -> A-Z)."""
     return ascii_upper(s)

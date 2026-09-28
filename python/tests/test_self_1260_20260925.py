@@ -150,18 +150,22 @@ def test_self_correlated_filter_cached_per_driver_row(tmp_path):
 
 
 def test_self_read_in_first_template_sees_no_donors(tmp_path):
-    # REQ-0136: rows currently being constructed are not eligible donors,
-    # so a SELF read in the first template finds nothing.
+    # REQ-0120: rows currently being constructed are never eligible donors,
+    # so the first template has none, and a SELF read there fails as
+    # phase_boundary before any row is built -- `no_match` cannot answer it.
     spec = self_spec()
+    spec["intermediates"][0]["no_match"] = None
     spec["rows"][0]["derivations"] = {
         "PREV": "prev-ae.AEDECOD",
     }
-    got = run(tmp_path, spec, {"ae.csv": AE})
-    lines = got.strip().split("\n")
-    assert lines[1] == "S1,1,HEADACHE,"
-    assert lines[2] == "S1,2,NAUSEA,"
-    assert lines[3] == "S2,1,COUGH,"
-    assert lines[4] == "S2,2,FEVER,"
+    with pytest.raises(YamaaError) as ei:
+        run(tmp_path, spec, {"ae.csv": AE})
+    assert (ei.value.phase, ei.value.condition, ei.value.requirement) == (
+        "validation",
+        "phase_boundary",
+        "REQ-0120",
+    )
+    assert ei.value.spec_paths == ["rows.first.derivations.PREV"]
 
 
 def test_self_unique_runs_over_completed_pool(tmp_path):

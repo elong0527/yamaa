@@ -1,4 +1,5 @@
-"""CSV source reading (R023) and artifact writing (R020, csv profile)."""
+"""CSV source reading and artifact writing (storage/csv), Parquet source
+reading (storage/parquet)."""
 
 from .errors import YamaaError
 from .values import (
@@ -75,7 +76,7 @@ def _scan_records(text, path, written_path, spec_path, dataset):
                     continue
                 state = "after_quote"
             elif c == "\r":
-                # R023: inside quotes no U+000D begins a record terminator.
+                # storage/csv: inside quotes no U+000D begins a record terminator.
                 fail("source_carriage_return", lineno, fieldno)
             else:
                 field.append(c)
@@ -109,7 +110,7 @@ def _scan_records(text, path, written_path, spec_path, dataset):
 
 
 def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=None):
-    """Read a delimited source per R023. types: field -> column_type."""
+    """Read a delimited source per storage/csv. types: field -> column_type."""
     written_path = written_path if written_path is not None else path
     with open(path, "rb") as f:
         raw = f.read()
@@ -209,14 +210,14 @@ def _parse_cell(cell, t, path, lineno, name, spec_path, dataset="<input>"):
     raise _phase_condition(
         "ingest",
         "invalid_field_type",
-        requirement="R006",
+        requirement="REQ-0012",
         spec_paths=[spec_path],
         context={"field": name, "type": t},
     )
 
 
 def write_csv_text(columns, rows, col_types, decimals=None):
-    """Render the csv artifact per R020. rows: list of dicts. Returns str."""
+    """Render the csv artifact per storage/csv. rows: list of dicts."""
     lines = [_csv_record(columns)]
     for row in rows:
         fields = [
@@ -275,23 +276,45 @@ def _fixed_point(x, n):
 def read_parquet(
     path, types, spec_path="<input>", dataset="<input>", written_path=None
 ):
-    """Read a Parquet source per the Parquet profile."""
+    """Read a Parquet source per the Parquet profile. Returns the fields, the
+    records, and each field's type from the Parquet schema (REQ-0517)."""
     import datetime as _datetime
 
+    import pyarrow as pa
     import pyarrow.parquet as pq
 
     written_path = written_path if written_path is not None else path
     try:
         table = pq.read_table(path)
-    except Exception as exc:  # noqa: BLE001 -- any read failure is source_unreadable
+    except Exception as exc:  # noqa: BLE001 -- any read failure is REQ-1038
         raise _phase_condition(
             "ingest",
-            "source_unreadable",
-            requirement="R023",
+            "source_parquet_invalid",
+            requirement="REQ-1038",
             spec_paths=[spec_path],
             context={"dataset": dataset, "path": written_path, "error": str(exc)},
         )
     fields = table.schema.names
+    # REQ-1032/REQ-1033: the closed, exact Parquet -> column_type mapping.
+    kinds = {
+        pa.string(): "str",
+        pa.large_string(): "str",
+        pa.int64(): "int",
+        pa.float64(): "float",
+        pa.date32(): "date",
+        pa.timestamp("us"): "datetime",
+    }
+    ftypes = {}
+    for f in table.schema:
+        if f.type not in kinds:
+            raise _phase_condition(
+                "ingest",
+                "source_field_type_unsupported",
+                requirement="REQ-1040",
+                spec_paths=[spec_path],
+                context={"dataset": dataset, "field": f.name, "type": str(f.type)},
+            )
+        ftypes[f.name] = kinds[f.type]
     records = []
     cols = {name: table.column(name).to_pylist() for name in fields}
     for i in range(table.num_rows):
@@ -314,4 +337,4 @@ def read_parquet(
             else:
                 rec[name] = v
         records.append(rec)
-    return fields, records
+    return fields, records, ftypes

@@ -15,10 +15,7 @@ COLUMN_TYPES = {"str", "int", "float", "date", "datetime"}
 _VARIABLE_FIELDS = {
     "cut": ("source",),
     "str_extract": ("source",),
-    "str_upper": ("source",),
-    "str_lower": ("source",),
-    "str_sentence": ("source",),
-    "str_title": ("source",),
+    "str_case": ("source",),
     "str_pad": ("source",),
     "date_diff": ("start", "end"),
     "date_impute": ("source", "not_before"),
@@ -33,25 +30,29 @@ _VARIABLE_FIELDS = {
     "baseline_flag": ("date", "reference_date"),
 }
 
-_WINDOW_KINDS = set(_VARIABLE_FIELDS) - {
-    "cut",
-    "str_extract",
-    "str_upper",
-    "str_lower",
-    "str_sentence",
-    "str_title",
-    "date_diff",
-    "date_impute",
-    "date_precision",
-    "to_date",
-    "study_day",
-} | {
+_WINDOW_KINDS = {
     "row_number",
     "rank",
     "row_value",
     "previous_non_missing",
     "locf",
     "baseline_flag",
+}
+
+
+# REQ-1048: the intermediate_class fields.
+_INTERMEDIATE_FIELDS = {
+    "id",
+    "dataset",
+    "key",
+    "between",
+    "filter",
+    "order_by",
+    "keep",
+    "columns",
+    "no_match",
+    "derivations",
+    "verification",
 }
 
 
@@ -131,7 +132,8 @@ def _check_portable_pattern(pattern, where):
 
 
 def _normalize_pattern(pattern):
-    """R022 normalization for Python's re; shared definition in pred.py."""
+    """Portable-regex normalization for Python's re (operations/text);
+    shared definition in pred.py."""
     return _pred.normalize_pattern(pattern)
 
 
@@ -142,6 +144,7 @@ def run(e):
     _check_intermediates(e)
     _check_rows(e)
     _check_row_windows(e)
+    _check_cycles(e)
     _check_derivations(e)
     _check_functions(e)
     _check_dependencies(e)
@@ -194,7 +197,7 @@ def _check_output(e):
                 "output.columns",
                 "validation",
                 "undeclared_column",
-                "R005",
+                "REQ-0234",
                 {"column": c},
             )
     path = out.get("path")
@@ -226,7 +229,7 @@ def _check_output(e):
                 f"output.order_by[{i}]",
                 "validation",
                 "undeclared_column",
-                "R005",
+                "REQ-0236",
                 {"column": var},
             )
         if var in seen:
@@ -265,7 +268,7 @@ def _node_has_phase_break(node):
         if isinstance(n, dict):
             if len(n) == 1:
                 k = next(iter(n))
-                if k in ("lookup", "aggregate") or k in _WINDOW_KINDS:
+                if k == "aggregate" or k in _WINDOW_KINDS:
                     return True
             stack.extend(n.values())
         elif isinstance(n, list):
@@ -321,6 +324,17 @@ def _check_intermediates(e):
                 {"identifier": lid},
             )
         seen[lid] = i
+        # REQ-0285: intermediate_class is closed; the retired `key_base`,
+        # `strict`, and `missing` are not its fields.
+        for f in d:
+            if f not in _INTERMEDIATE_FIELDS:
+                _fail(
+                    f"{where}.{f}",
+                    "validation",
+                    "unknown_field",
+                    "REQ-0285",
+                    {"intermediate": lid, "field": f},
+                )
         ds = d.get("dataset")
         is_self = ds == "SELF"
         if is_self:
@@ -333,8 +347,12 @@ def _check_intermediates(e):
                     {"dataset": ds},
                 )
         elif ds not in e.inputs:
-            _fail(where, "validation", "unknown_field", "R003", {"dataset": ds})
-        if set(d) <= {"id", "dataset"}:
+            _fail(where, "validation", "unknown_field", "REQ-0120", {"dataset": ds})
+        # REQ-1248: `no_match: null` answers absence exactly as the implicit
+        # join does, so it adds nothing to a bare alias.
+        if set(d) <= {"id", "dataset"} or (
+            set(d) == {"id", "dataset", "no_match"} and d["no_match"] is None
+        ):
             _fail(
                 where,
                 "validation",
@@ -493,11 +511,14 @@ def _check_intermediates(e):
                     )
         _check_intermediate_derivations(e, d, where, ds)
         _check_intermediate_verification(e, d, where, ds)
+    _check_intermediate_cycles(e)
 
 
 def _check_intermediate_derivations(e, d, where, ds):
     """REQ-1185: derivations read the donor's stored fields (bare or
-    dataset-qualified) plus earlier sibling derivations; windows allowed."""
+    dataset-qualified) plus earlier sibling derivations; windows allowed.
+    REQ-1263: a non-window derivation may read another intermediate's
+    column, matched from the donor record."""
     derivs = d.get("derivations")
     if derivs is None:
         return
@@ -526,18 +547,109 @@ def _check_intermediate_derivations(e, d, where, ds):
         node = _norm(deriv, dpath)
         _check_tree(e, node, dpath, "row")
         bare, qual = _ident_refs(node)
-        earlier = set(names[:idx])
+        available = fields | set(names[:idx])
         for ref in sorted(bare):
-            if ref not in fields and ref not in earlier:
+            if ref not in available:
                 _fail(dpath, "validation", "unknown_field", "REQ-1185", {"name": ref})
+        window = _top_key(node) in _WINDOW_KINDS
         for ref in sorted(qual):
-            parts = ref.split(".")
-            if (
-                len(parts) != 2
-                or parts[0] != ds
-                or (parts[1] not in fields and parts[1] not in earlier)
-            ):
+            head, _, field = ref.partition(".")
+            if head == ds and field in available:
+                continue
+            other = e.lookups_decl.get(head)
+            if other is None or other is d or window:
                 _fail(dpath, "validation", "unknown_field", "REQ-1185", {"name": ref})
+            _check_intermediate_read(e, other, field, ds, available, dpath)
+
+
+def _check_intermediate_read(e, other, field, ds, available, dpath):
+    """REQ-1263: the read intermediate reads an input dataset, carries the
+    read column, and matches on names the donor record supplies."""
+    if other["dataset"] == "SELF":
+        _fail(
+            dpath,
+            "validation",
+            "phase_boundary",
+            "REQ-1263",
+            {"intermediate": other["id"], "dataset": "SELF"},
+        )
+    table = e.inputs.get(other["dataset"])
+    stored = set(table.fields) if table is not None else set()
+    ofields = stored | set(other.get("derivations") or {})
+    cols = other.get("columns")
+    if field not in ofields or (cols is not None and field not in cols):
+        _fail(
+            dpath,
+            "validation",
+            "unknown_field",
+            "REQ-1263",
+            {"intermediate": other["id"], "column": field},
+        )
+    key = other.get("key")
+    if key is None:
+        vals = [k for k in e.keys if k in ofields]
+    elif isinstance(key, dict):
+        vals = list(key.values())
+    else:
+        vals = [key] if isinstance(key, str) else list(key)
+    between = other.get("between") or {}
+    if "value" in between:
+        vals.append(between["value"])
+    names = []
+    for v in vals:
+        if isinstance(v, str):
+            names.append(v)
+        elif isinstance(v, dict):
+            b, q = _safe_idents(v)
+            names.extend(b | q)
+    for n in names:
+        head, dot, fld = n.partition(".")
+        ok = fld in available if dot else n in available
+        if not ok or (dot and head != ds):
+            _fail(
+                dpath,
+                "validation",
+                "unknown_field",
+                "REQ-1263",
+                {"intermediate": other["id"], "name": n},
+            )
+
+
+def _check_intermediate_cycles(e):
+    """REQ-1263: intermediates whose derivations read each other, directly
+    or through a chain, fail as dependency_cycle."""
+    reads = {}
+    for d in e.spec.get("intermediates", []) or []:
+        out = set()
+        for deriv in (d.get("derivations") or {}).values():
+            _, qual = _safe_idents(_safe_norm(deriv, ""))
+            out |= {q.partition(".")[0] for q in qual} & set(e.lookups_decl)
+        reads[d["id"]] = out
+    state, stack = {}, []
+
+    def visit(n):
+        state[n] = "temp"
+        stack.append(n)
+        for r in sorted(reads.get(n, ())):
+            if state.get(r) == "temp":
+                cyc = stack[stack.index(r) :] + [r]
+                _fail(
+                    list(
+                        dict.fromkeys(e.lookup_paths[c] + ".derivations" for c in cyc)
+                    ),
+                    "validation",
+                    "dependency_cycle",
+                    "REQ-1263",
+                    {"cycle": cyc},
+                )
+            if state.get(r) is None:
+                visit(r)
+        stack.pop()
+        state[n] = "perm"
+
+    for n in reads:
+        if state.get(n) is None:
+            visit(n)
 
 
 def _check_intermediate_verification(e, d, where, ds):
@@ -699,19 +811,31 @@ def _check_derivations(e):
             f"columns.{name}.derivation",
             "col",
         )
-    for t in e.spec.get("rows", []) or []:
+    for ti, t in enumerate(e.spec.get("rows", []) or []):
         grouped = bool(t.get("group_by"))
+        first = ti == 0
         for dname, d in (t.get("derivations") or {}).items():
             node = _norm(d, f"rows.{t['id']}.derivations.{dname}")
             _, qual = _ident_refs(node)
             for q in sorted(qual):
-                if q.split(".")[0] == "SELF":
+                head = q.split(".")[0]
+                if head == "SELF":
                     _fail(
                         f"rows.{t['id']}.derivations.{dname}",
                         "validation",
                         "prohibited_construct",
                         "REQ-0120",
                         {"identifier": q},
+                    )
+                # REQ-0120: the first template has no completed donor rows.
+                other = e.lookups_decl.get(head)
+                if first and other is not None and other.get("dataset") == "SELF":
+                    _fail(
+                        f"rows.{t['id']}.derivations.{dname}",
+                        "validation",
+                        "phase_boundary",
+                        "REQ-0120",
+                        {"intermediate": head, "row": t["id"]},
                     )
             _check_tree(
                 e,
@@ -725,39 +849,25 @@ def _check_derivations(e):
 def _check_tree(e, node, path, phase, row_grouped=False):
     if isinstance(node, str):
         node = {"source": node}
-    if (
-        isinstance(node, dict)
-        and "value" in node
-        and set(node) <= {"value", "missing", "strict", "unconvertible"}
-    ):
-        if "strict" in node and not isinstance(node["strict"], bool):
-            _fail(
-                path + ".strict",
-                "validation",
-                "invalid_field_type",
-                "R007",
-                {"expected": "bool", "actual": _type_name(node["strict"])},
-            )
-        if "missing" in node and isinstance(node["missing"], (dict, list)):
-            _fail(
-                path + ".missing",
-                "validation",
-                "invalid_field_type",
-                "R007",
-                {"expected": "literal", "actual": _type_name(node["missing"])},
-            )
+    if isinstance(node, dict) and "value" in node and set(node) <= _expr.HANDLED_FIELDS:
         if "unconvertible" in node and isinstance(node["unconvertible"], (dict, list)):
             _fail(
                 path + ".unconvertible",
                 "validation",
                 "invalid_field_type",
-                "R007",
+                "REQ-0287",
                 {"expected": "literal", "actual": _type_name(node["unconvertible"])},
             )
         _check_tree(e, node["value"], path + ".value", phase, row_grouped=row_grouped)
         return
     if not isinstance(node, dict) or len(node) != 1:
-        _fail(path, "validation", "invalid_field_type", "R007", {"derivation": node})
+        _fail(
+            path,
+            "validation",
+            "invalid_field_type",
+            _expr.derivation_requirement(node),
+            {"derivation": node},
+        )
     key = next(iter(node))
     payload = node[key]
     sub = path + "." + key
@@ -797,8 +907,8 @@ def _check_flag(e, payload, path, phase, row_grouped=False):
             path,
             "validation",
             "invalid_field_type",
-            "REQ-1257",
-            {"expected": "predicate string or mapping"},
+            "REQ-0287",
+            {"expected": "predicate", "actual": _type_name(payload)},
         )
     _pred.parse(cond, site)
     _check_predicate_types(e, cond, site)
@@ -959,13 +1069,30 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 and f in payload
                 and not isinstance(payload[f], str)
             ):
+                v = payload[f]
                 _fail(
                     f"{path}.{f}",
                     "validation",
                     "invalid_field_type",
-                    "REQ-0322",
-                    {"expected": "variable", "actual": _type_name(payload[f])},
+                    "REQ-0287",
+                    {
+                        "expected": "variable",
+                        "actual": "mapping" if isinstance(v, dict) else _type_name(v),
+                    },
                 )
+    if key == "source" and isinstance(payload, dict):
+        ob, keep = payload.get("order_by"), payload.get("keep")
+        if bool(ob) != bool(keep):
+            _fail(
+                path,
+                "validation",
+                "unpaired_fields",
+                "REQ-0119",
+                {
+                    "declared": ["order_by"] if ob else ["keep"],
+                    "missing": ["keep"] if ob else ["order_by"],
+                },
+            )
     if key == "source" and isinstance(payload, dict) and "filter" in payload:
         f = payload["filter"]
         if not isinstance(f, str):
@@ -1020,6 +1147,8 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 "REQ-0142",
                 {"expr": payload.get("expr")},
             )
+        if phase == "col":
+            _check_aggregate_key(e, payload, path)
         b = payload.get("between") or {}
         for f in ("value", "lower", "upper"):
             if f in b and not isinstance(b[f], str):
@@ -1057,6 +1186,15 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
             _check_input_type(
                 e, payload.get("source"), "str", path + ".source", "REQ-0308"
             )
+            cases = ["upper", "lower", "sentence", "title"]
+            if payload.get("to") not in cases:
+                _fail(
+                    path + ".to",
+                    "validation",
+                    "value_not_permitted",
+                    "REQ-0287",
+                    {"value": payload.get("to"), "permitted": cases},
+                )
         elif key == "round_half_away_from_zero":
             _check_input_type(
                 e, payload.get("source"), "numeric", path + ".source", "REQ-0418"
@@ -1071,20 +1209,12 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     "REQ-1172",
                     {"expected": "int", "actual": _type_name(payload.get("digits"))},
                 )
-        elif key in ("str_upper", "str_lower", "str_extract", "str_contains"):
+        elif key in ("str_extract", "str_contains"):
             _check_input_type(
                 e, payload.get("source"), "str", path + ".source", "REQ-0308"
             )
-            if (
-                key == "str_contains"
-                and isinstance(payload, dict)
-                and payload.get("pattern") is not None
-            ):
+            if key == "str_contains" and payload.get("pattern") is not None:
                 _check_portable_pattern(payload["pattern"], f"{path}.pattern")
-        elif key in ("str_sentence", "str_title"):
-            _check_input_type(
-                e, payload.get("source"), "str", path + ".source", "REQ-0308"
-            )
         elif key == "str_pad":
             src = payload.get("source")
             if not isinstance(src, str):
@@ -1290,7 +1420,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 f"{path}.method",
                 "validation",
                 "value_not_permitted",
-                "R007",
+                "REQ-0287",
                 {"value": m, "permitted": ["competition", "dense"]},
             )
     if key == "mapping" and isinstance(payload, dict):
@@ -1319,6 +1449,70 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 "invalid_field_type",
                 "REQ-1110",
                 {"expected": "dict or path", "actual": _type_name(d)},
+            )
+
+
+def _check_aggregate_key(e, payload, path):
+    """REQ-0115/REQ-0141: every `key` column is a column of the qualified
+    relation, written bare, and every plain match value names a known
+    current-row value."""
+    key = payload.get("key")
+    if key is None:
+        return
+    heads = set()
+    ex = payload.get("expr")
+    if isinstance(ex, str):
+        try:
+            _, names = _agg.parse(ex, path + ".expr")
+        except YamaaError:
+            names = []
+        heads |= {n.split(".")[0] for n in names if "." in n}
+    for b in payload.get("derive") or []:
+        if isinstance(b, dict):
+            _, qual = _safe_idents(_safe_norm(b.get("derivation"), path))
+            heads |= {q.split(".")[0] for q in qual}
+    rel = sorted(h for h in heads if h in e.inputs)
+    if len(rel) != 1:
+        return
+    fields = set(e.inputs[rel[0]].fields)
+    if isinstance(key, str):
+        pairs = [(key, key)]
+    elif isinstance(key, dict):
+        pairs = list(key.items())
+    elif isinstance(key, list):
+        pairs = [(k, k) for k in key]
+    else:
+        _fail(
+            path + ".key",
+            "validation",
+            "invalid_field_type",
+            "REQ-0115",
+            {"expected": "list or mapping", "actual": _type_name(key)},
+        )
+    if not pairs:
+        _fail(
+            path + ".key",
+            "validation",
+            "missing_aggregate_keys",
+            "REQ-0140",
+            {"dataset": rel[0]},
+        )
+    for col, mv in pairs:
+        if not isinstance(col, str) or col not in fields:
+            _fail(
+                path + ".key",
+                "validation",
+                "unknown_field",
+                "REQ-0141",
+                {"key": col, "dataset": rel[0]},
+            )
+        if isinstance(mv, str) and "." not in mv and mv not in e.colspecs:
+            _fail(
+                path + ".key",
+                "validation",
+                "unknown_field",
+                "REQ-0141",
+                {"identifier": mv},
             )
 
 
@@ -1462,10 +1656,7 @@ def _ident_refs(node):
         elif key in (
             "cut",
             "str_extract",
-            "str_upper",
-            "str_lower",
-            "str_sentence",
-            "str_title",
+            "str_case",
             "str_contains",
             "str_pad",
             "to_date",
@@ -1566,10 +1757,7 @@ def _unqualified_refs(node, phase="col"):
     elif key in (
         "cut",
         "str_extract",
-        "str_upper",
-        "str_lower",
-        "str_sentence",
-        "str_title",
+        "str_case",
         "str_pad",
         "to_date",
         "date_precision",
@@ -1702,17 +1890,30 @@ def _check_functions(e):
         walk_derivs(t.get("derivations"), f"rows.{t['id']}.derivations")
 
 
-def _check_dependencies(e):
-    decl = e.col_order
-    idx = {n: i for i, n in enumerate(decl)}
-    keys = {}
-    deps = {}
-    for n in decl:
+def _column_deps(e, safe=False):
+    """Each column's top expression key and the columns it reads. With
+    `safe`, a malformed derivation reads nothing; its own check reports it."""
+    keys, deps = {}, {}
+    for n in e.col_order:
         d = e.colspecs[n].get("derivation")
-        node = _norm(d, f"columns.{n}.derivation") if d is not None else None
+        node = None
+        if d is not None:
+            node = _safe_norm(d, f"columns.{n}.derivation") if safe else _norm(d, "")
         keys[n] = _top_key(node) if node else "source"
-        refs = _unqualified_refs(node) if node else set()
-        deps[n] = {r for r in refs if r in idx}
+        try:
+            refs = _unqualified_refs(node) if node else set()
+        except Exception:
+            if not safe:
+                raise
+            refs = set()
+        deps[n] = {r for r in refs if r in e.colspecs}
+    return keys, deps
+
+
+def _check_cycles(e):
+    """REQ-0072: a dependency cycle rejects the specification before any one
+    derivation's operands are judged."""
+    keys, deps = _column_deps(e, safe=True)
     state = {}
     stack = []
 
@@ -1724,16 +1925,26 @@ def _check_dependencies(e):
                 cyc = stack[stack.index(r) :] + [r]
                 paths = [f"columns.{c}.derivation.{keys[c]}" for c in cyc]
                 _fail(
-                    paths, "validation", "dependency_cycle", "REQ-0072", {"cycle": cyc}
+                    list(dict.fromkeys(paths)),
+                    "validation",
+                    "dependency_cycle",
+                    "REQ-0072",
+                    {"cycle": cyc},
                 )
             if state.get(r) is None:
                 visit(r)
         stack.pop()
         state[n] = "perm"
 
-    for n in decl:
+    for n in e.col_order:
         if state.get(n) is None:
             visit(n)
+
+
+def _check_dependencies(e):
+    decl = e.col_order
+    idx = {n: i for i, n in enumerate(decl)}
+    keys, deps = _column_deps(e)
     for n in decl:
         for r in sorted(deps[n]):
             if idx[r] > idx[n]:

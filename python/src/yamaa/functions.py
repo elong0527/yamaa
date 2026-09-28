@@ -251,9 +251,11 @@ def check_call(functions, payload, where):
 
 def call_function(func, arg_values, where):
     """Invoke a project function with resolved arg values."""
-    # Short-circuit: missing required arg -> missing result.
-    for param_name, param in func.params.items():
-        if param.get("required", True) and arg_values.get(param_name) is None:
+    # REQ-0681: a missing value for a parameter that does not accept missing
+    # skips the call; an accepting parameter receives the missing scalar.
+    for param_name, value in arg_values.items():
+        param = func.params.get(param_name) or {}
+        if value is None and not param.get("accepts_missing", False):
             return None
     # Apply defaults for optional params not supplied.
     call_args = dict(arg_values)
