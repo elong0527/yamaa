@@ -92,6 +92,7 @@ rows:
 
 verifications:
   - row_count:
+      id: row_count
       min: 10
       max: 10
   # A grade that differs from the recorded one stops the run.

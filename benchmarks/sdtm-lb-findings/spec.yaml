@@ -72,6 +72,7 @@ columns:
           then: {literal: NOT DONE}
     verifications:
       allowed_values:
+        id: lbstat_allowed_values
         values: [NOT DONE]
 
   - name: LBTESTCD

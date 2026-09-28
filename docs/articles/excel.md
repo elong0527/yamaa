@@ -52,6 +52,7 @@ columns:                       # this section (below) is the Variable sheet
 
 verifications:                 # <- no cell for this either
   - unique:
+      id: unique-studyid-usubjid
       columns: [STUDYID, USUBJID]
   - implies:
       id: bmi-missing-only-without-usable-height
@@ -177,8 +178,10 @@ yamaa:
     type: str
     label: Sex
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: sex-not-missing
       - allowed_values:
+          id: sex-allowed-values
           values: [M, F, U]
     derivation:
       mapping:

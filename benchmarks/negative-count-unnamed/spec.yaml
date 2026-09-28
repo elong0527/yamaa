@@ -41,6 +41,7 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_adt
       columns: [STUDYID, USUBJID, PARAMCD, ADT]
   # Exactly one baseline per subject and parameter, but this grouped count
   # has no id naming that rule.

@@ -6,8 +6,7 @@ input:
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, DOBTC, DTM, REFDT, DOB_FIRST,
-    DOB_LAST, DOB_PREC_TX, DOB_PREC_DT, DTMDT, DOBDY]
+  columns: [STUDYID, USUBJID, DOBTC, DTM, REFDT, DOB_FIRST, DOB_LAST, DOB_PREC_TX, DOB_PREC_DT, DTMDT, DOBDY]
 
 columns:
   - name: STUDYID
@@ -50,8 +49,8 @@ columns:
         month: 6
         day: first
         minimum_source_precision: year
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   # The same completion, to the last day of the month the date lands in
   # (28 or 29 in a February, by year).
@@ -64,8 +63,8 @@ columns:
         month: 6
         day: last
         minimum_source_precision: year
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   # Y, M or D: how much of a date the collected text carries.
   - name: DOB_PREC_TX
@@ -74,8 +73,8 @@ columns:
     derivation:
       date_precision:
         source: DOBTC
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   # The completed date keeps the precision of the text it came from, so
   # this reads the same code as DOB_PREC_TX. A date value is never invalid
@@ -86,7 +85,7 @@ columns:
     derivation:
       date_precision:
         source: DOB_FIRST
-        missing: null
+        missing:
 
   - name: DTMDT
     type: date
@@ -107,7 +106,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 5
       max: 5

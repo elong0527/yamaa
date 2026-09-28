@@ -55,4 +55,5 @@ columns:
 
 verifications:
   - unique:
+      id: unique_usubjid
       columns: [USUBJID]

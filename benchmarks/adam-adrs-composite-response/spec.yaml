@@ -80,8 +80,10 @@ columns:
           THRESHOLD: RESPONDER
           OTHERWISE: NON-RESPONDER
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: avalc_not_missing
       - allowed_values:
+          id: avalc_allowed_values
           values: [RESPONDER, NON-RESPONDER, NOT EVALUABLE]
 
   - name: ARSN
@@ -96,7 +98,8 @@ columns:
           THRESHOLD: THRESHOLD MET
           OTHERWISE: THRESHOLD NOT MET
     verifications:
-      not_missing: {}
+      not_missing:
+        id: arsn_not_missing
 
   # No branch for NOT EVALUABLE, so AVAL stays empty there.
   - name: AVAL
@@ -111,8 +114,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_avisit
       columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - implies:

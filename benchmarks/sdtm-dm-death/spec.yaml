@@ -67,12 +67,15 @@ columns:
       flag: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
     verifications:
       allowed_values:
+        id: dthfl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 5
       max: 5
   - implies:

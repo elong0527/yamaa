@@ -16,8 +16,7 @@ intermediates:
 
 output:
   path: mh.csv
-  columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR,
-            MHSTAT]
+  columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT]
   order_by: [USUBJID, MHSEQ]
 
 columns:
@@ -40,7 +39,8 @@ columns:
     type: str
     label: Reported Term for the Medical History
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: mhterm_not_missing
 
   - name: MHCAT
     type: str
@@ -51,6 +51,7 @@ columns:
     label: Pre-Specified Medical History Indicator
     verifications:
       - allowed_values:
+          id: mhpresp_allowed_values
           values: [Y]
 
   - name: MHOCCUR
@@ -58,6 +59,7 @@ columns:
     label: Medical History Occurrence
     verifications:
       - allowed_values:
+          id: mhoccur_allowed_values
           values: [Y, N]
 
   - name: MHSTAT
@@ -65,6 +67,7 @@ columns:
     label: Completion Status
     verifications:
       - allowed_values:
+          id: mhstat_allowed_values
           values: [NOT DONE]
 
   # SORTORD, EVENTORD, EVENTREPEAT and REPEATKEY exist only to order MHSEQ;
@@ -181,8 +184,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_mhseq
       columns: [STUDYID, USUBJID, MHSEQ]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - implies:

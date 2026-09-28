@@ -36,6 +36,7 @@ columns:
     derivation: AE.AESEV
     verifications:
       - allowed_values:
+          id: asev_allowed_values
           values: [MILD, MODERATE, SEVERE]
 
   - name: ASEVN
@@ -44,7 +45,7 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing:
         dict:
           MILD: 1
           MODERATE: 2
@@ -70,5 +71,6 @@ columns:
 
 verifications:
   - row_count:
+      id: row_count
       min: 12
       max: 12

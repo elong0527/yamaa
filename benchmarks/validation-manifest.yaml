@@ -200,8 +200,8 @@ fixtures:
     validator: expression_contract
   negative-count-unnamed:
     rule: R009
-    condition: missing_verification_id
-    spec_paths: ["verifications[1].row_count"]
+    condition: missing_required_field
+    spec_paths: ["verifications[1].row_count.id"]
     validator: spec_contract
   negative-least-mixed:
     rule: R007

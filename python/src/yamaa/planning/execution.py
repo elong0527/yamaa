@@ -160,6 +160,8 @@ class PlannedIntermediate(_FrozenModel):
     # REQ-1245: donor columns asserted unique across the source-only
     # filtered records; empty when the author declared no verification.
     unique_columns: tuple[str, ...] = ()
+    # REQ-1245: the declared verification's id; None when no verification.
+    verification_id: str | None = None
 
     @property
     def filter_variables(self) -> tuple[str, ...]:
@@ -2982,15 +2984,17 @@ def _plan_lookups(
                     failed = True
 
         unique_columns: tuple[str, ...] = ()
+        verification_id: str | None = None
         if intermediate.verification is not None:
-            unique_columns = tuple(intermediate.verification.unique)
+            unique_columns = tuple(intermediate.verification.unique.columns)
+            verification_id = intermediate.verification.id
             for unique_index, field in enumerate(unique_columns):
                 if field in derived or field in fields:
                     continue
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
-                        f"{path}.verification.unique[{unique_index}]",
+                        f"{path}.verification.unique.columns[{unique_index}]",
                         {
                             "intermediate": intermediate.id,
                             "identifier": f"{intermediate.dataset}.{field}",
@@ -3064,6 +3068,7 @@ def _plan_lookups(
             no_match_declared="no_match" in intermediate.model_fields_set,
             derived=tuple(derived.items()),
             unique_columns=unique_columns,
+            verification_id=verification_id,
         )
         if intermediate_reads:
             reads[intermediate.id] = tuple(intermediate_reads)
@@ -4115,7 +4120,7 @@ def _row_phase_default_columns(
             names.extend((intermediate.between.lower, intermediate.between.upper))
         if intermediate.verification is not None:
             # REQ-1245: the asserted-unique columns are donor fields.
-            names.extend(intermediate.verification.unique)
+            names.extend(intermediate.verification.unique.columns)
         if intermediate.filter is not None:
             try:
                 names.extend(

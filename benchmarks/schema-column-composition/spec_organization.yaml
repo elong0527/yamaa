@@ -28,6 +28,7 @@ columns:
     derivation: LB.LBSTRESN
     verifications:
       - range:
+          id: aval_range
           min: 0
     metadata:
       analysis_role: analysis-value

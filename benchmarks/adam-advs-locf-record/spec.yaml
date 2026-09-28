@@ -65,6 +65,7 @@ columns:
 verifications:
   # One output row per planned visit: the driver table is not filtered.
   - row_count:
+      id: row_count
       min: 15
       max: 15
   # With no donor observation all three carried fields stay missing

@@ -52,12 +52,15 @@ columns:
         missing: "N"
     verifications:
       allowed_values:
+        id: complfl_allowed_values
         values: [Y, N]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 8
       max: 8
   - implies:

@@ -17,9 +17,7 @@ intermediates:
 
 output:
   path: qs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT,
-            QSORRES, QSSTRESC, QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL,
-            VISITNUM, QSDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT, QSORRES, QSSTRESC, QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL, VISITNUM, QSDTC]
   order_by: [STUDYID, USUBJID, QSSEQ]
 
 columns:
@@ -224,8 +222,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_qsseq
       columns: [STUDYID, USUBJID, QSSEQ]
   - row_count:
+      id: row_count
       min: 30
       max: 30
   - implies:

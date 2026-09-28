@@ -36,5 +36,6 @@ columns:
 
 verifications:
   - row_count:
+      id: row_count
       min: 6
       max: 6

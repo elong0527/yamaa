@@ -29,6 +29,7 @@ columns:
     label: Parameter Code
     verifications:
       allowed_values:
+        id: paramcd_allowed_values
         values: [PF01, PF02, PF03, PF04, PFSCORE]
 
   - name: PARAM
@@ -76,6 +77,7 @@ columns:
         - otherwise: ITEMRESN
     verifications:
       range:
+        id: aval_range
         min: 0
         max: 100
 
@@ -99,8 +101,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_visit_paramcd
       columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
+      id: row_count
       min: 25
       max: 25
   - implies:

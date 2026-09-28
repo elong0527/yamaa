@@ -830,6 +830,24 @@ def test_duplicate_donor_records_fail_verification() -> None:
     assert failure.severity == "error"
 
 
+def test_duplicate_donor_records_report_the_verification_id() -> None:
+    # REQ-0374: the diagnostic carries the declared verification id.
+    selector = IntermediateSelector(
+        [
+            ds_plan(
+                unique_columns=("STUDYID", "USUBJID"),
+                verification_id="ds-eos-unique",
+            )
+        ],
+        {"DS": ds()},
+    )
+
+    (failure,) = selector.verify_uniqueness()
+
+    assert failure.condition == "duplicate_intermediate_records"
+    assert failure.context["verification_id"] == "ds-eos-unique"
+
+
 def test_an_unverified_intermediate_is_not_checked() -> None:
     selector = IntermediateSelector([ds_plan()], {"DS": ds()})
 

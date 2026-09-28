@@ -67,6 +67,7 @@ columns:
     derivation: ADTR_RAW.ANL01FL
     verifications:
       allowed_values:
+        id: anl01fl_allowed_values
         values: [Y]
 
   # Lowest complete (ANL01FL = Y) sum among the subject's assessments dated
@@ -87,8 +88,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_avisit
       columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
+      id: row_count
       min: 14
       max: 14
   - implies:

@@ -6,8 +6,7 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT,
-    LBORRES, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -115,5 +114,6 @@ rows:
 
 verifications:
   - row_count:
+      id: row_count
       min: 5
       max: 5

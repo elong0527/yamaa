@@ -93,7 +93,9 @@ rows:
 
 verifications:
   - unique:
+      id: unique_usubjid_visit_paramcd
       columns: [USUBJID, VISIT, PARAMCD]
   - row_count:
+      id: row_count
       min: 15
       max: 15

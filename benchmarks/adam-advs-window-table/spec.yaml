@@ -116,12 +116,15 @@ columns:
       flag: "AWRANK = 1"
     verifications:
       allowed_values:
+        id: anl01fl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_vsseq
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   - row_count:
+      id: row_count
       min: 16
       max: 16
   - all_or_none:

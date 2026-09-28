@@ -40,6 +40,7 @@ columns:
     derivation: CE.CESEV
     verifications:
       allowed_values:
+        id: asev_allowed_values
         values: [MILD, MODERATE, SEVERE]
 
   - name: ASEVN
@@ -49,9 +50,10 @@ columns:
       mapping:
         source: ASEV
         dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
-        missing: null
+        missing:
     verifications:
       allowed_values:
+        id: asevn_allowed_values
         values: [1, 2, 3]
 
   - name: ATOXGRN
@@ -60,6 +62,7 @@ columns:
     derivation: ASEVN
     verifications:
       allowed_values:
+        id: atoxgrn_allowed_values
         values: [1, 2, 3]
 
   # Number each subject's graded events: worst grade first, then earliest
@@ -85,12 +88,15 @@ columns:
       flag: "WGRSEQ = 1"
     verifications:
       allowed_values:
+        id: aoccfl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_ceseq
       columns: [STUDYID, USUBJID, CESEQ]
   - row_count:
+      id: row_count
       min: 11
       max: 11
   - implies:

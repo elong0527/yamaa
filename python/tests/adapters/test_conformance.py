@@ -803,6 +803,7 @@ columns:
     derivation: RAW.AGE
     verifications:
       - range:
+          id: age_range
           min: 18
           max: 100
 """,
@@ -827,7 +828,7 @@ columns:
             b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
             b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,"
             b"FAILURE_COUNT,DETAILS\n"
-            b"1.0,dm.csv,columns.AGE.verifications[0].range,,range,AGE,"
+            b"1.0,dm.csv,columns.AGE.verifications[0].range,age_range,range,AGE,"
             b'REQ-0377,error,violated,range_failed,2,1,"{""column"":""AGE""}"\n'
         )
         assert not (tmp_path / "artifacts" / example.name / "dm.csv").exists()

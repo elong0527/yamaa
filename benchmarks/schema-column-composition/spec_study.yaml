@@ -18,7 +18,8 @@ columns:
           then: {literal: 31.0}
         - otherwise: LB.LBSTRESN
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: aval_not_missing
     metadata:
       review_status: adjudicated
 

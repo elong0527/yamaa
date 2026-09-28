@@ -40,7 +40,9 @@ intermediates:
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR'"
     verification:
-      unique: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
+      id: ec_occur_unique
+      unique:
+        columns: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
   # Each item lookup matches the collected EC form selected below.
   - id: EC_FORM
     dataset: ODM
@@ -212,7 +214,8 @@ columns:
           then: KITMAP.TREATMENT
         - otherwise: EC_ECTRT.Value
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: extrt_not_missing
 
   - name: EXDOSE
     type: float
@@ -231,7 +234,8 @@ columns:
           then: AUCTARGET
         - otherwise: KIT_DOSE
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: exdose_not_missing
 
   - name: EXDOSU
     type: str
@@ -243,6 +247,7 @@ columns:
         - otherwise: {literal: mg}
     verifications:
       allowed_values:
+        id: exdosu_allowed_values
         values: [mg, AUC]
 
   - name: EXSTDTC
@@ -266,8 +271,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_exseq
       columns: [STUDYID, USUBJID, EXSEQ]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - assert:

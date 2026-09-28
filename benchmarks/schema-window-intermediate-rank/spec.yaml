@@ -21,7 +21,7 @@ intermediates:
       SEVN:
         mapping:
           source: AE.AESEV
-          missing: null
+          missing:
           dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
       # Competition rank of the event within its subject: worst numeric
       # severity first, later onset date first. Events tied on both
@@ -91,7 +91,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 9
       max: 9

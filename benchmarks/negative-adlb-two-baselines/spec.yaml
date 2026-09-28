@@ -40,10 +40,12 @@ columns:
     derivation: ADLB_RAW.ABLFL
     verifications:
       allowed_values:
+        id: ablfl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_adt
       columns: [STUDYID, USUBJID, PARAMCD, ADT]
   # Exactly one record flagged Y per subject and parameter: a combination
   # with no flagged record fails min just as two flagged records fail max.

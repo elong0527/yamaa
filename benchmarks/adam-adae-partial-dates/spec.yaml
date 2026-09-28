@@ -54,8 +54,8 @@ columns:
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        missing: null   # handlers are explicit: an omitted one is fatal
-        invalid: null
+        missing:        # handlers are explicit: an omitted one is fatal
+        invalid:
 
   - name: ASTDTC
     type: str
@@ -68,7 +68,7 @@ columns:
     derivation:
       date_precision:
         source: ASTDT
-        missing: null
+        missing:
 
   # M means the collected start carried a year and month, so the day was
   # supplied.
@@ -81,6 +81,7 @@ columns:
           then: {literal: "D"}
     verifications:
       allowed_values:
+        id: astdtf_allowed_values
         values: ["D"]
 
   - name: TRTEMFL
@@ -90,12 +91,15 @@ columns:
       flag: "ASTDT >= TRTSDT"
     verifications:
       allowed_values:
+        id: trtemfl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 13
       max: 13
   - all_or_none:

@@ -21,8 +21,7 @@ intermediates:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM,
-    VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 # One candidate record per subject, visit, form and item. Only items in the
@@ -31,8 +30,7 @@ output:
 rows:
   - id: vs_reading
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
-      ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemOID]
     filter: "VSTESTCD IS NOT NULL"
     derivations:
       VSTESTCD: VS_MAP.VSTESTCD
@@ -90,7 +88,8 @@ columns:
           FO.VS_1H: 3
           FO.VS_4H: 4
     verifications:
-      not_missing: {}
+      not_missing:
+        id: vstptnum_not_missing
 
   - name: VSELTM
     type: str
@@ -104,13 +103,15 @@ columns:
           FO.VS_1H: PT1H
           FO.VS_4H: PT4H
     verifications:
-      not_missing: {}
+      not_missing:
+        id: vseltm_not_missing
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
     verifications:
       allowed_values:
+        id: vstestcd_allowed_values
         values: [PULSE, SYSBP, DIABP]
 
   - name: ORD_TEST
@@ -136,7 +137,8 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [VSTPTNUM, ORD_TEST]
     verifications:
-      not_missing: {}
+      not_missing:
+        id: vsseq_not_missing
 
   - name: VSORRES
     type: str
@@ -147,6 +149,7 @@ columns:
     label: Original Units
     verifications:
       allowed_values:
+        id: vsorresu_allowed_values
         values: [beats/min, mmHg]
 
   # Collected in standard units, so this is the collected result read as a
@@ -176,7 +179,8 @@ columns:
           FormOID: ODM.FormOID
         expr: "ONLY(ODM.Value)"
     verifications:
-      not_missing: {}
+      not_missing:
+        id: vsdtc_not_missing
 
   # Typed copies of the first-dose date-time and the reference start date,
   # for the dose-order checks and the study day; neither is in the output.
@@ -207,8 +211,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_vsseq
       columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
+      id: row_count
       min: 24
       max: 24
   # A post-dose reading dated before the first dose, or a pre-dose reading

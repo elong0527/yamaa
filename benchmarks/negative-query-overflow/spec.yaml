@@ -70,7 +70,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 3
       max: 3

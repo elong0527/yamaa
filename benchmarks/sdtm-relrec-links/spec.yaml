@@ -104,8 +104,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_rdomain_idvar_idvarval_relid
       columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
   - row_count:
+      id: row_count
       min: 8
       max: 8
   # A relationship with only one member is a dangling link number: the

@@ -151,7 +151,7 @@ columns:
         dict: {A: Alpha}
         case_sensitive: false
     verifications:
-      - max_length: {max: 8}
+      - max_length: {id: result_max_length, max: 8}
     metadata: {analysis_role: result, origin_note: parent}
 """,
         encoding="ascii",
@@ -169,7 +169,7 @@ columns:
         dict: {B: Beta}
         missing: null
     verifications:
-      - not_missing: {}
+      - not_missing: {id: result_not_missing}
     metadata: {origin_note: study, reviewed: "yes"}
 """,
         encoding="ascii",
@@ -199,7 +199,9 @@ columns:
         "reviewed": "yes",
     }
     # Every list replaces, so the child's one check is the whole list.
-    assert result["verifications"] == [{"not_missing": {"severity": "error"}}]
+    assert result["verifications"] == [
+        {"not_missing": {"id": "result_not_missing", "severity": "error"}}
+    ]
 
 
 def test_child_expression_naming_another_keyword_replaces_the_derivation(

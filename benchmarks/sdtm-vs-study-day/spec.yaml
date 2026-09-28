@@ -55,7 +55,8 @@ columns:
     label: Sequence Number
     derivation: VS_RAW.VSSEQ
     verifications:
-      not_missing: {}
+      not_missing:
+        id: vsseq_not_missing
 
   - name: VSTESTCD
     type: str
@@ -136,12 +137,15 @@ columns:
     derivation: SEHIT.EPOCH
     verifications:
       allowed_values:
+        id: epoch_allowed_values
         values: [SCREENING, TREATMENT, FOLLOW-UP]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_vsseq
       columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
+      id: row_count
       min: 7
       max: 7
   - implies:

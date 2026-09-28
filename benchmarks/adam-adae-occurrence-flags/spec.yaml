@@ -45,6 +45,7 @@ columns:
     derivation: ADAE_RAW.TRTEMFL
     verifications:
       allowed_values:
+        id: trtemfl_allowed_values
         values: [Y]
 
   # Number each subject's treatment-emergent events (earliest first, AESEQ
@@ -99,8 +100,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - implies:

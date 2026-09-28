@@ -76,6 +76,7 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_avisit
       columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - implies:
       id: contributing-hr-uses-beats-per-minute

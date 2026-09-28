@@ -4,6 +4,7 @@ spec_paths:
   - verifications[0].unique
 requirement: REQ-0381
 context:
+  verification_id: unique_siteid
   columns: [SITEID]
   failure_count: 1
   keys:

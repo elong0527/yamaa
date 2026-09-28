@@ -52,8 +52,10 @@ columns:
         false_value: "N"
         missing: "N"
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: avalc_not_missing
       - allowed_values:
+          id: avalc_allowed_values
           values: [Y, N]
 
   - name: AVAL
@@ -66,14 +68,18 @@ columns:
           Y: 1
           N: 0
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: aval_not_missing
       - range:
+          id: aval_range
           min: 0
           max: 1
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd
       columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
+      id: row_count
       min: 6
       max: 6

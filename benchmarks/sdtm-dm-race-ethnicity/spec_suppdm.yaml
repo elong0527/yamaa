@@ -44,7 +44,8 @@ columns:
     label: Identifying Variable Value
     derivation: USUBJID
     verifications:
-      not_missing: {}
+      - not_missing:
+          id: idvarval_not_missing
 
   - name: ITEMOID
     type: str
@@ -82,6 +83,7 @@ columns:
       str_template: "RACE{RACENUMC}"
     verifications:
       matches:
+        id: qnam_matches
         pattern: "^RACE[1-9][0-9]*$"
 
   - name: QLABEL
@@ -108,8 +110,10 @@ columns:
           "Subject refused": UNKNOWN
         missing: null
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: qval_not_missing
       - allowed_values:
+          id: qval_allowed_values
           values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
             BLACK OR AFRICAN AMERICAN,
             NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE,
@@ -142,8 +146,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_rdomain_usubjid_idvar_idvarval_qnam
       columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
+      id: row_count
       min: 11
       max: 11
   - implies:

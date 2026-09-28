@@ -91,7 +91,8 @@ columns:
     label: Object of the Observation
     derivation: SIBLING_FAOBJ.Value
     verifications:
-      not_missing: {}
+      not_missing:
+        id: faobj_not_missing
 
   - name: FACAT
     type: str
@@ -218,11 +219,13 @@ rows:
           missing: 99
 verifications:
   - unique:
+      id: unique_studyid_usubjid_faseq
       columns:
         - STUDYID
         - USUBJID
         - FASEQ
   - row_count:
+      id: row_count
       min: 9
       max: 9
   - implies:

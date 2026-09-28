@@ -17,6 +17,7 @@ columns:
     derivation: {literal: DS}
     verifications:
       allowed_values:
+        id: domain_allowed_values
         values: [DS]
 
   - name: STUDYID
@@ -39,8 +40,10 @@ columns:
           EOT: 1
           EOS: 2
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsseq_not_missing
       - allowed_values:
+          id: dsseq_allowed_values
           values: [1, 2]
 
   - name: DSCAT
@@ -49,6 +52,7 @@ columns:
     derivation: {literal: DISPOSITION EVENT}
     verifications:
       allowed_values:
+        id: dscat_allowed_values
         values: [DISPOSITION EVENT]
 
   - name: DSSCAT
@@ -61,8 +65,10 @@ columns:
           EOT: STUDY TREATMENT
           EOS: STUDY
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsscat_not_missing
       - allowed_values:
+          id: dsscat_allowed_values
           values: [STUDY TREATMENT, STUDY]
 
   # The completion flag, which decides DSTERM and DSDECOD. Like the reason,
@@ -76,8 +82,10 @@ columns:
         filter: ODM.ItemOID = 'IT.DS.COMP'
         variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: compstat_not_missing
       - allowed_values:
+          id: compstat_allowed_values
           values: [COMPLETED, DISCONTINUED]
 
   - name: DSTERM
@@ -92,7 +100,8 @@ columns:
               filter: ODM.ItemOID = 'IT.DS.REASON'
               variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsterm_not_missing
 
   - name: DSDECOD
     type: str
@@ -106,8 +115,10 @@ columns:
               filter: ODM.ItemOID = 'IT.DS.REASONCD'
               variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsdecod_not_missing
       - allowed_values:
+          id: dsdecod_allowed_values
           values: [COMPLETED, ADVERSE EVENT, OTHER]
 
   - name: DSSTDTC
@@ -118,12 +129,15 @@ columns:
         filter: ODM.ItemOID = 'IT.DS.DTC'
         variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsstdtc_not_missing
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_dsseq
       columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - implies:

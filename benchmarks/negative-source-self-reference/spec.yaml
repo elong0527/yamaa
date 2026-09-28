@@ -35,6 +35,7 @@ columns:
     label: Parameter Code
     verifications:
       allowed_values:
+        id: paramcd_allowed_values
         values: [ALT, AST, ASTALT]
 
   - name: PARAM
@@ -104,7 +105,9 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_adt_paramcd
       columns: [STUDYID, USUBJID, ADT, PARAMCD]
   - row_count:
+      id: row_count
       min: 6
       max: 6

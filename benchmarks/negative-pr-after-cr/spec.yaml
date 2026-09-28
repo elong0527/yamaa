@@ -40,6 +40,7 @@ columns:
     derivation: RS.RSSTRESC
     verifications:
       allowed_values:
+        id: avalc_allowed_values
         values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
 
   # The subject's previous response in date order (sequence number breaks
@@ -57,8 +58,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_rsseq
       columns: [STUDYID, USUBJID, RSSEQ]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   # A PR directly after a CR fails. The IS NOT NULL keeps a PR on the

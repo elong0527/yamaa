@@ -55,6 +55,7 @@ columns:
           then: {literal: WEEK 2}
     verifications:
       allowed_values:
+        id: avisit_allowed_values
         values: [WEEK 2]
 
   - name: AWTARGET
@@ -73,6 +74,7 @@ columns:
         expr: "ABS(ADY - AWTARGET)"
     verifications:
       range:
+        id: adist_range
         min: 0
 
   # Within each subject, parameter, and visit: closest to the target first,
@@ -99,8 +101,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_lbseq
       columns: [STUDYID, USUBJID, PARAMCD, LBSEQ]
   - row_count:
+      id: row_count
       min: 11
       max: 11
   - all_or_none:

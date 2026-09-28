@@ -50,6 +50,7 @@ columns:
       flag: "ASTDTM >= TRTSDTM"
     verifications:
       allowed_values:
+        id: trtemfl_allowed_values
         values: [Y]
 
   - name: AOCCSEQ
@@ -69,12 +70,15 @@ columns:
       flag: "AOCCSEQ = 1"
     verifications:
       allowed_values:
+        id: aoccfl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 7
       max: 7
   - implies:

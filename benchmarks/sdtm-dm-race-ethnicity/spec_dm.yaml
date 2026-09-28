@@ -86,6 +86,7 @@ columns:
               unmapped: null
     verifications:
       allowed_values:
+        id: race_allowed_values
         values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
           BLACK OR AFRICAN AMERICAN,
           NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE,
@@ -107,12 +108,15 @@ columns:
         unmapped: null
     verifications:
       allowed_values:
+        id: ethnic_allowed_values
         values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO,
           NOT REPORTED, UNKNOWN]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 12
       max: 12

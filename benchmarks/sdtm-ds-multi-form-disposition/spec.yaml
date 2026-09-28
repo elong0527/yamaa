@@ -16,6 +16,7 @@ columns:
     derivation: {literal: DS}
     verifications:
       allowed_values:
+        id: domain_allowed_values
         values: [DS]
 
   - name: STUDYID
@@ -46,38 +47,45 @@ columns:
     type: str
     label: Reported Term for the Disposition Event
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsterm_not_missing
 
   - name: DSDECOD
     type: str
     label: Standardized Disposition Term
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsdecod_not_missing
       - allowed_values:
-          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED,
-                   ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
+          id: dsdecod_allowed_values
+          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED, ADVERSE EVENT, LOST TO FOLLOW-UP, SCREEN FAILURE]
 
   - name: DSCAT
     type: str
     label: Category for Disposition Event
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dscat_not_missing
       - allowed_values:
+          id: dscat_allowed_values
           values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
   - name: DSSCAT
     type: str
     label: Subcategory for Disposition Event
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsscat_not_missing
       - allowed_values:
+          id: dsscat_allowed_values
           values: [INFORMED CONSENT, RANDOMIZATION, END OF TREATMENT, END OF STUDY]
 
   - name: DSSTDTC
     type: date
     label: Start Date/Time of Disposition Event
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsstdtc_not_missing
 
   # Per subject, by date and then by reported term, so records on the same
   # day keep a fixed order.
@@ -90,7 +98,8 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [DSSTDTC, DSTERM]
     verifications:
-      not_missing: {}
+      not_missing:
+        id: dsseq_not_missing
 
 # One row per collected form of each event. Each item is read from the
 # form's single record for it: a form holding the item twice fails the run,
@@ -202,8 +211,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_dsseq
       columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - implies:

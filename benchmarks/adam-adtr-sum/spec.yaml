@@ -84,12 +84,15 @@ columns:
       flag: "NMEAS = NTARGET"
     verifications:
       allowed_values:
+        id: anl01fl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_avisit
       columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
+      id: row_count
       min: 9
       max: 9
   - assert:

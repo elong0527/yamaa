@@ -16,6 +16,7 @@ columns:
     derivation: {literal: PR}
     verifications:
       allowed_values:
+        id: domain_allowed_values
         values: [PR]
 
   - name: STUDYID
@@ -42,13 +43,15 @@ columns:
     type: str
     label: Reported Name of the Procedure
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: prtrt_not_missing
 
   - name: PRCAT
     type: str
     label: Category for Procedures
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: prcat_not_missing
 
   - name: ANSWER
     type: str
@@ -59,6 +62,7 @@ columns:
     label: Pre-Specified Procedure Indicator
     verifications:
       - allowed_values:
+          id: prpresp_allowed_values
           values: [Y]
 
   - name: PROCCUR
@@ -66,6 +70,7 @@ columns:
     label: Procedure Occurrence
     verifications:
       - allowed_values:
+          id: proccur_allowed_values
           values: [Y, N]
 
   - name: PRLOC
@@ -77,6 +82,7 @@ columns:
     label: Laterality
     verifications:
       - allowed_values:
+          id: prlat_allowed_values
           values: [LEFT, RIGHT, BILATERAL, UNILATERAL]
 
   - name: PRDOSE
@@ -104,7 +110,8 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [PRSTDTC, PRTRT]
     verifications:
-      not_missing: {}
+      not_missing:
+        id: prseq_not_missing
 
 rows:
   - id: surgery
@@ -190,8 +197,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_prseq
       columns: [STUDYID, USUBJID, PRSEQ]
   - row_count:
+      id: row_count
       min: 3
       max: 3
   - implies:

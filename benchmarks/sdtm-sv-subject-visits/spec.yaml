@@ -17,8 +17,7 @@ base: ODM
 
 output:
   path: sv.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY,
-            SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES]
+  columns: [DOMAIN, STUDYID, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY, SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES]
   order_by: [STUDYID, USUBJID, SVSEQ]
 
 rows:
@@ -27,8 +26,7 @@ rows:
     # One row per study-event occurrence: the repeat key keeps repeated
     # unscheduled visits as separate rows instead of silently merging them.
     # Distinct decimal visit numbers identify repeated unscheduled visits.
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-               ODM.StudyEventRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
     derivations:
       VISIT:
         aggregate:
@@ -165,8 +163,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_visitnum
       columns: [STUDYID, USUBJID, VISITNUM]
   - row_count:
+      id: row_count
       min: 8
       max: 8
   - assert:

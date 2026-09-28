@@ -8,8 +8,7 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTSDTM, TRTSTMF,
-    TRTEDT, TRTEDTM, TRTETMF, TRTDURD, SAFFL]
+  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTSDTM, TRTSTMF, TRTEDT, TRTEDTM, TRTETMF, TRTDURD, SAFFL]
 
 columns:
   - name: STUDYID
@@ -53,6 +52,7 @@ columns:
         to: upper
     verifications:
       allowed_values:
+        id: trt01a_allowed_values
         values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
   # Earliest start and latest end as collected text. A date alone gets
@@ -81,8 +81,8 @@ columns:
       datetime_impute:
         source: TRTSDTC
         time: first
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   - name: TRTSTPR
     type: str
@@ -90,7 +90,7 @@ columns:
     derivation:
       datetime_precision:
         source: TRTSDTM
-        missing: null
+        missing:
 
   - name: TRTSTMF
     type: str
@@ -101,6 +101,7 @@ columns:
           then: {literal: H}
     verifications:
       allowed_values:
+        id: trtstmf_allowed_values
         values: [H]
 
   - name: TRTEDTM
@@ -110,8 +111,8 @@ columns:
       datetime_impute:
         source: TRTEDTC
         time: last
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   - name: TRTETPR
     type: str
@@ -119,7 +120,7 @@ columns:
     derivation:
       datetime_precision:
         source: TRTEDTM
-        missing: null
+        missing:
 
   - name: TRTETMF
     type: str
@@ -130,6 +131,7 @@ columns:
           then: {literal: H}
     verifications:
       allowed_values:
+        id: trtetmf_allowed_values
         values: [H]
 
   - name: TRTSDT
@@ -157,6 +159,7 @@ columns:
         bounds: inclusive
     verifications:
       range:
+        id: trtdurd_range
         min: 1
 
   - name: SAFFL
@@ -168,14 +171,18 @@ columns:
         false_value: "N"
         missing: "N"
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: saffl_not_missing
       - allowed_values:
+          id: saffl_allowed_values
           values: [Y, N]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 8
       max: 8
   - all_or_none:

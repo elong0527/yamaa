@@ -79,9 +79,11 @@ change pass or fail. A `warning` violation records every offending key under
 
 <a id="req-0374"></a>
 
-**REQ-0374.** `all_or_none`, `implies`, `assert`, and a `row_count`
-declaring `group_by` require an `id`. These IDs must be unique across the
-dataset verifications that declare them. Implementations must include the ID in failure reports in
+**REQ-0374.** Every verification requires an `id`: each dataset
+verification (`unique`, `all_or_none`, `implies`, `assert`, `row_count`),
+every column verification, and each intermediate's `verification`. These IDs
+must be unique within the verifications list that declares them
+([REQ-0398](verification.md#req-0398)). Implementations must include the ID in failure reports in
 addition to the stable specification path.
 
 ### Column verifications
@@ -428,7 +430,7 @@ execution defect, not a finding that can be recorded inside itself.
 
 | Field | Meaning |
 | --- | --- |
-| `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies each bound to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. Fraction bounds divide this count by all rows in the group. A grouped count requires id, which an ungrouped count does not. |
+| `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies each bound to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. Fraction bounds divide this count by all rows in the group. Every verification requires an id ([REQ-0374](verification.md#req-0374)). |
 | `dataset_verifications.row_count.when` | A predicate over one constructed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt. |
 
 ## Error conditions
@@ -440,7 +442,7 @@ fraction bound outside 0 through 1 also fails.
 
 <a id="req-0398"></a>
 
-**REQ-0398.** A duplicate dataset-verification `id`: fail.
+**REQ-0398.** A duplicate verification `id` within one verifications list: fail.
 
 <a id="req-0399"></a>
 
@@ -454,10 +456,6 @@ fraction bound outside 0 through 1 also fails.
 <a id="req-0401"></a>
 
 **REQ-0401.** `all_or_none` with fewer than two distinct columns: fail.
-
-<a id="req-0402"></a>
-
-**REQ-0402.** A `row_count` declaring `group_by` without an `id`: fail.
 
 <a id="req-0403"></a>
 

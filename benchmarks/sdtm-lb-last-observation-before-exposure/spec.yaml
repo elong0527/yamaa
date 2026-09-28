@@ -19,8 +19,7 @@ intermediates:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,
-            LBDTC, LBSTAT, LBLOBXFL]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT, LBLOBXFL]
 
 # One record per result item of each item group occurrence. The date and
 # status items are not in the dictionary, so their LBTESTCD is missing and
@@ -28,8 +27,7 @@ output:
 rows:
   - id: lb_result
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
-               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "LBTESTCD IS NOT NULL"
     derivations:
       LBTESTCD: LB_MAP.LBTESTCD
@@ -59,7 +57,8 @@ columns:
     label: Sequence Number
     derivation: ODM.ItemGroupRepeatKey
     verifications:
-      not_missing: {}
+      not_missing:
+        id: lbseq_not_missing
 
   - name: LBTESTCD
     type: str
@@ -136,8 +135,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_lbseq
       columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
+      id: row_count
       min: 14
       max: 14
   - implies:

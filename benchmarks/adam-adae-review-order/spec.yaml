@@ -50,6 +50,7 @@ columns:
     derivation: AE.AESEV
     verifications:
       allowed_values:
+        id: asev_allowed_values
         values: [MILD, MODERATE, SEVERE]
 
   # Rank for the review order above.
@@ -59,7 +60,7 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing:
         dict:
           MILD: 1
           MODERATE: 2
@@ -67,7 +68,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aseq
       columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
+      id: row_count
       min: 11
       max: 11

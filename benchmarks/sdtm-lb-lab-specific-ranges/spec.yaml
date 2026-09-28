@@ -68,8 +68,7 @@ intermediates:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN,
-    LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 columns:
   - name: DOMAIN
@@ -168,6 +167,7 @@ rows:
 
 verifications:
   - row_count:
+      id: row_count
       min: 8
       max: 8
   - all_or_none:

@@ -146,10 +146,17 @@ class IntermediateBetween(_StrictModel):
     upper: str
 
 
+class IntermediateUnique(_StrictModel):
+    """REQ-1245: the column combination an intermediate asserts unique."""
+
+    columns: list[str] = Field(min_length=1)
+
+
 class IntermediateVerification(_StrictModel):
     """REQ-1245: uniqueness asserted over an intermediate's filtered donor records."""
 
-    unique: list[str] = Field(min_length=1)
+    id: str = Field(min_length=1)
+    unique: IntermediateUnique
 
 
 class Intermediate(_StrictModel):

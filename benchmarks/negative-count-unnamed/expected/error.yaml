@@ -1,5 +1,8 @@
 phase: validation
-condition: missing_verification_id
+condition: missing_required_field
 spec_paths:
-  - verifications[1].row_count
-requirement: REQ-0402
+  - verifications[1].row_count.id
+requirement:
+context:
+  class: row_count
+  field: id

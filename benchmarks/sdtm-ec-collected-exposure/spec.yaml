@@ -101,8 +101,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_ecseq
       columns: [STUDYID, USUBJID, ECSEQ]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - assert:

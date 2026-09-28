@@ -86,4 +86,5 @@ columns:
           then: {literal: "N"}
     verifications:
       allowed_values:
+        id: dosadjfl_allowed_values
         values: ["Y", "N"]

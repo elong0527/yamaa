@@ -46,7 +46,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_lbseq
       columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
+      id: row_count
       min: 7
       max: 7

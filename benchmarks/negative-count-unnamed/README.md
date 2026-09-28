@@ -37,5 +37,5 @@ verifications:
 ```
 
 A count over the whole artifact rather than within a group asserts its size
-instead of a study rule and needs no name, so `min` and `max` alone remain
-valid there.
+instead of a study rule, but it still carries an `id`: every verification
+is named, so a failure always says which study decision the data broke.

@@ -38,7 +38,9 @@ intermediates:
       - SELF.AESEQ
     keep: first
     verification:
-      unique: [STUDYID, USUBJID, AESEQ]
+      id: first_sae_unique
+      unique:
+        columns: [STUDYID, USUBJID, AESEQ]
     no_match: null
 
   # The subject's immediately preceding event, serious or not. Only a
@@ -131,8 +133,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 14
       max: 14
   - implies:

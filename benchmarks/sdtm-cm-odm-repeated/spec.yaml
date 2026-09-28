@@ -50,7 +50,8 @@ columns:
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
-      not_missing: {}
+      not_missing:
+        id: cmtrt_not_missing
 
   - name: CMSTDTC
     type: str
@@ -142,10 +143,12 @@ rows:
           expr: ONLY(ODM.Value)
 verifications:
   - unique:
+      id: unique_studyid_usubjid_cmseq
       columns:
         - STUDYID
         - USUBJID
         - CMSEQ
   - row_count:
+      id: row_count
       min: 4
       max: 4

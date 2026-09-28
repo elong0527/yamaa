@@ -79,6 +79,7 @@ columns:
           then: {literal: NOT DONE}
     verifications:
       allowed_values:
+        id: lbstat_allowed_values
         values: [NOT DONE]
 
 rows:
@@ -97,8 +98,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_lbseq
       columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
+      id: row_count
       min: 5
       max: 5
   - implies:

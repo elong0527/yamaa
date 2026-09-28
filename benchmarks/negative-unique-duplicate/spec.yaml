@@ -28,4 +28,5 @@ columns:
 # one subject repeats its SITEID, so this fails on the completed dataset.
 verifications:
   - unique:
+      id: unique_siteid
       columns: [SITEID]

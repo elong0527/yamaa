@@ -59,17 +59,20 @@ columns:
     label: On Treatment Record Flag
     derivation:
       flag: >
-            TRTSDT IS NOT NULL AND
-            (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
-            (AENDT IS NULL OR AENDT >= TRTSDT)
+        TRTSDT IS NOT NULL AND
+        (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
+        (AENDT IS NULL OR AENDT >= TRTSDT)
     verifications:
       allowed_values:
+        id: ontrtfl_allowed_values
         values: [Y]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_cmseq
       columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
+      id: row_count
       min: 13
       max: 13
   - implies:

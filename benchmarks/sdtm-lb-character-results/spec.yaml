@@ -120,7 +120,7 @@ columns:
                 '1 PLUS': '1+'
                 '2+': '2+'
                 '+2': '2+'
-              missing: null
+              missing:
         - otherwise: LBORRES
 
   # A result that is not a plain number (a grade, or a censored value such as
@@ -173,7 +173,9 @@ rows:
 
 verifications:
   - row_count:
+      id: row_count
       min: 17
       max: 17
   - unique:
+      id: unique_studyid_usubjid_lbseq
       columns: [STUDYID, USUBJID, LBSEQ]

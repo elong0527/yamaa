@@ -8,9 +8,7 @@ input:
 
 output:
   path: tu.csv
-  columns: [DOMAIN, STUDYID, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST,
-            TUORRES, TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM,
-            VISIT, TUDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST, TUORRES, TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM, VISIT, TUDTC]
 
 columns:
   - name: DOMAIN
@@ -33,7 +31,8 @@ columns:
     label: Sequence Number
     derivation: TU_RAW.TUSEQ
     verifications:
-      not_missing: {}
+      not_missing:
+        id: tuseq_not_missing
 
   - name: TULNKID
     type: str
@@ -51,6 +50,7 @@ columns:
             str_template: "NEW{TU_RAW.LESION_NUM}"
     verifications:
       matches:
+        id: tulnkid_matches
         pattern: "^(T|NT|NEW)[0-9]+$"
 
   - name: TUTESTCD
@@ -59,6 +59,7 @@ columns:
     derivation: {literal: TUMIDENT}
     verifications:
       allowed_values:
+        id: tutestcd_allowed_values
         values: [TUMIDENT]
 
   - name: TUTEST
@@ -75,6 +76,7 @@ columns:
         to: upper
     verifications:
       allowed_values:
+        id: tuorres_allowed_values
         values: [TARGET, NON-TARGET, NEW]
 
   - name: TUSTRESC
@@ -126,10 +128,13 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_tuseq
       columns: [STUDYID, USUBJID, TUSEQ]
   - unique:
+      id: unique_studyid_usubjid_tulnkid
       columns: [STUDYID, USUBJID, TULNKID]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - implies:

@@ -29,6 +29,7 @@ columns:
     # and is listed in the warning log.
     verifications:
       - range:
+          id: age_range
           min: 18
           max: 100
           severity: warning

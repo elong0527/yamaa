@@ -496,7 +496,9 @@ def self_donor_specification(donor: Intermediate) -> Specification:
             id="DONOR",
             dataset="SELF",
             key=["K"],
-            verification=IntermediateVerification(unique=["D"]),
+            verification=IntermediateVerification(
+                id="donor-unique", unique={"columns": ["D"]}
+            ),
         ),
         Intermediate(id="DONOR", dataset="SELF", key={"K": "D"}),
         Intermediate(
@@ -3514,17 +3516,22 @@ def test_intermediate_verification_unique_columns_reach_the_plan() -> None:
     # REQ-1245: the declared uniqueness columns ride into the plan.
     plan = _plan_verification_spec(
         filter="DS.DSCAT = 'DISPOSITION EVENT'",
-        verification=IntermediateVerification(unique=["STUDYID", "USUBJID"]),
+        verification=IntermediateVerification(
+            id="ds-eos-unique", unique={"columns": ["STUDYID", "USUBJID"]}
+        ),
     )
 
     assert plan.intermediates[0].unique_columns == ("STUDYID", "USUBJID")
+    assert plan.intermediates[0].verification_id == "ds-eos-unique"
 
 
 def test_intermediate_verification_rejects_an_unknown_column() -> None:
     # REQ-1245: a unique column must name a stored field.
     with pytest.raises(ExecutionPlanningError) as raised:
         _plan_verification_spec(
-            verification=IntermediateVerification(unique=["STUDYID", "NOPE"]),
+            verification=IntermediateVerification(
+                id="ds-eos-unique", unique={"columns": ["STUDYID", "NOPE"]}
+            ),
         )
 
     (diagnostic,) = [
@@ -3533,7 +3540,7 @@ def test_intermediate_verification_rejects_an_unknown_column() -> None:
         if diagnostic.condition == "unknown_field"
     ]
     assert diagnostic.requirement == "REQ-1245"
-    assert diagnostic.spec_paths == ("intermediates[0].verification.unique[1]",)
+    assert diagnostic.spec_paths == ("intermediates[0].verification.unique.columns[1]",)
     assert diagnostic.context["identifier"] == "DS.NOPE"
 
 
@@ -3542,7 +3549,9 @@ def test_intermediate_verification_rejects_a_correlated_filter() -> None:
     with pytest.raises(ExecutionPlanningError) as raised:
         _plan_verification_spec(
             filter="DS.DSCAT = 'DISPOSITION EVENT' AND DS.USUBJID = SRC.USUBJID",
-            verification=IntermediateVerification(unique=["STUDYID", "USUBJID"]),
+            verification=IntermediateVerification(
+                id="ds-eos-unique", unique={"columns": ["STUDYID", "USUBJID"]}
+            ),
         )
 
     (diagnostic,) = raised.value.diagnostics

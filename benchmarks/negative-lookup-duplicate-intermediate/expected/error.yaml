@@ -4,6 +4,7 @@ spec_paths:
   - intermediates[0].verification
 requirement: REQ-1245
 context:
+  verification_id: ds_eos_unique
   intermediate: DS_EOS
   dataset: DS
   columns: [STUDYID, USUBJID]

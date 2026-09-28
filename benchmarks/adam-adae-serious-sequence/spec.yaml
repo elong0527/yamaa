@@ -30,6 +30,7 @@ columns:
     derivation: AE.AESER
     verifications:
       - allowed_values:
+          id: aeser_allowed_values
           values: ["Y", "N"]
 
   - name: ASTDT

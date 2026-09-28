@@ -38,6 +38,7 @@ columns:
     derivation: DM.RAWTXT
     verifications:
       max_length:
+        id: rawtxt_max_length
         max: 6
 
   - name: PEERTXT
@@ -139,7 +140,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 8
       max: 8

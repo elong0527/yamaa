@@ -23,16 +23,20 @@ columns:
     label: Age
     derivation: DM.AGE
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: age_not_missing
       # A warning, not an error: an age outside 18-100 is logged and the
       # run still succeeds with every row kept.
       - range:
+          id: age_range
           min: 18
           max: 100
           severity: warning
 
 verifications:
   - unique:
+      id: unique_usubjid
       columns: [USUBJID]
   - row_count:
+      id: row_count
       min: 1

@@ -45,6 +45,7 @@ columns:
     derivation: ADAE_RAW.AESEV
     verifications:
       allowed_values:
+        id: aesev_allowed_values
         values: [MILD, MODERATE, SEVERE]
 
   - name: TRTEMFL
@@ -53,6 +54,7 @@ columns:
     derivation: ADAE_RAW.TRTEMFL
     verifications:
       allowed_values:
+        id: trtemfl_allowed_values
         values: [Y]
 
   - name: AESEVN
@@ -65,9 +67,10 @@ columns:
           MILD: 1
           MODERATE: 2
           SEVERE: 3
-        missing: null
+        missing:
     verifications:
       range:
+        id: aesevn_range
         min: 1
         max: 3
 
@@ -95,8 +98,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 12
       max: 12
   - implies:

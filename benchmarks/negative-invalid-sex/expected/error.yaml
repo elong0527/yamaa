@@ -5,6 +5,7 @@ spec_paths:
 requirement: REQ-0376
 context:
   column: SEX
+  verification_id: sex_allowed_values
   failure_count: 3
   keys:
     - STUDYID: YAMAA-01

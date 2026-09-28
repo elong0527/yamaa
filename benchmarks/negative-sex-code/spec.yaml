@@ -26,4 +26,5 @@ columns:
     # A missing sex passes; any other value must be exactly M, F or U.
     verifications:
       - matches:
+          id: sex_matches
           pattern: '^[MFU]$'

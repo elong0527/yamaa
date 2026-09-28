@@ -330,6 +330,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R007', 'missing_value_required'): {'false_value'},
     ('R009', 'missing_verification_id'): set(),
+    ('R009', 'missing_required_field'): {'class', 'field'},
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
     },
@@ -5502,16 +5503,10 @@ def validate_spec_contracts(
                         f"ERROR: {path}: min_fraction must not exceed max_fraction"
                     )
                 if 'group_by' in payload:
+                    # REQ-0374: the schema requires a verification id on every
+                    # check, so no separate grouped row_count id check is
+                    # needed here.
                     group_by = payload.get('group_by')
-                    if not isinstance(payload.get('id'), str):
-                        errors.append(
-                            validation_diagnostic(
-                                path,
-                                'missing_verification_id',
-                                'a grouped row_count requires a verification '
-                                'id',
-                            )
-                        )
                     if isinstance(group_by, list):
                         if not group_by:
                             errors.append(

@@ -46,11 +46,14 @@ columns:
         unmapped: Rest of World
     verifications:
       allowed_values:
+        id: region1_allowed_values
         values: [North America, Europe, Rest of World]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 9
       max: 9

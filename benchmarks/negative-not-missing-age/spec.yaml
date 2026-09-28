@@ -24,4 +24,5 @@ columns:
     label: Age
     derivation: DM.AGE
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: age_not_missing

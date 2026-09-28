@@ -861,18 +861,21 @@ class IntermediateSelector:
                 continue
             duplicates = _duplicate_groups(records, plan.unique_columns)
             if duplicates:
+                context: dict[str, JsonValue] = {
+                    "intermediate": plan.identifier,
+                    "dataset": plan.dataset,
+                    "columns": list(plan.unique_columns),
+                    "duplicate_count": len(duplicates),
+                }
+                if plan.verification_id is not None:
+                    context["verification_id"] = plan.verification_id
                 failures.append(
                     VerificationFailure(
                         phase="verification",
                         condition="duplicate_intermediate_records",
                         spec_paths=(f"{plan.path}.verification",),
                         requirement="REQ-1245",
-                        context={
-                            "intermediate": plan.identifier,
-                            "dataset": plan.dataset,
-                            "columns": list(plan.unique_columns),
-                            "duplicate_count": len(duplicates),
-                        },
+                        context=context,
                         offending_keys=tuple(
                             {
                                 field: json_value(record.values[field])

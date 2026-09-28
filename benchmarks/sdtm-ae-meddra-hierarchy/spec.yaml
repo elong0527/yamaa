@@ -15,14 +15,14 @@ intermediates:
     key: {LLTCD: AE_RAW.AELLTCD}
     filter: "MEDDRA.PRIMARY_SOC = 'Y'"
     verification:
-      unique: [LLTCD]
+      id: primary_path_unique
+      unique:
+        columns: [LLTCD]
     no_match: null
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD,
-    AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD,
-    AEBODSYS, AEBODSCD, AESOC, AESOCCD]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD, AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD, AEBODSYS, AEBODSCD, AESOC, AESOCCD]
 
 columns:
   - name: DOMAIN
@@ -112,7 +112,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 5
       max: 5

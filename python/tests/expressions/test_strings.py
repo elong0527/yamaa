@@ -103,7 +103,7 @@ def _matches_column(pattern: str, subject: str) -> bool:
         {
             "name": "VALUE",
             "type": "str",
-            "verifications": [{"matches": {"pattern": pattern}}],
+            "verifications": [{"matches": {"id": "value_matches", "pattern": pattern}}],
         }
     )
     table = TypedTable(

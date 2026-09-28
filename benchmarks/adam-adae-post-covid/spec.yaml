@@ -52,12 +52,14 @@ columns:
     label: After First COVID-19 Flag
     derivation:
       flag: >-
-            ASTDT > FIRSTCOV.AESTDTC OR
-            (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
+        ASTDT > FIRSTCOV.AESTDTC OR
+        (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 11
       max: 11

@@ -5,6 +5,7 @@ spec_paths:
 requirement: REQ-0406
 context:
   column: USUBJID
+  verification_id: usubjid_max_length
   max: 20
   failure_count: 1
   keys:

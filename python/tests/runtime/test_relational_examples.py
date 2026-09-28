@@ -346,6 +346,7 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd
       columns: [STUDYID, USUBJID, PARAMCD]
 """
 
@@ -741,6 +742,7 @@ rows:
       VAL: {source: AUX.H}
 verifications:
   - unique:
+      id: unique_id_kind
       columns: [ID, KIND]
 """
 
@@ -820,7 +822,7 @@ def test_grouped_filter_precedes_whole_column_verification(
               - name: AVAL
                 type: int
                 verifications:
-                  range: {{min: 0}}
+                  range: {{id: aval_range, min: 0}}
             """
         )
     )

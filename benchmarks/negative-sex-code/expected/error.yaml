@@ -5,6 +5,7 @@ spec_paths:
 requirement: REQ-0379
 context:
   column: SEX
+  verification_id: sex_matches
   failure_count: 1
   keys:
     - STUDYID: PILOT7

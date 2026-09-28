@@ -32,7 +32,7 @@ columns:
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
-    verifications: {not_missing: {}}
+    verifications: {not_missing: {id: usubjid_not_missing}}
 
   - name: SEX
     type: str

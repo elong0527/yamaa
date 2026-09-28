@@ -130,8 +130,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_adt_aseq
       columns: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
   - row_count:
+      id: row_count
       min: 20
       max: 20
   - row_count:

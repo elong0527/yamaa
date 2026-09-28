@@ -71,6 +71,7 @@ columns:
     derivation: SMQ1.SCOPE
     verifications:
       allowed_values:
+        id: smq01sc_allowed_values
         values: [BROAD, NARROW]
 
   - name: SMQ02NAM
@@ -89,6 +90,7 @@ columns:
     derivation: SMQ2.SCOPE
     verifications:
       allowed_values:
+        id: smq02sc_allowed_values
         values: [BROAD, NARROW]
 
   - name: CQ01NAM
@@ -98,8 +100,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - all_or_none:

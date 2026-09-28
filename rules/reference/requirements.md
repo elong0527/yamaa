@@ -356,7 +356,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0371](../execution/verification.md#req-0371) | `execution/verification.md` | R009-5 |
 | [REQ-0372](../execution/verification.md#req-0372) | `execution/verification.md` | R009-6 |
 | [REQ-0373](../execution/verification.md#req-0373) | `execution/verification.md` | R009-7 |
-| [REQ-0374](../execution/verification.md#req-0374) | `execution/verification.md` | R009-8 |
+| [REQ-0374](../execution/verification.md#req-0374) | `execution/verification.md` | R009-8, R009-28 |
 | [REQ-0375](../execution/verification.md#req-0375) | `execution/verification.md` | R009-9 |
 | [REQ-0376](../execution/verification.md#req-0376) | `execution/verification.md` | R009-10 |
 | [REQ-0377](../execution/verification.md#req-0377) | `execution/verification.md` | R009-11 |
@@ -384,7 +384,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0399](../execution/verification.md#req-0399) | `execution/verification.md` | R009-25 |
 | [REQ-0400](../execution/verification.md#req-0400) | `execution/verification.md` | R009-26 |
 | [REQ-0401](../execution/verification.md#req-0401) | `execution/verification.md` | R009-27 |
-| [REQ-0402](../execution/verification.md#req-0402) | `execution/verification.md` | R009-28 |
 | [REQ-0403](../execution/verification.md#req-0403) | `execution/verification.md` | R009-29 |
 | [REQ-0404](../execution/verification.md#req-0404) | `execution/verification.md` | R009-30 |
 | [REQ-0405](../execution/verification.md#req-0405) | `execution/verification.md` | R009-31 |

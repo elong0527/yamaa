@@ -50,8 +50,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd
       columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
+      id: row_count
       min: 8
       max: 8
   - implies:

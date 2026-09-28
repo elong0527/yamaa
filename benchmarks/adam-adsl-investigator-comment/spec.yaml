@@ -39,8 +39,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - implies:

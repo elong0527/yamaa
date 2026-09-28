@@ -86,7 +86,9 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_avisitn
       columns: [STUDYID, USUBJID, PARAMCD, AVISITN]
   - row_count:
+      id: row_count
       min: 12
       max: 12

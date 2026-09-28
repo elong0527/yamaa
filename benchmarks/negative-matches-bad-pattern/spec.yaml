@@ -27,5 +27,6 @@ columns:
           # (?P<name>...) is a Python-only named group; the portable
           # spelling is (?<name>...), so this pattern is rejected before
           # any data is read.
+          id: sex_matches
           pattern: '(?P<code>[MFU])'
     derivation: DM.SEX

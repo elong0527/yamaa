@@ -72,6 +72,7 @@ columns:
 
 verifications:
   - row_count:
+      id: row_count
       min: 3
       max: 3
   # The check this benchmark exists to fail: a subject whose randomization

@@ -55,4 +55,5 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_vsseq
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]

@@ -92,6 +92,7 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_exseq_adosen
       columns: [STUDYID, USUBJID, EXSEQ, ADOSEN]
   # Fails on every row of a record counting more administrations than
   # were built.

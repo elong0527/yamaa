@@ -144,7 +144,17 @@ intermediate_class:
         description: See REQ-1245.
 
 intermediate_verification_class:
+    - id:
+        type: verification_id
+        required: true
+        description: See REQ-1245.
     - unique:
+        type: intermediate_unique_class
+        required: true
+        description: See REQ-1245.
+
+intermediate_unique_class:
+    - columns:
         type: "list[identifier]"
         required: true
         description: See REQ-1245.

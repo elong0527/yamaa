@@ -80,6 +80,7 @@ columns:
 
 verifications:
   - unique:
+      id: unique-studyid-usubjid
       columns: [STUDYID, USUBJID]
 ```
 

@@ -70,6 +70,7 @@ columns:
           keep: first
     verifications:
       allowed_values:
+        id: trt01a_allowed_values
         values: [VITAMIN D3, PLACEBO]
 
   - name: TRT02A
@@ -84,6 +85,7 @@ columns:
           keep: first
     verifications:
       allowed_values:
+        id: trt02a_allowed_values
         values: [VITAMIN D3, PLACEBO]
 
   # Days strictly between the end of period 1 and the start of period 2, so
@@ -99,12 +101,15 @@ columns:
         bounds: between
     verifications:
       range:
+        id: washdur_range
         min: 0
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - all_or_none:

@@ -86,8 +86,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_visit_paramcd
       columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
+      id: row_count
       min: 12
       max: 12
   # A collected record never has a DTYPE, so this fails when the input

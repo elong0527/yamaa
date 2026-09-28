@@ -48,6 +48,7 @@ columns:
                 variable: LB.LBSTRESN
     verifications:
       - not_missing:
+          id: aval_not_missing
           severity: error
     metadata:
       analysis_role: analysis-value

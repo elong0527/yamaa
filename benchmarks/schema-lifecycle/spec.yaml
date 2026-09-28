@@ -45,7 +45,8 @@ columns:
     type: float
     label: Analysis Value
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: aval_not_missing
 
   # Column stage: enriches the built rows with exactly one value each
   # and may not change the row count. The arithmetic reads AVAL's
@@ -96,4 +97,5 @@ rows:
 
 verifications:
   - unique:
+      id: unique_usubjid_visit_paramcd
       columns: [USUBJID, VISIT, PARAMCD]

@@ -30,7 +30,8 @@ columns:
     label: Reported Term for the Medical History Condition
     derivation: MH_FORM.MHTERM
     verifications:
-      not_missing: {}
+      not_missing:
+        id: mhterm_not_missing
 
   # The collected start year alone, or year and month joined with a hyphen.
   # A month with no year, or no year at all, leaves the start empty.
@@ -65,6 +66,7 @@ columns:
           then: {literal: BEFORE}
     verifications:
       allowed_values:
+        id: mhenrtpt_allowed_values
         values: [ONGOING, BEFORE]
 
   - name: MHENTPT
@@ -77,8 +79,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_mhseq
       columns: [STUDYID, USUBJID, MHSEQ]
   - row_count:
+      id: row_count
       min: 7
       max: 7
   - implies:

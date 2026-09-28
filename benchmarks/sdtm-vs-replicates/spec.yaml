@@ -51,6 +51,7 @@ columns:
           IT.VS.DIABP: DIABP
     verifications:
       allowed_values:
+        id: vstestcd_allowed_values
         values: [SYSBP, DIABP]
 
   - name: VSTEST
@@ -89,6 +90,7 @@ columns:
     label: Original Units
     verifications:
       allowed_values:
+        id: vsorresu_allowed_values
         values: [mmHg]
 
   - name: VSDRVFL
@@ -96,6 +98,7 @@ columns:
     label: Derived Record Flag
     verifications:
       allowed_values:
+        id: vsdrvfl_allowed_values
         values: [Y]
 
   # Within a subject: by visit name, then test code (DIABP before SYSBP),
@@ -109,7 +112,8 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [VISIT, VSTESTCD, ORD, VSREPNUM]
     verifications:
-      not_missing: {}
+      not_missing:
+        id: vsseq_not_missing
 
 # One reading row per subject, visit, replicate and test. The aggregate
 # filter confines a template to its own test, so a group of the other test
@@ -163,8 +167,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_vsseq
       columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
+      id: row_count
       min: 31
       max: 31
   - implies:

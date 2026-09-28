@@ -489,16 +489,21 @@ the window ranks the records of each subject and test on it.
 
 <a id="req-1245"></a>
 
-**REQ-1245.** An intermediate may declare `verification:` with a
-nonempty `unique:` list of its dataset's columns, asserting the
-combination is unique across the intermediate's filtered donor records:
+**REQ-1245.** An intermediate may declare `verification:` with an `id`
+and a `unique:` check naming a nonempty `columns:` list of its dataset's
+columns, asserting the combination is unique across the intermediate's
+filtered donor records. The `unique:` check shares its spelling with the
+dataset verification of the same name
+([REQ-0381](../execution/verification.md#req-0381)):
 
 ```yaml
 - id: DS_EOS
   dataset: DS
   filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
   verification:
-    unique: [STUDYID, USUBJID]
+    id: ds_eos_unique
+    unique:
+      columns: [STUDYID, USUBJID]
 ```
 
 The check runs over the source-only filtered donor records with
@@ -508,7 +513,7 @@ key is verified unique needs neither `keep` nor `order_by`:
 [REQ-0127](lookup.md#req-0127) already rejects multiple surviving
 matches without a selection rule. A repeated combination fails the run
 as `duplicate_intermediate_records` at the `intermediates[i].verification`
-path; there is no warning severity, so a duplicate can never resolve
+path, reporting the verification's `id`; there is no warning severity, so a duplicate can never resolve
 ambiguously. Each `unique` column must name a stored field or a derived
 name, or fail as `unknown_field`. A `filter` or `derivations:` entry that
 fails to materialize fails the run here as well: the verification is

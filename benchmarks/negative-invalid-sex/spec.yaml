@@ -27,4 +27,5 @@ columns:
     # fails the run. A missing sex passes this check.
     verifications:
       - allowed_values:
+          id: sex_allowed_values
           values: [M, F]

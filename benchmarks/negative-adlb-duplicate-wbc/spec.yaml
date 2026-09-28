@@ -97,4 +97,5 @@ rows:
 
 verifications:
   - unique:
+      id: unique_usubjid_visit_paramcd
       columns: [USUBJID, VISIT, PARAMCD]

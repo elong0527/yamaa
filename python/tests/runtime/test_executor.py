@@ -226,7 +226,7 @@ def test_declared_verification_log_records_every_evaluated_check() -> None:
         b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
         b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
         b"DETAILS\n"
-        b"1.0,adsl.csv,columns.AGE.verifications[0].range,,range,AGE,REQ-0377,"
+        b"1.0,adsl.csv,columns.AGE.verifications[0].range,age_range,range,AGE,REQ-0377,"
         b'warning,violated,range_failed,8,3,"{""column"":""AGE""}"\n'
     )
 
@@ -311,7 +311,7 @@ def test_failed_run_still_builds_the_verification_log() -> None:
         b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
         b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,"
         b"DETAILS\n"
-        b"1.0,adsl.csv,columns.AGE.verifications[0].range,,range,AGE,REQ-0377,"
+        b"1.0,adsl.csv,columns.AGE.verifications[0].range,age_range,range,AGE,REQ-0377,"
         b'error,violated,range_failed,8,3,"{""column"":""AGE""}"\n'
     )
 

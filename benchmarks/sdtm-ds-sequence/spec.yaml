@@ -15,6 +15,7 @@ columns:
     derivation: {literal: DS}
     verifications:
       allowed_values:
+        id: domain_allowed_values
         values: [DS]
 
   - name: STUDYID
@@ -35,8 +36,8 @@ columns:
         source: DS_RAW.DSDTCOL
         month: 6
         day: 15
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   # Number on the completed collection date so a partial entry takes
   # its chronological position among fully dated records.
@@ -49,15 +50,18 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [DSDTC]
     verifications:
-      not_missing: {}
+      not_missing:
+        id: dsseq_not_missing
 
   - name: DSDECOD
     type: str
     label: Standardized Disposition Term
     derivation: DS_RAW.DSDECOD
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: dsdecod_not_missing
       - allowed_values:
+          id: dsdecod_allowed_values
           values: [COMPLETED, RANDOMIZED, ADVERSE EVENT, SCREEN FAILURE]
 
   - name: DSCAT
@@ -70,6 +74,7 @@ columns:
         - otherwise: {literal: DISPOSITION EVENT}
     verifications:
       allowed_values:
+        id: dscat_allowed_values
         values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
 rows:
@@ -78,8 +83,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_dsseq
       columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
+      id: row_count
       min: 7
       max: 7
   - implies:

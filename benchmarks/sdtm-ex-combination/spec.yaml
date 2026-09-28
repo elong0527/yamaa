@@ -67,6 +67,7 @@ columns:
 
 verifications:
   - row_count:
+      id: row_count
       min: 9
       max: 9
   - assert:

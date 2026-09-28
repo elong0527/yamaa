@@ -62,7 +62,9 @@ def test_range_failure_reproduces_the_committed_error_contract() -> None:
     )
 
     failures = check_column(
-        completed, column("AGE", "int", {"range": {"min": 18, "max": 100}}), KEYS
+        completed,
+        column("AGE", "int", {"range": {"id": "age_range", "min": 18, "max": 100}}),
+        KEYS,
     )
 
     assert len(failures) == 1
@@ -80,7 +82,14 @@ def test_warning_retains_all_keys_without_changing_fatal_diagnostic_shape() -> N
         column(
             "AGE",
             "int",
-            {"range": {"min": 18, "max": 100, "severity": "warning"}},
+            {
+                "range": {
+                    "id": "age_range",
+                    "min": 18,
+                    "max": 100,
+                    "severity": "warning",
+                }
+            },
         ),
         KEYS,
     )
@@ -99,7 +108,11 @@ def test_not_missing_failure_reproduces_the_committed_error_contract() -> None:
         [["PILOT7", "P7-811", 54], ["PILOT7", "P7-812", None]],
     )
 
-    failures = check_column(completed, column("AGE", "int", {"not_missing": {}}), KEYS)
+    failures = check_column(
+        completed,
+        column("AGE", "int", {"not_missing": {"id": "age_not_missing"}}),
+        KEYS,
+    )
 
     assert reported(failures[0]) == committed("negative-not-missing-age")
 
@@ -111,7 +124,9 @@ def test_nonfinite_float_is_missing_before_column_verification() -> None:
     )
 
     failures = check_column(
-        completed, column("VALUE", "float", {"not_missing": {}}), KEYS
+        completed,
+        column("VALUE", "float", {"not_missing": {"id": "value_not_missing"}}),
+        KEYS,
     )
 
     assert failures[0].condition == "not_missing_failed"
@@ -133,7 +148,11 @@ def test_allowed_values_failure_reproduces_the_committed_error_contract() -> Non
 
     failures = check_column(
         completed,
-        column("SEX", "str", {"allowed_values": {"values": ["M", "F"]}}),
+        column(
+            "SEX",
+            "str",
+            {"allowed_values": {"id": "sex_allowed_values", "values": ["M", "F"]}},
+        ),
         KEYS,
     )
 
@@ -151,7 +170,11 @@ def test_max_length_failure_reproduces_the_committed_error_contract() -> None:
     )
 
     failures = check_column(
-        completed, column("USUBJID", "str", {"max_length": {"max": 20}}), KEYS
+        completed,
+        column(
+            "USUBJID", "str", {"max_length": {"id": "usubjid_max_length", "max": 20}}
+        ),
+        KEYS,
     )
 
     assert reported(failures[0]) == committed("negative-usubjid-length")
@@ -164,7 +187,9 @@ def test_unique_failure_reports_every_row_carrying_one_repeated_value() -> None:
     )
 
     failures = check_dataset(
-        completed, [Expression(root={"unique": {"columns": ["SITEID"]}})], KEYS
+        completed,
+        [Expression(root={"unique": {"id": "unique_siteid", "columns": ["SITEID"]}})],
+        KEYS,
     )
 
     assert reported(failures[0]) == committed("negative-unique-duplicate")
@@ -269,14 +294,20 @@ def test_a_collected_empty_string_is_a_value_rather_than_a_missing_one() -> None
     # An empty key value was collected, so output identity holds.
     assert check_keys(completed, KEYS) == ()
 
-    failures = check_column(completed, column("CMNT", "str", {"not_missing": {}}), KEYS)
+    failures = check_column(
+        completed,
+        column("CMNT", "str", {"not_missing": {"id": "cmnt_not_missing"}}),
+        KEYS,
+    )
     assert [failure.context["keys"] for failure in failures] == [
         [{"STUDYID": "S", "USUBJID": "S-3"}]
     ]
     # An empty string and a missing value are two values, not one repeated.
     assert (
         check_dataset(
-            completed, [Expression(root={"unique": {"columns": ["CMNT"]}})], KEYS
+            completed,
+            [Expression(root={"unique": {"id": "unique_cmnt", "columns": ["CMNT"]}})],
+            KEYS,
         )
         == ()
     )
@@ -386,7 +417,12 @@ def test_grouped_row_count_failure_reproduces_the_committed_error_contract() -> 
         completed,
         [
             Expression(
-                root={"unique": {"columns": ["STUDYID", "USUBJID", "PARAMCD", "ADT"]}}
+                root={
+                    "unique": {
+                        "id": "unique_studyid_usubjid_paramcd_adt",
+                        "columns": ["STUDYID", "USUBJID", "PARAMCD", "ADT"],
+                    }
+                }
             ),
             Expression(
                 root={
@@ -410,7 +446,9 @@ def test_grouped_row_count_failure_reproduces_the_committed_error_contract() -> 
 def test_ungrouped_row_count_fails_a_minimum_on_an_empty_artifact() -> None:
     empty = table([("STUDYID", "str"), ("USUBJID", "str")], [])
 
-    failures = check_dataset(empty, [Expression(root={"row_count": {"min": 1}})], KEYS)
+    failures = check_dataset(
+        empty, [Expression(root={"row_count": {"id": "row_count", "min": 1}})], KEYS
+    )
 
     assert failures[0].condition == "row_count_failed"
     assert failures[0].context["count"] == 0
@@ -454,6 +492,7 @@ def test_row_count_fraction_bounds_filtered_missing_values() -> None:
                 Expression(
                     root={
                         "row_count": {
+                            "id": "mostly_missing",
                             "filter": "VAL IS NULL",
                             "max_fraction": 0.75,
                         }
@@ -502,12 +541,16 @@ def test_row_count_fraction_on_empty_artifact_is_zero() -> None:
     empty = table([("STUDYID", "str"), ("USUBJID", "str")], [])
     assert (
         check_dataset(
-            empty, [Expression(root={"row_count": {"max_fraction": 0}})], KEYS
+            empty,
+            [Expression(root={"row_count": {"id": "row_count", "max_fraction": 0}})],
+            KEYS,
         )
         == ()
     )
     (failure,) = check_dataset(
-        empty, [Expression(root={"row_count": {"min_fraction": 0.1}})], KEYS
+        empty,
+        [Expression(root={"row_count": {"id": "row_count", "min_fraction": 0.1}})],
+        KEYS,
     )
     assert failure.context["denominator"] == 0
 
@@ -518,7 +561,11 @@ def test_row_count_rejects_invalid_fraction(bound: object) -> None:
     with pytest.raises(DeclarationError) as caught:
         check_dataset(
             completed,
-            [Expression(root={"row_count": {"max_fraction": bound}})],
+            [
+                Expression(
+                    root={"row_count": {"id": "row_count", "max_fraction": bound}}
+                )
+            ],
             KEYS,
         )
     assert caught.value.requirement == "REQ-0397"
@@ -528,7 +575,14 @@ def test_header_only_artifact_passes_key_validation_and_column_checks() -> None:
     empty = table([("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")], [])
 
     assert check_keys(empty, KEYS) == ()
-    assert check_column(empty, column("AGE", "int", {"not_missing": {}}), KEYS) == ()
+    assert (
+        check_column(
+            empty,
+            column("AGE", "int", {"not_missing": {"id": "age_not_missing"}}),
+            KEYS,
+        )
+        == ()
+    )
 
 
 def test_matches_searches_with_the_portable_contract_rather_than_a_host_dialect() -> (
@@ -540,7 +594,9 @@ def test_matches_searches_with_the_portable_contract_rather_than_a_host_dialect(
     )
 
     failures = check_column(
-        completed, column("CODE", "str", {"matches": {"pattern": r"^\d$"}}), KEYS
+        completed,
+        column("CODE", "str", {"matches": {"id": "code_matches", "pattern": r"^\d$"}}),
+        KEYS,
     )
 
     assert failures[0].condition == "matches_failed"
@@ -558,7 +614,11 @@ def test_matches_rejects_a_unicode_property_pattern() -> None:
 
     with pytest.raises(DeclarationError) as rejected:
         check_column(
-            completed, column("TEXT", "str", {"matches": {"pattern": r"\p{L}+"}}), KEYS
+            completed,
+            column(
+                "TEXT", "str", {"matches": {"id": "text_matches", "pattern": r"\p{L}+"}}
+            ),
+            KEYS,
         )
 
     assert rejected.value.condition == "invalid_regex"
@@ -572,13 +632,21 @@ def test_max_length_counts_one_supplementary_plane_scalar_once() -> None:
     )
 
     assert (
-        check_column(completed, column("TEXT", "str", {"max_length": {"max": 2}}), KEYS)
+        check_column(
+            completed,
+            column("TEXT", "str", {"max_length": {"id": "text_max_length", "max": 2}}),
+            KEYS,
+        )
         == ()
     )
     assert (
         len(
             check_column(
-                completed, column("TEXT", "str", {"max_length": {"max": 1}}), KEYS
+                completed,
+                column(
+                    "TEXT", "str", {"max_length": {"id": "text_max_length", "max": 1}}
+                ),
+                KEYS,
             )
         )
         == 1
@@ -593,14 +661,24 @@ def test_allowed_values_and_missing_values_follow_their_declared_type() -> None:
 
     assert (
         check_column(
-            completed, column("FLAG", "int", {"allowed_values": {"values": [1]}}), KEYS
+            completed,
+            column(
+                "FLAG",
+                "int",
+                {"allowed_values": {"id": "flag_allowed_values", "values": [1]}},
+            ),
+            KEYS,
         )
         == ()
     )
     with pytest.raises(DeclarationError) as raised:
         check_column(
             completed,
-            column("FLAG", "int", {"allowed_values": {"values": [True]}}),
+            column(
+                "FLAG",
+                "int",
+                {"allowed_values": {"id": "flag_allowed_values", "values": [True]}},
+            ),
             KEYS,
         )
     assert raised.value.requirement == "REQ-0404"
@@ -619,13 +697,17 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
         with pytest.raises(DeclarationError) as reversed_range:
             check_column(
                 candidate,
-                column("AGE", "int", {"range": {"min": 100, "max": 18}}),
+                column(
+                    "AGE", "int", {"range": {"id": "age_range", "min": 100, "max": 18}}
+                ),
                 KEYS,
             )
         assert reversed_range.value.requirement == "REQ-0399"
 
     with pytest.raises(DeclarationError) as no_bound:
-        check_dataset(completed, [Expression(root={"row_count": {}})], KEYS)
+        check_dataset(
+            completed, [Expression(root={"row_count": {"id": "row_count"}})], KEYS
+        )
     assert no_bound.value.requirement == "REQ-0399"
 
     with pytest.raises(DeclarationError) as grouped:
@@ -635,24 +717,36 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
             KEYS,
         )
     assert grouped.value.condition == "missing_verification_id"
-    assert grouped.value.requirement == "REQ-0402"
+    assert grouped.value.requirement == "REQ-0374"
 
     with pytest.raises(DeclarationError) as unknown:
         check_dataset(
-            completed, [Expression(root={"unique": {"columns": ["SITEID"]}})], KEYS
+            completed,
+            [
+                Expression(
+                    root={"unique": {"id": "unique_siteid", "columns": ["SITEID"]}}
+                )
+            ],
+            KEYS,
         )
     assert unknown.value.condition == "unknown_field"
 
     with pytest.raises(DeclarationError) as untyped:
         check_column(
-            completed, column("AGE", "int", {"matches": {"pattern": "^1$"}}), KEYS
+            completed,
+            column("AGE", "int", {"matches": {"id": "age_matches", "pattern": "^1$"}}),
+            KEYS,
         )
     assert untyped.value.requirement == "REQ-0404"
 
     with pytest.raises(DeclarationError) as unreadable:
         check_column(
             completed,
-            column("STUDYID", "str", {"matches": {"pattern": "(?P<code>[MFU])"}}),
+            column(
+                "STUDYID",
+                "str",
+                {"matches": {"id": "studyid_matches", "pattern": "(?P<code>[MFU])"}},
+            ),
             KEYS,
         )
     assert unreadable.value.condition == "invalid_regex"
@@ -680,6 +774,41 @@ def test_duplicate_verification_identifiers_are_refused() -> None:
         check_dataset(
             completed,
             [Expression(root=declaration), Expression(root=declaration)],
+            KEYS,
+        )
+
+    assert raised.value.condition == "duplicate_identifier"
+    assert raised.value.requirement == "REQ-0398"
+
+
+def test_column_verification_requires_an_id() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", "S-1", 50]],
+    )
+
+    with pytest.raises(DeclarationError) as raised:
+        check_column(
+            completed,
+            column("AGE", "int", {"range": {"min": 18, "max": 100}}),
+            KEYS,
+        )
+
+    assert raised.value.condition == "missing_verification_id"
+    assert raised.value.requirement == "REQ-0374"
+
+
+def test_duplicate_column_verification_identifiers_are_refused() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", "S-1", 50]],
+    )
+    declaration = {"not_missing": {"id": "age_present"}}
+
+    with pytest.raises(DeclarationError) as raised:
+        check_column(
+            completed,
+            column("AGE", "int", declaration, declaration),
             KEYS,
         )
 
@@ -785,6 +914,7 @@ def test_row_count_filters_receive_resolved_lookup_bindings() -> None:
     declaration = Expression(
         root={
             "row_count": {
+                "id": "kept-visit-count",
                 "filter": "VISIT.KEEP = 'Y'",
                 "min": 1,
                 "max": 1,
@@ -842,7 +972,7 @@ def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
     columns = [
         Column(name="STUDYID", type="str"),
         Column(name="USUBJID", type="str"),
-        column("AGE", "int", {"range": {"min": 18, "max": 100}}),
+        column("AGE", "int", {"range": {"id": "age_range", "min": 18, "max": 100}}),
     ]
 
     with pytest.raises(VerificationError) as raised:
@@ -870,7 +1000,10 @@ def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
     )
     assert (
         verify_completed_table(
-            passing, columns, KEYS, [Expression(root={"row_count": {"min": 1}})]
+            passing,
+            columns,
+            KEYS,
+            [Expression(root={"row_count": {"id": "row_count", "min": 1}})],
         )
         is passing
     )
@@ -888,8 +1021,15 @@ def test_column_records_report_held_and_violated_checks_in_order() -> None:
         column(
             "AGE",
             "int",
-            {"not_missing": {}},
-            {"range": {"min": 18, "max": 100, "severity": "warning"}},
+            {"not_missing": {"id": "age_not_missing"}},
+            {
+                "range": {
+                    "id": "age_range",
+                    "min": 18,
+                    "max": 100,
+                    "severity": "warning",
+                }
+            },
         ),
         KEYS,
         records=records,
@@ -904,9 +1044,10 @@ def test_column_records_report_held_and_violated_checks_in_order() -> None:
     assert held.failure is None
     assert held.check == "not_missing"
     assert held.target == "AGE"
-    assert held.verification_id is None
+    assert held.verification_id == "age_not_missing"
     assert held.evaluated_count == 2
     assert violated.failure is failures[0]
+    assert violated.verification_id == "age_range"
     assert violated.severity == "warning"
     assert violated.evaluated_count == 2
 
@@ -921,7 +1062,9 @@ def test_dataset_records_count_what_each_check_counts() -> None:
     failures = check_dataset(
         completed,
         [
-            Expression(root={"unique": {"columns": ["USUBJID"]}}),
+            Expression(
+                root={"unique": {"id": "unique_usubjid", "columns": ["USUBJID"]}}
+            ),
             Expression(
                 root={
                     "row_count": {
@@ -942,7 +1085,7 @@ def test_dataset_records_count_what_each_check_counts() -> None:
     # Three rows, three distinct subject combinations.
     assert unique.check == "unique"
     assert unique.target is None
-    assert unique.verification_id is None
+    assert unique.verification_id == "unique_usubjid"
     assert unique.evaluated_count == 3
     assert unique.failure is None
     # Three subject groups were evaluated, and each holds exactly one row.
@@ -961,7 +1104,7 @@ def test_dataset_records_carry_the_violated_failure() -> None:
 
     (failure,) = check_dataset(
         completed,
-        [Expression(root={"unique": {"columns": ["USUBJID"]}})],
+        [Expression(root={"unique": {"id": "unique_usubjid", "columns": ["USUBJID"]}})],
         KEYS,
         records=records,
     )

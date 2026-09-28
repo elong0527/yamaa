@@ -41,6 +41,7 @@ columns:
               missing: null
     verifications:
       - allowed_values:
+          id: asev_allowed_values
           values: [MILD, MODERATE, SEVERE, LIFE-THREATENING]
 
   - name: ASEVN
@@ -49,7 +50,7 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing:
         dict:
           MILD: 1
           MODERATE: 2
@@ -57,13 +58,16 @@ columns:
           LIFE-THREATENING: 4
     verifications:
       - range:
+          id: asevn_range
           min: 1
           max: 4
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aeseq
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
+      id: row_count
       min: 5
       max: 5
   - implies:

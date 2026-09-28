@@ -65,4 +65,5 @@ columns:
 
 verifications:
   - unique:
+      id: unique_usubjid_aseq
       columns: [USUBJID, ASEQ]

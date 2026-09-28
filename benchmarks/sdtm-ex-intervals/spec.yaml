@@ -41,6 +41,7 @@ columns:
     derivation: EC_RAW.ECDOSU
     verifications:
       allowed_values:
+        id: exdosu_allowed_values
         values: [mg]
 
   - name: EXDOSFRQ
@@ -49,6 +50,7 @@ columns:
     derivation: EC_RAW.ECDOSFRQ
     verifications:
       allowed_values:
+        id: exdosfrq_allowed_values
         values: [QD]
 
   - name: EXSTDTC
@@ -86,8 +88,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_exseq
       columns: [STUDYID, USUBJID, EXSEQ]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - assert:

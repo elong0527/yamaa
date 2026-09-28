@@ -31,6 +31,7 @@ columns:
     # which fails once the dataset is complete.
     verifications:
       - max_length:
+          id: usubjid_max_length
           max: 20
 
   - name: SUBJID

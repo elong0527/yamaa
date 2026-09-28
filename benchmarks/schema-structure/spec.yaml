@@ -64,7 +64,8 @@ columns:
           then: {literal: 1}
         - otherwise: {literal: 0}
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: high_not_missing
 
   - name: FLAG
     type: str
@@ -110,4 +111,5 @@ rows:
 
 verifications:
   - unique:
+      id: unique_usubjid_visit_paramcd
       columns: [USUBJID, VISIT, PARAMCD]

@@ -51,7 +51,8 @@ columns:
     type: str
     label: Object of the Observation
     verifications:
-      not_missing: {}
+      not_missing:
+        id: faobj_not_missing
 
   - name: FACAT
     type: str

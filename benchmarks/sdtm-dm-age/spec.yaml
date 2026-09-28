@@ -32,7 +32,8 @@ columns:
         filter: ODM.ItemOID = 'IT.DM.RFICDTC'
         variable: ODM.Value
     verifications:
-      not_missing: {}
+      not_missing:
+        id: rficdtc_not_missing
 
   - name: BRTHDTC
     type: str
@@ -50,7 +51,7 @@ columns:
     derivation:
       date_precision:
         source: BRTHDTC
-        missing: null
+        missing:
 
   # Only a complete birth date becomes a date; a year-month or year-only
   # one gives none, and so no age.
@@ -89,8 +90,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 5
       max: 5
   - all_or_none:

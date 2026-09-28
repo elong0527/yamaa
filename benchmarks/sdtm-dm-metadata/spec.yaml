@@ -30,7 +30,8 @@ columns:
         type: Assigned
         source: Sponsor
     verifications:
-      not_missing: {}
+      not_missing:
+        id: domain_not_missing
 
   - name: STUDYID
     type: str
@@ -44,7 +45,8 @@ columns:
         type: Protocol
         source: Sponsor
     verifications:
-      not_missing: {}
+      not_missing:
+        id: studyid_not_missing
 
   - name: USUBJID
     type: str
@@ -63,11 +65,12 @@ columns:
       origin:
         type: Derived
         source: Sponsor
-      method: Study identifier, site identifier, and subject identifier joined
-        by hyphens.
+      method: Study identifier, site identifier, and subject identifier joined by hyphens.
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: usubjid_not_missing
       - max_length:
+          id: usubjid_max_length
           max: 30
 
   - name: SUBJID
@@ -85,7 +88,8 @@ columns:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      not_missing: {}
+      not_missing:
+        id: subjid_not_missing
 
   - name: SITEID
     type: str
@@ -99,7 +103,8 @@ columns:
         type: Collected
         source: Investigator
     verifications:
-      not_missing: {}
+      not_missing:
+        id: siteid_not_missing
 
   - name: AGE
     type: int
@@ -117,6 +122,7 @@ columns:
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
       range:
+        id: age_range
         min: 0
         max: 120
 
@@ -150,8 +156,10 @@ columns:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: sex_not_missing
       - allowed_values:
+          id: sex_allowed_values
           values: [F, M, U]
 
   - name: COUNTRY
@@ -170,11 +178,14 @@ columns:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      not_missing: {}
+      not_missing:
+        id: country_not_missing
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 3
       max: 3

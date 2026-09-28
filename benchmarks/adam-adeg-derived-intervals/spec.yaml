@@ -122,8 +122,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_avisit
       columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
+      id: row_count
       min: 51
       max: 51
   - implies:

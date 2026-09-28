@@ -20,8 +20,7 @@ intermediates:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
-            RFPENDTC, RFENDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFPENDTC, RFENDTC]
 
 columns:
   - name: DOMAIN
@@ -44,7 +43,8 @@ columns:
     label: Date/Time of Informed Consent
     derivation: DM_RAW.RFICDTC
     verifications:
-      not_missing: {}
+      not_missing:
+        id: rficdtc_not_missing
 
   # MIN and MAX skip missing dates; a subject with none gets no date.
   - name: RFXSTDTC
@@ -102,8 +102,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - all_or_none:

@@ -160,7 +160,9 @@ def test_self_uniqueness_checks_completed_derived_rows() -> None:
     donor = spec.intermediates[0].model_copy(
         update={
             "filter": None,
-            "verification": IntermediateVerification(unique=["USUBJID", "AVISITN"]),
+            "verification": IntermediateVerification(
+                id="donor-unique", unique={"columns": ["USUBJID", "AVISITN"]}
+            ),
         }
     )
     spec = spec.model_copy(update={"intermediates": [donor]})

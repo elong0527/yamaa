@@ -39,6 +39,7 @@ columns:
       flag: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
     verifications:
       allowed_values:
+        id: crit1fl_allowed_values
         values: [Y]
 
   # DERM matches inside a longer word, so DERMATITIS counts.

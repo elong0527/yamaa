@@ -8,8 +8,7 @@ base: RAND
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS,
-            ACTARMUD]
+  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD]
 
 columns:
   - name: DOMAIN
@@ -100,8 +99,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - all_or_none:

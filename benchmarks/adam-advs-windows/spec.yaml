@@ -54,7 +54,8 @@ columns:
     label: Analysis Value
     derivation: ADVS_RAW.AVAL
     verifications:
-      not_missing: {}
+      not_missing:
+        id: aval_not_missing
 
   # Windows on study day, each including its lower break and excluding its
   # upper one: before 0 SCREENING, 0-1 BASELINE (there is no day 0), 2-21
@@ -68,9 +69,10 @@ columns:
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
         right: false
-        missing: null
+        missing:
     verifications:
       allowed_values:
+        id: avisit_allowed_values
         values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
 
   - name: AVISITN
@@ -85,7 +87,7 @@ columns:
           WEEK 2: 2
           WEEK 4: 4
           POST-TREATMENT: 99
-        missing: null
+        missing:
 
   # Within each subject, parameter, and window: earliest study day first,
   # then the lower sequence number. ANL01FL marks rank 1; a record with no
@@ -108,10 +110,12 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_paramcd_vsseq
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   # Pins the 14-row fixture: 9 original rows plus the day-2, day-22, and
   # day-43 boundary records and the same-day tie pair.
   - row_count:
+      id: row_count
       min: 14
       max: 14
   - all_or_none:

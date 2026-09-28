@@ -29,10 +29,13 @@ columns:
         sources: [DM.SEX]
         missing: U
     verifications:
-      - not_missing: {}
+      - not_missing:
+          id: sex_not_missing
       - allowed_values:
+          id: sex_allowed_values
           values: [M, F, U]
       - matches:
+          id: sex_matches
           pattern: '^[MFU]$'
 
   - name: SEXN
@@ -65,7 +68,7 @@ columns:
           BLACK OR AFRICAN AMERICAN: 2
           ASIAN: 3
           MULTIPLE: 4
-        missing: null
+        missing:
         unmapped: 99
 
   # A collected age that is not a whole number (text, or 34.5) cannot become
@@ -79,6 +82,7 @@ columns:
       unconvertible: null
     verifications:
       - range:
+          id: age_range
           min: 0
           max: 120
 
@@ -96,8 +100,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid
       columns: [STUDYID, USUBJID]
   - row_count:
+      id: row_count
       min: 11
       max: 11
   - assert:

@@ -381,7 +381,7 @@ sources:
   R009-25: {"file": "R009-verifications.md", "targets": ["REQ-0399"]}
   R009-26: {"file": "R009-verifications.md", "targets": ["REQ-0400"]}
   R009-27: {"file": "R009-verifications.md", "targets": ["REQ-0401"]}
-  R009-28: {"file": "R009-verifications.md", "targets": ["REQ-0402"]}
+  R009-28: {"file": "R009-verifications.md", "targets": ["REQ-0374"]}
   R009-29: {"file": "R009-verifications.md", "targets": ["REQ-0403"]}
   R009-30: {"file": "R009-verifications.md", "targets": ["REQ-0404"]}
   R009-31: {"file": "R009-verifications.md", "targets": ["REQ-0405"]}
@@ -1444,7 +1444,7 @@ requirements:
   REQ-0371: {"file": "execution/verification.md", "sources": ["R009-5"]}
   REQ-0372: {"file": "execution/verification.md", "sources": ["R009-6"]}
   REQ-0373: {"file": "execution/verification.md", "sources": ["R009-7"]}
-  REQ-0374: {"file": "execution/verification.md", "sources": ["R009-8"]}
+  REQ-0374: {"file": "execution/verification.md", "sources": ["R009-8", "R009-28"]}
   REQ-0375: {"file": "execution/verification.md", "sources": ["R009-9"]}
   REQ-0376: {"file": "execution/verification.md", "sources": ["R009-10"]}
   REQ-0377: {"file": "execution/verification.md", "sources": ["R009-11"]}
@@ -1472,7 +1472,6 @@ requirements:
   REQ-0399: {"file": "execution/verification.md", "sources": ["R009-25"]}
   REQ-0400: {"file": "execution/verification.md", "sources": ["R009-26"]}
   REQ-0401: {"file": "execution/verification.md", "sources": ["R009-27"]}
-  REQ-0402: {"file": "execution/verification.md", "sources": ["R009-28"]}
   REQ-0403: {"file": "execution/verification.md", "sources": ["R009-29"]}
   REQ-0404: {"file": "execution/verification.md", "sources": ["R009-30"]}
   REQ-0405: {"file": "execution/verification.md", "sources": ["R009-31"]}
@@ -2266,7 +2265,7 @@ requirements:
   REQ-1239: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.locf.source.description", "schema_expression_window.yaml:expressions.locf.window.description"]}
   REQ-1240: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_sentence.source.description", "schema_expression_str.yaml:expressions.str_sentence.missing.description"]}
   REQ-1241: {"file": "operations/text.md", "sources": ["schema_expression_str.yaml:expressions.str_title.source.description", "schema_expression_str.yaml:expressions.str_title.missing.description"]}
-  REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description"]}
+  REQ-1245: {"file": "operations/lookup.md", "sources": ["yamaa:issue-777:intermediate-unique-verification", "schema.yaml:intermediate_class.verification.description", "schema.yaml:intermediate_verification_class.unique.description", "schema.yaml:intermediate_verification_class.id.description", "schema.yaml:intermediate_unique_class.columns.description"]}
   REQ-1246: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:project-root-anchor"]}
   REQ-1247: {"file": "storage/resources.md", "sources": ["yamaa:issue-846:produced-artifact-anchor"]}
   REQ-1248: {"file": "operations/lookup.md", "sources": ["yamaa:issue-371:rename-only-intermediate"]}
@@ -2770,6 +2769,8 @@ provenance_addenda:
   - {"source": "yamaa:issue-777:intermediate-unique-verification", "text": "Issue #777: an intermediate may declare verification.unique asserting its filtered donor records carry each key combination once; duplicates fail the run, correlated filters are rejected, and keep stays positional.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_class.verification.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1245"}
   - {"source": "schema.yaml:intermediate_verification_class.unique.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_verification_class", "target": "REQ-1245"}
+  - {"source": "schema.yaml:intermediate_verification_class.id.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_verification_class", "target": "REQ-1245"}
+  - {"source": "schema.yaml:intermediate_unique_class.columns.description", "text": "See REQ-1245 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_unique_class", "target": "REQ-1245"}
   - {"source": "yamaa:issue-845:entry-inherits-output", "text": "Issue #845: an entry file may omit output and inherit it whole like any other replaced root field, so a shared layer can own the artifact membership and order.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0623"}
   - {"source": "yamaa:issue-845:inherited-output-paths", "text": "Issue #845: an inherited output publishes where the layer that wrote it names; path, warning_log, and verification_log keep that layer's provenance.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0629"}
   - {"source": "yamaa:issue-845:resolved-output-required", "text": "Issue #845: missing_entry_output is retired; a resolved specification no layer gave an output fails as missing_required_field at output.", "owner": "specification/composition", "group": "inherited-output", "target": "REQ-0657"}

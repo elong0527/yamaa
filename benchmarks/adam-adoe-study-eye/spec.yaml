@@ -37,6 +37,7 @@ columns:
     derivation: OE.OELAT
     verifications:
       allowed_values:
+        id: oelat_allowed_values
         values: [LEFT, RIGHT, BILATERAL]
 
   - name: AVAL
@@ -52,6 +53,7 @@ columns:
     derivation: ADSL.STUDYEYE
     verifications:
       allowed_values:
+        id: studyeye_allowed_values
         values: [LEFT, RIGHT, BILATERAL]
 
   # First match wins: a bilateral measurement is Both Eyes; with both eyes
@@ -73,12 +75,15 @@ columns:
           then: {literal: Fellow Eye}
     verifications:
       allowed_values:
+        id: afeye_allowed_values
         values: [Study Eye, Fellow Eye, Both Eyes]
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_oeseq
       columns: [STUDYID, USUBJID, OESEQ]
   - row_count:
+      id: row_count
       min: 10
       max: 10
   - implies:

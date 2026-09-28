@@ -36,7 +36,8 @@ columns:
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
-      not_missing: {}
+      not_missing:
+        id: cmtrt_not_missing
 
   - name: CMINDC
     type: str
@@ -54,8 +55,8 @@ columns:
       str_extract:
         source: DSTXT
         pattern: '^[0-9]+(\.[0-9]+)?$'
-        missing: null
-        no_match: null
+        missing:
+        no_match:
 
   # Any other collected dose, such as the range "200-400", stays as text.
   - name: CMDOSTXT
@@ -71,6 +72,7 @@ columns:
     label: Dose Units
     verifications:
       allowed_values:
+        id: cmdosu_allowed_values
         values: [mg]
 
   - name: FRQLBL
@@ -199,8 +201,10 @@ rows:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_cmseq
       columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
+      id: row_count
       min: 3
       max: 3
   - implies:

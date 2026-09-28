@@ -55,6 +55,7 @@ columns:
           then: {literal: WGTPCTL}
     verifications:
       allowed_values:
+        id: paramcd_allowed_values
         values: [BMIPCTL, WGTPCTL]
 
   - name: PARAM
@@ -101,8 +102,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_avisit_paramcd
       columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
+      id: row_count
       min: 8
       max: 8
   - implies:

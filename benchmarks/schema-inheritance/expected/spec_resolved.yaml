@@ -52,6 +52,7 @@ columns:
           variable: LB.LBSTRESU
 verifications:
   - unique:
+      id: unique_usubjid_paramcd
       columns:
         - USUBJID
         - PARAMCD

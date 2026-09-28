@@ -119,8 +119,10 @@ columns:
 
 verifications:
   - unique:
+      id: unique_studyid_usubjid_aseq
       columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
+      id: row_count
       min: 21
       max: 21
   - all_or_none:

@@ -99,8 +99,10 @@ verifications:
   # dataset-level rows, so keys cannot name it (REQ-0240 missing_key); the
   # uniqueness check mirrors the declared keys.
   - unique:
+      id: unique_studyid_rdomain_idvar_relid
       columns: [STUDYID, RDOMAIN, IDVAR, RELID]
   - row_count:
+      id: row_count
       min: 6
       max: 6
   - implies:
