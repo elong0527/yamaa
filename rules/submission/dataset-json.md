@@ -123,9 +123,7 @@ order, which is the order the standard presents them:
 <a id="req-1204"></a>
 
 **REQ-1204.** A member whose source is absent is omitted. It is never written
-as `null`: within this file `null` is the missing value of a row, and a member
-present with no value would say that the document declared something empty
-rather than declared nothing.
+as `null`: within this file `null` is the missing value of a row.
 
 <a id="req-1205"></a>
 
