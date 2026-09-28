@@ -74,11 +74,17 @@ def portable_pattern_error(pattern):
                 in_class = True
             elif c == "]" and in_class:
                 in_class = False
-            elif (
-                c == "{"
-                and not in_class
-                and not re.match(r"\{\d+(,\d*)?\}", pattern[i:])
-            ):
+            elif c == "{" and not in_class:
+                m = re.match(r"\{\d+(,\d*)?\}", pattern[i:])
+                if m is None:
+                    bad = "lone quantifier brace is outside the portable grammar"
+                    break
+                # Consume the whole quantifier so its closing brace is not
+                # mistaken for a lone "}" below (old engine parity: a "}"
+                # outside a class is always "a malformed quantifier").
+                i += len(m.group(0))
+                continue
+            elif c == "}" and not in_class:
                 bad = "lone quantifier brace is outside the portable grammar"
                 break
             i += 1
@@ -112,8 +118,11 @@ def normalize_pattern(pattern):
                 out.append(f"\\U{cp:08X}")
                 i = j + 1
                 continue
-            if nc == "s" and not in_class:
-                out.append("[" + _ECMA_S + "]")
+            if nc == "s":
+                # REQ-0823: inside a class spell the ECMA-262 set without the
+                # brackets (the old engine's _WHITESPACE_IN_CLASS); U+0085
+                # stays excluded however the host library treats [\s].
+                out.append("[" + _ECMA_S + "]" if not in_class else _ECMA_S)
                 i += 2
                 continue
             if nc == "S" and not in_class:
