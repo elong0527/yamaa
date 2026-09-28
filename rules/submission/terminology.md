@@ -46,9 +46,7 @@ alias.
 <a id="req-0931"></a>
 
 **REQ-0931.** A codelist declares either `items` or `external`, and never both
-and never neither. A codelist that lists its values and a codelist that defers
-to a dictionary are two different objects, and a codelist that did neither
-would constrain nothing.
+and never neither.
 
 <a id="req-0932"></a>
 
