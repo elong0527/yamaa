@@ -198,11 +198,6 @@ fixtures:
     condition: incomparable_sources
     spec_paths: [columns.LSTALVDT.derivation.greatest]
     validator: expression_contract
-  negative-count-unnamed:
-    rule: R009
-    condition: missing_verification_id
-    spec_paths: ["verifications[1].row_count"]
-    validator: spec_contract
   negative-least-mixed:
     rule: R007
     condition: incomparable_sources

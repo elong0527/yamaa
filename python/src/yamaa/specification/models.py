@@ -146,10 +146,27 @@ class RecordBetween(_StrictModel):
     upper: str | None = None
 
 
-class IntermediateVerification(_StrictModel):
-    """REQ-1245: uniqueness asserted over an intermediate's filtered donor records."""
+class IntermediateUnique(_StrictModel):
+    """The dataset-style unique check over filtered intermediate donors."""
 
-    unique: list[str] = Field(min_length=1)
+    columns: list[str] = Field(min_length=1)
+    id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def reject_null_id(self) -> IntermediateUnique:
+        if "id" in self.model_fields_set and self.id is None:
+            raise ValueError("an explicit verification id must be nonempty text")
+        return self
+
+
+class IntermediateVerification(_StrictModel):
+    unique: list[str] | IntermediateUnique
+
+    @model_validator(mode="after")
+    def require_unique_columns(self) -> IntermediateVerification:
+        if isinstance(self.unique, list) and not self.unique:
+            raise ValueError("a uniqueness check requires at least one column")
+        return self
 
 
 class Intermediate(_StrictModel):
@@ -166,7 +183,7 @@ class Intermediate(_StrictModel):
     keep: Literal["first", "last"] | None = None
     columns: list[str] | None = None
     derivations: dict[str, HandledExpression] | None = None
-    verification: IntermediateVerification | None = None
+    verifications: list[IntermediateVerification] | None = None
     no_match: JsonValue = None
 
 

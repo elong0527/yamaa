@@ -840,7 +840,7 @@ class IntermediateSelector:
         for plan in self.plans.values():
             if (plan.dataset == "SELF") != self_only:
                 continue
-            if not plan.unique_columns:
+            if not plan.unique_checks:
                 continue
             records = self._filtered(plan)
             if isinstance(records, ConditionResult):
@@ -859,29 +859,33 @@ class IntermediateSelector:
                     )
                 )
                 continue
-            duplicates = _duplicate_groups(records, plan.unique_columns)
-            if duplicates:
-                failures.append(
-                    VerificationFailure(
-                        phase="verification",
-                        condition="duplicate_intermediate_records",
-                        spec_paths=(f"{plan.path}.verification",),
-                        requirement="REQ-1245",
-                        context={
-                            "intermediate": plan.identifier,
-                            "dataset": plan.dataset,
-                            "columns": list(plan.unique_columns),
-                            "duplicate_count": len(duplicates),
-                        },
-                        offending_keys=tuple(
-                            {
-                                field: json_value(record.values[field])
-                                for field in plan.unique_columns
-                            }
-                            for record in duplicates
-                        ),
+            for check in plan.unique_checks:
+                duplicates = _duplicate_groups(records, check.columns)
+                if duplicates:
+                    context = {
+                        "intermediate": plan.identifier,
+                        "dataset": plan.dataset,
+                        "columns": list(check.columns),
+                        "duplicate_count": len(duplicates),
+                    }
+                    if check.verification_id is not None:
+                        context["verification_id"] = check.verification_id
+                    failures.append(
+                        VerificationFailure(
+                            phase="verification",
+                            condition="duplicate_intermediate_records",
+                            spec_paths=(check.spec_path,),
+                            requirement="REQ-1245",
+                            context=context,
+                            offending_keys=tuple(
+                                {
+                                    field: json_value(record.values[field])
+                                    for field in check.columns
+                                }
+                                for record in duplicates
+                            ),
+                        )
                     )
-                )
         return tuple(failures)
 
     def _match_index_for(

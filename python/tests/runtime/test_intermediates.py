@@ -5,7 +5,11 @@ from yamaa.expressions.dispatch import ExpressionDispatcher
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, ConditionResult, DateValue, TypedColumn, ValueResult
 from yamaa.odm import BindingIndex, BindingPlan, DatasetBinding
-from yamaa.planning import MatchValueExpression, PlannedIntermediate
+from yamaa.planning import (
+    MatchValueExpression,
+    PlannedIntermediate,
+    PlannedIntermediateUnique,
+)
 from yamaa.runtime import ExecutionSuccess, execute_specification
 from yamaa.runtime.intermediates import (
     IntermediateSelector,
@@ -537,6 +541,14 @@ def derived_plan(**extra: object) -> PlannedIntermediate:
 
     match_variables = extra.pop("match_variables", ("STUDYID", "USUBJID", "QVAL_T"))
     match_fields = extra.pop("match_fields", ("STUDYID", "USUBJID", "QVAL_U"))
+    unique_columns = extra.pop("unique_columns", ())
+    if unique_columns:
+        extra["unique_checks"] = (
+            PlannedIntermediateUnique(
+                columns=unique_columns,
+                spec_path="intermediates[0].verifications[0].unique",
+            ),
+        )
     return PlannedIntermediate(
         identifier="SUP_EP",
         dataset="SUPPLB",
@@ -781,6 +793,14 @@ def ds() -> RelationIndex:
 
 
 def ds_plan(**extra: object) -> PlannedIntermediate:
+    unique_columns = extra.pop("unique_columns", ())
+    if unique_columns:
+        extra["unique_checks"] = (
+            PlannedIntermediateUnique(
+                columns=unique_columns,
+                spec_path="intermediates[0].verifications[0].unique",
+            ),
+        )
     return PlannedIntermediate(
         identifier="DS_EOS",
         dataset="DS",
@@ -820,7 +840,7 @@ def test_duplicate_donor_records_fail_verification() -> None:
     assert failure.phase == "verification"
     assert failure.condition == "duplicate_intermediate_records"
     assert failure.requirement == "REQ-1245"
-    assert failure.spec_paths == ("intermediates[0].verification",)
+    assert failure.spec_paths == ("intermediates[0].verifications[0].unique",)
     assert failure.context == {
         "intermediate": "DS_EOS",
         "dataset": "DS",
@@ -828,6 +848,36 @@ def test_duplicate_donor_records_fail_verification() -> None:
         "duplicate_count": 1,
     }
     assert failure.severity == "error"
+
+
+def test_multiple_intermediate_checks_keep_their_paths_and_optional_ids() -> None:
+    selector = IntermediateSelector(
+        [
+            ds_plan(
+                unique_checks=(
+                    PlannedIntermediateUnique(
+                        columns=("STUDYID", "USUBJID"),
+                        spec_path="intermediates[0].verifications[0].unique",
+                    ),
+                    PlannedIntermediateUnique(
+                        columns=("STUDYID",),
+                        spec_path="intermediates[0].verifications[1].unique",
+                        verification_id="study-key",
+                    ),
+                )
+            )
+        ],
+        {"DS": ds()},
+    )
+
+    failures = selector.verify_uniqueness()
+
+    assert [failure.spec_paths for failure in failures] == [
+        ("intermediates[0].verifications[0].unique",),
+        ("intermediates[0].verifications[1].unique",),
+    ]
+    assert "verification_id" not in failures[0].context
+    assert failures[1].context["verification_id"] == "study-key"
 
 
 def test_an_unverified_intermediate_is_not_checked() -> None:
@@ -880,7 +930,12 @@ def test_a_failed_derivation_on_a_verified_intermediate_fails_verification() -> 
                 ),
             ),
         ),
-        unique_columns=("STUDYID", "USUBJID"),
+        unique_checks=(
+            PlannedIntermediateUnique(
+                columns=("STUDYID", "USUBJID"),
+                spec_path="intermediates[0].verifications[0].unique",
+            ),
+        ),
         no_match_declared=True,
     )
     selector = IntermediateSelector([plan], {"SUPPLB": supp()})

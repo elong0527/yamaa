@@ -487,17 +487,21 @@ the window ranks the records of each subject and test on it.
 
 <a id="req-1245"></a>
 
-**REQ-1245.** An intermediate may declare `verification:` with a
-nonempty `unique:` list of its dataset's columns, asserting the
-combination is unique across the intermediate's filtered donor records:
+**REQ-1245.** An intermediate may declare a `verifications:` list of
+`unique: [...]` checks. Each check asserts that its nonempty
+column combination is unique across the intermediate's filtered donor records:
 
 ```yaml
 - id: DS_EOS
   dataset: DS
   filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
-  verification:
-    unique: [STUDYID, USUBJID]
+  verifications:
+    - unique: [STUDYID, USUBJID]
 ```
+
+The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}`
+names a check when an explicit ID is useful. Both forms test the same donor
+records.
 
 The check runs over the source-only filtered donor records with
 `derivations:` computed. Input-backed checks run before any row is built;
@@ -505,15 +509,17 @@ The check runs over the source-only filtered donor records with
 key is verified unique needs neither `keep` nor `order_by`:
 [REQ-0127](lookup.md#req-0127) already rejects multiple surviving
 matches without a selection rule. A repeated combination fails the run
-as `duplicate_intermediate_records` at the `intermediates[i].verification`
-path; there is no warning severity, so a duplicate can never resolve
+as `duplicate_intermediate_records` at the
+`intermediates[i].verifications[j].unique` path. Each check may declare an
+optional `id`, governed by REQ-0374 and REQ-0398. There is no warning
+severity, so a duplicate can never resolve
 ambiguously. Each `unique` column must name a stored field or a derived
 name, or fail as `unknown_field`. A `filter` or `derivations:` entry that
 fails to materialize fails the run here as well: the verification is
 load-bearing, so its failure cannot wait for a selection that may never
 happen. A `filter` that references the current
 driver row is evaluated per row and admits no single run-wide donor set,
-so it cannot combine with `verification:` and fails validation.
+so it cannot combine with `verifications:` and fails validation.
 `keep` stays a positional selection requiring `order_by`; an unordered
 `keep: first` is not an exactly-one assertion.
 
@@ -667,8 +673,8 @@ paired key column to have the same comparable type.
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
-| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verification.unique` ([REQ-1185](lookup.md#req-1185)). |
-| `intermediate_class.verification` | Uniqueness asserted over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
+| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verifications.unique` ([REQ-1185](lookup.md#req-1185)). |
+| `intermediate_class.verifications` | Uniqueness checks over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.no_match` | Value returned when the lookup yields nothing; without it, yielding nothing fails ([REQ-0124](lookup.md#req-0124)). |
 
 <a id="req-1049"></a>

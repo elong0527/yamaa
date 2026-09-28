@@ -12,8 +12,8 @@ intermediates:
   - id: TEST
     dataset: TESTS
     key: VSTESTCD
-    verification:
-      unique: [VSTESTCD]
+    verifications:
+      - unique: [VSTESTCD]
 
 output:
   path: vs.csv

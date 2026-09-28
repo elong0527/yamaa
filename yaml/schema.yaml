@@ -120,15 +120,9 @@ intermediate_class:
         type: "dict[identifier, derivation]"
         required: false
         description: See REQ-1185.
-    - verification:
-        type: intermediate_verification_class
+    - verifications:
+        type: "list[intermediate_verification]"
         required: false
-        description: See REQ-1245.
-
-intermediate_verification_class:
-    - unique:
-        type: "list[identifier]"
-        required: true
         description: See REQ-1245.
 
 record_between_class:

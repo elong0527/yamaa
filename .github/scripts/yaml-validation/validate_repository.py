@@ -329,7 +329,6 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R007', 'missing_value_required'): {'false_value'},
-    ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
     },
@@ -5441,6 +5440,24 @@ def validate_spec_contracts(
             if not isinstance(intermediate, dict):
                 continue
             path = f"{spec_label}.intermediates[{index}]"
+            verification_ids = set()
+            for check_index, verification in enumerate(
+                intermediate.get('verifications') or ()
+            ):
+                if not isinstance(verification, dict):
+                    continue
+                unique = verification.get('unique')
+                if not isinstance(unique, dict):
+                    continue
+                identifier = unique.get('id')
+                if not isinstance(identifier, str):
+                    continue
+                if identifier in verification_ids:
+                    errors.append(
+                        f"ERROR: {path}.verifications[{check_index}].unique.id: "
+                        f"duplicate intermediate verification id {identifier!r}"
+                    )
+                verification_ids.add(identifier)
             # `order_by` and `keep` pair with each other; an omitted `key` is
             # inferred below (REQ-0153).
             if ('order_by' in intermediate) != ('keep' in intermediate):
@@ -5488,22 +5505,28 @@ def validate_spec_contracts(
             if not isinstance(verification, dict) or len(verification) != 1:
                 continue
             keyword, payload = next(iter(verification.items()))
+            short_unique = keyword == 'unique' and isinstance(payload, list)
+            if short_unique:
+                payload = {'columns': payload}
             if not isinstance(payload, dict):
                 continue
             path = f"{spec_label}.verifications[{index}].{keyword}"
             if payload.get('severity', 'error') == 'warning':
                 warning_paths.append(f"{path}.severity")
-            if keyword in {'all_or_none', 'implies', 'assert', 'row_count'}:
-                verification_id = payload.get('id')
-                if isinstance(verification_id, str):
-                    verification_ids.append((verification_id, path))
+            verification_id = payload.get('id')
+            if isinstance(verification_id, str):
+                verification_ids.append((verification_id, path))
             if keyword in {'unique', 'all_or_none'}:
                 names = payload.get('columns')
                 if isinstance(names, list):
-                    for name in names:
+                    for column_index, name in enumerate(names):
                         if isinstance(name, str) and name not in declared:
+                            column_path = (
+                                f"{path}[{column_index}]"
+                                if short_unique else f"{path}.columns"
+                            )
                             errors.append(
-                                f"ERROR: {path}.columns: unknown column "
+                                f"ERROR: {column_path}: unknown column "
                                 f"{name!r}"
                             )
                 if (
@@ -5552,15 +5575,6 @@ def validate_spec_contracts(
                     )
                 if 'group_by' in payload:
                     group_by = payload.get('group_by')
-                    if not isinstance(payload.get('id'), str):
-                        errors.append(
-                            validation_diagnostic(
-                                path,
-                                'missing_verification_id',
-                                'a grouped row_count requires a verification '
-                                'id',
-                            )
-                        )
                     if isinstance(group_by, list):
                         if not group_by:
                             errors.append(
@@ -5604,6 +5618,7 @@ def validate_spec_contracts(
             verifications = [verifications]
         if not isinstance(verifications, list):
             continue
+        seen_column_ids = set()
         for index, verification in enumerate(verifications):
             if not isinstance(verification, dict) or len(verification) != 1:
                 continue
@@ -5614,6 +5629,14 @@ def validate_spec_contracts(
                 f"{spec_label}.columns.{column_name}.verifications[{index}]."
                 f"{keyword}"
             )
+            verification_id = payload.get('id')
+            if isinstance(verification_id, str):
+                if verification_id in seen_column_ids:
+                    errors.append(
+                        f"ERROR: {path}.id: duplicate column verification id "
+                        f"{verification_id!r}"
+                    )
+                seen_column_ids.add(verification_id)
             if payload.get('severity', 'error') == 'warning':
                 warning_paths.append(f"{path}.severity")
             if keyword == 'range':
@@ -6213,9 +6236,15 @@ def self_read_field_names(spec):
             # REQ-0121: the bounds are donor fields; the value is the
             # current row's.
             spelled += identifiers([between.get('lower'), between.get('upper')])
-        verification = intermediate.get('verification')
-        if isinstance(verification, dict):
-            spelled += identifiers(verification.get('unique'))
+        verifications = intermediate.get('verifications')
+        if isinstance(verifications, list):
+            for verification in verifications:
+                if isinstance(verification, dict):
+                    unique = verification.get('unique')
+                    if isinstance(unique, list):
+                        unique = {'columns': unique}
+                    if isinstance(unique, dict):
+                        spelled += identifiers(unique.get('columns'))
         spelled += predicate_identifier_names(intermediate.get('filter'))
         derivations = intermediate.get('derivations')
         if isinstance(derivations, dict):
@@ -8645,7 +8674,7 @@ def validate_intermediate_static_semantics(
             and intermediate.get('keep') is None
             and intermediate.get('columns') is None
             and intermediate.get('derivations') is None
-            and intermediate.get('verification') is None
+            and intermediate.get('verifications') is None
             and 'no_match' in intermediate
             and intermediate['no_match'] is None
         ):
