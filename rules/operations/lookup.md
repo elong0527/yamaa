@@ -288,7 +288,7 @@ reads the named column of the selected record in any field typed as
 
 **REQ-0126.** During grouped row construction, every variable a lookup
 matches on must be derived by the row template that reads the lookup --
-except the template's group keys, which are known while rows are built
+except the template's group keys
 (and, for an ungrouped template, the driver record's own fields).
 [Execution lifecycle](../execution/lifecycle.md) orders row derivations before column derivation; a match value
 available only in a later phase fails as `phase_boundary`.
