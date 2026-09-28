@@ -17,9 +17,26 @@ intermediates:
       STUDYID: LB.STUDYID
       USUBJID: LB.USUBJID
       IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
+    columns: [QVAL]
     verification:
       unique: [STUDYID, USUBJID, IDVARVAL]
     no_match: null
+
+  # Every laboratory record carries its own endpoint qualifier before the
+  # window ranks the records of each subject and test: the endpoint
+  # record first, then the latest visit.
+  - id: EOT_RANK
+    dataset: LB
+    key: [STUDYID, USUBJID, LBSEQ]
+    derivations:
+      ENDPOINT: SUPP_EP.QVAL
+      EOT_SEQ:
+        row_number:
+          window:
+            group_by: [LB.USUBJID, LB.LBTESTCD]
+            order_by:
+              - {variable: ENDPOINT, direction: desc}
+              - {variable: LB.VISITNUM, direction: desc}
 
 output:
   path: adlb.csv
@@ -59,27 +76,13 @@ columns:
   - name: ENDPOINT
     type: str
     label: Protocol Endpoint Record
-    derivation: SUPP_EP.QVAL
-
-  # Rank after ENDPOINT has been joined onto each laboratory record. Keeping
-  # the lookup and window in the column lifecycle also lets both engines use
-  # the same selected SUPP_EP record.
-  - name: EOT_SEQ
-    type: int
-    label: End of Treatment Selection Sequence
-    derivation:
-      row_number:
-        window:
-          group_by: [USUBJID, LBTESTCD]
-          order_by:
-            - {variable: ENDPOINT, direction: desc}
-            - {variable: VISITNUM, direction: desc}
+    derivation: EOT_RANK.ENDPOINT
 
   - name: EOTFL
     type: str
     label: End of Treatment Record Flag
     derivation:
-      flag: "EOT_SEQ = 1"
+      flag: "EOT_RANK.EOT_SEQ = 1"
 
 verifications:
   - unique:
