@@ -4136,6 +4136,25 @@ class TestSpecNames(unittest.TestCase):
         self.assertIn("conflicts with a dataset or domain", message)
         self.assertIn("duplicate row id", message)
 
+    def test_accepts_intermediate_row_driver(self):
+        # REQ-1262: a row template may name a named intermediate as
+        # its driver besides an input dataset.
+        spec = {
+            "domain": "ADAE",
+            "input": {"AE": "input/ae.csv"},
+            "intermediates": [
+                {"id": "SERIOUS_AE", "dataset": "AE"},
+            ],
+            "keys": ["STUDYID"],
+            "output": {"columns": ["STUDYID"]},
+            "columns": [{"name": "STUDYID"}],
+            "rows": [{"id": "serious", "dataset": "SERIOUS_AE"}],
+        }
+
+        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+
+        self.assertEqual(errors, [])
+
 
 class TestSpecContracts(unittest.TestCase):
     def test_rejects_missing_base_and_incomplete_column_coverage(self):

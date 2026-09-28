@@ -1,0 +1,58 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER]
+
+# The serious events, kept in stored record order. The row template
+# below reads these records as its driver, so the artifact carries
+# one row per serious event and no row per non-serious event.
+intermediates:
+  - id: SERIOUS_AE
+    dataset: AE
+    filter: "AE.AESER = 'Y'"
+    columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+
+  - name: AESER
+    type: str
+    label: Serious Event
+
+rows:
+  # One row per serious event. Each value is read from the current
+  # driver record through the intermediate qualifier.
+  - id: serious
+    dataset: SERIOUS_AE
+    derivations:
+      STUDYID: SERIOUS_AE.STUDYID
+      USUBJID: SERIOUS_AE.USUBJID
+      AESEQ: SERIOUS_AE.AESEQ
+      AEDECOD: SERIOUS_AE.AEDECOD
+      AESER: SERIOUS_AE.AESER
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 4
+      max: 4

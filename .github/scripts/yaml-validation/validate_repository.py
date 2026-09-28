@@ -4852,6 +4852,15 @@ def validate_spec_names(spec, spec_label):
             order_variables.add(variable)
 
     rows = spec.get('rows')
+    intermediates = spec.get('intermediates')
+    intermediate_names = set()
+    if isinstance(intermediates, list):
+        intermediate_names = {
+            intermediate.get('id')
+            for intermediate in intermediates
+            if isinstance(intermediate, dict)
+            and isinstance(intermediate.get('id'), str)
+        }
     if isinstance(rows, list):
         row_ids = [
             row.get('id') for row in rows
@@ -4862,13 +4871,18 @@ def validate_spec_names(spec, spec_label):
             if not isinstance(row, dict):
                 continue
             driver = row.get('dataset')
-            if isinstance(driver, str) and driver not in dataset_names:
+            # REQ-1262: a row template may name an eligible named
+            # intermediate as its driver besides an input dataset.
+            if (
+                isinstance(driver, str)
+                and driver not in dataset_names
+                and driver not in intermediate_names
+            ):
                 errors.append(
                     f"ERROR: {spec_label}.rows[{index}].dataset: "
                     f"undeclared dataset {driver!r}"
                 )
 
-    intermediates = spec.get('intermediates')
     if isinstance(intermediates, list):
         intermediate_ids = [
             intermediate.get('id') for intermediate in intermediates
