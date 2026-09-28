@@ -429,7 +429,13 @@ inherit_refs <- function(x, colnames) {
       return()
     }
     if (!is.null(key) && key %in% c("source", "sources", "variable", "value",
-        "date", "key_base", "not_before", "group_by", "order_by")) {
+        "date", "not_before", "group_by", "order_by")) {
+      add_str(s)
+      return()
+    }
+    # unified match key (REQ-0115/0307): a bare string walked with the
+    # `key` marker is a current-row match entry
+    if (identical(parent, "key")) {
       add_str(s)
       return()
     }
@@ -459,7 +465,14 @@ inherit_refs <- function(x, colnames) {
     for (i in seq_along(x)) {
       k <- nm[i]
       pk <- if (k %in% EXPR_KINDS) k else parent
-      walk(x[[i]], if (nzchar(k)) k else NULL, pk)
+      # unified match key (REQ-0115): a named `key` mapping's values are
+      # current-row match entries -- walk them with the `key` marker
+      if (identical(k, "key") && is.list(x[[i]]) && !is.null(names(x[[i]])) &&
+          all(nzchar(names(x[[i]])))) {
+        for (j in seq_along(x[[i]])) walk(x[[i]][[j]], names(x[[i]])[j], "key")
+      } else {
+        walk(x[[i]], if (nzchar(k)) k else NULL, pk)
+      }
     }
   }
   walk(x, NULL, NULL)
@@ -556,8 +569,14 @@ prune_composed <- function(spec) {
     for (m in spec$intermediates) {
       if (!m$id %in% live_im) next
       add_ds(m$dataset)
-      if (!is.null(m$key_base))
-        add_c(unqual_vars(m$key_base))
+      # unified match key (REQ-0115): the match entries are current-row
+      # variables/expressions
+      pairs <- parse_match_key(if ("key" %in% names(m)) m[["key"]] else NULL)
+      for (p in pairs) {
+        e <- p$entry
+        if (is.character(e) && length(e) == 1) add_c(unqual_vars(e))
+        else feed(inherit_refs(e, colnames))
+      }
       feed(inherit_refs(list(filter = m$filter), colnames))
     }
     for (v in spec$verifications)
@@ -611,8 +630,8 @@ INHERIT_ROOT_ORDER <- c("schema_version", "domain", "keys", "input", "base",
   "intermediates", "output", "columns", "rows", "filter", "verifications",
   "submission", "metadata")
 INHERIT_INPUT_ORDER <- c("path", "types", "schema", "empty_string")
-INHERIT_INTERMEDIATE_ORDER <- c("id", "dataset", "key", "key_base", "between",
-  "filter", "order_by", "keep", "columns", "missing", "strict")
+INHERIT_INTERMEDIATE_ORDER <- c("id", "dataset", "key", "between",
+  "filter", "order_by", "keep", "columns", "no_match", "derivations")
 INHERIT_COLUMN_ORDER <- c("name", "type", "label", "derivation",
   "verifications", "submission", "metadata")
 INHERIT_ROW_ORDER <- c("id", "dataset", "group_by", "filter", "derivations",

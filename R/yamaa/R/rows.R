@@ -134,8 +134,9 @@ build_template_rows <- function(spec, ctx0, keys) {
     if (!is.null(t$group_by)) {
       blk <- build_grouped_block(t, ds, ydf, recs, ctx0, keys, spec)
     } else {
-      # ungrouped: filter input records first
-      recs <- apply_record_filter(ctx0, ds, recs, t$filter)
+      # REQ-0036: ungrouped filter evaluates after derivations against the
+      # candidate rows (built inside build_record_block), reading derived
+      # columns and lookup state
       blk <- build_record_block(t, ds, ydf, recs, ctx0, keys, spec)
     }
     # merge block columns
@@ -209,8 +210,31 @@ build_record_block <- function(t, ds, ydf, recs, ctx0, keys, spec) {
   ctx$inter_cache <- new.env(parent = emptyenv())
   ctx$inter <- ctx$inter_cache
   ctx <- eval_template_derivations(t, ctx)
+  # REQ-0036: the ungrouped filter evaluates after derivations against each
+  # candidate row, reading derived columns and lookup state (including
+  # named intermediates via the standard name resolution).
+  if (!is.null(t$filter) && ctx$n > 0) {
+    ctx$.rows <- seq_len(ctx$n)
+    ctx$.full_n <- ctx$n
+    resolver <- list(resolve = function(name) resolve_name(name, ctx), n = ctx$n)
+    f <- eval_pred(parse_predicate_text(t$filter), resolver)
+    keep <- !is.na(f) & f
+    for (nm in names(ctx$col)) {
+      c <- ctx$col[[nm]]
+      ctx$col[[nm]] <- tv(c$v[keep], c$t)
+    }
+    for (k in names(ctx$row_keys)) {
+      rk <- ctx$row_keys[[k]]
+      ctx$row_keys[[k]] <- tv(rk$v[keep], rk$t)
+    }
+    ctx$driver_ds <- ctx$driver_ds[keep]
+    ctx$driver_rec <- ctx$driver_rec[keep]
+    ctx$n <- sum(keep)
+    ctx$.rows <- seq_len(ctx$n)
+    ctx$.full_n <- ctx$n
+  }
   cols <- ctx$col
-  list(n = n, cols = cols, driver_ds = ctx$driver_ds, driver_rec = ctx$driver_rec)
+  list(n = ctx$n, cols = cols, driver_ds = ctx$driver_ds, driver_rec = ctx$driver_rec)
 }
 
 # grouped template block -----------------------------------------------------
@@ -277,13 +301,13 @@ input_record_keys <- function(ctx0, ds, ydf, keys, recs) {
 }
 
 # one derivation through stages 1-3: evaluate, convert to the declared type,
-# REQ-0344/0359: omitted `missing:` makes conversion failure fatal; explicit
+# REQ-0344/0359: omitted `unconvertible:` makes conversion failure fatal
 eval_derivation <- function(deriv, declared_type, colname, ctx) {
   cf <- NULL; cf_present <- FALSE
   expr <- deriv
   if (is.list(deriv) && !is.null(names(deriv)) && "value" %in% names(deriv)) {
-    cf_present <- "missing" %in% names(deriv)
-    cf <- deriv[["missing"]]
+    cf_present <- "unconvertible" %in% names(deriv)
+    cf <- deriv[["unconvertible"]]
     expr <- deriv$value
   }
   tvv <- eval_expression(expr, ctx)
@@ -418,19 +442,17 @@ self_donor_fields <- function(ispec, colnames) {
   intersect(unique(fields), colnames)
 }
 
-# unqualified output-column reads in a named intermediate's match variables
-# (key_base entries) and between value
+# unqualified output-column reads in a named intermediate's match entries
+# (unified key) and between value
 inter_match_cols <- function(ispec, colnames) {
   cols <- character(0)
-  kb <- ispec$key_base
-  if (!is.null(kb)) {
-    if (is.character(kb)) kb <- as.list(kb)
-    for (e in kb) {
-      if (is.character(e) && length(e) == 1)
-        cols <- c(cols, bare_col_ref(e, colnames))
-      else
-        cols <- c(cols, deriv_refs(e, colnames))
-    }
+  pairs <- parse_match_key(if ("key" %in% names(ispec)) ispec[["key"]] else NULL)
+  for (p in pairs) {
+    e <- p$entry
+    if (is.character(e) && length(e) == 1)
+      cols <- c(cols, bare_col_ref(e, colnames))
+    else
+      cols <- c(cols, deriv_refs(e, colnames))
   }
   bw <- ispec$between
   if (!is.null(bw) && !is.null(bw$value) &&

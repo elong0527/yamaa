@@ -8,12 +8,12 @@
 #   inter (id -> list(sel, absent)), inter_specs, spec, phase.
 
 EXPR_KINDS <- c("source", "literal", "first_available", "greatest", "least",
-  "case", "mapping", "cut", "compute", "aggregate", "lookup", "function",
+  "case", "mapping", "cut", "compute", "aggregate", "function",
   "row_number", "rank", "row_value", "previous_non_missing", "baseline_flag", "locf",
   "to_date", "date_diff", "date_impute", "date_precision", "study_day",
   "to_epoch_day",
   "datetime_impute", "datetime_precision",
-  "str_upper", "str_lower", "str_sentence", "str_title", "str_extract", "str_contains", "str_concat", "str_template", "str_pad",
+  "str_case", "str_extract", "str_contains", "str_concat", "str_template", "str_pad",
   "round_half_away_from_zero", "flag", "value")
 
 eval_expression <- function(expr, ctx) {
@@ -36,9 +36,9 @@ eval_expression <- function(expr, ctx) {
     cut = eval_cut(payload, ctx),
     compute = eval_compute_expr(payload, ctx),
     aggregate = eval_aggregate(payload, ctx),
-    lookup = eval_lookup_inline(payload, ctx),
     row_number = , rank = , row_value = ,
-    previous_non_missing = , baseline_flag = , locf = eval_window_expr(kind, payload, ctx),
+    previous_non_missing = , baseline_flag = , locf =
+      eval_window_guarded(kind, payload, ctx),
     to_date = eval_to_date(payload, ctx),
     to_epoch_day = eval_to_epoch_day(payload, ctx),
     "function" = eval_function_expr(payload, ctx),
@@ -48,10 +48,7 @@ eval_expression <- function(expr, ctx) {
     datetime_impute = eval_datetime_impute(payload, ctx),
     datetime_precision = eval_datetime_precision(payload, ctx),
     study_day = eval_study_day(payload, ctx),
-    str_upper = eval_str_case(kind, payload, ctx),
-    str_lower = eval_str_case(kind, payload, ctx),
-    str_sentence = eval_str_sentence(payload, ctx),
-    str_title = eval_str_title(payload, ctx),
+    str_case = eval_str_case(payload, ctx),
     str_extract = eval_str_extract(payload, ctx),
     str_contains = eval_str_contains(payload, ctx),
     str_concat = eval_str_concat(payload, ctx),
@@ -92,6 +89,14 @@ resolve_name <- function(name, ctx) {
 
 # read of V from an intermediate's selected record (per row)
 inter_read <- function(ctx, id, v) {
+  # REQ-1263: a window's fields inside an intermediate's derivations must
+  # not read another intermediate -- derive the value first.
+  if (isTRUE(ctx$block_inter_read))
+    yamaa_error("unknown_field",
+      paste0("intermediate read in window field: ", id, ".", v))
+  # REQ-1263: inside an intermediate's derivations the read runs per donor
+  # record against the donor record's fields.
+  if (!is.null(ctx$inter_donor)) return(inter_read_donor(ctx, id, v))
   ensure_intermediate(ctx, id)
   spec <- ctx$inter_specs[[id]]
   entry <- get(id, envir = ctx$inter_cache, inherits = FALSE)
@@ -100,33 +105,64 @@ inter_read <- function(ctx, id, v) {
   if (!v %in% names(ydf)) yamaa_error("unknown_field", paste0(id, ".", v, ": no such field"))
   t <- attr(ydf, "coltypes")[[v]]
   sel <- entry$sel; absent <- entry$absent
-  if (isTRUE(spec$strict) && any(absent))
-    yamaa_error("unmatched_key", paste0("strict intermediate ", id, " has no record for some row"))
+  rows <- ctx$.rows
+  if (!is.null(rows)) {
+    # REQ-1264: a case-branch masked retry covers its taken rows only.
+    if (!is.null(entry$for_rows) && length(entry$for_rows) == length(rows) &&
+        all(entry$for_rows == rows)) {
+      # entry built for exactly these rows: use directly
+    } else if (is.null(entry$for_rows) && length(sel) == ctx$.full_n) {
+      sel <- sel[rows]; absent <- absent[rows]
+    } else {
+      # entry covers a different row set: rebuild for these rows
+      rm(list = id, envir = ctx$inter_cache)
+      ensure_intermediate(ctx, id)
+      entry <- get(id, envir = ctx$inter_cache, inherits = FALSE)
+      ydf <- if (!is.null(entry$ydf)) entry$ydf else ctx$inputs[[spec$dataset]]
+      sel <- entry$sel; absent <- entry$absent
+    }
+  } else if (!is.null(entry$for_rows)) {
+    # full read but the entry was built for a masked subset: rebuild
+    rm(list = id, envir = ctx$inter_cache)
+    ensure_intermediate(ctx, id)
+    entry <- get(id, envir = ctx$inter_cache, inherits = FALSE)
+    ydf <- if (!is.null(entry$ydf)) entry$ydf else ctx$inputs[[spec$dataset]]
+    sel <- entry$sel; absent <- entry$absent
+  }
+  # REQ-0124: an empty selection with no `no_match` fails -- but only for
+  # rows this read covers (REQ-1264).
+  has_nm <- "no_match" %in% names(spec)
+  if (any(absent) && !has_nm)
+    yamaa_error("unmatched_key", paste0("intermediate ", id, " has no record for some row"))
   vals <- ydf[[v]][sel]  # NA where sel is NA
   vals[absent] <- NA
-  missing_lit <- spec$missing
-  if (!is.null(missing_lit) && any(absent)) {
-    lit <- literal_to_tv(missing_lit, t, sum(absent))
+  if (has_nm && !is.null(spec$no_match) && any(absent)) {
+    lit <- literal_to_tv(spec$no_match, t, sum(absent))
     vals[absent] <- lit$v
   }
   tv(vals, t)
 }
 
 # scalar qualified read of dataset q's field v for every row (REQ-0085/0086).
-# binding may carry filter/multiple_matches/missing (source expression).
+# binding may carry filter/order_by/keep/absent (source expression).
 dataset_scalar_read <- function(ctx, q, v, binding) {
   ydf <- ctx$inputs[[q]]
   if (!v %in% names(ydf)) yamaa_error("unknown_field", paste0(q, ".", v, ": no such field"))
   t <- attr(ydf, "coltypes")[[v]]
   n <- ctx$n
   out <- tv_na(t, n)
-  missing_lit <- if (!is.null(binding)) binding$missing else NULL
+  absent_lit <- if (!is.null(binding)) binding$absent else NULL
   for (i in seq_len(n)) {
-    recs <- if (q == ctx$driver_ds[i]) ctx$driver_rec[[i]]
+    # a derivation context (REQ-1185/1263) has no driver row: the only
+    # reachable dataset is the donor frame, handled by resolve_name
+    dds <- ctx$driver_ds
+    recs <- if (!is.null(dds) && length(dds) >= i && q == dds[i]) ctx$driver_rec[[i]]
             else implicit_join_matches(ctx, q, i)
     recs <- apply_record_filter(ctx, q, recs, if (!is.null(binding)) binding$filter else NULL)
-    recs <- apply_multiple_matches(ctx, q, recs, if (!is.null(binding)) binding$multiple_matches else NULL)
-    out$v[i] <- scalar_count_read(ydf[[v]], recs, missing_lit, t,
+    recs <- apply_record_selection(ctx, q, recs,
+      if (!is.null(binding)) binding$order_by else NULL,
+      if (!is.null(binding)) binding$keep else NULL)
+    out$v[i] <- scalar_count_read(ydf[[v]], recs, absent_lit, t,
       paste0(q, ".", v))
   }
   out
@@ -157,8 +193,17 @@ row_key_text <- function(ctx, k, i) {
   rk <- ctx$row_keys[[k]]
   if (!is.null(rk)) return(canon_key_text(rk$t, rk$v[i]))
   s <- split_qual(k)
+  # REQ-1185/1263: inside an intermediate's derivations the dataset
+  # qualifier names the derivation-augmented donor frame -- the donor
+  # record's field, never the join machinery (there is no driver row).
+  if (!is.null(s$q) && !is.null(ctx$inter_ds) && s$q == ctx$inter_ds) {
+    c <- ctx$col[[s$v]]
+    if (is.null(c))
+      yamaa_error("unknown_field", paste0("no key value for ", k, " in row ", i))
+    return(canon_key_text(c$t, c$v[i]))
+  }
   dds <- ctx$driver_ds[i]
-  # a qualified key_base term resolves against the driver record when it
+  # a qualified match-key term resolves against the driver record when it
   # names the driver dataset; any other qualifier has no current-row value
   if (!is.null(s$q) && (is.null(dds) || s$q != dds))
     yamaa_error("unknown_field", paste0("no key value for ", k, " in row ", i))
@@ -179,23 +224,36 @@ row_key_text <- function(ctx, k, i) {
   yamaa_error("unknown_field", paste0("no key value for ", k, " in row ", i))
 }
 
-# one key_base entry -> match text for row i. REQ-1259: an entry may be a
+# one match-key entry -> match text for row i. REQ-1259: an entry may be a
 # variable name or an expression evaluated against the current row; a
 # missing result matches nothing, exactly as a missing variable does
 # (both flow through canon_key_text).
-key_base_entry_text <- function(ctx, entry, i) {
+match_entry_text <- function(ctx, entry, i) {
   if (is.character(entry) && length(entry) == 1)
     return(row_key_text(ctx, entry, i))
   bv <- eval_expression(entry, ctx)
   canon_key_text(bv$t, bv$v[i])
 }
 
-# normalize a key_base list: each entry is a variable-name string or a
-# single-key expression map (REQ-1259). Always returns a list.
-normalize_key_base <- function(kb) {
-  if (is.null(kb)) return(NULL)
-  if (is.character(kb)) return(as.list(kb))
-  lapply(kb, function(e) e)
+# unified match key (REQ-0115/0307): NULL, a bare name, a list of names, or
+# a mapping {dataset column: variable|expression}. Returns a list of
+# list(right, entry) pairs, or NULL when key is omitted.
+parse_match_key <- function(key) {
+  if (is.null(key)) return(NULL)
+  if (is.character(key))
+    return(lapply(as.list(key), function(k) list(right = k, entry = k)))
+  if (is.list(key)) {
+    nms <- names(key)
+    if (!is.null(nms) && length(nms) == length(key) && all(nzchar(nms)))
+      return(lapply(seq_along(key),
+        function(j) list(right = nms[j], entry = key[[j]])))
+    el <- lapply(key, function(e) {
+      if (is.character(e) && length(e) == 1) return(list(right = e, entry = e))
+      yamaa_error("invalid_field_type", "key list entries must be column names")
+    })
+    return(el)
+  }
+  yamaa_error("invalid_field_type", "key must be a name, list of names, or mapping")
 }
 
 # implicit join: records of q sharing the applicable keys with row i.
@@ -327,15 +385,22 @@ make_correlated_resolver <- function(ctx, q, recs, ddrv, drec) {
   list(resolve = resolve, n = n)
 }
 
-apply_multiple_matches <- function(ctx, q, recs, mm) {
-  if (is.null(mm) || length(recs) <= 1) return(recs)
+# flat order_by + keep record selection (REQ-1166): order the records,
+# keep first/last. An order_by without keep (or keep without order_by)
+# fails unpaired_fields.
+apply_record_selection <- function(ctx, q, recs, order_by, keep) {
+  has_order <- !is.null(order_by) && length(order_by) > 0
+  if (has_order && is.null(keep))
+    yamaa_error("unpaired_fields", "source order_by without keep")
+  if (!has_order && !is.null(keep))
+    yamaa_error("unpaired_fields", "source keep without order_by")
+  if (!has_order || length(recs) <= 1) return(recs)
   ydf <- ctx$inputs[[q]]
   r <- make_record_resolver(ctx, q, recs)
-  ord <- eval_order_terms(mm$order_by, r)  # integer rank vector
+  ord <- eval_order_terms(order_by, r)  # integer rank vector
   # stable: order by rank, ties by record order
   o <- order(ord, seq_along(ord))
-  keep <- mm$keep
-  if (is.null(keep) || keep == "first") recs[o[1]] else recs[o[length(o)]]
+  if (keep == "first") recs[o[1]] else recs[o[length(o)]]
 }
 
 # ---- source expression ----------------------------------------------------
@@ -352,8 +417,8 @@ eval_source_expr <- function(payload, ctx) {
     return(resolve_name(binding$variable, ctx))
   }
   if (s$q %in% names(ctx$inter_specs)) {
-    if (!is.null(binding$filter) || !is.null(binding$multiple_matches))
-      yamaa_error("invalid_expression", "source filter/multiple_matches do not apply to intermediates")
+    if (!is.null(binding$filter) || !is.null(binding$order_by) || !is.null(binding$keep))
+      yamaa_error("invalid_expression", "source filter/order_by/keep do not apply to intermediates")
     return(inter_read(ctx, s$q, s$v))
   }
   dataset_scalar_read(ctx, s$q, s$v, binding)
@@ -361,11 +426,12 @@ eval_source_expr <- function(payload, ctx) {
 
 normalize_source_binding <- function(payload) {
   if (is.character(payload) && length(payload) == 1)
-    return(list(variable = payload, filter = NULL, missing = NULL, multiple_matches = NULL))
+    return(list(variable = payload, filter = NULL, absent = NULL,
+      order_by = NULL, keep = NULL))
   if (!is.list(payload) || is.null(payload$variable))
     yamaa_error("invalid_expression", "source needs a variable")
   list(variable = payload$variable, filter = payload$filter,
-    missing = payload$missing, multiple_matches = payload$multiple_matches)
+    absent = payload$absent, order_by = payload$order_by, keep = payload$keep)
 }
 
 # ---- literal --------------------------------------------------------------
@@ -551,32 +617,37 @@ eval_case_branch <- function(then, ctx, take, n) {
   sub$group_rec <- sub_row(ctx$group_rec)
   sub$row_keys <- lapply(ctx$row_keys, function(c)
     if (is.list(c) && !is.null(c$v) && length(c$v) == n) tv(c$v[take], c$t) else c)
+  # REQ-1264: tag the masked retry with its row identity and the row set it
+  # covers (nested branches map back to the outer identity). A masked
+  # retry inside an intermediate's derivations remaps the donor record
+  # identity the same way (the donor frame itself is never subsetted);
+  # the shared donor read cache stays valid -- a (target, donor row)
+  # key resolves identically in both passes.
+  sub$.rows <- if (is.null(ctx$.rows)) which(take) else ctx$.rows[take]
+  sub$.full_n <- if (is.null(ctx$.full_n)) n else ctx$.full_n
+  if (!is.null(ctx$donor_ydf_rows)) sub$donor_ydf_rows <- ctx$donor_ydf_rows[take]
   masked <- tryCatch(eval_expression(then, sub), error = function(e) e)
   if (inherits(masked, "error")) stop(branch)
   out <- tv_na(masked$t, n); out$v[take] <- masked$v; out
 }
 
 # ---- mapping --------------------------------------------------------------
-# exactly one of dict, dict_yaml (REQ-1110): the file loads once per
+# REQ-1110: `dict` is required -- an inline dict or a project path string,
+# read once through the spec's project resources. The dict_yaml spelling
+# and the strict flag are retired.
 mapping_dict <- function(payload, ctx) {
-  # NB: exact [[ matching -- `$` would partial-match `dict` to `dict_yaml`
-  dy <- payload[["dict_yaml"]]
-  if (!is.null(dy)) {
-    if (!is.null(payload[["dict"]]))
-      yamaa_error("invalid_expression", "mapping takes exactly one of dict, dict_yaml")
-    if (!is.character(dy) || length(dy) != 1)
-      yamaa_error("invalid_field_type", "mapping dict_yaml must be a path string")
-    p <- file.path(ctx$spec_dir, dy)
+  dict <- payload[["dict"]]
+  if (is.null(dict) || length(dict) == 0)
+    yamaa_error("invalid_expression", "mapping needs a dict")
+  if (is.character(dict) && length(dict) == 1) {
+    p <- file.path(ctx$spec_dir, dict)
     if (!file.exists(p))
-      yamaa_error("invalid_spec", paste0("mapping dict_yaml not found: ", dy))
+      yamaa_error("invalid_spec", paste0("mapping dict not found: ", dict))
     d <- yaml_load_file(p)
     if (is.null(d) || length(d) == 0)
       yamaa_error("invalid_expression", "mapping needs a dict")
     return(d)
   }
-  dict <- payload[["dict"]]
-  if (is.null(dict) || length(dict) == 0)
-    yamaa_error("invalid_expression", "mapping needs a dict")
   dict
 }
 
@@ -598,14 +669,16 @@ eval_mapping <- function(payload, ctx) {
   out <- tv_na(rt, n)
   sv <- src$v
   hit <- !is.na(sv)
-  strict <- isTRUE(payload$strict)
-  # REQ-1110: `missing:` is returned when the source is missing or has no
-  # dictionary entry; `strict: true` makes either an `unmapped_value` error
+  # REQ-1110: `missing:` answers a missing source, `unmapped:` a present
+  # source with no dictionary entry. A missing source with no `missing:`
+  # fails `missing_input` (REQ-0344); a present-but-unmapped source with no
+  # `unmapped:` fails `unmapped_value` (REQ-0334). `missing:` never answers
+  # the unmapped case.
   if (any(hit)) {
     sk <- if (case_sensitive) sv[hit] else ascii_upper(sv[hit])
     # REQ-1110: match against every key, null-valued or not. A source hitting
     # a null-valued key is mapped to typed missing (the NA already in out$v)
-    # -- it is NOT unmapped and never consults the missing:/strict: policy.
+    # -- it is NOT unmapped and never consults the handler policy.
     m <- match(sk, if (case_sensitive) keys else ascii_upper(keys))
     found <- !is.na(m)
     if (any(found)) {
@@ -619,34 +692,25 @@ eval_mapping <- function(payload, ctx) {
     }
     unmapped_idx <- which(hit)[!found]
     if (length(unmapped_idx) > 0) {
-      if (strict)
-        yamaa_error("unmapped_value", "mapping: unmapped value under strict:true")
-      # REQ-1110: a present source with no dictionary entry takes `unmapped:`
-      # when the key is present (explicit null keeps the typed NA already in
-      # out$v); when `unmapped` is absent and strict is not true, `missing:`
-      # covers the unmapped case too, else the result stays missing.
       if ("unmapped" %in% names(payload)) {
         u <- payload$unmapped
         if (!is.null(u)) {
           lit <- literal_to_tv(u, rt, length(unmapped_idx))
           out$v[unmapped_idx] <- lit$v
         }
-      } else if ("missing" %in% names(payload)) {
-        m <- payload$missing
-        if (!is.null(m)) {
-          lit <- literal_to_tv(m, rt, length(unmapped_idx))
-          out$v[unmapped_idx] <- lit$v
-        }
+      } else {
+        yamaa_error("unmapped_value",
+          paste0("mapping: no dictionary entry for '", sv[unmapped_idx[1]], "'"))
       }
     }
   }
   na_idx <- which(is.na(sv))
   if (length(na_idx) > 0) {
-    if (strict)
-      yamaa_error("unmapped_value", "mapping: missing source under strict:true")
-    if (!is.null(payload$missing)) {
+    if ("missing" %in% names(payload)) {
       lit <- literal_to_tv(payload$missing, rt, n)
       out$v[na_idx] <- lit$v[na_idx]
+    } else {
+      yamaa_error("missing_input", "mapping: missing source with no missing: handler")
     }
   }
   out
@@ -758,12 +822,11 @@ eval_aggregate <- function(payload, ctx) {
       yamaa_error("invalid_expression", "grouped-row aggregate must name the template's dataset")
     if (!is.null(payload$group_by))
       yamaa_error("invalid_expression", "grouped-row aggregate takes no local group_by")
-    # REQ-0142: grouped-row aggregates are group-scoped; key/key_base would
-    # imply a wider scope. Use exact [[ matching (not $) to avoid partial
-    # match against key_base.
-    if (!is.null(payload[["key"]]) || !is.null(payload[["key_base"]]))
+    # REQ-0142: grouped-row aggregates are group-scoped; a key would imply
+    # a wider scope. Use exact [[ matching (not $).
+    if (!is.null(payload[["key"]]))
       yamaa_error("invalid_aggregate_context",
-        "grouped-row aggregate takes no key/key_base")
+        "grouped-row aggregate takes no key")
     recs <- ctx$group_rec
     # recs is a list (one vector per group) in grouped phase
     if (is.list(recs)) {
@@ -1087,8 +1150,9 @@ eval_agg_qualified <- function(node, payload, ctx, ds, bound_names = character(0
   if (is.null(gb)) {
     # default: the applicable keys (REQ-0150 inference), or the explicit
     # key columns if key is given (group by what we join on)
-    if (!is.null(key)) {
-      gb <- paste0(ds, ".", key)
+    pairs0 <- parse_match_key(key)
+    if (!is.null(pairs0)) {
+      gb <- paste0(ds, ".", vapply(pairs0, function(p) p$right, character(1)))
     } else {
       ak <- intersect(ctx$keys, names(ydf))
       if (length(ak) == 0) yamaa_error("unjoinable", paste0("no shared key with ", ds))
@@ -1106,10 +1170,15 @@ eval_agg_qualified <- function(node, payload, ctx, ds, bound_names = character(0
   derive <- payload$derive
   check_agg_grouped_ids(node, gb, ds, bound_names)
   if (is.null(key)) key <- gb_cols  # same names on the current row
-  if (length(key) != length(gb_cols)) yamaa_error("invalid_expression", "key/group_by length mismatch")
-  kb <- normalize_key_base(payload$key_base)
-  if (!is.null(kb) && length(kb) != length(gb_cols))
-    yamaa_error("invalid_expression", "key_base/key length mismatch")
+  # unified match key (REQ-0307): (dataset-column, match-entry) pairs
+  # aligned to the group columns; an omitted key pairs same-named.
+  pairs <- parse_match_key(key)
+  if (is.null(pairs))
+    pairs <- lapply(gb_cols, function(k) list(right = k, entry = k))
+  rights <- vapply(pairs, function(p) p$right, character(1))
+  if (!setequal(rights, gb_cols))
+    yamaa_error("invalid_expression", "key/group_by column mismatch")
+  pairs <- pairs[match(gb_cols, rights)]
   # eligible right-side records (filter once)
   all_recs <- seq_len(nrow(ydf))
   all_recs <- apply_record_filter(ctx, ds, all_recs, payload$filter)
@@ -1129,10 +1198,8 @@ eval_agg_qualified <- function(node, payload, ctx, ds, bound_names = character(0
   out <- NULL; out_t <- NULL
   for (i in seq_len(n)) {
     # find the group matching this row's key values
-    kv <- vapply(seq_along(gb_cols), function(j) {
-      kj <- if (!is.null(kb)) kb[[j]] else key[j]
-      key_base_entry_text(ctx, kj, i)
-    }, character(1))
+    kv <- vapply(seq_along(gb_cols), function(j)
+      match_entry_text(ctx, pairs[[j]]$entry, i), character(1))
     recs <- grp[[paste(kv, collapse = "\x1f")]]
     if (is.null(recs)) recs <- integer(0)
     if (has_between && length(recs) > 0) {
@@ -1182,78 +1249,6 @@ narrow_between <- function(ydf, cts, recs, value, vt, bw, ds) {
     keep <- keep & !is.na(c) & c <= 0
   }
   recs[keep]
-}
-
-# ---- inline lookup --------------------------------------------------------
-eval_lookup_inline <- function(payload, ctx) {
-  ds <- payload$dataset
-  if (is.null(ds) || !ds %in% names(ctx$inputs))
-    yamaa_error("unknown_field", paste0("lookup dataset: ", ds))
-  ydf <- ctx$inputs[[ds]]; cts <- attr(ydf, "coltypes")
-  n <- ctx$n
-  key_base <- payload$key_base; key <- payload$key
-  if (is.null(key)) {
-    ak <- intersect(ctx$keys, names(ydf))
-    if (length(ak) == 0) yamaa_error("unjoinable", paste0("lookup: no shared key with ", ds))
-    key <- ak
-  }
-  if (is.null(key_base)) key_base <- key
-  key_base <- normalize_key_base(key_base); key <- as.character(key)
-  if (length(key_base) != length(key))
-    yamaa_error("source_key_length_mismatch", "lookup key_base/key length mismatch")
-  value_col <- payload$value
-  if (is.null(value_col) || !value_col %in% names(ydf))
-    yamaa_error("unknown_field", paste0("lookup value: ", value_col))
-  # eligible records: donor-only filter once per run; a driver-correlated
-  # filter (REQ-0132/0133) applies per row against matched records below.
-  recs <- seq_len(nrow(ydf))
-  sc <- filter_scope(ctx, ds, payload$filter, "lookup")
-  fnode <- sc$fnode; corr_q <- sc$corr_q
-  if (length(corr_q) == 0)
-    recs <- apply_record_filter(ctx, ds, recs, payload$filter)
-  # between narrowing per row happens below
-  idx <- build_group_index(ctx, ds, key, recs)
-  t <- cts[[value_col]]
-  out <- tv_na(t, n)
-  for (i in seq_len(n)) {
-    kv <- vapply(seq_along(key), function(j) {
-      e <- key_base[[j]]
-      bv <- if (is.character(e) && length(e) == 1) resolve_name(e, ctx)
-        else eval_expression(e, ctx)  # REQ-1259: expression key_base entry
-      canon_key_text(bv$t, bv$v[i])
-    }, character(1))
-    m <- idx[[paste(kv, collapse = "\x1f")]]
-    if (is.null(m)) m <- integer(0)
-    # REQ-0133: the correlated filter applies per row against matched
-    # records, before range narrowing and ordered selection.
-    if (length(corr_q) > 0 && length(m) > 0) {
-      r <- make_correlated_resolver(ctx, ds, m, corr_q, ctx$driver_rec[[i]])
-      keep <- eval_pred(fnode, r)
-      m <- m[!is.na(keep) & keep]
-    }
-    if (!is.null(payload$between) && length(m) > 0) {
-      bw <- payload$between
-      bv <- resolve_name(bw$value, ctx)
-      m <- narrow_between(ydf, cts, m, bv$v[i], bv$t, bw, ds)
-    }
-    if (!is.null(payload$order_by) && length(m) > 1) {
-      r <- make_record_resolver(ctx, ds, m)
-      ord <- eval_order_terms(payload$order_by, r)
-      o <- order(ord, seq_along(ord))
-      m <- m[if (payload$keep == "last") o[length(o)] else o[1]]
-    }
-    if (length(m) == 0) {
-      if (!is.null(payload$missing)) {
-        out$v[i] <- literal_to_tv(payload$missing, t, 1)$v
-      } else if (isTRUE(payload$strict)) {
-        yamaa_error("unmatched_key", "strict lookup found nothing")
-      }
-      next
-    }
-    if (length(m) > 1) yamaa_error("multiple_matches", "lookup matched multiple records")
-    out$v[i] <- ydf[[value_col]][m]
-  }
-  out
 }
 
 # ---- temporal expressions -------------------------------------------------
@@ -1371,15 +1366,29 @@ eval_str_transform <- function(kind, payload, ctx, op) {
   out
 }
 
-eval_str_case <- function(kind, payload, ctx)
-  eval_str_transform(kind, payload, ctx,
-    function(s) op_str_case(s, kind == "str_upper"))
+# REQ-0707: str_case dispatches on `to`; anything outside the four fails
+# value_not_permitted. The ASCII transforms live in text.R.
+eval_str_case <- function(payload, ctx) {
+  to <- payload$to
+  if (!is.character(to) || length(to) != 1 || !to %in% c("upper", "lower", "sentence", "title"))
+    yamaa_error("value_not_permitted",
+      paste0("str_case to must be upper|lower|sentence|title, got: ", deparse1(to)))
+  op <- switch(to,
+    upper = function(s) op_str_case(s, TRUE),
+    lower = function(s) op_str_case(s, FALSE),
+    sentence = op_str_sentence,
+    title = op_str_title)
+  eval_str_transform("str_case", payload, ctx, op)
+}
 
-eval_str_sentence <- function(payload, ctx)
-  eval_str_transform("str_sentence", payload, ctx, op_str_sentence)
-
-eval_str_title <- function(payload, ctx)
-  eval_str_transform("str_title", payload, ctx, op_str_title)
+# REQ-1263: inside an intermediate's derivations a window's group_by,
+# order_by, filter, and value fields must not read another intermediate.
+eval_window_guarded <- function(kind, payload, ctx) {
+  if (!is.null(ctx$inter_donor)) {
+    ctx$block_inter_read <- TRUE
+  }
+  eval_window_expr(kind, payload, ctx)
+}
 
 eval_str_extract <- function(payload, ctx) {
   op_str_extract(resolve_name(payload$source, ctx), payload$pattern,

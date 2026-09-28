@@ -25,7 +25,16 @@ derive_intermediate_frame <- function(ctx, spec, ds) {
     n = nrow(ydf),
     col = dcol,
     inputs = setNames(list(ydf), ds),
-    inter_specs = list(),
+    # REQ-1263: derivations may read other named intermediates. The donor
+    # ctx carries the real intermediate specs, the full inputs (the
+    # synthetic per-donor-row ctx swaps in a 1-row augmented donor frame),
+    # the current augmented donor frame, a per-pass read cache, and the
+    # read stack seeded with this intermediate (self-reads are cycles).
+    inter_specs = ctx$inter_specs,
+    all_inputs = ctx$inputs,
+    donor_ydf = ydf,
+    donor_read_cache = new.env(hash = TRUE, parent = emptyenv()),
+    inter_read_stack = c(ctx$inter_read_stack, spec$id),
     inter = new.env(parent = emptyenv()),
     keys = character(0),
     phase = "derivation",
@@ -33,6 +42,8 @@ derive_intermediate_frame <- function(ctx, spec, ds) {
     # names the derivation-augmented donor frame (stored + earlier-derived
     # names in col); resolve_name short-circuits on this marker.
     inter_ds = ds,
+    inter_donor = list(id = spec$id, ds = ds),
+    donor_ydf_rows = seq_len(nrow(ydf)),
     spec = ctx$spec,
     spec_dir = ctx$spec_dir,
     project_fns = ctx$project_fns,
@@ -51,9 +62,11 @@ derive_intermediate_frame <- function(ctx, spec, ds) {
           tv_len(val), " values for ", nrow(ydf), " records"))
     ydf[[nm]] <- val$v
     cts[[nm]] <- val$t
+    attr(ydf, "coltypes") <- cts
     # later derivations (and their windows) read earlier-derived names
     # bare through the context, alongside the stored fields
     dctx$col[[nm]] <- val
+    dctx$donor_ydf <- ydf
   }
   attr(ydf, "coltypes") <- cts
   ydf
@@ -67,15 +80,15 @@ init_intermediates <- function(spec, ctx) {
       if (im$id %in% names(ctx$inputs))
         yamaa_error("duplicate_identifier",
           paste0("intermediate id collides with input dataset: ", im$id))
-      # REQ-1248: an intermediate declaring only id and dataset merely
-      # renames the qualifier and fails
-      if (length(setdiff(names(im), c("id", "dataset"))) == 0)
+      # REQ-1248: an intermediate declaring nothing beyond id, dataset, and
+      # no_match merely renames the qualifier and fails
+      if (length(setdiff(names(im), c("id", "dataset", "no_match"))) == 0)
         yamaa_error("rename_only_intermediate",
           paste0("intermediate ", im$id, " only renames dataset ", im$dataset))
       # REQ-0153: an omitted key is the output keys the dataset also
       # carries; with no applicable key the run is rejected here, before
       # any data is read (not lazily on first read). Note: use exact name
-      # matching -- `$key` would partially match `key_base`.
+      # matching -- `$key` partial-matches.
       if (!"key" %in% names(im)) {
         ds <- im$dataset
         if (!is.null(ds) && ds %in% names(ctx$inputs)) {
@@ -95,6 +108,89 @@ init_intermediates <- function(spec, ctx) {
   ctx
 }
 
+# per-donor-record synthetic context for REQ-1263 (see DESIGN.md).
+donor_row_ctx <- function(ctx, j) {
+  ydf <- ctx$donor_ydf
+  if (!is.null(ctx$donor_ydf_rows)) j <- ctx$donor_ydf_rows[j]
+  cts <- attr(ydf, "coltypes")
+  # the record under evaluation reads through col (REQ-1185: a derivation
+  # context's dataset qualifier names the derivation-augmented donor
+  # frame); other records fail unjoinable.
+  dcol <- lapply(names(ydf), function(nm) tv(ydf[[nm]][j], cts[[nm]]))
+  names(dcol) <- names(ydf)
+  c(
+    ctx[names(ctx) %in% setdiff(names(ctx), c("n", "col", "inputs", "driver_rec", "driver_ds", "inter", "inter_cache"))],
+    list(
+      n = 1L,
+      col = dcol,
+      # the target intermediate's selection needs the full input frames;
+      # the donor frame itself stays available as ctx$donor_ydf
+      inputs = ctx$all_inputs,
+      inter_donor = ctx$inter_donor,
+      inter_read_stack = ctx$inter_read_stack,
+      donor_ydf = ctx$donor_ydf,
+      donor_read_cache = ctx$donor_read_cache,
+      # the synthetic per-record ctx reads through col (dcol); nothing
+      # downstream may see a donor subset
+      .rows = NULL, .full_n = NULL, block_inter_read = NULL
+    )
+  )
+}
+
+# REQ-1263: an intermediate read inside another intermediate's derivations
+# runs per donor record. Resolves the match key against the donor record,
+# selects from the target's (possibly derived) frame, and answers the
+# field -- caching per (target id, donor record) for the pass.
+inter_read_donor <- function(ctx, id, v) {
+  if (id %in% ctx$inter_read_stack)
+    yamaa_error("dependency_cycle", paste0("intermediate dependency cycle at: ", id))
+  if (identical(id, ctx$inter_donor$id))
+    yamaa_error("dependency_cycle", paste0("intermediate ", id, " reads itself"))
+  if (is.null(ctx$donor_ydf_rows)) yamaa_error("invalid_spec", "donor rows unset")
+  n <- length(ctx$donor_ydf_rows)
+  # no donor records: the read's type is undeterminable -- fail loudly
+  # rather than assembling a wrongly-typed empty
+  if (n == 0)
+    yamaa_error("invalid_spec",
+      paste0("intermediate ", ctx$inter_donor$id, " reads ", id, " with no donor records"))
+  out <- vector("list", n)
+  for (k in seq_len(n)) {
+    ck <- paste0(id, "\x1f", ctx$donor_ydf_rows[k])
+    hit <- get0(ck, envir = ctx$donor_read_cache, ifnotfound = NULL)
+    if (!is.null(hit)) {
+      out[[k]] <- hit
+      next
+    }
+    sctx <- donor_row_ctx(ctx, k)
+    sctx$inter_cache <- new.env(parent = emptyenv())
+    sctx$inter_read_stack <- c(sctx$inter_read_stack, id)
+    ensure_intermediate(sctx, id)
+    entry <- get(id, envir = sctx$inter_cache, inherits = FALSE)
+    spec <- sctx$inter_specs[[id]]
+    if (is.null(spec)) yamaa_error("unknown_field", paste0("unknown intermediate: ", id))
+    ydf <- if (!is.null(entry$ydf)) entry$ydf else sctx$all_inputs[[spec$dataset]]
+    if (!v %in% names(ydf))
+      yamaa_error("unknown_field", paste0(id, ".", v, ": no such field"))
+    t <- attr(ydf, "coltypes")[[v]]
+    sel <- entry$sel
+    if (length(sel) != 1) yamaa_error("invalid_spec", "donor read selection not scalar")
+    # REQ-0124: an empty selection with no `no_match` fails `unmatched_key`
+    # per row (the rows here are all read); a `no_match` answers instead.
+    has_nm <- "no_match" %in% names(spec)
+    if (is.na(sel)) {
+      if (!has_nm) yamaa_error("unmatched_key", paste0("intermediate ", id, " has no record"))
+      val <- if (is.null(spec$no_match)) tv_na(t, 1) else literal_to_tv(spec$no_match, t, 1)
+    } else {
+      val <- tv(ydf[[v]][sel], t)
+    }
+    assign(ck, val, envir = ctx$donor_read_cache)
+    out[[k]] <- val
+  }
+  # reassemble: every piece is a length-1 tv of a common type
+  vals <- unlist(lapply(out, function(x) x$v), use.names = FALSE)
+  tv(vals, out[[1]]$t)
+}
+
 ensure_intermediate <- function(ctx, id) {
   spec <- ctx$inter_specs[[id]]
   if (is.null(spec)) yamaa_error("unknown_field", paste0("unknown intermediate: ", id))
@@ -108,11 +204,15 @@ ensure_intermediate <- function(ctx, id) {
       yamaa_error("phase_boundary",
         paste0("SELF intermediate ", id, " read with no completed rows"))
     sel <- compute_intermediate_sel(ctx, spec)
+    sel$for_rows <- ctx$.rows
     assign(id, sel, envir = ctx$inter_cache)
     return(invisible(NULL))
   }
   if (exists(id, envir = ctx$inter_cache, inherits = FALSE)) return(invisible(NULL))
   sel <- compute_intermediate_sel(ctx, spec)
+  # the row set this selection covers: a masked case-branch retry computes
+  # for its taken rows only (ctx$.rows); inter_read maps or recomputes.
+  sel$for_rows <- ctx$.rows
   assign(id, sel, envir = ctx$inter_cache)
   invisible(NULL)
 }
@@ -136,24 +236,22 @@ compute_intermediate_sel <- function(ctx, spec) {
   if (length(corr_q) == 0)
     recs <- apply_record_filter(ctx, ds, recs, spec$filter)
 
-  # key pairs: key (dataset cols) with key_base (row vars).
-  # Exact name match: `$key` would partially match `key_base`.
-  dkey <- if ("key" %in% names(spec)) spec[["key"]] else NULL
-  bkey <- spec$key_base
-  dkey_inferred <- is.null(dkey)
-  if (dkey_inferred) {
+  # unified match key (REQ-0115): (dataset-column, match-entry) pairs.
+  # Exact name match: `$key` partial-matches.
+  pairs <- parse_match_key(if ("key" %in% names(spec)) spec[["key"]] else NULL)
+  if (is.null(pairs)) {
+    # REQ-0153: an omitted key pairs the output keys the dataset carries,
+    # each with the same-named current-row value.
     dkey <- intersect(ctx$keys, names(ydf))
-    # REQ-0153: no applicable key fails
     if (length(dkey) == 0)
       yamaa_error("no_applicable_keys",
         paste0("intermediate ", spec$id, " has no applicable keys"))
-    if (is.null(bkey)) bkey <- dkey
-  } else {
-    if (is.null(bkey)) bkey <- dkey
+    pairs <- lapply(dkey, function(k) list(right = k, entry = k))
   }
-  dkey <- as.character(dkey); bkey <- normalize_key_base(bkey)
-  if (length(dkey) == 0 || length(dkey) != length(bkey))
-    yamaa_error("source_key_length_mismatch", paste0("intermediate ", spec$id))
+  if (length(pairs) == 0)
+    yamaa_error("invalid_field_type",
+      paste0("intermediate ", spec$id, ": key must not be empty"))
+  dkey <- vapply(pairs, function(p) p$right, character(1))
   for (k in dkey) {
     if (!k %in% names(ydf)) yamaa_error("unknown_field", paste0(spec$id, ": ", k))
   }
@@ -210,7 +308,7 @@ compute_intermediate_sel <- function(ctx, spec) {
   sel <- rep(NA_integer_, n)
   absent <- rep(FALSE, n)
   for (i in seq_len(n)) {
-    rk <- paste(vapply(bkey, function(e) key_base_entry_text(ctx, e, i),
+    rk <- paste(vapply(pairs, function(p) match_entry_text(ctx, p$entry, i),
       character(1)), collapse = "\x1f")
     m <- idx[[rk]]
     if (is.null(m)) m <- integer(0)

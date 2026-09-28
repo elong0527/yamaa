@@ -242,9 +242,17 @@ verify_dataset_one <- function(v, ctx, idx0) {
         ug <- unique(gkey)
         firsts <- vapply(ug, function(g) rows[which(gkey == g)[1L]], integer(1))
         counts <- vapply(ug, function(g) sum(gkey == g), integer(1))
+        # REQ-0385: `when` selects groups to check (a group is selected when
+        # every counted row satisfies it); it does not change the count.
+        selected <- rep(TRUE, length(counts))
+        if (!is.null(p$`when`)) {
+          w <- eval_pred(parse_predicate_text(p$`when`), resolver_of())
+          w <- !is.na(w) & w
+          selected <- vapply(ug, function(g) all(w[rows[gkey == g]]), logical(1))
+        }
         bad <- rep(FALSE, length(counts))
-        if (!is.null(p$min)) bad <- bad | counts < p$min
-        if (!is.null(p$max)) bad <- bad | counts > p$max
+        if (!is.null(p$min)) bad <- bad | (selected & counts < p$min)
+        if (!is.null(p$max)) bad <- bad | (selected & counts > p$max)
       } else {
         bad <- logical(0)
       }

@@ -104,13 +104,19 @@ deriv_refs <- function(deriv, colnames) {
         if (!is.null(node)) refs <<- c(refs, ast_col_refs(node, colnames))
         return()
       }
+      # unified match key (REQ-0115/0307): a bare string walked with the
+      # `key` marker is a current-row match entry
+      if (identical(parent, "key")) {
+        refs <<- c(refs, bare_col_ref(x, colnames))
+        return()
+      }
       if (identical(key, "aggregate") || identical(parent, "aggregate")) {
         node <- tryCatch(parse_aggregate_text(x), error = function(e) NULL)
         if (!is.null(node)) refs <<- c(refs, ast_col_refs(node, colnames))
         return()
       }
       if (!is.null(key) && key %in% c("source", "sources", "variable", "value", "date",
-          "key_base", "not_before", "group_by", "order_by")) {
+          "not_before", "group_by", "order_by")) {
         refs <<- c(refs, bare_col_ref(x, colnames))
         return()
       }
@@ -150,7 +156,16 @@ deriv_refs <- function(deriv, colnames) {
     for (i in seq_along(x)) {
       k <- nm[i]
       pk <- if (k %in% EXPR_KINDS) k else parent
-      walk(x[[i]], if (nzchar(k)) k else NULL, pk)
+      # unified match key (REQ-0115): a named `key` mapping's values are
+      # current-row match entries -- walk them with the `key` marker so
+      # bare-string entries resolve as column references; expressions walk
+      # normally
+      if (identical(k, "key") && is.list(x[[i]]) && !is.null(names(x[[i]])) &&
+          all(nzchar(names(x[[i]])))) {
+        for (j in seq_along(x[[i]])) walk(x[[i]][[j]], names(x[[i]])[j], "key")
+      } else {
+        walk(x[[i]], if (nzchar(k)) k else NULL, pk)
+      }
     }
   }
   walk(deriv, NULL, NULL)
@@ -158,7 +173,7 @@ deriv_refs <- function(deriv, colnames) {
 }
 
 # TRUE when the derivation joins on inferred output keys: a qualified
-# aggregate, or a lookup, without explicit key material (REQ-0050/0150).
+# aggregate without explicit key material (REQ-0050/0150).
 deriv_needs_keys <- function(deriv) {
   found <- FALSE
   walk <- function(x) {
@@ -177,16 +192,13 @@ deriv_needs_keys <- function(deriv) {
         node <- tryCatch(parse_aggregate_text(payload$expr),
           error = function(e) NULL)
         quals <- if (is.null(node)) character(0) else collect_qualifiers(node)
+        # explicit key material is group_by OR the unified key: implicit
+        # keys are needed only when both are absent
         if (length(quals) > 0 &&
-            (is.null(payload$group_by) || is.null(payload$key))) {
+            (is.null(payload$group_by) && is.null(payload$key))) {
           found <<- TRUE
           return()
         }
-      }
-      if (k == "lookup" && is.list(p) &&
-          (is.null(p$key) || is.null(p$key_base))) {
-        found <<- TRUE
-        return()
       }
     }
     for (e in x) walk(e)

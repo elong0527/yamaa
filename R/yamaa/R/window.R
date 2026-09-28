@@ -225,7 +225,7 @@ merge_sort_idx <- function(idx, cmp) {
 }
 
 # eval_order_terms(terms, resolver) -> integer vector ranking each element
-# (for multiple_matches / lookup order_by over record resolvers)
+# (for source order_by and intermediate order_by over record resolvers)
 eval_order_terms <- function(terms, resolver) {
   n <- resolver$n
   if (is.null(terms) || length(terms) == 0) return(rep(1L, n))
