@@ -1332,7 +1332,12 @@ def evaluate_intermediate(
         upper_raw = raw.get("upper")
         if not (
             isinstance(value_raw, str)
-            and (isinstance(lower_raw, str) or isinstance(upper_raw, str))
+            and (lower_raw is not None or upper_raw is not None)
+            and all(
+                isinstance(bound, str)
+                for bound in (lower_raw, upper_raw)
+                if bound is not None
+            )
         ):
             return ConditionResult(
                 condition=RuntimeCondition(
