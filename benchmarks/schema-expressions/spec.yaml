@@ -29,8 +29,8 @@ columns:
     derivation: DM.SEX
 
   # Cut assigns a numeric source to one labeled band. Bands are closed on
-  # the left, so an age of exactly 65 lands in 65+; a missing age takes
-  # the declared missing value.
+  # the left, so an age of exactly 65 lands in 65+ and an age of exactly
+  # 18 lands in 18-64; a missing age takes the declared missing value.
   - name: AGEGRP
     type: str
     label: Age Group
