@@ -1,0 +1,7 @@
+REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS
+1.0,adsl.csv,verifications[0].row_count,flagged-share-within-limit,row_count,,REQ-0385,error,held,,1,0,{}
+1.0,adsl.csv,verifications[1].row_count,values-mostly-present,row_count,,REQ-0385,error,held,,1,0,{}
+1.0,adsl.csv,verifications[2].row_count,flagged-share-by-arm,row_count,,REQ-0385,error,held,,2,0,{}
+1.0,adsl.csv,verifications[3].row_count,flagged-count-within-limit,row_count,,REQ-0385,error,held,,1,0,{}
+1.0,adsl.csv,verifications[4].row_count,values-count-floor,row_count,,REQ-0385,error,held,,1,0,{}
+1.0,adsl.csv,verifications[5].row_count,unflagged-share-warning,row_count,,REQ-0385,warning,violated,row_count_failed,1,1,"{""count"":5,""denominator"":8}"

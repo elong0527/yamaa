@@ -1,0 +1,71 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [USUBJID, ARM, FLAG, VAL]
+  # The deliberately violated warning goes to the warning log; every
+  # declared check, held or violated, gets one line in the check log.
+  warning_log: adsl-warnings.csv
+  verification_log: adsl-checks.csv
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: ARM
+    type: str
+    label: Planned Arm
+    derivation: DM.ARM
+
+  - name: FLAG
+    type: str
+    label: Flagged for Review
+    derivation: DM.FLAG
+
+  - name: VAL
+    type: int
+    label: Collected Value
+    derivation: DM.VAL
+
+verifications:
+  # At most half the subjects are flagged: 3 of 8 are, so the check holds.
+  - row_count:
+      id: flagged-share-within-limit
+      filter: "FLAG = 'Y'"
+      max_fraction: 0.5
+  # At least three quarters carry a collected value: 7 of 8 do.
+  - row_count:
+      id: values-mostly-present
+      filter: "VAL IS NOT NULL"
+      min_fraction: 0.75
+  # Per arm, at most half flagged: arm A has 1 of 4, arm B has 2 of 4,
+  # and the boundary counts as held.
+  - row_count:
+      id: flagged-share-by-arm
+      filter: "FLAG = 'Y'"
+      group_by: [ARM]
+      max_fraction: 0.5
+  # At most three subjects are flagged: exactly 3 are, so the check
+  # holds and pins the inclusive count boundary.
+  - row_count:
+      id: flagged-count-within-limit
+      filter: "FLAG = 'Y'"
+      max: 3
+  # At least seven subjects carry a collected value: exactly 7 do.
+  - row_count:
+      id: values-count-floor
+      filter: "VAL IS NOT NULL"
+      min: 7
+  # Deliberately violated: 5 of 8 unflagged exceeds one half. A warning,
+  # so the run logs it and still succeeds.
+  - row_count:
+      id: unflagged-share-warning
+      filter: "FLAG = 'N'"
+      max_fraction: 0.5
+      severity: warning
