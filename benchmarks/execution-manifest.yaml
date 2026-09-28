@@ -879,6 +879,9 @@ examples:
   schema-round-half-away-from-zero-ties:
     status: executable
     runtimes: ['python']
+  schema-row-count-fractions:
+    status: executable
+    runtimes: ['python']
   schema-row-templates:
     status: executable
     runtimes: ['python']

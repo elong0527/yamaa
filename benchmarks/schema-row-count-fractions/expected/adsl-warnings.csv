@@ -1,0 +1,2 @@
+LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS
+1.0,adsl.csv,warning,row_count_failed,REQ-0385,verifications[5].row_count,unflagged-share-warning,1,[{}],"{""count"":5,""denominator"":8}"
