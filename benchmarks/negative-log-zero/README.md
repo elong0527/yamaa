@@ -7,9 +7,11 @@
 add its natural logarithm as `AVALLN`, with one record for each
 subject and parameter.
 
-**Input:** laboratory records carrying test code (`LBTESTCD`) and
-numeric result (`LBSTRESN`), where a viral load the assay did not
-detect is reported as zero.
+**Input:** five laboratory records across five subjects: a detectable
+viral load (12,000 copies/mL), an undetectable viral load reported as
+zero - the record the run rejects - a missing result, a low
+near-limit result (40), and a CD4 count (480), showing one record for
+each subject and parameter.
 
 **Variables:**
 
