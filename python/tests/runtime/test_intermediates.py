@@ -647,11 +647,7 @@ def test_a_derived_readable_column_resolves_from_the_selected_record() -> None:
     table = supp_table()
     binding_plan = BindingPlan(
         domain="OUT",
-        datasets={
-            "SUPPLB": DatasetBinding(
-                dataset="SUPPLB", columns=table.columns, context_columns=()
-            )
-        },
+        datasets={"SUPPLB": DatasetBinding(dataset="SUPPLB", columns=table.columns)},
         output_columns=("STUDYID", "USUBJID", "QVAL_T"),
     )
     relation = RelationIndex("SUPPLB", table)

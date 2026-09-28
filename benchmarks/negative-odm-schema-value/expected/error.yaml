@@ -1,0 +1,9 @@
+phase: ingest
+condition: odm_schema_value_missing
+spec_paths:
+  - input.ODM.path
+requirement: REQ-1276
+context:
+  dataset: ODM
+  field: SubjectKey
+  record: 5

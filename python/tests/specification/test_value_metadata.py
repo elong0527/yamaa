@@ -195,3 +195,24 @@ def test_rejects_unknown_row_submission_subfield(tmp_path: Path) -> None:
     condition, spec_paths, _ = _condition(path)
     assert condition in ("unknown_field", "model_contract_mismatch")
     assert spec_paths == ("rows.glucose.submission.LBORRESU.bogus_field",)
+
+
+def test_a_bare_odm_read_admits_a_collected_origin(tmp_path: Path) -> None:
+    # REQ-0899: a bare `odm` copies the one record it identifies, so it
+    # admits the origins a bare `source` does.
+    source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
+    derivation = "      LBSTRESU: {literal: mg/dL}\n"
+    origin = "          type: Assigned\n          source: Vendor"
+    assert derivation in source and origin in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        source.replace(
+            derivation, derivation + "      LBORRESU: {odm: ODM.IT.LB.GLUCU}\n", 1
+        ).replace(origin, "          type: Collected\n          source: Vendor", 1),
+        encoding="ascii",
+    )
+
+    loaded = load_specification(path, SCHEMA_ROOT)
+
+    rows = {row.id: row for row in loaded.specification.rows}
+    assert rows["glucose"].submission["LBORRESU"].origin.type == "Collected"

@@ -1,4 +1,4 @@
-"""Resolve bound names and complete long-form ODM contexts."""
+"""Resolve bound names against the records a row reaches."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from yamaa.expressions import (
-    AbsentValue,
     FailedResolution,
     PredicateError,
     PredicateValue,
@@ -20,7 +19,7 @@ from yamaa.expressions import (
     evaluate_predicate,
     parse_predicate,
 )
-from yamaa.io.polars import runtime_rows, runtime_value
+from yamaa.io.polars import runtime_value
 from yamaa.io.source import LoadedDataset
 from yamaa.models import (
     MISSING,
@@ -32,7 +31,7 @@ from yamaa.models import (
     runtime_type_name,
     values_comparable,
 )
-from yamaa.odm.bindings import ODM_CONTEXT_COLUMNS, BindingFailure, BindingPlan
+from yamaa.odm.bindings import BindingFailure, BindingPlan
 from yamaa.specification.models import OrderTerm
 
 
@@ -41,7 +40,7 @@ class _FrozenModel(BaseModel):
 
 
 class MultipleMatchSelection(_FrozenModel):
-    """The normalized R008 policy for choosing a duplicate contextual item."""
+    """The normalized R008 policy for keeping one of several matching records."""
 
     order_by: list[OrderTerm] = Field(min_length=1)
     keep: Literal["first", "last"]
@@ -203,150 +202,18 @@ def select_one(
     )
 
 
-class OdmItemIndex:
-    """A source-ordered index over complete available ODM context plus ItemOID."""
-
-    def __init__(
-        self,
-        dataset: str,
-        table: TypedTable,
-        *,
-        batch_size: int | None = None,
-    ) -> None:
-        if batch_size is not None and batch_size < 1:
-            raise ValueError("batch_size must be positive")
-        self.dataset = dataset
-        self.fields = tuple(column.name for column in table.columns)
-        self.context_columns = tuple(
-            column for column in ODM_CONTEXT_COLUMNS if column in self.fields
-        )
-        self._records: dict[tuple[object, ...], list[_IndexedRow]] = {}
-        if "ItemOID" not in self.fields or "Value" not in self.fields:
-            return
-
-        rows = runtime_rows(table)
-        size = batch_size or max(len(rows), 1)
-        for start in range(0, len(rows), size):
-            for offset, row in enumerate(rows[start : start + size], start=start):
-                item_oid = row["ItemOID"]
-                if not isinstance(item_oid, str):
-                    continue
-                key = tuple(row[column] for column in self.context_columns) + (
-                    item_oid,
-                )
-                self._records.setdefault(key, []).append(
-                    _IndexedRow(source_position=offset, values=row)
-                )
-
-    def _filter(
-        self,
-        matches: list[_IndexedRow],
-        predicate: str | None,
-    ) -> list[_IndexedRow] | FailedResolution:
-        if predicate is None:
-            return matches
-        try:
-            ast = parse_predicate(predicate)
-        except PredicateError as error:
-            return _failure(
-                "validation",
-                "invalid_predicate",
-                {"predicate": predicate, "position": error.position},
-            )
-
-        kept: list[_IndexedRow] = []
-        for row in matches:
-            result = evaluate_predicate(
-                ast,
-                _CandidateResolver(self.dataset, self.fields, row),
-            )
-            if isinstance(result, ConditionResult):
-                return FailedResolution(condition=result.condition)
-            assert isinstance(result, PredicateValue)
-            if result.value is TruthValue.TRUE:
-                kept.append(row)
-        return kept
-
-    def _select(
-        self,
-        matches: list[_IndexedRow],
-        selection: MultipleMatchSelection,
-        variable: str,
-    ) -> Resolution:
-        """Order the eligible contextual matches and keep one (REQ-0354)."""
-        return select_one(
-            self.dataset, self.fields, matches, selection, variable, "Value"
-        )
-
-    def resolve(
-        self,
-        item_oid: str,
-        context_row: Mapping[str, object],
-        *,
-        selector: str | None = None,
-        multiple_matches: Mapping[str, object] | None = None,
-    ) -> Resolution:
-        variable = f"{self.dataset}.{item_oid}"
-        if not self.context_columns:
-            return _failure("validation", "unknown_field", {"identifier": variable})
-        if any(column not in context_row for column in self.context_columns):
-            return _failure("validation", "unknown_field", {"identifier": variable})
-
-        key = tuple(
-            runtime_value(context_row[column]) for column in self.context_columns
-        ) + (item_oid,)
-        matches = list(self._records.get(key, ()))
-        if not matches:
-            # REQ-0100: no contextual match is an absent item, which the
-            # `missing` handler answers.
-            return AbsentValue(variable=variable)
-        if selector is not None:
-            eligible = self._filter(matches, selector)
-            if isinstance(eligible, FailedResolution):
-                return eligible
-            if not eligible:
-                # REQ-0355: the item exists and the filter selected none of
-                # its records, which is an absent match rather than an
-                # absent item.
-                return ResolvedValue(value=MISSING)
-            matches = eligible
-        if multiple_matches is None:
-            if len(matches) == 1:
-                return ResolvedValue(value=matches[0].values["Value"])
-            return _failure(
-                "join",
-                "multiple_matches",
-                {"variable": variable, "matches": len(matches)},
-                applicable_handler="multiple_matches",
-            )
-        try:
-            selection = MultipleMatchSelection.model_validate(
-                dict(multiple_matches), strict=True
-            )
-        except ValidationError:
-            return _failure(
-                "validation",
-                "invalid_field_type",
-                {"field": "multiple_matches"},
-            )
-        return self._select(matches, selection, variable)
-
-
 def _typed_table(value: LoadedDataset | TypedTable) -> TypedTable:
     return value.table if isinstance(value, LoadedDataset) else value
 
 
 class BindingIndex:
-    """Reusable source indexes that create one resolver per output row."""
-
-    CONTEXT_COLUMNS = ODM_CONTEXT_COLUMNS
+    """A checked binding plan that creates one resolver per output row."""
 
     def __init__(
         self,
         plan: BindingPlan,
         sources: Mapping[str, LoadedDataset | TypedTable],
         *,
-        batch_size: int | None = None,
         virtual_datasets: Collection[str] = (),
     ) -> None:
         if set(plan.datasets) - set(virtual_datasets) != set(sources):
@@ -358,15 +225,6 @@ class BindingIndex:
                 raise ValueError(
                     f"indexed table for {dataset!r} does not match the binding plan"
                 )
-        self._odm = {
-            dataset: OdmItemIndex(
-                dataset,
-                _typed_table(source),
-                batch_size=batch_size,
-            )
-            for dataset, source in sources.items()
-            if plan.datasets[dataset].is_long_form_odm
-        }
 
     def context(
         self,
@@ -381,8 +239,7 @@ class BindingIndex:
         combination and section. A plain dataset field read collects one
         value across them under REQ-0044: no value is missing, repeated
         readings of one value are that value, and two values disagreeing
-        fail. Record intermediates keep using the single ``source_rows`` record
-        as their ODM context.
+        fail.
         """
         return RuntimeContext(self, source_rows, output_values or {}, feeding_rows)
 
@@ -442,57 +299,46 @@ class RuntimeContext:
             # Selecting a row from another relation belongs to R003/#217. This
             # component only resolves rows explicitly supplied by its caller.
             return _failure("validation", "unknown_field", {"identifier": variable})
-        if bound.kind == "dataset":
-            assert bound.field is not None
-            if bound.field not in row:
-                return _failure("validation", "unknown_field", {"identifier": variable})
-            feeding = self._feeding_rows.get(bound.dataset, [row])
-            if selector is not None:
-                # REQ-0131: the filter states which of the records this row
-                # reaches the source may read, before REQ-0044 counts values.
-                eligible = self._eligible(bound.dataset, selector, feeding)
-                if isinstance(eligible, FailedResolution):
-                    return eligible
-                feeding = eligible
-            if not feeding:
-                return ResolvedValue(value=MISSING)
-            carrying = [
-                feeding_row
-                for feeding_row in feeding
-                if bound.field in feeding_row
-                and feeding_row[bound.field] is not MISSING
-                and feeding_row[bound.field] is not None
-            ]
-            present = _distinct_values(
-                feeding_row[bound.field] for feeding_row in carrying
-            )
-            if not present:
-                return ResolvedValue(value=runtime_value(row[bound.field]))
-            if len(present) > 1:
-                if multiple_matches is not None:
-                    # REQ-0353: the specification says which of the records it
-                    # keeps, so the disagreement is answered rather than fatal.
-                    return self._select(
-                        bound.dataset, bound.field, carrying, multiple_matches
-                    )
-                # REQ-0044 counts values, not the records carrying them: a
-                # field constant over a subject's records is one value, two
-                # records disagreeing are two.
-                return _failure(
-                    "derivation",
-                    "multiple_values_per_key",
-                    {"identifier": variable, "value_count": len(present)},
-                    requirement="REQ-0075",
+        assert bound.field is not None
+        if bound.field not in row:
+            return _failure("validation", "unknown_field", {"identifier": variable})
+        feeding = self._feeding_rows.get(bound.dataset, [row])
+        if selector is not None:
+            # REQ-0131: the filter states which of the records this row
+            # reaches the source may read, before REQ-0044 counts values.
+            eligible = self._eligible(bound.dataset, selector, feeding)
+            if isinstance(eligible, FailedResolution):
+                return eligible
+            feeding = eligible
+        if not feeding:
+            return ResolvedValue(value=MISSING)
+        carrying = [
+            feeding_row
+            for feeding_row in feeding
+            if bound.field in feeding_row
+            and feeding_row[bound.field] is not MISSING
+            and feeding_row[bound.field] is not None
+        ]
+        present = _distinct_values(feeding_row[bound.field] for feeding_row in carrying)
+        if not present:
+            return ResolvedValue(value=runtime_value(row[bound.field]))
+        if len(present) > 1:
+            if multiple_matches is not None:
+                # REQ-0353: the specification says which of the records it
+                # keeps, so the disagreement is answered rather than fatal.
+                return self._select(
+                    bound.dataset, bound.field, carrying, multiple_matches
                 )
-            return ResolvedValue(value=present[0])
-
-        assert bound.item_oid is not None
-        return self._index._odm[bound.dataset].resolve(
-            bound.item_oid,
-            row,
-            selector=selector,
-            multiple_matches=multiple_matches,
-        )
+            # REQ-0044 counts values, not the records carrying them: a
+            # field constant over a subject's records is one value, two
+            # records disagreeing are two.
+            return _failure(
+                "derivation",
+                "multiple_values_per_key",
+                {"identifier": variable, "value_count": len(present)},
+                requirement="REQ-0075",
+            )
+        return ResolvedValue(value=present[0])
 
     def _select(
         self,

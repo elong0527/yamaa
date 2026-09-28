@@ -41,7 +41,10 @@ class RuleRewriteTests(unittest.TestCase):
         self.assertEqual(resolve_requirement("REQ-0073", migration), ["REQ-0033"])
         self.assertEqual(resolve_requirement("R002-28", migration), ["REQ-0080"])
         self.assertEqual(resolve_requirement("REQ-0104", migration), ["REQ-0080"])
-        self.assertEqual(resolve_requirement("REQ-0096", migration), ["REQ-0098"])
+        self.assertEqual(resolve_requirement("REQ-0096", migration), ["REQ-1269"])
+        self.assertEqual(
+            resolve_requirement("R002-22", migration), ["REQ-1269", "REQ-1271"]
+        )
         self.assertEqual(resolve_requirement("REQ-0332", migration), [])
         self.assertGreater(len(resolve_requirement("R007-9", migration)), 1)
         self.assertEqual(resolve_requirement("R999-1", migration), [])

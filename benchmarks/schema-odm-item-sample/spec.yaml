@@ -1,0 +1,66 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: lb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, VISIT, LBTESTCD, LBORRES, LBDTC]
+  order_by: [STUDYID, USUBJID, LBSEQ]
+
+# One row per lab result record; the date item and other forms are not
+# results. Each row reads the date item of its own sample.
+rows:
+  - id: result
+    dataset: ODM
+    filter: "LBTESTCD IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        mapping:
+          source: ODM.ItemOID
+          dict: {IT.LB.ALT: ALT, IT.LB.AST: AST}
+          unmapped: null
+      LBORRES: ODM.Value
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: ODM.StudyEventOID
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+    derivation: {odm: ODM.IT.LB.LBDTC}
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [LBDTC, LBTESTCD]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, LBSEQ]

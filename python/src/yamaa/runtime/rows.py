@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import JsonValue, ValidationError
 
@@ -54,6 +54,11 @@ from yamaa.models import (
 )
 from yamaa.models.values import convert_value
 from yamaa.odm import BindingIndex
+from yamaa.odm.items import (
+    ODM_HIERARCHY_FIELDS,
+    ODM_IDENTIFYING_FIELDS,
+    parse_odm_read,
+)
 from yamaa.planning import (
     ExecutionDiagnostic,
     ImplicitJoin,
@@ -97,6 +102,9 @@ class CandidateRow:
     group_records: tuple[IndexedRecord, ...] = ()
     group_values: dict[str, RuntimeValue] = field(default_factory=dict)
     intermediates: dict[str, IntermediateOutcome] = field(default_factory=dict)
+    # How R001 built the row, which fixes the ODM scope an `odm` read takes
+    # (REQ-1269): a key combination, one driver record, or one driver group.
+    built_by: Literal["key", "record", "group"] | None = None
 
     @property
     def reported_group(self) -> dict[str, JsonValue]:
@@ -119,6 +127,28 @@ class RelationalContext:
     _partitions: dict[tuple[str, ...], dict[tuple[object, ...], list[CandidateRow]]] = (
         field(default_factory=dict)
     )
+    _odm_scopes: dict[
+        tuple[str, tuple[str, ...]], dict[tuple[object, ...], tuple[IndexedRecord, ...]]
+    ] = field(default_factory=dict)
+
+    def odm_records(
+        self,
+        dataset: str,
+        fields: tuple[str, ...],
+        values: tuple[object, ...],
+    ) -> tuple[IndexedRecord, ...]:
+        """Return the ODM records equal on `fields`, missing equal to missing.
+
+        REQ-1269 takes a scope the way REQ-0037 groups, so a repeat key that
+        was never collected matches another that was not; the index is built
+        once per dataset and set of fields, and every row shares it.
+        """
+        key = (dataset, fields)
+        index = self._odm_scopes.get(key)
+        if index is None:
+            index = partition_records(self.relations[dataset].records, fields)
+            self._odm_scopes[key] = index
+        return index.get(values, ())
 
     def partition(
         self, fields: tuple[str, ...]
@@ -476,7 +506,124 @@ class RowResolver:
         """Answer the operations that read a relation rather than one value."""
         if operation in WINDOW_OPERATIONS:
             return self._window(operation, payload)
+        if operation == "odm":
+            return self._odm(payload)
         return self._aggregate(payload)
+
+    def _odm_scope(
+        self, dataset: str, item_oid: str
+    ) -> tuple[tuple[IndexedRecord, ...], dict[str, JsonValue]] | ConditionResult:
+        """Return the row's scope records carrying the item, and the scope.
+
+        REQ-1269: a key combination reads the records it was derived from, a
+        grouped row the records equal to it on its group's hierarchy fields,
+        and a record-driven row its driver record's item group occurrence.
+        """
+        candidate = self._candidate
+        if candidate.built_by == "key" and dataset in candidate.feeding_rows:
+            records = tuple(
+                IndexedRecord(position=position, values=values)
+                for position, values in enumerate(candidate.feeding_rows[dataset])
+                if values.get("ItemOID") == item_oid
+            )
+            scope = {
+                key: json_value(candidate.values.get(key, MISSING))
+                for key in self._context.output_keys
+            }
+            return records, scope
+        if candidate.built_by == "group" and candidate.group_driver == dataset:
+            fields = tuple(
+                name
+                for name in ODM_HIERARCHY_FIELDS
+                if f"{dataset}.{name}" in candidate.group_values
+            )
+            values = tuple(
+                candidate.group_values[f"{dataset}.{name}"] for name in fields
+            )
+        elif candidate.built_by == "record" and dataset in candidate.source_rows:
+            driver = candidate.source_rows[dataset]
+            fields = ODM_HIERARCHY_FIELDS
+            values = tuple(driver[name] for name in fields)
+        else:
+            return ConditionResult(
+                condition=_condition(
+                    "invalid_odm_context",
+                    {"dataset": dataset, "row": candidate.row_id},
+                    requirement="REQ-1277",
+                )
+            )
+        records = self._context.odm_records(
+            dataset, (*fields, "ItemOID"), (*values, item_oid)
+        )
+        scope = {
+            name: json_value(value) for name, value in zip(fields, values, strict=True)
+        }
+        return records, scope
+
+    def _odm(self, payload: Mapping[str, object]) -> EvaluationResult:
+        """Read the one record an `odm` expression identifies (REQ-1271)."""
+        read = parse_odm_read(payload)
+        if read is None:
+            return _invalid("odm", "an item written as DATASET.ItemOID")
+        if read.dataset not in self._context.relations:
+            return ConditionResult(
+                condition=_condition(
+                    "unknown_field", {"identifier": read.item}, requirement="REQ-0103"
+                )
+            )
+        found = self._odm_scope(read.dataset, read.item_oid)
+        if isinstance(found, ConditionResult):
+            return found
+        records, scope = found
+        for level, wanted in (
+            ("StudyEventOID", read.events),
+            ("FormOID", read.forms),
+            ("ItemGroupOID", read.item_groups),
+        ):
+            if wanted is not None:
+                records = tuple(
+                    record for record in records if record.values[level] in wanted
+                )
+        predicate = self._predicate(read.filter)
+        if isinstance(predicate, ConditionResult):
+            return predicate
+        if predicate is not None:
+            eligible = eligible_records(
+                records, predicate, self._context.relations[read.dataset]
+            )
+            if isinstance(eligible, ConditionResult):
+                return eligible
+            records = tuple(eligible)
+        # REQ-1272: none gives missing, one its Value, and two or more fail
+        # whatever their values, since two records that agree are still two.
+        if not records:
+            return ValueResult(value=MISSING)
+        if len(records) == 1:
+            return ValueResult(value=records[0].values["Value"])
+        differ: dict[str, JsonValue] = {}
+        for name in ODM_IDENTIFYING_FIELDS:
+            seen: list[JsonValue] = []
+            for record in records:
+                value = json_value(record.values[name])
+                if value not in seen:
+                    seen.append(value)
+            if len(seen) > 1:
+                differ[name] = seen
+        return ConditionResult(
+            condition=_condition(
+                "odm_not_unique",
+                {
+                    "item": read.item,
+                    "row": self._candidate.row_id,
+                    "scope": scope,
+                    "records": len(records),
+                    "differ": differ,
+                    "repeated": not differ,
+                },
+                phase=self._phase,
+                requirement="REQ-1278",
+            )
+        )
 
     def _window(
         self,
@@ -1061,6 +1208,7 @@ def group_candidates(
                 group_driver=planned.driver,
                 group_records=records,
                 group_values=values,
+                built_by="group",
             )
         )
     return candidates

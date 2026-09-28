@@ -2,11 +2,7 @@ schema_version: '1.0'
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  ODM:
-    path: input/odm.csv
-    types:
-      StudyEventRepeatKey: int
-      ItemGroupRepeatKey: int
+  ODM: input/odm.csv
 
 output:
   path: ae.csv
@@ -111,26 +107,11 @@ rows:
     # item gives missing, and an item recorded twice stops the run.
     derivations:
       FORM: ODM.ItemGroupOID
-      AETERM:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.AE.AETERM'"
-          expr: ONLY(ODM.Value)
-      AESTDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.AE.AESTDTC'"
-          expr: ONLY(ODM.Value)
-      AEENDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.AE.AEENDTC'"
-          expr: ONLY(ODM.Value)
-      AESEV:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.AE.AESEV'"
-          expr: ONLY(ODM.Value)
-      AESER:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.AE.AESER'"
-          expr: ONLY(ODM.Value)
+      AETERM: {odm: ODM.IT.AE.AETERM}
+      AESTDTC: {odm: ODM.IT.AE.AESTDTC}
+      AEENDTC: {odm: ODM.IT.AE.AEENDTC}
+      AESEV: {odm: ODM.IT.AE.AESEV}
+      AESER: {odm: ODM.IT.AE.AESER}
 
 verifications:
   - unique:

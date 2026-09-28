@@ -27,6 +27,10 @@ coverage:
   literal: [negative-literal-structure]
   mapping: [negative-mapping-case-collision]
   locf: [negative-locf-no-order]
+  odm: [negative-odm-context, negative-odm-not-unique,
+    negative-odm-repeated-record, negative-odm-schema-ambiguous,
+    negative-odm-schema-missing, negative-odm-schema-type,
+    negative-odm-schema-value]
   previous_non_missing: [negative-previous-fixed]
   rank: [negative-rank-bad-method]
   round_half_away_from_zero: [negative-round-half-away-from-zero-non-numeric-source]

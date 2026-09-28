@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -205,6 +206,58 @@ def parse_parquet(content: bytes) -> TypedTable:
         ValueError,
     ) as error:
         raise ParquetProfileFailure("source_parquet_invalid", {}) from error
+
+
+def parquet_source_fields(
+    content: bytes,
+) -> tuple[pa.Table, tuple[tuple[str, ColumnType | None], ...]]:
+    """Read a snapshot and type each field without failing on any one of them.
+
+    REQ-1268 verifies only the fields an ODM input binds, so a field outside
+    its schema is never typed: this returns None for a field the closed
+    mapping cannot type, and the caller decides whether that field matters.
+    """
+    table, stored_schema = _read_source(content)
+    aligned = len(stored_schema) == len(table.schema)
+    fields: list[tuple[str, ColumnType | None]] = []
+    for position, field in enumerate(table.schema):
+        stored = stored_schema.column(position) if aligned else None
+        column_type = (
+            _column_type(stored, field.type)
+            if stored is not None
+            and stored.max_repetition_level == 0
+            and stored.path == field.name
+            else None
+        )
+        fields.append((field.name, column_type))
+    return table, tuple(fields)
+
+
+def parquet_text_columns(
+    table: pa.Table,
+    columns: Sequence[tuple[str, str]],
+) -> TypedTable:
+    """Select stored text fields as `str` columns under new names, in order."""
+    try:
+        frame = pl.from_arrow(
+            table.select([stored for stored, _ in columns]), rechunk=True
+        )
+        if not isinstance(frame, pl.DataFrame):
+            raise TypeError("a Parquet table must produce a Polars DataFrame")
+        frame = frame.rename({stored: name for stored, name in columns}).cast(
+            {name: pl.String for _, name in columns}
+        )
+    except (
+        pa.ArrowException,
+        pl.exceptions.PolarsError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise ParquetProfileFailure("source_parquet_invalid", {}) from error
+    return TypedTable(
+        columns=tuple(TypedColumn(name=name, type="str") for _, name in columns),
+        frame=frame,
+    )
 
 
 def read_parquet(content: bytes) -> pa.Table:

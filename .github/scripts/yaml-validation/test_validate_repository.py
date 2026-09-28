@@ -7631,6 +7631,124 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
 
 
 
+SCHEMA_HEADER = (
+    'StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,'
+    'StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,'
+    'ItemGroupRepeatKey,ItemOID,Value'
+)
+
+
+class TestOdmReads(unittest.TestCase):
+    """An `odm` read is checked against its row scope and ODM input."""
+
+    def spec(self, derivation, **extra):
+        spec = {
+            'schema_version': '1.0',
+            'domain': 'DM',
+            'keys': ['USUBJID'],
+            'input': {'ODM': 'input/odm.csv'},
+            'output': {'path': 'dm.csv', 'columns': ['USUBJID', 'AGE']},
+            'columns': [
+                {
+                    'name': 'USUBJID',
+                    'type': 'str',
+                    'label': 'Unique Subject Identifier',
+                    'derivation': 'ODM.SubjectKey',
+                },
+                {
+                    'name': 'AGE',
+                    'type': 'int',
+                    'label': 'Age',
+                    'derivation': derivation,
+                },
+            ],
+        }
+        spec.update(extra)
+        return spec
+
+    def findings(self, spec, header=SCHEMA_HEADER):
+        with tempfile.TemporaryDirectory() as raw:
+            example = Path(raw) / 'benchmarks' / 'schema-odm-probe'
+            (example / 'input').mkdir(parents=True)
+            (example / 'input' / 'odm.csv').write_text(header + '\n')
+            spec_path = example / 'spec.yaml'
+            spec_path.write_text('{}\n')
+            return VALIDATOR.validate_spec_odm_reads(
+                spec, 'schema-odm-probe/spec.yaml', spec_path
+            )
+
+    def test_accepts_a_read_over_a_header_in_any_case(self):
+        header = SCHEMA_HEADER.upper() + ',SITEID'
+        self.assertEqual(
+            self.findings(self.spec({'odm': 'ODM.IT.DM.AGE'}), header), []
+        )
+
+    def test_the_catalog_exposes_schema_fields_only(self):
+        env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.assertEqual(errors, [])
+        with tempfile.TemporaryDirectory() as raw:
+            example = Path(raw) / 'benchmarks' / 'schema-odm-probe'
+            (example / 'input').mkdir(parents=True)
+            (example / 'input' / 'odm.csv').write_text(
+                SCHEMA_HEADER.upper() + ',SITEID\n'
+            )
+            catalog = VALIDATOR.dataset_type_catalog(
+                self.spec({'odm': 'ODM.IT.DM.AGE'}),
+                example / 'spec.yaml',
+                env,
+            )
+        self.assertEqual(
+            catalog['ODM'],
+            {field: 'str' for field in VALIDATOR.ODM_SCHEMA_FIELDS},
+        )
+
+    def test_rejects_a_filter_naming_a_vendor_field(self):
+        [finding] = self.findings(self.spec({
+            'odm': {'item': 'ODM.IT.DM.AGE', 'filter': "ODM.SITEID = '9'"},
+        }))
+        self.assertEqual(finding.condition, 'unknown_field')
+        self.assertEqual(
+            finding.path,
+            'schema-odm-probe/spec.yaml.columns.AGE.derivation.odm.filter',
+        )
+
+    def test_rejects_a_read_in_an_intermediate(self):
+        spec = self.spec({'literal': 1}, intermediates=[{
+            'id': 'AGES',
+            'dataset': 'ODM',
+            'derivations': {'AGE': {'odm': 'ODM.IT.DM.AGE'}},
+        }])
+        [finding] = self.findings(spec)
+        self.assertEqual(finding.condition, 'invalid_odm_context')
+        self.assertEqual(
+            finding.path,
+            'schema-odm-probe/spec.yaml.intermediates[0].derivations.AGE.odm',
+        )
+        self.assertEqual(
+            finding.context, {'dataset': 'ODM', 'location': 'intermediate'}
+        )
+
+    def test_rejects_a_header_without_a_schema_field(self):
+        header = SCHEMA_HEADER.replace('FormOID,FormRepeatKey,', '')
+        [finding] = self.findings(self.spec({'odm': 'ODM.IT.DM.AGE'}), header)
+        self.assertEqual(finding.condition, 'odm_schema_field_missing')
+        self.assertEqual(
+            finding.context,
+            {'dataset': 'ODM', 'fields': ['FormOID', 'FormRepeatKey']},
+        )
+
+    def test_rejects_declared_types(self):
+        spec = self.spec({'odm': 'ODM.IT.DM.AGE'})
+        spec['input'] = {
+            'ODM': {'path': 'input/odm.csv', 'types': {'Value': 'int'}},
+        }
+        [finding] = self.findings(spec)
+        self.assertEqual(finding.condition, 'odm_schema_field_type')
+        self.assertEqual(
+            finding.path, 'schema-odm-probe/spec.yaml.input.ODM.types'
+        )
+
+
 class TestRowPhaseDatasetReads(unittest.TestCase):
     """REQ-0156/REQ-0157 as the repository validator applies them."""
 

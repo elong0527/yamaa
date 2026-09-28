@@ -38,6 +38,7 @@ from yamaa.odm import (
     DatasetBinding,
     build_binding_plan,
 )
+from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
@@ -1867,9 +1868,8 @@ def _bound_type(
         return column_types.get(bound.field)
     assert bound.dataset is not None
     dataset = bindings.datasets[bound.dataset]
-    field = "Value" if bound.kind == "odm_item" else bound.field
     return next(
-        (column.type for column in dataset.columns if column.name == field),
+        (column.type for column in dataset.columns if column.name == bound.field),
         None,
     )
 
@@ -3849,6 +3849,73 @@ def _sidecar_declarations(
     return diagnostics
 
 
+def _odm_read_diagnostics(specification: Specification) -> list[ExecutionDiagnostic]:
+    """Check every `odm` read against the rows it can be read for.
+
+    REQ-1270 gives an `odm` read a scope only in a row built from its ODM
+    input, so the check needs nothing but the specification and runs before
+    any source is read. REQ-1271 confines `filter` to schema fields.
+    """
+    diagnostics: list[ExecutionDiagnostic] = []
+    rows = specification.rows or ()
+
+    def driver(row: Row) -> str | None:
+        if row.dataset is not None:
+            return row.dataset
+        if len(specification.input) == 1:
+            return next(iter(specification.input))
+        return None
+
+    for site in odm_read_sites(specification):
+        dataset = site.read.dataset
+        if dataset not in specification.input:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    f"{site.path}.item",
+                    {"identifier": site.read.item},
+                    requirement="REQ-0103",
+                )
+            )
+            continue
+        if site.location in ("intermediate", "derive"):
+            scoped = False
+        elif site.location == "row":
+            assert site.row_index is not None
+            scoped = driver(rows[site.row_index]) == dataset
+        elif rows:
+            scoped = all(driver(row) == dataset for row in rows)
+        else:
+            scoped = specification.default_driver == dataset
+        if not scoped:
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_odm_context",
+                    site.path,
+                    {"dataset": dataset, "location": site.location},
+                    requirement="REQ-1277",
+                )
+            )
+        if site.read.filter is None:
+            continue
+        filter_path = f"{site.path}.filter"
+        ast = _parse_predicate_at(site.read.filter, filter_path, diagnostics)
+        if ast is None:
+            continue
+        for name in predicate_identifiers(ast):
+            qualifier, _, field = name.partition(".")
+            if qualifier != dataset or field not in ODM_SCHEMA_FIELDS:
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        filter_path,
+                        {"identifier": name, "dataset": dataset},
+                        requirement="REQ-1271",
+                    )
+                )
+    return diagnostics
+
+
 def _preflight_findings(
     specification: Specification,
     supported_operations: Collection[str],
@@ -3876,6 +3943,8 @@ def _preflight_findings(
         )
     diagnostics.extend(_lookup_declarations(specification))
     diagnostics.extend(_sidecar_declarations(specification))
+    if not specification.parents:
+        diagnostics.extend(_odm_read_diagnostics(specification))
 
     rows = specification.rows or ()
     if not specification.parents:
@@ -3970,7 +4039,7 @@ def preflight_execution(
 # REQ-1260: operations that read beyond the current row -- another dataset's
 # records, or the completed rows a window partitions. A derivation using one
 # keeps its column-phase meaning.
-_DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", *WINDOW_OPERATIONS})
+_DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", "odm", *WINDOW_OPERATIONS})
 
 
 def _column_level_reads(
@@ -4391,7 +4460,6 @@ def _bind_intermediate_drivers(
         datasets[identifier] = DatasetBinding(
             dataset=identifier,
             columns=tuple(TypedColumn(name=name, type=types[name]) for name in visible),
-            context_columns=(),
         )
     return bindings.model_copy(update={"datasets": datasets})
 

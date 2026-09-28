@@ -386,8 +386,8 @@ declared and sometimes refuted, never inferred.
 
 <a id="req-0897"></a>
 
-**REQ-0897.** A column whose derivation is anything other than a bare `source`
-or a bare `literal` computes its value from other values. The column's
+**REQ-0897.** A column whose derivation is anything other than a bare `source`,
+a bare `odm`, or a bare `literal` computes its value from other values. The column's
 `origin.type` must be `Derived`, `Assigned`, or `Other`. `Collected`,
 `Protocol`, `Predecessor`, and `Not Available` are refuted: each asserts
 the value arrived as it stands, and the specification shows it did not.
@@ -403,7 +403,8 @@ and a value the specification states outright is available.
 <a id="req-0899"></a>
 
 **REQ-0899.** A column derived by a bare `source` copies one value of one
-declared dataset. The column's `origin.type` must not be `Derived`: nothing
+declared dataset, and a column derived by a bare `odm` copies the `Value` of
+the one ODM record it identifies ([REQ-1272](../specification/binding.md#req-1272)). The column's `origin.type` must not be `Derived`: nothing
 was computed. Every remaining type stays admissible. Whether that
 stored value was collected, assigned, fixed by the protocol, or copied from
 a predecessor dataset is a fact about the source and not about this
