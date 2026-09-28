@@ -373,8 +373,7 @@ shared.
 **REQ-1264.** A named lookup matches only when it is read. The match runs the
 first time a column reads the lookup for a row, and the selection is shared
 with every later read in that row ([REQ-0138](lookup.md#req-0138)). An
-intermediate that no column reads for a row is never matched for that row:
-no record is selected, and an intermediate without `no_match` never fails
+intermediate without `no_match` never fails
 as `unmatched_key` on a row that did not read it.
 
 <a id="req-0139"></a>
