@@ -2927,7 +2927,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '    label: Verification input\n'
                 '    derivation: {literal: audit}\n'
                 'verifications:\n'
-                '  unique: {columns: [AUDIT]}\n'
+                '  unique: {id: audit-unique, columns: [AUDIT]}\n'
             )
             (layers / 'a.yaml').write_text(
                 'schema_version: "1.0"\n'
@@ -4315,7 +4315,7 @@ class TestSpecContracts(unittest.TestCase):
         errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
         self.assertIn("min_fraction must not exceed max_fraction", "\n".join(errors))
 
-    def test_rejects_grouped_row_count_without_id_or_known_columns(self):
+    def test_rejects_grouped_row_count_with_bad_columns(self):
         spec = {
             "domain": "ADLB",
             "input": {"LB": "lb.csv"},
@@ -4328,6 +4328,7 @@ class TestSpecContracts(unittest.TestCase):
             "verifications": [
                 {
                     "row_count": {
+                        "id": "by-subject",
                         "group_by": ["USUBJID", "USUBJID", "MISSING"],
                         "max": 1,
                     }
@@ -4339,7 +4340,8 @@ class TestSpecContracts(unittest.TestCase):
         errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
-        self.assertIn("a grouped row_count requires a verification id", message)
+        # REQ-0374: the id requirement is schema-level; the contract checks
+        # cover the group_by shape.
         self.assertIn("group_by: duplicate column 'USUBJID'", message)
         self.assertIn("group_by: unknown column 'MISSING'", message)
         self.assertIn("group_by: requires at least one column", message)
@@ -5427,7 +5429,7 @@ class TestRegularExpressionContract(unittest.TestCase):
 
     def test_matches_pattern_the_contract_rejects_fails_validation(self):
         errors = VALIDATOR.validate_type(
-            {'matches': {'pattern': '(?P<name>a)'}},
+            {'matches': {'id': 'sex-format', 'pattern': '(?P<name>a)'}},
             ['column_verification'],
             self.env,
             'spec.columns.SEX.verifications[0]',
@@ -5443,7 +5445,7 @@ class TestRegularExpressionContract(unittest.TestCase):
 
     def test_matches_pattern_the_contract_accepts_validates(self):
         errors = VALIDATOR.validate_type(
-            {'matches': {'pattern': '(?<name>a)'}},
+            {'matches': {'id': 'sex-format', 'pattern': '(?<name>a)'}},
             ['column_verification'],
             self.env,
             'spec.columns.SEX.verifications[0]',
