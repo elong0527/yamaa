@@ -459,6 +459,27 @@ examples:
   negative-not-missing-age:
     status: executable
     runtimes: ['python']
+  negative-odm-context:
+    status: executable
+    runtimes: ['python']
+  negative-odm-not-unique:
+    status: executable
+    runtimes: ['python']
+  negative-odm-repeated-record:
+    status: executable
+    runtimes: ['python']
+  negative-odm-schema-ambiguous:
+    status: executable
+    runtimes: ['python']
+  negative-odm-schema-missing:
+    status: executable
+    runtimes: ['python']
+  negative-odm-schema-type:
+    status: executable
+    runtimes: ['python']
+  negative-odm-schema-value:
+    status: executable
+    runtimes: ['python']
   negative-output-duplicate:
     status: executable
     runtimes: ['python']
@@ -634,6 +655,12 @@ examples:
     status: executable
     runtimes: ['python']
   schema-odm-form-items:
+    status: executable
+    runtimes: ['python']
+  schema-odm-item-sample:
+    status: executable
+    runtimes: ['python']
+  schema-odm-item-subject:
     status: executable
     runtimes: ['python']
   schema-ordering:

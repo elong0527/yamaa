@@ -1,0 +1,25 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {odm: ODM.IT.DM.AGE}

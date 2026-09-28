@@ -21,7 +21,12 @@ from yamaa.expressions import (
 )
 from yamaa.io import Artifact, ArtifactDiagnostic, ArtifactError, build_artifact
 from yamaa.io.polars import frame_from_values
-from yamaa.io.source import LoadedDataset, ProducerSchemaUnresolved, SourceError
+from yamaa.io.source import (
+    LoadedDataset,
+    ProducerSchemaUnresolved,
+    SourceError,
+    odm_schema_sources,
+)
 from yamaa.models import (
     MISSING,
     ConditionResult,
@@ -31,6 +36,7 @@ from yamaa.models import (
     TypedTable,
 )
 from yamaa.odm import BindingIndex
+from yamaa.odm.items import odm_inputs
 from yamaa.planning import (
     ExecutionDiagnostic,
     ExecutionPlanningError,
@@ -439,6 +445,7 @@ def _record_candidates(
             values={},
             feeding_rows={planned.driver: [values]},
             row_id=planned.declaration.id if planned.declaration else None,
+            built_by="record",
         )
         for values in (dict(record.values) for record in relation.records)
     ]
@@ -759,6 +766,7 @@ def _key_grain_candidates(
             source_rows={planned.driver: records[0]},
             values=dict(zip(key_names, key_values[token], strict=True)),
             feeding_rows={planned.driver: records},
+            built_by="key",
         )
         for derivation in planned.derivations:
             candidate.values[derivation.column] = _evaluate_one(
@@ -931,6 +939,15 @@ def execute_specification(
     dataset_takes_records = _accepts_records(selected_hooks.dataset)
     counter = HandlerCounter()
     warnings: list[VerificationFailure] = []
+    try:
+        sources = odm_schema_sources(
+            specification.input, sources, odm_inputs(specification)
+        )
+    except SourceError as error:
+        return ExecutionFailure(
+            diagnostics=_source_diagnostics(error),
+            handler_counts=counter.snapshot(),
+        )
     try:
         plan = plan_execution(
             specification,

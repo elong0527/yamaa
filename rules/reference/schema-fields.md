@@ -309,6 +309,19 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.round_half_away_from_zero.digits` | `"int"` | `true` | Absent | -- | [REQ-1172](../operations/computation.md#req-1172) |
 | `numeric_expression` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1120](../operations/computation.md#req-1120) |
 
+## schema_expression_odm.yaml
+
+| Field or value type | Type | Required | Default | Constraints | Contract |
+| --- | --- | --- | --- | --- | --- |
+| `expressions.odm` | `["odm_item", "odm_class"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_item` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[!-~]+$"}` | [REQ-1265](../specification/binding.md#req-1265) |
+| `odm_oid` | `"str"` | `false` | Absent | `{"pattern": "^[!-~]+$"}` | [REQ-1271](../specification/binding.md#req-1271) |
+| `odm_class.item` | `"odm_item"` | `true` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.event` | `["odm_oid", "list[odm_oid]"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.form` | `["odm_oid", "list[odm_oid]"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.item_group` | `["odm_oid", "list[odm_oid]"]` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+| `odm_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1274](../specification/binding.md#req-1274) |
+
 ## schema_expression_str.yaml
 
 | Field or value type | Type | Required | Default | Constraints | Contract |

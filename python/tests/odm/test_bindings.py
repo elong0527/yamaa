@@ -22,7 +22,7 @@ def _fixture_plan():
     return build_binding_plan(loaded_spec.specification, sources), sources
 
 
-def test_plan_resolves_output_dataset_and_complete_odm_item_names() -> None:
+def test_plan_resolves_output_and_dataset_names() -> None:
     plan, _ = _fixture_plan()
 
     assert plan.bind("LBDTC") == BoundReference(
@@ -36,31 +36,13 @@ def test_plan_resolves_output_dataset_and_complete_odm_item_names() -> None:
         dataset="ODM",
         field="StudyOID",
     )
-    item = plan.bind("ODM.IT.LB.LBDTC")
-    assert isinstance(item, BoundReference)
-    assert item.kind == "odm_item"
-    assert item.item_oid == "IT.LB.LBDTC"
-    assert item.context_columns == (
-        "StudyOID",
-        "MetaDataVersionOID",
-        "SubjectKey",
-        "StudyEventOID",
-        "StudyEventRepeatKey",
-        "FormOID",
-        "FormRepeatKey",
-        "ItemGroupOID",
-        "ItemGroupRepeatKey",
-    )
-
-    period_free_item = plan.bind("ODM.AGE")
-    assert isinstance(period_free_item, BoundReference)
-    assert period_free_item.kind == "odm_item"
-    assert period_free_item.item_oid == "AGE"
 
 
 @pytest.mark.parametrize(
     "name",
-    ["UNKNOWN", "OTHER.Value"],
+    # REQ-1265: an ODM item is read with `odm`, so an ItemOID suffix on a
+    # long-form relation names no field.
+    ["UNKNOWN", "OTHER.Value", "ODM.IT.LB.LBDTC", "ODM.AGE"],
 )
 def test_plan_rejects_unknown_names(name: str) -> None:
     plan, _ = _fixture_plan()

@@ -1,0 +1,8 @@
+phase: validation
+condition: odm_schema_field_missing
+spec_paths:
+  - input.ODM.path
+requirement: REQ-1275
+context:
+  dataset: ODM
+  fields: [FormOID, FormRepeatKey]

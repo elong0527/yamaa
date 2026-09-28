@@ -36,7 +36,9 @@ def _derivation_kind(expression: HandledExpression) -> str:
     operation = expression.value.operation
     if operation == "literal":
         return "literal"
-    if operation == "source":
+    # REQ-0899: a bare `odm` copies the one record it identifies, as a bare
+    # `source` copies one value.
+    if operation in ("source", "odm"):
         return "source"
     return "computed"
 

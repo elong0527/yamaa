@@ -147,7 +147,7 @@ uv run --project python --isolated --extra test pytest \
   python/tests/runtime/test_expression_examples.py
 ```
 
-## ODM source binding and contextual resolution
+## Source binding
 
 Build one binding plan from a normalized specification and its loaded source
 tables, then share one index across row-local resolvers:
@@ -161,14 +161,30 @@ resolver = index.context({"ODM": current_odm_row}, {"STUDYID": "STUDY01"})
 ```
 
 The resolver implements the scalar expression protocol. Direct qualified
-fields read the supplied source record, unqualified names read completed output
-values, and a long-form ODM item uses every context column present in the ODM
-projection. Duplicate ODM items require flat R008 `order_by`/`keep`
-siblings; successful duplicate selection is returned with
+fields read the supplied source record, and unqualified names read completed
+output values. Disagreeing values require flat R008 `order_by`/`keep`
+siblings; successful selection is returned with
 `handled_by="multiple_matches"` so the executor can count that path.
 Implicit cross-dataset row selection remains the keyed-join component's
 responsibility; this context resolves only source records its caller has
 explicitly bound.
+
+## ODM item reads
+
+An `odm` derivation reads one collected item from an ODM input:
+
+```yaml
+derivation: {odm: ODM.IT.DM.AGE}
+```
+
+An ODM input is any declared input an `odm` derivation names. It is read
+under the fixed eleven-field ODM schema in `yamaa.odm.items`: stored field
+names bind to the schema by ASCII case folding, vendor fields are neither
+typed nor exposed, and the fields and then the records are verified before
+any row reads them. Workflow execution reads ODM inputs this way through
+`load_source_tables(..., odm_datasets=...)`; `execute_specification` holds a
+table supplied any other way to the same schema, so a caller's own source
+provider cannot skip the verification.
 
 Run this component's focused tests from the repository root:
 

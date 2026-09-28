@@ -11,73 +11,36 @@ from yamaa.io.source import LoadedDataset
 from yamaa.models import RuntimeCondition, TypedColumn, TypedTable
 from yamaa.specification.models import Specification
 
-ODM_CONTEXT_COLUMNS = (
-    "StudyOID",
-    "MetaDataVersionOID",
-    "SubjectKey",
-    "StudyEventOID",
-    "StudyEventRepeatKey",
-    "FormOID",
-    "FormRepeatKey",
-    "ItemGroupOID",
-    "ItemGroupRepeatKey",
-)
-
 
 class _FrozenModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
 
 class DatasetBinding(_FrozenModel):
-    """The ordered fields and ODM context carried by one source relation."""
+    """The ordered fields carried by one source relation."""
 
     dataset: str = Field(min_length=1)
     columns: tuple[TypedColumn, ...]
-    context_columns: tuple[str, ...]
 
     @property
     def field_names(self) -> tuple[str, ...]:
         return tuple(column.name for column in self.columns)
-
-    @property
-    def is_long_form_odm(self) -> bool:
-        fields = self.field_names
-        return "ItemOID" in fields and "Value" in fields
 
 
 class BoundReference(_FrozenModel):
     """One source name classified before row-level resolution."""
 
     name: str = Field(min_length=1)
-    kind: Literal["output", "dataset", "odm_item"]
+    kind: Literal["output", "dataset"]
     dataset: str | None = None
     field: str | None = None
-    item_oid: str | None = None
-    context_columns: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_shape(self) -> BoundReference:
-        if self.kind == "output" and (
-            self.dataset is not None
-            or self.field is None
-            or self.item_oid is not None
-            or self.context_columns
-        ):
+        if self.kind == "output" and (self.dataset is not None or self.field is None):
             raise ValueError("an output binding carries only its field")
-        if self.kind == "dataset" and (
-            self.dataset is None
-            or self.field is None
-            or self.item_oid is not None
-            or self.context_columns
-        ):
+        if self.kind == "dataset" and (self.dataset is None or self.field is None):
             raise ValueError("a dataset binding requires a dataset and field")
-        if self.kind == "odm_item" and (
-            self.dataset is None
-            or self.field is not None
-            or self.item_oid is None
-            or not self.context_columns
-        ):
-            raise ValueError("an ODM item binding requires its complete context")
         return self
 
 
@@ -125,20 +88,8 @@ class BindingPlan(_FrozenModel):
                 dataset=dataset_name,
                 field=field,
             )
-
-        # Dataset fields take precedence above. Every other suffix on a
-        # long-form ODM relation is a complete ItemOID; REQ-0098 matches it
-        # without splitting on periods inside that identifier.
-        if dataset.is_long_form_odm:
-            if not dataset.context_columns:
-                return _unknown(name)
-            return BoundReference(
-                name=name,
-                kind="odm_item",
-                dataset=dataset_name,
-                item_oid=field,
-                context_columns=dataset.context_columns,
-            )
+        # An ODM item is read with `odm` (REQ-1265), never through a
+        # variable name, so any other suffix names no field.
         return _unknown(name)
 
 
@@ -160,14 +111,9 @@ def build_binding_plan(
 
     datasets: dict[str, DatasetBinding] = {}
     for dataset_name in declared:
-        table = _typed_table(sources[dataset_name])
-        fields = tuple(column.name for column in table.columns)
         datasets[dataset_name] = DatasetBinding(
             dataset=dataset_name,
-            columns=table.columns,
-            context_columns=tuple(
-                column for column in ODM_CONTEXT_COLUMNS if column in fields
-            ),
+            columns=_typed_table(sources[dataset_name]).columns,
         )
 
     return BindingPlan(

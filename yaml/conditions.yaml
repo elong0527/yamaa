@@ -43,6 +43,7 @@ conditions:
   invalid_datetime_text: {phases: [impute]}
   invalid_field_type: {phases: [validation]}
   invalid_mapping_dictionary: {phases: [validation]}
+  invalid_odm_context: {phases: [validation]}
   invalid_parent_path: {phases: [validation]}
   invalid_predicate: {phases: [validation]}
   invalid_regex: {phases: [validation]}
@@ -64,6 +65,11 @@ conditions:
   multiple_values_per_key: {phases: [derivation]}
   no_applicable_keys: {phases: [validation]}
   not_missing_failed: {phases: [verification]}
+  odm_not_unique: {phases: [derivation, row_construction]}
+  odm_schema_field_ambiguous: {phases: [validation]}
+  odm_schema_field_missing: {phases: [validation]}
+  odm_schema_field_type: {phases: [validation]}
+  odm_schema_value_missing: {phases: [ingest]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
   prohibited_construct: {phases: [validation]}

@@ -307,6 +307,10 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'forward_reference'): {'column', 'dependency'},
     ('R001', 'key_dependency'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
+    ('R002', 'invalid_odm_context'): {'dataset'},
+    ('R002', 'odm_schema_field_ambiguous'): {'dataset', 'field'},
+    ('R002', 'odm_schema_field_missing'): {'dataset', 'fields'},
+    ('R002', 'odm_schema_field_type'): {'dataset'},
     ('R002', 'unknown_field'): {'identifier'},
     ('R003', 'duplicate_identifier'): {'identifier'},
     ('R003', 'prohibited_construct'): {'identifier'},
@@ -3358,10 +3362,11 @@ def validate_retired_odm_item_references(
 ):
     """Reject an ODM contextual item reference.
 
-    A long-form ODM relation carries `ItemOID` and `Value`. Repository
-    specifications read `Value` under a source `filter` on `ItemOID`, so
-    the record the source reaches is written where a reviewer can see it.
-    This check carries no exemption for the retired variable-name form.
+    A long-form ODM relation carries `ItemOID` and `Value`. An item is read
+    with `odm` (REQ-1265), or as `Value` under a source `filter` on
+    `ItemOID`, so the record a read reaches is written where a reviewer can
+    see it. This check carries no exemption for the retired variable-name
+    form.
     """
     long_form = {
         dataset: fields
@@ -3385,8 +3390,8 @@ def validate_retired_odm_item_references(
             continue
         errors.append(
             f"ERROR: {path}: retired_construct: {name!r} addresses an ODM "
-            f"item through the variable name; read {dataset}.Value "
-            "under a source filter on ItemOID instead"
+            f"item through the variable name; read it with "
+            f"`odm: {dataset}.{field}` instead"
         )
     return sorted(set(errors))
 
@@ -5795,11 +5800,13 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
     datasets = spec.get('input')
     if not isinstance(datasets, dict):
         return catalog
+    odm_datasets = odm_inputs(spec)
 
     for dataset_id, source in datasets.items():
         if not isinstance(dataset_id, str):
             continue
         fields = {}
+        header = None
         source_path = source if isinstance(source, str) else None
         declared_types = None
         producer_path = None
@@ -5854,7 +5861,20 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
                     if isinstance(field, str) and field:
                         fields.setdefault(field, 'str')
             except (OSError, UnicodeError, csv.Error):
-                pass
+                header = None
+
+        if dataset_id in odm_datasets:
+            # REQ-1266/REQ-1267: an ODM input exposes its schema fields, bound
+            # without regard to case, as text; a vendor field is not read. A
+            # header this check cannot read is taken to carry the schema,
+            # which ingestion verifies against the file itself.
+            bound = (
+                odm_field_binding(header)[0]
+                if header is not None
+                else {field: field for field in ODM_SCHEMA_FIELDS}
+            )
+            catalog[dataset_id] = {field: 'str' for field in bound}
+            continue
 
         if isinstance(declared_types, dict):
             for field, value_type in declared_types.items():
@@ -5866,6 +5886,232 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
         catalog[dataset_id] = fields
 
     return catalog
+
+
+# REQ-1266: the vendor-neutral fields of an ODM input, in ODM order.
+ODM_SCHEMA_FIELDS = (
+    'StudyOID', 'MetaDataVersionOID', 'SubjectKey', 'StudyEventOID',
+    'StudyEventRepeatKey', 'FormOID', 'FormRepeatKey', 'ItemGroupOID',
+    'ItemGroupRepeatKey', 'ItemOID', 'Value',
+)
+
+
+def odm_fold(name):
+    """Fold A-Z to a-z and nothing else, as REQ-1267 compares names."""
+    return ''.join(
+        chr(ord(char) + 32) if 'A' <= char <= 'Z' else char for char in name
+    )
+
+
+def odm_field_binding(names):
+    """Return (bound, missing, ambiguous) for stored names under REQ-1267."""
+    canonical = {field.lower(): field for field in ODM_SCHEMA_FIELDS}
+    seen = {}
+    for name in names:
+        field = canonical.get(odm_fold(name)) if isinstance(name, str) else None
+        if field is not None:
+            seen.setdefault(field, []).append(name)
+    bound = {field: found[0] for field, found in seen.items() if len(found) == 1}
+    missing = [field for field in ODM_SCHEMA_FIELDS if field not in seen]
+    ambiguous = {field: found for field, found in seen.items() if len(found) > 1}
+    return bound, missing, ambiguous
+
+
+def iter_odm_reads(value, path, derive=False):
+    """Yield (path, payload, in_derive) for each `odm` expression in a tree."""
+    if isinstance(value, dict):
+        if len(value) == 1:
+            ((operation, payload),) = value.items()
+            if operation == 'odm':
+                yield f"{path}.odm", payload, derive
+                return
+            yield from iter_odm_reads(
+                payload, f"{path}.{operation}", derive or operation == 'aggregate'
+            )
+            return
+        for key, child in value.items():
+            yield from iter_odm_reads(child, f"{path}.{key}", derive)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from iter_odm_reads(child, f"{path}[{index}]", derive)
+
+
+def odm_read_sites(spec):
+    """Return (path, location, row_index, payload) for every `odm` read."""
+    sites = []
+
+    def add(derivation, path, location, row=None):
+        if (
+            isinstance(derivation, dict)
+            and 'value' in derivation
+            and set(derivation) <= {'value', 'unconvertible'}
+        ):
+            derivation, path = derivation['value'], f"{path}.value"
+        for read_path, payload, derive in iter_odm_reads(derivation, path):
+            sites.append(
+                (read_path, 'derive' if derive else location, row, payload)
+            )
+
+    for column in spec.get('columns') or []:
+        if isinstance(column, dict) and 'derivation' in column:
+            add(
+                column['derivation'],
+                f"columns.{column.get('name')}.derivation",
+                'column',
+            )
+    for index, row in enumerate(spec.get('rows') or []):
+        if isinstance(row, dict) and isinstance(row.get('derivations'), dict):
+            for name, derivation in row['derivations'].items():
+                add(derivation, f"rows[{index}].derivations.{name}", 'row', index)
+    for index, intermediate in enumerate(spec.get('intermediates') or []):
+        if isinstance(intermediate, dict) and isinstance(
+            intermediate.get('derivations'), dict
+        ):
+            for name, derivation in intermediate['derivations'].items():
+                add(
+                    derivation,
+                    f"intermediates[{index}].derivations.{name}",
+                    'intermediate',
+                )
+    return sites
+
+
+def odm_read_payload(payload):
+    """Return (dataset, item, filter) for an `odm` payload, or None."""
+    if isinstance(payload, str):
+        payload = {'item': payload}
+    if not isinstance(payload, dict):
+        return None
+    item = payload.get('item')
+    if not isinstance(item, str) or '.' not in item:
+        return None
+    selector = payload.get('filter')
+    return (
+        item.split('.', 1)[0],
+        item,
+        selector if isinstance(selector, str) else None,
+    )
+
+
+def odm_inputs(spec):
+    """Return the declared inputs an `odm` read names (REQ-1266)."""
+    declared = spec.get('input')
+    if not isinstance(declared, dict):
+        return frozenset()
+    names = set()
+    for _, _, _, payload in odm_read_sites(spec):
+        parsed = odm_read_payload(payload)
+        if parsed is not None and parsed[0] in declared:
+            names.add(parsed[0])
+    return frozenset(names)
+
+
+def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
+    """Check every `odm` read and the ODM inputs it names (REQ-1265..1278)."""
+    errors = []
+    datasets = spec.get('input')
+    if not isinstance(datasets, dict):
+        return errors
+    rows = [row for row in spec.get('rows') or [] if isinstance(row, dict)]
+    only = next(iter(datasets)) if len(datasets) == 1 else None
+
+    def driver(row):
+        dataset = row.get('dataset')
+        return dataset if isinstance(dataset, str) else only
+
+    for path, location, row_index, payload in odm_read_sites(spec):
+        parsed = odm_read_payload(payload)
+        if parsed is None:
+            continue
+        dataset, item, selector = parsed
+        if dataset not in datasets:
+            errors.append(validation_diagnostic(
+                f"{spec_label}.{path}.item",
+                'unknown_field',
+                f"{item!r} names no declared input",
+                context={'identifier': item},
+            ))
+            continue
+        # REQ-1270: only a row built from the ODM input has a scope.
+        if location in ('intermediate', 'derive'):
+            scoped = False
+        elif location == 'row':
+            scoped = row_index < len(rows) and driver(rows[row_index]) == dataset
+        elif rows:
+            scoped = all(driver(row) == dataset for row in rows)
+        else:
+            base = spec.get('base')
+            scoped = (base if isinstance(base, str) else only) == dataset
+        if not scoped:
+            errors.append(validation_diagnostic(
+                f"{spec_label}.{path}",
+                'invalid_odm_context',
+                f"no row this read evaluates for is built from {dataset!r}",
+                context={'dataset': dataset, 'location': location},
+            ))
+        # REQ-1271: a filter names only schema fields of the ODM input.
+        if selector is not None:
+            for name in sorted(predicate_identifier_names(selector)):
+                qualifier, _, field = name.partition('.')
+                if qualifier != dataset or field not in ODM_SCHEMA_FIELDS:
+                    errors.append(validation_diagnostic(
+                        f"{spec_label}.{path}.filter",
+                        'unknown_field',
+                        f"{name!r} is not a field of the ODM input {dataset!r}",
+                        context={'identifier': name, 'dataset': dataset},
+                    ))
+
+    for dataset in sorted(odm_inputs(spec)):
+        source = datasets[dataset]
+        declared = (
+            next((key for key in ('types', 'schema') if key in source), None)
+            if isinstance(source, dict)
+            else None
+        )
+        if declared is not None:
+            # REQ-1268: an ODM input's types are its schema's.
+            errors.append(validation_diagnostic(
+                f"{spec_label}.input.{dataset}.{declared}",
+                'odm_schema_field_type',
+                f"an ODM input declares no {declared}",
+                context={'dataset': dataset, 'declared': declared},
+            ))
+            continue
+        written = source if isinstance(source, str) else (
+            source.get('path') if isinstance(source, dict) else None
+        )
+        if (
+            not isinstance(written, str)
+            or spec_path is None
+            or not written.lower().endswith('.csv')
+            or classify_written_project_path(written) is not None
+            or rooted_project_segments(written) is not None
+        ):
+            continue
+        resolved = (sources or {}).get((dataset, 'path')) or (
+            spec_path.parent / written
+        )
+        try:
+            with open(resolved, 'r', encoding='utf-8', newline='') as handle:
+                header = next(csv.reader(handle, strict=True), [])
+        except (OSError, UnicodeError, csv.Error):
+            continue
+        _, missing, ambiguous = odm_field_binding(header)
+        if missing:
+            errors.append(validation_diagnostic(
+                f"{spec_label}.input.{dataset}.path",
+                'odm_schema_field_missing',
+                f"the ODM input lacks {', '.join(missing)}",
+                context={'dataset': dataset, 'fields': missing},
+            ))
+        for field, stored in ambiguous.items():
+            errors.append(validation_diagnostic(
+                f"{spec_label}.input.{dataset}.path",
+                'odm_schema_field_ambiguous',
+                f"{', '.join(map(repr, stored))} all name {field!r}",
+                context={'dataset': dataset, 'field': field, 'stored': stored},
+            ))
+    return errors
 
 
 def iter_function_calls(value, path):
@@ -9235,6 +9481,9 @@ def validate_spec_document(
         )
     )
     errors.extend(validate_column_labels(spec, spec_label))
+    errors.extend(
+        validate_spec_odm_reads(spec, spec_label, spec_path, sources)
+    )
     errors.extend(
         validate_spec_contracts(
             spec, spec_label, spec_path, project_root, snapshots, provenance,

@@ -1,0 +1,36 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  # The question is asked again at baseline; the screening answer is read.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation:
+      odm: {item: ODM.IT.DM.SEX, event: SCREENING}
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {odm: ODM.IT.DM.AGE}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]

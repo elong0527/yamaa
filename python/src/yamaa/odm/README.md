@@ -1,6 +1,6 @@
 # ODM helpers
 
-The ODM module owns ingestion and contextual resolution for CDISC ODM data.
+The ODM module owns ingestion and item reads for CDISC ODM data.
 Its three general-purpose file APIs are:
 
 ```python
@@ -36,20 +36,11 @@ result = write_odm_parquet("input.xml", "clinical-items.parquet")
 print(result.row_count)
 ```
 
-For a normalized long-form ODM projection, build one binding plan and share
-one index across row-local expression resolvers:
-
-```python
-from yamaa.odm import BindingIndex, build_binding_plan
-
-plan = build_binding_plan(loaded_spec.specification, loaded_sources)
-index = BindingIndex(plan, loaded_sources)
-resolver = index.context({"ODM": current_odm_row}, {"STUDYID": "STUDY01"})
-```
-
-The index matches every available ODM context column and the complete
-`ItemOID`. It distinguishes an absent item from a matched missing `Value` and
-applies explicit R008 multiple-match policies in deterministic source order.
+The written Parquet file is an ODM input as it stands: a specification that
+declares it and reads it with `odm` binds its eleven schema fields and
+ignores the name columns. `yamaa.odm.items` holds that fixed schema, the
+ASCII case-folding binding of stored names to it, and the parser that finds
+every `odm` read a specification writes.
 
 Run the focused tests from the installed, locked package environment:
 

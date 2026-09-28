@@ -20,6 +20,7 @@ from yamaa.io.source import (
     SourceError,
     load_source_tables,
 )
+from yamaa.odm.items import odm_inputs
 from yamaa.runtime.executor import (
     ExecutionHooks,
     ExecutionResult,
@@ -501,6 +502,9 @@ def execute_workflow(
                 producer_contracts=selected_contracts,
                 producer_snapshots=selected_snapshots,
                 origins=_layer_origins(resolved, datasets),
+                # REQ-1268: the inputs an `odm` expression names are read and
+                # verified under the fixed ODM schema.
+                odm_datasets=odm_inputs(resolved.specification),
             )
             captured.update(loaded)
             if event is not None:

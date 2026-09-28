@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Literal
 
@@ -10,7 +10,12 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.io.csv import CsvProfileFailure, CsvSource, parse_csv
-from yamaa.io.parquet import ParquetProfileFailure, parse_parquet
+from yamaa.io.parquet import (
+    ParquetProfileFailure,
+    parquet_source_fields,
+    parquet_text_columns,
+    parse_parquet,
+)
 from yamaa.io.polars import frame_from_values
 from yamaa.io.profiles import profile_of
 from yamaa.io.project import (
@@ -306,6 +311,222 @@ def _validate_parquet_contract(
     return table
 
 
+def _odm_field_diagnostics(
+    dataset: str,
+    names: Sequence[str],
+    stored_types: Mapping[str, ColumnType | None] | None,
+) -> tuple[dict[str, str], list[SourceDiagnostic]]:
+    """Bind stored fields to the ODM schema and report what REQ-1268 rejects.
+
+    ``stored_types`` is None for a CSV source, whose every field is text; a
+    Parquet source gives each field's type, None where the closed mapping
+    has none.
+    """
+    # The ODM package reads loaded datasets, so it is imported here rather
+    # than at module load, which would make the two modules import each other.
+    from yamaa.odm.items import bind_fields
+
+    binding = bind_fields(names)
+    diagnostics: list[SourceDiagnostic] = []
+    path = (f"input.{dataset}.path",)
+    if binding.missing:
+        diagnostics.append(
+            SourceDiagnostic(
+                phase="validation",
+                condition="odm_schema_field_missing",
+                spec_paths=path,
+                requirement="REQ-1275",
+                context={"dataset": dataset, "fields": list(binding.missing)},
+            )
+        )
+    diagnostics.extend(
+        SourceDiagnostic(
+            phase="validation",
+            condition="odm_schema_field_ambiguous",
+            spec_paths=path,
+            requirement="REQ-1275",
+            context={"dataset": dataset, "field": field, "stored": list(stored)},
+        )
+        for field, stored in binding.ambiguous.items()
+    )
+    if stored_types is not None:
+        diagnostics.extend(
+            SourceDiagnostic(
+                phase="validation",
+                condition="odm_schema_field_type",
+                spec_paths=path,
+                requirement="REQ-1275",
+                context={
+                    "dataset": dataset,
+                    "field": field,
+                    "stored_field": stored,
+                    "stored_type": stored_types[stored] or "unsupported",
+                },
+            )
+            for field, stored in binding.stored.items()
+            if stored_types[stored] != "str"
+        )
+    return binding.stored, diagnostics
+
+
+def _odm_record_diagnostics(
+    dataset: str,
+    table: TypedTable,
+    first_record: int,
+) -> list[SourceDiagnostic]:
+    """Report the first record lacking each identifier REQ-1268 requires."""
+    from yamaa.odm.items import ODM_REQUIRED_VALUES
+
+    diagnostics: list[SourceDiagnostic] = []
+    for field in ODM_REQUIRED_VALUES:
+        lacking = table.frame.with_row_index("record", offset=first_record).filter(
+            pl.col(field).is_null()
+        )
+        if lacking.height:
+            diagnostics.append(
+                SourceDiagnostic(
+                    phase="ingest",
+                    condition="odm_schema_value_missing",
+                    spec_paths=(f"input.{dataset}.path",),
+                    requirement="REQ-1276",
+                    context={
+                        "dataset": dataset,
+                        "field": field,
+                        "record": int(lacking["record"][0]),
+                        "records": lacking.height,
+                    },
+                )
+            )
+    return diagnostics
+
+
+def _odm_table(
+    dataset: str,
+    source: DatasetSource,
+    content: bytes,
+    profile: str,
+) -> TypedTable:
+    """Read an ODM input under its fixed schema (REQ-1266 through REQ-1268).
+
+    Only the schema fields are read, under the schema's names and as `str`;
+    a vendor field is neither typed nor exposed (REQ-1267), which is also
+    what lets a Parquet file carry fields the closed mapping cannot type.
+    """
+    from yamaa.odm.items import ODM_SCHEMA_FIELDS
+
+    if profile == "csv":
+        parsed = parse_csv(content)
+        bound, diagnostics = _odm_field_diagnostics(dataset, parsed.names, None)
+        if diagnostics:
+            raise SourceError(diagnostics)
+        positions = [parsed.names.index(bound[field]) for field in ODM_SCHEMA_FIELDS]
+        projected = CsvSource(
+            names=ODM_SCHEMA_FIELDS,
+            records=tuple(
+                tuple(record[position] for position in positions)
+                for record in parsed.records
+            ),
+        )
+        # CSV records are numbered from the header, which is record one.
+        table = _build_table(dataset, DatasetSource(path=source.path), projected)
+        first_record = 2
+    else:
+        arrow, fields = parquet_source_fields(content)
+        bound, diagnostics = _odm_field_diagnostics(
+            dataset, [name for name, _ in fields], dict(fields)
+        )
+        if diagnostics:
+            raise SourceError(diagnostics)
+        table = parquet_text_columns(
+            arrow, [(bound[field], field) for field in ODM_SCHEMA_FIELDS]
+        )
+        if source.empty_string == "missing":
+            table = _empty_strings_to_missing(table)
+        first_record = 1
+    records = _odm_record_diagnostics(dataset, table, first_record)
+    if records:
+        raise SourceError(records)
+    return table
+
+
+def _odm_declared_diagnostic(
+    dataset: str, source: DatasetSource
+) -> SourceDiagnostic | None:
+    """Reject the `types` or `schema` an ODM input declares (REQ-1268)."""
+    if source.types is None and source.schema_path is None:
+        return None
+    declared = "types" if source.types is not None else "schema"
+    return SourceDiagnostic(
+        phase="validation",
+        condition="odm_schema_field_type",
+        spec_paths=(f"input.{dataset}.{declared}",),
+        requirement="REQ-1275",
+        context={"dataset": dataset, "declared": declared},
+    )
+
+
+def odm_schema_sources(
+    datasets: Mapping[str, DatasetSource],
+    sources: Mapping[str, LoadedDataset | TypedTable],
+    odm_datasets: Collection[str],
+) -> dict[str, LoadedDataset | TypedTable]:
+    """Hold every ODM input a caller supplied to its fixed schema.
+
+    Ingestion given ``odm_datasets`` has already read each ODM input under
+    the schema, and that table passes unchanged. A table read any other way,
+    or handed over directly, is bound, verified, and projected to the schema
+    here, so no `odm` read reaches an unverified input whichever provider
+    supplied it (REQ-1268).
+    """
+    from yamaa.odm.items import ODM_SCHEMA_FIELDS
+
+    held = dict(sources)
+    diagnostics: list[SourceDiagnostic] = []
+    for dataset in sorted(set(odm_datasets) & set(sources)):
+        declared = _odm_declared_diagnostic(dataset, datasets[dataset])
+        if declared is not None:
+            diagnostics.append(declared)
+            continue
+        supplied = sources[dataset]
+        table = supplied.table if isinstance(supplied, LoadedDataset) else supplied
+        bound, fields = _odm_field_diagnostics(
+            dataset,
+            [column.name for column in table.columns],
+            {column.name: column.type for column in table.columns},
+        )
+        if fields:
+            diagnostics.extend(fields)
+            continue
+        if tuple(column.name for column in table.columns) != ODM_SCHEMA_FIELDS:
+            table = TypedTable(
+                columns=tuple(
+                    TypedColumn(name=field, type="str") for field in ODM_SCHEMA_FIELDS
+                ),
+                frame=table.frame.select(
+                    pl.col(bound[field]).alias(field) for field in ODM_SCHEMA_FIELDS
+                ),
+            )
+        # CSV records are numbered from the header, which is record one.
+        first_record = (
+            2
+            if isinstance(supplied, LoadedDataset)
+            and profile_of(supplied.written_path) == "csv"
+            else 1
+        )
+        records = _odm_record_diagnostics(dataset, table, first_record)
+        if records:
+            diagnostics.extend(records)
+            continue
+        held[dataset] = (
+            supplied.model_copy(update={"table": table})
+            if isinstance(supplied, LoadedDataset)
+            else table
+        )
+    if diagnostics:
+        raise SourceError(diagnostics)
+    return held
+
+
 def load_source_tables(
     datasets: Mapping[str, DatasetSource],
     resources: ProjectResources,
@@ -313,6 +534,7 @@ def load_source_tables(
     producer_contracts: Mapping[str, ProducerContract] | None = None,
     producer_snapshots: Mapping[str, ResourceSnapshot] | None = None,
     origins: Mapping[str, tuple[Path, str]] | None = None,
+    odm_datasets: Collection[str] = (),
 ) -> dict[str, LoadedDataset]:
     """Capture, verify, and ingest normalized dataset declarations.
 
@@ -320,6 +542,8 @@ def load_source_tables(
     path and that layer's own spelling. REQ-0780 resolves the path from
     there and retries that spelling from the project root and data roots;
     a dataset without an origin resolves ``source.path`` from ``resources``.
+    ``odm_datasets`` names the ODM inputs, which are read under the fixed
+    ODM schema rather than the generic field typing (REQ-1268).
     """
     contracts = producer_contracts or {}
     snapshots = producer_snapshots or {}
@@ -335,6 +559,15 @@ def load_source_tables(
     for dataset, source in datasets.items():
         view, written = views[dataset]
         profile = profile_of(source.path)
+        declared = (
+            _odm_declared_diagnostic(dataset, source)
+            if dataset in odm_datasets
+            else None
+        )
+        if declared is not None:
+            # REQ-1268: an ODM input's types are its schema's.
+            diagnostics.append(declared)
+            continue
         if source.schema_path is not None and source.types is not None:
             diagnostics.extend(
                 SourceDiagnostic(
@@ -414,7 +647,9 @@ def load_source_tables(
             seen.add(id(snapshot))
             profile = profile_of(source.path)
             assert profile is not None
-            if profile == "csv":
+            if dataset in odm_datasets:
+                table = _odm_table(dataset, source, snapshot.content, profile)
+            elif profile == "csv":
                 parsed = parse_csv(snapshot.content)
                 table = _build_table(dataset, source, parsed, contracts.get(dataset))
             else:

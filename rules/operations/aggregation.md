@@ -79,8 +79,8 @@ under [Lookup and joins](lookup.md).
 <a id="req-0469"></a>
 
 **REQ-0469.** An ODM contextual reference is not available in this grammar. ODM
-item identifiers carry further periods. Bind the reference with a structured
-`source` first.
+item identifiers carry further periods. Read the item into a column with
+[`odm`](../specification/binding.md#req-1265) first.
 
 <a id="req-0470"></a>
 

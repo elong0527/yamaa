@@ -110,8 +110,8 @@ joins. The source uses its own handlers after it holds a value.
 <a id="req-0353"></a>
 
 **REQ-0353.** `multiple_matches` relaxes right-side uniqueness wherever one
-source reaches several records: [Lookup and joins](../operations/lookup.md)'s matched records, an ODM item's
-contextual matches, and the records a key combination was derived from.
+source reaches several records: [Lookup and joins](../operations/lookup.md)'s matched records and the
+records a key combination was derived from.
 Disagreement among those records is otherwise fatal under [REQ-0075](lifecycle.md#req-0075).
 
 <a id="req-0354"></a>

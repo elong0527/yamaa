@@ -2,9 +2,7 @@ schema_version: "1.0"
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  ODM:
-    path: input/odm.csv
-    types: {ItemGroupRepeatKey: int}
+  ODM: input/odm.csv
   DM:
     path: input/dm.csv
     types: {RFSTDTC: date}
@@ -78,32 +76,12 @@ columns:
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
-    derivation:
-      aggregate:
-        filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
-        key:
-          StudyOID: ODM.StudyOID
-          SubjectKey: ODM.SubjectKey
-          StudyEventOID: ODM.StudyEventOID
-          FormOID: ODM.FormOID
-          ItemGroupOID: ODM.ItemGroupOID
-          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.LB.LBDTC}
 
   - name: LBSTAT
     type: str
     label: Completion Status
-    derivation:
-      aggregate:
-        filter: "ODM.ItemOID = 'IT.LB.LBSTAT'"
-        key:
-          StudyOID: ODM.StudyOID
-          SubjectKey: ODM.SubjectKey
-          StudyEventOID: ODM.StudyEventOID
-          FormOID: ODM.FormOID
-          ItemGroupOID: ODM.ItemGroupOID
-          ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
-        expr: "ONLY(ODM.Value)"
+    derivation: {odm: ODM.IT.LB.LBSTAT}
 
   - name: RFSTDTC
     type: date
