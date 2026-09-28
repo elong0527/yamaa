@@ -69,8 +69,9 @@ def eval_expr(node, ctx):
 
 
 def _source_var_payload(payload):
-    """Normalize the `source` expression payload to (variable, filter, missing,
-    selection). REQ-0111: a structured source keeps its `order_by`/`keep`."""
+    """Normalize the `source` expression payload to (variable, filter, absent,
+    selection). REQ-0111: a structured source keeps its `order_by`/`keep`;
+    REQ-1051: its `absent` answers a variable no record supplies."""
     if isinstance(payload, str):
         return payload, None, _ABSENT, None
     if not isinstance(payload, dict):
@@ -81,7 +82,7 @@ def _source_var_payload(payload):
     return (
         payload.get("variable"),
         payload.get("filter"),
-        payload.get("missing", _ABSENT),
+        payload.get("absent", _ABSENT),
         sel,
     )
 
