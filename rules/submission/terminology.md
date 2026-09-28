@@ -148,9 +148,7 @@ terminology.
 
 **REQ-0946.** Every codelist the study document declares must be named by at
 least one binding among the datasets the study document represents. An
-unreferenced codelist is rejected rather than emitted. The codelist
-would put terminology into a submission that no column carries. The
-usual cause is a binding that misspells its identifier.
+unreferenced codelist is rejected rather than emitted.
 
 ### Study-inventory vocabulary
 
