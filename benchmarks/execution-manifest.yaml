@@ -51,6 +51,9 @@ examples:
   adam-adae-text-cleanup:
     status: executable
     runtimes: ['python']
+  adam-adae-worsening-emergence:
+    status: executable
+    runtimes: ['python']
   adam-adae-worst-severity:
     status: executable
     runtimes: ['python']

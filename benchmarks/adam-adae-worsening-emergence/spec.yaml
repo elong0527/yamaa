@@ -1,0 +1,100 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, TRTSDTM, AESEV, TRTEMFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation: AE.AESTDTC
+
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation: ADSL.TRTSDTM
+
+  - name: AESEV
+    type: str
+    label: Severity/Intensity
+    derivation: AE.AESEV
+    verifications:
+      allowed_values:
+        values: [MILD, MODERATE, SEVERE]
+
+  # Numeric rank of the collected severity, so a later episode can be
+  # compared with an earlier one for the same term. Not in the output.
+  - name: AESEVN
+    type: int
+    label: Severity/Intensity (N)
+    derivation:
+      mapping:
+        source: AESEV
+        dict:
+          MILD: 1
+          MODERATE: 2
+          SEVERE: 3
+        missing: null
+
+  # Highest severity reached at or after first exposure, within the
+  # subject and term. A comparison with a missing moment is unknown,
+  # so rows with no onset or no exposure never contribute. Not in
+  # the output.
+  - name: POSTMAX
+    type: int
+    label: Maximum Post-Treatment Severity (N)
+    derivation:
+      aggregate:
+        filter: "ASTDTM >= TRTSDTM"
+        group_by: [STUDYID, USUBJID, AEDECOD]
+        expr: "MAX(AESEVN)"
+
+  # A comparison with a missing value is unknown, never true, so the
+  # flag stays empty when the onset, the severity, the post-treatment
+  # maximum, or the first exposure is missing.
+  - name: TRTEMFL
+    type: str
+    label: Treatment Emergent Analysis Flag
+    derivation:
+      flag: "ASTDTM >= TRTSDTM OR (ASTDTM < TRTSDTM AND AESEVN < POSTMAX)"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 12
+      max: 12
+  - implies:
+      id: treatment-emergent-event-has-known-onset-and-exposure
+      when: "TRTEMFL = 'Y'"
+      then: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL"
