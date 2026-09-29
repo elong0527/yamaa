@@ -75,13 +75,19 @@ what has no Excel counterpart at all. Four things:
    but nothing executes it. The `implies` rule -- "BMI is empty only when
    height is unusable" -- normally survives as a sentence in a review email.
 
-Going the other way, two of the eleven columns have no yamaa field:
+Going the other way, every one of the eleven columns has a yamaa field --
+two live in governed submission metadata rather than in the derivation:
 
 - **`Core`** is a conformance classification against a CDISC implementation
-  guide, not a statement about derivation. It travels in `column.metadata`.
-- **`Comments for Define`** is documentation by definition -- also
-  `column.metadata`. The template already separates it from `Conversion
-  Definition`; yamaa just makes the split executable-vs-not.
+  guide, not a statement about derivation. It travels in `submission.core`
+  (`Req` / `Exp` / `Perm` for SDTM; `Req` / `Cond` / `Perm` for ADaM).
+- **`Comments for Define`** is documentation by definition --
+  `submission.comment`. The template already separates it from `Conversion
+  Definition`; yamaa just makes the split executable-vs-governed-metadata.
+
+The free-form `column.metadata` map is uninterpreted annotation only: it is
+never merged with submission metadata and must not carry a governed key such
+as `core`, `codelist`, `length`, or `comment`.
 
 ---
 
@@ -107,17 +113,17 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Variable Name` | `column.name` | |
 | `Variable Label` | `column.label` | |
 | `Type` (Char / Num) | `column.type` | Closed set of five: `str` `int` `float` `date` `datetime` |
-| `Length` | a `max_length` verification | It is a constraint, so it becomes an executed one. Add `column.metadata.length` when define.xml needs to show it |
+| `Length` | a `max_length` verification plus `submission.length` | It is a constraint, so it becomes an executed one. `submission.length` is what define.xml shows; on a `str` column with a `max_length` verification it is derived from `max` and need not be declared separately |
 | Significant digits / display format | *project setting* | Decimal places belong to the project, not the spec (Types and conversion) |
-| `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `column.metadata.codelist` | Translation and enforcement separate here too |
+| `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `submission.codelist` | Translation and enforcement separate here too; `submission.codelist` names a codelist the study document declares |
 | `Origin` = Assigned | `literal: DM` | |
 | `Origin` = Collected (CRF / eDT) | `odm: ODM.IT.DM.AGE` | Reads the one record of the item among the ODM records the row was built from; `event`, `form`, `item_group`, and `filter` narrow it (Name binding) |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name reads that dataset through the implicit join on the output keys (Lookup and joins) |
 | `Origin` = Derived | a specific expression | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
-| `Core` (Req / Exp / Perm for SDTM; Req / Cond / Perm for ADaM) | `column.metadata` | Conformance classification; it says nothing about derivation |
+| `Core` (Req / Exp / Perm for SDTM; Req / Cond / Perm for ADaM) | `submission.core` | Conformance classification; it says nothing about derivation |
 | `Conversion Definition` | `derivation:` | From a sentence a person reads to an expression a machine runs |
 | `Variable Order` | `columns` order **and** `output.columns` | One Excel column doing two jobs |
-| `Comments for Define` | `column.metadata` | Free key-value, never validated, for define generation |
+| `Comments for Define` | `submission.comment` | Sponsor note carried with the column definition, for define generation |
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
 | "if not collected then U" | the `missing:` handler | |
 | "if not in codelist then 99" | the `unmapped:` handler | Without `unmapped:`, an unlisted value stops the run |
@@ -133,6 +139,51 @@ Excel has one Codelist column. yamaa separates by where the vocabulary lives:
 | Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | a named intermediate | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
 | Numeric banding (AGEGR1, BMI categories) | `cut` | [Example 1](#example-1-direct-mapping-a-codelist-and-numeric-banding) |
+
+### Where the codelist name lives
+
+One Excel `Controlled Terms or Format` cell collapses two declarations. yamaa
+keeps them apart: the spec names the codelist, and the study document declares
+it. From
+[`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata),
+`spec.yaml` first:
+
+```yaml
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_RAW.SEX
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 1
+      codelist: SEX
+      origin:
+        type: Collected
+        source: Investigator
+```
+
+then the `codelists:` entry in `define.yaml` that the binding names:
+
+```yaml
+codelists:
+  - id: SEX
+    name: Sex
+    standard: CT_SDTM
+    items:
+      - value: F
+        decode: Female
+      - value: M
+        decode: Male
+      - value: U
+        decode: Unknown
+```
+
+`submission.codelist` carries the `id`, not the values. The document carries
+the values once, and every column naming that `id` shares the one statement.
+When the bound codelist declares `items`, an `allowed_values` verification on
+the same column must list the same values -- the check the run executes and
+the terminology the document publishes stay in agreement.
 
 ### 2.4 Value-level metadata
 
@@ -207,7 +258,8 @@ What changed:
   handler stops the run instead of turning into a blank.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
-  itself goes in `column.metadata.codelist` if you generate define.xml.
+  itself goes in `submission.codelist` if you generate define.xml -- see
+  [Where the codelist name lives](#where-the-codelist-name-lives) below.
 
 ### Example 2: a Comment sentence becomes `compute`
 
@@ -290,6 +342,6 @@ benchmark for the full side-by-side:
 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `aggregate`-with-`filter` / `row_number` as columns |
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
-| [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
+| [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `submission` vs `verifications`: Length becomes both `submission.length` (for define.xml) and a `max_length` check |
 | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) | Coding against MedDRA with a named intermediate; several columns read the one record it selects |
 | [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |
