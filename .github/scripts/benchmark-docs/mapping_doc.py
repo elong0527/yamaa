@@ -18,6 +18,7 @@ other non-ASCII glyphs are emitted as HTML character references.
 """
 
 import html
+import re
 from pathlib import Path
 
 # ASCII escape sequences keep this file ASCII-clean for the repository source
@@ -27,21 +28,355 @@ ARROW = "\u2192"
 MAPPING_TABS_JS_PATH = Path(__file__).resolve().parent / "mapping-tabs.js"
 
 # Sentence templates: one plain-language mapping rule per derivation shape.
+#
+# A reviewer reads the value a column ends up holding, not the pipeline that
+# produced it. A reference into an `intermediates:` lookup is therefore
+# resolved in place: the sentence names the donor record -- its dataset, join
+# key, range, filter, ordering, and no-match value -- and never prints the
+# intermediate's id, which is an internal handle with no counterpart in a
+# sponsor's Excel specification.
+
+# A lookup whose donor record is itself selected through another lookup would
+# nest without bound; two levels is as deep as a readable sentence goes, and
+# below that a reference keeps only its column name.
+MAX_LOOKUP_DEPTH = 2
+
+# A qualified reference inside a predicate or formula. The leading identifier
+# rules out a decimal number, and a quoted literal carries no bare period, so
+# only real DATASET.COLUMN references match.
+REFERENCE_PATTERN = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b"
+)
+
+
+class SpecContext:
+    """The lookups a derivation is read against.
+
+    Built once per spec so each describer can resolve an
+    `INTERMEDIATE.COLUMN` reference without threading the whole spec through
+    every call. Describers called without one -- on a bare node, as the tests
+    do -- leave such references exactly as the spec writes them.
+    """
+
+    def __init__(self, spec=None):
+        spec = spec or {}
+        self.lookups = {
+            str(item.get("id")): item
+            for item in (spec.get("intermediates") or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+
+    def lookup(self, name):
+        return self.lookups.get(name)
+
+
+EMPTY_CONTEXT = SpecContext()
+
+
+def context(ctx):
+    return ctx if isinstance(ctx, SpecContext) else EMPTY_CONTEXT
+
+
+def literal_text(value):
+    """A declared literal as a reviewer reads it; a null handler is a blank cell."""
+    return "blank" if value is None else '"' + str(value) + '"'
+
+
+def join_and(parts):
+    """'A', 'A and B', 'A, B and C' -- never a trailing comma that reads as a
+    fourth item when the parts themselves contain commas."""
+    parts = [str(p) for p in parts if str(p)]
+    if len(parts) < 2:
+        return "".join(parts)
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def listed(lead, parts):
+    """'<lead> A and B'; items carrying their own commas are separated by
+    semicolons after a colon instead, so the reader sees where each one ends."""
+    parts = [str(p) for p in parts if str(p)]
+    if any("," in p for p in parts):
+        return lead + ": " + "; ".join(parts)
+    return lead + " " + join_and(parts)
+
+
+def join_then(parts):
+    return " then ".join(str(p) for p in parts if str(p))
+
+
+def sentence(text):
+    """One rule, punctuated once."""
+    text = str(text).strip()
+    return text if text.endswith(".") else text + "."
+
+
+def clause(text):
+    """A described expression reused mid-sentence, with its full stop dropped."""
+    return str(text).rstrip(".")
+
+
+def order_terms(terms):
+    """Ordering terms; direction and null placement stated only when declared."""
+    out = []
+    for term in terms or []:
+        if isinstance(term, dict):
+            text = str(term.get("variable", ""))
+            if term.get("direction") == "desc":
+                text += " descending"
+            if term.get("nulls"):
+                text += " (nulls " + str(term["nulls"]) + ")"
+        else:
+            text = str(term)
+        out.append(text)
+    return join_then(out)
+
+
+def split_reference(text):
+    """('MEDDRA_CODING', 'PTNAME') for a qualified reference, else (None, text)."""
+    if isinstance(text, str) and "." in text:
+        head, _, tail = text.partition(".")
+        return head, tail
+    return None, text
+
+
+# --- Lookups rendered as the donor record they select ----------------------
+
+
+def between_clause(between):
+    """An inclusive range match, worded for dates and numbers alike."""
+    value = str(between.get("value", ""))
+    lower = between.get("lower")
+    upper = between.get("upper")
+    if lower and upper:
+        return "where " + value + " falls within " + str(lower) + " to " + str(upper)
+    if lower:
+        return "where " + value + " is " + str(lower) + " or more"
+    return "where " + value + " is " + str(upper) + " or less"
+
+
+def match_clauses(node, ctx=None, depth=0):
+    """Join key, range, and filter conditions selecting the donor records."""
+    clauses = []
+    key = node.get("key")
+    if isinstance(key, dict):
+        clauses.append(
+            "whose "
+            + join_and(
+                [
+                    str(column) + " equals " + match_value(value, ctx, depth)
+                    for column, value in key.items()
+                ]
+            )
+        )
+    elif isinstance(key, list):
+        clauses.append("matching on " + join_and([str(k) for k in key]))
+    elif isinstance(key, str):
+        clauses.append("matching on " + key)
+    else:
+        # An omitted key matches on the output keys the donor dataset also
+        # carries (REQ-0150), so the reviewer is told a join still happens.
+        clauses.append("matching on the shared output keys")
+    between = node.get("between")
+    if isinstance(between, dict):
+        clauses.append(between_clause(between))
+    if node.get("filter"):
+        clauses.append("where " + describe_expression_text(node["filter"], ctx, depth))
+    return clauses
+
+
+def match_value(value, ctx=None, depth=0):
+    """The current-row side of one join key: a variable, or a computed value."""
+    if isinstance(value, dict):
+        return "(" + clause(describe_derivation(value, ctx, depth)) + ")"
+    return describe_variable(value, ctx, depth)
+
+
+def no_match_phrase(lookup):
+    """What an unmatched row yields, as a trailing parenthetical.
+
+    An absent `no_match` makes an unmatched row fatal (REQ-0124), which is the
+    reviewable fact -- not an omission to render as a blank cell.
+    """
+    if "no_match" not in lookup:
+        return "(a row with no match is an error)"
+    return "(" + literal_text(lookup["no_match"]) + " when no record matches)"
+
+
+def record_phrase(lookup, column=None, ctx=None, depth=0):
+    """The donor record a lookup selects, named by its dataset.
+
+    `column`, when it is one of the lookup's own `derivations`, is explained in
+    place so the reviewer sees where a value with no stored counterpart in the
+    donor dataset comes from.
+    """
+    dataset = str(lookup.get("dataset") or "")
+    keep = lookup.get("keep")
+    position = str(keep) + " " if keep else ""
+    if dataset.upper() == "SELF":
+        noun = "the " + position + "already-derived row of this dataset"
+    else:
+        noun = "the " + position + dataset + " record"
+    clauses = match_clauses(lookup, ctx, depth)
+    ordering = order_terms(lookup.get("order_by"))
+    if ordering:
+        clauses.append("ordered by " + ordering)
+    derivations = lookup.get("derivations") or {}
+    if column in derivations and depth < MAX_LOOKUP_DEPTH:
+        clauses.append(
+            "where "
+            + str(column)
+            + " is derived as "
+            + value_phrase(derivations[column], ctx, depth)
+        )
+    return noun + (" " + ", ".join(clauses) if clauses else "")
+
+
+def describe_variable(variable, ctx=None, depth=0):
+    """One variable slot, with a lookup reference resolved to its donor record."""
+    if not isinstance(variable, str):
+        return str(variable)
+    head, tail = split_reference(variable)
+    lookup = context(ctx).lookup(head) if head else None
+    if lookup is None:
+        return variable
+    if depth >= MAX_LOOKUP_DEPTH:
+        return tail
+    return (
+        tail
+        + " from "
+        + record_phrase(lookup, tail, ctx, depth + 1)
+        + " "
+        + no_match_phrase(lookup)
+    )
+
+
+def value_phrase(derivation, ctx=None, depth=0):
+    """A derivation as a noun phrase, for reuse inside a larger sentence.
+
+    A describer writes a standalone rule ("Take QVAL from ..."), which reads
+    wrong after "where ENDPOINT is"; the leading capital is what marks it as a
+    sentence, so dropping it is all the repair needed.
+    """
+    if isinstance(derivation, str):
+        return describe_variable(derivation, ctx, depth)
+    text = clause(describe_derivation(derivation, ctx, depth))
+    return text[:1].lower() + text[1:] if text else text
+
+
+def describe_expression_text(text, ctx=None, depth=0):
+    """A predicate or formula with its lookup references made readable.
+
+    Spelling a donor record out where the reference sits would bury the
+    condition, so the reference keeps only its column name and the record it
+    came from is named once, after the expression.
+    """
+    ctx = context(ctx)
+    if not isinstance(text, str) or not ctx.lookups:
+        return str(text)
+    seen = []
+
+    def swap(match):
+        head, tail = match.group(1), match.group(2)
+        if ctx.lookup(head) is None:
+            return match.group(0)
+        if (head, tail) not in seen:
+            seen.append((head, tail))
+        return tail
+
+    rewritten = REFERENCE_PATTERN.sub(swap, text)
+    if not seen or depth >= MAX_LOOKUP_DEPTH:
+        return rewritten
+    origins = [
+        tail
+        + " taken from "
+        + record_phrase(ctx.lookup(head), tail, ctx, depth + 1)
+        + " "
+        + no_match_phrase(ctx.lookup(head))
+        for head, tail in seen
+    ]
+    return rewritten + ", with " + join_and(origins)
+
+
+def describe_reference(variable, ctx=None, depth=0):
+    """A column that is one value copied in, from this row or another dataset."""
+    head, tail = split_reference(variable)
+    lookup = context(ctx).lookup(head) if head else None
+    if lookup is None:
+        return "Copy value from " + str(variable) + "."
+    return sentence(
+        "Take "
+        + tail
+        + " from "
+        + record_phrase(lookup, tail, ctx, depth + 1)
+        + " "
+        + no_match_phrase(lookup)
+    )
+
+
+def describe_window(window, ctx=None, depth=0):
+    """A window clause: a named window, or its partition and ordering inline."""
+    if isinstance(window, str):
+        return "using window " + window
+    if not isinstance(window, dict):
+        return ""
+    parts = []
+    groups = window.get("group_by")
+    if groups:
+        parts.append("within each (" + ", ".join(str(g) for g in groups) + ")")
+    ordering = order_terms(window.get("order_by"))
+    if ordering:
+        parts.append("ordered by " + ordering)
+    if window.get("filter"):
+        parts.append("over rows where " + str(window["filter"]))
+    return ", ".join(parts)
+
+
+def with_window(text, node, ctx=None, depth=0):
+    window = describe_window(node.get("window"), ctx, depth)
+    return text + (" " + window if window else "")
+
+
+def handler_phrase(node, field, label):
+    """'; missing input -> "X"' for one declared handler, or nothing."""
+    if field not in node:
+        return ""
+    return "; " + label + " " + ARROW + " " + literal_text(node[field])
+
+
+# --- One describer per derivation shape ------------------------------------
 
 
 def describe_literal(value):
     return 'Set constant value "' + str(value) + '".'
 
 
-def describe_source(src):
-    filt = src.get("filter")
-    var = src.get("variable")
-    if filt:
-        return "Copy value from " + str(var) + " where " + str(filt) + "."
-    return "Copy value from " + str(var) + "."
+def describe_source(src, ctx=None, depth=0):
+    """A `source:` binding: the variable, plus any record selection it declares."""
+    if isinstance(src, str):
+        return describe_reference(src, ctx, depth)
+    variable = src.get("variable")
+    head, _ = split_reference(variable)
+    lookup = context(ctx).lookup(head) if head else None
+    if lookup is not None:
+        return describe_reference(variable, ctx, depth)
+    selection = []
+    if src.get("filter"):
+        selection.append("where " + str(src["filter"]))
+    ordering = order_terms(src.get("order_by"))
+    if ordering:
+        keep = src.get("keep")
+        selection.append(
+            ("keeping the " + str(keep) + " " if keep else "")
+            + "ordered by "
+            + ordering
+        )
+    text = "Copy value from " + str(variable)
+    if selection:
+        text += " " + ", ".join(selection)
+    return sentence(text + handler_phrase(src, "absent", "an absent source"))
 
 
-def describe_mapping(mapping):
+def describe_mapping(mapping, ctx=None, depth=0):
     src = mapping.get("source", {})
     if isinstance(src, str):
         var, filt = src, None
@@ -64,7 +399,9 @@ def describe_mapping(mapping):
         tail = "; missing or unlisted values " + absent
     else:
         tail = "; missing values " + absent + "; unlisted values " + unlisted
-    return "Recode " + str(var) + where + rule + tail + "."
+    if not mapping.get("case_sensitive", True):
+        tail += "; matching ignores letter case"
+    return "Recode " + describe_variable(var, ctx, depth) + where + rule + tail + "."
 
 
 def describe_mapping_handler(mapping, handler):
@@ -79,40 +416,415 @@ def describe_mapping_handler(mapping, handler):
     return "stay missing" if value is None else ARROW + ' "' + str(value) + '"'
 
 
-def describe_case(branches):
+def describe_case(branches, ctx=None, depth=0):
+    """A branch ladder; an `otherwise:` branch carries the value in its own key."""
     parts = []
     has_otherwise = False
-    for branch in branches:
-        when = branch.get("when")
-        then = branch.get("then", {})
-        then_text = then.get("literal", then) if isinstance(then, dict) else then
-        if when:
-            parts.append("If " + str(when) + ' then "' + str(then_text) + '"')
-        else:
+    for branch in branches or []:
+        if not isinstance(branch, dict):
+            continue
+        if "otherwise" in branch:
             has_otherwise = True
-            parts.append('otherwise "' + str(then_text) + '"')
+            parts.append(
+                "otherwise " + describe_case_result(branch["otherwise"], ctx, depth)
+            )
+        else:
+            parts.append(
+                "If "
+                + describe_expression_text(branch.get("when"), ctx, depth)
+                + " then "
+                + describe_case_result(branch.get("then"), ctx, depth)
+            )
     if not has_otherwise:
         parts.append("otherwise blank")
     return "; ".join(parts) + "."
 
 
-def describe_row_number(node):
+def describe_case_result(result, ctx=None, depth=0):
+    """A branch result: a literal, or a nested expression described in place."""
+    if isinstance(result, dict):
+        if "literal" in result:
+            return '"' + str(result["literal"]) + '"'
+        return value_phrase(result, ctx, depth)
+    return '"' + str(result) + '"'
+
+
+def describe_flag(node, ctx=None, depth=0):
+    """`flag` is the one-branch `case` that yields a flag value (REQ-1256)."""
+    if not isinstance(node, dict):
+        return (
+            '"Y" when '
+            + describe_expression_text(node, ctx, depth)
+            + "; blank otherwise."
+        )
+    condition = describe_expression_text(node.get("condition"), ctx, depth)
+    true_value = literal_text(node.get("true_value", "Y"))
+    false_value = literal_text(node.get("false_value"))
+    text = true_value + " when " + condition + "; " + false_value + " otherwise"
+    # An unknown condition never falls through to false_value (REQ-1257).
+    if "missing" in node:
+        text += "; " + literal_text(node["missing"]) + " when the condition is unknown"
+    else:
+        text += "; blank when the condition is unknown"
+    return sentence(text)
+
+
+def describe_first_available(node, ctx=None, depth=0):
+    sources = []
+    for src in node.get("sources") or []:
+        if isinstance(src, dict):
+            text = describe_variable(src.get("variable"), ctx, depth)
+            if src.get("filter"):
+                text += " where " + str(src["filter"])
+            sources.append(text)
+        else:
+            sources.append(describe_variable(src, ctx, depth))
+    text = listed("First non-missing of", sources)
+    return sentence(text + handler_phrase(node, "missing", "all missing"))
+
+
+def describe_extreme(node, word, ctx=None, depth=0):
+    return sentence(
+        listed(
+            word + " of",
+            [describe_variable(s, ctx, depth) for s in node.get("sources") or []],
+        )
+    )
+
+
+def describe_aggregate(node, ctx=None, depth=0):
+    """A summary over donor records, with the records it summarises named."""
+    if not isinstance(node, dict):
+        return "Aggregate " + describe_expression_text(node, ctx, depth) + "."
+    text = "Aggregate " + describe_expression_text(node.get("expr"), ctx, depth)
+    clauses = []
+    groups = node.get("group_by")
+    if groups:
+        clauses.append("grouped by " + ", ".join(str(g) for g in groups))
+    clauses.extend(match_clauses(node, ctx, depth))
+    derive = node.get("derive") or []
+    for binding in derive:
+        if isinstance(binding, dict):
+            clauses.append(
+                "with "
+                + str(binding.get("name"))
+                + " as "
+                + value_phrase(binding.get("derivation"), ctx, depth)
+            )
+    if clauses:
+        text += " over records " + ", ".join(clauses)
+    return sentence(text)
+
+
+def describe_odm(node):
+    """One collected item read from the row's ODM scope."""
+    if isinstance(node, str):
+        node = {"item": node}
+    if not isinstance(node, dict):
+        return str(node)
+    _, item = split_reference(node.get("item"))
+    text = "Read collected ODM item " + str(item)
+    for field, label in (
+        ("event", "in event "),
+        ("form", "on form "),
+        ("item_group", "in item group "),
+    ):
+        value = node.get(field)
+        if value:
+            names = value if isinstance(value, list) else [value]
+            text += " " + label + join_and([str(n) for n in names])
+    if node.get("filter"):
+        text += " where " + str(node["filter"])
+    return sentence(text + "; no identified record yields blank")
+
+
+def describe_function(node):
+    args = []
+    for name, value in (node.get("args") or {}).items():
+        if isinstance(value, dict):
+            value = (
+                value.get("literal")
+                if "literal" in value
+                else value.get("date", value.get("datetime"))
+            )
+        args.append(str(name) + " = " + str(value))
+    text = "Call project function " + str(node.get("name"))
+    version = node.get("contract_version")
+    if version:
+        text += " (contract " + str(version) + ")"
+    if args:
+        text += " with " + join_and(args)
+    return sentence(text)
+
+
+def describe_cut(node, ctx=None, depth=0):
+    breaks = [str(b) for b in node.get("breaks") or []]
+    labels = ['"' + str(label) + '"' for label in node.get("labels") or []]
+    closed = (
+        "intervals closed on the right"
+        if node.get("right")
+        else "intervals closed on the left"
+    )
+    text = (
+        "Band "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " at "
+        + ", ".join(breaks)
+        + " into "
+        + join_and(labels)
+        + " ("
+        + closed
+        + ")"
+    )
+    return sentence(text + handler_phrase(node, "missing", "a missing source"))
+
+
+def describe_date_diff(node, ctx=None, depth=0):
+    unit = str(node.get("unit", ""))
+    bounds = str(node.get("bounds") or "exclusive")
+    counted = {
+        "exclusive": "counting the end date but not the start",
+        "inclusive": "counting both endpoints",
+        "between": "counting neither endpoint",
+    }.get(bounds, "counting " + bounds)
+    return sentence(
+        "Whole "
+        + unit
+        + "s from "
+        + describe_variable(node.get("start"), ctx, depth)
+        + " to "
+        + describe_variable(node.get("end"), ctx, depth)
+        + ", "
+        + counted
+    )
+
+
+def describe_study_day(node, ctx=None, depth=0):
+    return sentence(
+        "CDISC study day of "
+        + describe_variable(node.get("date"), ctx, depth)
+        + " against "
+        + describe_variable(node.get("reference"), ctx, depth)
+        + " as day 1; there is no day zero"
+    )
+
+
+def describe_to_date(node, ctx=None, depth=0):
+    return sentence(
+        "Take the date part of " + describe_variable(node.get("source"), ctx, depth)
+    )
+
+
+def describe_to_epoch_day(node, ctx=None, depth=0):
+    return sentence(
+        "Days since 1970-01-01 for " + describe_variable(node.get("source"), ctx, depth)
+    )
+
+
+def describe_precision(node, word, ctx=None, depth=0):
+    text = (
+        "Collected "
+        + word
+        + " precision of "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ": D for a complete date, M for year and month, Y for a year alone"
+    )
+    text += handler_phrase(node, "missing", "a missing source")
+    return sentence(text + handler_phrase(node, "invalid", "invalid text"))
+
+
+def describe_date_impute(node, ctx=None, depth=0):
+    bits = []
+    if node.get("month") is not None:
+        bits.append("month=" + str(node["month"]))
+    if node.get("day") is not None:
+        bits.append("day=" + str(node["day"]))
+    text = (
+        "Impute incomplete date from "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", defaulting "
+        + ", ".join(bits)
+    )
+    if node.get("not_before"):
+        text += ", never before " + str(node["not_before"])
+    text += handler_phrase(node, "missing", "a missing source")
+    text += handler_phrase(node, "invalid", "invalid text")
+    if "missing" not in node and "invalid" not in node:
+        text += "; missing or invalid input yields null"
+    return sentence(text)
+
+
+def describe_datetime_impute(node, ctx=None, depth=0):
+    time = str(node.get("time", ""))
+    instant = (
+        "the first instant of the day"
+        if time == "first"
+        else "the last instant of the day"
+    )
+    text = (
+        "Impute incomplete datetime from "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", defaulting the time to "
+        + instant
+    )
+    text += handler_phrase(node, "missing", "a missing source")
+    return sentence(text + handler_phrase(node, "invalid", "invalid text"))
+
+
+def describe_round(node, ctx=None, depth=0):
+    digits = node.get("digits")
+    unit = " place" if digits in (1, -1) else " places"
+    place = (
+        str(digits) + " decimal" + unit
+        if isinstance(digits, int) and digits >= 0
+        else str(abs(digits) if isinstance(digits, int) else digits)
+        + unit
+        + " left of the decimal point"
+    )
+    return sentence(
+        "Round "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " to "
+        + place
+        + ", ties away from zero"
+    )
+
+
+def describe_compute(node, ctx=None, depth=0):
+    return "Compute " + describe_expression_text(node.get("expr"), ctx, depth) + "."
+
+
+def describe_str_case(node, ctx=None, depth=0):
+    to = str(node.get("to", ""))
+    text = (
+        "Convert "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " to "
+        + to
+        + " case"
+    )
+    return sentence(text + handler_phrase(node, "missing", "a missing source"))
+
+
+def describe_str_pad(node, ctx=None, depth=0):
+    return sentence(
+        "Pad "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " on the left with spaces to at least "
+        + str(node.get("width"))
+        + " characters"
+    )
+
+
+def describe_str_extract(node, ctx=None, depth=0):
+    group = node.get("group", 0)
+    part = "the whole match" if group in (0, None) else "capture group " + str(group)
+    text = (
+        "Extract "
+        + part
+        + " of /"
+        + str(node.get("pattern"))
+        + "/ from "
+        + describe_variable(node.get("source"), ctx, depth)
+    )
+    text += handler_phrase(node, "missing", "a missing source")
+    return sentence(text + handler_phrase(node, "no_match", "no match"))
+
+
+def describe_str_contains(node, ctx=None, depth=0):
+    text = (
+        "True when "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " matches /"
+        + str(node.get("pattern"))
+        + "/ anywhere, false when it does not"
+    )
+    return sentence(text + handler_phrase(node, "missing", "a missing source"))
+
+
+def describe_str_concat(node, ctx=None, depth=0):
+    parts = []
+    for part in node.get("sources") or []:
+        if isinstance(part, dict) and "literal" in part:
+            parts.append('"' + str(part["literal"]) + '"')
+        elif isinstance(part, dict) and "source" in part:
+            parts.append(describe_variable(part["source"], ctx, depth))
+        elif isinstance(part, dict):
+            parts.append(value_phrase(part, ctx, depth))
+        else:
+            parts.append(describe_variable(part, ctx, depth))
+    text = "Concatenate " + join_and(parts)
+    return sentence(text + handler_phrase(node, "missing", "a missing part"))
+
+
+def describe_str_template(node, ctx=None, depth=0):
+    if isinstance(node, str):
+        node = {"template": node}
+    text = 'Fill the template "' + str(node.get("template")) + '"'
+    return sentence(text + handler_phrase(node, "missing", "a missing field"))
+
+
+def describe_row_number(node, ctx=None, depth=0):
+    """Kept as its own sentence: the window words differ from every other shape."""
     window = node.get("window", {})
     if isinstance(window, str):
         return "Row number using window " + window + "."
     groups = ", ".join(str(g) for g in window.get("group_by", []))
-    order = ", ".join(str(o) for o in window.get("order_by", []))
+    order = order_terms(window.get("order_by"))
     text = "Row number within each (" + groups + ")"
     if order:
         text += ", ordered by " + order
     return text + "."
 
 
-def describe_compute(node):
-    return "Compute " + str(node.get("expr")) + "."
+def describe_rank(node, ctx=None, depth=0):
+    method = str(node.get("method") or "competition")
+    tie = (
+        "ties share a number and the next distinct value skips the gap"
+        if method == "competition"
+        else "ties share a number and the next distinct value follows without a gap"
+    )
+    return sentence(with_window("Rank rows from 1", node, ctx, depth) + "; " + tie)
 
 
-def describe_baseline_flag(node):
+def describe_row_value(node, ctx=None, depth=0):
+    offset = node.get("offset", 0)
+    try:
+        step = int(offset)
+    except (TypeError, ValueError):
+        step = 0
+    if step < 0:
+        position = str(-step) + " row" + ("s" if step < -1 else "") + " earlier"
+    elif step > 0:
+        position = str(step) + " row" + ("s" if step > 1 else "") + " later"
+    else:
+        position = "the same row"
+    text = (
+        "Take "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " from "
+        + position
+    )
+    return sentence(with_window(text, node, ctx, depth))
+
+
+def describe_previous_non_missing(node, ctx=None, depth=0):
+    text = (
+        "Most recent non-missing "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " from an earlier row"
+    )
+    return sentence(with_window(text, node, ctx, depth))
+
+
+def describe_locf(node, ctx=None, depth=0):
+    text = "Last observation carried forward from " + describe_variable(
+        node.get("source"), ctx, depth
+    )
+    return sentence(with_window(text, node, ctx, depth))
+
+
+def describe_baseline_flag(node, ctx=None, depth=0):
     window = node.get("window", {})
     scope = (
         " using window " + window
@@ -131,57 +843,95 @@ def describe_baseline_flag(node):
     )
 
 
-def describe_date_impute(node):
-    bits = []
-    if node.get("month") is not None:
-        bits.append("month=" + str(node["month"]))
-    if node.get("day") is not None:
-        bits.append("day=" + str(node["day"]))
-    return (
-        "Impute incomplete date from "
-        + str(node.get("source"))
-        + ", defaulting "
-        + ", ".join(bits)
-        + "; missing or invalid input yields null."
-    )
+# Shape name -> describer. A shape absent here renders its YAML, which is the
+# signal that a new expression needs a sentence.
+DERIVATION_DESCRIBERS = {
+    "literal": lambda n, c, d: describe_literal(n),
+    "source": describe_source,
+    "mapping": describe_mapping,
+    "case": describe_case,
+    "flag": describe_flag,
+    "first_available": describe_first_available,
+    "greatest": lambda n, c, d: describe_extreme(n, "Greatest", c, d),
+    "least": lambda n, c, d: describe_extreme(n, "Least", c, d),
+    "aggregate": describe_aggregate,
+    "odm": lambda n, c, d: describe_odm(n),
+    "function": lambda n, c, d: describe_function(n),
+    "cut": describe_cut,
+    "compute": describe_compute,
+    "round_half_away_from_zero": describe_round,
+    "date_diff": describe_date_diff,
+    "date_impute": describe_date_impute,
+    "date_precision": lambda n, c, d: describe_precision(n, "date", c, d),
+    "datetime_impute": describe_datetime_impute,
+    "datetime_precision": lambda n, c, d: describe_precision(n, "datetime", c, d),
+    "to_date": describe_to_date,
+    "to_epoch_day": describe_to_epoch_day,
+    "study_day": describe_study_day,
+    "str_case": describe_str_case,
+    "str_pad": describe_str_pad,
+    "str_extract": describe_str_extract,
+    "str_contains": describe_str_contains,
+    "str_concat": describe_str_concat,
+    "str_template": describe_str_template,
+    "row_number": describe_row_number,
+    "rank": describe_rank,
+    "row_value": describe_row_value,
+    "previous_non_missing": describe_previous_non_missing,
+    "locf": describe_locf,
+    "baseline_flag": describe_baseline_flag,
+}
 
 
-def describe_derivation(derivation):
+def describe_derivation(derivation, ctx=None, depth=0):
     """Plain-language mapping rule for one column-level derivation."""
     if isinstance(derivation, str):
-        return "Copy value from " + derivation + "."
+        return describe_reference(derivation, ctx, depth)
     if not isinstance(derivation, dict):
         return str(derivation)
-    if "literal" in derivation:
-        return describe_literal(derivation["literal"])
-    source = derivation.get("source")
-    if isinstance(source, dict):
-        return describe_source(source)
-    if "mapping" in derivation:
-        return describe_mapping(derivation["mapping"])
-    if "case" in derivation:
-        return describe_case(derivation["case"])
-    if "row_number" in derivation:
-        return describe_row_number(derivation["row_number"])
-    if "compute" in derivation:
-        return describe_compute(derivation["compute"])
-    if "baseline_flag" in derivation:
-        return describe_baseline_flag(derivation["baseline_flag"])
-    if "date_impute" in derivation:
-        return describe_date_impute(derivation["date_impute"])
+    # `handled_expression_class`: an inner expression plus the value a failed
+    # conversion yields (REQ-1148).
+    if "value" in derivation:
+        text = clause(describe_derivation(derivation["value"], ctx, depth))
+        if "unconvertible" in derivation:
+            text += (
+                "; a value that cannot be converted "
+                + ARROW
+                + " "
+                + literal_text(derivation["unconvertible"])
+            )
+        return sentence(text)
+    for shape, describer in DERIVATION_DESCRIBERS.items():
+        if shape in derivation:
+            return describer(derivation[shape], ctx, depth)
     return str(derivation)
 
 
-def classify_origin(derivation, input_names):
-    """Origin per the Define-XML 2.1 vocabulary."""
+def classify_origin(derivation, input_names, ctx=None):
+    """Origin per the Define-XML 2.1 vocabulary.
+
+    A reference through an `intermediates:` lookup is Derived however the
+    donor column was collected: the value this dataset publishes is the
+    product of the join, not a field a site typed into this record.
+    """
+    lookups = context(ctx).lookups
     if isinstance(derivation, str):
         base = derivation.split(".")[0]
+        if base in lookups:
+            return "Derived"
         return "Collected" if base in input_names else "Derived"
     if not isinstance(derivation, dict):
         return "Derived"
     if "literal" in derivation:
         return "Assigned"
-    if "source" in derivation or "mapping" in derivation:
+    if "mapping" in derivation:
+        return "Collected"
+    source = derivation.get("source")
+    if source is not None:
+        variable = source if isinstance(source, str) else source.get("variable")
+        head, _ = split_reference(variable)
+        if head in lookups:
+            return "Derived"
         return "Collected"
     return "Derived"
 
@@ -277,12 +1027,12 @@ def controlled_terms(col, code_by_var):
     return code_by_var.get(col.get("name", ""), "")
 
 
-def conversion_definition(col):
+def conversion_definition(col, ctx=None):
     """The authored `submission.method`, else the derivation in plain language."""
     method = submission(col).get("method")
     if method:
         return str(method)
-    return describe_derivation(col.get("derivation"))
+    return describe_derivation(col.get("derivation"), ctx)
 
 
 def define_comment(col):
@@ -302,17 +1052,21 @@ def codelists(columns):
     return out
 
 
-def describe_row_template_derivation(derivation):
+def describe_row_template_derivation(derivation, ctx=None):
+    """A row-template cell: terser than a variable-sheet rule, but never raw YAML."""
     if isinstance(derivation, str):
-        return "Copy " + derivation
+        return "Copy " + describe_variable(derivation, ctx)
     if isinstance(derivation, dict):
         if "literal" in derivation:
             return 'Constant "' + str(derivation["literal"]) + '"'
         if "source" in derivation:
-            return "Copy " + str(derivation["source"])
+            source = derivation["source"]
+            variable = source if isinstance(source, str) else source.get("variable")
+            return "Copy " + describe_variable(variable, ctx)
         compute = derivation.get("compute", {})
         if isinstance(compute, dict) and compute.get("expr"):
             return "Compute " + str(compute["expr"])
+        return clause(describe_derivation(derivation, ctx))
     return str(derivation)
 
 
@@ -342,23 +1096,61 @@ ADAM_HEADERS = [
 ]
 
 
+REVISION_HISTORY_HEADERS = [
+    "Version",
+    "Date",
+    "Author",
+    "Description",
+    "Reviewer",
+    "Sign-off",
+]
+
+# The Mapping spec is generated, never authored, so its revision history
+# tracks the renderer rather than the benchmark's spec.yaml: an unchanged spec
+# can still read differently after a wording change, and a reviewer who signed
+# off on the earlier wording needs to see that it moved. Newest first; add an
+# entry whenever a change alters the text of a rendered cell. Reviewer and
+# Sign-off stay empty -- those are the reviewer's to fill, not the build's.
+RENDERER_REVISIONS = [
+    (
+        "1.1",
+        "2026-09-29",
+        (
+            "Resolve lookups into the donor record they select, and give every "
+            "derivation shape a plain-language rule instead of its raw YAML"
+        ),
+    ),
+    ("1.0", "", "Initial generation from spec.yaml"),
+]
+
+RENDERER_AUTHOR = "yamaa docs build"
+
+
+def revision_history_rows():
+    """The renderer's own history, identical across benchmarks by design."""
+    return [
+        [version, date, RENDERER_AUTHOR, description, "", ""]
+        for version, date, description in RENDERER_REVISIONS
+    ]
+
+
 def sdtm_variable_type(spec):
     """The Variable Type cell distinguishes a parent SDTM domain from its
     supplemental qualifier (SUPP--) dataset."""
     return "SUPP" if str(spec.get("domain", "")).upper().startswith("SUPP") else "SDTM"
 
 
-def mapping_row(col, index, spec, adam, input_names, code_by_var):
+def mapping_row(col, index, spec, adam, input_names, code_by_var, ctx=None):
     """One variable-sheet row in the standard's column order."""
     name = col.get("name", "")
     label = col.get("label", "")
     sub = submission(col)
     origin = submission_origin(col) or classify_origin(
-        col.get("derivation"), input_names
+        col.get("derivation"), input_names, ctx
     )
     terms = controlled_terms(col, code_by_var)
     core = str(sub.get("core") or "")
-    method = conversion_definition(col)
+    method = conversion_definition(col, ctx)
     if adam:
         return [
             str(spec.get("domain", "")),
@@ -389,6 +1181,7 @@ def mapping_row(col, index, spec, adam, input_names, code_by_var):
 def mapping_sheets(spec):
     """Sheet models: list of (tab id, tab label, headers, rows)."""
     columns = [c for c in spec.get("columns", []) if isinstance(c, dict)]
+    ctx = SpecContext(spec)
     input_names = set((spec.get("input") or {}).keys())
     output_names = (spec.get("output") or {}).get("columns") or [
         c["name"] for c in columns
@@ -400,7 +1193,7 @@ def mapping_sheets(spec):
     code_by_var = dict(codelists(shown))
     map_headers = ADAM_HEADERS if adam else SDTM_HEADERS
     map_rows = [
-        mapping_row(col, index, spec, adam, input_names, code_by_var)
+        mapping_row(col, index, spec, adam, input_names, code_by_var, ctx)
         for index, col in enumerate(shown, start=1)
     ]
 
@@ -419,7 +1212,7 @@ def mapping_sheets(spec):
             rc_rows.append(
                 [template.get("id", ""), template.get("filter", "")]
                 + [
-                    describe_row_template_derivation(derivs.get(v))
+                    describe_row_template_derivation(derivs.get(v), ctx)
                     for v in template_vars
                 ]
             )
@@ -447,8 +1240,8 @@ def mapping_sheets(spec):
         (
             "revision-history",
             "Revision history",
-            ["Version", "Date", "Author", "Description", "Reviewer", "Sign-off"],
-            [["1.0", "", "", "Initial generation from spec.yaml", "", ""]],
+            REVISION_HISTORY_HEADERS,
+            revision_history_rows(),
         )
     )
     return sheets
