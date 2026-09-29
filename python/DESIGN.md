@@ -26,12 +26,14 @@ box. This is a documented deviation; a Polars rewrite remains future work.
 
 ## Module layout (as built)
 
-- `api.py`  --  entry point: `derive(spec_path) -> str` (CSV text).
+- `api.py`  --  entry points: `derive(spec_path) -> str` (CSV text) and
+  `derive_artifacts(spec_path) -> {path: text | bytes}`, every file a run
+  publishes (storage/publication).
 - `errors.py`  --  `YamaaError` with phase/condition/requirement/spec_paths.
 - `values.py`  --  scalar model: `YDate`, `YDateTime`, missing/present,
   comparison and equality.
 - `csv_io.py`  --  CSV profile scanner and serializer (storage/csv),
-  Parquet reader (storage/parquet).
+  Parquet reader and writer (storage/parquet).
 - `pred.py`  --  predicate tokenizer/parser/evaluator (operations/predicates).
 - `numeric.py`  --  numeric expression parser/evaluator
   (operations/computation).
@@ -45,6 +47,9 @@ box. This is a documented deviation; a Polars rewrite remains future work.
   (execution/verification), output rendering (storage/publication).
 - `validate.py`  --  Stage-1 shape validation: inputs, columns, output,
   lookups, rows, expressions, dependencies, regex, verifications, paths.
+- `logs.py`  --  the warning and verification logs (execution/verification):
+  sidecar declarations, each declared check's outcome and complete evidence,
+  and the two verified sidecar datasets.
 
 ## Data flow
 

@@ -1,5 +1,5 @@
 """CSV source reading and artifact writing (storage/csv), Parquet source
-reading (storage/parquet)."""
+reading and artifact writing (storage/parquet)."""
 
 from .errors import YamaaError
 from .values import (
@@ -362,3 +362,49 @@ def read_parquet(
                 rec[name] = v
         records.append(rec)
     return fields, records, ftypes
+
+
+def write_parquet_bytes(columns, rows, col_types):
+    """Render the parquet artifact per storage/parquet: one optional field
+    per column under REQ-0734's mapping, a `datetime` on its own wall clock
+    (REQ-0738), uncompressed and with no key-value metadata of its own
+    (REQ-0741). rows: list of dicts."""
+    import datetime as _datetime
+    import io
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    kinds = {
+        "str": pa.string(),
+        "int": pa.int64(),
+        "float": pa.float64(),
+        "date": pa.date32(),
+        "datetime": pa.timestamp("us"),
+    }
+
+    def cell(v, t):
+        if is_missing(v):
+            return None
+        if t == "datetime":
+            # REQ-0738: a wall-clock reading, so no zone is attached.
+            return _datetime.datetime(  # noqa: DTZ001
+                v.year, v.month, v.day, v.hour, v.minute, v.second
+            )
+        if t == "date":
+            return _datetime.date(v.year, v.month, v.day)
+        return v
+
+    fields = [pa.field(c, kinds[col_types[c]]) for c in columns]
+    arrays = [
+        pa.array([cell(r.get(c), col_types[c]) for r in rows], type=f.type)
+        for c, f in zip(columns, fields)
+    ]
+    buf = io.BytesIO()
+    pq.write_table(
+        pa.Table.from_arrays(arrays, schema=pa.schema(fields)),
+        buf,
+        compression="none",
+        store_schema=False,
+    )
+    return buf.getvalue()

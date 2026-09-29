@@ -9,6 +9,7 @@ import yaml
 
 from . import agg as _agg
 from . import expr as _expr
+from . import logs as _logs
 from . import odm as _odm
 from . import pred as _pred
 from . import validate as _validate
@@ -196,6 +197,7 @@ class Engine:
         if isinstance(self.verifications, dict):
             self.verifications = [self.verifications]
         _validate.run(self)  # Stage-1 shape validation before any execution
+        _logs.check_declarations(self)
         self.rows = []  # list[dict] completed columns
         self._origins = []  # list[str|None]
         self._recs = []  # list[dict[str, list[record]]]
@@ -558,11 +560,14 @@ class Engine:
         self._eligible = {}
         self._self_marks = []
         self._row_phase = True
+        self._outcomes = []  # each declared check's outcome, for the logs
         self._verify_input_intermediates()
         self._build_rows()
         self._derive_columns()
         self._verify()
-        return self._render()
+        text = self._render()
+        self.sidecars = _logs.sidecars(self)  # REQ-0396: after every check
+        return text
 
     def _default_dataset(self):
         if self.spec.get("base"):
@@ -1238,6 +1243,7 @@ class Engine:
             _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
         severity = payload.get("severity", "error")
         failed = self._check_verification(kind, payload, col, where)
+        _logs.record(self, where, kind, payload, col, failed)
         if failed is not None and severity == "error":
             condition, detail = failed
             report = {}
@@ -1415,6 +1421,7 @@ class Engine:
                 )
         ctypes = {c: self.colspecs[c]["type"] for c in cols}
         out_rows = [{c: r.get(c) for c in cols} for r in rows]
+        self._artifact = (cols, out_rows, ctypes)
         return write_csv_text(
             cols, out_rows, ctypes, decimals=self.output.get("decimals")
         )

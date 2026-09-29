@@ -52,6 +52,32 @@ adsl = yamaa.derive("spec.yaml", project_root="python")
 Only the Python runtime is supported; an environment whose
 `runtime.language` names another language fails as `runner_language_mismatch`.
 
+## Warning and verification logs
+
+A specification may declare two sidecars beside its output:
+`output.warning_log`, one row per violated `warning` check with every
+offending key, and `output.verification_log`, one row per declared check,
+held or violated. `yamaa.derive_artifacts(spec_path, project_root=None)`
+runs the specification once and returns every file the run publishes, keyed
+by its declared path in the order a publisher replaces them: the
+verification log, the warning log, then `output.path`:
+
+```python
+files = yamaa.derive_artifacts("spec.yaml")
+# {"adsl-checks.csv": "...", "adsl-warnings.csv": "...", "adsl.csv": "..."}
+```
+
+Each path's extension selects its profile, so a `.csv` file is its text and
+a `.parquet` file its bytes. A declared warning log is its header alone when
+no warning is violated. Like `derive`, `derive_artifacts` writes nothing to
+disk; replacing each target atomically, in the order given, is the caller's
+job.
+
+A failed run publishes no output and no warning log. When it got past
+validation and declares `output.verification_log`, the `YamaaError` it
+raises carries that log, of the checks the run evaluated, as
+`error.artifacts`; otherwise `error.artifacts` is empty.
+
 ## Failures
 
 Every validation, derivation, and verification failure raises
@@ -80,7 +106,7 @@ from it.
 ## Benchmarks
 
 `python/check_benchmarks.py` runs every benchmark under `benchmarks/` through
-the engine and compares each output, or each pinned failure, with its
+the engine and compares each output and log, or each pinned failure, with its
 `expected/` directory:
 
 ```bash
@@ -93,7 +119,6 @@ uv run --project python --no-sync python python/check_benchmarks.py
 
 - Specification composition (`parents:`) and runs in which one specification
   reads another's output (#1504).
-- The warning log and verification log sidecars (#1498).
 
 ## Design
 
