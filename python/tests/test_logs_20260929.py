@@ -295,6 +295,22 @@ def test_a_grouped_row_count_reports_counts_even_for_one_group(tmp_path):
     assert check["DETAILS"] == warning["DETAILS"]  # REQ-1176: one encoding
 
 
+def test_an_ungrouped_row_count_failure_reports_its_one_count(tmp_path):
+    # REQ-1176: a violated check's DETAILS is its failure's context, so an
+    # ungrouped `row_count` error and its log entry agree on one count and,
+    # under a fraction bound, its denominator.
+    s = spec(
+        output=LOGS,
+        verifications=[{"row_count": {"filter": "AGE > 40", "max_fraction": 0.5}}],
+    )
+    err = failure(tmp_path, s)
+    assert err.condition == "row_count_failed"
+    assert (err.context["count"], err.context["denominator"]) == (2, 3)
+    assert "counts" not in err.context
+    (check,) = records(err.artifacts["checks.csv"])
+    assert check["DETAILS"] == '{"count":2,"denominator":3}'
+
+
 def test_a_unique_warning_lists_every_row_of_a_repeated_combination(tmp_path):
     s = spec(
         output=LOGS,

@@ -1378,7 +1378,7 @@ class Engine:
                 tup = tuple(_hashable(self.rows[i].get(g)) for g in group_by)
                 parts.setdefault(tup, []).append(i)
             groups = list(parts.values())
-        keys, counts = [], []
+        keys, counts, sizes = [], [], []
         for g in groups:
             if when is not None and not any(admits(when, i) for i in g):
                 continue
@@ -1395,12 +1395,27 @@ class Engine:
                     row = self.rows[g[0]]
                     keys.append({c: _expr.json_value(row.get(c)) for c in group_by})
                     counts.append(n)
+                    sizes.append(len(g))
                     break
         if not keys:
             return None
         # REQ-0402: the report names each failing group and its count; the
-        # bounds are in the declaration at the reported path.
-        detail = {"failure_count": len(keys), "keys": keys, "counts": counts}
+        # bounds are in the declaration at the reported path. REQ-0373 shows a
+        # sample of the groups, with REQ-0393's counts aligned to it, and an
+        # ungrouped check's one count, so the verification log carries this
+        # failure's context unchanged (REQ-1176).
+        fraction = any(
+            payload.get(b) is not None for b in ("min_fraction", "max_fraction")
+        )
+        detail = {"failure_count": len(keys), "keys": keys[:_REPORTED_KEYS]}
+        if group_by:
+            detail["counts"] = counts[:_REPORTED_KEYS]
+            if fraction:
+                detail["denominators"] = sizes[:_REPORTED_KEYS]
+        else:
+            detail["count"] = counts[0]
+            if fraction:
+                detail["denominator"] = sizes[0]
         return "row_count_failed", detail
 
     def _render(self):
