@@ -422,7 +422,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_comment` | `["str", "submission_comment_class"]` | `false` | Absent | -- | [REQ-1138](../submission/metadata.md#req-1138) |
 | `submission_method` | `["str", "submission_method_class"]` | `false` | Absent | -- | [REQ-1139](../submission/metadata.md#req-1139) |
 | `document_reference` | `["identifier", "document_reference_class"]` | `false` | Absent | -- | [REQ-1140](../submission/metadata.md#req-1140) |
-| `core_designation` | `"str"` | `false` | Absent | `{"values": ["Req", "Exp", "Perm"]}` | [REQ-1141](../submission/metadata.md#req-1141) |
+| `core_designation` | `"str"` | `false` | Absent | `{"values": ["Req", "Exp", "Perm", "Cond"]}` | [REQ-1141](../submission/metadata.md#req-1141) |
 | `origin_type` | `"str"` | `false` | Absent | `{"values": ["Assigned", "Collected", "Derived", "Not Available", "Other", "Predecessor", "Protocol"]}` | [REQ-1142](../submission/metadata.md#req-1142) |
 | `origin_source` | `"str"` | `false` | Absent | `{"values": ["Investigator", "Sponsor", "Subject", "Vendor"]}` | [REQ-1143](../submission/metadata.md#req-1143) |
 | `method_type` | `"str"` | `false` | Absent | `{"values": ["Computation", "Imputation"]}` | [REQ-1144](../submission/metadata.md#req-1144) |

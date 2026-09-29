@@ -37,7 +37,7 @@ DatasetSubclassName = Literal[
     "TIME-TO-EVENT",
 ]
 
-CoreDesignation = Literal["Req", "Exp", "Perm"]
+CoreDesignation = Literal["Req", "Exp", "Perm", "Cond"]
 
 OriginType = Literal[
     "Assigned",

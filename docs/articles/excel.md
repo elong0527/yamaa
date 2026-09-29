@@ -114,7 +114,7 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Origin` = Collected (CRF / eDT) | `odm: ODM.IT.DM.AGE` | Reads the one record of the item among the ODM records the row was built from; `event`, `form`, `item_group`, and `filter` narrow it (Name binding) |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name reads that dataset through the implicit join on the output keys (Lookup and joins) |
 | `Origin` = Derived | a specific expression | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
-| `Core` (Req / Exp / Perm) | `column.metadata` | Conformance classification; it says nothing about derivation |
+| `Core` (Req / Exp / Perm for SDTM; Req / Cond / Perm for ADaM) | `column.metadata` | Conformance classification; it says nothing about derivation |
 | `Conversion Definition` | `derivation:` | From a sentence a person reads to an expression a machine runs |
 | `Variable Order` | `columns` order **and** `output.columns` | One Excel column doing two jobs |
 | `Comments for Define` | `column.metadata` | Free key-value, never validated, for define generation |

@@ -199,7 +199,7 @@ document_reference:
 
 core_designation:
     type: str
-    values: [Req, Exp, Perm]
+    values: [Req, Exp, Perm, Cond]
     description: See REQ-1141.
 
 origin_type:

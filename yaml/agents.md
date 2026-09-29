@@ -54,8 +54,9 @@ One term per concept across all rules, schema comments, and messages:
   `metadata` map. The [submission contract](../rules/submission/metadata.md)
   reserves its governed key names, so the map cannot
   become a second place a governed fact lives.
-- Declare nothing a rule derives. `Mandatory` comes from `core`, a submission
-  length from `max_length`, an ADaM origin source from its type, and a
+- Declare nothing a rule derives. For `sdtm` and `send`, `Mandatory` comes
+  from `core`; for `adam` the two are independently declared. A submission
+  length comes from `max_length`, an ADaM origin source from its type, and a
   collected value's annotated-CRF reference from the document that declares
   it.
 - Declare a codelist once in the study document and bind columns to its
