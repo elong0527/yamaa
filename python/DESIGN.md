@@ -50,6 +50,9 @@ box. This is a documented deviation; a Polars rewrite remains future work.
 - `logs.py`  --  the warning and verification logs (execution/verification):
   sidecar declarations, each declared check's outcome and complete evidence,
   and the two verified sidecar datasets.
+- `compose.py`  --  specification composition (specification/composition):
+  resolves an entry's `parents` chain into the resolved specification the
+  engine then loads, reading declared kinds from the `yaml/` bundle.
 
 ## Data flow
 

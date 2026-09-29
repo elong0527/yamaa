@@ -8,6 +8,7 @@ from functools import cmp_to_key
 import yaml
 
 from . import agg as _agg
+from . import compose as _compose
 from . import expr as _expr
 from . import logs as _logs
 from . import odm as _odm
@@ -142,6 +143,18 @@ class Engine:
         self.project_root = project_root
         with open(self.spec_path, "r", encoding="utf-8") as f:
             self.spec = yaml.safe_load(f)
+        # specification/composition: every other rule reads the resolved
+        # specification (REQ-0651); an entry of another version fails below.
+        self.layer_paths = {}
+        spec = self.spec
+        if (
+            isinstance(spec, dict)
+            and spec.get("parents")
+            and spec.get("schema_version") == "1.0"
+        ):
+            self._reject_parents(spec["parents"])
+            resolved = _compose.resolve(self.spec_path, spec)
+            self.spec, self.layer_paths = resolved.document, resolved.layer_paths
         s = self.spec
         if not isinstance(s, dict):
             _fail("root", "validation", "invalid_field_type", "REQ-0622", {})
@@ -155,8 +168,6 @@ class Engine:
                 "REQ-0656",
                 {},
             )
-        if s.get("parents"):
-            self._reject_parents(s["parents"])
         self.functions = None
         if project_root is not None and _uses_function(s):
             from . import functions as _functions
@@ -319,8 +330,8 @@ class Engine:
                     expand(dd, f"intermediates[{i}].derivations.{dn}")
 
     def _reject_parents(self, parents):
-        """Composition failure surface (specification/composition); the
-        clean-room resolves no parents."""
+        """Composition failure surface (specification/composition), checked
+        before the chain is resolved."""
         if isinstance(parents, str):
             parents = [parents]
         for p in parents:
@@ -347,19 +358,6 @@ class Engine:
                 seen,
                 self.spec.get("schema_version"),
             )
-        if "output" not in self.spec:
-            # REQ-0657: an entry omitting `output` inherits it; only a
-            # resolution to which no layer contributed one fails.
-            inherited = False
-            for p in parents:
-                full = os.path.normpath(os.path.join(self.spec_dir, p))
-                with open(full, "r", encoding="utf-8") as f:
-                    doc = yaml.safe_load(f) or {}
-                if isinstance(doc, dict) and doc.get("output"):
-                    inherited = True
-                    break
-            if not inherited:
-                _fail("output", "validation", "missing_required_field", None, {})
         for c in self.spec.get("columns") or []:
             if isinstance(c, dict) and "type" in c and c["type"] is None:
                 _fail(
@@ -369,13 +367,6 @@ class Engine:
                     "REQ-0660",
                     {"field": "type"},
                 )
-        _fail(
-            "parents",
-            "validation",
-            "invalid_clear",
-            "REQ-0632",
-            {"detail": "spec composition is not implemented in the clean-room"},
-        )
 
     def _check_parent_chain(self, full, seen, entry_version):
         if full in seen:
@@ -386,6 +377,8 @@ class Engine:
                 "REQ-0655",
                 {"reason": "parent_chain_returns_to_entry"},
             )
+        if not os.path.isfile(full):
+            return  # compose reports a parent it cannot read (REQ-0653/REQ-0654)
         seen.append(full)
         with open(full, "r", encoding="utf-8") as f:
             doc = yaml.safe_load(f) or {}
@@ -433,6 +426,7 @@ class Engine:
             path, types = decl, {}
         else:
             path, types = decl["path"], decl.get("types") or {}
+        path = _compose.layer_path(self, f"input.{name}.path", path)
         _validate.check_resource_path(self, name, path)  # storage/resources
         profile = self._input_profile(name, path)
         full = os.path.normpath(os.path.join(self.spec_dir, path))
@@ -480,6 +474,7 @@ class Engine:
             path = decl["path"]
         else:
             path = decl
+        path = _compose.layer_path(self, f"input.{name}.path", path)
         _validate.check_resource_path(self, name, path)
         profile = self._input_profile(name, path)
         full = os.path.normpath(os.path.join(self.spec_dir, path))
@@ -1517,6 +1512,10 @@ def _norm_derivation(d, where):
     """REQ-0266/REQ-0319: bare string -> {source: s}; {value:} handled wrapper."""
     if isinstance(d, str):
         return {"source": d}
+    if isinstance(d, dict) and set(d) == {"value"} and isinstance(d["value"], dict):
+        # The canonical wrapper with no handler is its expression, so a
+        # window keyword under it still derives over the whole partition.
+        return _norm_derivation(d["value"], where)
     if isinstance(d, dict) and len(d) == 1:
         return d
     if isinstance(d, dict) and "value" in d and set(d) <= _expr.HANDLED_FIELDS:
