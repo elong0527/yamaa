@@ -28,6 +28,7 @@ conditions:
   duplicate_order_term: {phases: [validation]}
   field_parse_failed: {phases: [ingest]}
   forward_reference: {phases: [validation]}
+  function_call_failed: {phases: [derivation, validation]}
   function_contract_mismatch: {phases: [validation]}
   implication_failed: {phases: [verification]}
   incomparable_range_types: {phases: [validation]}
@@ -42,6 +43,9 @@ conditions:
   invalid_date_text: {phases: [impute]}
   invalid_datetime_text: {phases: [impute]}
   invalid_field_type: {phases: [validation]}
+  invalid_function_argument: {phases: [derivation, validation]}
+  invalid_function_result: {phases: [derivation]}
+  invalid_intermediate_driver: {phases: [validation]}
   invalid_mapping_dictionary: {phases: [validation]}
   invalid_odm_context: {phases: [validation]}
   invalid_parent_path: {phases: [validation]}
@@ -53,6 +57,7 @@ conditions:
   length_failed: {phases: [verification]}
   ln_of_nonpositive: {phases: [derivation]}
   matches_failed: {phases: [verification]}
+  missing_aggregate_keys: {phases: [validation]}
   missing_input: {phases: [cut, mapping]}
   missing_key: {phases: [output]}
   missing_required_field: {phases: [validation]}
@@ -74,6 +79,8 @@ conditions:
   producer_contract_mismatch: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
   prohibited_function: {phases: [validation]}
+  project_environment_invalid: {phases: [validation]}
+  project_environment_missing: {phases: [validation]}
   publication_failed: {phases: [output]}
   qualified_identifier: {phases: [validation]}
   range_failed: {phases: [verification]}
@@ -87,6 +94,7 @@ conditions:
   resource_path_symlink: {phases: [validation]}
   resource_path_uri_scheme: {phases: [validation]}
   row_count_failed: {phases: [verification]}
+  runner_language_mismatch: {phases: [validation]}
   schema_version_mismatch: {phases: [validation]}
   source_field_name_duplicate: {phases: [ingest]}
   source_field_name_empty: {phases: [ingest]}
@@ -98,9 +106,12 @@ conditions:
   source_record_width: {phases: [ingest]}
   sqrt_of_negative: {phases: [derivation]}
   undeclared_column: {phases: [validation]}
+  ungrouped_driver_field: {phases: [validation]}
   unique_failed: {phases: [verification]}
   unknown_artifact_profile: {phases: [validation]}
   unknown_field: {phases: [validation]}
+  unknown_intermediate_driver_type: {phases: [validation]}
+  unknown_project_function: {phases: [validation]}
   unknown_window: {phases: [validation]}
   unmapped_key: {phases: [mapping]}
   unmapped_value: {phases: [mapping]}
