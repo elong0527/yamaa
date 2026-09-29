@@ -439,16 +439,17 @@ class models:
 
 
 # ---------------------------------------------------------------------------
-# yamaa.schema.row_catalog / yamaa.schema.windows /
-# yamaa.specification.diagnostics / yamaa.specification.schema
+# yamaa.schema.windows / yamaa.specification.diagnostics /
+# yamaa.specification.schema
 # ---------------------------------------------------------------------------
 #
 # The repository validator reuses the runtime's spec-shape expansion so its
 # paths and reference walkers agree with engine diagnostics. The clean-room
-# engine performs row-catalog and named-window expansion internally
-# (Engine._expand_catalogs / Engine._expand_named_windows); the shims below
-# drive that same machinery over a caller-owned spec dict and translate
-# YamaaError into the diagnostic shape the validator reads.
+# engine performs named-window expansion internally
+# (Engine._expand_named_windows); the shims below drive that same machinery
+# over a caller-owned spec dict and translate YamaaError into the
+# diagnostic shape the validator reads. (Row catalogs, REQ-1249, are
+# retired, so there is no catalog expansion to share.)
 from yamaa import engine as _engine
 
 
@@ -491,9 +492,7 @@ def _expansion_engine(spec, spec_path):
     engine = _engine.Engine.__new__(_engine.Engine)
     engine.spec = spec
     engine.spec_dir = _os.path.dirname(_os.path.abspath(spec_path))
-    engine._row_paths = {
-        id(t): f"rows[{i}]" for i, t in enumerate(spec.get("rows") or [])
-    }
+    engine._record_row_paths()
     return engine
 
 
@@ -519,8 +518,7 @@ def _index_column_paths(spec, paths):
 def _run_expansion(method, spec, spec_path):
     # The old engine deep-copied the document before expanding; the
     # clean-room expands in place. Copy here so callers keep their
-    # authoring dict (a validator unit test reads the catalog entry
-    # after expansion).
+    # authoring dict.
     engine = _expansion_engine(_copy.deepcopy(spec), spec_path)
     try:
         method(engine)
@@ -529,13 +527,6 @@ def _run_expansion(method, spec, spec_path):
         diagnostic.spec_paths = _index_column_paths(spec, diagnostic.spec_paths)
         raise SpecificationError([diagnostic]) from error
     return engine.spec
-
-
-def expand_row_catalogs(spec, spec_path):
-    """yamaa.schema.row_catalog.expand_row_catalogs over the clean-room
-    engine: expand catalog templates in place, raising SpecificationError
-    on a malformed catalog."""
-    return _run_expansion(_engine.Engine._expand_catalogs, spec, spec_path)
 
 
 def _unknown_window_diagnostics(spec):
@@ -610,10 +601,6 @@ class SchemaBundle:
         self.registries = registries or {}
 
 
-class row_catalog:
-    expand_row_catalogs = staticmethod(expand_row_catalogs)
-
-
 class windows:
     expand_named_windows = staticmethod(expand_named_windows)
 
@@ -628,20 +615,16 @@ class diagnostics:
 
 # ---------------------------------------------------------------------------
 # Legacy module aliases: the validator's unit tests import a few old-engine
-# module paths directly (e.g. `from yamaa.schema.row_catalog import
-# expand_row_catalogs`). The clean-room package has no yamaa.schema tree,
+# module paths directly (e.g. `from yamaa.schema.windows import
+# expand_named_windows`). The clean-room package has no yamaa.schema tree,
 # so expose the compatibility namespaces under those names.
 # ---------------------------------------------------------------------------
 import types as _types
 
 _schema_module = _types.ModuleType("yamaa.schema")
 _schema_module.__path__ = []
-_row_catalog_module = _types.ModuleType("yamaa.schema.row_catalog")
-_row_catalog_module.expand_row_catalogs = expand_row_catalogs
 _windows_module = _types.ModuleType("yamaa.schema.windows")
 _windows_module.expand_named_windows = expand_named_windows
-_schema_module.row_catalog = _row_catalog_module
 _schema_module.windows = _windows_module
 _sys.modules["yamaa.schema"] = _schema_module
-_sys.modules["yamaa.schema.row_catalog"] = _row_catalog_module
 _sys.modules["yamaa.schema.windows"] = _windows_module

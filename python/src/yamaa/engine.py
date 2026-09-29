@@ -2,10 +2,7 @@
 derivation, verification, and rendering."""
 
 import copy
-import csv
-import io
 import os
-import re
 from functools import cmp_to_key
 
 import yaml
@@ -53,11 +50,6 @@ def _fail(where, phase, condition, requirement=None, context=None):
         spec_paths=[where],
         context=context or {},
     )
-
-
-_CATALOG_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_CATALOG_PLACEHOLDER = re.compile(r"\$\{([^}]*)\}")
-_CATALOG_INT = re.compile(r"^[+-]?[0-9]+$")
 
 
 # The phases in which a failure belongs to one row (or partition).
@@ -151,7 +143,7 @@ class Engine:
         s = self.spec
         if not isinstance(s, dict):
             _fail("root", "validation", "invalid_field_type", "REQ-0622", {})
-        self._expand_catalogs()
+        self._record_row_paths()
         self._expand_named_windows()
         if s.get("schema_version") != "1.0":
             _fail(
@@ -250,24 +242,14 @@ class Engine:
         self._dict_cache[written] = data
         return data
 
-    def _expand_catalogs(self):
-        """Expand row catalogs into ordinary row templates. A template"""
-        s = self.spec
-        rows = s.get("rows") or []
-        # A path addresses the specification as written, so every template,
-        # including one a catalog generated, is `rows[i]` of its written entry.
-        self._row_paths = {}
-        out = []
-        for i, t in enumerate(rows):
-            if not isinstance(t, dict) or "catalog" not in t:
-                generated = [t]
-            else:
-                generated = self._expand_catalog(t, i)
-            for nt in generated:
-                self._row_paths[id(nt)] = f"rows[{i}]"
-            out.extend(generated)
-        if len(out) != len(rows) or any(a is not b for a, b in zip(out, rows)):
-            s["rows"] = out
+    def _record_row_paths(self):
+        """A path addresses the specification as written: each row template
+        is `rows[i]`. (Row catalogs, REQ-1249, are retired without
+        replacement; validation rejects a `catalog` like any undeclared
+        row field.)"""
+        self._row_paths = {
+            id(t): f"rows[{i}]" for i, t in enumerate(self.spec.get("rows") or [])
+        }
 
     def row_path(self, t):
         """The written path of row template `t`: `rows[i]`."""
@@ -280,181 +262,6 @@ class Engine:
         if name in (t.get("derivations") or {}):
             return f"{self.row_path(t)}.derivations.{name}"
         return f"columns.{name}.derivation"
-
-    def _catalog_fail(
-        self, where, reason, condition="invalid_row_catalog", context=None
-    ):
-        ctx = {"reason": reason}
-        if context:
-            ctx.update(context)
-        _fail(where, "validation", condition, "REQ-1249", ctx)
-
-    def _expand_catalog(self, t, i):
-        where = f"rows[{i}].catalog"
-        cat = t.get("catalog")
-        tid = t.get("id")
-        if not isinstance(cat, dict):
-            self._catalog_fail(where, "invalid_declaration")
-        if not isinstance(tid, str) or not tid:
-            self._catalog_fail(where, "invalid_template_id")
-        path = cat.get("path")
-        if not isinstance(path, str) or not path:
-            self._catalog_fail(where, "invalid_path")
-        full = os.path.normpath(os.path.join(self.spec_dir, path))
-        if full != self.spec_dir and not full.startswith(self.spec_dir + os.sep):
-            self._catalog_fail(where, "invalid_path")
-        try:
-            with open(full, "rb") as f:
-                raw = f.read()
-        except OSError:
-            self._catalog_fail(where, "invalid_path")
-        try:
-            text = raw.decode("ascii")
-        except UnicodeDecodeError:
-            self._catalog_fail(where, "non_ascii_catalog")
-        id_column = cat.get("id_column")
-        if not isinstance(id_column, str) or not _CATALOG_IDENT.match(id_column):
-            self._catalog_fail(where, "invalid_id_column")
-        types = cat.get("types") or {}
-        if not isinstance(types, dict):
-            self._catalog_fail(where, "invalid_types")
-        for f, typ in types.items():
-            if typ not in ("str", "int", "float"):
-                self._catalog_fail(where, "invalid_types")
-        unique_columns = cat.get("unique_columns") or []
-        if not isinstance(unique_columns, list) or any(
-            not isinstance(c, str) for c in unique_columns
-        ):
-            self._catalog_fail(where, "invalid_unique_columns")
-
-        parsed = list(csv.reader(io.StringIO(text)))
-        if not parsed:
-            self._catalog_fail(where, "empty_catalog")
-        header = parsed[0]
-        if len(set(header)) != len(header) or any(
-            not _CATALOG_IDENT.match(h or "") for h in header
-        ):
-            self._catalog_fail(where, "invalid_header")
-        data = parsed[1:]
-        if not data:
-            self._catalog_fail(where, "empty_catalog")
-        if id_column not in header:
-            self._catalog_fail(where, "invalid_id_column")
-        for f in types:
-            if f not in header:
-                self._catalog_fail(where, "invalid_types")
-        for c in unique_columns:
-            if c not in header:
-                self._catalog_fail(where, "invalid_unique_columns")
-
-        records = []
-        for r in data:
-            if len(r) != len(header):
-                self._catalog_fail(where, "ragged_record")
-            rec = {}
-            for h, cell in zip(header, r):
-                if cell == "":
-                    self._catalog_fail(where, "missing_value")
-                rec[h] = self._catalog_cell(where, h, cell, types.get(h, "str"))
-            records.append(rec)
-        ids = [str(r[id_column]) for r in records]
-        if len(set(ids)) != len(ids):
-            self._catalog_fail(where, "duplicate_id_values")
-        for c in unique_columns:
-            vals = [str(r[c]) for r in records]
-            if len(set(vals)) != len(vals):
-                self._catalog_fail(
-                    where, "duplicate_unique_values", context={"column": c}
-                )
-
-        generated = []
-        for rec in records:
-            nt = copy.deepcopy(t)
-            del nt["catalog"]
-            nt["id"] = f"{tid}_{rec[id_column]}"
-            if isinstance(nt.get("filter"), str):
-                nt["filter"] = self._sub_placeholders(
-                    nt["filter"], where, rec, types, header, True
-                )
-            if isinstance(nt.get("derivations"), dict):
-                nt["derivations"] = {
-                    k: self._sub_placeholders(v, where, rec, types, header, False)
-                    for k, v in nt["derivations"].items()
-                }
-            generated.append(nt)
-        return generated
-
-    def _catalog_cell(self, where, field, cell, typ):
-        if typ == "str":
-            return cell
-        if typ == "int":
-            if _CATALOG_INT.match(cell):
-                return int(cell)
-            self._catalog_fail(
-                where, "invalid_int_cell", context={"field": field, "value": cell}
-            )
-        try:
-            v = float(cell)
-        except ValueError:
-            v = None
-        if v is None or v != v or v in (float("inf"), float("-inf")):  # noqa: PLR0124 -- NaN check is the intent
-            self._catalog_fail(
-                where, "invalid_float_cell", context={"field": field, "value": cell}
-            )
-        return v
-
-    def _sub_placeholders(self, node, where, rec, types, header, pred):
-        """Replace `${FIELD}` placeholders for one catalog record. In a"""
-        if isinstance(node, dict):
-            return {
-                k: self._sub_placeholders(
-                    v, where, rec, types, header, k in ("filter", "when")
-                )
-                for k, v in node.items()
-            }
-        if isinstance(node, list):
-            return [
-                self._sub_placeholders(v, where, rec, types, header, pred) for v in node
-            ]
-        if not isinstance(node, str):
-            return node
-
-        def field_of(m):
-            field = m.group(1)
-            if not _CATALOG_IDENT.match(field):
-                self._catalog_fail(
-                    where, "invalid_placeholder", context={"placeholder": m.group(0)}
-                )
-            if field not in header:
-                _fail(
-                    where,
-                    "validation",
-                    "unknown_row_catalog_column",
-                    "REQ-1249",
-                    {"field": field},
-                )
-            return field
-
-        def literal(field):
-            v = rec[field]
-            if types.get(field, "str") in ("int", "float"):
-                return str(v)
-            return "'" + str(v).replace("'", "''") + "'"
-
-        m = _CATALOG_PLACEHOLDER.fullmatch(node)
-        if m:
-            field = field_of(m)
-            return literal(field) if pred else rec[field]
-
-        def repl(mm):
-            field = field_of(mm)
-            if not pred:
-                self._catalog_fail(
-                    where, "embedded_placeholder", context={"placeholder": mm.group(0)}
-                )
-            return literal(field)
-
-        return _CATALOG_PLACEHOLDER.sub(repl, node)
 
     def _expand_named_windows(self):
         """REQ-1251/1252/1253: expand named window references before any"""

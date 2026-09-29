@@ -50,8 +50,6 @@ box. This is a documented deviation; a Polars rewrite remains future work.
 
 ```
 spec.yaml  ==>  engine.py (load, bind inputs)
-  expand row catalogs (REQ-1249): one ordinary template per catalog
-  record, `${FIELD}` placeholders substituted  --  before windows
   expand named windows (REQ-1251/1252/1253): root `windows:` shapes
   validated, string `window:` references replaced by independent
   deep copies of their definitions  --  before semantic analysis
@@ -259,20 +257,9 @@ fail validation as `window_order_by_required` (REQ-0340) when
   static type when the operation states none. REQ-0117: every identifier
   an expression entry reads must name a known current-row value
   (`unknown_field` otherwise).
-- Row catalogs (REQ-1249): a row template declaring `catalog` is expanded
-  at load into one ordinary template per catalog record, in CSV record
-  order at the original position, before named-window expansion. The CSV
-  is a specification resource (ASCII, unique-identifier header, one
-  present value per field per record, at least one record); `id_column`
-  values must be unique, `types` declares int/float fields (finite
-  numerics), `unique_columns` must exist and have no repeats. Generated
-  ids are `{template_id}_{id value}`. `${FIELD}` placeholders in the
-  template `filter` and derivations are substituted per record: an entire
-  scalar becomes the typed value, while inside a predicate `filter`/`when`
-  each placeholder becomes its quoted string (with `''` escaping) or
-  numeric literal. Any other embedded placeholder is invalid; an unknown
-  field fails `unknown_row_catalog_column`. All catalog failures surface
-  at `rows[i].catalog`.
+- Row catalogs (REQ-1249) are retired without replacement: row_class is
+  closed (REQ-0285), so a template declaring `catalog` fails validation as
+  `unknown_field` at `rows[i].catalog`.
 - `mapping` unmapped result (REQ-1110): a present source with no
   dictionary entry returns the `unmapped` result when declared and
   otherwise fails `mapping/unmapped_value`; `missing` never answers it.

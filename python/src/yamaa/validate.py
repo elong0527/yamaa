@@ -57,6 +57,9 @@ _INTERMEDIATE_FIELDS = {
     "verifications",
 }
 
+# REQ-1056: the row_class fields.
+_ROW_FIELDS = ("id", "dataset", "group_by", "filter", "derivations", "submission")
+
 # REQ-1274: the odm_class fields, and the schema's item and OID patterns.
 _ODM_READ_FIELDS = ("item", "event", "form", "item_group", "filter")
 _ODM_ITEM = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$")
@@ -943,8 +946,19 @@ def _check_rows(e):
             {"expected": "predicate", "actual": _type_name(filt)},
         )
     for t in e.spec.get("rows", []) or []:
-        ds = t.get("dataset") or e._default_dataset()
         where = e.row_path(t)
+        # REQ-0285: row_class is closed. Its retired `catalog` (REQ-1249,
+        # retired without replacement) is an undeclared field like any other.
+        for f in t:
+            if f not in _ROW_FIELDS:
+                _fail(
+                    f"{where}.{f}",
+                    "validation",
+                    "unknown_field",
+                    "REQ-0285",
+                    {"row": t.get("id"), "field": f},
+                )
+        ds = t.get("dataset") or e._default_dataset()
         if ds in e.lookups_decl and ds not in e.inputs:
             # REQ-1262: an eligible named intermediate may drive the rows.
             intermediate_driver_types(e, e.lookups_decl[ds], where + ".dataset")
