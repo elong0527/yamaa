@@ -4276,6 +4276,48 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("duplicate dataset verification id", message)
         self.assertIn("range requires an int or float column", message)
 
+    def test_a_row_may_not_override_an_odm_column_derivation(self):
+        # REQ-1260: an `odm` item read is not row-local, so a rows entry
+        # naming its column derives the column twice.
+        spec = {
+            "domain": "DM",
+            "input": {"ODM": "odm.csv"},
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID", "SEX"]},
+            "columns": [
+                {"name": "USUBJID"},
+                {"name": "SEX", "derivation": {"odm": "ODM.IT.DM.SEX"}},
+            ],
+            "rows": [
+                {
+                    "id": "subjects",
+                    "dataset": "ODM",
+                    "group_by": ["ODM.SubjectKey"],
+                    "derivations": {
+                        "USUBJID": "ODM.SubjectKey",
+                        "SEX": {"literal": "U"},
+                    },
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+
+        duplicates = [
+            error for error in errors
+            if getattr(error, "condition", None) == "duplicate_derivation"
+        ]
+        self.assertEqual(
+            [error.path for error in duplicates],
+            ["example/spec.yaml.columns.SEX.derivation"],
+        )
+        self.assertEqual(
+            duplicates[0].context, {"column": "SEX", "rows": ["subjects"]}
+        )
+        self.assertNotIn(
+            "SEX", VALIDATOR.row_local_column_derivations(spec)
+        )
+
     def test_short_unique_still_checks_declared_columns(self):
         spec = {
             "domain": "ADSL",

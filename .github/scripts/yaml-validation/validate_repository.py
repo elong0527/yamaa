@@ -318,6 +318,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R004', 'invalid_predicate'): {'predicate'},
     ('R004', 'incompatible_input_type'): {'left_type', 'right_type'},
     ('R004', 'unknown_field'): {'identifier'},
+    ('R005', 'duplicate_derivation'): {'column', 'rows'},
     ('R005', 'duplicate_order_term'): {'column'},
     ('R005', 'internal_column_in_keys'): {'column'},
     ('R005', 'undeclared_column'): {'column'},
@@ -5431,10 +5432,19 @@ def validate_spec_contracts(
         at_column = name in column_derivations
         at_rows = [name in names for names in row_derivations]
         if at_column and any(at_rows) and name not in row_local:
-            errors.append(
-                f"ERROR: {spec_label}.columns.{name}.derivation: column "
-                "is also derived by a row"
-            )
+            errors.append(validation_diagnostic(
+                f"{spec_label}.columns.{name}.derivation",
+                'duplicate_derivation',
+                "column is also derived by a row",
+                context={
+                    'column': name,
+                    'rows': [
+                        row.get('id')
+                        for row, present in zip(row_entries, at_rows)
+                        if present
+                    ],
+                },
+            ))
         elif row_entries and not at_column and not all(at_rows):
             missing_rows = [
                 str(index) for index, present in enumerate(at_rows)
@@ -6387,8 +6397,9 @@ def row_local_column_derivations(spec):
     """Return the columns whose column-level derivation is row-local.
 
     REQ-1260: a column-level derivation is row-local unless it uses a
-    lookup, an aggregate, or a window, reads a named intermediate, or reads
-    a column whose column-level derivation is not row-local.
+    lookup, an aggregate, a window, or an `odm` item read, reads a named
+    intermediate, or reads a column whose column-level derivation is not
+    row-local.
     """
     columns = spec.get('columns')
     intermediates = spec.get('intermediates')
@@ -6407,7 +6418,7 @@ def row_local_column_derivations(spec):
         derivation = column['derivation']
         names = derive_binding_reference_names(derivation)
         if any(
-            operation == 'aggregate'
+            operation in ('aggregate', 'odm')
             or operation in ROW_WINDOW_OPERATIONS
             for operation in derivation_operations(derivation)
         ) or any(
