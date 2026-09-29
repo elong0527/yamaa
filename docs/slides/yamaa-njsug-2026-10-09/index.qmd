@@ -108,11 +108,11 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 * Build publicly available ground truth.
   * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 * CDISC pilots (SDTM -> ADaM)
-  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6
+  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6.
 * OpenClinica real sample data (ODM -> SDTM -> ADaM)
-  * Real sample data for testing the full data journey
+  * Real sample data for testing the full data journey.
 * Synthetic studies (ODM -> SDTM -> ADaM)
-  * KN564 and KN189 as scalable test beds
+  * Simulate ODM XML from real clinical studies.
 
 ## yamaa: core principle
 
@@ -186,7 +186,6 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 
 - **Benchmarks** help assess an AI agent before adoption.
 - **Deployment** also requires onboarding the agent to a specific organization environment.
-
 Collaborating with [keiji.ai](https://keiji.ai/) to test synthetic clinical trial data.
 
 [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)

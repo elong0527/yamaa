@@ -435,6 +435,90 @@ def test_round_half_away_from_zero_survives_extreme_digits() -> None:
     assert _rounded(123.456, 400) == 123.456
 
 
+@pytest.mark.parametrize(
+    ("value", "digits"),
+    [
+        (1.25, 1),
+        (-1.25, 1),
+        (2.5, 0),
+        (-2.5, 0),
+        (1.35, 1),
+        (149.0, -1),
+        (5, 1),
+    ],
+)
+def test_compute_round_matches_the_standalone_operation(
+    value: object, digits: int
+) -> None:
+    # REQ-0418: the function form shares the standalone tie behavior.
+    expected = _rounded(value, digits)
+    actual = _value(f"ROUND_HALF_AWAY_FROM_ZERO(A, {digits})", {"A": value})
+
+    assert actual == expected
+    assert type(actual) is float
+
+
+def test_compute_round_is_case_insensitive() -> None:
+    assert _value("round_half_away_from_zero(2.45, 1)") == 2.5
+
+
+def test_compute_round_guards_division_with_nullif() -> None:
+    # The Pilot 3 AVGDD motivation: a guarded division rounded in one step
+    # matches the two-column form.
+    expr = "ROUND_HALF_AWAY_FROM_ZERO(CUMDOSE / NULLIF(TRTDURD, 0), 1)"
+    assert _value(expr, {"CUMDOSE": 245.0, "TRTDURD": 100.0}) == 2.5
+    assert _value(expr, {"CUMDOSE": -245.0, "TRTDURD": 100.0}) == -2.5
+    assert _value(expr, {"CUMDOSE": 100.0, "TRTDURD": 0.0}) is MISSING
+    assert _value(expr, {"CUMDOSE": MISSING, "TRTDURD": 10.0}) is MISSING
+
+    raw = _value("CUMDOSE / NULLIF(TRTDURD, 0)", {"CUMDOSE": 245.0, "TRTDURD": 100.0})
+    assert _value(expr, {"CUMDOSE": 245.0, "TRTDURD": 100.0}) == _rounded(raw, 1)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ROUND_HALF_AWAY_FROM_ZERO(A, 1)",
+        "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
+        "ROUND_HALF_AWAY_FROM_ZERO(A + 1, 0)",
+    ],
+)
+def test_compute_round_propagates_missing(text: str) -> None:
+    assert _value(text, {"A": MISSING, "D": 1}) is MISSING
+    assert _value("ROUND_HALF_AWAY_FROM_ZERO(A, NULL)", {"A": 1.25}) is MISSING
+    assert _value("ROUND_HALF_AWAY_FROM_ZERO(NULL, 1)") is MISSING
+
+
+def test_compute_round_returns_positive_zero() -> None:
+    result = _value("ROUND_HALF_AWAY_FROM_ZERO(A, 1)", {"A": -0.04})
+
+    assert result == 0.0
+    assert math.copysign(1.0, result) == 1.0  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("text", "values"),
+    [
+        ("ROUND_HALF_AWAY_FROM_ZERO(A, 1.5)", {"A": 1.25}),
+        ("ROUND_HALF_AWAY_FROM_ZERO(A, D)", {"A": 1.25, "D": 1.5}),
+        ("ROUND_HALF_AWAY_FROM_ZERO(A, 1.0)", {"A": 1.25}),
+    ],
+)
+def test_compute_round_rejects_a_non_integer_digits(
+    text: str, values: dict[str, object]
+) -> None:
+    failure = _condition(text, values)
+
+    assert failure.condition.condition == "incompatible_input_type"
+    assert failure.condition.requirement == "REQ-0418"
+    assert failure.condition.phase == "validation"
+
+
+def test_compute_round_survives_extreme_digits() -> None:
+    assert _value("ROUND_HALF_AWAY_FROM_ZERO(A, -400)", {"A": 123.456}) == 0.0
+    assert _value("ROUND_HALF_AWAY_FROM_ZERO(A, 400)", {"A": 123.456}) == 123.456
+
+
 def _parse(expression: dict[str, object], values: dict[str, object]) -> object:
     result = evaluate_expression(expression, MappingResolver(values))
     if isinstance(result, ValueResult):

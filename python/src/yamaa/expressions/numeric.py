@@ -57,6 +57,7 @@ FUNCTION_ARITIES: dict[str, tuple[int, int | None]] = {
     "LEAST": (2, None),
     "NULLIF": (2, 2),
     "COALESCE": (1, None),
+    "ROUND_HALF_AWAY_FROM_ZERO": (2, 2),
 }
 
 # A spelling R010 reserves for a construct the grammar does not admit, so the
@@ -515,6 +516,21 @@ def _call(node: NumericAst, expr: str, resolver: Resolver) -> object:
         return _modulo(arguments[0], arguments[1], expr)
     if name == "POWER":
         return _power(arguments[0], arguments[1], expr)
+    if name == "ROUND_HALF_AWAY_FROM_ZERO":
+        # REQ-0418: the function form shares the standalone operation's tie
+        # behavior and missing-value semantics; digits must be an integer.
+        digits = arguments[1]
+        if type(digits) is not int:
+            raise _fail(
+                "incompatible_input_type",
+                "REQ-0418",
+                {"expr": expr, "expected": "int", "actual": runtime_type_name(digits)},
+                phase="validation",
+            )
+        number = float(arguments[0])  # type: ignore[arg-type]
+        if not math.isfinite(number):
+            return MISSING
+        return _finite(_round_half_away_from_zero_scalar(number, digits))
 
     value = arguments[0]
     if name == "ABS":

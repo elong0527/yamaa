@@ -55,6 +55,7 @@ vocabulary:
     LEAST: {min_arguments: 2, max_arguments: null}
     NULLIF: {min_arguments: 2, max_arguments: 2}
     COALESCE: {min_arguments: 1, max_arguments: null}
+    ROUND_HALF_AWAY_FROM_ZERO: {min_arguments: 2, max_arguments: 2}
 # A spelling the grammar reserves for a construct it does not admit, so the
 # failure names the construct rather than a stray token.
 prohibited:
@@ -219,6 +220,35 @@ cases:
       A))) (call FLOOR (id A))) (call TRUNC (id A))) (call SQRT (id A)))
       (call EXP (id A))) (call LN (id A))) (call MOD (id A) (int 2)))
       (call GREATEST (id A) (int 1))) (call LEAST (id A) (int 1)))
+  - id: rounding-with-ties-away-from-zero-parses
+    covers: [call, vocabulary]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1)"
+    parse: accept
+    identifiers: [A]
+    shape: (call ROUND_HALF_AWAY_FROM_ZERO (id A) (int 1))
+  - id: rounding-function-name-is-case-insensitive
+    covers: [call, keyword-case]
+    text: "round_half_away_from_zero(A, 1)"
+    parse: accept
+    identifiers: [A]
+    shape: (call ROUND_HALF_AWAY_FROM_ZERO (id A) (int 1))
+  - id: average-daily-dose-rounds-a-guarded-division
+    covers: [call, arithmetic]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(CUMDOSE / NULLIF(TRTDURD, 0), 1)"
+    parse: accept
+    identifiers: [CUMDOSE, TRTDURD]
+    shape: (call ROUND_HALF_AWAY_FROM_ZERO (/ (id CUMDOSE) (call NULLIF
+      (id TRTDURD) (int 0))) (int 1))
+  - id: rounding-requires-value-and-digits
+    covers: [vocabulary, rejection]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: rounding-rejects-a-third-argument
+    covers: [vocabulary, rejection]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1, 2)"
+    parse: reject
+    condition: prohibited_function
   - id: rounding-is-not-in-the-vocabulary
     covers: [vocabulary, rejection]
     text: "ROUND(A, 2)"

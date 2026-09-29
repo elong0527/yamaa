@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+import yaml12
 from yaml.composer import ComposerError
 from yaml.constructor import ConstructorError
 from yaml.events import AliasEvent
@@ -158,6 +159,36 @@ def _yaml_error(error: yaml.YAMLError) -> SpecificationError:
     )
 
 
+def _yaml12_error(error: ValueError) -> SpecificationError:
+    reason = str(error)
+    context: dict[str, str | int] = {"reason": reason}
+    position = re.search(r" line (\d+) column (\d+)$", reason)
+    if position is not None:
+        context.update(line=int(position[1]), column=int(position[2]))
+    return SpecificationError(
+        [
+            ValidationDiagnostic(
+                condition="invalid_yaml",
+                spec_paths=("$",),
+                context=context,
+            )
+        ]
+    )
+
+
+def _normalize_non_finite(value: object) -> object:
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, list):
+        return [_normalize_non_finite(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            _normalize_non_finite(key): _normalize_non_finite(item)
+            for key, item in value.items()
+        }
+    return value
+
+
 def _escaped_path_member(member: object) -> str:
     return str(member).encode("unicode_escape").decode("ascii")
 
@@ -224,9 +255,19 @@ def read_yaml_bytes(raw: bytes, source_path: str | Path) -> object:
         ) from error
 
     try:
-        document = yaml.load(text, Loader=_Yaml12Loader)
+        # Keep the existing document restrictions and their marked diagnostics.
+        # yaml12 parses the values; its plain-object API does not expose the
+        # nodes needed to distinguish duplicate keys, anchors, and tags.
+        guard_document = yaml.load(text, Loader=_Yaml12Loader)
     except yaml.YAMLError as error:
         raise _yaml_error(error) from error
+    diagnostics = _unicode_scalar_diagnostics(guard_document)
+    if diagnostics:
+        raise SpecificationError(diagnostics)
+    try:
+        document = _normalize_non_finite(yaml12.parse_yaml(text))
+    except ValueError as error:
+        raise _yaml12_error(error) from error
     diagnostics = _unicode_scalar_diagnostics(document)
     if diagnostics:
         raise SpecificationError(diagnostics)

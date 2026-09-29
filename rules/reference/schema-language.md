@@ -69,6 +69,13 @@ Implementations must meet it without requiring authors to quote values.
 [Types and conversion](../values/types.md)'s non-finite normalization
 applies immediately after core-schema scalar resolution.
 
+For the repository implementations, use the `py-yaml12` package (imported as
+`yaml12`) in Python and the CRAN `yaml12` package in R to resolve YAML 1.2
+core values. Parser choice does not replace the document restrictions in
+[REQ-0246](#req-0246) or the non-finite normalization above. The Python
+reader also uses PyYAML to check syntax features that `py-yaml12`'s
+plain-object API does not expose.
+
 ### Named types
 
 <a id="req-0250"></a>
