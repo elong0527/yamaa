@@ -184,7 +184,7 @@ ensure_producer_completed <- function(id, idef, path, spec_dir, spec_path,
       norm_schema %in% normalizePath(workflow_stack, mustWork = FALSE))
     yamaa_error("producer_contract_mismatch", paste0("input ", id,
       ": schema names consumer or workflow ancestor: ", idef$schema))
-  producer <- tryCatch(yaml::read_yaml(schema_path),
+  producer <- tryCatch(yaml_load_file(schema_path),
     error = function(e) yamaa_error("invalid_spec",
       paste0("input ", id, ": cannot read producing spec: ", idef$schema)))
   p_out <- producer$output$path
@@ -209,7 +209,7 @@ validate_producer_contract <- function(id, idef, df, spec_dir, spec_path,
     yamaa_error("producer_contract_mismatch", paste0("input ", id,
       ": schema names the consuming specification or a workflow ancestor: ",
       idef$schema))
-  producer <- tryCatch(yaml::read_yaml(schema_path),
+  producer <- tryCatch(yaml_load_file(schema_path),
     error = function(e) yamaa_error("invalid_spec",
       paste0("input ", id, ": cannot read producing spec: ", idef$schema)))
   pcols <- vapply(producer$columns, function(c) c$name, character(1))

@@ -9,11 +9,11 @@ Description: A clean-room R implementation of the yamaa derivation engine:
     construction, column derivation, window expressions, lookups,
     temporal and text operations, verifications, and artifact publishing,
     driven by the schema and rules in yaml/ and validated against
-    benchmarks/. Self-contained: base R plus the yaml and arrow packages.
+    benchmarks/. Self-contained: base R plus the yaml12 and arrow packages.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
-    yaml,
+    yaml12 (>= 0.2.0),
     arrow
 Suggests:
     testthat (>= 3.0.0)

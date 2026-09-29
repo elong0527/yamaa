@@ -443,8 +443,9 @@ eval_literal <- function(payload, ctx) {
 literal_to_tv <- function(payload, target, n) {
   if (is.null(payload)) return(tv_na(if (!is.null(target)) target else "null", n))
   if (is.logical(payload) && length(payload) == 1) {
-    # YAML 1.1 Y/N become booleans; in yamaa they mean the strings "Y"/"N"
-    return(tv(rep(if (payload) "Y" else "N", n), "str"))
+    value <- tv(rep(payload, n), "bool")
+    if (!is.null(target)) return(convert_tv(value, target))
+    return(value)
   }
   if (is.integer(payload) || (is.numeric(payload) && length(payload) == 1)) {
     v <- payload; if (!is.finite(v)) return(tv(rep(NA_real_, n), "float"))
@@ -656,9 +657,7 @@ eval_mapping <- function(payload, ctx) {
   dict <- mapping_dict(payload, ctx)
   case_sensitive <- if (is.null(payload$case_sensitive)) TRUE else payload$case_sensitive
   # duplicate keys under the comparison rule fail (checked on raw keys)
-  # Y/N booleans from YAML 1.1 mean the strings "Y"/"N"
-  keys <- vapply(names(dict), function(k)
-    if (k == "TRUE") "Y" else if (k == "FALSE") "N" else k, character(1))
+  keys <- names(dict)
   ck <- if (case_sensitive) keys else ascii_upper(keys)
   # REQ-0714: keys colliding after the ASCII fold fail
   if (anyDuplicated(ck)) yamaa_error("ambiguous_dictionary", "mapping dict keys collide")

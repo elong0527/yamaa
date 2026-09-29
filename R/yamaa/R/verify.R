@@ -72,11 +72,7 @@ verify_column_one <- function(nm, c, v, ctx, idx0, prefix) {
   if (kind == "not_missing") {
     report("missing values present", !present, details, length(vals))
   } else if (kind == "allowed_values") {
-    vals_list <- lapply(p$values, function(x) {
-      # Y/N booleans from YAML 1.1 mean the strings "Y"/"N"
-      if (is.logical(x) && length(x) == 1 && !is.na(x)) if (x) "Y" else "N" else x
-    })
-    allowed <- literal_list_tv(vals_list, c$t)
+    allowed <- literal_list_tv(lapply(p$values, identity), c$t)
     bad <- present & vapply(vals,
       function(x) !any(eq_with_na(x, allowed$v)), logical(1))
     report(paste0(sum(bad), " values outside the allowed set"), bad, details, length(vals))

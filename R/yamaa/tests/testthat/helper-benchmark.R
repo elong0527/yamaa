@@ -4,11 +4,6 @@
 # reference; this helper mirrors its semantics (condition-only comparison
 # for negatives, text CSV comparison for positives).
 
-yamaa_handlers <- function() {
-  list("bool#yes" = function(x) if (x %in% c("Y", "y")) x else TRUE,
-       "bool#no" = function(x) if (x %in% c("N", "n")) x else FALSE)
-}
-
 yamaa_benchmarks_root <- function() {
   env <- Sys.getenv("YAMAA_BENCHMARKS", "")
   if (nzchar(env)) return(env)
@@ -17,8 +12,7 @@ yamaa_benchmarks_root <- function() {
 }
 
 yamaa_manifest <- function(bdir) {
-  yaml::yaml.load_file(file.path(bdir, "execution-manifest.yaml"),
-    handlers = yamaa_handlers())$examples
+  yamaa:::yaml_load_file(file.path(bdir, "execution-manifest.yaml"))$examples
 }
 
 # plain CSV reader for golden comparison (text compare, no typing)
@@ -165,8 +159,7 @@ run_one_benchmark <- function(nm, wt, man_entry) {
     error = function(e) paste0("R error: ", conditionMessage(e)))
   if (is_neg) {
     exp_err <- tryCatch(
-      yaml::yaml.load_file(file.path(bdir, "expected", "error.yaml"),
-        handlers = yamaa_handlers()),
+      yamaa:::yaml_load_file(file.path(bdir, "expected", "error.yaml")),
       error = function(e) NULL)
     if (is.null(err))
       return(list(status = "FAIL", detail = "negative benchmark succeeded"))
@@ -228,7 +221,7 @@ run_one_benchmark <- function(nm, wt, man_entry) {
   }
   exp_resolved <- file.path(exp_dir, "spec_resolved.yaml")
   if (file.exists(exp_resolved)) {
-    exp_spec <- yaml::yaml.load_file(exp_resolved, handlers = yamaa_handlers())
+    exp_spec <- yamaa:::yaml_load_file(exp_resolved)
     cmp3 <- compare_yaml(spec, exp_spec)
     if (!isTRUE(cmp3))
       return(list(status = "FAIL",

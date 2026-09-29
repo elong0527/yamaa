@@ -1,13 +1,49 @@
-# YAML 1.1 'Y'/'y'/'N'/'n' are strings, not booleans (REQ-0714 needs
-# distinct Y/y dict keys). Other booleans (true/false) stay logical.
-yaml_handlers <- list(
-  "bool#yes" = function(x) if (x %in% c("Y", "y")) x else TRUE,
-  "bool#no" = function(x) if (x %in% c("N", "n")) x else FALSE,
-  # R's NA_integer_ IS the -2^31 bit pattern, so keep ints as exact doubles
-  # (-2147483648 survives; int32 range is enforced downstream by to_int_value)
-  "int" = function(x) suppressWarnings(as.numeric(x)))
+# YAML 1.2 core resolution keeps Y/y/N/n, yes/no and ISO dates as strings.
+# yaml12 currently represents the integer -2147483648 as NA_integer_, which
+# is the same bit pattern in R. Its unsimplified form retains nulls as NULL,
+# letting us distinguish a minimum int32 literal from a null sequence member.
+yaml_has_integer_na <- function(x) {
+  if (is.integer(x) && anyNA(x)) return(TRUE)
+  if (is.list(x)) return(any(vapply(x, yaml_has_integer_na, logical(1))))
+  FALSE
+}
 
-yaml_load_file <- function(path) yaml::yaml.load_file(path, handlers = yaml_handlers)
+yaml_restore_min_int <- function(x, unsimplified) {
+  if (is.numeric(x) && is.list(unsimplified) &&
+      length(x) == length(unsimplified)) {
+    for (i in seq_along(x)) {
+      raw <- unsimplified[[i]]
+      if (is.na(x[i]) && is.integer(raw) && length(raw) == 1L && is.na(raw))
+        x[i] <- -2147483648
+    }
+  } else if (is.integer(x) && length(x) == 1L && is.na(x) &&
+      is.integer(unsimplified) && length(unsimplified) == 1L &&
+      is.na(unsimplified)) {
+    return(-2147483648)
+  } else if (is.list(x) && is.list(unsimplified)) {
+    for (i in seq_along(x))
+      x[i] <- list(yaml_restore_min_int(x[[i]], unsimplified[[i]]))
+  }
+  x
+}
+
+# Keep the old reader's numeric shape (exact doubles) and normalize non-finite
+# values immediately after YAML scalar resolution (REQ-0006).
+yaml_numeric_doubles <- function(x) {
+  if (is.integer(x)) storage.mode(x) <- "double"
+  if (is.numeric(x)) x[!is.finite(x)] <- NA_real_
+  if (is.list(x)) {
+    for (i in seq_along(x)) x[i] <- list(yaml_numeric_doubles(x[[i]]))
+  }
+  x
+}
+
+yaml_load_file <- function(path) {
+  parsed <- yaml12::read_yaml(path)
+  if (yaml_has_integer_na(parsed))
+    parsed <- yaml_restore_min_int(parsed, yaml12::read_yaml(path, simplify = FALSE))
+  yaml_numeric_doubles(parsed)
+}
 
 # values.R -- the yamaa type system in base R.
 #
@@ -82,14 +118,6 @@ parse_number_text <- function(s) {
   }, double(1), USE.NAMES = FALSE)
 }
 
-# R's yaml parses bare Y/N as booleans (YAML 1.1); in string contexts they
-# mean the strings "Y"/"N". Convert back when a string is expected.
-y_string <- function(x) {
-  if (is.logical(x) && length(x) == 1 && !is.na(x))
-    return(if (x) "Y" else "N")
-  as.character(x)
-}
-
 # REQ-0010: the conversion matrix ----------------------------------------
 apply_declared_type <- function(tv_in, declared, cf_lit, cf_present, colname) {
   if (tv_in$t == declared) return(tv_in)
@@ -150,7 +178,6 @@ convert_tv <- function(x, dest, on_fail = "raise") {
     "float->int" = vapply(v, to_int_value, double(1)),
     "date->str" = v,
     "datetime->str" = v,
-    "bool->str" = ifelse(is.na(v), NA_character_, ifelse(v, "Y", "N")),
     yamaa_error("conversion_failed",
       paste0("no conversion from ", x$t, " to ", dest)))
   tv(out, dest)

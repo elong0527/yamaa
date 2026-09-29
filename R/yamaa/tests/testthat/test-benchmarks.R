@@ -20,8 +20,7 @@ test_that("packaged engine matches goldens across the benchmark corpus", {
   # loudly instead of skipping when the corpus is absent.
   expect_true(dir.exists(bdir),
     info = paste0("benchmarks directory not found: ", bdir))
-  man <- yaml::yaml.load_file(file.path(bdir, "execution-manifest.yaml"),
-    handlers = yamaa_handlers())$examples
+  man <- yamaa_manifest(bdir)
   fails <- character(0)
   skips <- character(0)
   for (nm in sort(names(man))) {
