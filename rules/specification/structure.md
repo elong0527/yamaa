@@ -137,17 +137,17 @@ under this contract. A non-ASCII source byte fails validation with
 | Field | Meaning |
 | --- | --- |
 | `root_class.schema_version` | Schema bundle this specification is written against; [Schema language](../reference/schema-language.md) requires an exact match. |
+| `root_class.parents` | Ordered local specification layers resolved under [Specification composition](composition.md) before validation and execution. |
 | `root_class.domain` | Name of the output dataset this specification derives. |
 | `root_class.keys` | Output columns identifying a row; [Artifact publication](../storage/publication.md) defines the identity they assert. |
 | `root_class.input` | Source datasets readable by this specification, each under the name it is read through. |
 | `root_class.base` | Input dataset whose records build output rows when rows is absent; [Row construction](../execution/rows.md) states when it is required. |
-| `root_class.parents` | Ordered local specification layers resolved under [Specification composition](composition.md) before validation and execution. |
+| `root_class.filter` | Predicate selecting base input records for row construction when `rows` is absent; the filter-only row template lifted to root. Mutually exclusive with `root_class.rows`; [Row construction](../execution/rows.md) defines the driver it reads. |
+| `root_class.output` | Artifact presentation independent of dependency-ordered declarations; [Artifact publication](../storage/publication.md) defines it. |
 | `root_class.windows` | Complete named window settings under [REQ-1251](../operations/windows.md#req-1251). |
 | `root_class.intermediates` | Named dataset lookups several columns read through <lookup-id>.<column>; [Lookup and joins](../operations/lookup.md) defines them. |
-| `root_class.output` | Artifact presentation independent of dependency-ordered declarations; [Artifact publication](../storage/publication.md) defines it. |
 | `root_class.columns` | Columns in the dependency order [Execution lifecycle](../execution/lifecycle.md) requires; output.columns controls artifact order. |
 | `root_class.rows` | Row templates constructing output rows from input records or groups; [Row construction](../execution/rows.md) evaluates them. Mutually exclusive with `root_class.filter`. |
-| `root_class.filter` | Predicate selecting base input records for row construction when `rows` is absent; the filter-only row template lifted to root. Mutually exclusive with `root_class.rows`; [Row construction](../execution/rows.md) defines the driver it reads. |
 | `root_class.verifications` | Assertions over the completed dataset; [Verification](../execution/verification.md) defines them. |
 | `root_class.submission` | Governed dataset metadata a submission document is generated from; [Submission metadata](../submission/metadata.md) defines it. |
 | `root_class.metadata` | Free-form annotations carried with the specification; [Submission metadata](../submission/metadata.md) reserves the key names it governs. |

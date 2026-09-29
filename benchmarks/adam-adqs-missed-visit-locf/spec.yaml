@@ -16,20 +16,20 @@ input:
 # by subject (by arm, cut at discontinuation, or driven by a collected
 # count) is expanded upstream and read here as an ordinary input.
 
+output:
+  path: adqs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVISITN, AVAL, DTYPE, EFFFL]
+  order_by: [USUBJID, PARAMCD, AVISITN]
+
 intermediates:
   # The subject's collected score at the visit a template is building. A
   # record without a score is no collected score, so the visit counts as
   # missed.
   - id: COLLECTED
     dataset: QS
-    filter: "QS.AVAL IS NOT NULL"
     key: [STUDYID, USUBJID, PARAMCD, AVISITN]
+    filter: "QS.AVAL IS NOT NULL"
     no_match: null
-
-output:
-  path: adqs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVISITN, AVAL, DTYPE, EFFFL]
-  order_by: [USUBJID, PARAMCD, AVISITN]
 
 columns:
   - name: STUDYID

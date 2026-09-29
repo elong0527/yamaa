@@ -6,7 +6,8 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES,
+            LBORRESU, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -143,7 +144,8 @@ verifications:
   - implies:
       id: not-done-record-has-no-result
       when: "LBSTAT = 'NOT DONE'"
-      then: "LBORRES IS NULL AND LBORRESU IS NULL AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
+      then: "LBORRES IS NULL AND LBORRESU IS NULL
+        AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
   - implies:
       id: completed-result-is-not-flagged
       when: "LBSTAT IS NULL"

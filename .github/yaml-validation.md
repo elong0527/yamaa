@@ -179,6 +179,18 @@ The R side of the shared grammar vectors needs only R and the `yaml` package:
 Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
 ```
 
+Specification style is a separate step. The
+[style contract](../rules/specification/style.md) fixes one written form of
+a specification: field order, blank lines, a 79-column line width, and the
+canonical `{literal: X}` and bare-string source spellings. CI fails on any
+style finding in a benchmark specification, and `--fix` applies the layout
+fixes it can prove leave the parsed value and the comments unchanged:
+
+```bash
+uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
+uv run --project python --no-sync python -m yamaa.style --fix benchmarks/<name>/spec.yaml
+```
+
 Column labels are checked by `validate_repository.py`
 (`validate_column_labels`, covering plain and inherited specs alike),
 so there is no separate label-check step anymore.

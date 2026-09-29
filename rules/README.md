@@ -18,6 +18,7 @@ owns the sequence of a run.
 | [Specification structure](specification/structure.md) | normative | Declare identifiers, columns, derivation coverage, and source notation. |
 | [Specification composition](specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
 | [Name binding](specification/binding.md) | normative | Resolve input datasets, constructed output columns, and ODM item reads. |
+| [Specification style](specification/style.md) | normative | Fix one written form of a specification and report departures without changing its meaning. |
 
 ## Values
 

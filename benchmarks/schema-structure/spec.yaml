@@ -98,6 +98,7 @@ rows:
   # all missing is discarded after its summary is computed.
   - id: visit_low
     group_by: [LB.USUBJID, LB.VISIT]
+    filter: "AVAL IS NOT NULL"
     derivations:
       PARAMCD: {literal: LOW}
       PARAM: {literal: Lowest Result of Visit}
@@ -106,7 +107,6 @@ rows:
         aggregate:
           expr: "MIN(LB.LBSTRESN)"
       DTYPE: {literal: LOWEST}
-    filter: "AVAL IS NOT NULL"
 
 verifications:
   - unique:

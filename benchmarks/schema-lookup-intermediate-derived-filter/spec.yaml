@@ -6,6 +6,10 @@ input:
   DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDY: int, DSVALUE: float}}
 base: DM
 
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DSDECOD, DSVALUE, EOT_FALLBACK]
+
 intermediates:
   # Each subject's DS records (no key: it matches on the output keys),
   # ranked by study day with the sequence number, scaled down by 1000,
@@ -14,19 +18,15 @@ intermediates:
   # has a missing rank and is never chosen; the smallest rank is kept.
   - id: EOT
     dataset: DS
-    derivations:
-      EOT_FALLBACK:
-        compute:
-          expr: "DSSTDY + DSSEQ / 1000"
     filter: "DS.EOT_FALLBACK IS NOT NULL"
     order_by: [DS.EOT_FALLBACK]
     keep: first
     columns: [DSDECOD, DSVALUE, EOT_FALLBACK]
     no_match: null
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, DSDECOD, DSVALUE, EOT_FALLBACK]
+    derivations:
+      EOT_FALLBACK:
+        compute:
+          expr: "DSSTDY + DSSEQ / 1000"
 
 columns:
   - name: STUDYID

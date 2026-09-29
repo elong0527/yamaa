@@ -7,6 +7,12 @@ input:
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
+            RFPENDTC, RFENDTC]
+
 intermediates:
   # Each subject's last exposure record with an end date: latest end date,
   # ties to the higher sequence number. The filter matters: a record with
@@ -17,11 +23,6 @@ intermediates:
     order_by: [EX.EXENDTC, EX.EXSEQ]
     keep: last
     no_match: null
-
-output:
-  path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
-            RFPENDTC, RFENDTC]
 
 columns:
   - name: DOMAIN

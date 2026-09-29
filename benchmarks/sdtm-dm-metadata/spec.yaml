@@ -3,14 +3,6 @@ domain: DM
 keys: [STUDYID, USUBJID]
 input:
   DM_RAW: input/dm_raw.csv
-submission:
-  label: Demographics
-  class: SPECIAL PURPOSE
-  structure: One record per subject
-  repeating: false
-  comment:
-    text: Demographics are described in section 2.1 of the reviewer's guide.
-    documents: [csdrg]
 
 output:
   path: dm.csv
@@ -21,6 +13,8 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: DM}
+    verifications:
+      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -29,13 +23,13 @@ columns:
       origin:
         type: Assigned
         source: Sponsor
-    verifications:
-      not_missing: {}
 
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DM_RAW.STUDYID
+    verifications:
+      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -43,8 +37,6 @@ columns:
       origin:
         type: Protocol
         source: Sponsor
-    verifications:
-      not_missing: {}
 
   - name: USUBJID
     type: str
@@ -57,6 +49,10 @@ columns:
           - source: DM_RAW.SITEID
           - literal: '-'
           - source: DM_RAW.SUBJID
+    verifications:
+      - not_missing: {}
+      - max_length:
+          max: 30
     submission:
       core: Req
       role: Identifier
@@ -65,15 +61,13 @@ columns:
         source: Sponsor
       method: Study identifier, site identifier, and subject identifier joined
         by hyphens.
-    verifications:
-      - not_missing: {}
-      - max_length:
-          max: 30
 
   - name: SUBJID
     type: str
     label: Subject Identifier for the Study
     derivation: DM_RAW.SUBJID
+    verifications:
+      not_missing: {}
     submission:
       core: Req
       role: Topic
@@ -84,13 +78,13 @@ columns:
         documents:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
-    verifications:
-      not_missing: {}
 
   - name: SITEID
     type: str
     label: Study Site Identifier
     derivation: DM_RAW.SITEID
+    verifications:
+      not_missing: {}
     submission:
       core: Req
       role: Record Qualifier
@@ -98,13 +92,15 @@ columns:
       origin:
         type: Collected
         source: Investigator
-    verifications:
-      not_missing: {}
 
   - name: AGE
     type: int
     label: Age
     derivation: DM_RAW.AGE
+    verifications:
+      range:
+        min: 0
+        max: 120
     submission:
       core: Exp
       role: Record Qualifier
@@ -115,10 +111,6 @@ columns:
         documents:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
-    verifications:
-      range:
-        min: 0
-        max: 120
 
   - name: AGEU
     type: str
@@ -138,6 +130,10 @@ columns:
     type: str
     label: Sex
     derivation: DM_RAW.SEX
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [F, M, U]
     submission:
       core: Req
       role: Record Qualifier
@@ -149,15 +145,13 @@ columns:
         documents:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
-    verifications:
-      - not_missing: {}
-      - allowed_values:
-          values: [F, M, U]
 
   - name: COUNTRY
     type: str
     label: Country
     derivation: DM_RAW.COUNTRY
+    verifications:
+      not_missing: {}
     submission:
       core: Req
       role: Record Qualifier
@@ -169,8 +163,6 @@ columns:
         documents:
           - document: acrf
             pages: {type: PhysicalRef, refs: "1"}
-    verifications:
-      not_missing: {}
 
 verifications:
   - unique:
@@ -178,3 +170,12 @@ verifications:
   - row_count:
       min: 3
       max: 3
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
+  comment:
+    text: Demographics are described in section 2.1 of the reviewer's guide.
+    documents: [csdrg]

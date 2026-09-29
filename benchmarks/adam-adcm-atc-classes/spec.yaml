@@ -7,47 +7,55 @@ input:
   ATCDICT: input/atc_dict.csv
 base: CM
 
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, ATC1, ATC2, ATC3, ATC4,
+            ATC1CD, ATC2CD, ATC3CD, ATC4CD]
+
 intermediates:
   - id: FACM_ATC1
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC1'"
     no_match: null
+
   - id: FACM_ATC2
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC2'"
     no_match: null
+
   - id: FACM_ATC3
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC3'"
     no_match: null
+
   - id: FACM_ATC4
     dataset: FACM
     key: {STUDYID: CM.STUDYID, USUBJID: CM.USUBJID, CMSEQ: CM.CMSEQ}
     filter: "FACM.FATESTCD = 'ATC4'"
     no_match: null
+
   - id: ATC1_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC1CD}
     no_match: null
+
   - id: ATC2_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC2CD}
     no_match: null
+
   - id: ATC3_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC3CD}
     no_match: null
+
   - id: ATC4_DICT
     dataset: ATCDICT
     key: {ATCCODE: ATC4CD}
     no_match: null
-
-output:
-  path: adcm.csv
-  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, ATC1, ATC2, ATC3, ATC4, ATC1CD, ATC2CD, ATC3CD, ATC4CD]
 
 columns:
   - name: STUDYID
@@ -131,8 +139,10 @@ verifications:
   - implies:
       id: coded-medication-has-full-atc-path
       when: "CMDECOD IS NOT NULL"
-      then: "ATC1CD IS NOT NULL AND ATC2CD IS NOT NULL AND ATC3CD IS NOT NULL AND ATC4CD IS NOT NULL"
+      then: "ATC1CD IS NOT NULL AND ATC2CD IS NOT NULL
+        AND ATC3CD IS NOT NULL AND ATC4CD IS NOT NULL"
   - implies:
       id: atc-codes-imply-atc-names
       when: "ATC1CD IS NOT NULL"
-      then: "ATC1 IS NOT NULL AND ATC2 IS NOT NULL AND ATC3 IS NOT NULL AND ATC4 IS NOT NULL"
+      then: "ATC1 IS NOT NULL AND ATC2 IS NOT NULL
+        AND ATC3 IS NOT NULL AND ATC4 IS NOT NULL"

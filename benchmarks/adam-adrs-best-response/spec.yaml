@@ -7,6 +7,11 @@ input:
     path: input/adrs_selection.csv
     types: {BORSEQ: int}
 base: ADSL
+
+output:
+  path: adrs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, RANDDT, AVALC, AVAL, ADT]
+
 intermediates:
   # The subject's winning record in the selection (BORSEQ 1), matched on
   # STUDYID and USUBJID. A subject without one gets an empty response and
@@ -15,10 +20,6 @@ intermediates:
     dataset: ADRSSEL
     filter: "ADRSSEL.BORSEQ = 1"
     no_match: null
-
-output:
-  path: adrs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, RANDDT, AVALC, AVAL, ADT]
 
 columns:
   - name: STUDYID

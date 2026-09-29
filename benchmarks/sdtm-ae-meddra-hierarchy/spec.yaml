@@ -5,24 +5,21 @@ input:
   AE_RAW: input/ae_raw.csv
   MEDDRA: input/meddra_synthetic.csv
 base: AE_RAW
-metadata:
-  dictionary: MedDRA-shaped synthetic hierarchy
-  dictionary_version: synthetic
-
-intermediates:
-  - id: PRIMARY_PATH
-    dataset: MEDDRA
-    key: {LLTCD: AE_RAW.AELLTCD}
-    filter: "MEDDRA.PRIMARY_SOC = 'Y'"
-    verifications:
-      - unique: [LLTCD]
-    no_match: null
 
 output:
   path: ae.csv
   columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD,
     AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD,
     AEBODSYS, AEBODSCD, AESOC, AESOCCD]
+
+intermediates:
+  - id: PRIMARY_PATH
+    dataset: MEDDRA
+    key: {LLTCD: AE_RAW.AELLTCD}
+    filter: "MEDDRA.PRIMARY_SOC = 'Y'"
+    no_match: null
+    verifications:
+      - unique: [LLTCD]
 
 columns:
   - name: DOMAIN
@@ -116,3 +113,7 @@ verifications:
   - row_count:
       min: 5
       max: 5
+
+metadata:
+  dictionary: MedDRA-shaped synthetic hierarchy
+  dictionary_version: synthetic

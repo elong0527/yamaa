@@ -16,6 +16,11 @@ input:
 
 base: ODM
 
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN,
+    LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
+
 intermediates:
   # Lab panel items, one row per (subject, event, panel repeat).
   - id: LB_TESTCD
@@ -27,6 +32,7 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBTESTCD'"
+
   - id: LB_LBNAM
     dataset: ODM
     key:
@@ -36,6 +42,7 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBNAM'"
+
   - id: LB_STRESN
     dataset: ODM
     key:
@@ -45,15 +52,18 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBSTRESN'"
+
   # Subject-level demographics from the DM form.
   - id: DM_SEX
     dataset: ODM
     key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey}
     filter: "ODM.ItemOID = 'IT.DM.SEX'"
+
   - id: DM_BRTHDTC
     dataset: ODM
     key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey}
     filter: "ODM.ItemOID = 'IT.DM.BRTHDTC'"
+
   # Reference-range entry for the lab, test, sex and age band that was in
   # effect on the collection date. The row is anchored on the IT.LB.LBDTC
   # item, so the current collection date is the driver's ODM.Value.
@@ -65,11 +75,6 @@ intermediates:
       LBRANGE.EFFSTDT <= ODM.Value
       AND (LBRANGE.EFFENDT IS NULL OR ODM.Value <= LBRANGE.EFFENDT)
     no_match: null
-
-output:
-  path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN,
-    LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 columns:
   - name: DOMAIN

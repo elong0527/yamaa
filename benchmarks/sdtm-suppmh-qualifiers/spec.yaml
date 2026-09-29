@@ -6,7 +6,8 @@ input:
 
 output:
   path: suppmh.csv
-  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
+            QORIG, QEVAL]
   # IDVARVAL is text, so parent sequences sort as text: 10 before 2.
   order_by: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
@@ -93,4 +94,5 @@ verifications:
   - implies:
       id: qualifier-value-has-parent-identifier
       when: "QVAL IS NOT NULL"
-      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL
+        AND IDVARVAL IS NOT NULL"

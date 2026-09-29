@@ -5,6 +5,11 @@ input:
   ADSL: input/adsl.csv
   TU: input/tu.csv
 base: ADSL
+
+output:
+  path: adrs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVALC, AVAL]
+
 intermediates:
   # The subject's screening tumor identification records showing target
   # disease, matched on STUDYID and USUBJID. Only whether one exists is
@@ -17,10 +22,6 @@ intermediates:
     order_by: [TU.TUSEQ]
     keep: first
     no_match: null
-
-output:
-  path: adrs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVALC, AVAL]
 
 columns:
   - name: STUDYID

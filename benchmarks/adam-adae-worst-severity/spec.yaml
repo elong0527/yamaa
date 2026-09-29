@@ -6,7 +6,8 @@ input:
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, AESEVN, AWSEVFL]
+  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL,
+            AESEVN, AWSEVFL]
 
 columns:
   - name: STUDYID

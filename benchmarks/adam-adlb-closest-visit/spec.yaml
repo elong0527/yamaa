@@ -6,7 +6,8 @@ input:
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, ADY, AVAL, AVISIT, AWTARGET, ADIST, ANL01FL]
+  columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, ADY, AVAL, AVISIT, AWTARGET,
+            ADIST, ANL01FL]
 
 columns:
   - name: STUDYID

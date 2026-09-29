@@ -6,6 +6,11 @@ input:
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, DTHDTC, DTHFL]
+
 intermediates:
   # Per subject: the latest death disposition record and the latest fatal
   # adverse event. An undated record cannot supply a death date.
@@ -15,16 +20,13 @@ intermediates:
     order_by: [DS.DSSTDTC]
     keep: last
     no_match: null
+
   - id: DTHAE
     dataset: AE
     filter: "AE.AEOUT = 'FATAL' AND AE.AEENDTC IS NOT NULL"
     order_by: [AE.AEENDTC]
     keep: last
     no_match: null
-
-output:
-  path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, DTHDTC, DTHFL]
 
 columns:
   - name: DOMAIN

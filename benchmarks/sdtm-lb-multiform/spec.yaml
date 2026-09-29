@@ -365,7 +365,8 @@ verifications:
   - implies:
       id: not-done-record-has-no-result
       when: "LBSTAT = 'NOT DONE'"
-      then: "LBORRES IS NULL AND LBSTRESC IS NULL AND LBORRESU IS NULL AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
+      then: "LBORRES IS NULL AND LBSTRESC IS NULL AND LBORRESU IS NULL
+        AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
   - implies:
       id: completed-record-is-not-flagged
       when: "LBSTAT IS NULL"

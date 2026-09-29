@@ -2,7 +2,9 @@ schema_version: "1.0"
 domain: SE
 keys: [STUDYID, USUBJID, ETCD]
 input:
-  DM: {path: input/dm.csv, types: {RFICDTC: date, RFSTDTC: date, RFPENDTC: date}}
+  DM:
+    path: input/dm.csv
+    types: {RFICDTC: date, RFSTDTC: date, RFPENDTC: date}
   ODM: input/odm.csv
 base: ODM
 
@@ -16,7 +18,8 @@ base: ODM
 
 output:
   path: se.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
+  columns: [DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH,
+            SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES]
   order_by: [STUDYID, USUBJID, SESEQ]
 
 columns:
@@ -142,7 +145,8 @@ verifications:
       max: 6
   - assert:
       id: elements-have-ordered-bounds
-      expr: "SESTDTC IS NOT NULL AND SEENDTC IS NOT NULL AND SESTDTC <= SEENDTC"
+      expr: "SESTDTC IS NOT NULL AND SEENDTC IS NOT NULL
+        AND SESTDTC <= SEENDTC"
   - assert:
       id: every-element-carries-its-plan
       expr: "ETCD IS NOT NULL AND ELEMENT IS NOT NULL AND TAETORD IS NOT NULL"

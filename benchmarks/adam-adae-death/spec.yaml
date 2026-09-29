@@ -5,6 +5,11 @@ input:
   AE: {path: input/ae.csv, types: {ASTDT: date}}
   DM: {path: input/dm.csv, types: {DTHDT: date}}
 base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, DTHFL, DTHCAUS, DTHDT]
+
 intermediates:
   - id: DEATHEV
     dataset: AE
@@ -13,10 +18,6 @@ intermediates:
     order_by: [AE.ASTDT, AE.AESEQ]
     keep: last
     no_match: null
-
-output:
-  path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, DTHFL, DTHCAUS, DTHDT]
 
 columns:
   - name: STUDYID

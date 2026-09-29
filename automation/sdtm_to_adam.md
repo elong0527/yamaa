@@ -41,6 +41,12 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   are derived only in the ADSL spec; the other specs read them from the
   derived `adsl-yamaa.parquet` predecessor.
 - **Every column declares `label:`** 
+- **Write each spec in the specification style.** Field order, blank lines,
+  line width, and the canonical `{literal: X}` and bare-string source
+  spellings are fixed by the
+  [style contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md).
+  Run `python -m yamaa.style --fix <spec>.yaml` with the pinned yamaa, then
+  correct what it reports; it exits nonzero while a finding remains.
 - **Output naming.** Every spec's `output.path` is `adam/<ds>-yamaa.parquet`
   (e.g. `adam/adsl-yamaa.parquet`).
 

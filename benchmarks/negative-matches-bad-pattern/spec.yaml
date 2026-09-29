@@ -22,10 +22,10 @@ columns:
   - name: SEX
     type: str
     label: Sex
+    derivation: DM.SEX
     verifications:
       - matches:
           # (?P<name>...) is a Python-only named group; the portable
           # spelling is (?<name>...), so this pattern is rejected before
           # any data is read.
           pattern: '(?P<code>[MFU])'
-    derivation: DM.SEX

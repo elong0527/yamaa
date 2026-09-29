@@ -6,7 +6,8 @@ input:
 
 output:
   path: mh.csv
-  columns: [STUDYID, USUBJID, MHSEQ, MHTERM, MHSTDTC, MHENDTC, MHENRTPT, MHENTPT]
+  columns: [STUDYID, USUBJID, MHSEQ, MHTERM, MHSTDTC, MHENDTC, MHENRTPT,
+            MHENTPT]
   order_by: [STUDYID, USUBJID, MHSEQ]
 
 columns:

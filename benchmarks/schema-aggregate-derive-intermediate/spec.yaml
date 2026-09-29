@@ -5,6 +5,10 @@ input:
   EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
   DS: {path: input/ds.csv, types: {CAPDOSE: float}}
 
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, CUMDOSE]
+
 # Each subject's lowest cap: their DS records in ascending CAPDOSE order,
 # first one kept. keep makes it one record per subject, which is what lets
 # the aggregate's derive step below read it.
@@ -14,10 +18,6 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [DS.CAPDOSE]
     keep: first
-
-output:
-  path: adex.csv
-  columns: [STUDYID, USUBJID, CUMDOSE]
 
 columns:
   - name: STUDYID

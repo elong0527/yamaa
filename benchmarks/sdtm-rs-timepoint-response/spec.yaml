@@ -11,26 +11,6 @@ output:
   columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, RSSEQ, RSTESTCD, RSTEST,
             RSSTRESC, RSSTAT]
 
-rows:
-  # One record per subject and scheduled assessment that has a visit
-  # number; ONLY() fails if the assessment carries a visit item twice.
-  - id: visit
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
-    filter: "AVISITN IS NOT NULL"
-    derivations:
-      AVISIT:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VISIT.AVISIT'"
-          expr: "ONLY(ODM.Value)"
-      AVISITN:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VISIT.AVISITN'"
-          expr: "ONLY(ODM.Value)"
-      ADT:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VISIT.ADT'"
-          expr: "ONLY(ODM.Value)"
-
 columns:
   - name: STUDYID
     type: str
@@ -190,6 +170,26 @@ columns:
     verifications:
       allowed_values:
         values: [CR, PR, SD, PD, NE]
+
+rows:
+  # One record per subject and scheduled assessment that has a visit
+  # number; ONLY() fails if the assessment carries a visit item twice.
+  - id: visit
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "AVISITN IS NOT NULL"
+    derivations:
+      AVISIT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.AVISIT'"
+          expr: "ONLY(ODM.Value)"
+      AVISITN:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.AVISITN'"
+          expr: "ONLY(ODM.Value)"
+      ADT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VISIT.ADT'"
+          expr: "ONLY(ODM.Value)"
 
 verifications:
   - unique:

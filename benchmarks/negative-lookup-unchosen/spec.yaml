@@ -5,6 +5,11 @@ input:
   DM: input/dm.csv
   EX: input/ex.csv
 base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01A, TRT01DOSE]
+
 intermediates:
   # The subject's exposure record, matched on study and subject. No order
   # or end to keep is stated, so a subject with more than one exposure
@@ -12,10 +17,6 @@ intermediates:
   - id: DOSING
     dataset: EX
     columns: [EXTRT, EXDOSE]
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, TRT01A, TRT01DOSE]
 
 columns:
   - name: STUDYID

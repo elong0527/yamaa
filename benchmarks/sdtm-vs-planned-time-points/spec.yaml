@@ -7,39 +7,24 @@ input:
   VS_MAPPING: input/vs_mapping.csv
 base: ODM
 
-# The subject's first-dose date-time, from the dosing form's start item. It
-# is not in the output; only the two dose-order checks at the end read it.
-intermediates:
-  - id: DOSE
-    dataset: ODM
-    filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
-    key: {StudyOID: STUDYID, SubjectKey: USUBJID}
-  - id: VS_MAP
-    dataset: VS_MAPPING
-    key: {ItemOID: ODM.ItemOID}
-    no_match: null
-
 output:
   path: vs.csv
   columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM,
     VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
-# One candidate record per subject, visit, form and item. Only items in the
-# test dictionary get a test code, so the form's date-time item and the
-# dosing item give no record.
-rows:
-  - id: vs_reading
+# The subject's first-dose date-time, from the dosing form's start item. It
+# is not in the output; only the two dose-order checks at the end read it.
+intermediates:
+  - id: DOSE
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
-      ODM.ItemOID]
-    filter: "VSTESTCD IS NOT NULL"
-    derivations:
-      VSTESTCD: VS_MAP.VSTESTCD
-      VSORRES:
-        aggregate:
-          expr: "ONLY(ODM.Value)"
-      VSORRESU: VS_MAP.UNIT
+    key: {StudyOID: STUDYID, SubjectKey: USUBJID}
+    filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
+
+  - id: VS_MAP
+    dataset: VS_MAPPING
+    key: {ItemOID: ODM.ItemOID}
+    no_match: null
 
 columns:
   - name: DOMAIN
@@ -204,6 +189,22 @@ columns:
       study_day:
         date: VSDT
         reference: RFSTDTC
+
+# One candidate record per subject, visit, form and item. Only items in the
+# test dictionary get a test code, so the form's date-time item and the
+# dosing item give no record.
+rows:
+  - id: vs_reading
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+      ODM.ItemOID]
+    filter: "VSTESTCD IS NOT NULL"
+    derivations:
+      VSTESTCD: VS_MAP.VSTESTCD
+      VSORRES:
+        aggregate:
+          expr: "ONLY(ODM.Value)"
+      VSORRESU: VS_MAP.UNIT
 
 verifications:
   - unique:

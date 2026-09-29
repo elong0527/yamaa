@@ -10,6 +10,10 @@ input:
     types: {L: float, M: float, S: float, AGE: int}
 base: ADVS_RAW
 
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
+
 # The growth reference row for the collected measurement code (not the
 # output PARAMCD, which is the percentile code), sex, and age in days.
 intermediates:
@@ -17,10 +21,6 @@ intermediates:
     dataset: LMS
     key: {PARAMCD: ADVS_RAW.PARAMCD, SEX: ADVS_RAW.SEX, AGE: ADVS_RAW.AGE}
     no_match: null
-
-output:
-  path: advs.csv
-  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
 
 columns:
   - name: STUDYID
@@ -74,7 +74,8 @@ columns:
     label: LMS Standard Normal Score
     derivation:
       compute:
-        expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
+        expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L)
+          - 1) / (GROWTH.L * GROWTH.S)"
 
   # A measurement with no z-score gets no probability, and so no
   # percentile.

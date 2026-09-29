@@ -7,14 +7,14 @@ input:
   LBREF: ../reference/lbref.csv
 base: LB
 
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, SEX, AVAL, ANRHI]
+
 intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
-
-output:
-  path: adlb.csv
-  columns: [STUDYID, USUBJID, PARAMCD, SEX, AVAL, ANRHI]
 
 columns:
   - name: STUDYID

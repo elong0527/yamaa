@@ -6,7 +6,8 @@ input:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
+            VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT]
 
 columns:
   - name: DOMAIN
@@ -126,7 +127,8 @@ rows:
             then: VS_RAW.VSORRES
       VSSTRESU:
         case:
-          - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'kg' OR VS_RAW.VSORRESU = 'LB')"
+          - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'kg'
+              OR VS_RAW.VSORRESU = 'LB')"
             then: {literal: kg}
 
   - id: temp
@@ -144,7 +146,8 @@ rows:
             then: VS_RAW.VSORRES
       VSSTRESU:
         case:
-          - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'C' OR VS_RAW.VSORRESU = 'F')"
+          - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'C'
+              OR VS_RAW.VSORRESU = 'F')"
             then: {literal: C}
 
 verifications:
@@ -165,4 +168,6 @@ verifications:
   - implies:
       id: unit-checked-against-test
       when: "VSORRES IS NOT NULL"
-      then: "(VSTESTCD = 'HEIGHT' AND VSORRESU = 'cm') OR (VSTESTCD = 'WEIGHT' AND (VSORRESU = 'kg' OR VSORRESU = 'LB')) OR (VSTESTCD = 'TEMP' AND (VSORRESU = 'C' OR VSORRESU = 'F'))"
+      then: "(VSTESTCD = 'HEIGHT' AND VSORRESU = 'cm') OR (VSTESTCD = 'WEIGHT'
+        AND (VSORRESU = 'kg' OR VSORRESU = 'LB'))
+        OR (VSTESTCD = 'TEMP' AND (VSORRESU = 'C' OR VSORRESU = 'F'))"

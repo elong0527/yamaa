@@ -9,6 +9,11 @@ input:
     path: input/awindow.csv
     types: {AWLO: int, AWHI: int}
 base: ADVS_RAW
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADY, AVISIT]
+
 intermediates:
   # The study's window whose first and last analysis days (both included)
   # surround the record's ADY. Two windows holding the same day are two
@@ -17,10 +22,6 @@ intermediates:
     dataset: AWINDOW
     key: STUDYID
     between: {value: ADY, lower: AWLO, upper: AWHI}
-
-output:
-  path: advs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADY, AVISIT]
 
 columns:
   - name: STUDYID

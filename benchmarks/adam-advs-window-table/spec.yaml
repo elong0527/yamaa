@@ -8,6 +8,11 @@ input:
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
 base: ADVS_RAW
 
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, ADT, ADY, AVAL, AVISIT,
+            AVISITN, AWTARGET, AWTDIFF, ANL01FL]
+
 # The window whose first-to-last study day range, both ends inclusive,
 # holds the record's study day, matched on STUDYID (the one output key the
 # window table carries). A record with no study day, or a window with no
@@ -21,10 +26,6 @@ intermediates:
       lower: AWLO
       upper: AWHI
     no_match: null
-
-output:
-  path: advs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, ADT, ADY, AVAL, AVISIT, AVISITN, AWTARGET, AWTDIFF, ANL01FL]
 
 columns:
   - name: STUDYID

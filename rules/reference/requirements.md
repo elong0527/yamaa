@@ -1159,12 +1159,12 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1246](../storage/resources.md#req-1246) | `storage/resources.md` | Schema prose |
 | [REQ-1247](../storage/resources.md#req-1247) | `storage/resources.md` | Schema prose |
 | [REQ-1248](../operations/lookup.md#req-1248) | `operations/lookup.md` | Schema prose |
-| [REQ-1250](../operations/expressions.md#req-1250) | `operations/expressions.md` | Schema prose |
+| [REQ-1250](../specification/style.md#req-1250) | `specification/style.md` | Schema prose |
 | [REQ-1251](../operations/windows.md#req-1251) | `operations/windows.md` | Schema prose |
 | [REQ-1252](../operations/windows.md#req-1252) | `operations/windows.md` | Schema prose |
 | [REQ-1253](../operations/windows.md#req-1253) | `operations/windows.md` | Schema prose |
 | [REQ-1254](../specification/composition.md#req-1254) | `specification/composition.md` | Schema prose |
-| [REQ-1255](../operations/expressions.md#req-1255) | `operations/expressions.md` | Schema prose |
+| [REQ-1255](../specification/style.md#req-1255) | `specification/style.md` | Schema prose |
 | [REQ-1260](../specification/structure.md#req-1260) | `specification/structure.md` | R005-11, R005-41 |
 | [REQ-1261](../operations/text.md#req-1261) | `operations/text.md` | Schema prose |
 | [REQ-1262](../execution/rows.md#req-1262) | `execution/rows.md` | Schema prose |
@@ -1228,3 +1228,12 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1276](../specification/binding.md#req-1276) | `specification/binding.md` | Schema prose |
 | [REQ-1277](../specification/binding.md#req-1277) | `specification/binding.md` | Schema prose |
 | [REQ-1278](../specification/binding.md#req-1278) | `specification/binding.md` | R002-33 |
+| [REQ-1279](../specification/style.md#req-1279) | `specification/style.md` | Schema prose |
+| [REQ-1280](../specification/style.md#req-1280) | `specification/style.md` | Schema prose |
+| [REQ-1281](../specification/style.md#req-1281) | `specification/style.md` | Schema prose |
+| [REQ-1282](../specification/style.md#req-1282) | `specification/style.md` | Schema prose |
+| [REQ-1283](../specification/style.md#req-1283) | `specification/style.md` | Schema prose |
+| [REQ-1284](../specification/style.md#req-1284) | `specification/style.md` | Schema prose |
+| [REQ-1285](../specification/style.md#req-1285) | `specification/style.md` | Schema prose |
+| [REQ-1286](../specification/style.md#req-1286) | `specification/style.md` | Schema prose |
+| [REQ-1287](../specification/style.md#req-1287) | `specification/style.md` | Schema prose |

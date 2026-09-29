@@ -5,6 +5,11 @@ input:
   AE: {path: input/ae.csv, types: {AESEQ: int}}
 base: AE
 
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESEV, AESTDTC, SEV_RANK,
+            SEV_SEQ]
+
 # Each adverse event is ranked within its subject, worst severity first,
 # with the later onset date breaking a severity tie. The ranking runs as
 # a window over the intermediate's donor records after the numeric
@@ -43,10 +48,6 @@ intermediates:
             order_by:
               - {variable: AE.SEVN, direction: desc}
               - {variable: AE.AESTDTC, direction: desc}
-
-output:
-  path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESEV, AESTDTC, SEV_RANK, SEV_SEQ]
 
 columns:
   - name: STUDYID

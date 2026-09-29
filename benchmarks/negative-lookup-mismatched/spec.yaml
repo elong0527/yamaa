@@ -5,6 +5,11 @@ input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
 base: LB_RAW
+
+output:
+  path: lb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
+
 intermediates:
   # The reference range for the result's test code and sex. Each listed
   # table column matches the same-named current-row value, and the
@@ -12,10 +17,6 @@ intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX, UNIT]
-
-output:
-  path: lb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
 
 columns:
   - name: STUDYID

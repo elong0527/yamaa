@@ -9,20 +9,6 @@ output:
   columns: [STUDYID, USUBJID, LBSEQ, VISIT, LBTESTCD, LBORRES, LBDTC]
   order_by: [STUDYID, USUBJID, LBSEQ]
 
-# One row per lab result record; the date item and other forms are not
-# results. Each row reads the date item of its own sample.
-rows:
-  - id: result
-    dataset: ODM
-    filter: "LBTESTCD IS NOT NULL"
-    derivations:
-      LBTESTCD:
-        mapping:
-          source: ODM.ItemOID
-          dict: {IT.LB.ALT: ALT, IT.LB.AST: AST}
-          unmapped: null
-      LBORRES: ODM.Value
-
 columns:
   - name: STUDYID
     type: str
@@ -60,6 +46,20 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [LBDTC, LBTESTCD]
+
+# One row per lab result record; the date item and other forms are not
+# results. Each row reads the date item of its own sample.
+rows:
+  - id: result
+    dataset: ODM
+    filter: "LBTESTCD IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        mapping:
+          source: ODM.ItemOID
+          dict: {IT.LB.ALT: ALT, IT.LB.AST: AST}
+          unmapped: null
+      LBORRES: ODM.Value
 
 verifications:
   - unique:

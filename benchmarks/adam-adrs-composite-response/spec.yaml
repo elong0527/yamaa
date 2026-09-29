@@ -9,7 +9,8 @@ base: ADRS_RAW
 
 output:
   path: adrs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC, ARSN, AVAL]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS,
+            AVALC, ARSN, AVAL]
 
 columns:
   - name: STUDYID

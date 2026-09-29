@@ -9,7 +9,8 @@ base: TRVISIT
 
 output:
   path: adtr.csv
-  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL, NMEAS, NTARGET, ANL01FL]
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL,
+            NMEAS, NTARGET, ANL01FL]
 
 columns:
   - name: STUDYID

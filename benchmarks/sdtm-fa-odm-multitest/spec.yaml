@@ -18,27 +18,6 @@ input:
       StudyEventRepeatKey: int
       ItemGroupRepeatKey: int
 
-intermediates:
-  - id: SIBLING_FAOBJ
-    dataset: ODM_SIBLING
-    key:
-      StudyOID: ODM.StudyOID
-      SubjectKey: ODM.SubjectKey
-      StudyEventOID: ODM.StudyEventOID
-      StudyEventRepeatKey: ODM.StudyEventRepeatKey
-      ItemGroupOID: ODM.ItemGroupOID
-      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
-    filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
-  - id: SIBLING_FADTC
-    dataset: ODM_SIBLING
-    key:
-      StudyOID: ODM.StudyOID
-      SubjectKey: ODM.SubjectKey
-      StudyEventOID: ODM.StudyEventOID
-      StudyEventRepeatKey: ODM.StudyEventRepeatKey
-      ItemGroupOID: ODM.ItemGroupOID
-      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
-    filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
 output:
   path: fa.csv
   columns:
@@ -59,6 +38,30 @@ output:
   order_by:
     - USUBJID
     - FASEQ
+
+intermediates:
+  - id: SIBLING_FAOBJ
+    dataset: ODM_SIBLING
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      StudyEventRepeatKey: ODM.StudyEventRepeatKey
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
+    filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
+
+  - id: SIBLING_FADTC
+    dataset: ODM_SIBLING
+    key:
+      StudyOID: ODM.StudyOID
+      SubjectKey: ODM.SubjectKey
+      StudyEventOID: ODM.StudyEventOID
+      StudyEventRepeatKey: ODM.StudyEventRepeatKey
+      ItemGroupOID: ODM.ItemGroupOID
+      ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
+    filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
+
 columns:
   - name: DOMAIN
     type: str
@@ -180,6 +183,7 @@ columns:
             - EVENTREPEAT
             - REPEATKEY
             - TESTORD
+
 rows:
   # One record per collected result item; a test with no item on the form
   # gives no record. Derivations run before the row filter, so the mappings
@@ -187,7 +191,8 @@ rows:
   # placeholder rows.
   - id: reported-finding
     dataset: ODM
-    filter: ODM.ItemGroupOID = 'IG.FA' AND ODM.ItemOID IN ('IT.FA.OCCUR', 'IT.FA.SEV', 'IT.FA.LDIAM')
+    filter: ODM.ItemGroupOID = 'IG.FA' AND ODM.ItemOID IN ('IT.FA.OCCUR',
+      'IT.FA.SEV', 'IT.FA.LDIAM')
     derivations:
       FATESTCD:
         mapping:
@@ -216,6 +221,7 @@ rows:
             IT.FA.LDIAM: 3
           unmapped: 99
           missing: 99
+
 verifications:
   - unique:
       columns:

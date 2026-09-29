@@ -7,21 +7,22 @@ input:
   # adverse event items while the findings items build the rows.
   ODM_AE: input/odm.csv
 
+output:
+  path: fa.csv
+  columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
+            FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
+  order_by: [FASEQ]
+
 intermediates:
   - id: AE_TERM
     dataset: ODM_AE
-    filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
     key:
       StudyOID: ODM.StudyOID
       SubjectKey: ODM.SubjectKey
       StudyEventOID: ODM.StudyEventOID
       StudyEventRepeatKey: ODM.StudyEventRepeatKey
+    filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
     no_match: null
-
-output:
-  path: fa.csv
-  columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
-  order_by: [FASEQ]
 
 columns:
   - name: DOMAIN
@@ -116,7 +117,8 @@ rows:
   # contributes no row and needs no event term.
   - id: location
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey]
     filter: "FAORRES IS NOT NULL"
     derivations:
       FATESTCD: {literal: LOC}
@@ -141,7 +143,8 @@ rows:
 
   - id: size
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey]
     filter: "FAORRES IS NOT NULL"
     derivations:
       FATESTCD: {literal: SIZE}
@@ -169,7 +172,8 @@ rows:
 
   - id: biopsy
     dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey]
     filter: "FAORRES IS NOT NULL"
     derivations:
       FATESTCD: {literal: BIOPSY}

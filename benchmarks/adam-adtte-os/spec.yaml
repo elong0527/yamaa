@@ -8,21 +8,24 @@ input:
     types:
       ASEQ: int
 base: ADSL
+
+output:
+  path: adtte.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR,
+            EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
+
 intermediates:
   # The subject's earliest dated qualifying death. A death record only
   # qualifies when it carries a date; on a tied date the lower sequence
   # number wins, whatever the input order.
   - id: DEATH_REC
     dataset: ADRS
-    filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y' AND ADRS.ADT IS NOT NULL"
     key: [STUDYID, USUBJID]
+    filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y'
+      AND ADRS.ANL01FL = 'Y' AND ADRS.ADT IS NOT NULL"
     order_by: [ADRS.ADT, ADRS.ASEQ]
     keep: first
     no_match: null
-
-output:
-  path: adtte.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:
   - name: STUDYID

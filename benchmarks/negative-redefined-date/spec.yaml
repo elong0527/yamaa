@@ -4,9 +4,9 @@ keys: [STUDYID, USUBJID]
 input:
   DM:
     path: input/dm.csv
-    schema: input/dm.schema.yaml
     # Intentionally invalid: the producing DM specification types RANDDT.
     types: {RANDDT: date}
+    schema: input/dm.schema.yaml
 
 output:
   path: adsl.csv

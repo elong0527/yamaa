@@ -6,6 +6,10 @@ input:
   DS: input/ds.csv
 base: DM
 
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, EOSDT]
+
 intermediates:
   # Each subject's end-of-study record. Only disposition events that are
   # not screen failures are eligible, and the subject key is asserted
@@ -15,13 +19,9 @@ intermediates:
   - id: DS_EOS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
+    no_match: null
     verifications:
       - unique: [STUDYID, USUBJID]
-    no_match: null
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, EOSDT]
 
 columns:
   - name: STUDYID

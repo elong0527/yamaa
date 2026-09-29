@@ -7,6 +7,13 @@ input:
     path: input/vs_tests.csv
     types: {TESTORD: int, HAS_POSITION: int, HAS_METHOD: int, HAS_NOTDONE: int}
 
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
+            VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT,
+            VSREASND, VSDTC]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
 # The test table, read through each record's test code.
 intermediates:
   - id: TEST
@@ -14,12 +21,6 @@ intermediates:
     key: VSTESTCD
     verifications:
       - unique: [VSTESTCD]
-
-output:
-  path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
-    VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC]
-  order_by: [STUDYID, USUBJID, VSSEQ]
 
 columns:
   - name: DOMAIN

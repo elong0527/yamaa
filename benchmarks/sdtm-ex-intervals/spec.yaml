@@ -6,7 +6,8 @@ input:
 
 output:
   path: ex.csv
-  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ, EXSTDTC, EXENDTC, EXADJ]
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ,
+            EXSTDTC, EXENDTC, EXADJ]
   order_by: [STUDYID, USUBJID, EXSEQ]
 
 columns:
@@ -78,7 +79,8 @@ columns:
 # alphabetically first reason recorded in the interval; none gives missing.
 rows:
   - id: dose_intervals
-    group_by: [EC_RAW.STUDYID, EC_RAW.USUBJID, EC_RAW.ECTRT, EC_RAW.ECDOSE, EC_RAW.ECDOSU, EC_RAW.ECDOSFRQ]
+    group_by: [EC_RAW.STUDYID, EC_RAW.USUBJID, EC_RAW.ECTRT, EC_RAW.ECDOSE,
+               EC_RAW.ECDOSU, EC_RAW.ECDOSFRQ]
     derivations:
       EXSTDTC: {aggregate: "MIN(EC_RAW.ECSTDTC)"}
       EXENDTC: {aggregate: "MAX(EC_RAW.ECSTDTC)"}
@@ -92,7 +94,8 @@ verifications:
       max: 6
   - assert:
       id: intervals-have-ordered-bounds
-      expr: "EXSTDTC IS NOT NULL AND EXENDTC IS NOT NULL AND EXSTDTC <= EXENDTC"
+      expr: "EXSTDTC IS NOT NULL AND EXENDTC IS NOT NULL
+        AND EXSTDTC <= EXENDTC"
   - assert:
       id: every-interval-has-dose-and-unit
       expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"

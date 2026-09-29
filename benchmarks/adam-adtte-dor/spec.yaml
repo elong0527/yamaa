@@ -6,10 +6,13 @@ input:
   ADRS_RAW: input/adrs_raw.csv
   DS: input/ds.csv
 base: ADSL
+# One record per responder: a subject with no response date has none.
+filter: "ADSL.RESPDT IS NOT NULL"
 
 output:
   path: adtte.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR,
+            EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:
   - name: STUDYID
@@ -126,7 +129,8 @@ columns:
     label: Event Date
     derivation:
       case:
-        - when: "EVENTALLDT IS NOT NULL AND (NACTDT IS NULL OR EVENTALLDT <= NACTDT)"
+        - when: "EVENTALLDT IS NOT NULL AND (NACTDT IS NULL
+            OR EVENTALLDT <= NACTDT)"
           then: EVENTALLDT
 
   - name: CNSR
@@ -225,9 +229,6 @@ columns:
           then: DEATHSEQ
         - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
           then: LASTVLSEQ
-
-# One record per responder: a subject with no response date has none.
-filter: "ADSL.RESPDT IS NOT NULL"
 
 verifications:
   - unique:
