@@ -11,7 +11,8 @@ from . import pred as _pred
 from .errors import YamaaError
 from .values import YDate, YDateTime
 
-COLUMN_TYPES = {"str", "int", "float", "date", "datetime"}
+# REQ-0012: the column types, in the order a failure lists them.
+COLUMN_TYPES = ("str", "int", "float", "date", "datetime")
 
 _VARIABLE_FIELDS = {
     "cut": ("source",),
@@ -56,6 +57,9 @@ _INTERMEDIATE_FIELDS = {
     "verifications",
 }
 
+# REQ-1056: the row_class fields.
+_ROW_FIELDS = ("id", "dataset", "group_by", "filter", "derivations", "submission")
+
 # REQ-1274: the odm_class fields, and the schema's item and OID patterns.
 _ODM_READ_FIELDS = ("item", "event", "form", "item_group", "filter")
 _ODM_ITEM = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$")
@@ -85,8 +89,8 @@ def _type_name(v):
         return "str"
     if isinstance(v, list):
         return "list"
-    if isinstance(v, dict) and len(v) == 1:
-        return next(iter(v))
+    if isinstance(v, dict):
+        return "mapping"
     return "object"
 
 
@@ -149,7 +153,6 @@ def run(e):
     _check_output(e)
     _check_intermediates(e)
     _check_rows(e)
-    _check_row_windows(e)
     _check_cycles(e)
     _check_derivations(e)
     _check_odm_reads(e)
@@ -191,7 +194,7 @@ def _check_columns(e):
                 "validation",
                 "value_not_permitted",
                 "REQ-0012",
-                {"value": t, "permitted": sorted(COLUMN_TYPES)},
+                {"value": t, "permitted": list(COLUMN_TYPES)},
             )
 
 
@@ -215,8 +218,8 @@ def _check_output(e):
                 "output.path",
                 "validation",
                 "unknown_artifact_profile",
-                "REQ-1194",
-                {"path": path},
+                "REQ-0760",
+                {"path": path, "permitted": [".csv", ".parquet"]},
             )
     for k in e.spec.get("keys", []) or []:
         if k not in set(out.get("columns", []) or []):
@@ -225,7 +228,7 @@ def _check_output(e):
                 f"keys[{idx}]",
                 "validation",
                 "internal_column_in_keys",
-                "REQ-0233",
+                "REQ-0220",
                 {"column": k},
             )
     seen = set()
@@ -236,7 +239,7 @@ def _check_output(e):
                 f"output.order_by[{i}]",
                 "validation",
                 "undeclared_column",
-                "REQ-0236",
+                "REQ-0224",
                 {"column": var},
             )
         if var in seen:
@@ -244,7 +247,7 @@ def _check_output(e):
                 f"output.order_by[{i}]",
                 "validation",
                 "duplicate_order_term",
-                "REQ-0237",
+                "REQ-0224",
                 {"column": var},
             )
         seen.add(var)
@@ -480,7 +483,7 @@ def _check_intermediates(e):
                     "validation",
                     "unknown_field",
                     cond,
-                    {"name": ident, **(ctx or {})},
+                    {"identifier": ident, **(ctx or {})},
                 )
 
             try:
@@ -529,7 +532,7 @@ def _check_intermediates(e):
                         "validation",
                         "unknown_field",
                         "REQ-0120",
-                        {"name": v},
+                        {"identifier": v},
                     )
         _check_intermediate_derivations(e, d, where, ds)
         _check_intermediate_verification(e, d, where, ds)
@@ -572,7 +575,13 @@ def _check_intermediate_derivations(e, d, where, ds):
         available = fields | set(names[:idx])
         for ref in sorted(bare):
             if ref not in available:
-                _fail(dpath, "validation", "unknown_field", "REQ-1185", {"name": ref})
+                _fail(
+                    dpath,
+                    "validation",
+                    "unknown_field",
+                    "REQ-1185",
+                    {"identifier": ref},
+                )
         window = _top_key(node) in _WINDOW_KINDS
         for ref in sorted(qual):
             head, _, field = ref.partition(".")
@@ -580,7 +589,13 @@ def _check_intermediate_derivations(e, d, where, ds):
                 continue
             other = e.lookups_decl.get(head)
             if other is None or other is d or window:
-                _fail(dpath, "validation", "unknown_field", "REQ-1185", {"name": ref})
+                _fail(
+                    dpath,
+                    "validation",
+                    "unknown_field",
+                    "REQ-1185",
+                    {"identifier": ref},
+                )
             _check_intermediate_read(e, other, field, ds, available, dpath)
 
 
@@ -633,7 +648,7 @@ def _check_intermediate_read(e, other, field, ds, available, dpath):
                 "validation",
                 "unknown_field",
                 "REQ-1263",
-                {"intermediate": other["id"], "name": n},
+                {"intermediate": other["id"], "identifier": n},
             )
 
 
@@ -890,7 +905,7 @@ def _check_intermediate_verification(e, d, where, ds):
                     "validation",
                     "unknown_field",
                     "REQ-1245",
-                    {"intermediate": d.get("id"), "name": c},
+                    {"intermediate": d.get("id"), "identifier": c},
                 )
     filt = d.get("filter")
     if vers and isinstance(filt, str):
@@ -931,8 +946,19 @@ def _check_rows(e):
             {"expected": "predicate", "actual": _type_name(filt)},
         )
     for t in e.spec.get("rows", []) or []:
+        where = e.row_path(t)
+        # REQ-0285: row_class is closed. Its retired `catalog` (REQ-1249,
+        # retired without replacement) is an undeclared field like any other.
+        for f in t:
+            if f not in _ROW_FIELDS:
+                _fail(
+                    f"{where}.{f}",
+                    "validation",
+                    "unknown_field",
+                    "REQ-0285",
+                    {"row": t.get("id"), "field": f},
+                )
         ds = t.get("dataset") or e._default_dataset()
-        where = f"rows.{t['id']}"
         if ds in e.lookups_decl and ds not in e.inputs:
             # REQ-1262: an eligible named intermediate may drive the rows.
             intermediate_driver_types(e, e.lookups_decl[ds], where + ".dataset")
@@ -955,53 +981,6 @@ def _check_rows(e):
                 )
 
 
-def _check_row_windows(e):
-    """REQ-0326: a window used during row construction must not depend on"""
-    for t in e.spec.get("rows", []) or []:
-        derivs = t.get("derivations") or {}
-        where = f"rows.{t['id']}.derivations"
-        nodes = {}
-        for dname, d in derivs.items():
-            nodes[dname] = _norm(d, f"{where}.{dname}")
-        wins = {
-            n
-            for n, nd in nodes.items()
-            if isinstance(nd, dict) and len(nd) == 1 and next(iter(nd)) in _WINDOW_KINDS
-        }
-        if not wins:
-            continue
-        dep_cache = {}
-
-        def closure(name, seen=None, _dep_cache=dep_cache, _nodes=nodes):
-            if name in _dep_cache:
-                return _dep_cache[name]
-            seen = seen or set()
-            if name in seen or name not in _nodes:
-                return set()
-            seen = seen | {name}
-            out = set()
-            for r in _unqualified_refs(_nodes[name]):
-                out.add(r)
-                out |= closure(r, seen)
-            _dep_cache[name] = out
-            return out
-
-        for w in sorted(wins):
-            bad = [
-                r
-                for r in sorted(_unqualified_refs(nodes[w]))
-                if r in wins or closure(r) & wins
-            ]
-            if bad:
-                _fail(
-                    f"{where}.{w}.{next(iter(nodes[w]))}",
-                    "validation",
-                    "window_on_window_result",
-                    "REQ-0326",
-                    {"column": w, "depends_on": bad},
-                )
-
-
 def _check_derivations(e):
     for name in e.col_order:
         cs = e.colspecs[name]
@@ -1018,13 +997,13 @@ def _check_derivations(e):
         grouped = bool(t.get("group_by"))
         first = ti == 0
         for dname, d in (t.get("derivations") or {}).items():
-            node = _norm(d, f"rows.{t['id']}.derivations.{dname}")
+            node = _norm(d, f"{e.row_path(t)}.derivations.{dname}")
             _, qual = _ident_refs(node)
             for q in sorted(qual):
                 head = q.split(".")[0]
                 if head == "SELF":
                     _fail(
-                        f"rows.{t['id']}.derivations.{dname}",
+                        f"{e.row_path(t)}.derivations.{dname}",
                         "validation",
                         "prohibited_construct",
                         "REQ-0120",
@@ -1034,7 +1013,7 @@ def _check_derivations(e):
                 other = e.lookups_decl.get(head)
                 if first and other is not None and other.get("dataset") == "SELF":
                     _fail(
-                        f"rows.{t['id']}.derivations.{dname}",
+                        f"{e.row_path(t)}.derivations.{dname}",
                         "validation",
                         "phase_boundary",
                         "REQ-0120",
@@ -1043,10 +1022,57 @@ def _check_derivations(e):
             _check_tree(
                 e,
                 node,
-                f"rows.{t['id']}.derivations.{dname}",
+                f"{e.row_path(t)}.derivations.{dname}",
                 "row",
                 row_grouped=grouped,
             )
+            if grouped:
+                _check_grouped_reads(e, t, node, f"{e.row_path(t)}.derivations.{dname}")
+
+
+def _outside_aggregates(node):
+    """`node` with every aggregate replaced by a literal: an aggregate reads
+    its group's records, so its identifiers are not scalar reads."""
+    if isinstance(node, dict):
+        if len(node) == 1 and "aggregate" in node:
+            return {"literal": None}
+        return {k: _outside_aggregates(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_outside_aggregates(v) for v in node]
+    return node
+
+
+def _check_grouped_reads(e, t, node, path):
+    """REQ-0067/REQ-0157: outside an aggregate, a grouped template reads its
+    driver only through group keys, and an implicit join matches only on
+    applicable keys the group carries; any other driver field varies within
+    the group and has no single value for the candidate row."""
+    ds = t.get("dataset") or e._default_dataset()
+    gfields = {
+        g.split(".", 1)[1]
+        for g in t.get("group_by") or []
+        if isinstance(g, str) and g.startswith(f"{ds}.")
+    }
+
+    def ungrouped(identifier):
+        _fail(
+            path,
+            "validation",
+            "ungrouped_driver_field",
+            "REQ-0067",
+            {"identifier": identifier, "row": t.get("id"), "dataset": ds},
+        )
+
+    _, qual = _safe_idents(_outside_aggregates(node))
+    for ref in sorted(qual):
+        head, _, field = ref.partition(".")
+        if head == ds:
+            if field not in gfields:
+                ungrouped(ref)
+        elif head in e.inputs and head not in e.lookups_decl:
+            for k in e.keys:
+                if k in e.inputs[head].fields and k not in gfields:
+                    ungrouped(f"{ds}.{k}")
 
 
 def _check_odm_payload(e, payload, path):
@@ -1122,7 +1148,7 @@ def _check_odm_reads(e):
     def driver(t):
         return t.get("dataset") or base
 
-    sites = _odm.odm_sites(e.spec, lambda i, t: f"rows.{t.get('id')}")
+    sites = _odm.odm_sites(e.spec, lambda i, t: e.row_path(t))
     for path, location, owner, payload in sites:
         read = _check_odm_payload(e, payload, path)
         ds = read.dataset
@@ -1220,7 +1246,7 @@ def _check_flag(e, payload, path, phase, row_grouped=False):
                 "validation",
                 "missing_value_required",
                 "REQ-1258",
-                {},
+                {"false_value": payload["false_value"]},
             )
     else:
         _fail(
@@ -1465,7 +1491,11 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 "validation",
                 "invalid_aggregate_context",
                 "REQ-0142",
-                {"expr": payload.get("expr")},
+                {
+                    "expr": payload.get("expr"),
+                    "reason": "a grouped row aggregate reads its own group "
+                    "and declares no key pairs",
+                },
             )
         if phase == "col":
             _check_aggregate_key(e, payload, path)
@@ -1498,6 +1528,8 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                             {"expr": ex, "identifier": n},
                         )
     if isinstance(payload, dict):
+        if key == "date_diff":
+            _expr.check_date_diff_bounds(payload, path)
         if key == "cut":
             _check_input_type(
                 e, payload.get("source"), "numeric", path + ".source", "REQ-0306"
@@ -1545,23 +1577,13 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                     "REQ-0322",
                     {"expected": "variable", "actual": _type_name(src)},
                 )
-            w = payload.get("width")
-            if isinstance(w, bool) or not isinstance(w, int) or w < 1:
-                _fail(
-                    path + ".width",
-                    "validation",
-                    "invalid_field_type",
-                    "REQ-1261",
-                    {"width": w},
-                )
+            _expr.check_pad_width(payload.get("width"), path + ".width")
         elif key == "to_date":
-            _check_input_types(
-                e,
-                payload.get("source"),
-                ["datetime", "str"],
-                path + ".source",
-                "REQ-0607",
-            )
+            # REQ-0607 accepts a datetime or ISO text, so a declared type
+            # outside those fails at the operation, as a value would.
+            t = _var_type(e, payload.get("source"))
+            if t is not None and t not in ("datetime", "str"):
+                _expr.to_date_incompatible(path, t)
         elif key == "date_diff":
             _check_input_type(
                 e, payload.get("start"), "date", path + ".start", "REQ-0606"
@@ -1620,21 +1642,21 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
             srcs = payload.get("sources") if isinstance(payload, dict) else None
             if not isinstance(srcs, list):
                 srcs = [payload] if isinstance(payload, str) else []
-            kinds = {}
+            types = {}
             for s in srcs:
                 if isinstance(s, dict):
                     s = s.get("value", s.get("source"))
                 if isinstance(s, str):
                     t = _var_type(e, s)
                     if t is not None:
-                        kinds[s] = _kind(t)
-            if len(set(kinds.values())) > 1:
+                        types[s] = t
+            if len({_kind(t) for t in types.values()}) > 1:
                 _fail(
                     path,
                     "validation",
                     "incomparable_sources",
                     "REQ-0324",
-                    {"sources": list(kinds), "types": list(kinds.values())},
+                    {"sources": list(types), "types": list(types.values())},
                 )
     if key == "literal" and isinstance(payload, (dict, list)):
         _fail(
@@ -1651,13 +1673,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
             rx = _normalize_pattern(pat)
             g = payload.get("group", 0)
             if not isinstance(g, int) or isinstance(g, bool) or g < 0 or g > rx.groups:
-                _fail(
-                    f"{path}.group",
-                    "validation",
-                    "regex_group_out_of_range",
-                    "REQ-0828",
-                    {"group": g, "groups": rx.groups},
-                )
+                _expr.group_out_of_range(f"{path}.group", g, rx.groups, pat)
     if key == "str_template":
         t = payload if isinstance(payload, str) else payload.get("template")
         if not isinstance(t, str):
@@ -1668,6 +1684,7 @@ def _check_expr(e, key, payload, path, phase, row_grouped=False):
                 "REQ-0287",
                 {"expected": "str", "actual": _type_name(t)},
             )
+        _expr.parse_template(t, path)
     if key == "date_impute" and isinstance(payload, dict):
         prec = payload.get("minimum_source_precision", "year")
         m = payload.get("month")
@@ -1894,7 +1911,7 @@ def check_window_shape(w, where):
             "validation",
             "invalid_field_type",
             "REQ-0287",
-            {"expected": "str", "actual": _type_name(filt)},
+            {"expected": "predicate", "actual": _type_name(filt)},
         )
 
 
@@ -2207,7 +2224,7 @@ def _check_functions(e):
                 e.functions, node["function"], f"columns.{name}.derivation.function"
             )
     for t in e.spec.get("rows", []) or []:
-        walk_derivs(t.get("derivations"), f"rows.{t['id']}.derivations")
+        walk_derivs(t.get("derivations"), f"{e.row_path(t)}.derivations")
 
 
 def _column_deps(e, safe=False):

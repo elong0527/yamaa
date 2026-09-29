@@ -90,7 +90,11 @@ class Parser:
                     condition="prohibited_construct",
                     requirement="REQ-0441",
                     spec_paths=[self.where],
-                    context={"expr": self.text, "operator": text},
+                    context={
+                        "expr": self.text,
+                        "construct": "comparison",
+                        "operator": text,
+                    },
                 )
         node = self.expr()
         if self.pos != len(self.toks):
@@ -147,7 +151,7 @@ class Parser:
                 condition="prohibited_function",
                 requirement="REQ-0440",
                 spec_paths=[self.where],
-                context={"text": self.text, "function": name},
+                context={"expr": self.text, "function": name},
             )
         self.next()  # (
         args = []
@@ -166,7 +170,7 @@ class Parser:
                 condition="prohibited_function",
                 requirement="REQ-0440",
                 spec_paths=[self.where],
-                context={"text": self.text, "function": name, "argc": len(args)},
+                context={"expr": self.text, "function": name, "argc": len(args)},
             )
         return ("call", fname, args)
 
@@ -196,8 +200,10 @@ def _num(v, where, expr_text):
     if is_missing(v):
         return None
     if isinstance(v, bool) or not (_is_int(v) or isinstance(v, float)):
+        # REQ-0426: the registry keeps the condition in validation, as the
+        # static check that catches every declared non-numeric operand.
         raise YamaaError(
-            phase="derivation",
+            phase="validation",
             condition="incompatible_input_type",
             requirement="REQ-0444",
             spec_paths=[where],

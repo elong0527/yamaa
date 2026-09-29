@@ -3,8 +3,8 @@
 Covers the normative changes that landed after the clean-room's last
 sync: named windows (REQ-1251/1252/1253), the date_impute month policy
 (REQ-0592), rename-only intermediates (REQ-1248), cut missing input
-(REQ-0334), row catalogs (REQ-1249), and the mapping unmapped result
-(REQ-1110).
+(REQ-0334), the retired row catalogs (REQ-1249), and the mapping
+unmapped result (REQ-1110).
 """
 
 import os
@@ -68,7 +68,7 @@ def test_named_window_expands_before_validation(tmp_path):
 
 def test_unknown_window_reference_fails(tmp_path):
     # REQ-1253: a reference to an undeclared name fails unknown_window at
-    # the expression's window field.
+    # the expression's window field, under its column's `columns[i]`.
     spec = base_spec(derivation={"rank": {"source": "DM.VAL", "window": "nope"}})
     with pytest.raises(YamaaError) as ei:
         run(tmp_path, spec, {"dm.csv": DM})
@@ -78,7 +78,7 @@ def test_unknown_window_reference_fails(tmp_path):
         "unknown_window",
         "REQ-1253",
     )
-    assert e.spec_paths == ["columns.X.derivation.rank.window"]
+    assert e.spec_paths == ["columns[1].derivation.rank.window"]
 
 
 def test_named_window_definition_shape_is_validated(tmp_path):
@@ -194,71 +194,15 @@ def test_cut_missing_handler_still_answers(tmp_path):
     assert lines[2].endswith(",high")
 
 
-# -- row catalogs (REQ-1249) -------------------------------------------------
+# -- retired row catalogs (REQ-1249) -----------------------------------------
 
 
-def _catalog_spec(tmp_path, csv_text, derivations, template_filter=None):
+def test_row_catalog_is_retired(tmp_path):
+    # REQ-1249 is retired without replacement: row_class no longer declares
+    # `catalog`, so it fails as any undeclared class field (REQ-0285), before
+    # the catalog is read.
     d = str(tmp_path)
     os.makedirs(os.path.join(d, "input"), exist_ok=True)
-    with open(os.path.join(d, "input", "tests.csv"), "w", encoding="utf-8") as f:
-        f.write(csv_text)
-    with open(os.path.join(d, "input", "dm.csv"), "w", encoding="utf-8") as f:
-        f.write("USUBJID\nS1\nS2\n")
-    template = {
-        "id": "t",
-        "dataset": "DM",
-        "catalog": {
-            "path": "input/tests.csv",
-            "id_column": "ID",
-            "types": {"N": "int"},
-            "unique_columns": ["CODE"],
-        },
-        "derivations": derivations,
-    }
-    if template_filter is not None:
-        template["filter"] = template_filter
-    spec = {
-        "schema_version": "1.0",
-        "domain": "DMX",
-        "keys": ["USUBJID"],
-        "input": {"DM": {"path": "input/dm.csv"}},
-        "output": {"path": "dmx.csv", "columns": ["USUBJID", "X"]},
-        "columns": [
-            {"name": "USUBJID", "type": "str", "derivation": "DM.USUBJID"},
-            {"name": "X", "type": "str"},
-        ],
-        "rows": [template],
-    }
-    spec_path = os.path.join(d, "spec.yaml")
-    with open(spec_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(spec, f)
-    return derive(spec_path)
-
-
-def test_catalog_expands_with_typed_values(tmp_path):
-    # REQ-1249: one template per record in CSV order; an entire scalar
-    # placeholder becomes the typed value (int 1/2 render as "1"/"2").
-    # Each generated template keeps a distinct record via its filter so
-    # output keys stay unique.
-    out = _catalog_spec(
-        tmp_path,
-        "ID,CODE,N\nsysbp,S1,1\ndiabp,S2,2\n",
-        {"USUBJID": "DM.USUBJID", "X": {"literal": "${N}"}},
-        template_filter="DM.USUBJID = ${CODE}",
-    )
-    lines = out.splitlines()
-    assert lines[1] == "S1,1"
-    assert lines[2] == "S2,2"
-
-
-def test_catalog_predicate_placeholder_is_quoted(tmp_path):
-    # REQ-1249: inside a predicate filter the placeholder becomes a
-    # quoted literal; a quote inside the value is escaped (the predicate
-    # still parses) and matches nothing.
-    d = str(tmp_path)
-    os.makedirs(os.path.join(d, "input"), exist_ok=True)
-    with open(os.path.join(d, "input", "tests.csv"), "w", encoding="utf-8") as f:
-        f.write("ID,CODE\nkeep,S1\ndrop,S'X\n")
     with open(os.path.join(d, "input", "dm.csv"), "w", encoding="utf-8") as f:
         f.write("USUBJID\nS1\n")
     spec = {
@@ -266,58 +210,29 @@ def test_catalog_predicate_placeholder_is_quoted(tmp_path):
         "domain": "DMX",
         "keys": ["USUBJID"],
         "input": {"DM": {"path": "input/dm.csv"}},
-        "output": {"path": "dmx.csv", "columns": ["USUBJID", "X"]},
-        "columns": [
-            {"name": "USUBJID", "type": "str", "derivation": "DM.USUBJID"},
-            {"name": "X", "type": "str"},
-        ],
+        "output": {"path": "dmx.csv", "columns": ["USUBJID"]},
+        "columns": [{"name": "USUBJID", "type": "str"}],
         "rows": [
             {
                 "id": "t",
                 "dataset": "DM",
                 "catalog": {"path": "input/tests.csv", "id_column": "ID"},
-                "filter": "DM.USUBJID = ${CODE}",
-                "derivations": {"USUBJID": "DM.USUBJID", "X": {"literal": "${CODE}"}},
-            },
+                "derivations": {"USUBJID": "DM.USUBJID"},
+            }
         ],
     }
     spec_path = os.path.join(d, "spec.yaml")
     with open(spec_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(spec, f)
-    out = derive(spec_path)
-    lines = out.splitlines()
-    # the S1 record matches its filter; the S'X record parses (escaped
-    # quote) but matches nothing and is filtered out
-    assert lines[1] == "S1,S1"
-    assert len(lines) == 2
-
-
-def test_catalog_unknown_placeholder_fails(tmp_path):
-    # REQ-1249: a placeholder naming no catalog field fails.
     with pytest.raises(YamaaError) as ei:
-        _catalog_spec(
-            tmp_path,
-            "ID,CODE,N\nsysbp,SYSBP,1\n",
-            {"USUBJID": "DM.USUBJID", "X": {"literal": "${NOPE}"}},
-        )
+        derive(spec_path)
     e = ei.value
     assert (e.phase, e.condition, e.requirement) == (
         "validation",
-        "unknown_row_catalog_column",
-        "REQ-1249",
+        "unknown_field",
+        "REQ-0285",
     )
-
-
-def test_catalog_duplicate_id_fails(tmp_path):
-    # REQ-1249: id_column values must be unique identifiers.
-    with pytest.raises(YamaaError) as ei:
-        _catalog_spec(
-            tmp_path,
-            "ID,CODE,N\nsysbp,SYSBP,1\nsysbp,DIABP,2\n",
-            {"USUBJID": "DM.USUBJID", "X": {"literal": "${CODE}"}},
-        )
-    e = ei.value
-    assert (e.phase, e.condition) == ("validation", "invalid_row_catalog")
+    assert e.spec_paths == ["rows[0].catalog"]
 
 
 # -- mapping unmapped result (REQ-1110) --------------------------------------

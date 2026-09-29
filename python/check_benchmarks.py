@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Run every benchmark through the clean-room engine and fail on mismatch.
 
-For each benchmark directory (a directory containing spec.yaml):
-  - expected/error.yaml present -> expect YamaaError with matching
-    phase + condition.
+Every directory under the benchmarks root is a benchmark. It runs
+`spec.yaml`, or else the `spec_*.yaml` files `benchmark_specs` selects
+(benchmarks/agents.md): each producer an entry reads through
+`input.<id>.schema`, then the entry, the file no other file names as a
+parent or a producer. A directory with no specification, or whose files
+name each other so that none is the entry, fails.
+
+For each specification run:
+  - expected/error.yaml present -> expect YamaaError matching the full
+    pin: phase, condition, requirement, spec_paths, and every key the pin
+    lists under context (the engine may report more keys).
   - expected/*.csv or *.parquet  -> expect success; every committed
     artifact (matched by file stem) is compared against what the engine
     produces:
@@ -13,14 +21,18 @@ For each benchmark directory (a directory containing spec.yaml):
     CSV artifacts compare byte for byte under the csv profile's byte
     guarantee.  Parquet artifacts compare semantically (field names and
     order, logical types, row order, nulls, values), never as bytes.
-  - neither                       -> composition-only; skipped.
+    An entry that names `parents` also compares its resolved YAML data
+    tree with expected/spec_resolved.yaml (multi-level) or
+    expected/resolved[_<variant>].yaml (REQ-0650).
+  - neither                       -> no expected artifact; fails.
 
 Writes produced artifacts plus a JSON summary under --run-dir, prints a
 summary, and exits 1 when any benchmark fails or errors.
 
 This replaces the removed `yamaa.adapters.conformance` runner: the new
-engine's public surface is `yamaa.derive` / `yamaa.YamaaError`, so the
-check drives that surface directly instead of the old DomainRun API.
+engine's public surface is `yamaa.derive` / `yamaa.derive_artifacts` /
+`yamaa.YamaaError`, so the check drives that surface directly instead of
+the old DomainRun API.
 """
 
 import argparse
@@ -30,14 +42,15 @@ import json
 import os
 import sys
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "src"))
 
-from yamaa import YamaaError, derive
-from yamaa.engine import Engine
+from yamaa import YamaaError, derive, derive_artifacts
+from yamaa.compose import resolve
 
 
 def walk(o):
@@ -64,7 +77,126 @@ def project_root_for(d, spec):
     return d
 
 
+def _load_spec(path):
+    with open(path, "r", encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    return doc if isinstance(doc, dict) else {}
+
+
+def benchmark_specs(d):
+    """The specifications a benchmark runs, in run order, the entry last.
+
+    benchmarks/agents.md: `spec.yaml` is the one specification. Without it,
+    each `spec_*.yaml` is an inheritance level, a producer another file
+    reads through `input.<id>.schema`, or an entry, the file no other file
+    names as a parent or a producer. A level runs only as part of its entry;
+    a producer runs on its own, before the entry that reads it, and commits
+    its own artifact. Raises ValueError when there is nothing to run.
+    """
+    if os.path.isfile(os.path.join(d, "spec.yaml")):
+        return [os.path.join(d, "spec.yaml")]
+    specs = {os.path.realpath(p): p for p in glob.glob(os.path.join(d, "spec_*.yaml"))}
+    if not specs:
+        raise ValueError("no spec.yaml and no spec_*.yaml")
+    parents, producers = {}, {}
+    for real, path in specs.items():
+        doc = _load_spec(path)
+        named = doc.get("parents") or []
+        inputs = doc.get("input") if isinstance(doc.get("input"), dict) else {}
+        schemas = [s.get("schema") for s in inputs.values() if isinstance(s, dict)]
+        near = os.path.dirname(real)
+        parents[real], producers[real] = (
+            [
+                os.path.realpath(os.path.join(near, n))
+                for n in ([names] if isinstance(names, str) else names)
+                if isinstance(n, str)
+            ]
+            for names in (named, schemas)
+        )
+    named = {p for names in (*parents.values(), *producers.values()) for p in names}
+    entries = sorted((p for p in specs if p not in named), key=lambda p: specs[p])
+    if not entries:
+        raise ValueError("every spec_*.yaml is named by another, so none is the entry")
+    order = []
+
+    def visit(real, chain):
+        # A producer that any level of the chain reads runs first.
+        levels = [real]
+        for level in levels:
+            levels.extend(p for p in parents.get(level, []) if p not in levels)
+        for level in levels:
+            for producer in producers.get(level, []):
+                if producer in specs and producer not in order + chain:
+                    visit(producer, chain + [producer])
+        if real not in order:
+            order.append(real)
+
+    for entry in entries:
+        visit(entry, [entry])
+    return [specs[p] for p in order]
+
+
+def resolved_fixture(d, spec_path):
+    """benchmarks/agents.md: a multi-level benchmark commits
+    expected/spec_resolved.yaml; `spec[_<variant>].yaml` commits
+    expected/resolved[_<variant>].yaml."""
+    if not os.path.isfile(os.path.join(d, "spec.yaml")):
+        return os.path.join(d, "expected", "spec_resolved.yaml")
+    stem = os.path.splitext(os.path.basename(spec_path))[0]
+    return os.path.join(d, "expected", f"resolved{stem[len('spec') :]}.yaml")
+
+
+def resolved_finding(d, spec_path, spec):
+    """REQ-0650: compare a composed entry's resolved YAML data tree."""
+    if not spec.get("parents"):
+        return None
+    fixture = resolved_fixture(d, spec_path)
+    if not os.path.isfile(fixture):
+        return f"resolved.missing: expected/{os.path.basename(fixture)} not committed"
+    try:
+        got = resolve(spec_path, spec).document
+    except YamaaError as e:
+        return f"resolved: unexpected YamaaError {e.phase}/{e.condition}"
+    with open(fixture, "r", encoding="utf-8") as f:
+        want = yaml.safe_load(f)
+    if got != want:
+        return f"resolved: expected/{os.path.basename(fixture)} differs"
+    return None
+
+
 # ---------------------------------------------------------------- comparison
+
+# The pinned fields compared exactly; `context` is compared key by key.
+PIN_FIELDS = ("phase", "condition", "requirement", "spec_paths")
+
+
+def pin_mismatches(err, pin):
+    """How a raised YamaaError differs from its expected/error.yaml pin.
+
+    Phase and condition are always compared, requirement and spec_paths
+    whenever pinned, and each key the pin lists under `context`; context
+    keys the pin does not list are the engine's own detail and are not
+    compared. Returns an empty list when the error matches its pin.
+    """
+    got = {
+        "phase": err.phase,
+        "condition": err.condition,
+        "requirement": err.requirement,
+        "spec_paths": list(err.spec_paths),
+    }
+    out = [
+        f"{field} {got[field]!r} != pinned {pin.get(field)!r}"
+        for field in PIN_FIELDS
+        if (field in pin or field in ("phase", "condition"))
+        and got[field] != pin.get(field)
+    ]
+    context = err.context or {}
+    for key, want in (pin.get("context") or {}).items():
+        if key not in context:
+            out.append(f"context.{key} missing, pinned {want!r}")
+        elif context[key] != want:
+            out.append(f"context.{key} {context[key]!r} != pinned {want!r}")
+    return out
 
 
 def _csv_record(fields):
@@ -138,73 +270,56 @@ def _parquet_semantic_diff(got_table, want_path):
 # ---------------------------------------------------------------- execution
 
 
-def _produced_artifacts(engine, primary_text):
-    """{stem: (profile, payload)} for the primary output only.
-
-    The clean-room engine produces only the primary artifact; verification
-    and warning logs are not implemented. Payload is CSV text for csv
-    artifacts, an arrow table for parquet. primary_text is the primary
-    artifact's rendered CSV text; engine.run() must have been called exactly
-    once.
-    """
+def _produced_artifacts(artifacts):
+    """{stem: (profile, (file name, payload))} for every file the run
+    publishes: the primary artifact and the declared verification and
+    warning logs. Payload is CSV text for csv artifacts and the written
+    bytes for parquet."""
     produced = {}
-
-    def add(path, table_fn, text_fn):
-        if not path:
-            return
-        stem = os.path.splitext(os.path.basename(path))[0]
-        if path.lower().endswith(".parquet"):
-            produced[stem] = ("parquet", (os.path.basename(path), table_fn()))
-        else:
-            produced[stem] = ("csv", (os.path.basename(path), text_fn()))
-
-    out = engine.output
-    out_path = out.get("path", "")
-    if out_path.lower().endswith(".parquet"):
-        # The engine renders CSV text; parse it into a table for the
-        # semantic parquet comparison.
-        import io
-
-        import pyarrow.csv as pa_csv
-
-        def _parquet_from_csv():
-            return pa_csv.read_csv(io.BytesIO(primary_text.encode("utf-8")))
-
-        add(out_path, _parquet_from_csv, None)
-    else:
-        add(out_path, None, lambda: primary_text)
-    # Note: verification_log and warning_log are not produced by the
-    # clean-room engine; they are intentionally not checked.
+    for path, payload in artifacts.items():
+        fname = os.path.basename(path)
+        profile = "parquet" if path.lower().endswith(".parquet") else "csv"
+        produced[os.path.splitext(fname)[0]] = (profile, (fname, payload))
     return produced
 
 
-def run_positive(d, spec_path, spec, project_root, run_dir):
+def run_positive(d, specs, run_dir):
+    """Run each spec in order, producers before their entry, and compare
+    every artifact they publish together, the primary outputs and their
+    logs, with the committed ones."""
     name = os.path.basename(d)
-    # Only the primary output is checked; the clean-room engine does not
-    # produce verification/warning logs.
-    out_path = (spec.get("output") or {}).get("path", "")
-    primary_stem = os.path.splitext(os.path.basename(out_path))[0] if out_path else None
     expected = {}
     for pat in ("*.csv", "*.parquet"):
         for g in glob.glob(os.path.join(d, "expected", pat)):
-            stem = os.path.splitext(os.path.basename(g))[0]
-            # Only include the primary artifact; skip sidecars (verification
-            # logs, warning logs) which the clean-room engine does not produce.
-            if primary_stem is None or stem == primary_stem:
-                expected[stem] = g
+            expected[os.path.splitext(os.path.basename(g))[0]] = g
     if not expected:
-        return name, "SKIP", "composition-only", []
-
-    try:
-        engine = Engine(spec_path, project_root=project_root)
-        primary_text = engine.run()  # raises on failure; populates tables
-        produced = _produced_artifacts(engine, primary_text)
-    except YamaaError as e:
-        return (name, "FAIL", f"unexpected YamaaError {e.phase}/{e.condition}", [])
-    except Exception as e:  # noqa: BLE001
-        return name, "FAIL", f"unexpected {type(e).__name__}: {e}", []
+        return name, "FAIL", "artifact.missing: no expected artifact", []
 
     findings = []
+    produced = {}
+    for spec_path in specs:
+        spec = _load_spec(spec_path)
+        label = f"{os.path.basename(spec_path)}: " if len(specs) > 1 else ""
+        finding = resolved_finding(d, spec_path, spec)
+        if finding is not None:
+            findings.append(label + finding)
+        try:
+            got = _produced_artifacts(
+                derive_artifacts(spec_path, project_root=project_root_for(d, spec))
+            )
+        except YamaaError as e:
+            findings.append(f"{label}unexpected YamaaError {e.phase}/{e.condition}")
+            continue
+        except Exception as e:  # noqa: BLE001
+            findings.append(f"{label}unexpected {type(e).__name__}: {e}")
+            continue
+        for stem, artifact in got.items():
+            if stem in produced:
+                findings.append(f"artifact.duplicate: {stem} published twice")
+            produced[stem] = artifact
+    if findings:
+        return name, "FAIL", "; ".join(findings), []
+
     written = []
     for stem in sorted(set(produced) | set(expected)):
         if stem not in produced:
@@ -218,20 +333,20 @@ def run_positive(d, spec_path, spec, project_root, run_dir):
         if run_dir:
             dest = os.path.join(run_dir, "artifacts", name, fname)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            if profile == "parquet":
-                pq.write_table(payload, dest)
-            else:
-                with open(dest, "w", encoding="utf-8") as f:
-                    f.write(payload)
+            with open(dest, "wb") as f:
+                f.write(payload if profile == "parquet" else payload.encode("utf-8"))
             written.append(dest)
         if profile == "parquet":
-            diff = _parquet_semantic_diff(payload, want_path)
+            # The direct reader: pq.read_table over a buffer can deadlock
+            # pyarrow's thread pool at interpreter exit.
+            got = pq.ParquetFile(pa.BufferReader(payload)).read()
+            diff = _parquet_semantic_diff(got, want_path)
             if diff is not None:
                 findings.append(f"artifact.parquet: {fname}: {diff}")
         else:
-            with open(want_path, "r", encoding="utf-8") as f:
+            with open(want_path, "rb") as f:
                 want = f.read()
-            if payload != want:
+            if payload.encode("utf-8") != want:
                 findings.append(f"artifact.csv: {fname}: rendered bytes differ")
     if findings:
         return name, "FAIL", "; ".join(findings), written
@@ -245,18 +360,10 @@ def run_negative(d, spec_path, spec, project_root, run_dir):
     try:
         derive(spec_path, project_root=project_root)
     except YamaaError as e:
-        ok = e.phase == exp.get("phase") and e.condition == exp.get("condition")
-        if ok:
+        mismatches = pin_mismatches(e, exp)
+        if not mismatches:
             return name, "PASS", "", []
-        return (
-            name,
-            "FAIL",
-            (
-                f"expected {exp.get('phase')}/{exp.get('condition')}, "
-                f"got {e.phase}/{e.condition}"
-            ),
-            [],
-        )
+        return name, "FAIL", "; ".join(mismatches), []
     except Exception as e:  # noqa: BLE001
         return name, "FAIL", f"expected YamaaError, got {type(e).__name__}: {e}", []
     return (
@@ -268,13 +375,15 @@ def run_negative(d, spec_path, spec, project_root, run_dir):
 
 
 def run_one(d, run_dir):
-    spec_path = os.path.join(d, "spec.yaml")
-    with open(spec_path, "r", encoding="utf-8") as f:
-        spec = yaml.safe_load(f)
-    project_root = project_root_for(d, spec)
+    name = os.path.basename(d)
+    specs = benchmark_specs(d)
     if os.path.exists(os.path.join(d, "expected", "error.yaml")):
-        return run_negative(d, spec_path, spec, project_root, run_dir)
-    return run_positive(d, spec_path, spec, project_root, run_dir)
+        if len(specs) != 1:
+            names = [os.path.basename(s) for s in specs]
+            return name, "ERROR", f"runner: a negative runs one entry, got {names}", []
+        spec = _load_spec(specs[0])
+        return run_negative(d, specs[0], spec, project_root_for(d, spec), run_dir)
+    return run_positive(d, specs, run_dir)
 
 
 def main():
@@ -286,7 +395,7 @@ def main():
     dirs = sorted(
         d
         for d in glob.glob(os.path.join(args.benchmarks_root, "*"))
-        if os.path.isdir(d) and os.path.exists(os.path.join(d, "spec.yaml"))
+        if os.path.isdir(d)
     )
     results = []
     for d in dirs:

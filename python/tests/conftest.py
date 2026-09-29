@@ -24,11 +24,8 @@ def benchmark_dirs():
         # Fail collection loudly: a missing corpus must never read as "no
         # benchmarks to run".
         raise RuntimeError(f"benchmark corpus directory not found: {BENCH}")
-    return sorted(
-        d
-        for d in glob.glob(os.path.join(BENCH, "*"))
-        if os.path.isdir(d) and os.path.isfile(os.path.join(d, "spec.yaml"))
-    )
+    # Every directory is a benchmark; test_benchmarks fails one it cannot run.
+    return sorted(d for d in glob.glob(os.path.join(BENCH, "*")) if os.path.isdir(d))
 
 
 def pytest_generate_tests(metafunc):

@@ -165,7 +165,7 @@ def test_self_read_in_first_template_sees_no_donors(tmp_path):
         "phase_boundary",
         "REQ-0120",
     )
-    assert ei.value.spec_paths == ["rows.first.derivations.PREV"]
+    assert ei.value.spec_paths == ["rows[0].derivations.PREV"]
 
 
 def test_self_unique_runs_over_completed_pool(tmp_path):

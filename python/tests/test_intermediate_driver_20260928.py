@@ -113,7 +113,7 @@ def test_a_matching_or_selecting_intermediate_cannot_drive(tmp_path, declared):
         "invalid_intermediate_driver",
         "REQ-1262",
     )
-    assert err.spec_paths == ["rows.serious.dataset"]
+    assert err.spec_paths == ["rows[0].dataset"]
 
 
 def test_a_driver_filter_may_not_read_a_current_row(tmp_path):

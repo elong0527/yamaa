@@ -85,12 +85,18 @@ def _reduction_value(rname, argnode, records, field_of, where, expr_text):
         return len(records) if records else None  # REQ-0492
     if rname == "ONLY":
         if len(records) > 1:
+            # REQ-0501; a grouped row's aggregate reports it in row
+            # construction instead.
             raise YamaaError(
-                phase="row_construction",
-                condition="multiple_values_per_key",
+                phase="derivation",
+                condition="aggregate_multiple_records",
                 requirement="REQ-0501",
                 spec_paths=[where],
-                context={"expr": expr_text, "record_count": len(records)},
+                context={
+                    "expr": expr_text,
+                    "reducer": "ONLY",
+                    "record_count": len(records),
+                },
             )
         if not records:
             return None
@@ -111,10 +117,10 @@ def _reduction_value(rname, argnode, records, field_of, where, expr_text):
         for v in present[1:]:
             if not comparable(best, v):
                 raise YamaaError(
-                    phase="derivation",
+                    phase="validation",
                     condition="incompatible_input_type",
                     requirement="REQ-0511",
-                    spec_paths=[where],
+                    spec_paths=[f"{where}.expr"],
                     context={"expr": expr_text},
                 )
             c = compare(v, best)
@@ -209,12 +215,15 @@ def eval_over_records(
         try:
             return grouped_consts[n]
         except KeyError:
+            head, dot, _ = n.partition(".")
             raise YamaaError(
                 phase="validation",
                 condition="aggregate_identifier_not_grouped",
                 requirement="REQ-0503",
-                spec_paths=[where],
-                context={"identifier": n},
+                spec_paths=[f"{where}.expr"],
+                context={"dataset": head, "identifier": n}
+                if dot
+                else {"identifier": n},
             )
 
     return evaluate(node, resolve_grouped, red_vals, where, expr_text)

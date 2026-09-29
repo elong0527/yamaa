@@ -26,12 +26,14 @@ box. This is a documented deviation; a Polars rewrite remains future work.
 
 ## Module layout (as built)
 
-- `api.py`  --  entry point: `derive(spec_path) -> str` (CSV text).
+- `api.py`  --  entry points: `derive(spec_path) -> str` (CSV text) and
+  `derive_artifacts(spec_path) -> {path: text | bytes}`, every file a run
+  publishes (storage/publication).
 - `errors.py`  --  `YamaaError` with phase/condition/requirement/spec_paths.
 - `values.py`  --  scalar model: `YDate`, `YDateTime`, missing/present,
   comparison and equality.
 - `csv_io.py`  --  CSV profile scanner and serializer (storage/csv),
-  Parquet reader (storage/parquet).
+  Parquet reader and writer (storage/parquet).
 - `pred.py`  --  predicate tokenizer/parser/evaluator (operations/predicates).
 - `numeric.py`  --  numeric expression parser/evaluator
   (operations/computation).
@@ -45,13 +47,20 @@ box. This is a documented deviation; a Polars rewrite remains future work.
   (execution/verification), output rendering (storage/publication).
 - `validate.py`  --  Stage-1 shape validation: inputs, columns, output,
   lookups, rows, expressions, dependencies, regex, verifications, paths.
+- `logs.py`  --  the warning and verification logs (execution/verification):
+  sidecar declarations, each declared check's outcome and complete evidence,
+  and the two verified sidecar datasets.
+- `compose.py`  --  specification composition (specification/composition):
+  resolves an entry's `parents` chain into the resolved specification the
+  engine then loads, reading declared kinds from the `yaml/` bundle.
+- `workflow.py`  --  producing-specification workflows (storage/ingestion):
+  an input with `schema` runs its producer first, in the same run, and
+  reads the artifact it renders.
 
 ## Data flow
 
 ```
 spec.yaml  ==>  engine.py (load, bind inputs)
-  expand row catalogs (REQ-1249): one ordinary template per catalog
-  record, `${FIELD}` placeholders substituted  --  before windows
   expand named windows (REQ-1251/1252/1253): root `windows:` shapes
   validated, string `window:` references replaced by independent
   deep copies of their definitions  --  before semantic analysis
@@ -96,15 +105,23 @@ fail validation as `window_order_by_required` (REQ-0340) when
 5. Window functions never see phase: `_win_n()`/`_win_val()` are the only
   row access `window_value` uses, so key-phase, column-phase, and
   row-template-phase windows share one implementation.
-6. Row templates with window derivations are three-phase (REQ-0326):
-  Phase A derives non-window derivations per constructed row; Phase B
-  evaluates the template's windows over the template's constructed rows
-  (`_RowWinCtx`: unqualified variables read phase-A row values,
-  qualified variables read the row's own input record); Phase C derives
-  the derivations depending on window results. A window that depends on
-  another window's result, directly or through a value computed from one,
-  fails validation as `window_on_window_result`.
-6. Schema friction is recorded in FINDINGS.md, never entrenched.
+6. Row templates with window derivations are staged (REQ-0326): phase A
+  derives the derivations that neither are nor read a window, per
+  constructed row; then each stage evaluates the windows whose inputs are
+  complete over the template's constructed rows (`_RowWinCtx`:
+  unqualified variables read completed row values, qualified variables
+  read the row's own input record), and derives, row by row, the
+  derivations those windows complete. A window may therefore read another
+  window's result, directly or through scalar derivations.
+7. A failure names where the specification wrote what failed. While an
+  expression evaluates, `ctx.where` is its own path, so an operation's
+  failure is at `<derivation>.<operation>` (or a field under it); a row
+  template is `rows[i]`, and a column-level default a template inherits is
+  still `columns.<name>.derivation`. A failed conversion is the column's
+  (`columns.<name>`). A failure evaluating one row carries that row's
+  output `keys` once every key is derived; a window failure carries its
+  partition's.
+8. Schema friction is recorded in FINDINGS.md, never entrenched.
 
 ## What the design refuses
 
@@ -193,10 +210,14 @@ fail validation as `window_order_by_required` (REQ-0340) when
   predicate grammar admits  --  `str_contains(source, pattern)` with a
   string-literal portable-regex pattern, UNKNOWN on missing source,
   `incompatible_input_type` on non-str source, `invalid_predicate` on a
-  rejected pattern or any other `name(...)`. The same key exists as a
+  rejected pattern or any other `name(...)`. Like every predicate that
+  does not parse, those report REQ-0188 with the predicate and the
+  position where parsing stopped. The same key exists as a
   column expression returning bool with a `missing` handler.
-- `to_date` (REQ-1107): source is a `datetime` or ISO 8601 date text;
-  a `date` is not accepted as an identity spelling.
+- `to_date` (REQ-1107/REQ-0607): source is a `datetime`, ISO 8601 date
+  text, or ISO 8601 datetime text (its calendar date); a `date` is not
+  accepted as an identity spelling. Other text is `impute`/
+  `invalid_date_text`, the temporal stage REQ-0348 names.
 - Named windows (REQ-1251/1252/1253): root `windows:` declares named window
   specs by identifier (`dict[identifier, window_spec]`); an expression's
   `window` accepts a string naming one. At load, definitions are
@@ -247,20 +268,9 @@ fail validation as `window_order_by_required` (REQ-0340) when
   static type when the operation states none. REQ-0117: every identifier
   an expression entry reads must name a known current-row value
   (`unknown_field` otherwise).
-- Row catalogs (REQ-1249): a row template declaring `catalog` is expanded
-  at load into one ordinary template per catalog record, in CSV record
-  order at the original position, before named-window expansion. The CSV
-  is a specification resource (ASCII, unique-identifier header, one
-  present value per field per record, at least one record); `id_column`
-  values must be unique, `types` declares int/float fields (finite
-  numerics), `unique_columns` must exist and have no repeats. Generated
-  ids are `{template_id}_{id value}`. `${FIELD}` placeholders in the
-  template `filter` and derivations are substituted per record: an entire
-  scalar becomes the typed value, while inside a predicate `filter`/`when`
-  each placeholder becomes its quoted string (with `''` escaping) or
-  numeric literal. Any other embedded placeholder is invalid; an unknown
-  field fails `unknown_row_catalog_column`. All catalog failures surface
-  at `rows[i].catalog`.
+- Row catalogs (REQ-1249) are retired without replacement: row_class is
+  closed (REQ-0285), so a template declaring `catalog` fails validation as
+  `unknown_field` at `rows[i].catalog`.
 - `mapping` unmapped result (REQ-1110): a present source with no
   dictionary entry returns the `unmapped` result when declared and
   otherwise fails `mapping/unmapped_value`; `missing` never answers it.
