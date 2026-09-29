@@ -45,6 +45,11 @@ jobs:
         run: |
           uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py
 
+      # REQ-1280: every benchmark specification follows the style contract.
+      - name: Check specification style
+        run: |
+          uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
+
       - name: Check execution manifest
         run: |
           uv run --project python --no-sync python .github/scripts/yaml-validation/check_execution_manifest.py

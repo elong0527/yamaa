@@ -10,17 +10,17 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `root_class.schema_version` | `"str"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.parents` | `["path", "list[path]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.domain` | `"identifier"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.keys` | `"list[identifier]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.input` | `"dict[identifier, dataset_source]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.base` | `"identifier"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
-| `root_class.parents` | `["path", "list[path]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.output` | `"output_class"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.windows` | `"dict[identifier, window_spec]"` | `false` | Absent | -- | [REQ-1251](../operations/windows.md#req-1251) |
 | `root_class.intermediates` | `"list[intermediate_class]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
-| `root_class.output` | `"output_class"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.columns` | `"list[column_class]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.rows` | `"list[row_class]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
-| `root_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.verifications` | `["dataset_verification", "list[dataset_verification]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.submission` | `"submission_dataset_class"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.metadata` | `"dict[str, str]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |

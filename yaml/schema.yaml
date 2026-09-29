@@ -13,6 +13,10 @@ root_class:
         type: str
         required: true
         description: See REQ-1042.
+    - parents:
+        type: [path, "list[path]"]
+        required: false
+        description: See REQ-1042.
     - domain:
         type: identifier
         required: true
@@ -29,9 +33,13 @@ root_class:
         type: identifier
         required: false
         description: See REQ-1042.
-    - parents:
-        type: [path, "list[path]"]
+    - filter:
+        type: predicate
         required: false
+        description: See REQ-1042.
+    - output:
+        type: output_class
+        required: true
         description: See REQ-1042.
     - windows:
         type: "dict[identifier, window_spec]"
@@ -41,20 +49,12 @@ root_class:
         type: "list[intermediate_class]"
         required: false
         description: See REQ-1042.
-    - output:
-        type: output_class
-        required: true
-        description: See REQ-1042.
     - columns:
         type: "list[column_class]"
         required: true
         description: See REQ-1042.
     - rows:
         type: "list[row_class]"
-        required: false
-        description: See REQ-1042.
-    - filter:
-        type: predicate
         required: false
         description: See REQ-1042.
     - verifications:
