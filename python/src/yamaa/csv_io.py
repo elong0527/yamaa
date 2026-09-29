@@ -134,9 +134,12 @@ def _scan_records(text, path, written_path, spec_path, dataset):
     return records
 
 
-def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=None):
+def read_csv(
+    path, types, spec_path="<input>", dataset="<input>", written_path=None, raw=None
+):
     """Read a delimited source per storage/csv. types: field -> column_type.
-    `spec_path` is the input's declaration, `input.X`."""
+    `spec_path` is the input's declaration, `input.X`. raw, when given, is
+    the snapshot of the bytes stored at path."""
     written_path = written_path if written_path is not None else path
 
     def fail(condition, record, field):
@@ -144,8 +147,9 @@ def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=N
             condition, record, field, spec_path, dataset, written_path
         )
 
-    with open(path, "rb") as f:
-        raw = f.read()
+    if raw is None:
+        with open(path, "rb") as f:
+            raw = f.read()
     if raw.startswith(b"\xef\xbb\xbf"):
         fail("source_byte_order_mark", 1, 1)
     try:

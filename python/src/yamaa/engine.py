@@ -14,6 +14,7 @@ from . import logs as _logs
 from . import odm as _odm
 from . import pred as _pred
 from . import validate as _validate
+from . import workflow as _workflow
 from .csv_io import parquet_field_types, read_csv, read_parquet, write_csv_text
 from .errors import YamaaError
 from .values import (
@@ -137,7 +138,7 @@ def _vlist(v):
 
 
 class Engine:
-    def __init__(self, spec_path, project_root=None):
+    def __init__(self, spec_path, project_root=None, workflow=None):
         self.spec_path = os.path.abspath(spec_path)
         self.spec_dir = os.path.dirname(self.spec_path)
         self.project_root = project_root
@@ -155,6 +156,7 @@ class Engine:
             self._reject_parents(spec["parents"])
             resolved = _compose.resolve(self.spec_path, spec)
             self.spec, self.layer_paths = resolved.document, resolved.layer_paths
+        self.workflow = workflow or _workflow.Workflow(self.spec_path)
         s = self.spec
         if not isinstance(s, dict):
             _fail("root", "validation", "invalid_field_type", "REQ-0622", {})
@@ -422,6 +424,8 @@ class Engine:
     def _load_input(self, name, decl):
         if name in self.odm_inputs:
             return self._load_odm_input(name, decl)
+        if isinstance(decl, dict) and "schema" in decl:
+            return Table(name, *_workflow.produced_input(self, name, decl))
         if isinstance(decl, str):
             path, types = decl, {}
         else:

@@ -53,6 +53,9 @@ box. This is a documented deviation; a Polars rewrite remains future work.
 - `compose.py`  --  specification composition (specification/composition):
   resolves an entry's `parents` chain into the resolved specification the
   engine then loads, reading declared kinds from the `yaml/` bundle.
+- `workflow.py`  --  producing-specification workflows (storage/ingestion):
+  an input with `schema` runs its producer first, in the same run, and
+  reads the artifact it renders.
 
 ## Data flow
 
