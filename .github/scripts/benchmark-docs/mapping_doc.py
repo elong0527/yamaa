@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Render the human-review "Mapping spec" section of a benchmark dashboard.
 
-The section is generated from the benchmark's spec.yaml as a familiar Excel
-specification: one row per output column. The header layout follows the
-sponsor's SDTM and ADaM variable sheets, chosen by the dataset standard, so a
+The section is generated from the benchmark's spec.yaml and, when present,
+define.yaml as a familiar Excel specification: one row per output column. The
+header layout follows the sponsor's SDTM and ADaM variable sheets, so a
 reviewer reads the derived spec in the same shape they author it. Rendering is
-deterministic: an unchanged spec produces identical HTML.
+deterministic: unchanged inputs produce identical HTML.
 
 Values come from each column's `submission:` block when present -- `core`,
-`length`, `codelist`, `origin.type`, `method`, `comment` -- and fall back to
-the derivation itself: a plain-language conversion rule and a Define-XML 2.1
-origin classification (Assigned, Collected, Derived, Not Available, Other,
-Predecessor, Protocol).
+`length`, `codelist`, `data_type`, `origin.type`, `method`, `comment` -- and from
+the study document's codelists. The derivation supplies a plain-language
+conversion rule and a Define-XML 2.1 origin classification (Assigned,
+Collected, Derived, Not Available, Other, Predecessor, Protocol).
 
 This file is ASCII-only to satisfy the repository source lint; arrows and
 other non-ASCII glyphs are emitted as HTML character references.
@@ -1105,13 +1105,51 @@ def submission_origin(col):
     return ""
 
 
-def controlled_terms(col, code_by_var):
-    """Codelist or format binding: the declared `submission.codelist`, else the
-    permitted values enforced by an `allowed_values` verification."""
+TEMPORAL_SUBMISSION_TYPES = frozenset(
+    {
+        "date",
+        "datetime",
+        "time",
+        "partialDate",
+        "partialTime",
+        "partialDatetime",
+        "incompleteDate",
+        "incompleteTime",
+        "incompleteDatetime",
+        "durationDatetime",
+        "intervalDatetime",
+    }
+)
+
+
+def resolved_data_type(col):
+    """Submission data type, including the default from the column type."""
+    declared = submission(col).get("data_type")
+    if declared:
+        return declared
+    return {"str": "text", "int": "integer"}.get(col.get("type"), col.get("type"))
+
+
+def controlled_terms(col, code_by_var, definitions):
+    """The named terminology, permitted values, or ISO 8601 format."""
     code = submission(col).get("codelist")
     if code:
-        return str(code)
-    return code_by_var.get(col.get("name", ""), "")
+        definition = definitions.get(code)
+        if definition is None:
+            return str(code)
+        name = str(definition.get("name") or code)
+        external = definition.get("external")
+        if isinstance(external, dict):
+            dictionary = str(external.get("dictionary") or "")
+            version = external.get("version")
+            details = dictionary + (f", version {version}" if version else "")
+            if details:
+                return name + " (" + details + ")"
+        return name
+    values = code_by_var.get(col.get("name", ""))
+    if values:
+        return values
+    return "ISO 8601" if resolved_data_type(col) in TEMPORAL_SUBMISSION_TYPES else ""
 
 
 def conversion_definition(col, ctx=None):
@@ -1129,14 +1167,54 @@ def define_comment(col):
     return str(comment) if comment else ""
 
 
-def codelists(columns):
+def allowed_value_codelists(columns):
+    """Fallback terminology when a benchmark has no study document."""
     out = []
     for col in columns:
-        for check in col.get("verifications", []) or []:
+        checks = col.get("verifications") or []
+        if isinstance(checks, dict):
+            checks = [checks]
+        for check in checks:
             if isinstance(check, dict) and "allowed_values" in check:
                 values = check["allowed_values"].get("values", [])
                 out.append((col["name"], ", ".join(str(v) for v in values)))
     return out
+
+
+def document_codelists(define):
+    """The study document's codelists in declaration order."""
+    if not isinstance(define, dict):
+        return []
+    return [
+        item for item in define.get("codelists", []) or [] if isinstance(item, dict)
+    ]
+
+
+def document_codelist_rows(definitions):
+    """One row per declared value, or one row for an external codelist."""
+    rows = []
+    for definition in definitions:
+        external = definition.get("external")
+        external = external if isinstance(external, dict) else {}
+        items = definition.get("items") or [None]
+        for item in items:
+            item = item if isinstance(item, dict) else {}
+            rows.append(
+                [
+                    definition.get("id", ""),
+                    definition.get("name", ""),
+                    item.get("value", ""),
+                    item.get("decode", ""),
+                    definition.get("alias", ""),
+                    item.get("alias", ""),
+                    "Yes" if definition.get("extensible", False) else "No",
+                    "Yes" if item.get("extended", False) else "",
+                    definition.get("format_name", ""),
+                    external.get("dictionary", ""),
+                    external.get("version", ""),
+                ]
+            )
+    return rows
 
 
 def describe_row_template_derivation(derivation, ctx=None):
@@ -1200,6 +1278,15 @@ REVISION_HISTORY_HEADERS = [
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
     (
+        "1.3",
+        "2026-09-29",
+        (
+            "Show study codelist names, external dictionaries, and ISO 8601 "
+            "formats in variable rows; list the document's codelist values "
+            "and metadata"
+        ),
+    ),
+    (
         "1.2",
         "2026-09-29",
         (
@@ -1236,7 +1323,9 @@ def sdtm_variable_type(spec):
     return "SUPP" if str(spec.get("domain", "")).upper().startswith("SUPP") else "SDTM"
 
 
-def mapping_row(col, index, spec, adam, input_names, code_by_var, ctx=None):
+def mapping_row(
+    col, index, spec, adam, input_names, code_by_var, definitions, ctx=None
+):
     """One variable-sheet row in the standard's column order."""
     name = col.get("name", "")
     label = col.get("label", "")
@@ -1244,7 +1333,7 @@ def mapping_row(col, index, spec, adam, input_names, code_by_var, ctx=None):
     origin = submission_origin(col) or classify_origin(
         col.get("derivation"), input_names, ctx, adam
     )
-    terms = controlled_terms(col, code_by_var)
+    terms = controlled_terms(col, code_by_var, definitions)
     core = str(sub.get("core") or "")
     method = conversion_definition(col, ctx)
     if col.get("derivation") is None and not submission(col).get("method"):
@@ -1276,7 +1365,7 @@ def mapping_row(col, index, spec, adam, input_names, code_by_var, ctx=None):
     ]
 
 
-def mapping_sheets(spec):
+def mapping_sheets(spec, define=None):
     """Sheet models: list of (tab id, tab label, headers, rows)."""
     columns = [c for c in spec.get("columns", []) if isinstance(c, dict)]
     ctx = SpecContext(spec)
@@ -1288,10 +1377,13 @@ def mapping_sheets(spec):
     shown = [c for c in columns if c.get("name") in output_set]
 
     adam = is_adam(spec)
-    code_by_var = dict(codelists(shown))
+    fallback_codes = allowed_value_codelists(shown)
+    code_by_var = dict(fallback_codes)
+    document_codes = document_codelists(define)
+    definitions = {item["id"]: item for item in document_codes if item.get("id")}
     map_headers = ADAM_HEADERS if adam else SDTM_HEADERS
     map_rows = [
-        mapping_row(col, index, spec, adam, input_names, code_by_var, ctx)
+        mapping_row(col, index, spec, adam, input_names, code_by_var, definitions, ctx)
         for index, col in enumerate(shown, start=1)
     ]
 
@@ -1323,14 +1415,34 @@ def mapping_sheets(spec):
             )
         )
 
-    codes = codelists(shown)
-    if codes:
+    if define is not None and document_codes:
+        sheets.append(
+            (
+                "codelists",
+                "Codelists",
+                [
+                    "Codelist ID",
+                    "Name",
+                    "Value",
+                    "Decode",
+                    "Codelist NCI alias",
+                    "Value NCI alias",
+                    "Extensible",
+                    "Extended value",
+                    "SAS format",
+                    "Dictionary",
+                    "Version",
+                ],
+                document_codelist_rows(document_codes),
+            )
+        )
+    elif define is None and fallback_codes:
         sheets.append(
             (
                 "codelists",
                 "Codelists",
                 ["Variable", "Permitted values"],
-                [[var, values] for var, values in codes],
+                [[var, values] for var, values in fallback_codes],
             )
         )
 
@@ -1369,9 +1481,9 @@ def render_table(tab_id, headers, rows):
     )
 
 
-def render_mapping_section(spec):
+def render_mapping_section(spec, define=None):
     """Full 'Mapping spec' section HTML with tabbed sheet panes."""
-    sheets = mapping_sheets(spec)
+    sheets = mapping_sheets(spec, define)
     if not sheets:
         return ""
     tabs = []
@@ -1400,7 +1512,7 @@ def render_mapping_section(spec):
         '<section id="mapping-spec" class="panel mapping-panel" aria-labelledby="mapping-heading">'
         '<header class="panel-header"><span class="panel-title">'
         '<h2 id="mapping-heading">Mapping spec</h2></span>'
-        '<span class="panel-caption">Generated from the YAML spec for human review; '
+        '<span class="panel-caption">Generated from benchmark YAML for human review; '
         "do not edit by hand</span></header>"
         '<div class="mapping-body">'
         '<div role="tablist" aria-label="Mapping spec sheets" class="mapping-tablist">'

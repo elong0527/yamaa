@@ -16,6 +16,12 @@ def load_spec(name):
     return yaml.safe_load((BENCHMARKS / name / "spec.yaml").read_text(encoding="utf-8"))
 
 
+def load_define(name):
+    return yaml.safe_load(
+        (BENCHMARKS / name / "define.yaml").read_text(encoding="utf-8")
+    )
+
+
 def mapping_sheet(name):
     sheets = {
         tab_id: (headers, rows)
@@ -74,6 +80,117 @@ class SdtmMappingTests(unittest.TestCase):
         self.assertEqual(age[2], "Num")
         self.assertEqual(age[3], "3")
         self.assertEqual(age[6], "Exp")
+
+    def test_study_document_supplies_controlled_terms_and_all_codelists(self):
+        sheets = {
+            tab_id: (headers, rows)
+            for tab_id, _, headers, rows in mapping_doc.mapping_sheets(
+                load_spec("sdtm-dm-metadata"), load_define("sdtm-dm-metadata")
+            )
+        }
+        _, mapping = sheets["mapping"]
+        terms = {row[0]: row[4] for row in mapping}
+        self.assertEqual(terms["DOMAIN"], "Domain Abbreviation (DM)")
+        self.assertEqual(terms["SEX"], "Sex")
+        self.assertEqual(terms["AGEU"], "Age Unit")
+        self.assertEqual(terms["COUNTRY"], "Country Codes (ISO 3166, version 2020)")
+        headers, rows = sheets["codelists"]
+        self.assertEqual(
+            [row[0] for row in rows], ["DOMAIN", "AGEU", "SEX", "SEX", "SEX", "COUNTRY"]
+        )
+        sex = next(row for row in rows if row[0] == "SEX" and row[2] == "F")
+        self.assertEqual(sex[headers.index("Decode")], "Female")
+        self.assertEqual(sex[headers.index("Codelist NCI alias")], "C66731")
+        self.assertEqual(sex[headers.index("Value NCI alias")], "C16576")
+        self.assertEqual(sex[headers.index("SAS format")], "$SEX")
+        country = rows[-1]
+        self.assertEqual(country[headers.index("Dictionary")], "ISO 3166")
+        self.assertEqual(country[headers.index("Version")], "2020")
+
+    def test_temporal_submission_types_use_iso_8601_without_a_codelist(self):
+        for data_type in mapping_doc.TEMPORAL_SUBMISSION_TYPES:
+            with self.subTest(data_type=data_type):
+                col = {
+                    "name": "DTC",
+                    "type": "str",
+                    "submission": {"data_type": data_type},
+                }
+                self.assertEqual(mapping_doc.controlled_terms(col, {}, {}), "ISO 8601")
+        self.assertEqual(
+            mapping_doc.controlled_terms({"name": "DTC", "type": "str"}, {}, {}),
+            "",
+        )
+        self.assertEqual(
+            mapping_doc.controlled_terms({"name": "DT", "type": "date"}, {}, {}),
+            "ISO 8601",
+        )
+        self.assertEqual(
+            mapping_doc.controlled_terms(
+                {
+                    "name": "DTC",
+                    "type": "str",
+                    "submission": {"data_type": "partialDate"},
+                },
+                {"DTC": "2020, 2021"},
+                {},
+            ),
+            "2020, 2021",
+        )
+        self.assertEqual(
+            mapping_doc.controlled_terms(
+                {
+                    "name": "DTC",
+                    "type": "str",
+                    "submission": {"data_type": "partialDate", "codelist": "DATE_CL"},
+                },
+                {},
+                {"DATE_CL": {"name": "Date terms"}},
+            ),
+            "Date terms",
+        )
+
+    def test_allowed_values_remain_the_fallback_without_a_document(self):
+        spec = {
+            "domain": "DM",
+            "columns": [
+                {
+                    "name": "SEX",
+                    "type": "str",
+                    "verifications": {"allowed_values": {"values": ["F", "M"]}},
+                }
+            ],
+        }
+        sheets = {
+            tab_id: (headers, rows)
+            for tab_id, _, headers, rows in mapping_doc.mapping_sheets(spec)
+        }
+        self.assertEqual(sheets["mapping"][1][0][4], "F, M")
+        self.assertEqual(
+            sheets["codelists"], (["Variable", "Permitted values"], [["SEX", "F, M"]])
+        )
+
+    def test_document_extensibility_and_extended_values_are_visible(self):
+        define = {
+            "codelists": [
+                {
+                    "id": "EXAMPLE",
+                    "name": "Example",
+                    "extensible": True,
+                    "items": [
+                        {"value": "X", "decode": "Example value", "extended": True}
+                    ],
+                }
+            ]
+        }
+        headers, rows = next(
+            (headers, rows)
+            for tab_id, _, headers, rows in mapping_doc.mapping_sheets(
+                {"domain": "DM"}, define
+            )
+            if tab_id == "codelists"
+        )
+        self.assertEqual(rows[0][headers.index("Extensible")], "Yes")
+        self.assertEqual(rows[0][headers.index("Extended value")], "Yes")
 
     def test_variable_type_marks_supplemental_domains(self):
         _, rows = mapping_sheet("sdtm-suppmh-qualifiers")

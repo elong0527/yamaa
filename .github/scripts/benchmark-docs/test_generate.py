@@ -63,6 +63,17 @@ class DashboardContent(HTMLParser):
 
 
 class DashboardTests(unittest.TestCase):
+    def test_mapping_uses_define_document_beside_the_benchmark(self):
+        benchmark = generate.BENCHMARKS / "sdtm-dm-metadata"
+        page = generate.render_benchmark(benchmark).decode("ascii")
+        mapping = page.split('<section id="mapping-spec"', 1)[1].split("</section>", 1)[
+            0
+        ]
+        self.assertIn(">Country Codes (ISO 3166, version 2020)</td>", mapping)
+        self.assertIn('id="mapping-tab-codelists"', mapping)
+        self.assertIn(">Demographics</td>", mapping)
+        self.assertIn(">C16576</td>", mapping)
+
     def test_source_values_and_yaml_are_exact(self):
         content = DashboardContent(generate.render_benchmark(BENCHMARK).decode("ascii"))
         expected_cells = []
@@ -91,7 +102,11 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(content.downloads, [])
         self.assertEqual(
             [tab["id"] for tab in content.tabs],
-            ["mapping-tab-mapping", "mapping-tab-revision-history"],
+            [
+                "mapping-tab-mapping",
+                "mapping-tab-codelists",
+                "mapping-tab-revision-history",
+            ],
         )
         self.assertEqual(
             [pane["aria-label"] for pane in content.file_panes],
@@ -363,7 +378,9 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertIn("Choose specification document", page)
         self.assertIn('<span class="panel-caption">4 spec files</span>', page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
+        base = (
+            "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
+        )
         for path in [
             "spec_organization.yaml",
             "spec_compound.yaml",
@@ -375,7 +392,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("edit.href = active.dataset.editUrl", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertNotIn('id="section-select"', page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
+        base = (
+            "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
+        )
         for target in (
             "spec_organization.yaml",
             "spec_compound.yaml",

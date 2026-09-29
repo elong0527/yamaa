@@ -1,8 +1,9 @@
 # Benchmark dashboards
 
 Generates a self-contained HTML page per benchmark plus the
-`docs/benchmark/index.md` gallery, from each benchmark's `README.md`, spec and
-`input/`/`expected/` files. Output is git-ignored -- never edit it by hand.
+`docs/benchmark/index.md` gallery, from each benchmark's `README.md`, spec,
+optional `define.yaml`, and `input/`/`expected/` files. Output is git-ignored --
+never edit it by hand.
 Edit fixtures, the templates here, or the gallery prose at
 `docs/articles/benchmark.md` (it holds the substitution placeholders, so
 `exclude_docs` keeps MkDocs from publishing it), then regenerate and test:
