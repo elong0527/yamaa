@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-  ADSL: input/adsl.csv
+  AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
 base: AE
 
 output:

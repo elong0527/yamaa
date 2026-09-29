@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: input/ae.csv
-  DM: input/dm.csv
+  AE: {path: input/ae.csv, types: {ASTDT: date}}
+  DM: {path: input/dm.csv, types: {DTHDT: date}}
 base: AE
 intermediates:
   - id: DEATHEV

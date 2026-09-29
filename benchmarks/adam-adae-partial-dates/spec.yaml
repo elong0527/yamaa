@@ -3,7 +3,7 @@ domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: input/ae.csv
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
 base: AE
 
 output:

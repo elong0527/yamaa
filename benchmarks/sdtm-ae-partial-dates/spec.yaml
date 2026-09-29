@@ -3,7 +3,7 @@ domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   ODM: input/odm.csv
-  DM: input/dm.csv
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
 base: ODM
 
 output:

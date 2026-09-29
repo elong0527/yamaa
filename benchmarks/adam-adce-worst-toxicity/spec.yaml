@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADCE
 keys: [STUDYID, USUBJID, CESEQ]
 input:
-  CE: input/ce.csv
+  CE: {path: input/ce.csv, types: {ASTDT: date}}
 
 output:
   path: adce.csv

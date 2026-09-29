@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADVS_RAW: {path: input/advs_raw.csv, types: {ADY: int}}
+  ADVS_RAW: {path: input/advs_raw.csv, types: {ADY: int, ADT: date}}
 
 output:
   path: advs.csv

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, types: {RESPDT: date, NACTDT: date}}
   ADRS_RAW: input/adrs_raw.csv
   DS: input/ds.csv
 base: ADSL

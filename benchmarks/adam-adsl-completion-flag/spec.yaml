@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_RAW: input/adsl_raw.csv
+  ADSL_RAW: {path: input/adsl_raw.csv, types: {TRTSDT: date}}
   DS: input/ds.csv
 base: ADSL_RAW
 # The subject's end-of-study COMPLETED disposition record, if any: a

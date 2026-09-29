@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, ASEQ]
 input:
-  ADRS_RAW: input/adrs_raw.csv
+  ADRS_RAW: {path: input/adrs_raw.csv, types: {ADT: date}}
 
 output:
   path: adrs.csv

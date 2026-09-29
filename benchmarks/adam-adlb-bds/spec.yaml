@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
 input:
-  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
-  ADSL: input/adsl.csv
+  LB: {path: input/lb.csv, types: {LBSTRESN: float, LBDTC: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
 
 output:
   path: adlb.csv

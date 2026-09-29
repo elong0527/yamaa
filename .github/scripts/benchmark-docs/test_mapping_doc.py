@@ -149,21 +149,24 @@ class SdtmMappingTests(unittest.TestCase):
 class AdamMappingTests(unittest.TestCase):
     def test_named_window_summary_keeps_the_reference_visible(self):
         self.assertEqual(
-            mapping_doc.describe_derivation(
-                {"row_number": {"window": "VISIT_ORDER"}}
-            ),
+            mapping_doc.describe_derivation({"row_number": {"window": "VISIT_ORDER"}}),
             "Row number using window VISIT_ORDER.",
         )
         baseline = mapping_doc.describe_derivation(
-            {"baseline_flag": {
-                "date": "ADT", "reference_date": "TRTSDT",
-                "window": "BASELINE_GROUPS",
-            }}
+            {
+                "baseline_flag": {
+                    "date": "ADT",
+                    "reference_date": "TRTSDT",
+                    "window": "BASELINE_GROUPS",
+                }
+            }
         )
         self.assertIn("ADT on or before TRTSDT using window BASELINE_GROUPS", baseline)
 
     def test_unknown_window_benchmark_still_renders_for_review(self):
-        section = mapping_doc.render_mapping_section(load_spec("negative-unknown-window"))
+        section = mapping_doc.render_mapping_section(
+            load_spec("negative-unknown-window")
+        )
         self.assertIn("Row number using window VISITS_ORDER.", section)
 
     def test_headers_follow_the_adam_variable_sheet(self):
@@ -235,3 +238,212 @@ class SheetStructureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def method_column(name):
+    """The Conversion Definition / Computational Method cell, by variable name."""
+    spec = load_spec(name)
+    headers, rows = mapping_sheet(name)
+    index = headers.index(
+        "Computational Method" if mapping_doc.is_adam(spec) else "Conversion Definition"
+    )
+    key = headers.index("Variable Name")
+    return {row[key]: row[index] for row in rows}
+
+
+class LookupResolutionTests(unittest.TestCase):
+    """A reviewer reads the value, not the pipeline: an `intermediates:` id is
+    an internal handle and must never reach a mapping cell."""
+
+    def test_coded_term_states_the_merge_instead_of_naming_the_lookup(self):
+        rule = method_column("sdtm-ae-coding")["AEDECOD"]
+        self.assertNotIn("MEDDRA_CODING", rule)
+        self.assertIn("Take PTNAME from the MEDDRA record", rule)
+        self.assertIn("LLTNAME equals AE_RAW.AETERM", rule)
+        self.assertIn('no match yields "NOT CODED"', rule)
+
+    def test_selection_names_the_filter_order_and_kept_record(self):
+        rule = method_column("adam-adae-death")["DTHCAUS"]
+        self.assertNotIn("DEATHEV", rule)
+        self.assertIn("the last AE record", rule)
+        self.assertIn("matching on STUDYID and USUBJID", rule)
+        self.assertIn("where AE.AEOUT = 'FATAL'", rule)
+        self.assertIn("ordered by AE.ASTDT then AE.AESEQ", rule)
+
+    def test_range_match_reads_as_an_inclusive_window(self):
+        rule = method_column("sdtm-vs-epoch-from-subject-elements")["EPOCH"]
+        self.assertNotIn("ELEM", rule)
+        self.assertIn("VSDTM falls within SESTDTC to SEENDTC", rule)
+
+    def test_lookup_reference_inside_a_predicate_is_resolved(self):
+        rule = method_column("adam-adlb-end-of-treatment")["EOTFL"]
+        self.assertNotIn("EOT_RANK", rule)
+        self.assertIn('"Y" when EOT_SEQ = 1', rule)
+        self.assertIn("EOT_SEQ taken from the LB record", rule)
+
+    def test_absent_no_match_is_reported_as_an_error_not_a_blank(self):
+        rule = method_column("adam-adcm-atc-classes")["ATC1CD"]
+        self.assertIn("no match yields blank", rule)
+        self.assertIn(
+            "a row with no match is an error",
+            method_column("adam-adlb-end-of-treatment")["ENDPOINT"],
+        )
+
+    def test_value_read_through_a_lookup_is_derived_not_collected(self):
+        headers, rows = mapping_sheet("sdtm-ae-coding")
+        origin = {row[0]: row[headers.index("Origin")] for row in rows}
+        self.assertEqual(origin["AETERM"], "Collected")
+        self.assertEqual(origin["AEDECOD"], "Derived")
+
+    def test_a_spec_without_lookups_keeps_the_plain_copy_wording(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation("DM.SEX"), "Copy value from DM.SEX."
+        )
+
+
+class DerivationShapeTests(unittest.TestCase):
+    """Every expression the corpus uses has a sentence; a shape with none would
+    render its YAML into a cell a reviewer is asked to sign."""
+
+    def test_no_benchmark_renders_raw_yaml_into_a_method_cell(self):
+        raw = []
+        for spec_path in sorted(BENCHMARKS.glob("*/spec.yaml")):
+            name = spec_path.parent.name
+            for variable, rule in method_column(name).items():
+                if rule.startswith(("{", "[")):
+                    raw.append(name + "/" + variable)
+        self.assertEqual(raw, [])
+
+    def test_flag_states_all_three_outcomes(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"flag": "DTHDT IS NOT NULL"}),
+            '"Y" when DTHDT IS NOT NULL; blank otherwise.',
+        )
+        rule = mapping_doc.describe_derivation(
+            {"flag": {"condition": "AVAL > 0", "false_value": "N", "missing": "U"}}
+        )
+        self.assertIn('"Y" when AVAL > 0', rule)
+        self.assertIn('"N" otherwise', rule)
+        self.assertIn('"U" when the condition is unknown', rule)
+
+    def test_case_otherwise_branch_carries_its_own_value(self):
+        rule = mapping_doc.describe_derivation(
+            {
+                "case": [
+                    {"when": "X = 1", "then": {"literal": "Y"}},
+                    {"otherwise": {"literal": "N"}},
+                ]
+            }
+        )
+        self.assertEqual(rule, 'If X = 1 then "Y"; otherwise "N".')
+
+    def test_aggregate_names_the_records_it_summarises(self):
+        rule = method_column("adam-adex-cumulative-dose")["DOSECUM"]
+        self.assertIn("SUM(EX.EXDOSE)", rule)
+        self.assertIn("matching on the shared output keys", rule)
+
+    def test_date_diff_states_which_endpoints_are_counted(self):
+        rule = mapping_doc.describe_derivation(
+            {
+                "date_diff": {
+                    "start": "BRTHDT",
+                    "end": "RANDDT",
+                    "unit": "year",
+                    "bounds": "exclusive",
+                }
+            }
+        )
+        self.assertEqual(
+            rule,
+            "Whole years from BRTHDT to RANDDT, counting the end date but not the start.",
+        )
+
+    def test_cut_names_the_closed_side_of_each_interval(self):
+        rule = method_column("adam-adsl-demographics")["AGEGR1"]
+        self.assertIn("intervals closed on the left", rule)
+        self.assertIn('"18-64"', rule)
+
+    def test_handled_expression_reports_the_unconvertible_value(self):
+        rule = method_column("adam-adsl-demographics")["AGE"]
+        self.assertIn("cannot be converted", rule)
+
+
+class RevisionHistoryTests(unittest.TestCase):
+    def test_history_tracks_the_renderer_newest_first(self):
+        sheets = {
+            tab_id: (headers, rows)
+            for tab_id, _, headers, rows in mapping_doc.mapping_sheets(
+                load_spec("sdtm-ae-coding")
+            )
+        }
+        headers, rows = sheets["revision-history"]
+        self.assertEqual(headers, mapping_doc.REVISION_HISTORY_HEADERS)
+        versions = [row[0] for row in rows]
+        self.assertEqual(versions, sorted(versions, reverse=True))
+        self.assertEqual(rows[-1][3], "Initial generation from spec.yaml")
+        for row in rows:
+            self.assertEqual(row[2], mapping_doc.RENDERER_AUTHOR)
+            # Reviewer and Sign-off belong to the reviewer, not the build.
+            self.assertEqual(row[4:], ["", ""])
+
+    def test_every_benchmark_shows_the_same_renderer_history(self):
+        for name in ("sdtm-ae-coding", "adam-adlb-bds", "sdtm-dm-basic"):
+            sheets = {
+                tab_id: rows
+                for tab_id, _, _, rows in mapping_doc.mapping_sheets(load_spec(name))
+            }
+            self.assertEqual(
+                sheets["revision-history"], mapping_doc.revision_history_rows()
+            )
+
+
+class ExcelProseTests(unittest.TestCase):
+    """A variable sheet is written in sentences. A bracketed aside is a
+    programmer's habit, so the describers add none of their own -- a
+    parenthesis in a cell can only have come from the spec's own text."""
+
+    def test_no_describer_invents_a_parenthesis(self):
+        invented = []
+        for spec_path in sorted(BENCHMARKS.glob("*/spec.yaml")):
+            name = spec_path.parent.name
+            source = spec_path.read_text(encoding="utf-8")
+            for variable, rule in method_column(name).items():
+                if "(" in rule and "(" not in source:
+                    invented.append(name + "/" + variable + ": " + rule)
+        self.assertEqual(invented, [])
+
+    def test_a_lookup_states_its_no_match_answer_as_a_clause(self):
+        rule = method_column("sdtm-ae-coding")["AEDECOD"]
+        self.assertNotIn("(", rule)
+        self.assertTrue(rule.endswith('no match yields "NOT CODED".'), rule)
+
+
+class NoDerivationTests(unittest.TestCase):
+    """A column can reach the variable sheet with no derivation of its own.
+    The cell must say where the value comes from, not print Python's None."""
+
+    def test_row_template_column_points_at_the_row_construction_sheet(self):
+        rules = method_column("adam-adlb-bds")
+        self.assertEqual(rules["PARAMCD"], mapping_doc.ROW_TEMPLATE_RULE)
+        self.assertEqual(rules["AVAL"], mapping_doc.ROW_TEMPLATE_RULE)
+
+    def test_inherited_column_says_so(self):
+        self.assertEqual(
+            method_column("negative-property-clear")["USUBJID"],
+            mapping_doc.INHERITED_RULE,
+        )
+
+    def test_no_benchmark_prints_none_into_a_method_cell(self):
+        empty = []
+        for spec_path in sorted(BENCHMARKS.glob("*/spec.yaml")):
+            name = spec_path.parent.name
+            for variable, rule in method_column(name).items():
+                if rule in ("None", ""):
+                    empty.append(name + "/" + variable)
+        self.assertEqual(empty, [])
+
+    def test_a_nested_lookup_answers_in_the_short_form(self):
+        rule = method_column("adam-adlb-end-of-treatment")["ENDPOINT"]
+        # The inner lookup's answer must not read as the outer lookup's.
+        self.assertIn("blank when unmatched", rule)
+        self.assertTrue(rule.endswith("a row with no match is an error."), rule)

@@ -4,11 +4,11 @@ keys: [STUDYID, USUBJID, ASEQ]
 input:
   PLAN:
     path: input/plan.csv
-    types: {ASEQ: int}
+    types: {ASEQ: int, ADT: date}
   VS:
     path: input/vs.csv
     types: {VSDTC: date}
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
 
 base: PLAN
 intermediates:

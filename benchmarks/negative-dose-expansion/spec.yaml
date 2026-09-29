@@ -4,7 +4,7 @@ keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 input:
   EX:
     path: input/ex.csv
-    types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int}
+    types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int, EXSTDTC: date, EXENDTC: date}
 
 output:
   path: adex.csv

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, types: {RANDDT: date}}
   ADRSSEL:
     path: input/adrs_selection.csv
     types: {BORSEQ: int}
