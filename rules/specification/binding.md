@@ -151,8 +151,9 @@ source:
 
 <a id="req-0094"></a>
 
-**REQ-0094.** `absent` and `multiple_matches` are handlers; [Local handlers](../execution/handlers.md) defines
-them and [Lookup and joins](../operations/lookup.md) defines the join uniqueness `multiple_matches` relaxes.
+**REQ-0094.** `absent` and a source's `order_by`/`keep` selection are
+handlers; [Local handlers](../execution/handlers.md) defines them and [Lookup and joins](../operations/lookup.md) defines the join
+uniqueness the selection relaxes.
 
 <a id="req-0095"></a>
 

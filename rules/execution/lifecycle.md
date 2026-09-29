@@ -225,8 +225,8 @@ derivation:
 **REQ-0075.** A column derivation yielding more than one value for one key
   combination: fail and report the column, how many values it yielded, and
   the keys. Missing results are excluded from the count. A source declaring
-  `multiple_matches` keeps one of the records carrying those values instead
-  of failing, which [REQ-0353](handlers.md#req-0353) defines.
+  `order_by` and `keep` keeps one of the records carrying those values
+  instead of failing, which [REQ-0353](handlers.md#req-0353) defines.
 
 <a id="req-0241"></a>
 
