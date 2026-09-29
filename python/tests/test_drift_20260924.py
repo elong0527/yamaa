@@ -68,7 +68,7 @@ def test_named_window_expands_before_validation(tmp_path):
 
 def test_unknown_window_reference_fails(tmp_path):
     # REQ-1253: a reference to an undeclared name fails unknown_window at
-    # the expression's window field.
+    # the expression's window field, under its column's `columns[i]`.
     spec = base_spec(derivation={"rank": {"source": "DM.VAL", "window": "nope"}})
     with pytest.raises(YamaaError) as ei:
         run(tmp_path, spec, {"dm.csv": DM})
@@ -78,7 +78,7 @@ def test_unknown_window_reference_fails(tmp_path):
         "unknown_window",
         "REQ-1253",
     )
-    assert e.spec_paths == ["columns.X.derivation.rank.window"]
+    assert e.spec_paths == ["columns[1].derivation.rank.window"]
 
 
 def test_named_window_definition_shape_is_validated(tmp_path):

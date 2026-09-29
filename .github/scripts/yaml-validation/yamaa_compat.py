@@ -485,11 +485,15 @@ def _to_diagnostic(error):
 
 
 def _expansion_engine(spec, spec_path):
-    """A bare Engine shell: spec + spec_dir only, no construction side
-    effects. The expansion methods read nothing else."""
+    """A bare Engine shell: spec, spec_dir, and each template's written
+    `rows[i]` path (Engine.row_path), no construction side effects. The
+    expansion methods read nothing else."""
     engine = _engine.Engine.__new__(_engine.Engine)
     engine.spec = spec
     engine.spec_dir = _os.path.dirname(_os.path.abspath(spec_path))
+    engine._row_paths = {
+        id(t): f"rows[{i}]" for i, t in enumerate(spec.get("rows") or [])
+    }
     return engine
 
 
@@ -563,10 +567,10 @@ def _unknown_window_diagnostics(spec):
     for c in spec.get("columns") or []:
         if isinstance(c, dict):
             walk(c.get("derivation"), f"columns.{c.get('name')}.derivation")
-    for t in spec.get("rows") or []:
+    for i, t in enumerate(spec.get("rows") or []):
         if isinstance(t, dict):
             for dn, dd in (t.get("derivations") or {}).items():
-                walk(dd, f"rows.{t.get('id')}.derivations.{dn}")
+                walk(dd, f"rows[{i}].derivations.{dn}")
     for i, im in enumerate(spec.get("intermediates") or []):
         if isinstance(im, dict):
             for dn, dd in (im.get("derivations") or {}).items():

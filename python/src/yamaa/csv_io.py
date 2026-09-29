@@ -20,22 +20,47 @@ def _phase_condition(phase, condition, **kw):
     return YamaaError(phase=phase, condition=condition, **kw)
 
 
+def _profile_failure(condition, record, field, spec_path, dataset, written_path):
+    """REQ-0851: a CSV profile failure names the dataset, the path as
+    written, and the record and field where it was decided, counted from
+    one with the header as record one. It is reported at `input.X.path`."""
+    return _phase_condition(
+        "ingest",
+        condition,
+        requirement="REQ-0029" if condition == "invalid_text" else "REQ-0851",
+        spec_paths=[f"{spec_path}.path"],
+        context={
+            "dataset": dataset,
+            "path": written_path,
+            "record": record,
+            "field": field,
+        },
+    )
+
+
+def _coordinates(prefix):
+    """The record and field a reader stands at after reading `prefix`
+    (REQ-0853): a quoted delimiter or terminator does not advance them."""
+    record, field, quoted = 1, 1, False
+    for c in prefix:
+        if c == '"':
+            quoted = not quoted
+        elif quoted:
+            continue
+        elif c == ",":
+            field += 1
+        elif c == "\n":
+            record, field = record + 1, 1
+    return record, field
+
+
 def _scan_records(text, path, written_path, spec_path, dataset):
     """Split text into records per REQ-0838/22. Raises YamaaError with the
     record/field where a quoting or carriage-return failure was decided."""
 
     def fail(condition, record, field):
-        raise _phase_condition(
-            "ingest",
-            condition,
-            requirement="REQ-0851",
-            spec_paths=[spec_path],
-            context={
-                "dataset": dataset,
-                "path": written_path,
-                "record": record,
-                "field": field,
-            },
+        raise _profile_failure(
+            condition, record, field, spec_path, dataset, written_path
         )
 
     records, rec, field = [], [], []
@@ -110,76 +135,51 @@ def _scan_records(text, path, written_path, spec_path, dataset):
 
 
 def read_csv(path, types, spec_path="<input>", dataset="<input>", written_path=None):
-    """Read a delimited source per storage/csv. types: field -> column_type."""
+    """Read a delimited source per storage/csv. types: field -> column_type.
+    `spec_path` is the input's declaration, `input.X`."""
     written_path = written_path if written_path is not None else path
+
+    def fail(condition, record, field):
+        raise _profile_failure(
+            condition, record, field, spec_path, dataset, written_path
+        )
+
     with open(path, "rb") as f:
         raw = f.read()
     if raw.startswith(b"\xef\xbb\xbf"):
-        raise _phase_condition(
-            "ingest",
-            "source_byte_order_mark",
-            requirement="REQ-0851",
-            spec_paths=[spec_path],
-            context={"dataset": dataset, "path": written_path},
-        )
+        fail("source_byte_order_mark", 1, 1)
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as e:
-        raise _phase_condition(
-            "ingest",
-            "invalid_text",
-            requirement="REQ-0836",
-            spec_paths=[spec_path],
-            context={"dataset": dataset, "path": written_path, "detail": str(e)},
-        )
+        # REQ-0853: report where the reader had reached in the valid prefix.
+        fail("invalid_text", *_coordinates(raw[: e.start].decode("utf-8")))
     # REQ-0838: records split on \n, optional preceding \r; final record may omit terminator.
     rows = _scan_records(text, path, written_path, spec_path, dataset)
     if not rows:
-        raise _phase_condition(
-            "ingest",
-            "source_header_absent",
-            requirement="REQ-0851",
-            spec_paths=[spec_path],
-            context={"dataset": dataset, "path": written_path},
-        )
+        fail("source_header_absent", 1, 1)
     header = rows[0]
-    if any(h == "" for h in header):
-        raise _phase_condition(
-            "ingest",
-            "source_field_name_empty",
-            requirement="REQ-0842",
-            spec_paths=[spec_path],
-            context={"dataset": dataset, "path": written_path},
-        )
-    if len(set(header)) != len(header):
-        raise _phase_condition(
-            "ingest",
-            "source_field_name_duplicate",
-            requirement="REQ-0843",
-            spec_paths=[spec_path],
-            context={"dataset": dataset, "path": written_path},
-        )
+    seen = set()
+    for n, h in enumerate(header, start=1):
+        if h == "":
+            fail("source_field_name_empty", 1, n)
+        if h in seen:
+            fail("source_field_name_duplicate", 1, h)
+        seen.add(h)
     records = []
     for lineno, row in enumerate(rows[1:], start=2):
         if len(row) != len(header):
-            raise _phase_condition(
-                "ingest",
-                "source_record_width",
-                requirement="REQ-0844",
-                spec_paths=[spec_path],
-                context={"dataset": dataset, "path": written_path, "record": lineno},
-            )
+            # The field where the width was decided: the first extra one,
+            # or the first one the record lacks.
+            fail("source_record_width", lineno, min(len(row), len(header)) + 1)
         rec = {}
         for name, cell in zip(header, row):
             t = types.get(name, "str")
-            rec[name] = _parse_cell(
-                cell, t, written_path, lineno, name, spec_path, dataset
-            )
+            rec[name] = _parse_cell(cell, t, name, spec_path, dataset)
         records.append(rec)
     return header, records
 
 
-def _parse_cell(cell, t, path, lineno, name, spec_path, dataset="<input>"):
+def _parse_cell(cell, t, name, spec_path, dataset="<input>"):
     if cell == "":
         return None  # REQ-0845: an empty field is missing for every type
     try:
@@ -193,25 +193,20 @@ def _parse_cell(cell, t, path, lineno, name, spec_path, dataset="<input>"):
             return parse_date(cell)
         if t == "datetime":
             return parse_datetime(cell)
-    except ValueError as e:
+    except ValueError:
+        # REQ-0536: the stored text does not parse under the declared type.
         raise _phase_condition(
             "ingest",
             "field_parse_failed",
-            requirement="REQ-0526",
-            spec_paths=[spec_path],
-            context={
-                "dataset": dataset,
-                "path": path,
-                "line": lineno,
-                "field": name,
-                "detail": str(e),
-            },
+            requirement="REQ-0536",
+            spec_paths=[f"{spec_path}.types.{name}"],
+            context={"dataset": dataset, "field": name, "type": t, "value": cell},
         )
     raise _phase_condition(
-        "ingest",
+        "validation",
         "invalid_field_type",
         requirement="REQ-0012",
-        spec_paths=[spec_path],
+        spec_paths=[f"{spec_path}.types.{name}"],
         context={"field": name, "type": t},
     )
 
@@ -255,7 +250,10 @@ def _field_text(v, t, decimals):
     if t == "datetime":
         return datetime_text(v)
     raise YamaaError(
-        phase="output", condition="invalid_field_type", context={"type": t}
+        phase="validation",
+        condition="invalid_field_type",
+        requirement="REQ-0012",
+        context={"type": t},
     )
 
 
@@ -292,7 +290,7 @@ def _parquet_invalid(exc, spec_path, dataset, written_path):
         "ingest",
         "source_parquet_invalid",
         requirement="REQ-1038",
-        spec_paths=[spec_path],
+        spec_paths=[f"{spec_path}.path"],
         context={"dataset": dataset, "path": written_path, "error": str(exc)},
     )
 
@@ -337,7 +335,7 @@ def read_parquet(
                 "ingest",
                 "source_field_type_unsupported",
                 requirement="REQ-1040",
-                spec_paths=[spec_path],
+                spec_paths=[f"{spec_path}.path"],
                 context={"dataset": dataset, "field": f.name, "type": str(f.type)},
             )
         ftypes[f.name] = kinds[f.type]

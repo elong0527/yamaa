@@ -60,28 +60,33 @@ _CATALOG_PLACEHOLDER = re.compile(r"\$\{([^}]*)\}")
 _CATALOG_INT = re.compile(r"^[+-]?[0-9]+$")
 
 
-def _only_error(e, where):
-    """REQ-0501: ONLY over several records in the column phase fails as
-    derivation/aggregate_multiple_records. Pass through anything else."""
-    if e.phase == "row_construction" and e.condition == "multiple_values_per_key":
-        return YamaaError(
-            phase="derivation",
-            condition="aggregate_multiple_records",
-            requirement="REQ-0501",
-            spec_paths=[where],
-            context={
-                "reducer": "ONLY",
-                "record_count": (e.context or {}).get("record_count"),
-            },
-        )
-    return e
+# The phases in which a failure belongs to one row (or partition).
+_ROW_PHASES = frozenset(
+    {"derivation", "impute", "join", "mapping", "cut", "row_construction", "convert"}
+)
+
+
+def _conversion_error(fail, v, target, path):
+    """The one report a failed conversion makes: the value, its runtime type,
+    and the target type."""
+    return YamaaError(
+        phase="convert",
+        condition="conversion_failed",
+        requirement=fail.requirement,
+        spec_paths=[path],
+        context={
+            "from": _expr._runtime_type_name(v),
+            "to": target,
+            "value": _expr.json_value(v),
+        },
+    )
 
 
 def _odm_no_scope(where, payload):
     """REQ-1277: an `odm` read evaluated where no row has an ODM scope."""
     read = _odm.parse_odm_read(payload)
     _fail(
-        f"{where}.odm",
+        where,
         "validation",
         "invalid_odm_context",
         "REQ-1277",
@@ -121,6 +126,10 @@ _VERIFICATION_REQUIREMENTS = {
     "assert_failed": "REQ-0384",
     "row_count_failed": "REQ-0385",
 }
+
+
+# REQ-0373: an error report's sample of offending keys.
+_REPORTED_KEYS = 5
 
 
 def _vlist(v):
@@ -245,15 +254,32 @@ class Engine:
         """Expand row catalogs into ordinary row templates. A template"""
         s = self.spec
         rows = s.get("rows") or []
-        if not any(isinstance(t, dict) and "catalog" in t for t in rows):
-            return
+        # A path addresses the specification as written, so every template,
+        # including one a catalog generated, is `rows[i]` of its written entry.
+        self._row_paths = {}
         out = []
         for i, t in enumerate(rows):
             if not isinstance(t, dict) or "catalog" not in t:
-                out.append(t)
-                continue
-            out.extend(self._expand_catalog(t, i))
-        s["rows"] = out
+                generated = [t]
+            else:
+                generated = self._expand_catalog(t, i)
+            for nt in generated:
+                self._row_paths[id(nt)] = f"rows[{i}]"
+            out.extend(generated)
+        if len(out) != len(rows) or any(a is not b for a, b in zip(out, rows)):
+            s["rows"] = out
+
+    def row_path(self, t):
+        """The written path of row template `t`: `rows[i]`."""
+        return self._row_paths[id(t)]
+
+    def deriv_path(self, t, name):
+        """Where derivation `name` of template `t` is written: in the
+        template, or as the column-level default the template inherits
+        (REQ-1260)."""
+        if name in (t.get("derivations") or {}):
+            return f"{self.row_path(t)}.derivations.{name}"
+        return f"columns.{name}.derivation"
 
     def _catalog_fail(
         self, where, reason, condition="invalid_row_catalog", context=None
@@ -470,13 +496,13 @@ class Engine:
                 for i, v in enumerate(node):
                     expand(v, f"{where}[{i}]")
 
-        for c in s.get("columns") or []:
+        for i, c in enumerate(s.get("columns") or []):
             if isinstance(c, dict):
-                expand(c.get("derivation"), f"columns.{c.get('name')}.derivation")
+                expand(c.get("derivation"), f"columns[{i}].derivation")
         for t in s.get("rows") or []:
             if isinstance(t, dict):
                 for dn, dd in (t.get("derivations") or {}).items():
-                    expand(dd, f"rows.{t.get('id')}.derivations.{dn}")
+                    expand(dd, f"{self.row_path(t)}.derivations.{dn}")
         for i, im in enumerate(s.get("intermediates") or []):
             if isinstance(im, dict):
                 for dn, dd in (im.get("derivations") or {}).items():
@@ -488,23 +514,28 @@ class Engine:
         if isinstance(parents, str):
             parents = [parents]
         for p in parents:
-            if (
-                not isinstance(p, str)
-                or "://" in p
-                or p.startswith("file:")
-                or os.path.isabs(p)
-            ):
-                _fail(
-                    "parents",
-                    "validation",
-                    "invalid_parent_path",
-                    "REQ-0628",
-                    {"parent": p},
-                )
+            # REQ-0653: a URL, URI, empty, or non-local parent reference.
+            if not isinstance(p, str) or not p:
+                reason = "empty_path"
+            elif "://" in p or p.startswith("file:"):
+                reason = "remote_reference"
+            elif os.path.isabs(p):
+                reason = "absolute_path"
+            else:
+                continue
+            _fail(
+                "parents",
+                "validation",
+                "invalid_parent_path",
+                "REQ-0653",
+                {"reason": reason},
+            )
         seen = [os.path.normpath(self.spec_path)]
         for p in parents:
             self._check_parent_chain(
-                os.path.normpath(os.path.join(self.spec_dir, p)), seen
+                os.path.normpath(os.path.join(self.spec_dir, p)),
+                seen,
+                self.spec.get("schema_version"),
             )
         if "output" not in self.spec:
             # REQ-0657: an entry omitting `output` inherits it; only a
@@ -536,7 +567,7 @@ class Engine:
             {"detail": "spec composition is not implemented in the clean-room"},
         )
 
-    def _check_parent_chain(self, full, seen):
+    def _check_parent_chain(self, full, seen, entry_version):
         if full in seen:
             _fail(
                 "parents",
@@ -548,13 +579,15 @@ class Engine:
         seen.append(full)
         with open(full, "r", encoding="utf-8") as f:
             doc = yaml.safe_load(f) or {}
-        if not isinstance(doc, dict) or doc.get("schema_version") != "1.0":
+        version = doc.get("schema_version") if isinstance(doc, dict) else None
+        if version != "1.0" or version != entry_version:
+            # REQ-0656: report both implicated values, never a host path.
             _fail(
                 "parents",
                 "validation",
                 "schema_version_mismatch",
                 "REQ-0656",
-                {"parent": full},
+                {"entry_version": entry_version, "parent_version": version},
             )
         sub = doc.get("parents")
         if sub:
@@ -562,7 +595,9 @@ class Engine:
                 sub = [sub]
             for p in sub:
                 self._check_parent_chain(
-                    os.path.normpath(os.path.join(os.path.dirname(full), p)), seen
+                    os.path.normpath(os.path.join(os.path.dirname(full), p)),
+                    seen,
+                    entry_version,
                 )
         seen.pop()
 
@@ -747,7 +782,11 @@ class Engine:
             table = self._driver_table(t, ds)
         else:
             _fail(
-                f"rows.{t['id']}.dataset", "validation", "unknown_field", "REQ-0103", {}
+                f"{self.row_path(t)}.dataset",
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {},
             )
         group_by = t.get("group_by")
         filt = t.get("filter")
@@ -771,7 +810,7 @@ class Engine:
         if lid not in self.drivers:
             decl = self.lookups_decl[lid]
             types = _validate.intermediate_driver_types(
-                self, decl, f"rows.{t['id']}.dataset"
+                self, decl, f"{self.row_path(t)}.dataset"
             )
             recs = _BaseCtx(self, self.lookup_paths[lid])._eligible(decl)
             fields = list(types)
@@ -787,20 +826,30 @@ class Engine:
             if len(parts) == 2 and parts[0] == ds:
                 if parts[1] not in record:
                     _fail(
-                        where, "validation", "unknown_field", "REQ-0103", {"name": name}
+                        where,
+                        "validation",
+                        "unknown_field",
+                        "REQ-0103",
+                        {"identifier": name},
                     )
                 return record[parts[1]]
             if len(parts) == 1 and parts[0] in record:
                 return record[parts[0]]
-            _fail(where, "validation", "unknown_field", "REQ-0189", {"name": name})
+            _fail(
+                where, "validation", "unknown_field", "REQ-0189", {"identifier": name}
+            )
 
         return _pred.evaluate(node, resolve, where)
 
     def _template_phases(self, t, derivs):
-        """Split a template's derivations into phase A (non-window, not"""
-        where = f"rows.{t['id']}.derivations"
+        """Split a template's derivations into phase A (neither a window nor
+        reading one) and the stages after it (REQ-0326). A stage evaluates
+        the windows whose inputs are complete over the template's rows, then,
+        row by row, the scalars those windows complete; so a window may read
+        a completed window column, directly or through scalar derivations."""
+        where = f"{self.row_path(t)}.derivations"
         order = _validate._topo_order(derivs, _validate._unqualified_refs, where)
-        nodes = {n: _norm_derivation(derivs[n], f"{where}.{n}") for n in order}
+        nodes = {n: _norm_derivation(derivs[n], self.deriv_path(t, n)) for n in order}
         winset = {
             n
             for n in order
@@ -808,23 +857,35 @@ class Engine:
             and len(nodes[n]) == 1
             and next(iter(nodes[n])) in WINDOW_KEYS
         }
+        deps = {n: _validate._unqualified_refs(nodes[n]) & set(nodes) for n in order}
         closure = set(winset)
         changed = True
         while changed:
             changed = False
             for n in order:
-                if n not in closure and _validate._unqualified_refs(nodes[n]) & closure:
+                if n not in closure and deps[n] & closure:
                     closure.add(n)
                     changed = True
         phase_a = [n for n in order if n not in closure]
-        phase_b = [n for n in order if n in winset]
-        phase_c = [n for n in order if n in closure and n not in winset]
-        return nodes, phase_a, phase_b, phase_c
+        done = set(phase_a)
+        pending = [n for n in order if n in closure]
+        stages = []
+        while pending:
+            wins = [n for n in pending if n in winset and deps[n] <= done]
+            done |= set(wins)
+            scalars = []
+            for n in pending:
+                if n not in done and n not in winset and deps[n] <= done:
+                    scalars.append(n)
+                    done.add(n)
+            pending = [n for n in pending if n not in done]
+            stages.append((wins, scalars))
+        return nodes, phase_a, stages
 
     def _row_filter(self, t, filt, ctx):
         """REQ-0036/REQ-0068: an ungrouped filter reads the driver record,
         the candidate's derived columns, and lookup state."""
-        where = f"rows.{t['id']}.filter"
+        where = f"{self.row_path(t)}.filter"
         node, _ = _pred.parse(filt, where)
         ctx.where = where
 
@@ -833,14 +894,20 @@ class Engine:
             if dot and head == ctx.ds:
                 if field not in ctx.record:
                     _fail(
-                        where, "validation", "unknown_field", "REQ-0103", {"name": name}
+                        where,
+                        "validation",
+                        "unknown_field",
+                        "REQ-0103",
+                        {"identifier": name},
                     )
                 return ctx.record[field]
             if dot and head in self.lookups_decl:
                 return ctx.value(name)
             if not dot and name in ctx.row:
                 return ctx.row[name]
-            _fail(where, "validation", "unknown_field", "REQ-0068", {"name": name})
+            _fail(
+                where, "validation", "unknown_field", "REQ-0068", {"identifier": name}
+            )
 
         return _pred.evaluate(node, resolve, where)
 
@@ -871,7 +938,7 @@ class Engine:
         """The template derivations an ungrouped filter needs: the names it
         reads, the match values of the lookups it reads, and their
         dependencies among `names`."""
-        _, idents = _pred.parse(filt, f"rows.{t['id']}.filter")
+        _, idents = _pred.parse(filt, f"{self.row_path(t)}.filter")
         driver = t.get("dataset") or self._default_dataset()
         need = set()
         for ident in idents:
@@ -894,17 +961,43 @@ class Engine:
         return {n for n in names if n in need}
 
     def _eval_row_deriv(self, t, name, node, ctx):
-        ctx.where = f"rows.{t['id']}.derivations.{name}"
-        v = _expr.eval_expr(node, ctx)
-        cs = self.colspecs.get(name)
-        ctx.row[name] = v if cs is None else self._convert(v, cs, ctx.where, node)
+        ctx.where = self.deriv_path(t, name)
+        try:
+            v = _expr.eval_expr(node, ctx)
+            cs = self.colspecs.get(name)
+            ctx.row[name] = v if cs is None else self._convert(v, cs, node, ctx.where)
+        except YamaaError as err:
+            raise self._with_keys(err, ctx.row)
+
+    def _row_stages(self, t, ds, nodes, stages, rows, recs, ctxs):
+        """Run a template's window stages over its constructed rows."""
+        wctx = _RowWinCtx(self, t, ds, rows, recs)
+        for wins, scalars in stages:
+            for name in wins:
+                kind = next(iter(nodes[name]))
+                where = self.deriv_path(t, name)
+                wctx.where = f"{where}.{kind}"
+                vec = wctx.window_value(kind, nodes[name][kind])
+                cs = self.colspecs.get(name)
+                for row, v in zip(rows, vec):
+                    try:
+                        row[name] = (
+                            v
+                            if cs is None
+                            else self._convert(v, cs, nodes[name], where)
+                        )
+                    except YamaaError as err:
+                        raise self._with_keys(err, row)
+            for ctx in ctxs:
+                for name in scalars:
+                    self._eval_row_deriv(t, name, nodes[name], ctx)
 
     def _build_record_driven(self, t, table, filt, derivs):
         """REQ-0036: every driver record builds a candidate row; the filter
         gates it once the derivations it reads are complete, before the
         window pass. A discarded record derives nothing else."""
         ds = table.name
-        nodes, phase_a, phase_b, phase_c = self._template_phases(t, derivs)
+        nodes, phase_a, stages = self._template_phases(t, derivs)
         gate = set()
         if filt is not None:
             gate = self._filter_reads(t, filt, phase_a, nodes)
@@ -923,17 +1016,7 @@ class Engine:
             rows.append(ctx.row)
             ctxs.append(ctx)
             recs.append(rec)
-        if phase_b:
-            wctx = _RowWinCtx(self, t, ds, rows, recs)
-            for name in phase_b:
-                wctx.where = f"rows.{t['id']}.derivations.{name}"
-                kind = next(iter(nodes[name]))
-                vec = wctx.window_value(kind, nodes[name][kind])
-                for i, v in enumerate(vec):
-                    rows[i][name] = v
-        for ctx in ctxs:
-            for name in phase_c:
-                self._eval_row_deriv(t, name, nodes[name], ctx)
+        self._row_stages(t, ds, nodes, stages, rows, recs, ctxs)
         for row, rec in zip(rows, recs):
             self._append_row(row, ds, {ds: [rec]}, set(derivs), ("record", t))
 
@@ -943,7 +1026,7 @@ class Engine:
         for g in group_by:
             if "." not in g or g.split(".")[0] != ds:
                 _fail(
-                    f"rows.{t['id']}.group_by",
+                    f"{self.row_path(t)}.group_by",
                     "validation",
                     "unknown_field",
                     "REQ-0066",
@@ -957,81 +1040,28 @@ class Engine:
                 index[key] = len(groups)
                 groups.append([key, {c: rec.get(c) for c in gcols}, []])
             groups[index[key]][2].append(rec)
-        nodes, phase_a, phase_b, phase_c = self._template_phases(t, derivs)
-        if not phase_b:
-            for _, keydict, grecords in groups:
-                ctx = _RowCtx(self, "row", t, ds, group=grecords, groupkeys=keydict)
-                row, derived = self._eval_row_derivs(t, derivs, ctx)
-                if filt is not None:
-                    node, _ = _pred.parse(filt, f"rows.{t['id']}.filter")
-                    if (
-                        _pred.evaluate(
-                            node,
-                            lambda n, row=row: row.get(n),
-                            f"rows.{t['id']}.filter",
-                        )
-                        is not True
-                    ):
-                        continue
-                self._append_row(row, ds, {ds: grecords}, derived, ("group", t))
-            return
-        pairs = []  # (row, ctx, grecords)
+        nodes, phase_a, stages = self._template_phases(t, derivs)
+        where = f"{self.row_path(t)}.filter"
+        rows, ctxs, grecs = [], [], []
         for _, keydict, grecords in groups:
             ctx = _RowCtx(self, "row", t, ds, group=grecords, groupkeys=keydict)
-            row = {}
-            ctx.row = row
+            ctx.row = {}
             for name in phase_a:
-                ctx.where = f"rows.{t['id']}.derivations.{name}"
-                v = _expr.eval_expr(nodes[name], ctx)
-                if name in self.colspecs:
-                    v = self._convert(v, self.colspecs[name], ctx.where)
-                row[name] = v
+                self._eval_row_deriv(t, name, nodes[name], ctx)
             if filt is not None:
-                node, _ = _pred.parse(filt, f"rows.{t['id']}.filter")
+                node, _ = _pred.parse(filt, where)
+                row = ctx.row
                 if (
-                    _pred.evaluate(
-                        node,
-                        lambda n, row=row: row.get(n),
-                        f"rows.{t['id']}.filter",
-                    )
+                    _pred.evaluate(node, lambda n, row=row: row.get(n), where)
                     is not True
                 ):
                     continue
-            pairs.append((row, ctx, grecords))
-        rows = [p[0] for p in pairs]
-        wctx = _RowWinCtx(self, t, ds, rows, None)
-        for name in phase_b:
-            wctx.where = f"rows.{t['id']}.derivations.{name}"
-            kind = next(iter(nodes[name]))
-            vec = wctx.window_value(kind, nodes[name][kind])
-            for i, v in enumerate(vec):
-                rows[i][name] = v
-        for row, ctx, grecords in pairs:
-            ctx.row = row
-            for name in phase_c:
-                ctx.where = f"rows.{t['id']}.derivations.{name}"
-                v = _expr.eval_expr(nodes[name], ctx)
-                if name in self.colspecs:
-                    v = self._convert(v, self.colspecs[name], ctx.where)
-                row[name] = v
+            rows.append(ctx.row)
+            ctxs.append(ctx)
+            grecs.append(grecords)
+        self._row_stages(t, ds, nodes, stages, rows, None, ctxs)
+        for row, grecords in zip(rows, grecs):
             self._append_row(row, ds, {ds: grecords}, set(derivs), ("group", t))
-
-    def _eval_row_derivs(self, t, derivs, ctx):
-        order = _validate._topo_order(
-            derivs, _validate._unqualified_refs, f"rows.{t['id']}.derivations"
-        )
-        row = {}
-        ctx.row = row
-        for name in order:
-            ctx.where = f"rows.{t['id']}.derivations.{name}"
-            node = _norm_derivation(derivs[name], ctx.where)
-            v = _expr.eval_expr(node, ctx)
-            cs = self.colspecs.get(name)
-            if cs is None:
-                row[name] = v
-            else:
-                row[name] = self._convert(v, cs, ctx.where, deriv=node)
-        return row, set(derivs)
 
     def _build_key_table(self):
         base = self._default_dataset()
@@ -1080,18 +1110,17 @@ class Engine:
             for k in plainkeys:
                 ctx.where = f"columns.{k}.derivation"
                 v = _expr.eval_expr(keynodes[k], ctx)
-                row[k] = self._convert(v, self.colspecs[k], ctx.where)
+                row[k] = self._convert(v, self.colspecs[k])
             krows.append(row)
             krecs.append(rec)
         for k in winkeys:
             node = keynodes[k]
             kind = next(iter(node))
-            wctx = _KeyWinCtx(self, base, krows, krecs, f"columns.{k}.derivation")
+            where = f"columns.{k}.derivation.{kind}"
+            wctx = _KeyWinCtx(self, base, krows, krecs, where)
             vec = wctx.window_value(kind, node[kind])
             for i, v in enumerate(vec):
-                krows[i][k] = self._convert(
-                    v, self.colspecs[k], f"columns.{k}.derivation"
-                )
+                krows[i][k] = self._convert(v, self.colspecs[k])
         seen = {}
         order = []
         for i, row in enumerate(krows):
@@ -1256,55 +1285,92 @@ class Engine:
                 if name in self._derived[i]:
                     continue
                 ctx = _ColCtx(self, i, f"columns.{name}.derivation")
-                v = _expr.eval_expr(node, ctx)
-                self.rows[i][name] = self._convert(v, cs, ctx.where)
+                try:
+                    v = _expr.eval_expr(node, ctx)
+                    self.rows[i][name] = self._convert(v, cs)
+                except YamaaError as err:
+                    raise self._with_keys(err, self.rows[i])
                 self._derived[i].add(name)
         self._verify_self_uniques()
 
     def _derive_window(self, name, cs, node, kind):
         payload = node[kind]
-        ctx = _ColCtx(self, 0, f"columns.{name}.derivation")
+        ctx = _ColCtx(self, 0, f"columns.{name}.derivation.{kind}")
         vec = ctx.window_value(kind, payload)
         for i, v in enumerate(vec):
             if name in self._derived[i]:
                 continue
-            self.rows[i][name] = self._convert(v, cs, f"columns.{name}.derivation")
+            try:
+                self.rows[i][name] = self._convert(v, cs)
+            except YamaaError as err:
+                raise self._with_keys(err, self.rows[i])
             self._derived[i].add(name)
 
-    def _convert(self, v, cs, where, deriv=None):
+    def _convert(self, v, cs, node=None, where=None, path=None):
+        """REQ-0010: convert a completed result to its column's type. The
+        failure cites the conversion rule that refused the value (REQ-0013,
+        REQ-0021, REQ-0601) and is the column's own, at `columns.<name>`
+        (or `path`), unless `unconvertible` answers it (REQ-0359). A handler
+        literal that does not convert fails at the handler, under the
+        derivation written at `where` (REQ-0364)."""
         target = cs["type"]
-        node = deriv if deriv is not None else cs.get("derivation")
+        node = node if node is not None else cs.get("derivation")
         try:
             return _convert_value(v, target)
-        except _ConvertFail:
-            # REQ-0359: unconvertible supplies a literal replacement, converted
-            # to the column type. REQ-0363: no unconvertible -> fatal.
-            if isinstance(node, dict) and "unconvertible" in node:
-                try:
-                    return _convert_value(node["unconvertible"], target)
-                except _ConvertFail as uf:
-                    raise YamaaError(
-                        phase="convert",
-                        condition="conversion_failed",
-                        requirement=uf.requirement,
-                        spec_paths=[where],
-                        context={"column": cs["name"], "type": target},
-                    )
-            raise YamaaError(
-                phase="convert",
-                condition="conversion_failed",
-                requirement="REQ-0363",
-                spec_paths=[where],
-                context={"column": cs["name"], "type": target},
-            )
+        except _ConvertFail as fail:
+            if not (isinstance(node, dict) and "unconvertible" in node):
+                raise _conversion_error(
+                    fail, v, target, path or f"columns.{cs['name']}"
+                )
+        handler = node["unconvertible"]
+        try:
+            return _convert_value(handler, target)
+        except _ConvertFail as fail:
+            where = where or f"columns.{cs['name']}.derivation"
+            raise _conversion_error(fail, handler, target, f"{where}.unconvertible")
+
+    def _with_keys(self, err, row):
+        """A failure evaluating one row names the row by its output keys once
+        every key is derived; a partial key names no row."""
+        if err.phase in _ROW_PHASES and "keys" not in err.context:
+            keys = _expr.keys_of(self, row)
+            if keys is not None:
+                err.context = {**err.context, "keys": [keys]}
+        return err
 
     def _verify(self):
-        for i, v in enumerate(self.verifications):
-            self._verify_one(v, f"verifications[{i}]", None)
+        """REQ-0031: column verification completes, then the output keys
+        are validated, then dataset verification runs."""
         for name in self.col_order:
             for i, v in enumerate(_vlist(self.colspecs[name].get("verifications"))):
                 where = f"columns.{name}.verifications[{i}]"
                 self._verify_one(v, where, name)
+        self._check_keys()
+        for i, v in enumerate(self.verifications):
+            self._verify_one(v, f"verifications[{i}]", None)
+
+    def _check_keys(self):
+        """REQ-0240: every key is present on every row and no two rows share
+        a combination. A missing key fails at its `keys[i]` entry and a
+        repeated combination at `keys`, each reporting its count and a
+        sample of the offending keys."""
+        for pos, k in enumerate(self.keys):
+            offending = [i for i, r in enumerate(self.rows) if is_missing(r.get(k))]
+            if offending:
+                _, ctx = self._offending(
+                    "missing_key", offending, count_name="missing_count", column=k
+                )
+                _fail(f"keys[{pos}]", "output", "missing_key", "REQ-0240", ctx)
+        parts = {}
+        for i, row in enumerate(self.rows):
+            tup = tuple(_hashable(row.get(k)) for k in self.keys)
+            parts.setdefault(tup, []).append(i)
+        repeated = [p[0] for p in parts.values() if len(p) > 1]
+        if repeated:
+            _, ctx = self._offending(
+                "duplicate_key", repeated, count_name="duplicate_count"
+            )
+            _fail("keys", "output", "duplicate_key", "REQ-0240", ctx)
 
     def _verify_self_uniques(self):
         """REQ-0120/1245: uniqueness over the current completed donor pool."""
@@ -1364,95 +1430,119 @@ class Engine:
             _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
         severity = payload.get("severity", "error")
         failed = self._check_verification(kind, payload, col, where)
-        failed, detail = failed if isinstance(failed, tuple) else (failed, {})
-        if failed and severity == "error":
-            report = {"verification": kind}
+        if failed is not None and severity == "error":
+            condition, detail = failed
+            report = {}
             if payload.get("id") is not None:
                 report["verification_id"] = payload["id"]  # REQ-0374
             _fail(
                 where,
                 "verification",
-                failed,
-                _VERIFICATION_REQUIREMENTS.get(failed, "REQ-0406"),
+                condition,
+                _VERIFICATION_REQUIREMENTS.get(condition, "REQ-0406"),
                 {**report, **detail},
             )
 
+    def _offending(
+        self, condition, rows, count=None, count_name="failure_count", **context
+    ):
+        """REQ-0373: a failed check reports its failure count and a
+        representative sample of the offending rows' keys."""
+        keys = [_expr.keys_of(self, self.rows[i]) for i in rows[:_REPORTED_KEYS]]
+        count = len(rows) if count is None else count
+        return condition, {**context, count_name: count, "keys": keys}
+
     def _check_verification(self, kind, payload, col, where):
+        """The failed condition and its report, or None when the check
+        holds. Rows are checked in construction order."""
+        rows = range(len(self.rows))
         if kind == "row_count":
             return self._check_row_count(payload, where)
         if kind == "unique":
             cols = payload["columns"]
-            seen = set()
-            for row in self.rows:
+            parts = {}
+            for i, row in enumerate(self.rows):
                 tup = tuple(_hashable(row.get(c)) for c in cols)
-                if tup in seen:
-                    return "unique_failed"
-                seen.add(tup)
-            return None
+                parts.setdefault(tup, []).append(i)
+            repeated = [p for p in parts.values() if len(p) > 1]
+            if not repeated:
+                return None
+            # Each repeated combination is one failure; every row carrying
+            # it is offending, since those rows differ in their own keys.
+            offending = [i for p in repeated for i in p]
+            return self._offending(
+                "unique_failed", offending, len(repeated), columns=list(cols)
+            )
         if kind == "all_or_none":
-            for row in self.rows:
+            offending = []
+            for i, row in enumerate(self.rows):
                 vals = [row.get(c) for c in payload["columns"]]
                 if any(is_missing(x) for x in vals) and not all(
                     is_missing(x) for x in vals
                 ):
-                    return "all_or_none_failed"
-            return None
+                    offending.append(i)
+            return (
+                self._offending("all_or_none_failed", offending) if offending else None
+            )
         if kind == "assert":
-            node, _ = _pred.parse(payload["expr"], where)
-            for i, row in enumerate(self.rows):
-                ctx = _ColCtx(self, i, where)
-                if _pred.evaluate(node, ctx.value, where) is not True:
-                    return "assert_failed"
-            return None
+            node, _ = _pred.parse(payload["expr"], f"{where}.expr")
+            offending = [
+                i
+                for i in rows
+                if _pred.evaluate(node, _ColCtx(self, i, where).value, where)
+                is not True
+            ]
+            return self._offending("assert_failed", offending) if offending else None
         if kind == "implies":
-            wn, _ = _pred.parse(payload["when"], where)
-            tn, _ = _pred.parse(payload["then"], where)
-            for i, row in enumerate(self.rows):
+            wn, _ = _pred.parse(payload["when"], f"{where}.when")
+            tn, _ = _pred.parse(payload["then"], f"{where}.then")
+            offending = []
+            for i in rows:
                 ctx = _ColCtx(self, i, where)
                 w = _pred.evaluate(wn, ctx.value, where)
                 if w is True and _pred.evaluate(tn, ctx.value, where) is not True:
-                    return "implication_failed"
-            return None
+                    offending.append(i)
+            if not offending:
+                return None
+            return self._offending("implication_failed", offending)
         col = col or payload.get("column")
         if col is None or col not in self.colspecs:
             _fail(
                 where, "validation", "unknown_field", "REQ-0405", {"verification": kind}
             )
+        values = [(i, self.rows[i].get(col)) for i in rows]
+        present = [(i, v) for i, v in values if not is_missing(v)]
+        extra = {}
         if kind == "not_missing":
-            if any(is_missing(r.get(col)) for r in self.rows):
-                return "not_missing_failed"
-            return None
-        if kind == "allowed_values":
+            condition = "not_missing_failed"
+            offending = [i for i, v in values if is_missing(v)]
+        elif kind == "allowed_values":
+            condition = "allowed_values_failed"
             allowed = set(payload["values"])
-            for r in self.rows:
-                v = r.get(col)
-                if not is_missing(v) and v not in allowed:
-                    return "allowed_values_failed"
-            return None
-        if kind == "range":
-            for r in self.rows:
-                v = r.get(col)
-                if is_missing(v):
-                    continue
-                if "min" in payload and compare(v, payload["min"]) < 0:
-                    return "range_failed"
-                if "max" in payload and compare(v, payload["max"]) > 0:
-                    return "range_failed"
-            return None
-        if kind == "max_length":
-            for r in self.rows:
-                v = r.get(col)
-                if not is_missing(v) and len(v) > payload["max"]:
-                    return "length_failed"
-            return None
-        if kind == "matches":
+            offending = [i for i, v in present if v not in allowed]
+        elif kind == "range":
+            condition = "range_failed"
+            offending = [
+                i
+                for i, v in present
+                if ("min" in payload and compare(v, payload["min"]) < 0)
+                or ("max" in payload and compare(v, payload["max"]) > 0)
+            ]
+        elif kind == "max_length":
+            condition = "length_failed"
+            offending = [i for i, v in present if len(v) > payload["max"]]
+            extra["max"] = payload["max"]
+        elif kind == "matches":
+            condition = "matches_failed"
             rx = _validate._normalize_pattern(payload["pattern"])
-            for r in self.rows:
-                v = r.get(col)
-                if not is_missing(v) and not rx.search(v):
-                    return "matches_failed"
+            offending = [i for i, v in present if not rx.search(v)]
+        else:
+            _fail(
+                where, "validation", "unknown_field", "REQ-0397", {"verification": kind}
+            )
+        if not offending:
             return None
-        _fail(where, "validation", "unknown_field", "REQ-0397", {"verification": kind})
+        return self._offending(condition, offending, column=col, **extra)
 
     def _check_row_count(self, payload, where):
         """REQ-0385/0386/0387/1154: group the artifact's rows, count the
@@ -1488,7 +1578,8 @@ class Engine:
             ):
                 b = payload.get(bound)
                 if b is not None and (value < b if low else value > b):
-                    keys.append({c: self.rows[g[0]].get(c) for c in group_by})
+                    row = self.rows[g[0]]
+                    keys.append({c: _expr.json_value(row.get(c)) for c in group_by})
                     counts.append(n)
                     break
         if not keys:
@@ -1499,26 +1590,6 @@ class Engine:
         return "row_count_failed", detail
 
     def _render(self):
-        seen = set()
-        for i, row in enumerate(self.rows):
-            tup = tuple(_hashable(row.get(k)) for k in self.keys)
-            if any(is_missing(row.get(k)) for k in self.keys):
-                _fail(
-                    "output",
-                    "output",
-                    "missing_key",
-                    "REQ-0240",
-                    {"row": i, "keys": self.keys},
-                )
-            if tup in seen:
-                _fail(
-                    "output",
-                    "output",
-                    "duplicate_key",
-                    "REQ-0240",
-                    {"row": i, "keys": self.keys},
-                )
-            seen.add(tup)
         rows = self.rows
         if self.output.get("order_by"):
             rows = _order_rows(
@@ -1696,7 +1767,13 @@ class _BaseCtx:
                 return record.get(parts[1])
             if len(parts) == 1:
                 return record.get(name)
-            _fail(self.where, "validation", "unknown_field", "REQ-0189", {"name": name})
+            _fail(
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0189",
+                {"identifier": name},
+            )
 
         return _pred.evaluate(node, resolve, self.where)
 
@@ -1782,7 +1859,7 @@ class _BaseCtx:
                         "validation",
                         "unknown_field",
                         "REQ-0132",
-                        {"name": name},
+                        {"identifier": name},
                     )
 
                 out = []
@@ -1833,7 +1910,9 @@ class _BaseCtx:
             return record.get(parts[1])
         if len(parts) == 1:
             return record.get(name)
-        _fail(self.where, "validation", "unknown_field", "REQ-0132", {"name": name})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-0132", {"identifier": name}
+        )
 
     def _lookup_keys(self, decl):
         """Return (donor_fields, driver_exprs) for a lookup key.
@@ -1855,12 +1934,19 @@ class _BaseCtx:
         if key is None:
             key = [k for k in self.e.keys if k in fields]
             if not key:
+                # REQ-0153: an omitted key is the output keys the dataset
+                # carries; with none, the key must be declared.
                 _fail(
                     where,
                     "validation",
                     "no_applicable_keys",
                     "REQ-0153",
-                    {"intermediate": decl["id"], "dataset": ds_label},
+                    {
+                        "intermediate": decl["id"],
+                        "dataset": ds_label,
+                        "keys": list(self.e.keys),
+                        "hint": "declare the `key` explicitly",
+                    },
                 )
         elif isinstance(key, str):
             key = [key]
@@ -1942,7 +2028,7 @@ class _BaseCtx:
                         "validation",
                         "unknown_field",
                         "REQ-0132",
-                        {"name": name},
+                        {"identifier": name},
                     )
 
                 cands = [
@@ -2017,7 +2103,12 @@ class _BaseCtx:
                     "validation",
                     "incomparable_range_types",
                     "REQ-0121",
-                    {},
+                    {
+                        "intermediate": decl["id"],
+                        "value_type": _expr._runtime_type_name(val),
+                        "lower_type": _expr._runtime_type_name(lo),
+                        "upper_type": _expr._runtime_type_name(hi),
+                    },
                 )
             if between.get("lower") and compare(lo, val) > 0:
                 continue
@@ -2076,7 +2167,18 @@ class _BaseCtx:
                 ),
                 self.where,
             )
-            vals = self._window_kind(kind, payload, ordered, e)
+            try:
+                vals = self._window_kind(kind, payload, ordered, e)
+            except YamaaError as err:
+                # A window failure belongs to its partition rather than to
+                # one row, so it names the partition it could not answer.
+                if "keys" not in err.context and err.phase != "validation":
+                    part = {
+                        g: _expr.json_value(self._win_val(e, idxs[0], g))
+                        for g in group_by
+                    }
+                    err.context = {**err.context, "keys": [part]}
+                raise
             for i, v in zip(ordered, vals):
                 result[i] = v
         return result
@@ -2150,11 +2252,15 @@ class _BaseCtx:
                     continue
                 if type(d) is not type(r):
                     _fail(
-                        self.where,
-                        "derivation",
+                        f"{self.where}.reference_date",
+                        "validation",
                         "incompatible_input_type",
                         "REQ-0004",
-                        {},
+                        {
+                            "source": rv,
+                            "expected": _expr._runtime_type_name(d),
+                            "actual": _expr._runtime_type_name(r),
+                        },
                     )
                 if compare(d, r) <= 0:
                     cands.append((d, i))
@@ -2164,7 +2270,14 @@ class _BaseCtx:
                 winners = [i for c, i in cands if compare(c, latest) == 0]
                 if len(winners) > 1:
                     _fail(
-                        self.where, "derivation", "ambiguous_baseline", "REQ-0322", {}
+                        self.where,
+                        "derivation",
+                        "ambiguous_baseline",
+                        "REQ-0322",
+                        {
+                            "date": _expr.json_value(latest),
+                            "match_count": len(winners),
+                        },
                     )
                 out[ordered.index(winners[0])] = "Y"
             return out
@@ -2174,11 +2287,8 @@ class _BaseCtx:
         if isinstance(payload, str):
             payload = {"expr": payload}
         if payload.get("derive"):
-            try:
-                return self._agg_derive(payload)
-            except YamaaError as e:
-                raise _only_error(e, self.where) from e
-        node, names = _agg.parse(payload["expr"], self.where)
+            return self._agg_derive(payload)
+        node, names = _agg.parse(payload["expr"], f"{self.where}.expr")
         stars = {r[1] for r in _agg.collect_reductions(node, []) if r[0] == "starcount"}
         names = [n for n in names if n not in stars]
         qualified = [n for n in names if "." in n]
@@ -2201,24 +2311,15 @@ class _BaseCtx:
                     "REQ-0504",
                     {"expr": payload["expr"]},
                 )
-            try:
-                return self._agg_qualified(node, payload, sorted(stars))
-            except YamaaError as e:
-                raise _only_error(e, self.where) from e
+            return self._agg_qualified(node, payload, sorted(stars))
         if qualified:
-            try:
-                return self._agg_qualified(node, payload, qualified)
-            except YamaaError as e:
-                raise _only_error(e, self.where) from e
-        try:
-            return self._agg_unqualified(node, payload, plain, i)
-        except YamaaError as e:
-            raise _only_error(e, self.where) from e
+            return self._agg_qualified(node, payload, qualified)
+        return self._agg_unqualified(node, payload, plain, i)
 
     def _agg_derive(self, payload):
         """Reduce over per-record derive bindings (REQ-1189/1190)."""
         e = self.e
-        node, _names = _agg.parse(payload["expr"], self.where)
+        node, _names = _agg.parse(payload["expr"], f"{self.where}.expr")
         derive = payload["derive"]
         seen = set()
         for b in derive:
@@ -2300,12 +2401,12 @@ class _BaseCtx:
         for r in matched:
             scope = {}
             dctx = _DeriveCtx(e, ds, r, scope, self.where, i, inter_scope)
-            for b in derive:
-                bnode = _norm_derivation(b["derivation"], self.where)
-                v = _expr.eval_expr(bnode, dctx)
-                v = self.e._convert(
-                    v, {"name": b["name"], "type": b["type"]}, self.where, deriv=bnode
-                )
+            for j, b in enumerate(derive):
+                where = f"{self.where}.derive[{j}].derivation"
+                bnode = _norm_derivation(b["derivation"], where)
+                v = _expr.eval_at(bnode, dctx, where)
+                binding = {"name": b["name"], "type": b["type"]}
+                v = e._convert(v, binding, bnode, where, path=self.where)
                 scope[b["name"]] = v
             for f, v in r.items():
                 scope.setdefault(f"{ds}.{f}", v)
@@ -2517,7 +2618,13 @@ class _ColCtx(_BaseCtx):
                     "REQ-0189",
                     {"identifier": name, "suggestion": f"{origin}.{name}"},
                 )
-            _fail(self.where, "validation", "unknown_field", "REQ-0070", {"name": name})
+            _fail(
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0070",
+                {"identifier": name},
+            )
         return row[name]
 
     def source_records(self, var):
@@ -2531,12 +2638,20 @@ class _ColCtx(_BaseCtx):
         table = self._table(ds)
         if table is None:
             _fail(
-                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {"identifier": var},
             )
         field = parts[-1]
         if field not in table.fields:
             _fail(
-                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {"identifier": var},
             )
         origin = e._origins[i]
         if ds == origin:
@@ -2579,7 +2694,7 @@ class _ColCtx(_BaseCtx):
             e._built[i],
             e._recs[i].get(origin, []),
             e.rows[i],
-            f"{self.where}.odm",
+            self.where,
             "derivation",
         )
 
@@ -2600,10 +2715,10 @@ class _RowCtx(_BaseCtx):
         self.row = {}
 
     def _row_index(self):
-        _fail(self.where, "row_construction", "phase_boundary", "REQ-0126", {})
+        _fail(self.where, "validation", "phase_boundary", "REQ-0126", {})
 
     def _row_value(self, i, name):
-        _fail(self.where, "row_construction", "phase_boundary", "REQ-0126", {})
+        _fail(self.where, "validation", "phase_boundary", "REQ-0126", {})
 
     def _driver_intermediate(self):
         return self.ds if self.ds in self.e.drivers else None
@@ -2644,7 +2759,9 @@ class _RowCtx(_BaseCtx):
                 "REQ-0189",
                 {"identifier": name, "suggestion": f"{self.ds}.{name}"},
             )
-        _fail(self.where, "validation", "unknown_field", "REQ-0070", {"name": name})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-0070", {"identifier": name}
+        )
 
     def source_records(self, var):
         parts = var.split(".")
@@ -2658,11 +2775,19 @@ class _RowCtx(_BaseCtx):
         table = self._table(ds)
         if table is None:
             _fail(
-                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {"identifier": var},
             )
         if len(parts) >= 3 and parts[1] not in table.fields:
             _fail(
-                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {"identifier": var},
             )
         if ds == self.ds:
             if self.record is not None:
@@ -2671,7 +2796,7 @@ class _RowCtx(_BaseCtx):
                 return [{parts[1]: self.groupkeys[parts[1]]}]
             _fail(
                 self.where,
-                "row_construction",
+                "validation",
                 "ungrouped_driver_field",
                 "REQ-0067",
                 {"variable": var},
@@ -2690,7 +2815,7 @@ class _RowCtx(_BaseCtx):
             if self.group is not None and k not in self.groupkeys:
                 _fail(
                     self.where,
-                    "row_construction",
+                    "validation",
                     "ungrouped_driver_field",
                     "REQ-0067",
                     {"key": k},
@@ -2721,14 +2846,14 @@ class _RowCtx(_BaseCtx):
                             "validation",
                             "unknown_field",
                             "REQ-0103",
-                            {"variable": var},
+                            {"identifier": var},
                         )
                     return self.record.get(field)
                 if field in self.groupkeys:
                     return self.groupkeys[field]
             _fail(
                 self.where,
-                "row_construction",
+                "validation",
                 "phase_boundary",
                 "REQ-0126",
                 {"variable": var},
@@ -2740,14 +2865,16 @@ class _RowCtx(_BaseCtx):
         if var in ((self.template or {}).get("derivations") or {}):
             _fail(
                 self.where,
-                "row_construction",
+                "validation",
                 "phase_boundary",
                 "REQ-0126",
                 {"variable": var},
             )
         if self.record is not None and var in self.record:
             return self.record[var]
-        _fail(self.where, "validation", "unknown_field", "REQ-0070", {"name": var})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-0070", {"identifier": var}
+        )
 
     def _match_operand(self, name):
         return self._row_match_value(name)
@@ -2809,7 +2936,7 @@ class _RowCtx(_BaseCtx):
                         "validation",
                         "unknown_field",
                         "REQ-0132",
-                        {"name": name},
+                        {"identifier": name},
                     )
 
                 cands = [
@@ -2856,12 +2983,10 @@ class _RowCtx(_BaseCtx):
 
     def aggregate_value(self, payload):
         if self.group is None:
-            _fail(
-                self.where, "row_construction", "prohibited_construct", "REQ-0508", {}
-            )
+            _fail(self.where, "validation", "prohibited_construct", "REQ-0508", {})
         if isinstance(payload, str):
             payload = {"expr": payload}
-        node, names = _agg.parse(payload["expr"], self.where)
+        node, names = _agg.parse(payload["expr"], f"{self.where}.expr")
         ds = self.ds
         for n in names:
             if "." in n and n.split(".")[0] != ds:
@@ -2902,22 +3027,20 @@ class _RowCtx(_BaseCtx):
                 payload["expr"],
             )
         except YamaaError as e:
-            if (
-                e.phase == "row_construction"
-                and e.condition == "multiple_values_per_key"
-            ):
+            if e.condition == "aggregate_multiple_records":
+                # REQ-0501: a grouped row's ONLY fails while its row is
+                # constructed, naming the template and the group.
                 raise YamaaError(
                     phase="row_construction",
-                    condition="aggregate_multiple_records",
-                    requirement="REQ-0501",
-                    spec_paths=[self.where],
+                    condition=e.condition,
+                    requirement=e.requirement,
+                    spec_paths=e.spec_paths,
                     context={
-                        "reducer": "ONLY",
+                        **e.context,
                         "row": (self.template or {}).get("id"),
                         "group": dict(self.groupkeys),
-                        "record_count": len(recs),
                     },
-                )
+                ) from e
             raise
 
     def compute_ident(self, name):
@@ -2930,7 +3053,7 @@ class _RowCtx(_BaseCtx):
                     return self.groupkeys[parts[1]]
                 _fail(
                     self.where,
-                    "row_construction",
+                    "validation",
                     "ungrouped_driver_field",
                     "REQ-0067",
                     {"identifier": name},
@@ -2955,7 +3078,7 @@ class _RowCtx(_BaseCtx):
             built,
             recs,
             self.row,
-            f"{self.where}.odm",
+            self.where,
             "row_construction",
         )
 
@@ -2964,7 +3087,7 @@ class _RowWinCtx(_BaseCtx):
     """Row-template window phase (REQ-0326): windows over one template's"""
 
     def __init__(self, engine, template, ds, rows, recs):
-        super().__init__(engine, f"rows.{template['id']}.derivations")
+        super().__init__(engine, f"{engine.row_path(template)}.derivations")
         self.template = template
         self.ds = ds
         self.trows = rows
@@ -2981,7 +3104,7 @@ class _RowWinCtx(_BaseCtx):
                     return self.recs[i].get(parts[1])
                 _fail(
                     self.where,
-                    "row_construction",
+                    "validation",
                     "ungrouped_driver_field",
                     "REQ-0067",
                     {"identifier": var},
@@ -3009,10 +3132,10 @@ class _KeyCtx(_BaseCtx):
         self.record = record
 
     def _row_index(self):
-        _fail(self.where, "row_construction", "phase_boundary", "REQ-0069", {})
+        _fail(self.where, "validation", "phase_boundary", "REQ-0069", {})
 
     def _row_value(self, i, name):
-        _fail(self.where, "row_construction", "phase_boundary", "REQ-0069", {})
+        _fail(self.where, "validation", "phase_boundary", "REQ-0069", {})
 
     def value(self, name):
         parts = name.split(".")
@@ -3122,7 +3245,7 @@ class _DeriveCtx:
                     "validation",
                     "unknown_field",
                     "REQ-0103",
-                    {"variable": name},
+                    {"identifier": name},
                 )
             if f not in self.record:
                 _fail(
@@ -3130,7 +3253,7 @@ class _DeriveCtx:
                     "validation",
                     "unknown_field",
                     "REQ-0103",
-                    {"variable": name},
+                    {"identifier": name},
                 )
             return self.record[f]
         if name in self.scope:
@@ -3145,7 +3268,11 @@ class _DeriveCtx:
             if var in self.inter:
                 return [{var.split(".")[-1]: self.inter[var]}]
             _fail(
-                self.where, "validation", "unknown_field", "REQ-0103", {"variable": var}
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0103",
+                {"identifier": var},
             )
         return [self.record]
 
@@ -3159,7 +3286,13 @@ class _DeriveCtx:
                 return record.get(parts[1])
             if len(parts) == 1:
                 return record.get(name)
-            _fail(self.where, "validation", "unknown_field", "REQ-0189", {"name": name})
+            _fail(
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-0189",
+                {"identifier": name},
+            )
 
         return _pred.evaluate(node, resolve, self.where)
 
@@ -3213,7 +3346,13 @@ class _DonorCtx(_BaseCtx):
 
     def _field(self, name):
         if name not in self.record:
-            _fail(self.where, "validation", "unknown_field", "REQ-1185", {"name": name})
+            _fail(
+                self.where,
+                "validation",
+                "unknown_field",
+                "REQ-1185",
+                {"identifier": name},
+            )
         return self.record[name]
 
     def _other(self, head):
@@ -3230,7 +3369,9 @@ class _DonorCtx(_BaseCtx):
             return self._field(field)
         if self._other(head) is not None:
             return self.lookup_value(head, field)
-        _fail(self.where, "validation", "unknown_field", "REQ-1185", {"name": name})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-1185", {"identifier": name}
+        )
 
     def source_records(self, var):
         head, _, field = var.partition(".")
@@ -3242,7 +3383,9 @@ class _DonorCtx(_BaseCtx):
             self.lookup_value(head, field)  # REQ-0125: a readable column
             rec = self._match_lookup(other, self._row_index())
             return [rec] if rec is not None else []
-        _fail(self.where, "validation", "unknown_field", "REQ-1185", {"name": var})
+        _fail(
+            self.where, "validation", "unknown_field", "REQ-1185", {"identifier": var}
+        )
 
     def compute_ident(self, name):
         return self.value(name)
@@ -3268,7 +3411,7 @@ class _DonorWinCtx(_BaseCtx):
                     "validation",
                     "unknown_field",
                     "REQ-0103",
-                    {"variable": var},
+                    {"identifier": var},
                 )
             return self.recs[i].get(f)
         return self.recs[i].get(var)
@@ -3298,7 +3441,7 @@ def _order_cmp(ta, tb, get_a, get_b, where):
         if not comparable(va, vb):
             _fail(
                 where,
-                "derivation",
+                "validation",
                 "incompatible_input_type",
                 "REQ-0323",
                 {"term": term},

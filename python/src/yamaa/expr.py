@@ -50,9 +50,14 @@ def _fail(where, phase, condition, requirement, context=None):
 
 
 def eval_expr(node, ctx):
-    """node: a derivation mapping (one registry key) or {'value':...} handled form."""
+    """node: a derivation mapping (one registry key) or {'value':...} handled form.
+
+    While an expression evaluates, `ctx.where` is the path of the node being
+    evaluated: `<derivation>.<operation>`, extended into nested expressions.
+    A failure an operation raises therefore names the operation, or a field
+    under it, never only the derivation that holds it."""
     if isinstance(node, dict) and "value" in node and set(node) <= HANDLED_FIELDS:
-        return eval_expr(node["value"], ctx)
+        return eval_at(node["value"], ctx, f"{ctx.where}.value")
     if not isinstance(node, dict) or len(node) != 1:
         _fail(
             ctx.where,
@@ -65,7 +70,39 @@ def eval_expr(node, ctx):
     fn = _REGISTRY.get(key)
     if fn is None:
         _fail(ctx.where, "validation", "unknown_field", "REQ-0321", {"expression": key})
-    return fn(node[key], ctx)
+    outer = ctx.where
+    ctx.where = f"{outer}.{key}"
+    try:
+        return fn(node[key], ctx)
+    finally:
+        ctx.where = outer
+
+
+def eval_at(node, ctx, where):
+    """Evaluate a nested expression written at `where`."""
+    outer = ctx.where
+    ctx.where = where
+    try:
+        return eval_expr(node, ctx)
+    finally:
+        ctx.where = outer
+
+
+def keys_of(e, row):
+    """The output keys of `row` as reported values, or None while a key is
+    not yet derived: a partial key would name no row."""
+    if row is None or any(k not in row for k in e.keys):
+        return None
+    return {k: json_value(row[k]) for k in e.keys}
+
+
+def json_value(v):
+    """A runtime value as a failure reports it: temporal values as text."""
+    if isinstance(v, YDateTime):
+        return datetime_text(v)
+    if isinstance(v, YDate):
+        return date_text(v)
+    return v
 
 
 def _source_var_payload(payload):
@@ -176,7 +213,7 @@ def _one_record(var, filt, missing, sel, ctx, site=None):
             )
     rec = recs[0]
     if value_field not in rec:
-        _fail(ctx.where, "validation", "unknown_field", "REQ-0103", {"variable": var})
+        _fail(ctx.where, "validation", "unknown_field", "REQ-0103", {"identifier": var})
     return rec[value_field]
 
 
@@ -209,7 +246,7 @@ def _choose(recs, sel, ctx):
 def ev_source(payload, ctx):
     var, filt, missing, sel = _source_var_payload(payload)
     if "." in var:
-        return _one_record(var, filt, missing, sel, ctx, site=f"{ctx.where}.source")
+        return _one_record(var, filt, missing, sel, ctx)
     return ctx.value(var)
 
 
@@ -235,10 +272,13 @@ def ev_greatest_least(payload, ctx, which):
         if best is not None and not comparable(best, v):
             _fail(
                 ctx.where,
-                "derivation",
-                "incompatible_input_type",
-                "REQ-0323",
-                {"sources": payload["sources"]},
+                "validation",
+                "incomparable_sources",
+                "REQ-0324",
+                {
+                    "sources": payload["sources"],
+                    "types": [_runtime_type_name(best), _runtime_type_name(v)],
+                },
             )
         if best is None or (compare(v, best) > 0) == (which == "greatest"):
             best = v
@@ -247,7 +287,7 @@ def ev_greatest_least(payload, ctx, which):
 
 def ev_flag(payload, ctx):
     if isinstance(payload, str):
-        cond_text, site = payload, ctx.where + ".flag"
+        cond_text, site = payload, ctx.where
         tv, fv, mv = "Y", _ABSENT, _ABSENT
     elif isinstance(payload, dict):
         cond = payload.get("condition")
@@ -259,7 +299,7 @@ def ev_flag(payload, ctx):
                 "REQ-1257",
                 {"expected": "predicate", "field": "condition"},
             )
-        cond_text, site = cond, ctx.where + ".flag.condition"
+        cond_text, site = cond, ctx.where + ".condition"
         tv = payload.get("true_value", "Y")
         fv = payload.get("false_value", _ABSENT)
         mv = payload.get("missing", _ABSENT)
@@ -281,7 +321,7 @@ def ev_flag(payload, ctx):
                 condition=e.condition,
                 requirement="REQ-0189",
                 spec_paths=[site],
-                context={"identifier": e.context.get("name")},
+                context={"identifier": e.context.get("identifier")},
             ) from e
         raise
     if holds is True:
@@ -298,16 +338,61 @@ def _raw_operand(var, ctx):
     return _one_record(var, None, _ABSENT, None, ctx)
 
 
+def _incompatible(ctx, field, requirement, var, expected, v):
+    """REQ-0323: an operand of a type the operation does not take. The static
+    check catches every declared type; a value with no static type (an
+    intermediate's column) reports the same validation condition when it
+    arrives, at the operand's field."""
+    _fail(
+        f"{ctx.where}.{field}" if field else ctx.where,
+        "validation",
+        "incompatible_input_type",
+        requirement,
+        {"source": var, "expected": expected, "actual": _runtime_type_name(v)},
+    )
+
+
+def check_pad_width(width, where):
+    """REQ-1261: `width` is a positive integer. A value that is not an
+    integer fails its type (REQ-0287); one below one fails as REQ-1261
+    says."""
+    if isinstance(width, bool) or not isinstance(width, int):
+        _fail(
+            where,
+            "validation",
+            "invalid_field_type",
+            "REQ-0287",
+            {"expected": "int", "actual": _runtime_type_name(width)},
+        )
+    if width < 1:
+        _fail(
+            where,
+            "validation",
+            "invalid_field_type",
+            "REQ-1261",
+            {"expected": "positive int", "actual": width},
+        )
+
+
+def group_out_of_range(where, group, group_count, pattern):
+    """REQ-0828: a `str_extract.group` the pattern does not capture."""
+    _fail(
+        where,
+        "validation",
+        "regex_group_out_of_range",
+        "REQ-0828",
+        {"group": group, "group_count": group_count, "pattern": pattern},
+    )
+
+
+# REQ-0010: the runtime types with a canonical text; a Boolean has none.
+_TEXT_SOURCES = "str, int, float, date, or datetime"
+
+
 def _canonical_text(v, var, ctx):
     """REQ-0010 scalar -> canonical text. Booleans fail conversion."""
     if isinstance(v, bool):
-        _fail(
-            ctx.where,
-            "extract",
-            "incompatible_input_type",
-            "REQ-0010",
-            {"variable": var},
-        )
+        _incompatible(ctx, "source", "REQ-0010", var, _TEXT_SOURCES, v)
     if isinstance(v, str):
         return v
     if isinstance(v, int):
@@ -318,9 +403,7 @@ def _canonical_text(v, var, ctx):
         return datetime_text(v)
     if isinstance(v, YDate):
         return date_text(v)
-    _fail(
-        ctx.where, "extract", "incompatible_input_type", "REQ-0010", {"variable": var}
-    )
+    _incompatible(ctx, "source", "REQ-0010", var, _TEXT_SOURCES, v)
 
 
 def ev_str_pad(payload, ctx):
@@ -332,15 +415,8 @@ def ev_str_pad(payload, ctx):
             "REQ-1261",
             {"expected": "mapping"},
         )
-    width = payload.get("width")
-    if isinstance(width, bool) or not isinstance(width, int) or width < 1:
-        _fail(
-            ctx.where + ".width",
-            "validation",
-            "invalid_field_type",
-            "REQ-1261",
-            {"width": width},
-        )
+    check_pad_width(payload.get("width"), ctx.where + ".width")
+    width = payload["width"]
     var = payload.get("source")
     v = _raw_operand(var, ctx)
     if is_missing(v):
@@ -354,7 +430,7 @@ def ev_case(payload, ctx):
         if not isinstance(item, dict):
             _fail(ctx.where, "validation", "invalid_field_type", "REQ-0339", {})
         if "when" in item:
-            site = f"{ctx.where}.case[{n}].when"
+            site = f"{ctx.where}[{n}].when"
             site_ctx = copy.copy(ctx)
             site_ctx.where = site
             node, _ = _pred.parse(item["when"], site)
@@ -367,19 +443,19 @@ def ev_case(payload, ctx):
                         condition=e.condition,
                         requirement="REQ-0189",
                         spec_paths=e.spec_paths,
-                        context={"identifier": e.context.get("name")},
+                        context={"identifier": e.context.get("identifier")},
                     ) from e
                 raise
             if holds is True:
                 then = item["then"]
                 if isinstance(then, str):
                     then = {"source": then}
-                return eval_expr(then, ctx)
+                return eval_at(then, ctx, f"{ctx.where}[{n}].then")
         elif "otherwise" in item and len(item) == 1:
             other = item["otherwise"]
             if isinstance(other, str):
                 other = {"source": other}
-            return eval_expr(other, ctx)
+            return eval_at(other, ctx, f"{ctx.where}[{n}].otherwise")
         else:
             _fail(ctx.where, "validation", "invalid_field_type", "REQ-0339", {})
     return None
@@ -389,7 +465,7 @@ def ev_mapping(payload, ctx):
     """REQ-1110: look a string source up in the dictionary. `missing` answers
     a missing source and `unmapped` a present one with no entry; without
     its handler, each condition fails (REQ-0344)."""
-    site = f"{ctx.where}.mapping"
+    site = ctx.where
     var, filt = _filtered_source_payload(payload["source"])
     v = (
         _one_record(var, filt, _ABSENT, None, ctx, site=site)
@@ -404,21 +480,30 @@ def ev_mapping(payload, ctx):
             "mapping",
             "missing_input",
             "REQ-0334",
-            {"variable": var, "keys": _keys_ctx(ctx)},
+            {"variable": var},
         )
     if not isinstance(v, str):
-        _fail(site, "mapping", "incompatible_input_type", "REQ-0323", {})
+        _incompatible(ctx, "source", "REQ-0304", var, "str", v)
     # REQ-1110: dict is inline or a YAML path loaded via project resources.
     d = payload["dict"]
     if isinstance(d, str):
-        d = ctx.e._load_dict_yaml(d, ctx.where)
+        d = ctx.e._load_dict_yaml(d, f"{site}.dict")
     case_sensitive = payload.get("case_sensitive", True)
     if case_sensitive:
         key = v
     else:
-        folded = {ascii_fold(k): k for k in d}
-        if len(folded) != len(d):
-            _fail(ctx.where, "validation", "ambiguous_dictionary", "REQ-0714", {})
+        folded = {}
+        for k in d:
+            folded.setdefault(ascii_fold(k), []).append(k)
+        collisions = sorted(fk for fk, entries in folded.items() if len(entries) > 1)
+        if collisions:
+            _fail(
+                f"{site}.dict",
+                "validation",
+                "ambiguous_dictionary",
+                "REQ-0714",
+                {"folded_key": collisions[0], "entries": folded[collisions[0]]},
+            )
         key = ascii_fold(v)
         d = {ascii_fold(k): val for k, val in d.items()}
     if key in d:
@@ -431,7 +516,7 @@ def ev_mapping(payload, ctx):
         "mapping",
         "unmapped_value",
         "REQ-0334",
-        {"source": var, "value": v, "keys": _keys_ctx(ctx)},
+        {"source": var, "value": v},
     )
 
 
@@ -442,7 +527,7 @@ def ev_cut(payload, ctx):
         if "missing" in payload:
             return payload["missing"]
         _fail(
-            f"{ctx.where}.cut",
+            ctx.where,
             "cut",
             "missing_input",
             "REQ-0334",
@@ -453,7 +538,7 @@ def ev_cut(payload, ctx):
         # source with no static type (an intermediate's column) reports the
         # same validation condition when its value arrives.
         _fail(
-            f"{ctx.where}.cut.source",
+            f"{ctx.where}.source",
             "validation",
             "incompatible_input_type",
             "REQ-0306",
@@ -486,23 +571,15 @@ def ev_round_half_away_from_zero(payload, ctx):
     if is_missing(v):
         return None
     if isinstance(v, bool) or not isinstance(v, (int, float)):
-        _fail(
-            ctx.where,
-            "derivation",
-            "incompatible_input_type",
-            "REQ-0418",
-            {"source": src, "value": v},
-        )
+        _incompatible(ctx, "source", "REQ-0418", src, "numeric", v)
     return _numeric.round_half_away_from_zero(v, payload["digits"])
 
 
-def _str_operand(var, ctx, stage="extract"):
+def _str_operand(var, ctx):
     """Resolve a string operand WITHOUT handler substitution."""
     v = ctx.value(var) if "." not in var else _one_record(var, None, _ABSENT, None, ctx)
     if not is_missing(v) and not isinstance(v, str):
-        _fail(
-            ctx.where, stage, "incompatible_input_type", "REQ-0308", {"variable": var}
-        )
+        _incompatible(ctx, "source", "REQ-0308", var, "str", v)
     return v
 
 
@@ -514,7 +591,7 @@ def ev_str_extract(payload, ctx):
         rx = re.compile(payload["pattern"])
     except re.error:
         _fail(
-            ctx.where,
+            ctx.where + ".pattern",
             "validation",
             "invalid_regex",
             "REQ-0827",
@@ -524,83 +601,88 @@ def ev_str_extract(payload, ctx):
     if not m:
         return payload.get("no_match")  # fatal when omitted (REQ-0344)
     g = payload.get("group", 0)
-    try:
-        return m.group(g)
-    except IndexError:
-        _fail(
-            ctx.where,
-            "extract",
-            "regex_group_out_of_range",
-            "REQ-0828",
-            {"pattern": payload["pattern"], "group": g},
-        )
+    if g > rx.groups:
+        # REQ-0828: validation rejects the group before any row reads it.
+        group_out_of_range(ctx.where + ".group", g, rx.groups, payload["pattern"])
+    return m.group(g)
 
 
 def ev_str_concat(payload, ctx):
     parts = []
-    for s in payload["sources"]:
-        v = eval_expr(s, ctx)
+    for j, s in enumerate(payload["sources"]):
+        v = eval_at(s, ctx, f"{ctx.where}.sources[{j}]")
         if is_missing(v):
             return payload.get("missing")  # fatal when omitted
         if not isinstance(v, str):
-            _fail(ctx.where, "extract", "incompatible_input_type", "REQ-0308", {})
+            _incompatible(ctx, f"sources[{j}]", "REQ-0308", None, "str", v)
         parts.append(v)
     return "".join(parts)
 
 
 _TEMPLATE_RE = re.compile(r"{{|}}|{[A-Za-z_][A-Za-z0-9_.]*}")
+_PLACEHOLDER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
+
+
+def parse_template(text, where):
+    """REQ-0453/REQ-0461: split a template into ("text", literal) and
+    ("name", variable) parts. A brace pair is one literal brace; a lone
+    brace or a placeholder that is not a variable name fails validation,
+    reporting the reason and the placeholder."""
+    parts, literal, i = [], [], 0
+
+    def bad(reason, placeholder=None):
+        ctx = {"reason": reason}
+        if placeholder is not None:
+            ctx["placeholder"] = placeholder
+        _fail(where, "validation", "invalid_string_template", "REQ-0461", ctx)
+
+    while i < len(text):
+        if text.startswith("{{", i) or text.startswith("}}", i):
+            literal.append(text[i])
+            i += 2
+            continue
+        c = text[i]
+        if c == "}":
+            bad("unmatched_brace")
+        if c != "{":
+            literal.append(c)
+            i += 1
+            continue
+        end = text.find("}", i + 1)
+        if end < 0:
+            bad("unmatched_brace")
+        name = text[i + 1 : end]
+        if "{" in name or not _PLACEHOLDER.fullmatch(name):
+            bad("invalid_placeholder", name)
+        if literal:
+            parts.append(("text", "".join(literal)))
+            literal = []
+        parts.append(("name", name))
+        i = end + 1
+    if literal:
+        parts.append(("text", "".join(literal)))
+    return parts
 
 
 def ev_str_template(payload, ctx):
     template = payload if isinstance(payload, str) else payload["template"]
     missing = None if isinstance(payload, str) else payload.get("missing")
-    pos = 0
     out = []
-    for m in _TEMPLATE_RE.finditer(template):
-        literal = template[pos : m.start()]
-        if "{" in literal or "}" in literal:
-            _fail(
-                ctx.where,
-                "validation",
-                "invalid_string_template",
-                "REQ-0461",
-                {"template": template},
-            )
-        out.append(literal)  # literal text between tokens
-        tok = m.group()
-        if tok == "{{":
-            out.append("{")
-        elif tok == "}}":
-            out.append("}")
-        else:
-            name = tok[1:-1]
-            v = (
-                ctx.value(name)
-                if "." not in name
-                else _one_record(name, None, _ABSENT, None, ctx)
-            )
-            if is_missing(v):
-                return missing  # fatal when omitted (REQ-0344)
-            if not isinstance(v, str):
-                _fail(
-                    ctx.where,
-                    "template",
-                    "incompatible_input_type",
-                    "REQ-0458",
-                    {"variable": name},
-                )
-            out.append(v)
-        pos = m.end()
-    tail = template[pos:]
-    if "{" in tail or "}" in tail:
-        _fail(
-            ctx.where,
-            "validation",
-            "invalid_string_template",
-            "REQ-0461",
-            {"template": template},
+    for kind, part in parse_template(template, ctx.where):
+        if kind == "text":
+            out.append(part)
+            continue
+        v = (
+            ctx.value(part)
+            if "." not in part
+            else _one_record(part, None, _ABSENT, None, ctx)
         )
-    out.append(tail)
+        if is_missing(v):
+            return missing  # fatal when omitted (REQ-0344)
+        if not isinstance(v, str):
+            field = "template" if isinstance(payload, dict) else None
+            _incompatible(ctx, field, "REQ-0458", part, "str", v)
+        out.append(v)
     return "".join(out)
 
 
@@ -635,7 +717,7 @@ def ev_str_case(payload, ctx):
                 i += 1
         return "".join(out)
     _fail(
-        ctx.where,
+        ctx.where + ".to",
         "validation",
         "value_not_permitted",
         "REQ-0287",
@@ -651,7 +733,7 @@ def ev_str_contains(payload, ctx):
         rx = _pred.normalize_pattern(payload["pattern"])
     except re.error:
         _fail(
-            ctx.where,
+            ctx.where + ".pattern",
             "validation",
             "invalid_regex",
             "REQ-0827",
@@ -661,7 +743,7 @@ def ev_str_contains(payload, ctx):
 
 
 def ev_compute(payload, ctx):
-    node, _ = _numeric.parse(payload["expr"], ctx.where)
+    node, _ = _numeric.parse(payload["expr"], ctx.where + ".expr")
     return _numeric.evaluate(node, ctx.compute_ident, ctx.where, payload["expr"])
 
 
@@ -683,20 +765,15 @@ def ev_date_diff(payload, ctx):
         if "." not in payload["end"]
         else _one_record(payload["end"], None, _ABSENT, None, ctx)
     )
+    check_date_diff_bounds(payload, ctx.where)
     if is_missing(s) or is_missing(e):
         return None
-    if type(s) is not type(e) or not isinstance(s, (YDate, YDateTime)):
-        _fail(ctx.where, "derivation", "incompatible_input_type", "REQ-0004", {})
+    if not isinstance(s, (YDate, YDateTime)):
+        _incompatible(ctx, "start", "REQ-0004", payload["start"], "date", s)
+    if type(s) is not type(e):
+        _incompatible(ctx, "end", "REQ-0004", payload["end"], _runtime_type_name(s), e)
     unit = payload["unit"]
     bounds = payload.get("bounds", "exclusive")
-    if unit != "day" and bounds != "exclusive":
-        _fail(
-            ctx.where,
-            "validation",
-            "value_not_permitted",
-            "REQ-0613",
-            {"unit": unit, "bounds": bounds},
-        )
     if unit == "day":
         days = (
             (e - s).days
@@ -718,7 +795,27 @@ def ev_date_diff(payload, ctx):
         m = _whole_months(s, e)
         q = abs(m) // 12
         return q if m >= 0 else -q
-    _fail(ctx.where, "validation", "value_not_permitted", "REQ-0287", {"unit": unit})
+    _fail(
+        ctx.where + ".unit",
+        "validation",
+        "value_not_permitted",
+        "REQ-0287",
+        {"value": unit, "permitted": ["day", "week", "month", "year"]},
+    )
+
+
+def check_date_diff_bounds(payload, where):
+    """REQ-0613: a unit other than `day` counts whole units, so its only
+    permitted `bounds` is `exclusive`."""
+    bounds = payload.get("bounds", "exclusive")
+    if payload.get("unit") != "day" and bounds != "exclusive":
+        _fail(
+            where + ".bounds",
+            "validation",
+            "value_not_permitted",
+            "REQ-0613",
+            {"value": bounds, "permitted": ["exclusive"]},
+        )
 
 
 def _whole_months(s, e):
@@ -744,6 +841,36 @@ def _whole_months(s, e):
     return sign * count
 
 
+def _invalid_date_text(payload, ctx, src):
+    """REQ-0588: present text that is neither a complete date nor a date
+    prefix answers `invalid`, or fails at the operation naming its source."""
+    if "invalid" not in payload:
+        _fail(
+            ctx.where,
+            "impute",
+            "invalid_date_text",
+            "REQ-0588",
+            {"source": payload["source"], "value": src},
+        )
+    return payload["invalid"]
+
+
+def _completed_date(payload, ctx, src, year, month, day):
+    """REQ-0608: the completed value must be a real calendar date."""
+    try:
+        return YDate(year, month, day)
+    except ValueError:
+        if "invalid" not in payload:
+            _fail(
+                ctx.where,
+                "impute",
+                "invalid_calendar_date",
+                "REQ-0608",
+                {"value": src, "completed": f"{year:04d}-{month:02d}-{day:02d}"},
+            )
+        return None
+
+
 def ev_date_impute(payload, ctx):
     src = _date_operand(payload["source"], ctx)
     if is_missing(src):
@@ -753,28 +880,11 @@ def ev_date_impute(payload, ctx):
     elif isinstance(src, str):
         parts = date_prefix_parts(src)
         if parts is None:
-            if "invalid" not in payload:
-                _fail(
-                    ctx.where,
-                    "impute",
-                    "invalid_date_text",
-                    "REQ-0588",
-                    {"source": src},
-                )
-            return payload["invalid"]
+            return _invalid_date_text(payload, ctx, src)
         year, month, day = parts
         if day is not None:
-            try:
-                completed = YDate(year, month, day)
-            except ValueError:
-                if "invalid" not in payload:
-                    _fail(
-                        ctx.where,
-                        "impute",
-                        "invalid_calendar_date",
-                        "REQ-0608",
-                        {"source": src},
-                    )
+            completed = _completed_date(payload, ctx, src, year, month, day)
+            if completed is None:
                 return payload["invalid"]
             precision = "D"
         else:
@@ -787,27 +897,13 @@ def ev_date_impute(payload, ctx):
                 d = 1
             elif d == "last":
                 d = calendar.monthrange(year, month)[1]
-            try:
-                completed = YDate(year, month, d)
-            except ValueError:
-                if "invalid" not in payload:
-                    _fail(
-                        ctx.where,
-                        "impute",
-                        "invalid_calendar_date",
-                        "REQ-0608",
-                        {"source": src},
-                    )
+            completed = _completed_date(payload, ctx, src, year, month, d)
+            if completed is None:
                 return payload["invalid"]
             precision = "M" if parts[1] is not None else "Y"
     else:
-        _fail(
-            ctx.where,
-            "impute",
-            "incompatible_input_type",
-            "REQ-0606" if isinstance(src, YDateTime) else "REQ-0323",
-            {"source": type(src).__name__},
-        )
+        requirement = "REQ-0606" if isinstance(src, YDateTime) else "REQ-0323"
+        _incompatible(ctx, "source", requirement, payload["source"], "date or str", src)
     nb = payload.get("not_before")
     if nb is not None:
         bound = (
@@ -817,7 +913,7 @@ def ev_date_impute(payload, ctx):
         )
         if not is_missing(bound):
             if type(bound) is not YDate:
-                _fail(ctx.where, "impute", "incompatible_input_type", "REQ-0337", {})
+                _incompatible(ctx, "not_before", "REQ-0337", nb, "date", bound)
             if precision != "D" and completed < bound:
                 lo = (
                     YDate(completed.year, completed.month, 1)
@@ -850,24 +946,11 @@ def ev_date_precision(payload, ctx):
     if isinstance(src, str):
         parts = date_prefix_parts(src)
         if parts is None:
-            if "invalid" not in payload:
-                _fail(
-                    ctx.where,
-                    "impute",
-                    "invalid_date_text",
-                    "REQ-0588",
-                    {"source": src},
-                )
-            return payload["invalid"]
+            return _invalid_date_text(payload, ctx, src)
         _, month, day = parts
         return "D" if day is not None else ("M" if month is not None else "Y")
-    _fail(
-        ctx.where,
-        "impute",
-        "incompatible_input_type",
-        "REQ-0606" if isinstance(src, YDateTime) else "REQ-0337",
-        {},
-    )
+    requirement = "REQ-0606" if isinstance(src, YDateTime) else "REQ-0337"
+    _incompatible(ctx, "source", requirement, payload["source"], "date or str", src)
 
 
 def ev_to_date(payload, ctx):
@@ -881,17 +964,42 @@ def ev_to_date(payload, ctx):
     if isinstance(v, YDateTime):
         return YDate(v.year, v.month, v.day)
     if isinstance(v, str):
+        # REQ-0607: ISO date text parses directly; ISO datetime text keeps
+        # its calendar date. Its conditions are the temporal ones REQ-0348
+        # puts on the `impute` stage.
         try:
             return parse_date(v)
         except ValueError:
+            pass
+        try:
+            m = parse_datetime(v)
+        except ValueError:
             _fail(
                 ctx.where,
-                "derivation",
+                "impute",
                 "invalid_date_text",
-                "REQ-1107",
-                {"source": payload["source"], "text": v},
+                "REQ-0607",
+                {"source": payload["source"], "value": v},
             )
-    _fail(ctx.where, "derivation", "incompatible_input_type", "REQ-0607", {})
+        return YDate(m.year, m.month, m.day)
+    to_date_incompatible(ctx.where, _runtime_type_name(v))
+
+
+def to_date_incompatible(where, actual):
+    """REQ-0607: `to_date` takes a datetime or ISO text, never a date; the
+    failure names the operation and its `source` field."""
+    _fail(
+        where,
+        "validation",
+        "incompatible_input_type",
+        "REQ-0607",
+        {
+            "operation": "to_date",
+            "source": "source",
+            "expected": "datetime, ISO date text, or ISO 8601 datetime text",
+            "actual": actual,
+        },
+    )
 
 
 def ev_study_day(payload, ctx):
@@ -907,8 +1015,11 @@ def ev_study_day(payload, ctx):
     )
     if is_missing(d) or is_missing(r):
         return None
-    if type(d) is not type(r) or not isinstance(d, (YDate, YDateTime)):
-        _fail(ctx.where, "derivation", "incompatible_input_type", "REQ-0004", {})
+    if not isinstance(d, (YDate, YDateTime)):
+        _incompatible(ctx, "date", "REQ-0004", payload["date"], "date", d)
+    if type(d) is not type(r):
+        expected = _runtime_type_name(d)
+        _incompatible(ctx, "reference", "REQ-0004", payload["reference"], expected, r)
     delta = (d - r).days
     return delta + 1 if delta >= 0 else delta
 
@@ -917,6 +1028,12 @@ _EPOCH_ORDINAL = _date(1970, 1, 1).toordinal()
 
 
 def _runtime_type_name(v):
+    if v is None:
+        return "null"
+    if isinstance(v, dict):
+        return "mapping"
+    if isinstance(v, list):
+        return "list"
     if isinstance(v, bool):
         return "bool"
     if isinstance(v, int):
@@ -948,14 +1065,6 @@ def _collected_datetime_precision(text):
     return None
 
 
-def _keys_ctx(ctx):
-    e = ctx.e
-    try:
-        return [{k: e.rows[ctx.i].get(k) for k in e.keys}]
-    except (AttributeError, IndexError, TypeError):
-        return []
-
-
 def ev_datetime_impute(payload, ctx):
     time_rule = payload.get("time")
     if time_rule not in ("first", "last"):
@@ -976,7 +1085,7 @@ def ev_datetime_impute(payload, ctx):
             "impute",
             "missing_input",
             "REQ-1182",
-            {"operation": "datetime_impute", "source": var, "keys": _keys_ctx(ctx)},
+            {"operation": "datetime_impute", "source": var},
         )
     if isinstance(v, YDateTime):
         return v
@@ -1006,7 +1115,6 @@ def ev_datetime_impute(payload, ctx):
                 "operation": "datetime_impute",
                 "source": var,
                 "value": v,
-                "keys": _keys_ctx(ctx),
             },
         )
     if precision == "S":
@@ -1028,7 +1136,7 @@ def ev_datetime_precision(payload, ctx):
             "impute",
             "missing_input",
             "REQ-1183",
-            {"operation": "datetime_precision", "source": var, "keys": _keys_ctx(ctx)},
+            {"operation": "datetime_precision", "source": var},
         )
     if isinstance(v, YDateTime):
         return "S" if v.collected_precision == "second" else "D"
@@ -1058,7 +1166,6 @@ def ev_datetime_precision(payload, ctx):
                 "operation": "datetime_precision",
                 "source": var,
                 "value": v,
-                "keys": _keys_ctx(ctx),
             },
         )
     return precision

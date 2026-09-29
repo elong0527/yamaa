@@ -174,7 +174,7 @@ def test_row_filter_naming_underived_column_fails(tmp_path):
     spec = filter_spec("GRP = 'a'", FILTER_DERIVS)
     e = expect_error(tmp_path, spec, {"dm.csv": "USUBJID,AGE,GRP\nS1,40,a\n"})
     assert pinned(e) == ("validation", "unknown_field", "REQ-0068")
-    assert e.spec_paths == ["rows.dm.filter"]
+    assert e.spec_paths == ["rows[0].filter"]
 
 
 # -- grouped row counts (REQ-0386/0387/1154) --------------------------------

@@ -119,7 +119,7 @@ def test_odm_read_in_grouped_row_fails_at_row_construction(tmp_path):
     spec["columns"][1].pop("derivation")
     e = expect_error(tmp_path, spec, {"odm.csv": ODM})
     assert pinned(e) == ("row_construction", "odm_not_unique", "REQ-1278")
-    assert e.spec_paths == ["rows.subject.derivations.X.odm"]
+    assert e.spec_paths == ["rows[0].derivations.X.odm"]
     assert e.context["row"] == "subject"
 
 

@@ -119,6 +119,9 @@ def test_str_contains_predicate_missing_is_unknown(tmp_path):
 
 
 def test_str_contains_predicate_rejects_other_calls(tmp_path):
+    # REQ-1244 names these invalid_predicate; like any text that does not
+    # parse as a predicate, each reports REQ-0188 with the predicate and
+    # the position where parsing stopped.
     e = expect_error(
         tmp_path,
         adsl_spec(
@@ -134,7 +137,7 @@ def test_str_contains_predicate_rejects_other_calls(tmp_path):
     assert (e.phase, e.condition, e.requirement) == (
         "validation",
         "invalid_predicate",
-        "REQ-1244",
+        "REQ-0188",
     )
 
 
@@ -157,7 +160,7 @@ def test_str_contains_predicate_rejects_bad_pattern(tmp_path):
     assert (e.phase, e.condition, e.requirement) == (
         "validation",
         "invalid_predicate",
-        "REQ-1244",
+        "REQ-0188",
     )
 
 
@@ -180,7 +183,7 @@ def test_str_contains_predicate_rejects_nonliteral_pattern(tmp_path):
     assert (e.phase, e.condition, e.requirement) == (
         "validation",
         "invalid_predicate",
-        "REQ-1244",
+        "REQ-0188",
     )
 
 
@@ -222,15 +225,26 @@ def test_to_date_iso_text(tmp_path):
     assert out.splitlines() == ["USUBJID,FLAG", "S1,2024-03-09", "S2,"]
 
 
+def test_to_date_datetime_text(tmp_path):
+    # REQ-0607: ISO 8601 datetime text keeps its calendar date.
+    dm = "USUBJID,DTC\nS1,2024-03-09T10:15:00\n"
+    spec = adsl_spec(derivation={"to_date": {"source": "DM.DTC"}})
+    spec["columns"][1]["type"] = "date"
+    out = run(tmp_path, spec, {"dm.csv": dm})
+    assert out.splitlines() == ["USUBJID,FLAG", "S1,2024-03-09"]
+
+
 def test_to_date_partial_text_invalid(tmp_path):
+    # REQ-0607/REQ-0348: text that is neither a complete date nor a complete
+    # datetime is invalid date text, a temporal condition of `impute`.
     dm = "USUBJID,DTC\nS1,2024-03\n"
     spec = adsl_spec(derivation={"to_date": {"source": "DM.DTC"}})
     spec["columns"][1]["type"] = "date"
     e = expect_error(tmp_path, spec, {"dm.csv": dm})
     assert (e.phase, e.condition, e.requirement) == (
-        "derivation",
+        "impute",
         "invalid_date_text",
-        "REQ-1107",
+        "REQ-0607",
     )
 
 
@@ -277,7 +291,7 @@ def test_grouped_row_aggregate_with_key_rejected(tmp_path):
         "REQ-0142",
     )
     assert e.spec_paths == [
-        "rows.ae.derivations.N.aggregate.key",
+        "rows[0].derivations.N.aggregate.key",
     ]
 
 

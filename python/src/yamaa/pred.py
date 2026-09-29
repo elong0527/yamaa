@@ -179,46 +179,61 @@ _TOKEN_RE = re.compile(
 )
 
 
+def invalid_predicate(text, position, where, detail):
+    """REQ-0188: text that does not parse as one Boolean predicate. The
+    failure names the predicate and the character position, counted from
+    zero, where parsing stopped."""
+    raise YamaaError(
+        phase="validation",
+        condition="invalid_predicate",
+        requirement="REQ-0188",
+        spec_paths=[where],
+        context={"predicate": text, "position": position, "detail": detail},
+    )
+
+
 def tokenize(text, where="<predicate>"):
-    toks = []
+    """The tokens of `text` and the character position each starts at."""
+    toks, starts = [], []
     pos = 0
     while pos < len(text):
         m = _TOKEN_RE.match(text, pos)
         if not m:
-            raise YamaaError(
-                phase="validation",
-                condition="invalid_predicate",
-                requirement="REQ-0188",
-                spec_paths=[where],
-                context={"text": text, "at": text[pos : pos + 20]},
-            )
-        pos = m.end()
+            invalid_predicate(text, pos, where, "unrecognized character")
+        start, pos = pos, m.end()
         kind = m.lastgroup
         val = m.group()
         if kind == "ws":
             continue
+        starts.append(start)
         if kind == "word" and val.upper() in KEYWORDS:
             toks.append(("kw", val.upper()))
         elif kind == "dotted":
             toks.append(("ident", val))
         else:
             toks.append((kind, val))
-    return toks
+    return toks, starts
 
 
 class Parser:
     def __init__(self, text, where):
-        self.toks = tokenize(text, where)
+        self.toks, self.starts = tokenize(text, where)
         self.pos = 0
+        self.last = 0  # where the most recently consumed token starts
         self.where = where
         self.text = text
         self.names = []  # identifiers bound, in order
+
+    def at(self, i):
+        """The position of token i; the end of the text past the last one."""
+        return self.starts[i] if i < len(self.starts) else len(self.text)
 
     def peek(self):
         return self.toks[self.pos] if self.pos < len(self.toks) else (None, None)
 
     def next(self):
         t = self.peek()
+        self.last = self.at(self.pos)
         self.pos += 1
         return t
 
@@ -228,19 +243,15 @@ class Parser:
             self.fail(f"expected {kw}")
         return val
 
-    def fail(self, msg="parse error"):
-        raise YamaaError(
-            phase="validation",
-            condition="invalid_predicate",
-            requirement="REQ-0188",
-            spec_paths=[self.where],
-            context={"text": self.text, "detail": msg},
-        )
+    def fail(self, msg="parse error", position=None):
+        """Fail at `position`, by default the token just consumed."""
+        position = self.last if position is None else position
+        invalid_predicate(self.text, position, self.where, msg)
 
     def parse(self):
         node = self.disjunction()
         if self.pos != len(self.toks):
-            self.fail("trailing tokens")
+            self.fail("trailing tokens", self.at(self.pos))
         return node
 
     def disjunction(self):
@@ -289,13 +300,7 @@ class Parser:
             # identifier; any other name(...) is invalid_predicate.
             if val.upper() == "STR_CONTAINS":
                 return self._str_contains_call()
-            raise YamaaError(
-                phase="validation",
-                condition="invalid_predicate",
-                requirement="REQ-1244",
-                spec_paths=[self.where],
-                context={"text": self.text, "name": val},
-            )
+            self.fail(f"{val}(...) is not a predicate function", self.at(self.pos))
         return self.comparison_or_null_test()
 
     def _str_contains_call(self):
@@ -305,24 +310,14 @@ class Parser:
         k, v = self.next()
         if k != "punct" or v != ",":
             self.fail("expected , in str_contains call")
-
-        def bad_pattern(detail):
-            raise YamaaError(
-                phase="validation",
-                condition="invalid_predicate",
-                requirement="REQ-1244",
-                spec_paths=[self.where],
-                context={"text": self.text, "detail": detail},
-            )
-
         k, v = self.next()
         # REQ-1244: the pattern is a string literal holding a portable regex.
         if k != "string":
-            bad_pattern("str_contains pattern must be a string literal")
+            self.fail("str_contains pattern must be a string literal")
         pattern = v[1:-1].replace("''", "'")
         bad = portable_pattern_error(pattern)
         if bad is not None:
-            bad_pattern(f"pattern outside the portable grammar: {bad}")
+            self.fail(f"pattern outside the portable grammar: {bad}")
         k, v = self.next()
         if k != "punct" or v != ")":
             self.fail("expected ) in str_contains call")
@@ -408,13 +403,7 @@ class Parser:
                         self.fail("ESCAPE needs a string literal")
                     esc = v[1:-1].replace("''", "'")
                     if len(esc) != 1:
-                        raise YamaaError(
-                            phase="validation",
-                            condition="invalid_predicate",
-                            requirement="REQ-0191",
-                            spec_paths=[self.where],
-                            context={"text": self.text},
-                        )
+                        self.fail("ESCAPE takes exactly one character")
                 node = ("like", left, pat, esc)
             return ("not", node) if neg else node
         if kind == "op":
@@ -495,6 +484,8 @@ def _like_match(value, pattern, escape):
 
 def evaluate(node, resolve, where="<predicate>"):
     """resolve(name) -> value. Returns True/False/None."""
+    # REQ-0190: operands the static check could not type (an intermediate's
+    # column) report its validation condition when their values arrive.
     kind = node[0]
     if kind == "lit":
         return node[1]
@@ -519,7 +510,7 @@ def evaluate(node, resolve, where="<predicate>"):
             return None  # REQ-0166
         if not comparable(lv, rv):
             raise YamaaError(
-                phase="derivation",
+                phase="validation",
                 condition="incompatible_input_type",
                 requirement="REQ-0190",
                 spec_paths=[where],
@@ -554,7 +545,7 @@ def evaluate(node, resolve, where="<predicate>"):
             return None
         if not isinstance(sv, str) or not isinstance(pv, str):
             raise YamaaError(
-                phase="derivation",
+                phase="validation",
                 condition="incompatible_input_type",
                 requirement="REQ-0190",
                 spec_paths=[where],
@@ -570,7 +561,7 @@ def evaluate(node, resolve, where="<predicate>"):
             return None
         if not isinstance(sv, str):
             raise YamaaError(
-                phase="derivation",
+                phase="validation",
                 condition="incompatible_input_type",
                 requirement="REQ-1244",
                 spec_paths=[where],
