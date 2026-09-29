@@ -1,5 +1,6 @@
 """Structured run failure. Carries phase/condition/requirement/spec_paths
-so the benchmark runner can match expected/error.yaml entries."""
+so the benchmark runner can match expected/error.yaml entries, and the
+files a failed run still publishes (its verification log) as `artifacts`."""
 
 import json
 
@@ -13,6 +14,7 @@ class YamaaError(Exception):
         self.requirement = requirement
         self.spec_paths = list(spec_paths or [])
         self.context = context or {}
+        self.artifacts = {}  # derive_artifacts: declared path -> file
         super().__init__(
             f"[{phase}/{condition}]"
             + (f" {requirement}" if requirement else "")

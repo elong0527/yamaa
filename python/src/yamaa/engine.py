@@ -8,10 +8,13 @@ from functools import cmp_to_key
 import yaml
 
 from . import agg as _agg
+from . import compose as _compose
 from . import expr as _expr
+from . import logs as _logs
 from . import odm as _odm
 from . import pred as _pred
 from . import validate as _validate
+from . import workflow as _workflow
 from .csv_io import parquet_field_types, read_csv, read_parquet, write_csv_text
 from .errors import YamaaError
 from .values import (
@@ -135,12 +138,25 @@ def _vlist(v):
 
 
 class Engine:
-    def __init__(self, spec_path, project_root=None):
+    def __init__(self, spec_path, project_root=None, workflow=None):
         self.spec_path = os.path.abspath(spec_path)
         self.spec_dir = os.path.dirname(self.spec_path)
         self.project_root = project_root
         with open(self.spec_path, "r", encoding="utf-8") as f:
             self.spec = yaml.safe_load(f)
+        # specification/composition: every other rule reads the resolved
+        # specification (REQ-0651); an entry of another version fails below.
+        self.layer_paths = {}
+        spec = self.spec
+        if (
+            isinstance(spec, dict)
+            and spec.get("parents")
+            and spec.get("schema_version") == "1.0"
+        ):
+            self._reject_parents(spec["parents"])
+            resolved = _compose.resolve(self.spec_path, spec)
+            self.spec, self.layer_paths = resolved.document, resolved.layer_paths
+        self.workflow = workflow or _workflow.Workflow(self.spec_path)
         s = self.spec
         if not isinstance(s, dict):
             _fail("root", "validation", "invalid_field_type", "REQ-0622", {})
@@ -154,8 +170,6 @@ class Engine:
                 "REQ-0656",
                 {},
             )
-        if s.get("parents"):
-            self._reject_parents(s["parents"])
         self.functions = None
         if project_root is not None and _uses_function(s):
             from . import functions as _functions
@@ -196,6 +210,7 @@ class Engine:
         if isinstance(self.verifications, dict):
             self.verifications = [self.verifications]
         _validate.run(self)  # Stage-1 shape validation before any execution
+        _logs.check_declarations(self)
         self.rows = []  # list[dict] completed columns
         self._origins = []  # list[str|None]
         self._recs = []  # list[dict[str, list[record]]]
@@ -317,8 +332,8 @@ class Engine:
                     expand(dd, f"intermediates[{i}].derivations.{dn}")
 
     def _reject_parents(self, parents):
-        """Composition failure surface (specification/composition); the
-        clean-room resolves no parents."""
+        """Composition failure surface (specification/composition), checked
+        before the chain is resolved."""
         if isinstance(parents, str):
             parents = [parents]
         for p in parents:
@@ -345,19 +360,6 @@ class Engine:
                 seen,
                 self.spec.get("schema_version"),
             )
-        if "output" not in self.spec:
-            # REQ-0657: an entry omitting `output` inherits it; only a
-            # resolution to which no layer contributed one fails.
-            inherited = False
-            for p in parents:
-                full = os.path.normpath(os.path.join(self.spec_dir, p))
-                with open(full, "r", encoding="utf-8") as f:
-                    doc = yaml.safe_load(f) or {}
-                if isinstance(doc, dict) and doc.get("output"):
-                    inherited = True
-                    break
-            if not inherited:
-                _fail("output", "validation", "missing_required_field", None, {})
         for c in self.spec.get("columns") or []:
             if isinstance(c, dict) and "type" in c and c["type"] is None:
                 _fail(
@@ -367,13 +369,6 @@ class Engine:
                     "REQ-0660",
                     {"field": "type"},
                 )
-        _fail(
-            "parents",
-            "validation",
-            "invalid_clear",
-            "REQ-0632",
-            {"detail": "spec composition is not implemented in the clean-room"},
-        )
 
     def _check_parent_chain(self, full, seen, entry_version):
         if full in seen:
@@ -384,6 +379,8 @@ class Engine:
                 "REQ-0655",
                 {"reason": "parent_chain_returns_to_entry"},
             )
+        if not os.path.isfile(full):
+            return  # compose reports a parent it cannot read (REQ-0653/REQ-0654)
         seen.append(full)
         with open(full, "r", encoding="utf-8") as f:
             doc = yaml.safe_load(f) or {}
@@ -427,10 +424,13 @@ class Engine:
     def _load_input(self, name, decl):
         if name in self.odm_inputs:
             return self._load_odm_input(name, decl)
+        if isinstance(decl, dict) and "schema" in decl:
+            return Table(name, *_workflow.produced_input(self, name, decl))
         if isinstance(decl, str):
             path, types = decl, {}
         else:
             path, types = decl["path"], decl.get("types") or {}
+        path = _compose.layer_path(self, f"input.{name}.path", path)
         _validate.check_resource_path(self, name, path)  # storage/resources
         profile = self._input_profile(name, path)
         full = os.path.normpath(os.path.join(self.spec_dir, path))
@@ -478,6 +478,7 @@ class Engine:
             path = decl["path"]
         else:
             path = decl
+        path = _compose.layer_path(self, f"input.{name}.path", path)
         _validate.check_resource_path(self, name, path)
         profile = self._input_profile(name, path)
         full = os.path.normpath(os.path.join(self.spec_dir, path))
@@ -558,11 +559,14 @@ class Engine:
         self._eligible = {}
         self._self_marks = []
         self._row_phase = True
+        self._outcomes = []  # each declared check's outcome, for the logs
         self._verify_input_intermediates()
         self._build_rows()
         self._derive_columns()
         self._verify()
-        return self._render()
+        text = self._render()
+        self.sidecars = _logs.sidecars(self)  # REQ-0396: after every check
+        return text
 
     def _default_dataset(self):
         if self.spec.get("base"):
@@ -1238,6 +1242,7 @@ class Engine:
             _fail(where, "validation", "invalid_field_type", "REQ-0397", {})
         severity = payload.get("severity", "error")
         failed = self._check_verification(kind, payload, col, where)
+        _logs.record(self, where, kind, payload, col, failed)
         if failed is not None and severity == "error":
             condition, detail = failed
             report = {}
@@ -1372,7 +1377,7 @@ class Engine:
                 tup = tuple(_hashable(self.rows[i].get(g)) for g in group_by)
                 parts.setdefault(tup, []).append(i)
             groups = list(parts.values())
-        keys, counts = [], []
+        keys, counts, sizes = [], [], []
         for g in groups:
             if when is not None and not any(admits(when, i) for i in g):
                 continue
@@ -1389,12 +1394,27 @@ class Engine:
                     row = self.rows[g[0]]
                     keys.append({c: _expr.json_value(row.get(c)) for c in group_by})
                     counts.append(n)
+                    sizes.append(len(g))
                     break
         if not keys:
             return None
         # REQ-0402: the report names each failing group and its count; the
-        # bounds are in the declaration at the reported path.
-        detail = {"failure_count": len(keys), "keys": keys, "counts": counts}
+        # bounds are in the declaration at the reported path. REQ-0373 shows a
+        # sample of the groups, with REQ-0393's counts aligned to it, and an
+        # ungrouped check's one count, so the verification log carries this
+        # failure's context unchanged (REQ-1176).
+        fraction = any(
+            payload.get(b) is not None for b in ("min_fraction", "max_fraction")
+        )
+        detail = {"failure_count": len(keys), "keys": keys[:_REPORTED_KEYS]}
+        if group_by:
+            detail["counts"] = counts[:_REPORTED_KEYS]
+            if fraction:
+                detail["denominators"] = sizes[:_REPORTED_KEYS]
+        else:
+            detail["count"] = counts[0]
+            if fraction:
+                detail["denominator"] = sizes[0]
         return "row_count_failed", detail
 
     def _render(self):
@@ -1415,6 +1435,7 @@ class Engine:
                 )
         ctypes = {c: self.colspecs[c]["type"] for c in cols}
         out_rows = [{c: r.get(c) for c in cols} for r in rows]
+        self._artifact = (cols, out_rows, ctypes)
         return write_csv_text(
             cols, out_rows, ctypes, decimals=self.output.get("decimals")
         )
@@ -1495,6 +1516,10 @@ def _norm_derivation(d, where):
     """REQ-0266/REQ-0319: bare string -> {source: s}; {value:} handled wrapper."""
     if isinstance(d, str):
         return {"source": d}
+    if isinstance(d, dict) and set(d) == {"value"} and isinstance(d["value"], dict):
+        # The canonical wrapper with no handler is its expression, so a
+        # window keyword under it still derives over the whole partition.
+        return _norm_derivation(d["value"], where)
     if isinstance(d, dict) and len(d) == 1:
         return d
     if isinstance(d, dict) and "value" in d and set(d) <= _expr.HANDLED_FIELDS:

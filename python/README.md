@@ -52,6 +52,32 @@ adsl = yamaa.derive("spec.yaml", project_root="python")
 Only the Python runtime is supported; an environment whose
 `runtime.language` names another language fails as `runner_language_mismatch`.
 
+## Warning and verification logs
+
+A specification may declare two sidecars beside its output:
+`output.warning_log`, one row per violated `warning` check with every
+offending key, and `output.verification_log`, one row per declared check,
+held or violated. `yamaa.derive_artifacts(spec_path, project_root=None)`
+runs the specification once and returns every file the run publishes, keyed
+by its declared path in the order a publisher replaces them: the
+verification log, the warning log, then `output.path`:
+
+```python
+files = yamaa.derive_artifacts("spec.yaml")
+# {"adsl-checks.csv": "...", "adsl-warnings.csv": "...", "adsl.csv": "..."}
+```
+
+Each path's extension selects its profile, so a `.csv` file is its text and
+a `.parquet` file its bytes. A declared warning log is its header alone when
+no warning is violated. Like `derive`, `derive_artifacts` writes nothing to
+disk; replacing each target atomically, in the order given, is the caller's
+job.
+
+A failed run publishes no output and no warning log. When it got past
+validation and declares `output.verification_log`, the `YamaaError` it
+raises carries that log, of the checks the run evaluated, as
+`error.artifacts`; otherwise `error.artifacts` is empty.
+
 ## Failures
 
 Every validation, derivation, and verification failure raises
@@ -69,6 +95,26 @@ except yamaa.YamaaError as error:
     error.context      # the values the rule says to report
 ```
 
+## Composition and producers
+
+A specification that names `parents` is resolved first: its layers merge
+into one resolved specification, which is what `derive` then validates and
+runs. Composition reads the declared kind of each field from the schema
+bundle under `yaml/`, found beside the package's checkout or above the
+specification.
+
+An input declared with `schema` reads the artifact another specification
+produces. `derive` runs that producer first, in the same call, and reads the
+dataset it renders, so
+
+```python
+dm = yamaa.derive("spec_dm.yaml")
+suppdm = yamaa.derive("spec_suppdm.yaml")  # runs spec_dm.yaml again, in memory
+```
+
+needs no `dm.csv` on disk. The producer's `output.path` must name the
+input's `path`, and nothing is written.
+
 ## Inputs
 
 An input is a CSV or Parquet file. A Parquet field takes its type from the
@@ -80,20 +126,17 @@ from it.
 ## Benchmarks
 
 `python/check_benchmarks.py` runs every benchmark under `benchmarks/` through
-the engine and compares each output, or each pinned failure, with its
-`expected/` directory:
+the engine and compares each output and log, or each pinned failure, with its
+`expected/` directory. A benchmark runs `spec.yaml`, or else each producer
+its entry reads and then the entry, the `spec_*.yaml` no other file names as
+a parent or a producer; a composed entry also compares its resolved
+specification with `expected/spec_resolved.yaml`:
 
 ```bash
 uv run --project python --no-sync python python/check_benchmarks.py
 ```
 
 `python/tests/test_benchmarks.py` runs the same comparison under pytest.
-
-## Not yet implemented
-
-- Specification composition (`parents:`) and runs in which one specification
-  reads another's output (#1504).
-- The warning log and verification log sidecars (#1498).
 
 ## Design
 
