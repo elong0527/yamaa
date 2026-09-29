@@ -220,7 +220,7 @@ names no designation its standard publishes.
 value. `mandatory` is not a second spelling of `core`, and the mapping
 between them is standard-specific: for `sdtm` and `send` [REQ-0882](metadata.md#req-0882) derives one;
 for `adam` the two are independently declared and no value of one derives
-the other, because the ADaM guides state `Core` assists preparation, is not
+the other. The ADaM guides state `Core` assists preparation, is not
 submitted in define.xml, and allows nulls unless otherwise specified:
 
 <a id="req-0882"></a>
