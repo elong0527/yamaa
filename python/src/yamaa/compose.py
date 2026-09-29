@@ -99,7 +99,7 @@ def _dict_value(name):
 
 
 class Bundle:
-    """The schema bundle's classes, aliases, and registries (REQ-0245 on).
+    """The schema bundle's classes, aliases, and registries (REQ-0250 on).
 
     A class maps each field to its descriptor in schema order, `fields_from`
     already expanded; a registry maps each keyword to its payload, either
