@@ -273,7 +273,7 @@ def _str_extract(payload: object, resolver: Resolver) -> EvaluationResult:
             "validation",
             "regex_group_out_of_range",
             {"group": group, "group_count": declared, "pattern": pattern},
-            requirement="REQ-0828",
+            requirement="REQ-0816",
             field="group",
         )
 

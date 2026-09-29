@@ -232,7 +232,7 @@ def test_a_group_outside_the_pattern_fails_validation(group: int) -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "regex_group_out_of_range"
-    assert result.condition.requirement == "REQ-0828"
+    assert result.condition.requirement == "REQ-0816"
     assert result.condition.path_suffix == "group"
     assert result.condition.context["group_count"] == 1
 

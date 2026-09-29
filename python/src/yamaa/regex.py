@@ -85,7 +85,7 @@ class RegexGroupError(ValueError):
     """A `str_extract.group` the pattern does not declare."""
 
     condition = "regex_group_out_of_range"
-    requirement = "REQ-0828"
+    requirement = "REQ-0816"
 
     def __init__(self, pattern: str, group: int, group_count: int) -> None:
         super().__init__(

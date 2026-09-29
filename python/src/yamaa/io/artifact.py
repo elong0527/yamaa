@@ -195,7 +195,7 @@ def _declaration_diagnostics(
                     "validation",
                     "internal_column_in_keys",
                     f"keys[{position}]",
-                    "REQ-0233",
+                    "REQ-0220",
                     {"column": name},
                 )
             )
@@ -209,7 +209,7 @@ def _declaration_diagnostics(
                     "validation",
                     "duplicate_order_term",
                     path,
-                    "REQ-0237",
+                    "REQ-0224",
                     {"column": term.variable},
                 )
             )
@@ -221,7 +221,7 @@ def _declaration_diagnostics(
                     "validation",
                     "undeclared_column",
                     path,
-                    "REQ-0236",
+                    "REQ-0224",
                     {"column": term.variable},
                 )
             )

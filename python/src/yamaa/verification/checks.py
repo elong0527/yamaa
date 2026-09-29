@@ -48,15 +48,11 @@ from yamaa.verification.diagnostics import (
 
 _NUMERIC: frozenset[ColumnType] = frozenset({"int", "float"})
 
-# The committed `length_failed` fixture names REQ-0406, the requirement that
-# fails a run on any verification failure, where the others name the
-# requirement defining their own check. Both identities are reproduced here
-# rather than made uniform, because a runtime must report what is committed.
 _COLUMN_REQUIREMENTS = {
     "not_missing": ("not_missing_failed", "REQ-0375"),
     "allowed_values": ("allowed_values_failed", "REQ-0376"),
     "range": ("range_failed", "REQ-0377"),
-    "max_length": ("length_failed", "REQ-0406"),
+    "max_length": ("length_failed", "REQ-0378"),
     "matches": ("matches_failed", "REQ-0379"),
 }
 _DATASET_REQUIREMENTS = {
