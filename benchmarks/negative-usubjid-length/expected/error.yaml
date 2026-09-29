@@ -2,7 +2,7 @@ phase: verification
 condition: length_failed
 spec_paths:
   - columns.USUBJID.verifications[0].max_length
-requirement: REQ-0406
+requirement: REQ-0378
 context:
   column: USUBJID
   max: 20
