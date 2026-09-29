@@ -109,10 +109,11 @@ joins. The source uses its own handlers after it holds a value.
 
 <a id="req-0353"></a>
 
-**REQ-0353.** `multiple_matches` relaxes right-side uniqueness wherever one
-source reaches several records: [Lookup and joins](../operations/lookup.md)'s matched records and the
-records a key combination was derived from.
-Disagreement among those records is otherwise fatal under [REQ-0075](lifecycle.md#req-0075).
+**REQ-0353.** A source's `order_by` and `keep` relax right-side uniqueness
+wherever one source reaches several records: [Lookup and joins](../operations/lookup.md)'s matched records and the
+records a key combination was derived from. Without them, several matched
+records fail as `multiple_matches` under [REQ-0127](../operations/lookup.md#req-0127), and disagreement among
+the records a key combination was derived from fails under [REQ-0075](lifecycle.md#req-0075).
 
 <a id="req-0354"></a>
 
