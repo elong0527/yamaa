@@ -958,32 +958,68 @@ def describe_derivation(derivation, ctx=None, depth=0):
     return str(derivation)
 
 
-def classify_origin(derivation, input_names, ctx=None):
-    """Origin per the Define-XML 2.1 vocabulary.
+def classify_origin(derivation, input_names, ctx=None, adam=False):
+    """Origin per the Define-XML 2.1 vocabulary for one standard family.
 
     A reference through an `intermediates:` lookup is Derived however the
     donor column was collected: the value this dataset publishes is the
     product of the join, not a field a site typed into this record.
+
+    REQ-0890 admits only Derived, Assigned, Predecessor and Other for the
+    adam family, so a bare copy from a declared input is Predecessor and a
+    recode or any other computation is Derived. For sdtm the same copy is
+    Collected; a mapping or source over a locally derived column computes
+    rather than copies, so it is Derived.
     """
     lookups = context(ctx).lookups
     if isinstance(derivation, str):
         base = derivation.split(".")[0]
         if base in lookups:
             return "Derived"
-        return "Collected" if base in input_names else "Derived"
+        if base in input_names:
+            return "Predecessor" if adam else "Collected"
+        return "Derived"
     if not isinstance(derivation, dict):
         return "Derived"
     if "literal" in derivation:
         return "Assigned"
     if "mapping" in derivation:
-        return "Collected"
+        if adam:
+            return "Derived"
+        mapping = derivation.get("mapping")
+        variable = None
+        if isinstance(mapping, dict):
+            src = mapping.get("source")
+            if isinstance(src, str):
+                variable = src
+            elif isinstance(src, dict):
+                variable = src.get("variable")
+        head, _ = split_reference(variable)
+        if head in lookups:
+            return "Derived"
+        return "Collected" if head in input_names else "Derived"
     source = derivation.get("source")
     if source is not None:
         variable = source if isinstance(source, str) else source.get("variable")
         head, _ = split_reference(variable)
         if head in lookups:
             return "Derived"
-        return "Collected"
+        if head in input_names:
+            return "Predecessor" if adam else "Collected"
+        return "Derived"
+    if "odm" in derivation:
+        odm = derivation.get("odm")
+        variable = None
+        if isinstance(odm, str):
+            variable = odm
+        elif isinstance(odm, dict):
+            variable = odm.get("item")
+        head, _ = split_reference(variable)
+        if head in lookups:
+            return "Derived"
+        if head in input_names:
+            return "Predecessor" if adam else "Collected"
+        return "Derived"
     return "Derived"
 
 
@@ -1164,6 +1200,15 @@ REVISION_HISTORY_HEADERS = [
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
     (
+        "1.2",
+        "2026-09-29",
+        (
+            "Classify ADaM copies from a declared input as Predecessor and "
+            "recodes as Derived, and SDTM recodes of locally derived "
+            "columns as Derived"
+        ),
+    ),
+    (
         "1.1",
         "2026-09-29",
         (
@@ -1197,7 +1242,7 @@ def mapping_row(col, index, spec, adam, input_names, code_by_var, ctx=None):
     label = col.get("label", "")
     sub = submission(col)
     origin = submission_origin(col) or classify_origin(
-        col.get("derivation"), input_names, ctx
+        col.get("derivation"), input_names, ctx, adam
     )
     terms = controlled_terms(col, code_by_var)
     core = str(sub.get("core") or "")
