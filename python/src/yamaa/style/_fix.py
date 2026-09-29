@@ -1,9 +1,9 @@
 """Layout fixes that move and insert whole lines, kept only when proved.
 
 REQ-1286: a fix rearranges the lines of a file and never rewrites what a
-value says. Each candidate edit is applied to the text, the text is parsed
-again under the engine's YAML 1.2 core rules, and the edit is kept only when
-the parsed value, compared with its types, and the comment lines are
+value says. Each candidate edit is applied to the text, the text is read
+again by the engine's specification reader, and the edit is kept only when
+the value read, compared with its types, and the comment lines are
 unchanged. A refused edit leaves its finding reported.
 """
 
@@ -15,7 +15,8 @@ from dataclasses import dataclass
 
 import yaml
 
-from yamaa.specification._yaml import _Yaml12Loader
+from yamaa.specification._yaml import read_yaml_bytes
+from yamaa.specification.diagnostics import SpecificationError
 from yamaa.style._checks import (
     LINE_WIDTH,
     Departure,
@@ -32,6 +33,7 @@ from yamaa.style._document import Document, last_line, parse, walk
 # little room, so the wrapped list steps in from its key instead.
 _ALIGN_LIMIT = 40
 _MAX_EDITS = 1000
+_PROOF_SOURCE = "<style fix>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,11 +57,15 @@ def _comments(text: str) -> Counter[str]:
 
 
 def proved(before: str, after: str) -> bool:
-    """True when `after` parses to the value of `before` with its comments."""
+    """True when `after` reads as the value of `before` with its comments.
+
+    Both texts go through the engine's own specification reader, so an edit
+    is judged by exactly the value a run would read.
+    """
     try:
-        old = yaml.load(before, Loader=_Yaml12Loader)
-        new = yaml.load(after, Loader=_Yaml12Loader)
-    except yaml.YAMLError:
+        old = read_yaml_bytes(before.encode("utf-8"), _PROOF_SOURCE)
+        new = read_yaml_bytes(after.encode("utf-8"), _PROOF_SOURCE)
+    except SpecificationError:
         return False
     return _typed(old) == _typed(new) and _comments(before) == _comments(after)
 
