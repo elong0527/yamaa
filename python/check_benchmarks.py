@@ -2,8 +2,9 @@
 """Run every benchmark through the clean-room engine and fail on mismatch.
 
 For each benchmark directory (a directory containing spec.yaml):
-  - expected/error.yaml present -> expect YamaaError with matching
-    phase + condition.
+  - expected/error.yaml present -> expect YamaaError matching the full
+    pin: phase, condition, requirement, spec_paths, and every key the pin
+    lists under context (the engine may report more keys).
   - expected/*.csv or *.parquet  -> expect success; every committed
     artifact (matched by file stem) is compared against what the engine
     produces:
@@ -65,6 +66,38 @@ def project_root_for(d, spec):
 
 
 # ---------------------------------------------------------------- comparison
+
+# The pinned fields compared exactly; `context` is compared key by key.
+PIN_FIELDS = ("phase", "condition", "requirement", "spec_paths")
+
+
+def pin_mismatches(err, pin):
+    """How a raised YamaaError differs from its expected/error.yaml pin.
+
+    Phase and condition are always compared, requirement and spec_paths
+    whenever pinned, and each key the pin lists under `context`; context
+    keys the pin does not list are the engine's own detail and are not
+    compared. Returns an empty list when the error matches its pin.
+    """
+    got = {
+        "phase": err.phase,
+        "condition": err.condition,
+        "requirement": err.requirement,
+        "spec_paths": list(err.spec_paths),
+    }
+    out = [
+        f"{field} {got[field]!r} != pinned {pin.get(field)!r}"
+        for field in PIN_FIELDS
+        if (field in pin or field in ("phase", "condition"))
+        and got[field] != pin.get(field)
+    ]
+    context = err.context or {}
+    for key, want in (pin.get("context") or {}).items():
+        if key not in context:
+            out.append(f"context.{key} missing, pinned {want!r}")
+        elif context[key] != want:
+            out.append(f"context.{key} {context[key]!r} != pinned {want!r}")
+    return out
 
 
 def _csv_record(fields):
@@ -245,18 +278,10 @@ def run_negative(d, spec_path, spec, project_root, run_dir):
     try:
         derive(spec_path, project_root=project_root)
     except YamaaError as e:
-        ok = e.phase == exp.get("phase") and e.condition == exp.get("condition")
-        if ok:
+        mismatches = pin_mismatches(e, exp)
+        if not mismatches:
             return name, "PASS", "", []
-        return (
-            name,
-            "FAIL",
-            (
-                f"expected {exp.get('phase')}/{exp.get('condition')}, "
-                f"got {e.phase}/{e.condition}"
-            ),
-            [],
-        )
+        return name, "FAIL", "; ".join(mismatches), []
     except Exception as e:  # noqa: BLE001
         return name, "FAIL", f"expected YamaaError, got {type(e).__name__}: {e}", []
     return (
