@@ -178,9 +178,10 @@ def test_odm_read_in_aggregate_derive_has_no_scope(tmp_path):
     assert e.context["location"] == "derive"
 
 
-def test_odm_column_read_needs_only_the_templates_that_read_it(tmp_path):
-    # REQ-1260/REQ-1270: the roster template derives X itself, so only the
-    # ODM template reads the column's `odm` derivation.
+def test_odm_column_read_is_not_row_local(tmp_path):
+    # REQ-1260: an `odm` column derivation reads the row's item records, so
+    # it is not row-local. A template naming the column derives it twice,
+    # and every template must carry an ODM scope (REQ-1270/REQ-1277).
     roster = "USUBJID\n003\n"
     rows = [
         {
@@ -198,11 +199,31 @@ def test_odm_column_read_needs_only_the_templates_that_read_it(tmp_path):
     spec = subject_spec({"odm": "ODM.IT.SEX"}, rows=rows)
     spec["input"]["ROSTER"] = "input/roster.csv"
     spec["columns"][0].pop("derivation")
-    out = run(tmp_path, spec, {"odm.csv": ODM, "roster.csv": roster})
-    assert out.splitlines() == ["USUBJID,X", "001,F", "002,M", "003,U"]
+    e = expect_error(tmp_path, spec, {"odm.csv": ODM, "roster.csv": roster})
+    assert pinned(e) == ("validation", "duplicate_derivation", "REQ-1260")
+    assert e.spec_paths == ["columns.X.derivation"]
+    assert e.context == {"column": "X", "rows": ["listed"]}
     rows[1]["derivations"].pop("X")
     e = expect_error(tmp_path, spec, {"odm.csv": ODM, "roster.csv": roster})
     assert pinned(e) == ("validation", "invalid_odm_context", "REQ-1277")
+
+
+def test_a_template_may_not_override_a_column_phase_derivation(tmp_path):
+    # REQ-1260: only a row-local column derivation is a default a template
+    # may override; an aggregate stays in the column phase.
+    rows = [
+        {
+            "id": "collected",
+            "dataset": "ODM",
+            "group_by": ["ODM.SubjectKey"],
+            "derivations": {"USUBJID": "ODM.SubjectKey", "X": {"literal": "U"}},
+        }
+    ]
+    spec = subject_spec({"aggregate": {"expr": "COUNT(ODM.Value)"}}, rows=rows)
+    spec["columns"][0].pop("derivation")
+    e = expect_error(tmp_path, spec, {"odm.csv": ODM})
+    assert pinned(e) == ("validation", "duplicate_derivation", "REQ-1260")
+    assert e.context == {"column": "X", "rows": ["collected"]}
 
 
 def test_odm_filter_names_only_schema_fields(tmp_path):

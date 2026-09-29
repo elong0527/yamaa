@@ -275,7 +275,9 @@ def _node_has_phase_break(node):
         if isinstance(n, dict):
             if len(n) == 1:
                 k = next(iter(n))
-                if k == "aggregate" or k in _WINDOW_KINDS:
+                # REQ-1260: an `odm` read reads the item records of the
+                # row's scope, as an aggregate reads a relation.
+                if k in ("aggregate", "odm") or k in _WINDOW_KINDS:
                     return True
             stack.extend(n.values())
         elif isinstance(n, list):
@@ -312,6 +314,21 @@ def _compute_row_defaults(e):
 
     e.row_defaults = {name for name in col_nodes if is_row_local(name)}
     e.donor_fields = set(e.col_order)
+    # REQ-1260: a column-level derivation that is not row-local cannot be a
+    # default, so a `rows` entry naming its column derives it twice.
+    rows = e.spec.get("rows") or []
+    for name in col_nodes:
+        if name in e.row_defaults:
+            continue
+        naming = [t.get("id") for t in rows if name in (t.get("derivations") or {})]
+        if naming:
+            _fail(
+                f"columns.{name}.derivation",
+                "validation",
+                "duplicate_derivation",
+                "REQ-1260",
+                {"column": name, "rows": naming},
+            )
 
 
 def _check_intermediates(e):
@@ -1122,10 +1139,10 @@ def _check_odm_reads(e):
         if location == "row":
             scoped = driver(rows[owner]) == ds
         elif location == "column":
-            # A template that derives the column itself never reads this
-            # derivation, so only the others need a scope (REQ-1260).
-            readers = [t for t in rows if owner not in (t.get("derivations") or {})]
-            scoped = all(driver(t) == ds for t in readers) if rows else base == ds
+            # REQ-1260/REQ-1270: an `odm` column derivation is not row-local,
+            # so it evaluates for every row and each row's template must
+            # carry a scope over the input.
+            scoped = all(driver(t) == ds for t in rows) if rows else base == ds
         else:
             scoped = False
         if not scoped:
