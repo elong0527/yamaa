@@ -17,8 +17,7 @@ columns:
     type: str
     label: Unique Subject Identifier
 
-  # An item read is not row-local, so it is not a default the template
-  # below may override: the template deriving SEX derives it twice.
+  # The row template replaces this default with a reviewed unknown value.
   - name: SEX
     type: str
     label: Sex

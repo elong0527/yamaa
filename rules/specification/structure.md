@@ -64,10 +64,9 @@ Write `literal: null` rather than omitting the derivation.
 <a id="req-1260"></a>
 
 **REQ-1260.** A column-level derivation is row-local unless it uses a
-lookup, an aggregate, a window, or an `odm` item read, reads a named
-intermediate, or reads a column whose column-level derivation is not
-row-local. A row-local column-level derivation is that column's default
-derivation when at least
+lookup, an aggregate, or a window, reads a named intermediate, or reads a
+column whose column-level derivation is not row-local. A row-local
+column-level derivation is that column's default derivation when at least
 one `rows` entry names the column, or when a row-phase context reads the
 column: a `rows` derivation (windows included), a grouped `rows` filter, a
 donor field of a `SELF` intermediate, or a match variable or `between`

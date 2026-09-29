@@ -385,11 +385,6 @@ fixtures:
     condition: window_order_by_required
     spec_paths: [columns.AVAL.derivation.locf.window]
     validator: static_semantics
-  negative-odm-column-override:
-    rule: R005
-    condition: duplicate_derivation
-    spec_paths: [columns.SEX.derivation]
-    validator: spec_contract
   negative-odm-context:
     rule: R002
     condition: invalid_odm_context

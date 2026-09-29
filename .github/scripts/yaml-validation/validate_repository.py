@@ -5945,16 +5945,22 @@ def _ensure_odm_binding():
 
 
 def odm_read_sites(spec):
-    """Return (path, location, row_index, read) for every `odm` read."""
+    """Return (path, location, row_index, column_name, read) for ODM reads."""
     _ensure_odm_binding()
     sites = []
 
-    def add(derivation, path, location, row=None):
+    def add(derivation, path, location, row=None, column_name=None):
         for read_path, payload, derive in iter_odm_payloads(derivation, path):
             read = parse_odm_read(payload)
             if read is not None:
                 sites.append(
-                    (read_path, 'derive' if derive else location, row, read)
+                    (
+                        read_path,
+                        'derive' if derive else location,
+                        row,
+                        column_name,
+                        read,
+                    )
                 )
 
     for column in spec.get('columns') or []:
@@ -5963,6 +5969,7 @@ def odm_read_sites(spec):
                 column['derivation'],
                 f"columns.{column.get('name')}.derivation",
                 'column',
+                column_name=column.get('name'),
             )
     for index, row in enumerate(spec.get('rows') or []):
         if isinstance(row, dict) and isinstance(row.get('derivations'), dict):
@@ -5988,7 +5995,7 @@ def odm_inputs(spec):
         return frozenset()
     return frozenset(
         read.dataset
-        for _, _, _, read in odm_read_sites(spec)
+        for _, _, _, _, read in odm_read_sites(spec)
         if read.dataset in declared
     )
 
@@ -6006,7 +6013,7 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
         dataset = row.get('dataset')
         return dataset if isinstance(dataset, str) else only
 
-    for path, location, row_index, read in odm_read_sites(spec):
+    for path, location, row_index, column_name, read in odm_read_sites(spec):
         dataset, item, selector = read.dataset, read.item, read.filter
         if dataset not in datasets:
             errors.append(validation_diagnostic(
@@ -6022,7 +6029,11 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
         elif location == 'row':
             scoped = row_index < len(rows) and driver(rows[row_index]) == dataset
         elif rows:
-            scoped = all(driver(row) == dataset for row in rows)
+            scoped = all(
+                driver(row) == dataset
+                for row in rows
+                if column_name not in (row.get('derivations') or {})
+            )
         else:
             base = spec.get('base')
             scoped = (base if isinstance(base, str) else only) == dataset
@@ -6397,9 +6408,8 @@ def row_local_column_derivations(spec):
     """Return the columns whose column-level derivation is row-local.
 
     REQ-1260: a column-level derivation is row-local unless it uses a
-    lookup, an aggregate, a window, or an `odm` item read, reads a named
-    intermediate, or reads a column whose column-level derivation is not
-    row-local.
+    lookup, an aggregate, or a window, reads a named intermediate, or reads
+    a column whose column-level derivation is not row-local.
     """
     columns = spec.get('columns')
     intermediates = spec.get('intermediates')
@@ -6418,7 +6428,7 @@ def row_local_column_derivations(spec):
         derivation = column['derivation']
         names = derive_binding_reference_names(derivation)
         if any(
-            operation in ('aggregate', 'odm')
+            operation == 'aggregate'
             or operation in ROW_WINDOW_OPERATIONS
             for operation in derivation_operations(derivation)
         ) or any(

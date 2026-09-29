@@ -227,7 +227,9 @@ one item reads the other items of its own item group occurrence.
 **REQ-1270.** An `odm` expression evaluates for a row that has an ODM
 scope over the input it names, in a column derivation or in a row
 derivation. The scope belongs to the row: a column derivation reads, for
-each row, the scope of the row template that built it. An `odm`
+each row that evaluates it, the scope of the row template that built it.
+A row template overriding a row-local column derivation does not evaluate
+that column's `odm` expression ([REQ-1260](structure.md#req-1260)). An `odm`
 expression in a named intermediate, or one a row built from another
 dataset would read, has no scope.
 
@@ -328,8 +330,8 @@ record that lacks it.
 <a id="req-1277"></a>
 
 **REQ-1277.** An `odm` expression in a named intermediate, or one a row
-with no ODM scope over its input would read: fail at validation with
-`invalid_odm_context`.
+that evaluates it with no ODM scope over its input would read: fail at
+validation with `invalid_odm_context`.
 
 <a id="req-1278"></a>
 

@@ -4276,9 +4276,9 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("duplicate dataset verification id", message)
         self.assertIn("range requires an int or float column", message)
 
-    def test_a_row_may_not_override_an_odm_column_derivation(self):
-        # REQ-1260: an `odm` item read is not row-local, so a rows entry
-        # naming its column derives the column twice.
+    def test_a_row_may_override_an_odm_column_derivation(self):
+        # REQ-1260: the item read is a default in the row that uses its own
+        # derivation instead.
         spec = {
             "domain": "DM",
             "input": {"ODM": "odm.csv"},
@@ -4307,16 +4307,8 @@ class TestSpecContracts(unittest.TestCase):
             error for error in errors
             if getattr(error, "condition", None) == "duplicate_derivation"
         ]
-        self.assertEqual(
-            [error.path for error in duplicates],
-            ["example/spec.yaml.columns.SEX.derivation"],
-        )
-        self.assertEqual(
-            duplicates[0].context, {"column": "SEX", "rows": ["subjects"]}
-        )
-        self.assertNotIn(
-            "SEX", VALIDATOR.row_local_column_derivations(spec)
-        )
+        self.assertEqual(duplicates, [])
+        self.assertIn("SEX", VALIDATOR.row_local_column_derivations(spec))
 
     def test_short_unique_still_checks_declared_columns(self):
         spec = {
@@ -7743,6 +7735,19 @@ class TestOdmReads(unittest.TestCase):
         self.assertEqual(
             self.findings(self.spec({'odm': 'ODM.IT.DM.AGE'}), header), []
         )
+
+    def test_an_overridden_column_read_needs_no_odm_scope(self):
+        spec = self.spec({'odm': 'ODM.IT.DM.AGE'}, rows=[{
+            'id': 'other_source',
+            'dataset': 'DM',
+            'derivations': {'AGE': {'literal': 0}},
+        }])
+        spec['input']['DM'] = 'input/dm.csv'
+        self.assertEqual(self.findings(spec), [])
+
+        del spec['rows'][0]['derivations']['AGE']
+        [finding] = self.findings(spec)
+        self.assertEqual(finding.condition, 'invalid_odm_context')
 
     def test_the_catalog_exposes_schema_fields_only(self):
         env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])

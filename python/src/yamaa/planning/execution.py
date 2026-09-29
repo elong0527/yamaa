@@ -3884,7 +3884,11 @@ def _odm_read_diagnostics(specification: Specification) -> list[ExecutionDiagnos
             assert site.row_index is not None
             scoped = driver(rows[site.row_index]) == dataset
         elif rows:
-            scoped = all(driver(row) == dataset for row in rows)
+            scoped = all(
+                driver(row) == dataset
+                for row in rows
+                if site.column_name not in row.derivations
+            )
         else:
             scoped = specification.default_driver == dataset
         if not scoped:
@@ -4036,10 +4040,9 @@ def preflight_execution(
         raise UnsupportedPlanningError(unsupported)
 
 
-# REQ-1260: operations that read beyond the current row -- another dataset's
-# records, or the completed rows a window partitions. A derivation using one
-# keeps its column-phase meaning.
-_DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", "odm", *WINDOW_OPERATIONS})
+# REQ-1260: operations whose column derivations cannot become row-template
+# defaults. An ODM item read can use a row template's scope, so it is omitted.
+_DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", *WINDOW_OPERATIONS})
 
 
 def _column_level_reads(

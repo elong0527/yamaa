@@ -142,6 +142,68 @@ def test_a_record_driven_row_reads_its_own_item_group_occurrence(
     assert result.artifact.frame["VSDTC"].to_list() == ["2025-01-02", "2025-01-16"]
 
 
+def test_a_row_derivation_can_read_an_odm_item(tmp_path: Path) -> None:
+    body = GROUPED.replace(
+        "      VISIT: ODM.StudyEventOID\n",
+        "      VISIT: ODM.StudyEventOID\n      VSDTC: {odm: ODM.IT.VS.DATE}\n",
+    ) + _columns("{literal: X}").replace("    derivation: {literal: X}\n", "")
+
+    result = _run(tmp_path, body)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame["VSDTC"].to_list() == [
+        "2025-01-02",
+        "2025-01-16",
+    ]
+
+
+def test_a_column_odm_default_can_be_overridden_and_inherited(
+    tmp_path: Path,
+) -> None:
+    rows = """rows:
+  - id: screening
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "VISIT = 'SCREENING'"
+    derivations:
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      VISIT: ODM.StudyEventOID
+      VSDTC: {literal: X}
+  - id: week2
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "VISIT = 'WEEK2'"
+    derivations:
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      VISIT: ODM.StudyEventOID
+"""
+    result = _run(tmp_path, rows + _columns("{odm: ODM.IT.VS.DATE}"))
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [
+        ("S1", "001", "SCREENING", "X"),
+        ("S1", "001", "WEEK2", "2025-01-16"),
+    ]
+
+
+def test_a_column_odm_override_needs_no_odm_row_scope(tmp_path: Path) -> None:
+    rows = """rows:
+  - id: other_source
+    dataset: DM
+    derivations:
+      STUDYID: DM.STUDYID
+      USUBJID: DM.USUBJID
+      VISIT: {literal: SCREENING}
+      VSDTC: {literal: X}
+"""
+    result = _run(tmp_path, rows + _columns("{odm: ODM.IT.VS.DATE}"))
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("S1", "001", "SCREENING", "X")]
+
+
 @pytest.mark.parametrize(
     ("body", "path", "location"),
     [

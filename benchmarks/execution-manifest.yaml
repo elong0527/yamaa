@@ -462,9 +462,6 @@ examples:
   negative-not-missing-age:
     status: executable
     runtimes: ['python']
-  negative-odm-column-override:
-    status: executable
-    runtimes: ['python']
   negative-odm-context:
     status: executable
     runtimes: ['python']
@@ -658,6 +655,9 @@ examples:
     status: executable
     runtimes: ['python']
   schema-numeric-functions:
+    status: executable
+    runtimes: ['python']
+  schema-odm-column-override:
     status: executable
     runtimes: ['python']
   schema-odm-form-items:

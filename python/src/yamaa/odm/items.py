@@ -167,6 +167,7 @@ class OdmReadSite:
     location: Location
     read: OdmRead
     row_index: int | None = None
+    column_name: str | None = None
 
 
 def iter_odm_payloads(
@@ -219,7 +220,11 @@ def odm_read_sites(specification: Specification) -> tuple[OdmReadSite, ...]:
     sites: list[OdmReadSite] = []
 
     def add(
-        derivation: object, path: str, location: Location, row: int | None = None
+        derivation: object,
+        path: str,
+        location: Location,
+        row: int | None = None,
+        column_name: str | None = None,
     ) -> None:
         node, path = _derivation_root(derivation, path)
         for site_path, payload, derive in iter_odm_payloads(node, path, False):
@@ -231,12 +236,18 @@ def odm_read_sites(specification: Specification) -> tuple[OdmReadSite, ...]:
                         location="derive" if derive else location,
                         read=read,
                         row_index=row,
+                        column_name=column_name,
                     )
                 )
 
     for column in specification.columns:
         if column.derivation is not None:
-            add(column.derivation, f"columns.{column.name}.derivation", "column")
+            add(
+                column.derivation,
+                f"columns.{column.name}.derivation",
+                "column",
+                column_name=column.name,
+            )
     for index, row in enumerate(specification.rows or ()):
         for name, derivation in row.derivations.items():
             add(derivation, f"rows[{index}].derivations.{name}", "row", index)

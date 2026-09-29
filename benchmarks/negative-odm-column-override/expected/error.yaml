@@ -1,9 +1,0 @@
-phase: validation
-condition: duplicate_derivation
-spec_paths:
-  - columns.SEX.derivation
-requirement: REQ-1260
-context:
-  column: SEX
-  rows:
-    - subjects
