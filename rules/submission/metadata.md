@@ -207,15 +207,21 @@ nothing.
 
 <a id="req-0880"></a>
 
-**REQ-0880.** `core` is the standard's core designation: `Req` for required,
-`Exp` for expected, or `Perm` for permissible, declared for a dataset whose
-family is `sdtm` or `send` and never for `adam`.
+**REQ-0880.** `core` is the standard's core designation, declared for every
+family. For `sdtm` and `send` it is `Req` for required, `Exp` for expected,
+or `Perm` for permissible. For `adam` it is `Req` for required, `Cond` for
+conditionally required, or `Perm` for permissible, as the ADaM implementation
+guides publish them. An `Exp` for `adam`, or a `Cond` for `sdtm` or `send`,
+names no designation its standard publishes.
 
 <a id="req-0881"></a>
 
 **REQ-0881.** `mandatory` states whether the completed column must carry a
 value. `mandatory` is not a second spelling of `core`, and the mapping
-between them is standard-specific:
+between them is standard-specific: for `sdtm` and `send` [REQ-0882](metadata.md#req-0882) derives one;
+for `adam` the two are independently declared and no value of one derives
+the other, because the ADaM guides state `Core` assists preparation, is not
+submitted in define.xml, and allows nulls unless otherwise specified:
 
 <a id="req-0882"></a>
 
@@ -231,7 +237,12 @@ between them is standard-specific:
 
 <a id="req-0884"></a>
 
-**REQ-0884.** For `adam`, `mandatory` is required and nothing derives it.
+**REQ-0884.** For `adam`, `core` and `mandatory` are both required and
+neither derives the other. A `Req` core requires the variable's inclusion in
+the dataset but allows nulls; `mandatory` states whether every row carries a
+non-missing value, as the programming specification decides. A `Cond` core
+therefore tells nothing about `mandatory`, and a `mandatory: false` on a
+`Req` column is accepted.
 
 <a id="req-0885"></a>
 
@@ -621,7 +632,7 @@ a submission.
 
 | Field | Meaning |
 | --- | --- |
-| `core_designation` | Required, expected, or permissible in the dataset's standard. |
+| `core_designation` | Required, expected, conditionally required, or permissible in the dataset's standard; [Submission metadata](metadata.md) states which family admits which. |
 
 <a id="req-1142"></a>
 
@@ -718,9 +729,10 @@ the declared type, and the submission type.
 
 <a id="req-0915"></a>
 
-**REQ-0915.** A `core` declared for the `adam` family, absent for `sdtm` or
-`send`, a `mandatory: false` on a `Req` column, or a `mandatory` absent for
-`adam`: fail with `core_mandatory_conflict`, reporting the column.
+**REQ-0915.** A `core` absent for any family, an `Exp` for `adam`, a `Cond`
+for `sdtm` or `send`, a `mandatory: false` on a `Req` column for `sdtm` or
+`send`, or a `mandatory` absent for `adam`: fail with
+`core_mandatory_conflict`, reporting the column.
 
 <a id="req-0916"></a>
 
