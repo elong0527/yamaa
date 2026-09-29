@@ -95,6 +95,26 @@ except yamaa.YamaaError as error:
     error.context      # the values the rule says to report
 ```
 
+## Composition and producers
+
+A specification that names `parents` is resolved first: its layers merge
+into one resolved specification, which is what `derive` then validates and
+runs. Composition reads the declared kind of each field from the schema
+bundle under `yaml/`, found beside the package's checkout or above the
+specification.
+
+An input declared with `schema` reads the artifact another specification
+produces. `derive` runs that producer first, in the same call, and reads the
+dataset it renders, so
+
+```python
+dm = yamaa.derive("spec_dm.yaml")
+suppdm = yamaa.derive("spec_suppdm.yaml")  # runs spec_dm.yaml again, in memory
+```
+
+needs no `dm.csv` on disk. The producer's `output.path` must name the
+input's `path`, and nothing is written.
+
 ## Inputs
 
 An input is a CSV or Parquet file. A Parquet field takes its type from the
@@ -107,18 +127,16 @@ from it.
 
 `python/check_benchmarks.py` runs every benchmark under `benchmarks/` through
 the engine and compares each output and log, or each pinned failure, with its
-`expected/` directory:
+`expected/` directory. A benchmark runs `spec.yaml`, or else each producer
+its entry reads and then the entry, the `spec_*.yaml` no other file names as
+a parent or a producer; a composed entry also compares its resolved
+specification with `expected/spec_resolved.yaml`:
 
 ```bash
 uv run --project python --no-sync python python/check_benchmarks.py
 ```
 
 `python/tests/test_benchmarks.py` runs the same comparison under pytest.
-
-## Not yet implemented
-
-- Specification composition (`parents:`) and runs in which one specification
-  reads another's output (#1504).
 
 ## Design
 

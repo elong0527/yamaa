@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Run every benchmark through the clean-room engine and fail on mismatch.
 
-For each benchmark directory (a directory containing spec.yaml):
+Every directory under the benchmarks root is a benchmark. It runs
+`spec.yaml`, or else the `spec_*.yaml` files `benchmark_specs` selects
+(benchmarks/agents.md): each producer an entry reads through
+`input.<id>.schema`, then the entry, the file no other file names as a
+parent or a producer. A directory with no specification, or whose files
+name each other so that none is the entry, fails.
+
+For each specification run:
   - expected/error.yaml present -> expect YamaaError matching the full
     pin: phase, condition, requirement, spec_paths, and every key the pin
     lists under context (the engine may report more keys).
@@ -14,7 +21,10 @@ For each benchmark directory (a directory containing spec.yaml):
     CSV artifacts compare byte for byte under the csv profile's byte
     guarantee.  Parquet artifacts compare semantically (field names and
     order, logical types, row order, nulls, values), never as bytes.
-  - neither                       -> composition-only; skipped.
+    An entry that names `parents` also compares its resolved YAML data
+    tree with expected/spec_resolved.yaml (multi-level) or
+    expected/resolved[_<variant>].yaml (REQ-0650).
+  - neither                       -> no expected artifact; fails.
 
 Writes produced artifacts plus a JSON summary under --run-dir, prints a
 summary, and exits 1 when any benchmark fails or errors.
@@ -40,6 +50,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "src"))
 
 from yamaa import YamaaError, derive, derive_artifacts
+from yamaa.compose import resolve
 
 
 def walk(o):
@@ -64,6 +75,93 @@ def project_root_for(d, spec):
     if os.path.isfile(os.path.join(py_dir, "environment.yaml")):
         return py_dir
     return d
+
+
+def _load_spec(path):
+    with open(path, "r", encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    return doc if isinstance(doc, dict) else {}
+
+
+def benchmark_specs(d):
+    """The specifications a benchmark runs, in run order, the entry last.
+
+    benchmarks/agents.md: `spec.yaml` is the one specification. Without it,
+    each `spec_*.yaml` is an inheritance level, a producer another file
+    reads through `input.<id>.schema`, or an entry, the file no other file
+    names as a parent or a producer. A level runs only as part of its entry;
+    a producer runs on its own, before the entry that reads it, and commits
+    its own artifact. Raises ValueError when there is nothing to run.
+    """
+    if os.path.isfile(os.path.join(d, "spec.yaml")):
+        return [os.path.join(d, "spec.yaml")]
+    specs = {os.path.realpath(p): p for p in glob.glob(os.path.join(d, "spec_*.yaml"))}
+    if not specs:
+        raise ValueError("no spec.yaml and no spec_*.yaml")
+    parents, producers = {}, {}
+    for real, path in specs.items():
+        doc = _load_spec(path)
+        named = doc.get("parents") or []
+        inputs = doc.get("input") if isinstance(doc.get("input"), dict) else {}
+        schemas = [s.get("schema") for s in inputs.values() if isinstance(s, dict)]
+        near = os.path.dirname(real)
+        parents[real], producers[real] = (
+            [
+                os.path.realpath(os.path.join(near, n))
+                for n in ([names] if isinstance(names, str) else names)
+                if isinstance(n, str)
+            ]
+            for names in (named, schemas)
+        )
+    named = {p for names in (*parents.values(), *producers.values()) for p in names}
+    entries = sorted((p for p in specs if p not in named), key=lambda p: specs[p])
+    if not entries:
+        raise ValueError("every spec_*.yaml is named by another, so none is the entry")
+    order = []
+
+    def visit(real, chain):
+        # A producer that any level of the chain reads runs first.
+        levels = [real]
+        for level in levels:
+            levels.extend(p for p in parents.get(level, []) if p not in levels)
+        for level in levels:
+            for producer in producers.get(level, []):
+                if producer in specs and producer not in order + chain:
+                    visit(producer, chain + [producer])
+        if real not in order:
+            order.append(real)
+
+    for entry in entries:
+        visit(entry, [entry])
+    return [specs[p] for p in order]
+
+
+def resolved_fixture(d, spec_path):
+    """benchmarks/agents.md: a multi-level benchmark commits
+    expected/spec_resolved.yaml; `spec[_<variant>].yaml` commits
+    expected/resolved[_<variant>].yaml."""
+    if not os.path.isfile(os.path.join(d, "spec.yaml")):
+        return os.path.join(d, "expected", "spec_resolved.yaml")
+    stem = os.path.splitext(os.path.basename(spec_path))[0]
+    return os.path.join(d, "expected", f"resolved{stem[len('spec') :]}.yaml")
+
+
+def resolved_finding(d, spec_path, spec):
+    """REQ-0650: compare a composed entry's resolved YAML data tree."""
+    if not spec.get("parents"):
+        return None
+    fixture = resolved_fixture(d, spec_path)
+    if not os.path.isfile(fixture):
+        return f"resolved.missing: expected/{os.path.basename(fixture)} not committed"
+    try:
+        got = resolve(spec_path, spec).document
+    except YamaaError as e:
+        return f"resolved: unexpected YamaaError {e.phase}/{e.condition}"
+    with open(fixture, "r", encoding="utf-8") as f:
+        want = yaml.safe_load(f)
+    if got != want:
+        return f"resolved: expected/{os.path.basename(fixture)} differs"
+    return None
 
 
 # ---------------------------------------------------------------- comparison
@@ -185,26 +283,43 @@ def _produced_artifacts(artifacts):
     return produced
 
 
-def run_positive(d, spec_path, spec, project_root, run_dir):
+def run_positive(d, specs, run_dir):
+    """Run each spec in order, producers before their entry, and compare
+    every artifact they publish together, the primary outputs and their
+    logs, with the committed ones."""
     name = os.path.basename(d)
-    # Every committed artifact is checked: the primary output and its logs.
     expected = {}
     for pat in ("*.csv", "*.parquet"):
         for g in glob.glob(os.path.join(d, "expected", pat)):
             expected[os.path.splitext(os.path.basename(g))[0]] = g
     if not expected:
-        return name, "SKIP", "composition-only", []
-
-    try:
-        produced = _produced_artifacts(
-            derive_artifacts(spec_path, project_root=project_root)
-        )
-    except YamaaError as e:
-        return (name, "FAIL", f"unexpected YamaaError {e.phase}/{e.condition}", [])
-    except Exception as e:  # noqa: BLE001
-        return name, "FAIL", f"unexpected {type(e).__name__}: {e}", []
+        return name, "FAIL", "artifact.missing: no expected artifact", []
 
     findings = []
+    produced = {}
+    for spec_path in specs:
+        spec = _load_spec(spec_path)
+        label = f"{os.path.basename(spec_path)}: " if len(specs) > 1 else ""
+        finding = resolved_finding(d, spec_path, spec)
+        if finding is not None:
+            findings.append(label + finding)
+        try:
+            got = _produced_artifacts(
+                derive_artifacts(spec_path, project_root=project_root_for(d, spec))
+            )
+        except YamaaError as e:
+            findings.append(f"{label}unexpected YamaaError {e.phase}/{e.condition}")
+            continue
+        except Exception as e:  # noqa: BLE001
+            findings.append(f"{label}unexpected {type(e).__name__}: {e}")
+            continue
+        for stem, artifact in got.items():
+            if stem in produced:
+                findings.append(f"artifact.duplicate: {stem} published twice")
+            produced[stem] = artifact
+    if findings:
+        return name, "FAIL", "; ".join(findings), []
+
     written = []
     for stem in sorted(set(produced) | set(expected)):
         if stem not in produced:
@@ -260,13 +375,15 @@ def run_negative(d, spec_path, spec, project_root, run_dir):
 
 
 def run_one(d, run_dir):
-    spec_path = os.path.join(d, "spec.yaml")
-    with open(spec_path, "r", encoding="utf-8") as f:
-        spec = yaml.safe_load(f)
-    project_root = project_root_for(d, spec)
+    name = os.path.basename(d)
+    specs = benchmark_specs(d)
     if os.path.exists(os.path.join(d, "expected", "error.yaml")):
-        return run_negative(d, spec_path, spec, project_root, run_dir)
-    return run_positive(d, spec_path, spec, project_root, run_dir)
+        if len(specs) != 1:
+            names = [os.path.basename(s) for s in specs]
+            return name, "ERROR", f"runner: a negative runs one entry, got {names}", []
+        spec = _load_spec(specs[0])
+        return run_negative(d, specs[0], spec, project_root_for(d, spec), run_dir)
+    return run_positive(d, specs, run_dir)
 
 
 def main():
@@ -278,7 +395,7 @@ def main():
     dirs = sorted(
         d
         for d in glob.glob(os.path.join(args.benchmarks_root, "*"))
-        if os.path.isdir(d) and os.path.exists(os.path.join(d, "spec.yaml"))
+        if os.path.isdir(d)
     )
     results = []
     for d in dirs:
