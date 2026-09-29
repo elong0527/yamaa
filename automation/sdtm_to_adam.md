@@ -80,11 +80,12 @@ python3 python/run.py
 python3 python/compare.py
 ```
 
-Drift check for the pinned planning relation (CI fails closed on mismatch):
+Drift check for the pinned planning relation (CI fails closed on mismatch,
+also run from `program/adam`):
 
 ```bash
-python3 submission-pilot3/program/adam/python/make_plan.py --out /tmp/plan.regen.csv
-diff /tmp/plan.regen.csv submission-pilot3/data/mapping/plan.csv
+python3 python/make_plan.py --out /tmp/plan.regen.csv
+diff /tmp/plan.regen.csv ../../data/mapping/plan.csv
 ```
 
 ## 2. Spec section order
@@ -110,7 +111,6 @@ keys: [STUDYID, USUBJID]
 input:
   DM: ../../data/sdtm/dm.parquet
   EX: ../../data/sdtm/ex.parquet
-  ADSL: ../../data/adam/adsl-yamaa.parquet
 
 base: DM
 
