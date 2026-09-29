@@ -164,6 +164,7 @@ column_class:
         type: str
         required: false
         description: See REQ-1043.
+    # See REQ-1260.
     - derivation:
         type: derivation
         required: false
@@ -198,6 +199,7 @@ row_class:
         type: predicate
         required: false
         description: See REQ-1056.
+    # See REQ-0199.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true

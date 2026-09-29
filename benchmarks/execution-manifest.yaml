@@ -657,6 +657,9 @@ examples:
   schema-numeric-functions:
     status: executable
     runtimes: ['python']
+  schema-odm-column-override:
+    status: executable
+    runtimes: ['python']
   schema-odm-form-items:
     status: executable
     runtimes: ['python']

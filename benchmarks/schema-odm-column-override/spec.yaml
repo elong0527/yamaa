@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  # The row template replaces this default with a reviewed unknown value.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: {odm: ODM.IT.DM.SEX}
+
+rows:
+  - id: subjects
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    derivations:
+      STUDYID: ODM.StudyOID
+      USUBJID: ODM.SubjectKey
+      SEX: {literal: U}

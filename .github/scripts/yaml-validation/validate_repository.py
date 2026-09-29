@@ -318,6 +318,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R004', 'invalid_predicate'): {'predicate'},
     ('R004', 'incompatible_input_type'): {'left_type', 'right_type'},
     ('R004', 'unknown_field'): {'identifier'},
+    ('R005', 'duplicate_derivation'): {'column', 'rows'},
     ('R005', 'duplicate_order_term'): {'column'},
     ('R005', 'internal_column_in_keys'): {'column'},
     ('R005', 'undeclared_column'): {'column'},
@@ -5431,10 +5432,19 @@ def validate_spec_contracts(
         at_column = name in column_derivations
         at_rows = [name in names for names in row_derivations]
         if at_column and any(at_rows) and name not in row_local:
-            errors.append(
-                f"ERROR: {spec_label}.columns.{name}.derivation: column "
-                "is also derived by a row"
-            )
+            errors.append(validation_diagnostic(
+                f"{spec_label}.columns.{name}.derivation",
+                'duplicate_derivation',
+                "column is also derived by a row",
+                context={
+                    'column': name,
+                    'rows': [
+                        row.get('id')
+                        for row, present in zip(row_entries, at_rows)
+                        if present
+                    ],
+                },
+            ))
         elif row_entries and not at_column and not all(at_rows):
             missing_rows = [
                 str(index) for index, present in enumerate(at_rows)
@@ -5935,16 +5945,22 @@ def _ensure_odm_binding():
 
 
 def odm_read_sites(spec):
-    """Return (path, location, row_index, read) for every `odm` read."""
+    """Return (path, location, row_index, column_name, read) for ODM reads."""
     _ensure_odm_binding()
     sites = []
 
-    def add(derivation, path, location, row=None):
+    def add(derivation, path, location, row=None, column_name=None):
         for read_path, payload, derive in iter_odm_payloads(derivation, path):
             read = parse_odm_read(payload)
             if read is not None:
                 sites.append(
-                    (read_path, 'derive' if derive else location, row, read)
+                    (
+                        read_path,
+                        'derive' if derive else location,
+                        row,
+                        column_name,
+                        read,
+                    )
                 )
 
     for column in spec.get('columns') or []:
@@ -5953,6 +5969,7 @@ def odm_read_sites(spec):
                 column['derivation'],
                 f"columns.{column.get('name')}.derivation",
                 'column',
+                column_name=column.get('name'),
             )
     for index, row in enumerate(spec.get('rows') or []):
         if isinstance(row, dict) and isinstance(row.get('derivations'), dict):
@@ -5978,7 +5995,7 @@ def odm_inputs(spec):
         return frozenset()
     return frozenset(
         read.dataset
-        for _, _, _, read in odm_read_sites(spec)
+        for _, _, _, _, read in odm_read_sites(spec)
         if read.dataset in declared
     )
 
@@ -5996,7 +6013,7 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
         dataset = row.get('dataset')
         return dataset if isinstance(dataset, str) else only
 
-    for path, location, row_index, read in odm_read_sites(spec):
+    for path, location, row_index, column_name, read in odm_read_sites(spec):
         dataset, item, selector = read.dataset, read.item, read.filter
         if dataset not in datasets:
             errors.append(validation_diagnostic(
@@ -6012,7 +6029,11 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
         elif location == 'row':
             scoped = row_index < len(rows) and driver(rows[row_index]) == dataset
         elif rows:
-            scoped = all(driver(row) == dataset for row in rows)
+            scoped = all(
+                driver(row) == dataset
+                for row in rows
+                if column_name not in (row.get('derivations') or {})
+            )
         else:
             base = spec.get('base')
             scoped = (base if isinstance(base, str) else only) == dataset
