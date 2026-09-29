@@ -137,6 +137,23 @@ def test_a_failed_run_keeps_its_warnings_out_of_a_warning_log(tmp_path):
     ]
 
 
+def test_a_stopped_run_logs_no_check_it_never_reached(tmp_path):
+    # REQ-1177: a column error stops the run before key validation and the
+    # dataset checks (REQ-0031), so its log ends at the failed stage.
+    s = spec(
+        output={"verification_log": "checks.csv"},
+        verifications=[{"row_count": {"min": 1}}],
+    )
+    s["columns"][1]["verifications"] = [{"not_missing": {}}, {"range": {"max": 100}}]
+    e = failure(tmp_path, s)
+    assert e.condition == "range_failed"
+    rows = records(e.artifacts["checks.csv"])
+    assert [(r["SPEC_PATH"], r["OUTCOME"]) for r in rows] == [
+        ("columns.AGE.verifications[0].not_missing", "held"),
+        ("columns.AGE.verifications[1].range", "violated"),
+    ]
+
+
 def test_a_run_that_never_executed_writes_no_log(tmp_path):
     s = with_age_checks(age_range())
     s["output"]["columns"].append("NOPE")
