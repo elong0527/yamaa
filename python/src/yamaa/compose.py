@@ -648,7 +648,11 @@ def _linearize(bundle, entry_path, entry_doc):
                     "parents",
                     "invalid_parent_path",
                     "REQ-0653",
-                    {"reason": "remote_reference"},
+                    {
+                        "reason": "remote_reference"
+                        if isinstance(parent, str) and parent
+                        else "empty_path"
+                    },
                 )
             full = os.path.join(os.path.dirname(path), parent)
             if not os.path.isfile(full):
