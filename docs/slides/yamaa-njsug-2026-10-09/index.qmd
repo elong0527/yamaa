@@ -160,6 +160,16 @@ Learn with AI: [https://arena.ai/](https://arena.ai/)
 - Excel specification is not an input but an output.
 - Communication costs more than tokens.
 
+## Summary of the workflow
+
+- **Extract:** enable regular EDC extraction in ODM format for each study to create a versioned source.
+- **Draft:** ask AI agent to draft the study spec from the organization or program template, adding only study differences.
+- **Review:** human and AI review study derivations and verifications in yamaa where fixes are cheap.
+- **Finalize:** approve and tag the resolved spec in version control with full lineage.
+- **Automate:** run the same spec on schedule in R or Python to produce identical SDTM and ADaM plus define.xml.
+
+> Note: this is an iterative process while the study is ongoing. Team members and AI collaborate centrally on the version controlled specification.
+
 ## How to contribute
 
 * RConsortium / BBSW
