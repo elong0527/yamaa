@@ -790,7 +790,13 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_file_header = ""
     code_files = benchmark_code_files(benchmark)
     code_panel = render_code_panel(code_files, edit_base) if code_files else ""
-    mapping_section = mapping_doc.render_mapping_section(spec)
+    define_path = benchmark / "define.yaml"
+    define = (
+        yaml.safe_load(define_path.read_text(encoding="utf-8"))
+        if define_path.is_file()
+        else None
+    )
+    mapping_section = mapping_doc.render_mapping_section(spec, define)
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         benchmark_name=escape(benchmark.name),
