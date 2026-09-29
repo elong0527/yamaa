@@ -312,6 +312,21 @@ def _compute_row_defaults(e):
 
     e.row_defaults = {name for name in col_nodes if is_row_local(name)}
     e.donor_fields = set(e.col_order)
+    # REQ-1260: a column-level derivation that is not row-local cannot be a
+    # default, so a `rows` entry naming its column derives it twice.
+    rows = e.spec.get("rows") or []
+    for name in col_nodes:
+        if name in e.row_defaults:
+            continue
+        naming = [t.get("id") for t in rows if name in (t.get("derivations") or {})]
+        if naming:
+            _fail(
+                f"columns.{name}.derivation",
+                "validation",
+                "duplicate_derivation",
+                "REQ-1260",
+                {"column": name, "rows": naming},
+            )
 
 
 def _check_intermediates(e):
@@ -1122,8 +1137,9 @@ def _check_odm_reads(e):
         if location == "row":
             scoped = driver(rows[owner]) == ds
         elif location == "column":
-            # A template that derives the column itself never reads this
-            # derivation, so only the others need a scope (REQ-1260).
+            # REQ-1260/REQ-1270: an `odm` column derivation is row-local, so a
+            # template that derives the column itself never evaluates it and
+            # only the templates that inherit it need a scope (REQ-1277).
             readers = [t for t in rows if owner not in (t.get("derivations") or {})]
             scoped = all(driver(t) == ds for t in readers) if rows else base == ds
         else:
