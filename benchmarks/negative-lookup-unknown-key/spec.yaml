@@ -5,16 +5,17 @@ input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
 base: LB_RAW
+
+output:
+  path: lb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
+
 intermediates:
   # No key is named, so it is inferred from the output keys LBRANGE
   # carries -- and it carries none of STUDYID, USUBJID, LBSEQ.
   - id: REFRANGE
     dataset: LBRANGE
     columns: [NRHI]
-
-output:
-  path: lb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
 
 columns:
   - name: STUDYID

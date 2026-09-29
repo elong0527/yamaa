@@ -6,7 +6,9 @@ input:
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER, PRIOR_SAEFL, PRIOR_SAEDECOD, PRIOR_SAESEQ, FIRST_SAEDECOD, FIRST_SAESEQ, PREV_AEDECOD]
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, AESER, PRIOR_SAEFL,
+            PRIOR_SAEDECOD, PRIOR_SAESEQ, FIRST_SAEDECOD, FIRST_SAESEQ,
+            PREV_AEDECOD]
 
 # Named intermediates reading completed records (dataset SELF): during
 # row construction, the records of earlier row templates; during column
@@ -37,9 +39,9 @@ intermediates:
     order_by:
       - SELF.AESEQ
     keep: first
+    no_match: null
     verifications:
       - unique: [STUDYID, USUBJID, AESEQ]
-    no_match: null
 
   # The subject's immediately preceding event, serious or not. Only a
   # column derivation reads it, after both row templates have completed,
@@ -62,37 +64,47 @@ columns:
     type: str
     label: Study Identifier
     derivation: AE.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: AE.USUBJID
+
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation: AE.AESEQ
+
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
     derivation: AE.AEDECOD
+
   - name: AESER
     type: str
     label: Serious Event
     derivation: AE.AESER
+
   - name: PRIOR_SAEFL
     type: str
     label: Prior Serious Event Flag
+
   - name: PRIOR_SAEDECOD
     type: str
     label: Prior Serious Event Dictionary-Derived Term
+
   - name: PRIOR_SAESEQ
     type: int
     label: Prior Serious Event Sequence Number
+
   - name: FIRST_SAEDECOD
     type: str
     label: First Serious Event Dictionary-Derived Term
+
   - name: FIRST_SAESEQ
     type: int
     label: First Serious Event Sequence Number
+
   - name: PREV_AEDECOD
     type: str
     label: Preceding Event Dictionary-Derived Term

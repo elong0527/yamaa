@@ -8,6 +8,7 @@ input:
   ADSL:
     path: input/adsl.csv
     types: {HEIGHTBL: float}
+
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]

@@ -9,32 +9,16 @@ input:
   LB_MAPPING: input/lb_mapping.csv
 base: ODM
 
-intermediates:
-  - id: LB_MAP
-    dataset: LB_MAPPING
-    key: {ItemOID: ODM.ItemOID}
-    no_match: null
-
 output:
   path: lb.csv
   columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,
             LBDTC, LBSTAT, LBLOBXFL]
 
-# One record per result item of each item group occurrence. The date and
-# status items are not in the dictionary, so their LBTESTCD is missing and
-# the filter drops them; they are read back onto the result record below.
-rows:
-  - id: lb_result
-    dataset: ODM
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
-               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
-    filter: "LBTESTCD IS NOT NULL"
-    derivations:
-      LBTESTCD: LB_MAP.LBTESTCD
-      LBSPEC: LB_MAP.LBSPEC
-      LBORRES:
-        aggregate:
-          expr: "ONLY(ODM.Value)"
+intermediates:
+  - id: LB_MAP
+    dataset: LB_MAPPING
+    key: {ItemOID: ODM.ItemOID}
+    no_match: null
 
 columns:
   - name: DOMAIN
@@ -111,6 +95,22 @@ columns:
     label: Last Observation Before Exposure Flag
     derivation:
       flag: "LOBXRNK = 1"
+
+# One record per result item of each item group occurrence. The date and
+# status items are not in the dictionary, so their LBTESTCD is missing and
+# the filter drops them; they are read back onto the result record below.
+rows:
+  - id: lb_result
+    dataset: ODM
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    filter: "LBTESTCD IS NOT NULL"
+    derivations:
+      LBTESTCD: LB_MAP.LBTESTCD
+      LBSPEC: LB_MAP.LBSPEC
+      LBORRES:
+        aggregate:
+          expr: "ONLY(ODM.Value)"
 
 verifications:
   - unique:

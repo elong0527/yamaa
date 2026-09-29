@@ -5,6 +5,11 @@ input:
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]
+
 intermediates:
   # Each subject's first COVID-19 event: earliest start, then lowest AESEQ.
   - id: FIRSTCOV
@@ -14,10 +19,6 @@ intermediates:
     order_by: [AE.AESTDTC, AE.AESEQ]
     keep: first
     no_match: null
-
-output:
-  path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]
 
 columns:
   - name: STUDYID

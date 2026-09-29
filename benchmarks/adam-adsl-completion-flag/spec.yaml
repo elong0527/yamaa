@@ -5,6 +5,11 @@ input:
   ADSL_RAW: {path: input/adsl_raw.csv, types: {TRTSDT: date}}
   DS: input/ds.csv
 base: ADSL_RAW
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, COMPLFL]
+
 # The subject's end-of-study COMPLETED disposition record, if any: a
 # DISPOSITION EVENT in the FOLLOW-UP epoch. A treatment-epoch completion
 # does not count. A subject with two such records stops the run: nothing
@@ -12,12 +17,9 @@ base: ADSL_RAW
 intermediates:
   - id: COMPLT
     dataset: DS
-    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP' AND DS.DSDECOD = 'COMPLETED'"
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP'
+      AND DS.DSDECOD = 'COMPLETED'"
     no_match: null
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, TRTSDT, COMPLFL]
 
 columns:
   - name: STUDYID

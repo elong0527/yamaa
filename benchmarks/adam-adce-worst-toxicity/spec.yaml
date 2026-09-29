@@ -6,7 +6,8 @@ input:
 
 output:
   path: adce.csv
-  columns: [STUDYID, USUBJID, CESEQ, CETERM, ASTDT, ASEV, ASEVN, ATOXGRN, AOCCFL]
+  columns: [STUDYID, USUBJID, CESEQ, CETERM, ASTDT, ASEV, ASEVN, ATOXGRN,
+            AOCCFL]
 
 columns:
   - name: STUDYID

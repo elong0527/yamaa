@@ -9,6 +9,11 @@ input:
     path: input/epoch.csv
     types: {DYLO: int, DYHI: int}
 base: VS_RAW
+
+output:
+  path: vs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, VSDTC, EPOCH]
+
 intermediates:
   # The epoch whose day range holds the record. VSDTC is a date and the
   # bounds are day counts, which have no common order, so the specification
@@ -17,10 +22,6 @@ intermediates:
     dataset: EPOCHS
     key: STUDYID
     between: {value: VSDTC, lower: DYLO, upper: DYHI}
-
-output:
-  path: vs.csv
-  columns: [STUDYID, USUBJID, VSSEQ, VSDTC, EPOCH]
 
 columns:
   - name: STUDYID

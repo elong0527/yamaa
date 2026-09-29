@@ -76,6 +76,7 @@ rows:
   # reduces to missing, which is UNKNOWN and suppressed.
   - id: visit_total
     group_by: [LB.USUBJID, LB.VISIT]
+    filter: "AVAL > 100"
     derivations:
       PARAMCD: {literal: TOTAL}
       PARAM: {literal: Total of Components}
@@ -83,4 +84,3 @@ rows:
         aggregate:
           expr: "SUM(LB.LBSTRESN)"
       DTYPE: {literal: CALCULATION}
-    filter: "AVAL > 100"

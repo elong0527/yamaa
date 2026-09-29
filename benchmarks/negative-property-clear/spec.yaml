@@ -2,9 +2,11 @@ schema_version: "1.0"
 parents: layers/parent.yaml
 domain: ADSL
 keys: [USUBJID]
+
 output:
   path: adsl.csv
   columns: [USUBJID]
+
 columns:
   # null clears the type inherited from layers/parent.yaml, but a column
   # must have a type, so it cannot be cleared.

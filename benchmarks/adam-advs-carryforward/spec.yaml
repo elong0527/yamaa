@@ -11,6 +11,12 @@ input:
   ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
 
 base: PLAN
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT,
+            HEIGHTBL]
+
 intermediates:
   # The vital-signs record collected for a planned measurement: same subject,
   # test code as the parameter, and date as ADT. A planned measurement with
@@ -19,10 +25,6 @@ intermediates:
     dataset: VS
     key: {STUDYID: STUDYID, USUBJID: USUBJID, VSTESTCD: PARAMCD, VSDTC: ADT}
     no_match: null
-
-output:
-  path: advs.csv
-  columns: [STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
 
 columns:
   - name: STUDYID

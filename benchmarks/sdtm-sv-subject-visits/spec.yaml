@@ -21,52 +21,6 @@ output:
             SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES]
   order_by: [STUDYID, USUBJID, SVSEQ]
 
-rows:
-  - id: visit
-    dataset: ODM
-    # One row per study-event occurrence: the repeat key keeps repeated
-    # unscheduled visits as separate rows instead of silently merging them.
-    # Distinct decimal visit numbers identify repeated unscheduled visits.
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-               ODM.StudyEventRepeatKey]
-    derivations:
-      VISIT:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.TV.VISIT'"
-          expr: "ONLY(ODM.Value)"
-      VISITNUM:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.TV.VISITNUM'"
-          expr: "ONLY(ODM.Value)"
-      VISITDY:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.TV.VISITDY'"
-          expr: "ONLY(ODM.Value)"
-      VSDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
-          expr: "ONLY(ODM.Value)"
-      LBDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
-          expr: "ONLY(ODM.Value)"
-      EXDTC:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.EX.EXDTC'"
-          expr: "ONLY(ODM.Value)"
-      TAETORD:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.TV.TAETORD'"
-          expr: "ONLY(ODM.Value)"
-      EPOCH:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.TV.EPOCH'"
-          expr: "ONLY(ODM.Value)"
-      SVUPDES:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.TV.UPDES'"
-          expr: "ONLY(ODM.Value)"
-
 columns:
   - name: DOMAIN
     type: str
@@ -163,6 +117,52 @@ columns:
           group_by: [STUDYID, USUBJID]
           order_by: [SVSTDTC]
 
+rows:
+  - id: visit
+    dataset: ODM
+    # One row per study-event occurrence: the repeat key keeps repeated
+    # unscheduled visits as separate rows instead of silently merging them.
+    # Distinct decimal visit numbers identify repeated unscheduled visits.
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey]
+    derivations:
+      VISIT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.VISIT'"
+          expr: "ONLY(ODM.Value)"
+      VISITNUM:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.VISITNUM'"
+          expr: "ONLY(ODM.Value)"
+      VISITDY:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.VISITDY'"
+          expr: "ONLY(ODM.Value)"
+      VSDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.VS.VSDTC'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
+      EXDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.EX.EXDTC'"
+          expr: "ONLY(ODM.Value)"
+      TAETORD:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.TAETORD'"
+          expr: "ONLY(ODM.Value)"
+      EPOCH:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.EPOCH'"
+          expr: "ONLY(ODM.Value)"
+      SVUPDES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.TV.UPDES'"
+          expr: "ONLY(ODM.Value)"
+
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VISITNUM]
@@ -171,7 +171,8 @@ verifications:
       max: 8
   - assert:
       id: visits-span-their-form-dates
-      expr: "SVSTDTC IS NOT NULL AND SVENDTC IS NOT NULL AND SVSTDTC <= SVENDTC"
+      expr: "SVSTDTC IS NOT NULL AND SVENDTC IS NOT NULL
+        AND SVSTDTC <= SVENDTC"
   - assert:
       id: planned-visits-carry-their-plan
       expr: "NOT (VISITNUM < 99 AND (VISITDY IS NULL OR TAETORD IS NULL))"

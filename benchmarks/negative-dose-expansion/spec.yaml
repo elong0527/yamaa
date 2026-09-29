@@ -4,11 +4,17 @@ keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 input:
   EX:
     path: input/ex.csv
-    types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int, EXSTDTC: date, EXENDTC: date}
+    types:
+      EXSEQ: int
+      EXDOSE: float
+      EXDOSCNT: int
+      EXSTDTC: date
+      EXENDTC: date
 
 output:
   path: adex.csv
-  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ASTDT, AENDT, ADOSEN, NDOSE]
+  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ASTDT, AENDT,
+            ADOSEN, NDOSE]
 
 columns:
   - name: STUDYID

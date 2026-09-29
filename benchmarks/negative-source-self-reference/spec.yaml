@@ -5,14 +5,14 @@ input:
   LB: {path: input/lb.csv, types: {LBSTRESN: float, LBDTC: date}}
   ADLB: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
 
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, ADT, PARAMCD, PARAM, AVAL]
+
 intermediates:
   - id: ADLB_LOOKUP
     dataset: ADLB
     key: {USUBJID: USUBJID, ADT: ADT, PARAMCD: ASTCODE}
-
-output:
-  path: adlb.csv
-  columns: [STUDYID, USUBJID, ADT, PARAMCD, PARAM, AVAL]
 
 columns:
   - name: STUDYID

@@ -8,7 +8,8 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES,
+            LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC]
 
 columns:
   - name: DOMAIN
@@ -105,7 +106,8 @@ columns:
     label: Character Result/Finding in Standard Units
     derivation:
       case:
-        - when: "LBORRES_U IN ('NEGATIVE','NEG','TRACE','TR','1+','+1','1 PLUS','2+','+2')"
+        - when: "LBORRES_U IN
+            ('NEGATIVE','NEG','TRACE','TR','1+','+1','1 PLUS','2+','+2')"
           then:
             mapping:
               source: LBORRES
@@ -155,7 +157,8 @@ columns:
 
 rows:
   - id: lab-result
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID, ODM.FormRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+               ODM.FormRepeatKey]
     filter: "LBORRES IS NOT NULL"
     derivations:
       LBORRES:

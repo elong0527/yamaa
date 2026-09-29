@@ -8,7 +8,8 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID, USUBJID, AGE]
+  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID,
+            USUBJID, AGE]
 
 columns:
   # The earliest exposure start date. MIN skips a missing date, so a subject

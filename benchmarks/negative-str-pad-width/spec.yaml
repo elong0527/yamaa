@@ -11,8 +11,14 @@ output:
 
 columns:
   - {name: STUDYID, type: str, label: Study Identifier, derivation: LB.STUDYID}
-  - {name: USUBJID, type: str, label: Subject Identifier, derivation: LB.USUBJID}
+
+  - name: USUBJID
+    type: str
+    label: Subject Identifier
+    derivation: LB.USUBJID
+
   - {name: LBSEQ, type: int, label: Sequence Number, derivation: LB.LBSEQ}
+
   - name: IDVARVAL
     type: str
     label: Padded Sequence Number

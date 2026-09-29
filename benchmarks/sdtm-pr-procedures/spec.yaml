@@ -6,7 +6,8 @@ input:
 
 output:
   path: pr.csv
-  columns: [DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR,
+            PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC]
   order_by: [STUDYID, USUBJID, PRSEQ]
 
 columns:
@@ -108,7 +109,9 @@ columns:
 
 rows:
   - id: surgery
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey, ODM.ItemGroupOID,
+               ODM.ItemGroupRepeatKey]
     filter: "FORM = 'IG.PR.SURGERY'"
     derivations:
       FORM: ODM.ItemGroupOID
@@ -140,7 +143,9 @@ rows:
           expr: "ONLY(ODM.Value)"
 
   - id: radiotherapy
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.StudyEventRepeatKey, ODM.ItemGroupOID,
+               ODM.ItemGroupRepeatKey]
     filter: "FORM = 'IG.PR.RADIOTHERAPY'"
     derivations:
       FORM: ODM.ItemGroupOID

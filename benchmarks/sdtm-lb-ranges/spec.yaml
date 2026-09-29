@@ -7,6 +7,11 @@ input:
   DM: input/dm.csv
 base: LB_RAW
 
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBSTRESU,
+            LBSTNRLO, LBSTNRHI, LBNRIND]
+
 # Sex is not an LB variable: it is read from DM by subject and used only
 # to pick the reference entry. The reference entry for the record's test
 # code and DM sex; two entries for one combination stop the run; none
@@ -15,14 +20,11 @@ intermediates:
   - id: DMSEX
     dataset: DM
     key: [USUBJID]
+
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
     no_match: null
-
-output:
-  path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBSTRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 columns:
   - name: DOMAIN

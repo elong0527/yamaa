@@ -8,6 +8,12 @@ input:
     types:
       AESEQ: int
 base: ADSL
+
+output:
+  path: adtte.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR,
+            EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
+
 intermediates:
   # The subject's first AE by onset date, ties to the lower AESEQ; an AE with
   # no onset date sorts last.
@@ -16,10 +22,6 @@ intermediates:
     order_by: [ADAE.ASTDT, ADAE.AESEQ]
     keep: first
     no_match: null
-
-output:
-  path: adtte.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:
   - name: STUDYID

@@ -36,7 +36,8 @@ columns:
     type: str
     label: Criterion 1 Evaluation Result Flag
     derivation:
-      flag: "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
+      flag: "str_contains(AE.AEDECOD,
+        'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
     verifications:
       allowed_values:
         values: [Y]

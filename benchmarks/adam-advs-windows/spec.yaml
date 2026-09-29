@@ -6,7 +6,8 @@ input:
 
 output:
   path: advs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL, AVISIT, AVISITN, ANL01FL]
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL,
+            AVISIT, AVISITN, ANL01FL]
 
 columns:
   - name: STUDYID

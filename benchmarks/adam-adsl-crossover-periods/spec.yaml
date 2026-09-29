@@ -8,7 +8,8 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TR01SDT, TR01EDT, TR02SDT, TR02EDT, TRT01A, TRT02A, WASHDUR]
+  columns: [STUDYID, USUBJID, TR01SDT, TR01EDT, TR02SDT, TR02EDT, TRT01A,
+            TRT02A, WASHDUR]
 
 columns:
   - name: STUDYID

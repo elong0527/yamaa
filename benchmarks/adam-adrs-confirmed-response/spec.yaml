@@ -84,7 +84,8 @@ columns:
       case:
         - when: "AVALC = 'PD'"
           then: {literal: Y}
-        - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR', 'CR') AND DAYS_TO_NEXT >= 28"
+        - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR',
+            'CR') AND DAYS_TO_NEXT >= 28"
           then: {literal: Y}
         - otherwise: {literal: N}
 

@@ -5,14 +5,15 @@ input:
   MH_SUPP_RAW: input/mh_supp_raw.csv
   MH: input/mh.csv
 
+output:
+  path: suppmh.csv
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
+            QORIG, QEVAL]
+
 intermediates:
   - id: MH_PARENT
     dataset: MH
     key: {USUBJID: MH_SUPP_RAW.USUBJID, MHTERM: MH_SUPP_RAW.MHTERM}
-
-output:
-  path: suppmh.csv
-  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
 
 columns:
   - name: STUDYID
@@ -102,4 +103,5 @@ verifications:
   - implies:
       id: qualifier-value-has-parent-identifier
       when: "QVAL IS NOT NULL"
-      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL
+        AND IDVARVAL IS NOT NULL"

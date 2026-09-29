@@ -10,15 +10,17 @@ input:
     types: {FACTOR: float}
 base: LB_RAW
 
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBORRES, LBORRESU,
+            LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO,
+            LBSTNRHI]
+
 intermediates:
   - id: CONV_LOOKUP
     dataset: CONV
     key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
     no_match: null
-
-output:
-  path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBORRES, LBORRESU, LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO, LBSTNRHI]
 
 columns:
   - name: DOMAIN

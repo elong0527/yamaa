@@ -357,6 +357,10 @@ check merely to make the sample pass.
     uv run --project ../python --no-sync \
         python ../.github/scripts/yaml-validation/validate_repository.py
 
+    # every specification follows the style contract
+    # (../rules/specification/style.md); --fix applies the proved layout fixes
+    uv run --project ../python --no-sync python -m yamaa.style */spec*.yaml
+
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative benchmark has exactly one remediation section
     python3 - <<'PY'

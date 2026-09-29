@@ -10,15 +10,16 @@ input:
     path: dm.csv
     schema: spec_dm.yaml
 
+output:
+  path: suppdm.csv
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
+            QORIG, QEVAL]
+  order_by: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+
 intermediates:
   - id: DMREC
     dataset: DM
     key: {STUDYID: ODM.StudyOID, USUBJID: ODM.SubjectKey}
-
-output:
-  path: suppdm.csv
-  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
-  order_by: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 columns:
   - name: STUDYID
@@ -101,7 +102,8 @@ columns:
           "American Indian or Alaska Native": AMERICAN INDIAN OR ALASKA NATIVE
           "Asian": ASIAN
           "Black or African American": BLACK OR AFRICAN AMERICAN
-          "Native Hawaiian or Other Pacific Islander": NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER
+          "Native Hawaiian or Other Pacific Islander": NATIVE HAWAIIAN
+            OR OTHER PACIFIC ISLANDER
           "White": WHITE
           "Other, specify: Fijian": OTHER
           "Not reported": NOT REPORTED
@@ -149,4 +151,5 @@ verifications:
   - implies:
       id: race-value-has-parent-identifier
       when: "QVAL IS NOT NULL"
-      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL
+        AND IDVARVAL IS NOT NULL"

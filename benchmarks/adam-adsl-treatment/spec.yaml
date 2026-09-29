@@ -31,7 +31,8 @@ columns:
     derivation:
       source:
         variable: EX.EXTRT
-        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
+          AND EX.EXSTDTC IS NOT NULL"
         order_by: [EX.EXSTDTC, EX.EXSEQ]
         keep: first
 
@@ -62,7 +63,8 @@ columns:
     label: Collected Date/Time of First Exposure to Treatment
     derivation:
       aggregate:
-        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
+          AND EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
   - name: TRTEDTC
@@ -70,7 +72,8 @@ columns:
     label: Collected Date/Time of Last Exposure to Treatment
     derivation:
       aggregate:
-        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
+          AND EX.EXENDTC IS NOT NULL"
         expr: "MAX(EX.EXENDTC)"
 
   - name: TRTSDTM

@@ -7,8 +7,10 @@ input:
       LBTESTCD: str
       LBSTRESN: float
       LBSTRESU: str
+
 columns:
   - name: AVAL
     label: Compound Standardized Result
+
 metadata:
   scope: compound

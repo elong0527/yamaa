@@ -6,6 +6,10 @@ input:
   SE: {path: input/se.csv, types: {SESTDTC: datetime, SEENDTC: datetime}}
 base: VS_RAW
 
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH]
+
 # EPOCH comes from the subject's own elements: the element in progress at
 # the collection date-time, i.e. the SE record whose start is on or before
 # it and whose end is on or after it. The between narrows the subject's
@@ -25,10 +29,6 @@ intermediates:
     order_by: [SE.SESTDTC]
     keep: last
     no_match: null
-
-output:
-  path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH]
 
 columns:
   - name: DOMAIN

@@ -6,6 +6,12 @@ input:
   RS: {path: input/rs.csv, types: {RSSEQ: int}}
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: ADSL
+
+output:
+  path: adtte.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR,
+            EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
+
 intermediates:
   # Per subject: the first adequate progression (PD), the first death, and
   # the last adequate assessment, which sets the censoring date. Records
@@ -14,25 +20,25 @@ intermediates:
   # the filters exclude undated records outright (issue #1008).
   - id: PROGRESSION
     dataset: RS
-    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
+    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD'
+      AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: first
     no_match: null
+
   - id: DEATH
     dataset: DS
     filter: "DS.DSDECOD = 'DEATH' AND DS.DSDTC IS NOT NULL"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
     no_match: null
+
   - id: LASTASSESS
     dataset: RS
-    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
+    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'
+      AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
-
-output:
-  path: adtte.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:
   - name: STUDYID

@@ -5,6 +5,11 @@ input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
 base: LB_RAW
+
+output:
+  path: lb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
+
 intermediates:
   # The limit for the result's test code and sex. With no no_match answer,
   # a result that finds no limit, including one with a blank sex, stops the
@@ -12,10 +17,6 @@ intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
-
-output:
-  path: lb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
 
 columns:
   - name: STUDYID

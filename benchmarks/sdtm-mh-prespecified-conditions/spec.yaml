@@ -9,16 +9,16 @@ input:
     path: input/mh_items.csv
     types: {SORTORD: int}
 
-intermediates:
-  - id: MH_MAP
-    dataset: MH_ITEMS
-    key: {ItemOID: ODM.ItemOID}
-
 output:
   path: mh.csv
   columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR,
             MHSTAT]
   order_by: [USUBJID, MHSEQ]
+
+intermediates:
+  - id: MH_MAP
+    dataset: MH_ITEMS
+    key: {ItemOID: ODM.ItemOID}
 
 columns:
   - name: DOMAIN

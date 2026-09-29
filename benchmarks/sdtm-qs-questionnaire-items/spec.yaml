@@ -7,20 +7,21 @@ input:
   NOTDONE: {path: input/notdone.csv}
   ITEMS: {path: input/items.csv, types: {ItemOrder: int}}
 
-intermediates:
-  - id: VISIT
-    dataset: VISITS
-    key: {SubjectKey: VISIT_SUBJECT, StudyEventOID: VISIT_EVENT}
-  - id: ITEM
-    dataset: ITEMS
-    key: {ItemOID: ITEM_OID}
-
 output:
   path: qs.csv
   columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT,
             QSORRES, QSSTRESC, QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL,
             VISITNUM, QSDTC]
   order_by: [STUDYID, USUBJID, QSSEQ]
+
+intermediates:
+  - id: VISIT
+    dataset: VISITS
+    key: {SubjectKey: VISIT_SUBJECT, StudyEventOID: VISIT_EVENT}
+
+  - id: ITEM
+    dataset: ITEMS
+    key: {ItemOID: ITEM_OID}
 
 columns:
   - name: DOMAIN
@@ -32,9 +33,11 @@ columns:
   - name: VISIT_SUBJECT
     type: str
     label: Visit Lookup Subject Key
+
   - name: VISIT_EVENT
     type: str
     label: Visit Lookup Study Event
+
   - name: ITEM_OID
     type: str
     label: Item Lookup OID

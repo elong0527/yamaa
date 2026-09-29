@@ -5,6 +5,12 @@ input:
   AE: input/ae.csv
   QUERY: {path: input/queries.csv, types: {GRPID: int}}
 base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, SMQ01NAM, SMQ01CD,
+            SMQ02NAM, SMQ02CD]
+
 intermediates:
   # One lookup per place: the dictionary entry in place SMQ01 (or SMQ02)
   # whose term is the event's coded term; no entry gives missing values.
@@ -13,14 +19,11 @@ intermediates:
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ01'"
+
   - id: SMQ2
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ02'"
-
-output:
-  path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, SMQ01NAM, SMQ01CD, SMQ02NAM, SMQ02CD]
 
 columns:
   - name: STUDYID

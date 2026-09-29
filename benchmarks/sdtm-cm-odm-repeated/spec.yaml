@@ -10,6 +10,7 @@ input:
     types:
       StudyEventRepeatKey: int
       ItemGroupRepeatKey: int
+
 output:
   path: cm.csv
   columns:
@@ -25,6 +26,7 @@ output:
   order_by:
     - USUBJID
     - CMSEQ
+
 columns:
   - name: DOMAIN
     type: str
@@ -103,6 +105,7 @@ columns:
             - EVENTORD
             - EVENTREPEAT
             - REPEATKEY
+
 rows:
   # One medication course is one form repeat within one visit repeat, so a
   # form repeat number reused at a later visit is a separate course. A
@@ -140,6 +143,7 @@ rows:
         aggregate:
           filter: ODM.ItemOID = 'IT.CM.CMINDC'
           expr: ONLY(ODM.Value)
+
 verifications:
   - unique:
       columns:

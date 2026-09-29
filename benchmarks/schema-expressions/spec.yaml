@@ -7,7 +7,8 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, SEX, AGEGRP, SAFFL, COUNTRY, SUBJLBL, WTMAX, WTMIN]
+  columns: [STUDYID, USUBJID, SEX, AGEGRP, SAFFL, COUNTRY, SUBJLBL, WTMAX,
+            WTMIN]
 
 columns:
   # A literal returns its declared value unchanged.

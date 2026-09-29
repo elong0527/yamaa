@@ -11,7 +11,8 @@ input:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM,
+            VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 columns:
@@ -116,7 +117,8 @@ columns:
 # has no value and is not emitted; neither is a blank reading.
 rows:
   - id: systolic
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "VSSTRESN IS NOT NULL"
     derivations:
       ORD: {literal: 1}
@@ -132,7 +134,8 @@ rows:
       VSDRVFL: {literal: null}
 
   - id: diastolic
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
+               ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "VSSTRESN IS NOT NULL"
     derivations:
       ORD: {literal: 1}

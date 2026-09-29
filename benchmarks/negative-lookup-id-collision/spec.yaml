@@ -5,6 +5,11 @@ input:
   DM: input/dm.csv
   EX: input/ex.csv
 base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01A]
+
 intermediates:
   # The subject's earliest exposure record. Its id repeats the input
   # dataset name EX, so a later EX.EXTRT could mean either one.
@@ -12,10 +17,6 @@ intermediates:
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, TRT01A]
 
 columns:
   - name: STUDYID

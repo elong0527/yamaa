@@ -6,6 +6,10 @@ input:
   WT: {path: input/wt.csv, types: {WTSEQ: int, WT: float}}
 base: DM
 
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SEX, AGE, AGE65FL, SUBJLBL, WTMAX, LASTWT]
+
 intermediates:
   # The subject's latest dated weight record. The match key is written
   # as a lone key, and the ordering value as a lone value; both expand
@@ -15,10 +19,6 @@ intermediates:
     key: USUBJID
     order_by: ["WT.WTDTC"]
     keep: last
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, SEX, AGE, AGE65FL, SUBJLBL, WTMAX, LASTWT]
 
 columns:
   - name: STUDYID

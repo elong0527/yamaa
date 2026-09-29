@@ -8,7 +8,8 @@ base: VS
 
 output:
   path: advs.csv
-  columns: [USUBJID, ASEQ, VSTESTCD, SEX, AGE, AGEGR1, RACE, VSSTRESN, VSSTRESU]
+  columns: [USUBJID, ASEQ, VSTESTCD, SEX, AGE, AGEGR1, RACE, VSSTRESN,
+            VSSTRESU]
 
 columns:
   - name: USUBJID

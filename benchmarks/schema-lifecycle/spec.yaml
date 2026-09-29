@@ -86,13 +86,13 @@ rows:
   # missing is discarded, so the final checks below never see it.
   - id: visit_low
     group_by: [LB.USUBJID, LB.VISIT]
+    filter: "AVAL IS NOT NULL"
     derivations:
       PARAMCD: {literal: LOW}
       PARAM: {literal: Lowest Result of Visit}
       AVAL:
         aggregate:
           expr: "MIN(LB.LBSTRESN)"
-    filter: "AVAL IS NOT NULL"
 
 verifications:
   - unique:

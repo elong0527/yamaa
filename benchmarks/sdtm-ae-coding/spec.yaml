@@ -5,19 +5,16 @@ input:
   AE_RAW: input/ae_raw.csv
   MEDDRA: input/meddra_26_1.csv
 base: AE_RAW
-metadata:
-  dictionary: MedDRA
-  dictionary_version: "26.1"
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
 intermediates:
   - id: MEDDRA_CODING
     dataset: MEDDRA
     key: {LLTNAME: AE_RAW.AETERM}
     no_match: NOT CODED
-
-output:
-  path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
 columns:
   - name: DOMAIN
@@ -64,3 +61,7 @@ verifications:
   - row_count:
       min: 8
       max: 8
+
+metadata:
+  dictionary: MedDRA
+  dictionary_version: "26.1"

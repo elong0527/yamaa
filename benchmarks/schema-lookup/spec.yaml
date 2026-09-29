@@ -7,6 +7,10 @@ input:
   MEDDRA: input/meddict.csv
 base: DM
 
+output:
+  path: adsl.csv
+  columns: [USUBJID, DTHDY, DTHCAUS, DTHPTERM]
+
 intermediates:
   # The fatal adverse event per subject. Only fatal records are
   # eligible; the latest one wins. With no key declared it matches on the
@@ -18,14 +22,11 @@ intermediates:
     order_by: [AE.AEDY]
     keep: last
     no_match: null
+
   - id: MEDDRA_PT
     dataset: MEDDRA
     key: {LLTNAME: DTHCAUS}
     no_match: null
-
-output:
-  path: adsl.csv
-  columns: [USUBJID, DTHDY, DTHCAUS, DTHPTERM]
 
 columns:
   - name: USUBJID

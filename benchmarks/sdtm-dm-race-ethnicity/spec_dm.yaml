@@ -74,10 +74,12 @@ columns:
             mapping:
               source: RACESINGLE
               dict:
-                "American Indian or Alaska Native": AMERICAN INDIAN OR ALASKA NATIVE
+                "American Indian or Alaska Native": AMERICAN INDIAN
+                  OR ALASKA NATIVE
                 "Asian": ASIAN
                 "Black or African American": BLACK OR AFRICAN AMERICAN
-                "Native Hawaiian or Other Pacific Islander": NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER
+                "Native Hawaiian or Other Pacific Islander": NATIVE HAWAIIAN
+                  OR OTHER PACIFIC ISLANDER
                 "White": WHITE
                 "Other, specify: Fijian": OTHER
                 "Not reported": NOT REPORTED

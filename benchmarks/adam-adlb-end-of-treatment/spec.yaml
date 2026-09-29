@@ -6,20 +6,24 @@ input:
   SUPPLB: input/supplb.csv
 base: LB
 
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL]
+
 intermediates:
   # The protocol endpoint qualifier, one supplemental record per
   # laboratory record. The supplemental key is the laboratory sequence
   # number written as eight-character, space-padded text.
   - id: SUPP_EP
     dataset: SUPPLB
-    filter: "SUPPLB.QNAM = 'ENDPOINT'"
     key:
       STUDYID: LB.STUDYID
       USUBJID: LB.USUBJID
       IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}
+    filter: "SUPPLB.QNAM = 'ENDPOINT'"
+    no_match: null
     verifications:
       - unique: [STUDYID, USUBJID, IDVARVAL]
-    no_match: null
 
   # Every laboratory record carries its own endpoint qualifier before the
   # window ranks the records of each subject and test: the endpoint
@@ -36,10 +40,6 @@ intermediates:
             order_by:
               - {variable: ENDPOINT, direction: desc}
               - {variable: LB.VISITNUM, direction: desc}
-
-output:
-  path: adlb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL]
 
 columns:
   - name: STUDYID

@@ -6,9 +6,13 @@ input:
   ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
 
 base: RS
+
+filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
+
 output:
   path: adrs.csv
-  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL]
+  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC,
+            AVAL, ANL01FL]
 
 columns:
   - name: STUDYID
@@ -122,8 +126,6 @@ columns:
     verifications:
       allowed_values:
         values: [Y]
-
-filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
 
 verifications:
   - unique:
