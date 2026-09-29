@@ -20,8 +20,9 @@ Writes produced artifacts plus a JSON summary under --run-dir, prints a
 summary, and exits 1 when any benchmark fails or errors.
 
 This replaces the removed `yamaa.adapters.conformance` runner: the new
-engine's public surface is `yamaa.derive` / `yamaa.YamaaError`, so the
-check drives that surface directly instead of the old DomainRun API.
+engine's public surface is `yamaa.derive` / `yamaa.derive_artifacts` /
+`yamaa.YamaaError`, so the check drives that surface directly instead of
+the old DomainRun API.
 """
 
 import argparse
@@ -31,14 +32,14 @@ import json
 import os
 import sys
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "src"))
 
-from yamaa import YamaaError, derive
-from yamaa.engine import Engine
+from yamaa import YamaaError, derive, derive_artifacts
 
 
 def walk(o):
@@ -171,67 +172,33 @@ def _parquet_semantic_diff(got_table, want_path):
 # ---------------------------------------------------------------- execution
 
 
-def _produced_artifacts(engine, primary_text):
-    """{stem: (profile, payload)} for the primary output only.
-
-    The clean-room engine produces only the primary artifact; verification
-    and warning logs are not implemented. Payload is CSV text for csv
-    artifacts, an arrow table for parquet. primary_text is the primary
-    artifact's rendered CSV text; engine.run() must have been called exactly
-    once.
-    """
+def _produced_artifacts(artifacts):
+    """{stem: (profile, (file name, payload))} for every file the run
+    publishes: the primary artifact and the declared verification and
+    warning logs. Payload is CSV text for csv artifacts and the written
+    bytes for parquet."""
     produced = {}
-
-    def add(path, table_fn, text_fn):
-        if not path:
-            return
-        stem = os.path.splitext(os.path.basename(path))[0]
-        if path.lower().endswith(".parquet"):
-            produced[stem] = ("parquet", (os.path.basename(path), table_fn()))
-        else:
-            produced[stem] = ("csv", (os.path.basename(path), text_fn()))
-
-    out = engine.output
-    out_path = out.get("path", "")
-    if out_path.lower().endswith(".parquet"):
-        # The engine renders CSV text; parse it into a table for the
-        # semantic parquet comparison.
-        import io
-
-        import pyarrow.csv as pa_csv
-
-        def _parquet_from_csv():
-            return pa_csv.read_csv(io.BytesIO(primary_text.encode("utf-8")))
-
-        add(out_path, _parquet_from_csv, None)
-    else:
-        add(out_path, None, lambda: primary_text)
-    # Note: verification_log and warning_log are not produced by the
-    # clean-room engine; they are intentionally not checked.
+    for path, payload in artifacts.items():
+        fname = os.path.basename(path)
+        profile = "parquet" if path.lower().endswith(".parquet") else "csv"
+        produced[os.path.splitext(fname)[0]] = (profile, (fname, payload))
     return produced
 
 
 def run_positive(d, spec_path, spec, project_root, run_dir):
     name = os.path.basename(d)
-    # Only the primary output is checked; the clean-room engine does not
-    # produce verification/warning logs.
-    out_path = (spec.get("output") or {}).get("path", "")
-    primary_stem = os.path.splitext(os.path.basename(out_path))[0] if out_path else None
+    # Every committed artifact is checked: the primary output and its logs.
     expected = {}
     for pat in ("*.csv", "*.parquet"):
         for g in glob.glob(os.path.join(d, "expected", pat)):
-            stem = os.path.splitext(os.path.basename(g))[0]
-            # Only include the primary artifact; skip sidecars (verification
-            # logs, warning logs) which the clean-room engine does not produce.
-            if primary_stem is None or stem == primary_stem:
-                expected[stem] = g
+            expected[os.path.splitext(os.path.basename(g))[0]] = g
     if not expected:
         return name, "SKIP", "composition-only", []
 
     try:
-        engine = Engine(spec_path, project_root=project_root)
-        primary_text = engine.run()  # raises on failure; populates tables
-        produced = _produced_artifacts(engine, primary_text)
+        produced = _produced_artifacts(
+            derive_artifacts(spec_path, project_root=project_root)
+        )
     except YamaaError as e:
         return (name, "FAIL", f"unexpected YamaaError {e.phase}/{e.condition}", [])
     except Exception as e:  # noqa: BLE001
@@ -251,20 +218,20 @@ def run_positive(d, spec_path, spec, project_root, run_dir):
         if run_dir:
             dest = os.path.join(run_dir, "artifacts", name, fname)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            if profile == "parquet":
-                pq.write_table(payload, dest)
-            else:
-                with open(dest, "w", encoding="utf-8") as f:
-                    f.write(payload)
+            with open(dest, "wb") as f:
+                f.write(payload if profile == "parquet" else payload.encode("utf-8"))
             written.append(dest)
         if profile == "parquet":
-            diff = _parquet_semantic_diff(payload, want_path)
+            # The direct reader: pq.read_table over a buffer can deadlock
+            # pyarrow's thread pool at interpreter exit.
+            got = pq.ParquetFile(pa.BufferReader(payload)).read()
+            diff = _parquet_semantic_diff(got, want_path)
             if diff is not None:
                 findings.append(f"artifact.parquet: {fname}: {diff}")
         else:
-            with open(want_path, "r", encoding="utf-8") as f:
+            with open(want_path, "rb") as f:
                 want = f.read()
-            if payload != want:
+            if payload.encode("utf-8") != want:
                 findings.append(f"artifact.csv: {fname}: rendered bytes differ")
     if findings:
         return name, "FAIL", "; ".join(findings), written

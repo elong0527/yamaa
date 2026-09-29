@@ -1,19 +1,22 @@
 """Step-1 parity: every benchmark in the corpus runs through the clean-room
-``derive()`` and matches its expected artifact (or expected error).
+engine and matches its expected artifacts (or expected error).
 
 Negative benchmarks must match their full pin: phase, condition,
 requirement, spec_paths, and every key the pin lists under context (the
-engine may report more keys). Positive benchmarks compare the derived CSV
-byte-for-byte against the golden artifact. The one composition-only skip is
-honored here too.
+engine may report more keys). Positive benchmarks compare every committed
+artifact, the output and its warning and verification logs, against what
+``derive_artifacts()`` publishes: csv byte for byte, parquet value for
+value. The one composition-only skip is honored here too.
 """
 
 import glob
 import os
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import yaml
 
-from yamaa import YamaaError, derive
+from yamaa import YamaaError, derive, derive_artifacts
 
 
 def _walk(o):
@@ -72,7 +75,11 @@ def test_benchmark(bench_dir):
         spec = yaml.safe_load(f)
     project_root = _project_root_for(bench_dir, spec)
     err_path = os.path.join(bench_dir, "expected", "error.yaml")
-    goldens = sorted(glob.glob(os.path.join(bench_dir, "expected", "*.csv")))
+    goldens = sorted(
+        g
+        for pattern in ("*.csv", "*.parquet")
+        for g in glob.glob(os.path.join(bench_dir, "expected", pattern))
+    )
     if not os.path.exists(err_path) and not goldens:
         # The corpus's single composition-only benchmark documents spec
         # composition without a runnable artifact.
@@ -96,15 +103,36 @@ def test_benchmark(bench_dir):
         return
 
     assert goldens, f"{name}: no golden artifact and no error.yaml"
-    out_name = os.path.basename((spec.get("output") or {}).get("path", ""))
-    golden = next((g for g in goldens if os.path.basename(g) == out_name), goldens[0])
     try:
-        got = derive(spec_path, project_root=project_root)
+        got = derive_artifacts(spec_path, project_root=project_root)
     except YamaaError as e:
         raise AssertionError(
             f"{name}: unexpected YamaaError {e.phase}/{e.condition} "
             f"{e.requirement} {e.spec_paths}"
         ) from e
-    with open(golden, "r", encoding="utf-8") as f:
-        want = f.read()
-    assert got == want, f"{name}: derived output differs from golden"
+    # Every committed artifact, the primary output and its declared logs, is
+    # produced and matches: csv byte for byte, parquet value for value.
+    produced = {os.path.basename(path): data for path, data in got.items()}
+    committed = {os.path.basename(g): g for g in goldens}
+    assert sorted(produced) == sorted(committed), (
+        f"{name}: produced {sorted(produced)}, committed {sorted(committed)}"
+    )
+    for fname, golden in committed.items():
+        with open(golden, "rb") as f:
+            want = f.read()
+        if fname.lower().endswith(".parquet"):
+            same = _parquet_values(produced[fname]) == _parquet_values(want)
+        else:
+            same = produced[fname].encode("utf-8") == want
+        assert same, f"{name}: derived {fname} differs from golden"
+
+
+def _parquet_values(data):
+    """What REQ-0740 fixes of a parquet file rather than its bytes: field
+    names in order, logical types, and every row's values (a float by its
+    shortest round-trip text, so the comparison is bit-exact)."""
+    # The direct reader: pq.read_table over a buffer can deadlock pyarrow's
+    # thread pool at interpreter exit.
+    table = pq.ParquetFile(pa.BufferReader(data)).read()
+    rows = [[repr(v) for v in row.values()] for row in table.to_pylist()]
+    return table.schema.names, [str(f.type) for f in table.schema], rows
