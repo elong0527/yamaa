@@ -13,14 +13,26 @@ conditions:
   allowed_values_failed: {phases: [verification]}
   ambiguous_baseline: {phases: [derivation]}
   ambiguous_dictionary: {phases: [validation]}
+  artifact_outside_document: {phases: [validation]}
   artifact_path_collision: {phases: [validation]}
   assert_failed: {phases: [verification]}
+  codelist_duplicate_value: {phases: [validation]}
+  codelist_extension_not_admitted: {phases: [validation]}
+  codelist_partial_item_field: {phases: [validation]}
+  codelist_shape_invalid: {phases: [validation]}
+  codelist_type_mismatch: {phases: [validation]}
+  codelist_values_conflict: {phases: [validation]}
   conversion_failed: {phases: [convert]}
   core_mandatory_conflict: {phases: [validation]}
   correlated_filter_with_unique_verification: {phases: [validation]}
+  dataset_json_path_collision: {phases: [validation]}
+  dataset_json_without_data: {phases: [validation]}
   decimals_not_applicable: {phases: [validation]}
+  declared_length_conflict: {phases: [validation]}
   dependency_cycle: {phases: [validation]}
   division_by_zero: {phases: [derivation]}
+  duplicate_dataset_entry: {phases: [validation]}
+  duplicate_define_identifier: {phases: [validation]}
   duplicate_derivation: {phases: [validation]}
   duplicate_identifier: {phases: [validation]}
   duplicate_intermediate_records: {phases: [verification]}
@@ -56,7 +68,9 @@ conditions:
   key_dependency: {phases: [validation]}
   length_failed: {phases: [verification]}
   ln_of_nonpositive: {phases: [derivation]}
+  mandatory_not_enforced: {phases: [validation]}
   matches_failed: {phases: [verification]}
+  method_missing: {phases: [validation]}
   missing_aggregate_keys: {phases: [validation]}
   missing_input: {phases: [cut, mapping]}
   missing_key: {phases: [output]}
@@ -69,12 +83,19 @@ conditions:
   multiple_matches: {phases: [join]}
   multiple_values_per_key: {phases: [derivation]}
   no_applicable_keys: {phases: [validation]}
+  non_ascii_source: {phases: [validation]}
   not_missing_failed: {phases: [verification]}
   odm_not_unique: {phases: [derivation, row_construction]}
   odm_schema_field_ambiguous: {phases: [validation]}
   odm_schema_field_missing: {phases: [validation]}
   odm_schema_field_type: {phases: [validation]}
   odm_schema_value_missing: {phases: [ingest]}
+  origin_contradicts_derivation: {phases: [validation]}
+  origin_description_missing: {phases: [validation]}
+  origin_document_missing: {phases: [validation]}
+  origin_missing: {phases: [validation]}
+  origin_source_not_admitted: {phases: [validation]}
+  parent_not_found: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
@@ -87,6 +108,7 @@ conditions:
   redundant_field_type: {phases: [validation]}
   regex_group_out_of_range: {phases: [validation]}
   rename_only_intermediate: {phases: [validation]}
+  reserved_metadata_key: {phases: [validation]}
   resource_path_missing: {phases: [validation]}
   resource_path_not_regular_file: {phases: [validation]}
   resource_path_not_relative: {phases: [validation]}
@@ -95,6 +117,7 @@ conditions:
   resource_path_uri_scheme: {phases: [validation]}
   row_count_failed: {phases: [verification]}
   runner_language_mismatch: {phases: [validation]}
+  sas_name_too_long: {phases: [validation]}
   schema_version_mismatch: {phases: [validation]}
   source_field_name_duplicate: {phases: [ingest]}
   source_field_name_empty: {phases: [ingest]}
@@ -104,20 +127,33 @@ conditions:
   source_profile_unknown: {phases: [validation]}
   source_quote_unterminated: {phases: [ingest]}
   source_record_width: {phases: [ingest]}
+  source_system_incomplete: {phases: [validation]}
   sqrt_of_negative: {phases: [derivation]}
+  submission_data_type_not_admitted: {phases: [validation]}
+  submission_length_missing: {phases: [validation]}
+  submission_length_not_applicable: {phases: [validation]}
+  submission_metadata_missing: {phases: [validation]}
   undeclared_column: {phases: [validation]}
   ungrouped_driver_field: {phases: [validation]}
   unique_failed: {phases: [verification]}
   unknown_artifact_profile: {phases: [validation]}
+  unknown_codelist: {phases: [validation]}
+  unknown_document: {phases: [validation]}
   unknown_field: {phases: [validation]}
   unknown_intermediate_driver_type: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
+  unknown_standard: {phases: [validation]}
+  unknown_standard_family: {phases: [validation]}
   unknown_window: {phases: [validation]}
   unmapped_key: {phases: [mapping]}
   unmapped_value: {phases: [mapping]}
   unmatched_key: {phases: [join]}
   unpaired_fields: {phases: [validation]}
+  unreferenced_codelist: {phases: [validation]}
   unresolvable_name: {phases: [validation]}
+  unsupported_regex_engine: {phases: [validation]}
+  unsupported_text_contract: {phases: [validation]}
+  untransportable_text: {phases: [validation]}
   unwritable_value: {phases: [output]}
   value_not_permitted: {phases: [validation]}
   window_order_by_required: {phases: [validation]}
