@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_RAW: input/adsl.csv
+  ADSL_RAW: {path: input/adsl.csv, types: {TRTSDT: date}}
   CM:
     path: input/cm.csv
     types: {CMSTDTC: str, CMSTDTC_IMP: date}

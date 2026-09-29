@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 input:
-  ADLB_RAW: input/adlb_raw.csv
+  ADLB_RAW: {path: input/adlb_raw.csv, types: {ADT: date}}
 
 output:
   path: adlb.csv

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  DM_RAW: input/dm_raw.csv
+  DM_RAW: {path: input/dm_raw.csv, types: {RFICDTC: date}}
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
   DS: input/ds.csv
   AE: input/ae.csv

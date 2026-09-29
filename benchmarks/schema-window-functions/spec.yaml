@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADVS
 keys: [USUBJID, VISITN]
 input:
-  VS: {path: input/vs.csv, types: {VISITN: int, VSSTRESN: float}}
+  VS: {path: input/vs.csv, types: {VISITN: int, VSSTRESN: float, VSDTC: date, TRTSDT: date}}
 base: VS
 
 output:

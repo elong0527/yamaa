@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: EX
 keys: [STUDYID, USUBJID, EXSEQ]
 input:
-  EX_RAW: input/ex_raw.csv
+  EX_RAW: {path: input/ex_raw.csv, types: {EXSTDTC: date, EXENDTC: date}}
 
 output:
   path: ex.csv

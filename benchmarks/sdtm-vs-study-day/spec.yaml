@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  VS_RAW: input/vs_raw.csv
-  DM: input/dm.csv
+  VS_RAW: {path: input/vs_raw.csv, types: {VSDTC: date}}
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
   TV: input/tv.csv
   SE:
     path: input/se.csv

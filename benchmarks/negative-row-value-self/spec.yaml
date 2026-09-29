@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
-  VS: input/vs.csv
+  VS: {path: input/vs.csv, types: {VSDTC: date}}
 
 output:
   path: advs.csv

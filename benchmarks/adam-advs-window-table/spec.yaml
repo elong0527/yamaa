@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
-  ADVS_RAW: input/advs_raw.csv
+  ADVS_RAW: {path: input/advs_raw.csv, types: {ADT: date}}
   AWINDOW:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}

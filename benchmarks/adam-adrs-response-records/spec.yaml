@@ -3,7 +3,7 @@ domain: ADRS
 keys: [STUDYID, USUBJID, RSSEQ]
 input:
   RS: input/rs.csv
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
 
 base: RS
 output:

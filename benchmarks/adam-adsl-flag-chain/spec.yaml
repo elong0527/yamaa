@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
+  DM: {path: input/dm.csv, types: {RANDDT: date}}
   EX: input/ex.csv
 base: DM
 

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  ADAE_RAW: input/adae_raw.csv
+  ADAE_RAW: {path: input/adae_raw.csv, types: {ASTDT: date}}
 
 output:
   path: adae.csv

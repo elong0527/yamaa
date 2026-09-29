@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  SOURCE: input/adsl.csv
+  SOURCE: {path: input/adsl.csv, types: {DTMSTR: datetime, REFDTSTR: date}}
 
 output:
   path: adsl.csv

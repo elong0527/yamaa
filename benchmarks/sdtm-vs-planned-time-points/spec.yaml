@@ -3,7 +3,7 @@ domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
   ODM: input/odm.csv
-  DM: input/dm.csv
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
   VS_MAPPING: input/vs_mapping.csv
 base: ODM
 
