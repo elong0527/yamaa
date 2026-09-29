@@ -375,12 +375,12 @@ def check_pad_width(width, where):
 
 
 def group_out_of_range(where, group, group_count, pattern):
-    """REQ-0828: a `str_extract.group` the pattern does not capture."""
+    """REQ-0816: a `str_extract.group` the pattern does not capture."""
     _fail(
         where,
         "validation",
         "regex_group_out_of_range",
-        "REQ-0828",
+        "REQ-0816",
         {"group": group, "group_count": group_count, "pattern": pattern},
     )
 
@@ -602,7 +602,7 @@ def ev_str_extract(payload, ctx):
         return payload.get("no_match")  # fatal when omitted (REQ-0344)
     g = payload.get("group", 0)
     if g > rx.groups:
-        # REQ-0828: validation rejects the group before any row reads it.
+        # REQ-0816: validation rejects the group before any row reads it.
         group_out_of_range(ctx.where + ".group", g, rx.groups, payload["pattern"])
     return m.group(g)
 

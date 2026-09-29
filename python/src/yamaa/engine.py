@@ -111,6 +111,7 @@ _VERIFICATION_REQUIREMENTS = {
     "not_missing_failed": "REQ-0375",
     "allowed_values_failed": "REQ-0376",
     "range_failed": "REQ-0377",
+    "length_failed": "REQ-0378",
     "matches_failed": "REQ-0379",
     "unique_failed": "REQ-0381",
     "all_or_none_failed": "REQ-0382",

@@ -228,7 +228,7 @@ def _check_output(e):
                 f"keys[{idx}]",
                 "validation",
                 "internal_column_in_keys",
-                "REQ-0233",
+                "REQ-0220",
                 {"column": k},
             )
     seen = set()
@@ -239,7 +239,7 @@ def _check_output(e):
                 f"output.order_by[{i}]",
                 "validation",
                 "undeclared_column",
-                "REQ-0236",
+                "REQ-0224",
                 {"column": var},
             )
         if var in seen:
@@ -247,7 +247,7 @@ def _check_output(e):
                 f"output.order_by[{i}]",
                 "validation",
                 "duplicate_order_term",
-                "REQ-0237",
+                "REQ-0224",
                 {"column": var},
             )
         seen.add(var)
