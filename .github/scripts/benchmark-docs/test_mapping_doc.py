@@ -260,7 +260,7 @@ class LookupResolutionTests(unittest.TestCase):
         self.assertNotIn("MEDDRA_CODING", rule)
         self.assertIn("Take PTNAME from the MEDDRA record", rule)
         self.assertIn("LLTNAME equals AE_RAW.AETERM", rule)
-        self.assertIn('"NOT CODED" when no record matches', rule)
+        self.assertIn('no match yields "NOT CODED"', rule)
 
     def test_selection_names_the_filter_order_and_kept_record(self):
         rule = method_column("adam-adae-death")["DTHCAUS"]
@@ -283,7 +283,7 @@ class LookupResolutionTests(unittest.TestCase):
 
     def test_absent_no_match_is_reported_as_an_error_not_a_blank(self):
         rule = method_column("adam-adcm-atc-classes")["ATC1CD"]
-        self.assertIn("blank when no record matches", rule)
+        self.assertIn("no match yields blank", rule)
         self.assertIn(
             "a row with no match is an error",
             method_column("adam-adlb-end-of-treatment")["ENDPOINT"],
@@ -395,3 +395,55 @@ class RevisionHistoryTests(unittest.TestCase):
             self.assertEqual(
                 sheets["revision-history"], mapping_doc.revision_history_rows()
             )
+
+
+class ExcelProseTests(unittest.TestCase):
+    """A variable sheet is written in sentences. A bracketed aside is a
+    programmer's habit, so the describers add none of their own -- a
+    parenthesis in a cell can only have come from the spec's own text."""
+
+    def test_no_describer_invents_a_parenthesis(self):
+        invented = []
+        for spec_path in sorted(BENCHMARKS.glob("*/spec.yaml")):
+            name = spec_path.parent.name
+            source = spec_path.read_text(encoding="utf-8")
+            for variable, rule in method_column(name).items():
+                if "(" in rule and "(" not in source:
+                    invented.append(name + "/" + variable + ": " + rule)
+        self.assertEqual(invented, [])
+
+    def test_a_lookup_states_its_no_match_answer_as_a_clause(self):
+        rule = method_column("sdtm-ae-coding")["AEDECOD"]
+        self.assertNotIn("(", rule)
+        self.assertTrue(rule.endswith('no match yields "NOT CODED".'), rule)
+
+
+class NoDerivationTests(unittest.TestCase):
+    """A column can reach the variable sheet with no derivation of its own.
+    The cell must say where the value comes from, not print Python's None."""
+
+    def test_row_template_column_points_at_the_row_construction_sheet(self):
+        rules = method_column("adam-adlb-bds")
+        self.assertEqual(rules["PARAMCD"], mapping_doc.ROW_TEMPLATE_RULE)
+        self.assertEqual(rules["AVAL"], mapping_doc.ROW_TEMPLATE_RULE)
+
+    def test_inherited_column_says_so(self):
+        self.assertEqual(
+            method_column("negative-property-clear")["USUBJID"],
+            mapping_doc.INHERITED_RULE,
+        )
+
+    def test_no_benchmark_prints_none_into_a_method_cell(self):
+        empty = []
+        for spec_path in sorted(BENCHMARKS.glob("*/spec.yaml")):
+            name = spec_path.parent.name
+            for variable, rule in method_column(name).items():
+                if rule in ("None", ""):
+                    empty.append(name + "/" + variable)
+        self.assertEqual(empty, [])
+
+    def test_a_nested_lookup_answers_in_the_short_form(self):
+        rule = method_column("adam-adlb-end-of-treatment")["ENDPOINT"]
+        # The inner lookup's answer must not read as the outer lookup's.
+        self.assertIn("blank when unmatched", rule)
+        self.assertTrue(rule.endswith("a row with no match is an error."), rule)

@@ -65,6 +65,14 @@ class SpecContext:
             for item in (spec.get("intermediates") or [])
             if isinstance(item, dict) and item.get("id")
         }
+        # Columns a `rows:` template fills, which carry no derivation of
+        # their own on the variable sheet.
+        self.row_template_columns = {
+            str(name)
+            for template in (spec.get("rows") or [])
+            if isinstance(template, dict)
+            for name in (template.get("derivations") or {})
+        }
 
     def lookup(self, name):
         return self.lookups.get(name)
@@ -124,7 +132,7 @@ def order_terms(terms):
             if term.get("direction") == "desc":
                 text += " descending"
             if term.get("nulls"):
-                text += " (nulls " + str(term["nulls"]) + ")"
+                text += ", nulls " + str(term["nulls"])
         else:
             text = str(term)
         out.append(text)
@@ -184,22 +192,56 @@ def match_clauses(node, ctx=None, depth=0):
     return clauses
 
 
+# A join key may be computed rather than read, and "IDVARVAL equals pad
+# LB.LBSEQ" puts an imperative where the sentence wants a thing. These give the
+# shapes that can sit on the key side of a match a noun form instead.
+KEY_VALUE_PHRASES = {
+    "literal": lambda n, c, d: literal_text(n),
+    "str_pad": lambda n, c, d: (
+        describe_variable(n.get("source"), c, d)
+        + " padded on the left with spaces to at least "
+        + str(n.get("width"))
+        + " characters"
+    ),
+    "str_case": lambda n, c, d: (
+        describe_variable(n.get("source"), c, d) + " in " + str(n.get("to")) + " case"
+    ),
+    "compute": lambda n, c, d: describe_expression_text(n.get("expr"), c, d),
+}
+
+
 def match_value(value, ctx=None, depth=0):
     """The current-row side of one join key: a variable, or a computed value."""
-    if isinstance(value, dict):
-        return "(" + clause(describe_derivation(value, ctx, depth)) + ")"
-    return describe_variable(value, ctx, depth)
+    if not isinstance(value, dict):
+        return describe_variable(value, ctx, depth)
+    for shape, phrase in KEY_VALUE_PHRASES.items():
+        if shape in value:
+            return phrase(value[shape], ctx, depth)
+    # Any other shape keeps its own rule wording; "the value" carries the
+    # imperative without stranding it mid-sentence.
+    return "the value from " + value_phrase(value, ctx, depth)
 
 
-def no_match_phrase(lookup):
-    """What an unmatched row yields, as a trailing parenthetical.
+def no_match_phrase(lookup, depth=0):
+    """What an unmatched row yields, as a trailing clause.
 
-    An absent `no_match` makes an unmatched row fatal (REQ-0124), which is the
-    reviewable fact -- not an omission to render as a blank cell.
+    A sponsor's variable sheet is written in sentences, so this is worded as
+    one rather than bracketed like a code comment. An absent `no_match` makes
+    an unmatched row fatal (REQ-0124), which is the reviewable fact -- not an
+    omission to render as a blank cell. A lookup reached through another
+    lookup answers in the shorter form, so its clause cannot be mistaken for
+    the outer lookup's own answer at the end of the sentence.
     """
     if "no_match" not in lookup:
-        return "(a row with no match is an error)"
-    return "(" + literal_text(lookup["no_match"]) + " when no record matches)"
+        return (
+            ", an error when unmatched"
+            if depth
+            else ", and a row with no match is an error"
+        )
+    answer = literal_text(lookup["no_match"])
+    if depth:
+        return ", " + answer + " when unmatched"
+    return ", and no match yields " + answer
 
 
 def record_phrase(lookup, column=None, ctx=None, depth=0):
@@ -245,8 +287,7 @@ def describe_variable(variable, ctx=None, depth=0):
         tail
         + " from "
         + record_phrase(lookup, tail, ctx, depth + 1)
-        + " "
-        + no_match_phrase(lookup)
+        + no_match_phrase(lookup, depth)
     )
 
 
@@ -290,8 +331,7 @@ def describe_expression_text(text, ctx=None, depth=0):
         tail
         + " taken from "
         + record_phrase(ctx.lookup(head), tail, ctx, depth + 1)
-        + " "
-        + no_match_phrase(ctx.lookup(head))
+        + no_match_phrase(ctx.lookup(head), depth)
         for head, tail in seen
     ]
     return rewritten + ", with " + join_and(origins)
@@ -308,8 +348,7 @@ def describe_reference(variable, ctx=None, depth=0):
         + tail
         + " from "
         + record_phrase(lookup, tail, ctx, depth + 1)
-        + " "
-        + no_match_phrase(lookup)
+        + no_match_phrase(lookup, depth)
     )
 
 
@@ -322,7 +361,7 @@ def describe_window(window, ctx=None, depth=0):
     parts = []
     groups = window.get("group_by")
     if groups:
-        parts.append("within each (" + ", ".join(str(g) for g in groups) + ")")
+        parts.append("within each group of " + ", ".join(str(g) for g in groups))
     ordering = order_terms(window.get("order_by"))
     if ordering:
         parts.append("ordered by " + ordering)
@@ -344,6 +383,20 @@ def handler_phrase(node, field, label):
 
 
 # --- One describer per derivation shape ------------------------------------
+
+
+# A column can reach the variable sheet with no derivation of its own: a
+# `rows:` template supplies it per constructed row, or an inherited parent
+# layer does. Either way the cell says where to look instead of printing
+# Python's "None".
+ROW_TEMPLATE_RULE = "Set per constructed row; see the Row construction sheet."
+INHERITED_RULE = "No derivation in this specification; inherited from its parent."
+
+
+def no_derivation_rule(column_name, ctx=None):
+    if column_name in context(ctx).row_template_columns:
+        return ROW_TEMPLATE_RULE
+    return INHERITED_RULE
 
 
 def describe_literal(value):
@@ -551,7 +604,7 @@ def describe_function(node):
     text = "Call project function " + str(node.get("name"))
     version = node.get("contract_version")
     if version:
-        text += " (contract " + str(version) + ")"
+        text += " at contract version " + str(version)
     if args:
         text += " with " + join_and(args)
     return sentence(text)
@@ -572,9 +625,8 @@ def describe_cut(node, ctx=None, depth=0):
         + ", ".join(breaks)
         + " into "
         + join_and(labels)
-        + " ("
+        + ", "
         + closed
-        + ")"
     )
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
@@ -722,9 +774,9 @@ def describe_str_extract(node, ctx=None, depth=0):
     text = (
         "Extract "
         + part
-        + " of /"
+        + " matching "
         + str(node.get("pattern"))
-        + "/ from "
+        + " from "
         + describe_variable(node.get("source"), ctx, depth)
     )
     text += handler_phrase(node, "missing", "a missing source")
@@ -735,9 +787,9 @@ def describe_str_contains(node, ctx=None, depth=0):
     text = (
         "True when "
         + describe_variable(node.get("source"), ctx, depth)
-        + " matches /"
+        + " matches "
         + str(node.get("pattern"))
-        + "/ anywhere, false when it does not"
+        + " anywhere, false when it does not"
     )
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
@@ -771,7 +823,7 @@ def describe_row_number(node, ctx=None, depth=0):
         return "Row number using window " + window + "."
     groups = ", ".join(str(g) for g in window.get("group_by", []))
     order = order_terms(window.get("order_by"))
-    text = "Row number within each (" + groups + ")"
+    text = "Row number within each group of " + groups
     if order:
         text += ", ordered by " + order
     return text + "."
@@ -829,9 +881,8 @@ def describe_baseline_flag(node, ctx=None, depth=0):
     scope = (
         " using window " + window
         if isinstance(window, str)
-        else " within each ("
+        else " within each group of "
         + ", ".join(str(g) for g in window.get("group_by", []))
-        + ")"
     )
     return (
         '"Y" for the last record with '
@@ -1151,6 +1202,8 @@ def mapping_row(col, index, spec, adam, input_names, code_by_var, ctx=None):
     terms = controlled_terms(col, code_by_var)
     core = str(sub.get("core") or "")
     method = conversion_definition(col, ctx)
+    if col.get("derivation") is None and not submission(col).get("method"):
+        method = no_derivation_rule(name, ctx)
     if adam:
         return [
             str(spec.get("domain", "")),
