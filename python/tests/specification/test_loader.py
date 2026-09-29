@@ -501,10 +501,17 @@ def test_yaml_12_core_scalars_remain_distinct(tmp_path: Path) -> None:
     path = tmp_path / "scalars.yaml"
     path.write_text(
         "yes_value: yes\n"
+        "no_value: no\n"
+        "n: sample_size\n"
         "date_value: 2026-09-11\n"
         "bool_value: true\n"
         "int_value: 1\n"
-        "float_value: 1e2\n",
+        "float_value: 1e2\n"
+        "decimal_value: 010\n"
+        "octal_value: 0o10\n"
+        "infinity_value: -.Inf\n"
+        "nan_value: .NAN\n"
+        "quoted_infinity: '-.Inf'\n",
         encoding="ascii",
     )
 
@@ -512,10 +519,17 @@ def test_yaml_12_core_scalars_remain_distinct(tmp_path: Path) -> None:
 
     assert document == {
         "yes_value": "yes",
+        "no_value": "no",
+        "n": "sample_size",
         "date_value": "2026-09-11",
         "bool_value": True,
         "int_value": 1,
         "float_value": 100.0,
+        "decimal_value": 10,
+        "octal_value": 8,
+        "infinity_value": None,
+        "nan_value": None,
+        "quoted_infinity": "-.Inf",
     }
     assert isinstance(document, dict)
     assert type(document["bool_value"]) is bool
