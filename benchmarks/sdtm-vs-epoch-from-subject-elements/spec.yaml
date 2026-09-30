@@ -35,16 +35,39 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: VS}
+    verifications:
+      not_missing: {}
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: VS_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 20
+      origin:
+        type: Protocol
+        source: Sponsor
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: VS_RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 30
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: VSSEQ
     type: int
@@ -52,21 +75,51 @@ columns:
     derivation: VS_RAW.VSSEQ
     verifications:
       not_missing: {}
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
     derivation: VS_RAW.VSTESTCD
+    verifications:
+      not_missing: {}
+    submission:
+      core: Req
+      role: Topic
+      length: 8
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: VSORRES
     type: str
     label: Result or Finding in Original Units
     derivation: VS_RAW.VSORRES
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 20
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: VSDTC
     type: str
     label: Date/Time of Measurements
     derivation: VS_RAW.VSDTC
+    submission:
+      core: Exp
+      role: Record Qualifier
+      data_type: datetime
+      origin:
+        type: Assigned
+        source: Sponsor
 
   # The element lookup compares moments, so the collected text becomes a
   # datetime: a full date-time passes through, a date-only collection is
@@ -86,9 +139,14 @@ columns:
     type: str
     label: Epoch
     derivation: ELEM.EPOCH
-    verifications:
-      allowed_values:
-        values: [SCREENING, TREATMENT, FOLLOW-UP]
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 10
+      codelist: EPOCH
+      origin:
+        type: Derived
+        source: Sponsor
 
 verifications:
   - unique:
@@ -100,3 +158,9 @@ verifications:
       id: missing-date-means-missing-epoch
       when: "VSDTC IS NULL"
       then: "EPOCH IS NULL"
+
+submission:
+  label: Vital Signs
+  class: FINDINGS
+  structure: One record per vital signs measurement
+  repeating: true

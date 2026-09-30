@@ -1,0 +1,52 @@
+schema_version: "1.0"
+define_version: "2.1.11"
+context: Other
+language: en
+file_oid: www.example.org/YAMAA-01/1/Define-XML_2.1
+creation_datetime: "2026-09-30T00:00:00"
+originator: Example Sponsor
+source_system: yamaa
+source_system_version: "1.0"
+
+study:
+  id: YAMAA-01
+  name: YAMAA-01
+  description: Example study demonstrating an extensible epoch list
+  protocol_name: YAMAA-01
+
+metadata_version:
+  id: YAMAA-01.1
+  name: Study YAMAA-01, Data Definitions
+  description: Tabulation data definitions for YAMAA-01
+
+standards:
+  - id: SDTMIG
+    name: SDTMIG
+    type: IG
+    version: "3.4"
+    status: Final
+  - id: CT_SDTM
+    name: CDISC/NCI
+    type: CT
+    publishing_set: SDTM
+    version: "2023-12-15"
+    status: Final
+
+default_standard: SDTMIG
+
+codelists:
+  - id: EPOCH
+    name: Epoch
+    standard: CT_SDTM
+    extensible: true
+    items:
+      - value: SCREENING
+      - value: TREATMENT
+      - value: FOLLOW-UP
+
+datasets:
+  - id: VS
+    spec: spec.yaml
+
+output:
+  path: define.xml
