@@ -26,7 +26,7 @@ from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
 _CSV_REQUIREMENTS = {
-    "invalid_text": "REQ-0029",
+    "invalid_text": "REQ-0853",
     "source_byte_order_mark": "REQ-0851",
     "source_carriage_return": "REQ-0851",
     "source_field_name_duplicate": "REQ-0851",

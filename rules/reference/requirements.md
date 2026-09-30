@@ -1237,3 +1237,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1285](../specification/style.md#req-1285) | `specification/style.md` | Schema prose |
 | [REQ-1286](../specification/style.md#req-1286) | `specification/style.md` | Schema prose |
 | [REQ-1287](../specification/style.md#req-1287) | `specification/style.md` | Schema prose |
+| [REQ-1288](../specification/style.md#req-1288) | `specification/style.md` | Schema prose |
+| [REQ-1289](../specification/style.md#req-1289) | `specification/style.md` | Schema prose |
+| [REQ-1290](../specification/style.md#req-1290) | `specification/style.md` | Schema prose |

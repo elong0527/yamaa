@@ -406,11 +406,11 @@ class LookupResolutionTests(unittest.TestCase):
             method_column("adam-adlb-end-of-treatment")["ENDPOINT"],
         )
 
-    def test_value_read_through_a_lookup_is_derived_not_collected(self):
+    def test_value_read_through_a_lookup_is_assigned_not_collected(self):
         headers, rows = mapping_sheet("sdtm-ae-coding")
         origin = {row[0]: row[headers.index("Origin")] for row in rows}
         self.assertEqual(origin["AETERM"], "Collected")
-        self.assertEqual(origin["AEDECOD"], "Derived")
+        self.assertEqual(origin["AEDECOD"], "Assigned")
 
     def test_a_spec_without_lookups_keeps_the_plain_copy_wording(self):
         self.assertEqual(

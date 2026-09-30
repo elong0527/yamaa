@@ -580,7 +580,7 @@ def test_committed_symlink_fixture_is_a_real_symlink() -> None:
         (
             "negative-source-bad-encoding",
             "invalid_text",
-            "REQ-0029",
+            "REQ-0853",
             {"record": 3, "field": 3},
         ),
         (

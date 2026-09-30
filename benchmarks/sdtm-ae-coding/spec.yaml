@@ -21,26 +21,63 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: AE}
+    verifications:
+      not_missing: {}
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: AE_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 20
+      origin:
+        type: Protocol
+        source: Sponsor
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: AE_RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 30
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation: AE_RAW.AESEQ
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origin:
+        type: Assigned
+        source: Sponsor
 
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
     derivation: AE_RAW.AETERM
+    submission:
+      core: Exp
+      role: Topic
+      length: 200
+      origin:
+        type: Collected
+        source: Investigator
 
   # Both coded terms come from the dictionary row whose lowest-level term
   # equals the reported term exactly, letter case included. No such row, or
@@ -49,11 +86,31 @@ columns:
     type: str
     label: Dictionary-Derived Term
     derivation: MEDDRA_CODING.PTNAME
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 200
+      codelist: MEDDRA
+      origin:
+        type: Assigned
+        source: Sponsor
+      method: Take PTNAME from the MEDDRA record whose LLTNAME equals
+        AE_RAW.AETERM, and no match yields "NOT CODED".
 
   - name: AEBODSYS
     type: str
     label: Body System or Organ Class
     derivation: MEDDRA_CODING.SOCNAME
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 200
+      codelist: MEDDRA
+      origin:
+        type: Assigned
+        source: Sponsor
+      method: Take SOCNAME from the MEDDRA record whose LLTNAME equals
+        AE_RAW.AETERM, and no match yields "NOT CODED".
 
 verifications:
   - unique:
@@ -62,6 +119,8 @@ verifications:
       min: 8
       max: 8
 
-metadata:
-  dictionary: MedDRA
-  dictionary_version: "26.1"
+submission:
+  label: Adverse Events
+  class: EVENTS
+  structure: One record per adverse event
+  repeating: true

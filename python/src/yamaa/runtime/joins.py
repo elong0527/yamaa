@@ -480,7 +480,7 @@ def _parsed(predicate: str | None) -> PredicateAst | None | ConditionResult:
             "validation",
             "invalid_predicate",
             {"predicate": predicate, "position": error.position},
-            requirement="REQ-0188",
+            requirement=error.requirement,
         )
 
 

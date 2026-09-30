@@ -58,7 +58,11 @@ Pydantic models. It does not execute the specification or resolve inheritance.
 
 `yamaa.style` checks a specification against the
 [style contract](../rules/specification/style.md): field order, blank lines,
-line width, and the canonical literal and source spellings. A style finding
+line width, the canonical literal and source spellings, and three authoring
+lints -- a derivation identical in every row template that belongs at
+column level (`repeated_row_derivation`), a named intermediate equivalent
+to the implicit join (`redundant_intermediate`), and an output column
+without a label (`missing_label`). A style finding
 is not a validation diagnostic; the specification stays valid and runs the
 same way.
 
@@ -73,7 +77,10 @@ Each finding prints as `path:line:column: name message (REQ-NNNN)`. The exit
 status is 0 when no finding remains, 1 when one does, and 2 when a file
 cannot be read or parsed. `--fix` moves and inserts whole lines only, and
 keeps an edit only when the file still parses to the same typed value with
-the same comments; a finding it cannot fix that way stays reported. A
+the same comments; a finding it cannot fix that way stays reported.
+`literal_form`, `source_form`, and the three authoring lints rewrite the
+specification value to preserve derivation behavior, so their authors
+correct them; no fix is offered. A
 comment `# yamaa-style: allow <name> -- <reason>` directly above a field or
 an entry suppresses that finding there.
 

@@ -29,7 +29,14 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   across every row template (group-key echoes like `STUDYID`/`USUBJID`,
   literals like `DOMAIN`, `PARAMCD` assignments) goes in
   `columns[].derivation`, never inside `rows:` derivations. Row templates
-  should be minimized for section level details. 
+  should be minimized for section level details. An `aggregate`, a window
+  derivation, a read through a named intermediate, or a driver read when
+  templates build from different datasets is row-phase dependent
+  and stays in its row template.
+- **Read the input dataset directly.** A named intermediate with no
+  `filter`, selection, custom key, or handler that changes behavior reads
+  what the implicit join already reads; qualify the input dataset where it
+  is read instead of aliasing it. 
 - **Declaration order is load-bearing.** A column must be declared after any
   column its derivation references.
 - **Ordered window chains stay in the dataset spec.** A later window derivation
@@ -42,8 +49,9 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   derived `adsl-yamaa.parquet` predecessor.
 - **Every column declares `label:`** 
 - **Write each spec in the specification style.** Field order, blank lines,
-  line width, and the canonical `{literal: X}` and bare-string source
-  spellings are fixed by the
+  line width, the canonical `{literal: X}` and bare-string source
+  spellings, and the three authoring lints (uniform derivations, redundant
+  intermediates, missing output-column labels) are fixed by the
   [style contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md).
   Run `python -m yamaa.style --fix <spec>.yaml` with the pinned yamaa, then
   correct what it reports; it exits nonzero while a finding remains.

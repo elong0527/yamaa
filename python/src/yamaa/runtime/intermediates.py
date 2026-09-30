@@ -287,7 +287,7 @@ def _window_eligibility(
     except PredicateError as error:
         return _condition(
             "invalid_predicate",
-            "REQ-0188",
+            error.requirement,
             {"predicate": predicate_text, "position": error.position},
             phase="validation",
         )

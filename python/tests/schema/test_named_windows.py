@@ -178,7 +178,7 @@ def test_unknown_reference_reports_use_site(tmp_path, definitions):
         load_specification(write_spec(tmp_path, value), SCHEMA)
     diagnostic = error.value.diagnostics[0]
     assert diagnostic.condition == "unknown_window"
-    assert diagnostic.spec_paths == ("columns[4].derivation.row_value.window",)
+    assert diagnostic.spec_paths == ("columns.PREV.derivation.row_value.window",)
     assert diagnostic.context == {"window": "VISITS"}
 
 

@@ -1,7 +1,7 @@
 # Benchmark prompt recipe
 
-Canonical recipe for writing a benchmark's `instruction.md`: the request an
-AI coding agent receives when the benchmark runs as an agent evaluation
+Canonical recipe for writing a benchmark's `prompt.md`: the request an AI
+coding agent receives when the benchmark runs as an agent evaluation
 (through Harbor). The agent gets this file and the benchmark's input
 datasets, nothing else, and its output datasets are graded cell by cell
 against the benchmark's golden files.
@@ -19,11 +19,11 @@ against the benchmark's golden files.
 - **Which benchmarks.** Positive `sdtm-*` and `adam-*` benchmarks whose
   README lifecycle is `reviewed` or `finalized`. `schema-*` benchmarks
   exercise the specification language and `negative-*` benchmarks have no
-  dataset to deliver, so neither gets an instruction.
+  dataset to deliver, so neither gets a prompt.
 - **Not yet.** Benchmarks whose golden includes warning or violation logs,
   that call a project function (`environment.yaml`), or that generate a
   document (`define.xml`) wait until the evaluation supports them.
-- **Where.** `benchmarks/<name>/instruction.md`, beside the README.
+- **Where.** `benchmarks/<name>/prompt.md`, beside the README.
 - **Worked examples.** `adam-adsl-age-group` (categories and codes),
   `adam-adae-death` (two inputs, precedence, ties), and `adam-adtte-dor`
   (three inputs, event and censoring rules, source tracing).
@@ -32,14 +32,13 @@ against the benchmark's golden files.
 
 | Sees | Never sees |
 |---|---|
-| `instruction.md`, verbatim | `README.md`, `spec*.yaml`, `expected/` |
+| `prompt.md`, verbatim | `README.md`, `spec*.yaml`, `expected/` |
 | `/app/input/`: the `input/` files | `run.py`, `run.R`, yamaa itself |
 | Python and R with common data packages | the internet (web search is off) |
 
 The agent, model, and model provider are chosen when the evaluation runs,
-so the same instruction must work unchanged for any of them. The
-instruction plus the input files must be enough to reproduce every golden
-cell.
+so the same prompt must work unchanged for any of them. The prompt plus
+the input files must be enough to reproduce every golden cell.
 
 ## 3. Structure
 
@@ -111,35 +110,35 @@ Write "has no value" for an empty golden cell.
 
 ## 5. Fairness review
 
-Before committing, review the instruction as the agent would read it:
+Before committing, review the prompt as the agent would read it:
 
 1. **Cover every golden cell.** Walk each derived column of the golden
-   file row by row. Every value must follow from the instruction, the
-   inputs, and ordinary CDISC practice. A value that needs an unstated
-   choice needs a sentence.
+   file row by row. Every value must follow from the prompt, the inputs,
+   and ordinary CDISC practice. A value that needs an unstated choice
+   needs a sentence.
 2. **Rule out a second reading.** If another plausible interpretation
    changes any golden cell, say which one applies. In `adam-adtte-dor`,
    censoring at "the last evaluable assessment before new therapy" would
-   move one subject's date, so the instruction says evaluable assessments
-   count whether they fall before or after new therapy.
+   move one subject's date, so the prompt says evaluable assessments count
+   whether they fall before or after new therapy.
 3. **Remove what no golden cell needs.**
 4. **Agree with the README.** Every `Variables:` bullet and the `Note:`
-   show up in the instruction, and nothing contradicts them.
+   show up in the prompt, and nothing contradicts them.
 5. **Keep it short.** Plain text with simple lists, straight quotes around
    literal values, prose wrapped at 79 columns, under about 40 lines.
 
 ## 6. Keep it in step
 
-Change `instruction.md` in the same change as any edit to that benchmark's
+Change `prompt.md` in the same change as any edit to that benchmark's
 README, inputs, or golden files.
 
 ## Checks to run before finishing
 
-Run from the repository root; both print nothing when the instructions
-are clean.
+Run from the repository root; both print nothing when the prompts are
+clean.
 
 ```bash
-awk 'length > 79 { print FILENAME ":" FNR }' benchmarks/*/instruction.md
+awk 'length > 79 { print FILENAME ":" FNR }' benchmarks/*/prompt.md
 ```
 
 ```bash
@@ -147,7 +146,7 @@ python3 - <<'PY'
 import glob, os, re
 banned = ("yamaa", "yaml", "spec", "schema", "handler", "verification",
           "derivation")
-for path in sorted(glob.glob("benchmarks/*/instruction.md")):
+for path in sorted(glob.glob("benchmarks/*/prompt.md")):
     folder = os.path.dirname(path)
     text = open(path).read()
     flat = " ".join(text.split())

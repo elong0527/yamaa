@@ -17,6 +17,7 @@ from yamaa.specification.schema import (
     normalize_specification,
     validate_specification,
 )
+from yamaa.specification.submission import validate_submission_metadata
 from yamaa.specification.value_metadata import validate_value_metadata
 
 
@@ -42,10 +43,8 @@ def load_specification(
             bundle,
             entry_document=document,
         )
-        # Row-level (value-level) submission metadata: data-independent checks.
-        value_diagnostics = validate_value_metadata(resolved.specification)
-        if value_diagnostics:
-            raise SpecificationError(value_diagnostics)
+        # resolve_specification already ran submission and value-metadata
+        # validation; reaching here means both passed.
         return LoadedSpecification(
             specification=resolved.specification,
             written_path=written_path,
@@ -74,10 +73,12 @@ def load_specification(
         ]
         raise SpecificationError(diagnostics) from error
 
-    # Row-level (value-level) submission metadata: data-independent checks.
+    # Column-level (REQ-0907) and row-level (REQ-1162..REQ-1168) checks.
+    submission_diagnostics = validate_submission_metadata(specification)
     value_diagnostics = validate_value_metadata(specification)
-    if value_diagnostics:
-        raise SpecificationError(value_diagnostics)
+    diagnostics = [*submission_diagnostics, *value_diagnostics]
+    if diagnostics:
+        raise SpecificationError(diagnostics)
 
     return LoadedSpecification(
         specification=specification,

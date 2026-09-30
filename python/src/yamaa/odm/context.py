@@ -389,6 +389,7 @@ class RuntimeContext:
                 "validation",
                 "invalid_predicate",
                 {"predicate": selector, "position": error.position},
+                requirement=error.requirement,
             )
         fields = self._fields(dataset)
         kept: list[dict[str, object]] = []

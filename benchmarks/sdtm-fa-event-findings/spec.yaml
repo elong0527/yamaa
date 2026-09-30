@@ -70,6 +70,7 @@ columns:
   - name: FASTRESC
     type: str
     label: Character Result/Finding in Std Format
+    derivation: FAORRES
 
   - name: FASTRESN
     type: float
@@ -128,7 +129,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
           expr: "ONLY(ODM.Value)"
-      FASTRESC: FAORRES
       FAORRESU: {literal: null}
       FASTRESN: {literal: null}
       FASTRESU: {literal: null}
@@ -183,7 +183,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"
           expr: "ONLY(ODM.Value)"
-      FASTRESC: FAORRES
       FAORRESU: {literal: null}
       FASTRESN: {literal: null}
       FASTRESU: {literal: null}

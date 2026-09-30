@@ -33,7 +33,7 @@ tracker, one work item per root cause.
                                                     # vectors, and the runtime it resolves in
         run.py                                      # run the entry spec
         run.R                                       # the R runner for the entry spec
-        instruction.md                              # agent evaluation request, sdtm-*/adam-* only
+        prompt.md                                   # agent evaluation prompt, sdtm-*/adam-* only
                                                     # (../automation/benchmark_prompt.md)
 
 Every positive benchmark carries `run.py`, the three-line snippet that runs
@@ -410,7 +410,7 @@ check reports is a variable the README does not explain.
 3. Add a row to the index table in `README.md`. Its `Derives` column copies
    the README title, which now carries no standard/domain prefix.
 4. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
-   `reviewed`, write its `instruction.md` to the
+   `reviewed`, write its `prompt.md` to the
    [benchmark prompt recipe](../automation/benchmark_prompt.md).
 5. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.

@@ -31,16 +31,38 @@ def _diagnostic(
     )
 
 
-def _derivation_kind(expression: HandledExpression) -> str:
+def _derivation_kind(
+    expression: HandledExpression, intermediate_ids: frozenset[str] = frozenset()
+) -> str:
     """Classify a row entry's derivation the way REQ-0897..REQ-0899 do."""
     operation = expression.value.operation
     if operation == "literal":
         return "literal"
     # REQ-0899: a bare `odm` copies the one record it identifies, as a bare
-    # `source` copies one value.
+    # `source` copies one value. A reference through a named intermediate
+    # joins and selects a record, so it computes rather than copies.
     if operation in ("source", "odm"):
+        if operation == "source" and _reads_intermediate(expression, intermediate_ids):
+            return "computed"
         return "source"
     return "computed"
+
+
+def _reads_intermediate(
+    expression: HandledExpression, intermediate_ids: frozenset[str]
+) -> bool:
+    """True when a bare `source` reads `<intermediate>.<column>`."""
+    if not intermediate_ids:
+        return False
+    root = expression.value.root
+    if not isinstance(root, dict) or set(root) != {"source"}:
+        return False
+    payload = root["source"]
+    variable: object = payload.get("variable") if isinstance(payload, dict) else payload
+    if not isinstance(variable, str) or "." not in variable:
+        return False
+    qualifier, _, _ = variable.partition(".")
+    return qualifier in intermediate_ids
 
 
 # REQ-0897..REQ-0899 applied to one row entry's derivation.
@@ -75,6 +97,7 @@ def validate_value_metadata(
     column_derivations = {
         column.name: column.derivation for column in specification.columns
     }
+    intermediate_ids = frozenset(item.id for item in specification.intermediates or [])
 
     # (column, testcd) -> first submission seen, for conflict detection.
     seen: dict[tuple[str, str], SubmissionColumn] = {}
@@ -151,7 +174,11 @@ def validate_value_metadata(
                 )
                 continue
 
-            kind = _derivation_kind(effective)
+            kind = _derivation_kind(effective, intermediate_ids)
+            if submission.origin is None:
+                # REQ-0918 for values is reported by submission metadata
+                # validation; skip refutation without an origin to read.
+                continue
             if submission.origin.type not in _ADMITTED_ORIGINS[kind]:
                 diagnostics.append(
                     _diagnostic(

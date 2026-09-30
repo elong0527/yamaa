@@ -3714,7 +3714,7 @@ class TestNamedWindows(unittest.TestCase):
         self.assertEqual(errors[0].condition, 'unknown_window')
         self.assertEqual(errors[0].context, {'window': 'RESPONSE_ORDER'})
         self.assertTrue(errors[0].path.endswith('.row_value.window'))
-        self.assertTrue(errors[0].path.startswith('spec.columns['))
+        self.assertTrue(errors[0].path.startswith('spec.columns.'))
 
     def test_unused_malformed_definition_is_not_discarded(self):
         for definition in ('RESPONSE_ORDER', {'ref': 'RESPONSE_ORDER'}, {'unknown': 1}):
