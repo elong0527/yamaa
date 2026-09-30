@@ -36,7 +36,18 @@ run is ranked here when it makes at least 1 attempt on each task at the
 tasks' own timeouts. Rows are ranked by pass rate (highest first), then
 cell accuracy (highest first), then cost (lowest first).
 
-No runs are recorded on this leaderboard yet.
+| # | Agent | Version | Model | Pass rate | Cell accuracy | Errors | Tokens in | Tokens out | Cost | Date | Tasks from | Run | Trials |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---:|
+| 1 | opencode | 1.18.33 | opencode-go/muse-spark-1.3-contributor | 100.0% | 100.0% | 0 | 242.6k | 6.6k | $0.010 | 2026-09-30 | ad99be33 | [muse-spark-1.3-dry-run-2026-09-30](results/muse-spark-1.3-dry-run-2026-09-30.json) | 3 |
+
+Each cell below is the task result and the share of golden cells the
+agent reproduced; with several attempts, the passes out of the attempts.
+
+| Benchmark | #1 `muse-spark-1.3-contributor` |
+|---|---|
+| [adam-adae-death-python](../../benchmarks/adam-adae-death/README.md) | **pass**, 100.0% |
+| [adam-adsl-age-group-python](../../benchmarks/adam-adsl-age-group/README.md) | **pass**, 100.0% |
+| [adam-adtte-dor-python](../../benchmarks/adam-adtte-dor/README.md) | **pass**, 100.0% |
 
 ## ADaM pilot (R)
 
@@ -53,7 +64,18 @@ ranked here when it makes at least 1 attempt on each task at the tasks'
 own timeouts. Rows are ranked by pass rate (highest first), then cell
 accuracy (highest first), then cost (lowest first).
 
-No runs are recorded on this leaderboard yet.
+| # | Agent | Version | Model | Pass rate | Cell accuracy | Errors | Tokens in | Tokens out | Cost | Date | Tasks from | Run | Trials |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---:|
+| 1 | opencode | 1.18.33 | opencode-go/muse-spark-1.3-contributor | 100.0% | 100.0% | 0 | 305.0k | 6.4k | $0.011 | 2026-09-30 | ad99be33 | [muse-spark-1.3-dry-run-2026-09-30](results/muse-spark-1.3-dry-run-2026-09-30.json) | 3 |
+
+Each cell below is the task result and the share of golden cells the
+agent reproduced; with several attempts, the passes out of the attempts.
+
+| Benchmark | #1 `muse-spark-1.3-contributor` |
+|---|---|
+| [adam-adae-death-r](../../benchmarks/adam-adae-death/README.md) | **pass**, 100.0% |
+| [adam-adsl-age-group-r](../../benchmarks/adam-adsl-age-group/README.md) | **pass**, 100.0% |
+| [adam-adtte-dor-r](../../benchmarks/adam-adtte-dor/README.md) | **pass**, 100.0% |
 
 ## Reading the results
 
