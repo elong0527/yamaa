@@ -181,10 +181,15 @@ Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
 
 Specification style is a separate step. The
 [style contract](../rules/specification/style.md) fixes one written form of
-a specification: field order, blank lines, a 79-column line width, and the
-canonical `{literal: X}` and bare-string source spellings. CI fails on any
+a specification: field order, blank lines, a 79-column line width, the
+canonical `{literal: X}` and bare-string source spellings, and three
+authoring lints (a uniform row-template derivation that belongs at column
+level, a named intermediate equivalent to the implicit join, and an output
+column without a label). CI fails on any
 style finding in a benchmark specification, and `--fix` applies the layout
-fixes it can prove leave the parsed value and the comments unchanged:
+fixes it can prove leave the parsed value and the comments unchanged.
+Authoring lints rewrite the specification value to preserve derivation
+behavior, so their authors correct them; no fix is offered:
 
 ```bash
 uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml

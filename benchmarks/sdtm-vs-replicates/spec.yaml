@@ -84,10 +84,12 @@ columns:
   - name: VSORRES
     type: str
     label: Result or Finding in Original Units
+    derivation: VSSTRESN
 
   - name: VSORRESU
     type: str
     label: Original Units
+    derivation: {literal: mmHg}
     verifications:
       allowed_values:
         values: [mmHg]
@@ -129,8 +131,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
           expr: "ONLY(ODM.Value)"
-      VSORRES: VSSTRESN
-      VSORRESU: {literal: mmHg}
       VSDRVFL: {literal: null}
 
   - id: diastolic
@@ -146,8 +146,6 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.DIABP'"
           expr: "ONLY(ODM.Value)"
-      VSORRES: VSSTRESN
-      VSORRESU: {literal: mmHg}
       VSDRVFL: {literal: null}
 
   # One mean row per subject, visit and test, over the readings present:
@@ -160,8 +158,6 @@ rows:
       VSSTRESN:
         aggregate:
           expr: "MEAN(ODM.Value)"
-      VSORRES: VSSTRESN
-      VSORRESU: {literal: mmHg}
       VSDRVFL: {literal: Y}
 
 verifications:

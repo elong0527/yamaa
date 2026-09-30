@@ -80,10 +80,12 @@ columns:
   - name: EVENTREPEAT
     type: int
     label: Collection event repeat
+    derivation: ODM.StudyEventRepeatKey
 
   - name: REPEATKEY
     type: int
     label: Medical history form repeat
+    derivation: ODM.ItemGroupRepeatKey
 
   # Checklist conditions in form order first, then volunteered conditions by
   # visit, visit repeat, and form repeat.
@@ -143,8 +145,6 @@ rows:
                   SCREENING: 1
                   BASELINE: 2
           - otherwise: {literal: 99}
-      EVENTREPEAT: ODM.StudyEventRepeatKey
-      REPEATKEY: ODM.ItemGroupRepeatKey
 
   # One record per non-blank free-text condition. SORTORD 4 places these
   # after the three checklist items; a visit other than SCREENING or
@@ -176,8 +176,6 @@ rows:
                   SCREENING: 1
                   BASELINE: 2
           - otherwise: {literal: 99}
-      EVENTREPEAT: ODM.StudyEventRepeatKey
-      REPEATKEY: ODM.ItemGroupRepeatKey
 
 verifications:
   - unique:

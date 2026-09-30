@@ -139,6 +139,104 @@ The mapping form remains the valid spelling where the shorthand does not
 apply: nested expression arguments, the `value` of a handled expression,
 and filtered sources written `{source: {variable: ..., ...}}`.
 
+### Authoring lints
+
+<a id="req-1288"></a>
+
+**REQ-1288.** A derivation identical in every row template belongs at
+column level. When two or more row templates derive the same column with
+the same derivation, the column has no column-level derivation, and the
+derivation is row-local, the check reports `repeated_row_derivation` at
+the first template's entry and suggests moving it to
+`columns[].derivation`. A derivation is row-local unless it uses a
+dataset-level operation (`aggregate` or a window operation), reads a named
+intermediate, or reads a column whose column-level derivation is not
+row-local ([REQ-1260](../specification/structure.md#req-1260)). Such
+derivations stay in their row template, where the row phase evaluates
+them, and are never reported. A derivation reading a driver dataset stays
+as well when the row templates build from different datasets: the driver
+read and the column-phase implicit join bind different records. Only a
+`literal` is driver-independent and reported across drivers. A column read
+by any row `filter` stays as well: a filter resolves only columns its own
+template derives. A single row
+template, a column derived in
+only some templates, differing derivations per template, and a column
+that already has a column-level default are also never reported.
+
+```yaml
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: DM}
+
+rows:
+  - id: first
+    derivations:
+      USUBJID: DM.USUBJID
+  - id: second
+    derivations:
+      USUBJID: DM.USUBJID
+```
+
+The `USUBJID` derivation above is reported: it is the same source in
+every template, uses no aggregate, window, or intermediate, and has no
+column-level default. Moving it to `columns[].derivation` makes it the
+row-phase default each template inherits. An `aggregate`, a window
+derivation, or a read through a named intermediate is row-phase dependent
+and stays where it is written.
+
+<a id="req-1289"></a>
+
+**REQ-1289.** A simple named intermediate equivalent to the implicit join
+is reported as `redundant_intermediate`. An intermediate with no `filter`,
+`between`, `order_by`, `keep`, `derivations`, `verifications`, or
+`columns`, with `no_match: null`, and with an explicit `key` that restates
+exactly the output `keys`, reads what `DATASET.COLUMN` already reads
+([REQ-0150](../operations/lookup.md#req-0150)). The check reports the
+intermediate's `id` and suggests reading the input dataset directly.
+An omitted `key` with `no_match: null` fails validation as
+`rename_only_intermediate`
+([REQ-1248](../operations/lookup.md#req-1248)) instead and is never a
+style finding; an intermediate without `no_match` requires a match the
+implicit join cannot state; a non-null `no_match` literal, a custom key,
+and a `SELF` intermediate all change behavior and are never reported. An
+unread intermediate is unused, not redundant, and is never reported.
+
+```yaml
+keys: [STUDYID, USUBJID]
+intermediates:
+  - id: ADSL1
+    dataset: ADSL
+    key: [STUDYID, USUBJID]
+    no_match: null
+```
+
+Read `ADSL.TRTSDTM` above instead of `ADSL1.TRTSDTM`. Before
+[yamaa #1485](https://github.com/elong0527/yamaa/issues/1485) fixed
+implicit-join indexing, a named intermediate was needed for performance
+(Pilot 3 ADLBC used `ADSL1` for that reason); after the fix the implicit
+join is indexed and the alias can be removed.
+
+<a id="req-1290"></a>
+
+**REQ-1290.** Every output column declares `label:`. A column named in
+`output.columns` and declared in the same file without a non-empty
+`label` is reported as `missing_label` at its `columns[]` entry. A column
+not declared in the same file, and any file with `parents`, is never
+reported: the label may come from a parent layer resolved under
+[Specification composition](composition.md). Labels do not change
+derivation behavior; they carry the reader-facing description a submission
+document is generated from.
+
+```yaml
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+```
+
 ### Fixes
 
 <a id="req-1286"></a>
@@ -154,7 +252,10 @@ fixed file parses under the YAML 1.2 core schema to the same value, with
 the same types, as the file before it, carries the same comment lines, and
 does not change when it is fixed again. Otherwise the file stays as written
 and the finding stays reported. A `literal_form` or `source_form` finding
-changes the spelling of a value, and its author corrects it.
+changes the spelling of a value, and its author corrects it. A
+`repeated_row_derivation`, `redundant_intermediate`, or `missing_label`
+finding rewrites the specification value to preserve derivation behavior,
+and its author corrects it; no fix is offered.
 
 ### Suppression
 

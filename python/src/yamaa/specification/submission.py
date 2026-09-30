@@ -109,13 +109,37 @@ _ADMITTED_ORIGINS: dict[str, frozenset[str]] = {
 }
 
 
-def _derivation_kind(expression: HandledExpression) -> str:
+def _derivation_kind(
+    expression: HandledExpression, intermediate_ids: frozenset[str] = frozenset()
+) -> str:
     operation = expression.value.operation
     if operation == "literal":
         return "literal"
     if operation in ("source", "odm"):
+        # REQ-0899 copies one value of one declared dataset. A reference
+        # through a named intermediate joins and selects a record, so it
+        # computes rather than copies.
+        if operation == "source" and _reads_intermediate(expression, intermediate_ids):
+            return "computed"
         return "source"
     return "computed"
+
+
+def _reads_intermediate(
+    expression: HandledExpression, intermediate_ids: frozenset[str]
+) -> bool:
+    """True when a bare `source` reads `<intermediate>.<column>`."""
+    if not intermediate_ids:
+        return False
+    root = expression.value.root
+    if not isinstance(root, dict) or set(root) != {"source"}:
+        return False
+    payload = root["source"]
+    variable: object = payload.get("variable") if isinstance(payload, dict) else payload
+    if not isinstance(variable, str) or "." not in variable:
+        return False
+    qualifier, _, _ = variable.partition(".")
+    return qualifier in intermediate_ids
 
 
 def _verification_root(verification: Any) -> Any:
@@ -201,6 +225,7 @@ def validate_submission_metadata(
     for row in specification.rows or []:
         for name, derivation in (row.derivations or {}).items():
             row_derivations.setdefault(name, []).append(derivation)
+    intermediate_ids = frozenset(item.id for item in specification.intermediates or [])
 
     for column in specification.columns:
         name = column.name
@@ -423,7 +448,9 @@ def validate_submission_metadata(
             )
 
         # REQ-0897..REQ-0900 / REQ-0922: the graph refutes contradicting origins.
-        admitted = _admitted_for_column(column, row_derivations.get(name, []))
+        admitted = _admitted_for_column(
+            column, row_derivations.get(name, []), intermediate_ids
+        )
         if admitted is not None:
             if not admitted:
                 diagnostics.append(
@@ -505,6 +532,7 @@ def validate_submission_metadata(
 def _admitted_for_column(
     column: Any,
     row_derivations: list[HandledExpression],
+    intermediate_ids: frozenset[str] = frozenset(),
 ) -> frozenset[str] | None:
     """Return origins the derivation graph admits, or None when unknown.
 
@@ -513,13 +541,13 @@ def _admitted_for_column(
     if row_derivations:
         admitted: frozenset[str] | None = None
         for derivation in row_derivations:
-            kinds = _ADMITTED_ORIGINS[_derivation_kind(derivation)]
+            kinds = _ADMITTED_ORIGINS[_derivation_kind(derivation, intermediate_ids)]
             admitted = kinds if admitted is None else admitted & kinds
         return admitted if admitted is not None else frozenset()
     derivation = getattr(column, "derivation", None)
     if derivation is None:
         return None
-    return _ADMITTED_ORIGINS[_derivation_kind(derivation)]
+    return _ADMITTED_ORIGINS[_derivation_kind(derivation, intermediate_ids)]
 
 
 __all__ = ["validate_submission_metadata"]

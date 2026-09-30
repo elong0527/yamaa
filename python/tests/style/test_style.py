@@ -502,3 +502,304 @@ def test_every_finding_is_named_by_its_contract_requirement() -> None:
         )
         assert match is not None, requirement
         assert f"`{name}`" in match[1], (name, requirement)
+
+
+REPEATED = """\
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, DOMAIN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+
+rows:
+  - id: a
+    derivations:
+      STUDYID: DM.STUDYID
+      USUBJID: DM.USUBJID
+      DOMAIN: {literal: DM}
+
+  - id: b
+    derivations:
+      STUDYID: DM.STUDYID
+      USUBJID: DM.USUBJID
+      DOMAIN: {literal: DM}
+"""
+
+
+def test_repeated_row_derivations_move_to_column_level(
+    tmp_path: Path,
+) -> None:
+    path = _spec(tmp_path, REPEATED)
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("repeated_row_derivation", "rows[0].derivations.STUDYID", "REQ-1288"),
+        ("repeated_row_derivation", "rows[0].derivations.USUBJID", "REQ-1288"),
+        ("repeated_row_derivation", "rows[0].derivations.DOMAIN", "REQ-1288"),
+    ]
+    first = findings[0]
+    assert (first.line, first.column) == (27, 7)
+    assert "move it to columns[].derivation" in first.message
+    assert first.render().startswith(f"{path}:27:7: repeated_row_derivation ")
+    # REQ-1286: authoring lints rewrite the value, so no fix is offered.
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is False
+    assert [item.name for item in remaining] == [
+        "repeated_row_derivation",
+        "repeated_row_derivation",
+        "repeated_row_derivation",
+    ]
+
+
+def test_repeated_row_derivation_needs_every_template(tmp_path: Path) -> None:
+    partial = REPEATED.replace(
+        "  - id: b\n    derivations:\n      STUDYID: DM.STUDYID\n",
+        "  - id: b\n    derivations:\n",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, partial), orders=ORDERS)
+    ]
+    # STUDYID is derived in only one template, so it stays; USUBJID and
+    # DOMAIN are still uniform and still reported.
+    assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") not in names
+    assert ("repeated_row_derivation", "rows[0].derivations.USUBJID") in names
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") in names
+
+
+def test_repeated_row_derivation_skips_row_phase_work(tmp_path: Path) -> None:
+    aggregate = REPEATED.replace(
+        "      DOMAIN: {literal: DM}\n\n  - id: b",
+        "      DOMAIN:\n        aggregate:\n"
+        '          filter: "DM.X = 1"\n'
+        '          expr: "ONLY(DM.Y)"\n\n  - id: b',
+    ).replace(
+        "      DOMAIN: {literal: DM}\n",
+        "      DOMAIN:\n        aggregate:\n"
+        '          filter: "DM.X = 1"\n'
+        '          expr: "ONLY(DM.Y)"\n',
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, aggregate), orders=ORDERS)
+    ]
+    # STUDYID and USUBJID stay row-local and stay reported; the aggregate
+    # is row-phase dependent and stays where it is written.
+    assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") in names
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in names
+    intermediate = REPEATED.replace(
+        "output:\n  path: dm.csv",
+        "intermediates:\n  - id: PICK\n    dataset: DM\n"
+        '    filter: "DM.X = 1"\n    no_match: null\n\noutput:\n  path: dm.csv',
+    ).replace("DOMAIN: {literal: DM}", "DOMAIN: PICK.X")
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, intermediate), orders=ORDERS)
+    ]
+
+
+def test_repeated_row_derivation_skips_existing_defaults(
+    tmp_path: Path,
+) -> None:
+    defaulted = REPEATED.replace(
+        "  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n",
+        "  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n"
+        "    derivation: {literal: DM}\n",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, defaulted), orders=ORDERS)
+    ]
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in names
+    assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") in names
+
+
+def test_repeated_row_derivation_skips_mixed_drivers_except_literals(
+    tmp_path: Path,
+) -> None:
+    mixed = REPEATED.replace(
+        "  - id: b\n    derivations:",
+        "  - id: b\n    dataset: OTHER\n    derivations:",
+    ).replace(
+        "input:\n  DM: input/dm.csv",
+        "input:\n  DM: input/dm.csv\n  OTHER: input/other.csv",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, mixed), orders=ORDERS)
+    ]
+    # A source read binds different records per driver, so it stays;
+    # a literal is driver-independent and is still reported.
+    assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") not in names
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") in names
+
+
+def test_repeated_row_derivation_skips_columns_read_by_a_filter(
+    tmp_path: Path,
+) -> None:
+    filtered = REPEATED.replace(
+        "  - id: a\n    derivations:",
+        "  - id: a\n    filter: \"DOMAIN = 'DM'\"\n    derivations:",
+    ).replace(
+        "  - id: b\n    derivations:",
+        "  - id: b\n    filter: \"DOMAIN = 'DM'\"\n    derivations:",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, filtered), orders=ORDERS)
+    ]
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in names
+    assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") in names
+
+
+REDUNDANT = """\
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  ADSL: input/adsl.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+intermediates:
+  - id: ADSL1
+    dataset: ADSL
+    key: [STUDYID, USUBJID]
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL1.AGE
+"""
+
+
+def test_redundant_intermediate_reads_the_dataset_directly(
+    tmp_path: Path,
+) -> None:
+    path = _spec(tmp_path, REDUNDANT)
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("redundant_intermediate", "intermediates[0]", "REQ-1289"),
+    ]
+    assert findings[0].message == (
+        "intermediate `ADSL1` reads exactly what the implicit join to `ADSL` "
+        "reads; read `ADSL` directly"
+    )
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is False
+    assert [item.name for item in remaining] == ["redundant_intermediate"]
+
+
+def test_redundant_intermediate_keeps_narrowing_lookups(
+    tmp_path: Path,
+) -> None:
+    filtered = REDUNDANT.replace(
+        "    key: [STUDYID, USUBJID]\n    no_match: null",
+        "    key: [STUDYID, USUBJID]\n"
+        "    filter: \"ADSL.EFFFL = 'Y'\"\n    no_match: null",
+    )
+    assert _names(_spec(tmp_path, filtered)) == []
+    custom = REDUNDANT.replace(
+        "    key: [STUDYID, USUBJID]",
+        "    key: [USUBJID]",
+    )
+    assert _names(_spec(tmp_path, custom)) == []
+    required = REDUNDANT.replace("\n    no_match: null", "")
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, required))
+    rename_only = REDUNDANT.replace(
+        "    key: [STUDYID, USUBJID]\n    no_match: null", "    no_match: null"
+    )
+    # REQ-1248 owns the omitted-key rename; style stays silent.
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, rename_only))
+
+
+MISSING_LABEL = """\
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: AGE
+    type: int
+    derivation: DM.AGE
+"""
+
+
+def test_missing_output_column_labels(tmp_path: Path) -> None:
+    path = _spec(tmp_path, MISSING_LABEL)
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("missing_label", "columns[1]", "REQ-1290"),
+    ]
+    assert findings[0].message == ("output column `AGE` has no label; declare `label:`")
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is False
+    assert [item.name for item in remaining] == ["missing_label"]
+
+
+def test_missing_label_skips_internal_and_inherited_columns(
+    tmp_path: Path,
+) -> None:
+    internal = MISSING_LABEL.replace(
+        "  columns: [STUDYID, AGE]",
+        "  columns: [STUDYID]",
+    )
+    assert _names(_spec(tmp_path, internal)) == []
+    inherited = MISSING_LABEL.replace(
+        'schema_version: "1.0"\ndomain: ADSL',
+        'schema_version: "1.0"\nparents: base.yaml\ndomain: ADSL',
+    )
+    assert "missing_label" not in _names(_spec(tmp_path, inherited))
+
+
+def test_authoring_suppression_with_a_reason_covers_its_entry(
+    tmp_path: Path,
+) -> None:
+    text = REPEATED.replace(
+        "  - id: a",
+        "  # yamaa-style: allow repeated_row_derivation -- reviewed row scope\n"
+        "  - id: a",
+    )
+    assert _names(_spec(tmp_path, text)) == []
