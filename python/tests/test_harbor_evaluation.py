@@ -53,8 +53,8 @@ def _grade(tmp_path: Path, benchmark: str, columns, rows, trajectory=None) -> di
 
 
 @pytest.mark.parametrize("benchmark", PILOTS)
-def test_every_pilot_has_an_instruction(benchmark):
-    assert (ROOT / "benchmarks" / benchmark / "instruction.md").is_file()
+def test_every_pilot_has_a_prompt(benchmark):
+    assert (ROOT / "benchmarks" / benchmark / "prompt.md").is_file()
 
 
 @pytest.mark.parametrize("benchmark", PILOTS)
@@ -210,7 +210,7 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
         assert config.agent.allowed_hosts == []
         assert config.verifier.environment.network_mode.value == "no-network"
         assert (task / "instruction.md").read_text() == (
-            ROOT / "benchmarks" / task.name / "instruction.md"
+            ROOT / "benchmarks" / task.name / "prompt.md"
         ).read_text()
     config = build.job_config(
         tasks,

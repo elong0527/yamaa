@@ -105,7 +105,7 @@ def render(results: list[dict]) -> str:
         "",
         "How well AI coding agents turn a benchmark's request and input datasets",
         "into the requested dataset. Each agent gets only the benchmark's",
-        "`instruction.md` and its input files, in a sandbox that reaches nothing",
+        "`prompt.md` and its input files, in a sandbox that reaches nothing",
         "but the model API, and its output is graded cell by cell against the",
         "benchmark's golden file. A task passes when every cell matches.",
         f"[The evaluation]({REPOSITORY}/evaluations/harbor/README.md) runs on",

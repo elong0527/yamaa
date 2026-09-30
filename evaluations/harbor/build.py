@@ -1,10 +1,10 @@
 """Build Harbor tasks and a job file from yamaa benchmarks.
 
-Every benchmark with an `instruction.md` becomes one Harbor task:
+Every benchmark with a `prompt.md` becomes one Harbor task:
 
     <out>/tasks/<benchmark>/            <out> is ~/.cache/yamaa-harbor
       task.toml            deny-all network; the job adds the model API host
-      instruction.md       copied verbatim from the benchmark
+      instruction.md       the benchmark's prompt.md, verbatim
       environment/         FROM the base image, plus the benchmark's input/
       tests/               grade.py, contract.json and the golden files,
                            built into the separate verifier image
@@ -185,7 +185,7 @@ def build_task(benchmark: Path, tasks: Path, image: str, commit: str) -> Path:
 
     task_text = task_toml(benchmark.name, readme_tags(readme), domain, commit)
     (task / "task.toml").write_text(task_text)
-    shutil.copyfile(benchmark / "instruction.md", task / "instruction.md")
+    shutil.copyfile(benchmark / "prompt.md", task / "instruction.md")
 
     shutil.copytree(benchmark / "input", task / "environment" / "input")
     (task / "environment" / "Dockerfile").write_text(
@@ -289,7 +289,7 @@ def job_config(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--benchmarks", nargs="*", help="default: every instruction")
+    parser.add_argument("--benchmarks", nargs="*", help="default: every prompt")
     parser.add_argument("--model", required=True, help="provider/model")
     parser.add_argument("--api-host", help="model API host, for other providers")
     parser.add_argument("--key-env", help="API key variable, for other providers")
@@ -302,7 +302,7 @@ def main() -> None:
     args = parser.parse_args()
 
     names = args.benchmarks or sorted(
-        p.parent.name for p in BENCHMARKS.glob("*/instruction.md")
+        p.parent.name for p in BENCHMARKS.glob("*/prompt.md")
     )
     commit = git_commit()
     tasks_dir = args.out.resolve() / "tasks"

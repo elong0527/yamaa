@@ -1,7 +1,7 @@
 # Agent evaluation with Harbor
 
 Runs yamaa benchmarks as agent evaluations: an AI coding agent gets a
-benchmark's `instruction.md` and its input datasets, writes the requested
+benchmark's `prompt.md` and its input datasets, writes the requested
 dataset, and is graded cell by cell against the benchmark's golden file.
 [Harbor](https://github.com/harbor-framework/harbor) runs the agent in
 Docker; this folder only writes Harbor task directories and a job file.
@@ -9,17 +9,17 @@ Docker; this folder only writes Harbor task directories and a job file.
 | File | Role |
 |---|---|
 | `Dockerfile` | the base image: Python and R with data packages, OpenCode's offline settings |
-| `build.py` | benchmarks with an `instruction.md` -> Harbor tasks and `job.json` |
+| `build.py` | benchmarks with a `prompt.md` -> Harbor tasks and `job.json` |
 | `grade.py` | the verifier, copied into every task's `tests/` |
 | `leaderboard.py` | recorded runs (`results/`) -> the site's leaderboard page |
 | `results/` | recorded agent runs, one file per Harbor job |
 
-How to write an instruction is in
+How to write a prompt is in
 [`automation/benchmark_prompt.md`](../../automation/benchmark_prompt.md).
 
 ## What a run enforces
 
-- **The agent sees only the instruction and `/app/input/`.** Specifications,
+- **The agent sees only the prompt and `/app/input/`.** Specifications,
   READMEs, and golden files never enter its container; the golden files
   live in `tests/`, which Harbor builds into a separate verifier image.
 - **Closed book.** While the agent works, only the model API host is
