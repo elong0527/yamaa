@@ -152,6 +152,10 @@ def validate_value_metadata(
                 continue
 
             kind = _derivation_kind(effective)
+            if submission.origin is None:
+                # REQ-0918 for values is reported by submission metadata
+                # validation; skip refutation without an origin to read.
+                continue
             if submission.origin.type not in _ADMITTED_ORIGINS[kind]:
                 diagnostics.append(
                     _diagnostic(

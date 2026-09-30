@@ -246,7 +246,12 @@ class SubmissionColumn(_StrictModel):
     significant_digits: int | None = None
     display_format: str | None = None
     codelist: str | None = None
-    origin: SubmissionOrigin
+    # REQ-1156: vocabulary naming the study's dataset inventory.
+    inventory_vocabulary: bool | None = None
+    # REQ-0887: required when submission metadata is present, but optional
+    # in the model so validation reports `origin_missing` (REQ-0918)
+    # rather than a shape failure.
+    origin: SubmissionOrigin | None = None
     method: SubmissionMethod | None = None
     comment: SubmissionComment | None = None
 

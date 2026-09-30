@@ -107,6 +107,7 @@ conditions:
   qualified_identifier: {phases: [validation]}
   range_failed: {phases: [verification]}
   redundant_field_type: {phases: [validation]}
+  reference_data_repeating_conflict: {phases: [validation]}
   regex_group_out_of_range: {phases: [validation]}
   rename_only_intermediate: {phases: [validation]}
   reserved_metadata_key: {phases: [validation]}
@@ -136,9 +137,11 @@ conditions:
   source_text_after_quote: {phases: [ingest]}
   sqrt_of_negative: {phases: [derivation]}
   submission_data_type_not_admitted: {phases: [validation]}
+  submission_length_invalid: {phases: [validation]}
   submission_length_missing: {phases: [validation]}
   submission_length_not_applicable: {phases: [validation]}
   submission_metadata_missing: {phases: [validation]}
+  submission_not_output_column: {phases: [validation]}
   undeclared_column: {phases: [validation]}
   ungrouped_driver_field: {phases: [validation]}
   unique_failed: {phases: [verification]}
