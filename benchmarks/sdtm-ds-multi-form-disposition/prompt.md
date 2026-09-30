@@ -1,0 +1,23 @@
+Following CDISC SDTM standards, use the provided ODM dataset to create
+a DS dataset with one record per subject per study event: informed
+consent, randomization, end of treatment, and end of study.
+
+The output dataset should contain the following columns in this order:
+DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC
+
+USUBJID is the study and subject identifiers with a hyphen between
+them. Each collected form gives one record, and an event with no form
+gives none. Consent gives DSTERM and DSDECOD INFORMED CONSENT OBTAINED;
+randomization gives RANDOMIZED. Both are protocol milestones, with
+DSSCAT INFORMED CONSENT and RANDOMIZATION. End of treatment gives
+COMPLETED when the completion status says so, else the collected reason
+with the collected standardized reason; DSSCAT is END OF TREATMENT. End
+of study gives COMPLETED when completed, SCREEN FAILURE when the status
+says so, else the collected reason with the collected standardized
+reason; DSSCAT is END OF STUDY. End-of-treatment and end-of-study
+records are disposition events. DSSTDTC is the collected date for that
+record. DSSEQ numbers each subject's records in the order they
+happened, by date and then by reported term.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/ds.csv.
