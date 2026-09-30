@@ -15,9 +15,9 @@ PREV_AVAL is the value of the visit just before in visit order, for
 the same subject. It has no value on the subject's first visit.
 
 CHG is the change since that visit, not the change from baseline; it
-has no value whenever PREV_AVAL has none. PREV2 is the previous
-visit's change, read after that change is complete; it has no value
-until two earlier visits carry results.
+has no value whenever PREV_AVAL has none. PREV2 is the CHG of the
+previous visit; it has no value until two earlier visits carry
+results.
 
 A record with no numeric result gets no row, so the change and its lag
 compare against the latest earlier visit with a result. A zero change

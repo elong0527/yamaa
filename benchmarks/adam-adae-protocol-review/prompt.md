@@ -15,7 +15,8 @@ otherwise:
   or the collected start datetime falls at or after 09:30 on
   1 February 2025;
 - the reported term begins with the literal text INF_, where the
-  underscore is a literal character, so INFXREACTION does not match;
+  underscore is a literal character, so a term with any other character
+  in that position does not match;
 - the protocol review score is -1.5 or higher.
 An event with neither a start date nor a start datetime known is N.
 

@@ -7,10 +7,10 @@ TRTSDT, TRTEMFL
 
 ASTDT is the analysis start date. A fully collected date is used as it
 stands. A collected year and month is completed to the 15th. A year
-alone, non-date text, and a missing value give no analysis date.
-ASTDTC is the same analysis date written as text, and has no value
-when there is no analysis date. ASTDTF is D when the day was supplied
-to complete the date, and has no value otherwise.
+alone, non-date text, and a missing value give no analysis date. ASTDTC
+is the same analysis date written as YYYY-MM-DD text, and has no value
+when there is no analysis date. ASTDTF is D when the day was supplied to
+complete the date, and has no value otherwise.
 
 A completed date is never placed before first exposure. When the 15th
 would fall before TRTSDT, the date moves forward to the exposure date.

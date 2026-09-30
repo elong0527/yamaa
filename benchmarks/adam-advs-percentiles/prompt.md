@@ -12,10 +12,12 @@ measurement, with PARAM "BMI-for-Age Percentile" and
 "Weight-for-Age Percentile" to match.
 
 AVAL is the growth percentile for the collected result against the
-reference coefficients matched on measurement code, sex, and age in
-days, expressed as a percentage. A measurement with no matching
-reference row, or with no collected result, leaves AVAL with no value.
-A collected result exactly at the reference median gives 50.
+reference coefficients L, M, and S matched on measurement code, sex,
+and age in days: 100 times the standard normal cumulative probability
+of the LMS z-score ((result / M) ^ L - 1) / (L * S), not rounded. A
+measurement with no matching reference row, or with no collected
+result, leaves AVAL with no value. A collected result exactly at the
+reference median gives 50.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/advs.csv.

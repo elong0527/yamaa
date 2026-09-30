@@ -5,19 +5,14 @@ including one total record per subject and visit.
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, DTYPE
 
-Keep each collected component record with its test name and result,
-with DTYPE empty. A component with no collected result contributes
-nothing.
+Keep every collected component record with its test code and name,
+visit, and result; DTYPE has no value on these records. A component with
+no collected result is still kept, and its AVAL has no value.
 
 Add one total record per subject and visit with PARAMCD "TOTAL", PARAM
-Total of Components, and DTYPE CALCULATION. Its value is the component
-results added in the order the source records were stored; a subject
-and visit with no collected results at all leaves the total empty
-rather than zero.
-
-Binary floating-point addition makes the total sensitive to that
-order: records stored as 0.1, 0.2, 0.3 total 0.6000000000000001,
-while the same values stored as 0.3, 0.2, 0.1 total 0.6.
+"Total of Components", and DTYPE "CALCULATION". Its AVAL is the sum of
+the collected component results at that subject and visit; it has no
+value, rather than zero, when none of them has a collected result.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adlb.csv.

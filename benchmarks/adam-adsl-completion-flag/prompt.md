@@ -7,9 +7,7 @@ STUDYID, USUBJID, TRTSDT, COMPLFL
 COMPLFL is Y when the subject has a disposition event in the study
 (FOLLOW-UP) epoch with standardized outcome COMPLETED; N otherwise. A
 subject whose records carry only other outcomes, such as ADVERSE
-EVENT, and a subject with no disposition record at all, are both N. A
-subject with two such completion records stops the run rather than
-being flagged.
+EVENT, and a subject with no disposition record at all, are both N.
 
 The flag answers whether an end-of-study completion record exists, not
 whether its collection date was filled in or how an earlier period

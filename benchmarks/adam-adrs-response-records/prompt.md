@@ -8,8 +8,8 @@ ANL01FL
 
 Only assessments the investigator scored as overall response leave a
 record; a target-lesion assessment and an independent assessor
-assessment leave none. Use PARAMCD "OVR" and PARAM Overall Response by
-Investigator.
+assessment leave none. Use PARAMCD "OVR" and PARAM
+"Overall Response by Investigator".
 
 RSDTC is the collected assessment date as recorded. ADT is the
 completed analysis date: a fully collected date is used as it stands,
