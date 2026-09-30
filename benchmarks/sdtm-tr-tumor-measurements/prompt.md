@@ -14,16 +14,16 @@ TO MEASURE, a state such as PRESENT, or has no value when the lesion was
 not assessed. TRORRESU is the unit exactly as collected (mm or cm for a
 diameter), and has no value otherwise.
 
-TRSTRESC is the diameter in mm written as text, 5 for a lesion too small
-to measure, or a lesion state kept as collected; it has no value when the
-lesion was not assessed. TRSTRESN is the diameter in mm as a number (a
-value collected in cm is reported in mm), or 5 for a lesion too small to
-measure; it has no value for lesion states and for lesions not assessed.
-TRSTRESU is mm whenever a standardized numeric result exists, and has no
-value otherwise. TRSTAT is NOT DONE for a lesion not assessed at a visit,
-and has no value otherwise. TRMETHOD, TREVAL, and VISITNUM are as
-collected; TRDTC is the assessment date as collected, and has no value
-when the lesion was not assessed.
+TRSTRESC is the diameter in mm written as text (a whole number has no
+decimal point), 5 for a lesion too small to measure, or a lesion state
+kept as collected; it has no value when the lesion was not assessed.
+TRSTRESN is the diameter in mm as a number (a value collected in cm is
+multiplied by 10), or 5 for a lesion too small to measure; it has no value
+for lesion states and for lesions not assessed. TRSTRESU is mm whenever a
+standardized numeric result exists, and has no value otherwise. TRSTAT is
+NOT DONE for a lesion not assessed at a visit, and has no value otherwise.
+TRMETHOD, TREVAL, and VISITNUM are as collected; TRDTC is the assessment
+date as collected, and has no value when the lesion was not assessed.
 
 A lymph-node target lesion contributes its short axis as its diameter. A
 lesion too small to measure is not a zero: it takes the study convention

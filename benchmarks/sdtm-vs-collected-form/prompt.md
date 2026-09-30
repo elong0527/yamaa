@@ -19,14 +19,15 @@ no result was collected. VSSTRESN is the numeric result in the standard
 unit; the form already collects standard units, so it equals the collected
 result, and has no value when no result was collected. VSSTRESC is the
 same standardized value written as text, so it always agrees with the
-numeric result. VSSTRESU is the standard unit, equal to the collected
-unit, and has no value when no result was collected. VSPOS is the body
-position as collected (SITTING) on blood pressure and pulse records with a
-collected result, and has no value otherwise. VSMETHOD is the measurement
-method as collected (ORAL) on temperature records with a collected result,
-and has no value otherwise. VSSTAT is NOT DONE when the form flags blood
-pressure as not done, and has no value otherwise; VSREASND is the reason
-the form gives, and has no value otherwise.
+numeric result; a whole number is written without a decimal point.
+VSSTRESU is the standard unit, equal to the collected unit, and has no
+value when no result was collected. VSPOS is the body position as
+collected (SITTING) on blood pressure and pulse records with a collected
+result, and has no value otherwise. VSMETHOD is the measurement method as
+collected (ORAL) on temperature records with a collected result, and has
+no value otherwise. VSSTAT is NOT DONE when the form flags blood pressure
+as not done, and has no value otherwise; VSREASND is the reason the form
+gives, and has no value otherwise.
 
 A not-done blood pressure still produces its two records so the reason is
 kept, but they carry no result, unit, position, or standardized value.

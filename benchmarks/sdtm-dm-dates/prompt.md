@@ -16,10 +16,10 @@ participated: the latest of the last exposure end date, the latest
 disposition event date, and the latest adverse event end date. A missing
 one is skipped, and it has no value only when all three are. Only
 disposition rows in the DISPOSITION EVENT category count. RFENDTC is
-the reference end date; it has no value whenever RFSTDTC does, so a
-subject who never entered the reference period has no end date.
-Exposure, disposition, and adverse event rows count only for the subject
-with the same study and subject identifiers.
+the reference end date, taken here as RFPENDTC; it has no value whenever
+RFSTDTC does, so a subject who never entered the reference period has no
+end date. Exposure, disposition, and adverse event rows count only for
+the subject with the same study and subject identifiers.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/dm.csv.
