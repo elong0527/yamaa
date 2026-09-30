@@ -2351,6 +2351,9 @@ requirements:
   REQ-1285: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:line-width"]}
   REQ-1286: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:style-fixes"]}
   REQ-1287: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:style-suppression"]}
+  REQ-1288: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:repeated-row-derivation"]}
+  REQ-1289: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:redundant-intermediate"]}
+  REQ-1290: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:missing-label"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2894,3 +2897,6 @@ provenance_addenda:
   - {"source": "yamaa:issue-1510:line-width", "text": "Issue #1510: A line holds at most 79 characters; flow lists and quoted or plain scalars may continue on following lines.", "owner": "specification/style", "group": "specification-style", "target": "REQ-1285"}
   - {"source": "yamaa:issue-1510:style-fixes", "text": "Issue #1510: A style fix only relays out lines and is kept only when the value, its types, and the comment lines are unchanged and a second fix changes nothing.", "owner": "specification/style", "group": "specification-style", "target": "REQ-1286"}
   - {"source": "yamaa:issue-1510:style-suppression", "text": "Issue #1510: A yamaa-style allow comment with a reason suppresses the named findings within the field or entry below it; an invalid one is reported as invalid_suppression.", "owner": "specification/style", "group": "specification-style", "target": "REQ-1287"}
+  - {"source": "yamaa:issue-1510:repeated-row-derivation", "text": "Issue #1510: A derivation identical in every row template belongs at column level when row-local; aggregates, windows, intermediate reads, non-row-local column reads, and driver reads across different drivers stay in their row template.", "owner": "specification/style", "group": "specification-style", "target": "REQ-1288"}
+  - {"source": "yamaa:issue-1510:redundant-intermediate", "text": "Issue #1510: A simple named intermediate equivalent to the implicit join is reported; filters, selections, custom keys, handlers that change behavior, SELF, and unread intermediates are never reported.", "owner": "specification/style", "group": "specification-style", "target": "REQ-1289"}
+  - {"source": "yamaa:issue-1510:missing-label", "text": "Issue #1510: Every output column declares label; columns not declared in the same file and files with parents are never reported.", "owner": "specification/style", "group": "specification-style", "target": "REQ-1290"}

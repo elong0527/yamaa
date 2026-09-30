@@ -38,6 +38,7 @@ columns:
   - name: FORM
     type: str
     label: Procedure Form as Collected
+    derivation: ODM.ItemGroupOID
 
   - name: PRTRT
     type: str
@@ -114,7 +115,6 @@ rows:
                ODM.ItemGroupRepeatKey]
     filter: "FORM = 'IG.PR.SURGERY'"
     derivations:
-      FORM: ODM.ItemGroupOID
       PRTRT:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRTRT'"
@@ -148,7 +148,6 @@ rows:
                ODM.ItemGroupRepeatKey]
     filter: "FORM = 'IG.PR.RADIOTHERAPY'"
     derivations:
-      FORM: ODM.ItemGroupOID
       PRTRT:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRTRT'"

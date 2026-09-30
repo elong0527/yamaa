@@ -25,6 +25,9 @@ FINDINGS: Mapping[str, str] = {
     "literal_form": "REQ-1250",
     "source_form": "REQ-1255",
     "invalid_suppression": "REQ-1287",
+    "repeated_row_derivation": "REQ-1288",
+    "redundant_intermediate": "REQ-1289",
+    "missing_label": "REQ-1290",
 }
 
 # REQ-1283 separates the entries of these root lists.
@@ -108,6 +111,12 @@ def check(document: Document, orders: Mapping[str, Sequence[str]]) -> list[Depar
     found.extend(_line_width(document, paths))
     found.extend(_literal_form(document))
     found.extend(_source_form(document))
+    # REQ-1288 to REQ-1290 read the specification value; they stay silent
+    # when the file has no value (invalid YAML) and never change it.
+    # Imported lazily so the layout checks remain usable on their own.
+    from yamaa.style._authoring import check_authoring
+
+    found.extend(check_authoring(document))
     return sorted(found, key=lambda item: (item.line, item.column, item.name))
 
 
