@@ -89,7 +89,9 @@ def test_rejects_unadmitted_data_type(tmp_path: Path) -> None:
     )
     source = path.read_text(encoding="ascii")
     path.write_text(
-        source.replace("      length: 2\n", "      data_type: integer\n      length: 2\n", 1),
+        source.replace(
+            "      length: 2\n", "      data_type: integer\n      length: 2\n", 1
+        ),
         encoding="ascii",
     )
 
@@ -102,7 +104,11 @@ def test_rejects_unadmitted_data_type(tmp_path: Path) -> None:
 
 def test_rejects_missing_length(tmp_path: Path) -> None:
     # REQ-0872: `text` requires a length when no max_length derives it.
-    path = _mutated(tmp_path, "      role: Identifier\n      length: 2\n", "      role: Identifier\n")
+    path = _mutated(
+        tmp_path,
+        "      role: Identifier\n      length: 2\n",
+        "      role: Identifier\n",
+    )
 
     assert _condition(path) == (
         "submission_length_missing",
@@ -130,11 +136,17 @@ def test_rejects_declared_length_conflict(tmp_path: Path) -> None:
     # REQ-0875: declaring both is accepted when equal, rejected when different.
     # USUBJID derives length 30 from max_length; declaring 31 conflicts.
     source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
-    old = "      core: Req\n      role: Identifier\n      origin:\n        type: Derived"
+    old = (
+        "      core: Req\n      role: Identifier\n      origin:\n        type: Derived"
+    )
     assert old in source
     path = tmp_path / "spec.yaml"
     path.write_text(
-        source.replace(old, "      core: Req\n      role: Identifier\n      length: 31\n      origin:\n        type: Derived", 1),
+        source.replace(
+            old,
+            "      core: Req\n      role: Identifier\n      length: 31\n      origin:\n        type: Derived",
+            1,
+        ),
         encoding="ascii",
     )
 
@@ -158,7 +170,11 @@ def test_rejects_non_positive_length(tmp_path: Path) -> None:
 
 def test_rejects_missing_core_when_root_submission_present(tmp_path: Path) -> None:
     # REQ-0882/REQ-0915, scoped per #1514 to specs opting in via root submission.
-    path = _mutated(tmp_path, "      core: Req\n      role: Identifier\n", "      role: Identifier\n")
+    path = _mutated(
+        tmp_path,
+        "      core: Req\n      role: Identifier\n",
+        "      role: Identifier\n",
+    )
 
     assert _condition(path) == (
         "core_mandatory_conflict",
@@ -196,7 +212,10 @@ def test_rejects_missing_origin(tmp_path: Path) -> None:
     old = "      length: 2\n      codelist: DOMAIN\n      origin:\n        type: Assigned\n        source: Sponsor\n"
     assert old in source
     path = tmp_path / "spec.yaml"
-    path.write_text(source.replace(old, "      length: 2\n      codelist: DOMAIN\n", 1), encoding="ascii")
+    path.write_text(
+        source.replace(old, "      length: 2\n      codelist: DOMAIN\n", 1),
+        encoding="ascii",
+    )
 
     assert _condition(path) == (
         "origin_missing",
@@ -257,11 +276,17 @@ def test_rejects_contradicted_origin(tmp_path: Path) -> None:
 def test_rejects_submission_outside_output(tmp_path: Path) -> None:
     # REQ-0856: submission only for output.columns.
     source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
-    old = "  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]"
+    old = (
+        "  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]"
+    )
     assert old in source
     path = tmp_path / "spec.yaml"
     path.write_text(
-        source.replace(old, "  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX]", 1),
+        source.replace(
+            old,
+            "  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX]",
+            1,
+        ),
         encoding="ascii",
     )
 

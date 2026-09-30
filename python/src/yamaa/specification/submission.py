@@ -398,7 +398,10 @@ def validate_submission_metadata(
             continue
 
         # REQ-0892 / REQ-0920: description required for incomplete origins.
-        if origin.type in ("Predecessor", "Other", "Not Available") and not origin.description:
+        if (
+            origin.type in ("Predecessor", "Other", "Not Available")
+            and not origin.description
+        ):
             diagnostics.append(
                 _diagnostic(
                     "origin_description_missing",
