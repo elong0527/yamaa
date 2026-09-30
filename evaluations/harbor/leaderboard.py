@@ -13,7 +13,7 @@ carries, the columns, and the ordered `rank_by` rules.
 trial ids a row is built from, and the leaderboards the run belongs to. A
 row's metrics aggregate its trials as Harbor does: the mean counts an errored
 trial as 0, and pass@k is Harbor's unbiased estimator averaged over tasks.
-`render` rebuilds `docs/articles/leaderboard.md`, ranking rows with Harbor's
+`render` rebuilds `leaderboard.md` beside this file, ranking rows with Harbor's
 own comparison; `--check` fails when the committed page is out of date.
 `export` writes the configs `harbor hub leaderboard create` and
 `harbor hub leaderboard row create` take.
@@ -29,8 +29,10 @@ import re
 import sys
 import textwrap
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+
+import tomllib
 
 import yaml
 
@@ -38,8 +40,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RESULTS = HERE / "results"
 LEADERBOARDS = HERE / "leaderboards"
-PAGE = ROOT / "docs" / "articles" / "leaderboard.md"
-REPOSITORY = "https://github.com/elong0527/yamaa/blob/main"
+# The page is for review in the repository, not published on the site.
+PAGE = HERE / "leaderboard.md"
 HUB_DOCS = "https://docs.harborframework.com/core-concepts/harbor-hub/leaderboards"
 EXPORT = (
     Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
@@ -72,14 +74,31 @@ def _default_timeouts(config: dict) -> bool:
     )
 
 
+def _task_commit(config: dict) -> str | None:
+    """The yamaa commit a trial's task was built from (`task.toml`
+    metadata), shortened; `None` when the task directory is gone."""
+    path = Path((config.get("task") or {}).get("path") or "") / "task.toml"
+    if not path.is_file():
+        return None
+    commit = tomllib.loads(path.read_text()).get("metadata", {}).get("yamaa_commit")
+    if not commit:
+        return None
+    sha, _, dirty = commit.partition("+")
+    return sha[:8] + (f"+{dirty}" if dirty else "")
+
+
 def collect(job_dir: Path) -> dict:
     """The facts of one Harbor job that a leaderboard row is built from."""
     trials = []
     agents = set()
     default_timeouts = _default_timeouts(_read_json(job_dir / "config.json"))
+    started, commits = [], set()
     for path in sorted(job_dir.glob("*/result.json")):
         result = json.loads(path.read_text())
         config = result.get("config") or {}
+        if result.get("started_at"):
+            started.append(datetime.fromisoformat(result["started_at"]))
+        commits.add(_task_commit(config))
         info = result.get("agent_info") or {}
         model = (config.get("agent") or {}).get("model_name")
         agents.add((info.get("name"), info.get("version"), model))
@@ -114,7 +133,11 @@ def collect(job_dir: Path) -> dict:
     return {
         "job": job_dir.name,
         "job_id": job.get("id"),
-        "date": job["started_at"][:10],
+        # Trial times are UTC; the job's own `started_at` is local time.
+        "date": min(started).astimezone(UTC).date().isoformat()
+        if started
+        else job["started_at"][:10],
+        "yamaa_commit": ", ".join(sorted(c or "unknown" for c in commits)),
         "harbor_version": (lock.get("harbor") or {}).get("version"),
         "agent": agent,
         "agent_version": version,
@@ -275,7 +298,7 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
         if seen.intersection(trial_ids):
             raise SystemExit(f"{run['job']} on {name}: a trial is on two rows")
         seen.update(trial_ids)
-        record = f"{REPOSITORY}/evaluations/harbor/results/{run['job']}.json"
+        record = f"results/{run['job']}.json"
         rows.append(
             {
                 "metadata": {
@@ -287,6 +310,7 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "job": run["job"],
                     "job_id": run["job_id"],
                     "harbor_version": run["harbor_version"],
+                    "yamaa_commit": run.get("yamaa_commit"),
                     "record": {"url": record, "label": run["job"]},
                 },
                 "metrics": metrics(trials),
@@ -392,13 +416,14 @@ def _wrap(text: str) -> str:
 
 
 def _task_link(task: str) -> str:
-    """A task's site link; language-suffixed tasks point at their benchmark."""
+    """A task's link from the page; language-suffixed tasks point at their
+    benchmark's README."""
     base = task
     for suffix in ("-python", "-r"):
         if task.endswith(suffix):
             base = task[: -len(suffix)]
             break
-    return f"[{task}](../benchmark/{base}.html)"
+    return f"[{task}](../../benchmarks/{base}/README.md)"
 
 
 def _board_section(board: dict, rows: list[dict]) -> list[str]:
@@ -465,12 +490,6 @@ def render(boards: list[dict], runs: list[dict]) -> str:
         if unknown:
             raise SystemExit(f"{run['job']} names unknown leaderboards: {unknown}")
     lines = [
-        "---",
-        "title: Leaderboard",
-        "hide:",
-        "  - actions",
-        "---",
-        "",
         "# Agent leaderboards",
         "",
         "How well AI coding agents turn a benchmark's request and input datasets",
@@ -479,11 +498,13 @@ def render(boards: list[dict], runs: list[dict]) -> str:
         "input files, in a sandbox that reaches nothing",
         "but the model API, and its output is graded cell by cell against the",
         "benchmark's golden file. A task passes when every cell matches and",
-        "the required script (`result.R` or `result.py`) exists.",
-        f"[The evaluation]({REPOSITORY}/evaluations/harbor/README.md) runs on",
+        "the required script (`result.R` or `result.py`), rerun from a clean",
+        "state, writes the same datasets. Results are recorded in this",
+        "repository for review and are not published.",
+        "[The evaluation](README.md) runs on",
         "[Harbor](https://github.com/harbor-framework/harbor); how each request",
         "is written is in",
-        f"[the benchmark prompt recipe]({REPOSITORY}/automation/benchmark_prompt.md).",
+        "[the benchmark prompt recipe](../../automation/benchmark_prompt.md).",
         "",
         "Each leaderboard below is defined the way",
         f"[Harbor Hub leaderboards]({HUB_DOCS}) are: a fixed set of tasks, the",

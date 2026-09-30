@@ -42,7 +42,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 BENCHMARKS = ROOT / "benchmarks"
-IMAGE = "yamaa-harbor-env:0.1"
+IMAGE = "yamaa-harbor-env:0.2"
 OPENCODE_VERSION = "1.18.33"
 OPENCODE_MODELS_PATH = "/opt/yamaa-eval/opencode-models.json"
 # Build output and Harbor job directories stay outside the repository, whose
@@ -106,23 +106,33 @@ def system_prompt(language: str) -> str:
     return (HERE / LANGUAGES[language]["system"]).read_text(encoding="utf-8").strip()
 
 
-def contract_for(benchmark: Path, language: str) -> dict:
-    """Outputs, columns, keys and column types, checked against the golden.
+def output_specs(benchmark: Path) -> list[dict]:
+    """Each specification that writes a golden dataset, in file order.
 
-    The contract also names the required script (`result.R` or `result.py`),
-    which the grader checks alongside the datasets.
+    `spec.yaml`, or else the `spec_<name>.yaml` files: domains built
+    together (DM and SUPPDM) each write their own golden, and variants that
+    write the same one count once.
     """
-    if language not in LANGUAGES:
-        raise BuildError(f"unknown language {language!r}; want r or python")
-    spec_path = benchmark / "spec.yaml"
-    if not spec_path.is_file():
-        raise BuildError(f"{benchmark.name}: only single spec.yaml benchmarks")
-    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    single = benchmark / "spec.yaml"
+    paths = [single] if single.is_file() else sorted(benchmark.glob("spec_*.yaml"))
+    specs, seen = [], set()
+    for path in paths:
+        spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+        output = spec.get("output") or {}
+        name = Path(output.get("path") or "").name
+        if not name or name in seen or not (benchmark / "expected" / name).is_file():
+            continue
+        if output.get("warning_log") or output.get("verification_log"):
+            raise BuildError(f"{benchmark.name}: log outputs are not graded yet")
+        seen.add(name)
+        specs.append(spec)
+    if not specs:
+        raise BuildError(f"{benchmark.name}: no specification writes a golden dataset")
+    return specs
+
+
+def _output_contract(benchmark: Path, spec: dict) -> dict:
     output = spec["output"]
-    if output.get("warning_log") or output.get("verification_log"):
-        raise BuildError(f"{benchmark.name}: log outputs are not graded yet")
-    if (benchmark / "environment.yaml").exists():
-        raise BuildError(f"{benchmark.name}: project functions are not supported")
     name = Path(output["path"]).name
     columns = list(output["columns"])
     keys = list(spec["keys"])
@@ -133,35 +143,75 @@ def contract_for(benchmark: Path, language: str) -> dict:
         if kind not in ("str", "int", "float", "date", "datetime"):
             raise BuildError(f"{benchmark.name}: {column} has type {kind!r}")
         types[column] = kind
-    golden = benchmark / "expected" / name
-    with golden.open(newline="", encoding="utf-8") as handle:
+    with (benchmark / "expected" / name).open(newline="", encoding="utf-8") as handle:
         reader = csv.reader(handle)
         header = next(reader)
         rows = list(reader)
     if header != columns:
-        raise BuildError(f"{benchmark.name}: golden header differs from the spec")
+        raise BuildError(
+            f"{benchmark.name}: golden {name} header differs from the spec"
+        )
     seen = set()
     for row in rows:
         record = dict(zip(header, row, strict=True))
         key = tuple(record[k] for k in keys)
-        if key in seen or any(part == "" for part in key):
+        if key in seen or any(part.strip() == "" for part in key):
             raise BuildError(f"{benchmark.name}: golden key {key} is not unique")
         seen.add(key)
-        literal = [v for v in row if v != "" and v.strip() in NULL_TOKENS]
+        # The grader reads these tokens as no value, so a golden cell that
+        # holds one as text could never be matched.
+        literal = [v for v in row if v.strip() and v.strip() in NULL_TOKENS]
         if literal:
-            raise BuildError(f"{benchmark.name}: golden holds {literal[0]!r}")
+            raise BuildError(f"{benchmark.name}: golden {name} holds {literal[0]!r}")
+    return {"file": name, "columns": columns, "keys": keys, "types": types}
+
+
+def contract_for(benchmark: Path, language: str) -> dict:
+    """Outputs, columns, keys and column types, checked against the golden.
+
+    The contract also names the required script (`result.R` or `result.py`),
+    which the grader checks, reruns, and grades alongside the datasets.
+    """
+    if language not in LANGUAGES:
+        raise BuildError(f"unknown language {language!r}; want r or python")
+    outputs = [_output_contract(benchmark, s) for s in output_specs(benchmark)]
     return {
         "benchmark": benchmark.name,
         "language": language,
         "script": LANGUAGES[language]["script"],
-        "outputs": [{"file": name, "columns": columns, "keys": keys, "types": types}],
+        "outputs": outputs,
     }
+
+
+def oracle_script(language: str, golden: list[Path]) -> str:
+    """A script in the track's language that writes the golden files byte for
+    byte, so the oracle also passes the grader's rerun."""
+    lines = []
+    if language == "r":
+        lines.append("# Oracle: writes the golden datasets byte for byte.")
+        for path in golden:
+            data = path.read_bytes()
+            values = ", ".join(f"0x{b:02x}" for b in data)
+            lines.append(f"writeBin(as.raw(c({values})), '/app/output/{path.name}')")
+    else:
+        lines += [
+            "# Oracle: writes the golden datasets byte for byte.",
+            "from pathlib import Path",
+            "",
+        ]
+        for path in golden:
+            lines.append(
+                f"Path('/app/output/{path.name}').write_bytes("
+                f"bytes.fromhex('{path.read_bytes().hex()}'))"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def task_toml(
     benchmark: str, tags: dict[str, str], domain: str, commit: str, language: str
 ) -> str:
     standard, lifecycle = tags["standard"], tags["lifecycle"]
+    noun = "datasets" if " and " in domain else "dataset"
     label = LANGUAGES[language]["label"]
     return f"""\
 schema_version = "1.4"
@@ -170,7 +220,7 @@ artifacts = ["/app", "/logs/agent/trajectory.json"]
 [task]
 name = "yamaa/{benchmark}-{language}"
 version = "0.1.0"
-description = "Create the {domain} dataset of the yamaa benchmark {benchmark} in {label}."
+description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
 
 [metadata]
@@ -209,7 +259,7 @@ def build_task(
 ) -> Path:
     contract = contract_for(benchmark, language)
     readme = (benchmark / "README.md").read_text(encoding="utf-8")
-    domain = yaml.safe_load((benchmark / "spec.yaml").read_text())["domain"]
+    domain = " and ".join(s["domain"] for s in output_specs(benchmark))
     task = tasks / f"{benchmark.name}-{language}"
     if task.exists():
         shutil.rmtree(task)
@@ -224,7 +274,13 @@ def build_task(
         system_prompt(language) + "\n\n---\n\n" + prompt + "\n"
     )
 
-    shutil.copytree(benchmark / "input", task / "environment" / "input")
+    # Data files only: an input schema (`*.schema.yaml`) is yamaa's own
+    # description of how a producer builds the input, not source data.
+    shutil.copytree(
+        benchmark / "input",
+        task / "environment" / "input",
+        ignore=shutil.ignore_patterns("*.yaml", "*.yml"),
+    )
     (task / "environment" / "Dockerfile").write_text(
         f"FROM {image}\nCOPY --chown=agent:agent input/ /app/input/\n"
     )
@@ -240,7 +296,7 @@ def build_task(
         "#!/usr/bin/env bash\n"
         "# No reward.json on a grader crash, so Harbor records a verifier error.\n"
         "set -euo pipefail\n"
-        "python3 /tests/grade.py\n"
+        "python3 /tests/grade.py --rerun\n"
     )
     (task / "tests" / "Dockerfile").write_text(
         f"FROM {image}\n"
@@ -248,17 +304,18 @@ def build_task(
         "COPY grade.py contract.json /tests/\n"
         "COPY expected/ /tests/expected/\n"
     )
-    solve = task / "solution" / "solve.sh"
     script = LANGUAGES[language]["script"]
+    (task / "solution" / script).write_text(oracle_script(language, golden))
+    runner = "Rscript" if language == "r" else "python3"
+    solve = task / "solution" / "solve.sh"
     solve.write_text(
         "#!/usr/bin/env bash\n"
-        "# Oracle: the golden files plus a placeholder script, to prove\n"
-        "# packaging and grading. The placeholder satisfies the script\n"
-        "# check; the datasets carry the grade.\n"
+        "# Oracle: a script that writes the golden files, to prove packaging,\n"
+        "# the rerun, and grading.\n"
         "set -euo pipefail\n"
         "mkdir -p /app/output\n"
-        "cp /solution/expected/*.csv /app/output/\n"
-        f"printf '# oracle placeholder for {script}\\n' > /app/output/{script}\n"
+        f"cp /solution/{script} /app/output/{script}\n"
+        f"{runner} /app/output/{script}\n"
     )
     solve.chmod(0o755)
     return task
@@ -384,6 +441,10 @@ def main() -> None:
     )
     commit = git_commit()
     tasks_dir = args.out.resolve() / "tasks"
+    # Start clean: a task left from an earlier build would still be picked up
+    # by `harbor run -p <tasks>`.
+    if tasks_dir.exists():
+        shutil.rmtree(tasks_dir)
     tasks, skipped = build_selection(
         names,
         languages=args.language,

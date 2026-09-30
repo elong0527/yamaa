@@ -1,9 +1,3 @@
----
-title: Leaderboard
-hide:
-  - actions
----
-
 # Agent leaderboards
 
 How well AI coding agents turn a benchmark's request and input datasets
@@ -12,11 +6,13 @@ its language (R or Python), the benchmark's `prompt.md` and its
 input files, in a sandbox that reaches nothing
 but the model API, and its output is graded cell by cell against the
 benchmark's golden file. A task passes when every cell matches and
-the required script (`result.R` or `result.py`) exists.
-[The evaluation](https://github.com/elong0527/yamaa/blob/main/evaluations/harbor/README.md) runs on
+the required script (`result.R` or `result.py`), rerun from a clean
+state, writes the same datasets. Results are recorded in this
+repository for review and are not published.
+[The evaluation](README.md) runs on
 [Harbor](https://github.com/harbor-framework/harbor); how each request
 is written is in
-[the benchmark prompt recipe](https://github.com/elong0527/yamaa/blob/main/automation/benchmark_prompt.md).
+[the benchmark prompt recipe](../../automation/benchmark_prompt.md).
 
 Each leaderboard below is defined the way
 [Harbor Hub leaderboards](https://docs.harborframework.com/core-concepts/harbor-hub/leaderboards) are: a fixed set of tasks, the
@@ -32,12 +28,13 @@ ADTTE. An agent gets the Python system prompt, the benchmark's prompt
 and input datasets, and a task passes when its output matches every
 golden cell and `/app/output/result.py` exists.
 
-Tasks: [adam-adae-death-python](../benchmark/adam-adae-death.html),
-[adam-adsl-age-group-python](../benchmark/adam-adsl-age-group.html),
-[adam-adtte-dor-python](../benchmark/adam-adtte-dor.html). A run is
-ranked here when it makes at least 1 attempt on each task at the tasks'
-own timeouts. Rows are ranked by pass rate (highest first), then cell
-accuracy (highest first), then cost (lowest first).
+Tasks:
+[adam-adae-death-python](../../benchmarks/adam-adae-death/README.md),
+[adam-adsl-age-group-python](../../benchmarks/adam-adsl-age-group/README.md),
+[adam-adtte-dor-python](../../benchmarks/adam-adtte-dor/README.md). A
+run is ranked here when it makes at least 1 attempt on each task at the
+tasks' own timeouts. Rows are ranked by pass rate (highest first), then
+cell accuracy (highest first), then cost (lowest first).
 
 No runs are recorded on this leaderboard yet.
 
@@ -49,11 +46,11 @@ agent gets the R system prompt, the benchmark's prompt and input
 datasets, and a task passes when its output matches every golden cell
 and `/app/output/result.R` exists.
 
-Tasks: [adam-adae-death-r](../benchmark/adam-adae-death.html),
-[adam-adsl-age-group-r](../benchmark/adam-adsl-age-group.html),
-[adam-adtte-dor-r](../benchmark/adam-adtte-dor.html). A run is ranked
-here when it makes at least 1 attempt on each task at the tasks' own
-timeouts. Rows are ranked by pass rate (highest first), then cell
+Tasks: [adam-adae-death-r](../../benchmarks/adam-adae-death/README.md),
+[adam-adsl-age-group-r](../../benchmarks/adam-adsl-age-group/README.md),
+[adam-adtte-dor-r](../../benchmarks/adam-adtte-dor/README.md). A run is
+ranked here when it makes at least 1 attempt on each task at the tasks'
+own timeouts. Rows are ranked by pass rate (highest first), then cell
 accuracy (highest first), then cost (lowest first).
 
 No runs are recorded on this leaderboard yet.

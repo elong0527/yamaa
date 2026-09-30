@@ -4,7 +4,7 @@
 # verifier. Python and R with common data packages; no yamaa, no benchmark
 # files, no network at run time beyond the model API.
 #
-#   docker build -t yamaa-harbor-env:0.1 evaluations/harbor
+#   docker build -t yamaa-harbor-env:0.2 evaluations/harbor
 #
 # Bump the tag in build.py (IMAGE) whenever this file changes.
 
@@ -45,7 +45,7 @@ RUN uv venv /opt/yamaa-eval/venv --python /usr/bin/python3 \
 
 # --- R data packages from a dated Posit Package Manager snapshot -----------
 RUN R -q -e "options(repos = c(CRAN = 'https://p3m.dev/cran/__linux__/noble/${CRAN_SNAPSHOT}')); \
-    pkgs <- c('dplyr', 'tidyr', 'readr', 'stringr', 'lubridate', 'purrr', 'haven', 'xml2'); \
+    pkgs <- c('dplyr', 'tidyr', 'readr', 'stringr', 'lubridate', 'purrr', 'haven', 'xml2', 'nanoparquet'); \
     install.packages(pkgs, Ncpus = 4); \
     stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)))"
 
