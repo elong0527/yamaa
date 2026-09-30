@@ -32,7 +32,7 @@ def _filter_identifiers(predicate: object) -> frozenset[str]:
         return frozenset()
     try:
         return frozenset(predicate_identifiers(parse_predicate(predicate)))
-    except Exception:
+    except ValueError:
         return frozenset()
 
 
