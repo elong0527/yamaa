@@ -88,7 +88,7 @@ def _incompatible(
 
     Every sibling reports the variable that supplied the value and its
     actual type at the field that names it (for example
-    `columns.SITE.derivation.str_case.source` with `{source: SITENUM, …}`),
+    `columns.SITE.derivation.str_case.source` with `{source: SITENUM, ...}`),
     so a date operation does the same rather than naming the operation
     with the field key.
     """
