@@ -79,7 +79,7 @@ submission_column_class:
         description: See REQ-1156.
     - origin:
         type: submission_origin_class
-        required: true
+        required: false
         description: See REQ-1131.
     - method:
         type: submission_method

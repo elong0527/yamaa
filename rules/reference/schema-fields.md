@@ -398,7 +398,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_column_class.display_format` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.codelist` | `"identifier"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.inventory_vocabulary` | `"bool"` | `false` | Absent | -- | [REQ-1156](../submission/terminology.md#req-1156) |
-| `submission_column_class.origin` | `"submission_origin_class"` | `true` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
+| `submission_column_class.origin` | `"submission_origin_class"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.method` | `"submission_method"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.comment` | `"submission_comment"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_origin_class.type` | `"origin_type"` | `true` | Absent | -- | [REQ-1132](../submission/metadata.md#req-1132) |

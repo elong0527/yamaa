@@ -1458,6 +1458,15 @@ def resolve_specification(
                 for item in error.errors(include_url=False, include_input=False)
             ]
         ) from error
+    from yamaa.specification.submission import validate_submission_metadata
+    from yamaa.specification.value_metadata import validate_value_metadata
+
+    semantic_diagnostics = [
+        *validate_submission_metadata(specification),
+        *validate_value_metadata(specification),
+    ]
+    if semantic_diagnostics:
+        raise SpecificationError(semantic_diagnostics)
     return ResolvedSpecification(
         specification=specification,
         document=resolved,  # type: ignore[arg-type]

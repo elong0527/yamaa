@@ -201,13 +201,15 @@ def test_a_bare_odm_read_admits_a_collected_origin(tmp_path: Path) -> None:
     # REQ-0899: a bare `odm` copies the one record it identifies, so it
     # admits the origins a bare `source` does.
     source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
-    derivation = "      LBSTRESU: {literal: mg/dL}\n"
+    # Anchor inside the glucose row's derivations; the column-level
+    # `LBSTRESU` literal the style pass hoisted no longer lives here.
+    derivation = "      LBDTC:\n"
     origin = "          type: Assigned\n          source: Vendor"
     assert derivation in source and origin in source
     path = tmp_path / "spec.yaml"
     path.write_text(
         source.replace(
-            derivation, derivation + "      LBORRESU: {odm: ODM.IT.LB.GLUCU}\n", 1
+            derivation, "      LBORRESU: {odm: ODM.IT.LB.GLUCU}\n" + derivation, 1
         ).replace(origin, "          type: Collected\n          source: Vendor", 1),
         encoding="ascii",
     )
