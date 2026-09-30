@@ -27,10 +27,15 @@ from typing import NamedTuple
 
 _CSV_REQUIREMENTS = {
     "invalid_text": "REQ-0029",
+    "source_byte_order_mark": "REQ-0851",
+    "source_carriage_return": "REQ-0851",
     "source_field_name_duplicate": "REQ-0851",
     "source_field_name_empty": "REQ-0851",
-    "source_record_width": "REQ-0851",
+    "source_header_absent": "REQ-0851",
+    "source_quote_in_bare_field": "REQ-0851",
     "source_quote_unterminated": "REQ-0851",
+    "source_record_width": "REQ-0851",
+    "source_text_after_quote": "REQ-0851",
 }
 
 
