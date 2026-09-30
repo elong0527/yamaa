@@ -318,8 +318,9 @@ def test_rejects_reserved_metadata_key(tmp_path: Path) -> None:
     )
 
 
-def test_rejects_reference_data_with_repeating(tmp_path: Path) -> None:
-    # REQ-0865/REQ-0925: reference data never repeats.
+def test_rejects_reference_data_with_repeating(
+    tmp_path: Path,
+) -> None:  # REQ-0865/REQ-0925: reference data never repeats.
     source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
     old = "  repeating: false\n"
     assert old in source
@@ -334,3 +335,15 @@ def test_rejects_reference_data_with_repeating(tmp_path: Path) -> None:
         ("submission",),
         "REQ-0925",
     )
+
+
+def test_intermediate_lookup_admits_derived_origin() -> None:
+    # A reference through a named intermediate joins and selects a record,
+    # so it computes rather than copies: Derived is admitted (REQ-0897),
+    # while a bare input-dataset source refutes it (REQ-0899).
+    example = REPOSITORY_ROOT / "benchmarks" / "sdtm-ae-coding"
+    loaded = load_specification(example / "spec.yaml", SCHEMA_ROOT)
+    columns = {column.name: column for column in loaded.specification.columns}
+    assert columns["AEDECOD"].submission is not None
+    assert columns["AEDECOD"].submission.origin.type == "Derived"
+    assert columns["AEDECOD"].submission.method is not None

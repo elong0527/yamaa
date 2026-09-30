@@ -94,6 +94,8 @@ columns:
       origin:
         type: Derived
         source: Sponsor
+      method: Take PTNAME from the MEDDRA record whose LLTNAME equals
+        AE_RAW.AETERM, and no match yields "NOT CODED".
 
   - name: AEBODSYS
     type: str
@@ -107,6 +109,8 @@ columns:
       origin:
         type: Derived
         source: Sponsor
+      method: Take SOCNAME from the MEDDRA record whose LLTNAME equals
+        AE_RAW.AETERM, and no match yields "NOT CODED".
 
 verifications:
   - unique:

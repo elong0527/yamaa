@@ -147,6 +147,9 @@ columns:
       origin:
         type: Derived
         source: Sponsor
+      method: Take EPOCH from the last SE record matching on STUDYID and
+        USUBJID, where VSDTM falls within SESTDTC to SEENDTC, ordered by
+        SE.SESTDTC, and no match yields blank.
 
 verifications:
   - unique:
