@@ -1,0 +1,282 @@
+"""Grade one agent submission against a benchmark's golden datasets.
+
+Runs in Harbor's separate verifier container as `/tests/grade.py` and also
+standalone, so it uses the Python standard library only. It is a pure
+function of the submitted CSV files, the task's `contract.json`, the golden
+files, and the agent trajectory.
+
+The reward is 1 only when every requested dataset matches its golden file:
+the same columns, the same keys, and the same value in every cell once each
+value is read as its column's type. Column order and row order are
+reported but not graded. A grader failure raises instead of writing
+`reward.json`, so Harbor records a verifier error rather than a score.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+from datetime import date, datetime
+from pathlib import Path
+
+NULL_TOKENS = frozenset({"", "NA", "NaN", "nan", ".", "NULL", "None"})
+WEB_TOOLS = frozenset({"webfetch", "websearch", "web_fetch", "web_search"})
+RELATIVE_TOLERANCE = 1e-9
+MAX_REPORTED = 200
+
+
+class SubmissionError(ValueError):
+    """The submitted file cannot be read as a dataset."""
+
+
+def normalize(value: str, kind: str) -> object:
+    """A cell as a comparable value of its column type (`None` for no value)."""
+    text = value.strip()
+    if text in NULL_TOKENS:
+        return None
+    if kind in ("int", "float"):
+        try:
+            number = float(text)
+        except ValueError:
+            return ("unparsed", text)
+        return number if math.isfinite(number) else ("unparsed", text)
+    if kind == "date":
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return ("unparsed", text)
+        if isinstance(parsed, datetime) and parsed.time() != datetime.min.time():
+            return ("unparsed", text)
+        return parsed.date() if isinstance(parsed, datetime) else parsed
+    if kind == "datetime":
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return ("unparsed", text)
+    return value
+
+
+def same(expected: object, actual: object) -> bool:
+    if isinstance(expected, float) and isinstance(actual, float):
+        scale = max(1.0, abs(expected), abs(actual))
+        return abs(expected - actual) <= RELATIVE_TOLERANCE * scale
+    return expected == actual
+
+
+def read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, None)
+            if header is None:
+                raise SubmissionError(f"{path.name} is empty")
+            header = [name.strip() for name in header]
+            rows = []
+            for number, record in enumerate(reader, start=2):
+                if not record:
+                    continue
+                if len(record) != len(header):
+                    raise SubmissionError(
+                        f"{path.name} line {number} has {len(record)} fields, "
+                        f"header has {len(header)}"
+                    )
+                rows.append(dict(zip(header, record, strict=True)))
+    except UnicodeDecodeError as exc:
+        raise SubmissionError(f"{path.name} is not UTF-8: {exc}") from exc
+    except csv.Error as exc:
+        raise SubmissionError(f"{path.name} is not valid CSV: {exc}") from exc
+    return header, rows
+
+
+def index_rows(
+    rows: list[dict[str, str]], keys: list[str], types: dict[str, str]
+) -> tuple[dict[tuple, dict[str, str]], list[str]]:
+    """Rows by normalized key, and problems with the keys themselves."""
+    indexed: dict[tuple, dict[str, str]] = {}
+    problems = []
+    for row in rows:
+        key = tuple(normalize(row[k], types[k]) for k in keys)
+        if any(part is None for part in key):
+            problems.append(f"row with a missing key value: {display(key)}")
+        elif key in indexed:
+            problems.append(f"duplicate key: {display(key)}")
+        else:
+            indexed[key] = row
+    return indexed, problems
+
+
+def display(value: object) -> str:
+    if isinstance(value, tuple) and value[:1] == ("unparsed",):
+        return str(value[1])
+    if isinstance(value, tuple):
+        return "|".join(display(part) for part in value)
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return str(value)
+
+
+def grade_output(spec: dict, expected_dir: Path, output_dir: Path) -> dict:
+    """Compare one requested dataset with its golden file."""
+    name, keys, types = spec["file"], spec["keys"], spec["types"]
+    columns = spec["columns"]
+    result: dict = {"file": name, "passed": False, "problems": [], "diffs": []}
+    golden_header, golden_rows = read_rows(expected_dir / name)
+    if golden_header != columns:
+        raise RuntimeError(f"golden {name} header differs from the contract")
+    golden, golden_problems = index_rows(golden_rows, keys, types)
+    if golden_problems:
+        raise RuntimeError(f"golden {name}: {golden_problems[0]}")
+    cells = len(golden) * (len(columns) - len(keys))
+    result.update(expected_rows=len(golden), expected_cells=cells)
+    result.update(matched_rows=0, matched_cells=0)
+
+    path = output_dir / name
+    if not path.is_file():
+        result["problems"].append(f"{name} was not written")
+        return result
+    try:
+        header, rows = read_rows(path)
+    except SubmissionError as exc:
+        result["problems"].append(str(exc))
+        return result
+
+    missing = [c for c in columns if c not in header]
+    extra = [c for c in header if c not in columns]
+    duplicated = sorted({c for c in header if header.count(c) > 1})
+    result["column_order_matches"] = header == columns
+    if missing:
+        result["problems"].append(f"missing columns: {', '.join(missing)}")
+    if extra:
+        result["problems"].append(f"unexpected columns: {', '.join(extra)}")
+    if duplicated:
+        result["problems"].append(f"repeated columns: {', '.join(duplicated)}")
+    if any(k in missing for k in keys) or duplicated:
+        return result
+
+    actual, key_problems = index_rows(rows, keys, types)
+    result["problems"].extend(key_problems[:MAX_REPORTED])
+    absent = [k for k in golden if k not in actual]
+    unexpected = [k for k in actual if k not in golden]
+    if absent:
+        result["problems"].append(
+            f"{len(absent)} expected row(s) missing, first: {display(absent[0])}"
+        )
+    if unexpected:
+        result["problems"].append(
+            f"{len(unexpected)} unexpected row(s), first: {display(unexpected[0])}"
+        )
+
+    compared = [c for c in columns if c not in keys and c not in missing]
+    matched_rows = matched_cells = 0
+    for key, want in golden.items():
+        got = actual.get(key)
+        if got is None:
+            continue
+        row_ok = True
+        for column in compared:
+            expected = normalize(want[column], types[column])
+            value = normalize(got[column], types[column])
+            if same(expected, value):
+                matched_cells += 1
+                continue
+            row_ok = False
+            if len(result["diffs"]) < MAX_REPORTED:
+                result["diffs"].append(
+                    {
+                        "key": display(key),
+                        "column": column,
+                        "expected": want[column],
+                        "actual": got[column],
+                    }
+                )
+        matched_rows += row_ok
+    result.update(matched_rows=matched_rows, matched_cells=matched_cells)
+    mismatched = cells - matched_cells
+    if mismatched:
+        result["problems"].append(f"{mismatched} cell(s) differ from the golden")
+    result["passed"] = not result["problems"]
+    return result
+
+
+def scan_trajectory(path: Path) -> dict:
+    """Web tool calls in the agent's ATIF trajectory, when there is one."""
+    if not path.is_file():
+        return {"checked": False, "violations": []}
+    trajectory = json.loads(path.read_text(encoding="utf-8"))
+    violations = []
+    for index, step in enumerate(trajectory.get("steps") or []):
+        for call in (step or {}).get("tool_calls") or []:
+            tool = str(call.get("function_name") or call.get("name") or "")
+            if tool.lower() in WEB_TOOLS:
+                violations.append({"step": index, "tool": tool})
+    return {"checked": True, "violations": violations}
+
+
+def grade(
+    contract: dict, expected_dir: Path, output_dir: Path, trajectory: Path
+) -> dict:
+    outputs = [grade_output(s, expected_dir, output_dir) for s in contract["outputs"]]
+    network = scan_trajectory(trajectory)
+    cells = sum(o["expected_cells"] for o in outputs)
+    rows = sum(o["expected_rows"] for o in outputs)
+    passed = all(o["passed"] for o in outputs) and not network["violations"]
+    return {
+        "benchmark": contract["benchmark"],
+        "passed": passed,
+        "reward": {
+            "reward": 1.0 if passed else 0.0,
+            "cell_accuracy": sum(o["matched_cells"] for o in outputs) / cells
+            if cells
+            else 1.0,
+            "row_accuracy": sum(o["matched_rows"] for o in outputs) / rows
+            if rows
+            else 1.0,
+            "web_tool_calls": float(len(network["violations"])),
+        },
+        "outputs": outputs,
+        "network": network,
+    }
+
+
+def write_results(result: dict, out: Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "grade.json").write_text(json.dumps(result, indent=2) + "\n")
+    for output in result["outputs"]:
+        if output["diffs"]:
+            with (out / f"diff-{output['file']}").open("w", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle, fieldnames=["key", "column", "expected", "actual"]
+                )
+                writer.writeheader()
+                writer.writerows(output["diffs"])
+    (out / "reward.json").write_text(json.dumps(result["reward"], indent=2) + "\n")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--contract", type=Path, default=Path("/tests/contract.json"))
+    parser.add_argument("--expected", type=Path, default=Path("/tests/expected"))
+    parser.add_argument("--output", type=Path, default=Path("/app/output"))
+    parser.add_argument(
+        "--trajectory", type=Path, default=Path("/logs/agent/trajectory.json")
+    )
+    parser.add_argument("--out", type=Path, default=Path("/logs/verifier"))
+    args = parser.parse_args()
+    contract = json.loads(args.contract.read_text(encoding="utf-8"))
+    result = grade(contract, args.expected, args.output, args.trajectory)
+    write_results(result, args.out)
+    status = "PASS" if result["passed"] else "FAIL"
+    print(f"{status} {contract['benchmark']}: {json.dumps(result['reward'])}")
+    for output in result["outputs"]:
+        for problem in output["problems"]:
+            print(f"  {output['file']}: {problem}")
+
+
+if __name__ == "__main__":
+    main()
