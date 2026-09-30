@@ -52,7 +52,7 @@ conditions:
   invalid_aggregate_context: {phases: [validation]}
   invalid_calendar_date: {phases: [impute]}
   invalid_clear: {phases: [validation]}
-  invalid_date_text: {phases: [impute]}
+  invalid_date_text: {phases: [impute, validation]}
   invalid_datetime_text: {phases: [impute]}
   invalid_field_type: {phases: [validation]}
   invalid_function_argument: {phases: [derivation, validation]}
@@ -61,6 +61,7 @@ conditions:
   invalid_mapping_dictionary: {phases: [validation]}
   invalid_odm_context: {phases: [validation]}
   invalid_parent_path: {phases: [validation]}
+  invalid_power: {phases: [derivation]}
   invalid_predicate: {phases: [validation]}
   invalid_regex: {phases: [validation]}
   invalid_string_template: {phases: [validation]}
@@ -72,7 +73,7 @@ conditions:
   matches_failed: {phases: [verification]}
   method_missing: {phases: [validation]}
   missing_aggregate_keys: {phases: [validation]}
-  missing_input: {phases: [cut, mapping]}
+  missing_input: {phases: [cut, impute, mapping]}
   missing_key: {phases: [output]}
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
@@ -119,15 +120,20 @@ conditions:
   runner_language_mismatch: {phases: [validation]}
   sas_name_too_long: {phases: [validation]}
   schema_version_mismatch: {phases: [validation]}
+  source_byte_order_mark: {phases: [ingest]}
+  source_carriage_return: {phases: [ingest]}
   source_field_name_duplicate: {phases: [ingest]}
   source_field_name_empty: {phases: [ingest]}
   source_field_type_unsupported: {phases: [ingest]}
   source_field_value_invalid: {phases: [ingest]}
+  source_header_absent: {phases: [ingest]}
   source_parquet_invalid: {phases: [ingest]}
   source_profile_unknown: {phases: [validation]}
+  source_quote_in_bare_field: {phases: [ingest]}
   source_quote_unterminated: {phases: [ingest]}
   source_record_width: {phases: [ingest]}
   source_system_incomplete: {phases: [validation]}
+  source_text_after_quote: {phases: [ingest]}
   sqrt_of_negative: {phases: [derivation]}
   submission_data_type_not_admitted: {phases: [validation]}
   submission_length_missing: {phases: [validation]}

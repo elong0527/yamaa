@@ -233,7 +233,7 @@ implementations must not silently convert a failure to missing.
 <a id="req-0433"></a>
 
 **REQ-0433.** `POWER` with a zero base and a negative exponent, or a negative
-base and a non-integer exponent.
+base and a non-integer exponent: fail with `invalid_power`.
 
 ### Determinism
 
