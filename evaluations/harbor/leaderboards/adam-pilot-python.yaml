@@ -48,7 +48,7 @@ harbor:
       date:
         type: string
         format: date
-        description: Day the job started (UTC)
+        description: Day the first trial started (UTC)
       attempts:
         type: integer
         description: Attempts per task (Harbor n_attempts)
@@ -61,6 +61,11 @@ harbor:
       harbor_version:
         type: [string, "null"]
         description: Harbor version from the job's lock.json
+      yamaa_commit:
+        type: [string, "null"]
+        description: >-
+          yamaa commit the tasks were built from (task.toml metadata), with
+          +dirty when the tree had uncommitted changes
       record:
         type: object
         description: The recorded run in the repository
@@ -156,6 +161,10 @@ harbor:
       header: Date
       accessor: metadata.date
       type: date
+    - id: yamaa_commit
+      header: Tasks from
+      accessor: metadata.yamaa_commit
+      type: text
     - id: record
       header: Run
       accessor: metadata.record

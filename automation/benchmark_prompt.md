@@ -16,13 +16,17 @@ against the benchmark's golden files.
 
 ## 1. Scope
 
-- **Which benchmarks.** Positive `sdtm-*` and `adam-*` benchmarks whose
-  README lifecycle is `reviewed` or `finalized`. `schema-*` benchmarks
-  exercise the specification language and `negative-*` benchmarks have no
-  dataset to deliver, so neither gets a prompt.
-- **Not yet.** Benchmarks whose golden includes warning or violation logs,
-  that call a project function (`environment.yaml`), or that generate a
-  document (`define.xml`) wait until the evaluation supports them.
+- **Which benchmarks.** Every positive `sdtm-*` and `adam-*` benchmark,
+  whatever its README lifecycle; a `draft` benchmark's prompt changes with
+  it. `schema-*` benchmarks exercise the specification language and
+  `negative-*` benchmarks have no dataset to deliver, so neither gets a
+  prompt.
+- **What is graded.** Every golden dataset the benchmark's specifications
+  write, several for domains built together (DM and SUPPDM). A benchmark
+  whose golden is a warning or violation log (`adam-adsl-age-quality`) is
+  not built yet. A generated document (`define.xml`) is not graded; only
+  its datasets are. A project function (`environment.yaml`) is the
+  agent's to compute: state what the value is, as for any other column.
 - **Where.** `benchmarks/<name>/prompt.md`, beside the README.
 - **Worked examples.** `adam-adsl-age-group` (categories and codes),
   `adam-adae-death` (two inputs, precedence, ties), and `adam-adtte-dor`
@@ -33,14 +37,15 @@ against the benchmark's golden files.
 | Sees | Never sees |
 |---|---|
 | the system prompt for the run's language (R or Python), then `prompt.md`, verbatim | `README.md`, `spec*.yaml`, `expected/` |
-| `/app/input/`: the `input/` files | `run.py`, `run.R`, yamaa itself |
+| `/app/input/`: the `input/` data files | `run.py`, `run.R`, yamaa itself, input schemas (`*.schema.yaml`) |
 | Python and R with common data packages | the internet (web search is off) |
 
 The agent, model, and model provider are chosen when the evaluation runs,
 and the language is fixed by the task's system prompt (`system-r.md` or
 `system-python.md`, which also requires `result.R` or `result.py`), so the
 same benchmark prompt must work unchanged for either language. The prompt plus
-the input files must be enough to reproduce every golden cell.
+the input files must be enough to reproduce every golden cell. The grader
+also reruns the script from a clean state and grades what it writes.
 
 ## 3. Structure
 
@@ -81,7 +86,18 @@ State:
   (`Y`), fixed `PARAMCD` and `PARAM`, and descriptive text, spelled as in
   the golden (`TUMOUR`, not `TUMOR`);
 - the mapping of a numeric code to its label (`1 for <18, 2 for 18-64`);
-- the precision of a rounded result when the golden is rounded;
+- every key column, including how a sequence number runs (per subject or
+  across the study, in which order, from which start): rows are matched
+  by key, so a key numbered another way loses the whole row;
+- the literal values of any text column the golden fills from a lookup or
+  a fixed label, such as visit names (`VISIT 1`, `DAY 1`);
+- a conversion factor or constant exactly as the golden uses it (`0.0167`,
+  `0.45359237 kg per pound`), never "the standard factor";
+- the precision of a rounded result, and that a result is not rounded
+  when the golden keeps full precision (`AVAL is not rounded`);
+- the text form of a number or datetime the golden holds in a text column,
+  which is compared exactly (`whole numbers are written without a decimal
+  point`, `ISO 8601 with a T between date and time`);
 - study-specific rules a CDISC-literate programmer cannot infer: what
   counts as the event, when and where a record is censored, which source
   wins when several could supply a value, and how ties break;
@@ -100,13 +116,20 @@ Do not:
 - describe pass-through columns or ask for them to be carried or copied:
   the column list already asks for them;
 - add a generic missing-value, imputation, or traceability footer;
+- describe how processing fails or stops ("stops the run", "is an error",
+  "no output is written"), or the order of internal steps ("once every
+  row exists", "calculated a second way"): the golden is a completed
+  dataset, and only its values count;
 - mention sample data: subject identifiers, row counts, or particular
   dates;
 - name a programming language, package, agent, model, or provider, or
   describe the sandbox;
-- prescribe file formatting, types, or sort order. The grader matches rows
-  by key, reads an empty cell or `NA` as no value, compares numbers as
-  numbers, and reads dates as `YYYY-MM-DD`.
+- prescribe file formatting, types, or sort order, or explain
+  floating-point summation order. The grader matches rows by key and reads
+  an empty cell, `NA`, or `.` as no value. In number and date columns it
+  compares numbers as numbers within a relative 1e-9 (`1.0` equals `1`) and
+  reads dates as `YYYY-MM-DD` (a midnight datetime too). Text columns are
+  compared exactly, surrounding spaces included.
 
 Write "has no value" for an empty golden cell.
 
@@ -123,10 +146,12 @@ Before committing, review the prompt as the agent would read it:
    censoring at "the last evaluable assessment before new therapy" would
    move one subject's date, so the prompt says evaluable assessments count
    whether they fall before or after new therapy.
-3. **Remove what no golden cell needs.**
-4. **Agree with the README.** Every `Variables:` bullet and the `Note:`
+3. **Check the keys.** Number every key column the way the prompt says
+   and confirm it gives the golden's keys row for row.
+4. **Remove what no golden cell needs.**
+5. **Agree with the README.** Every `Variables:` bullet and the `Note:`
    show up in the prompt, and nothing contradicts them.
-5. **Keep it short.** Plain text with simple lists, straight quotes around
+6. **Keep it short.** Plain text with simple lists, straight quotes around
    literal values, prose wrapped at 79 columns, under about 40 lines.
 
 ## 6. Keep it in step
@@ -136,31 +161,44 @@ README, inputs, or golden files.
 
 ## Checks to run before finishing
 
-Run from the repository root; both print nothing when the prompts are
-clean.
+Run from the repository root. The second check uses the evaluation's own
+build, so it checks exactly the datasets that are graded; both print
+nothing but the one benchmark that is not built yet
+(`adam-adsl-age-quality`).
 
 ```bash
 awk 'length > 79 { print FILENAME ":" FNR }' benchmarks/*/prompt.md
 ```
 
 ```bash
-python3 - <<'PY'
-import glob, os, re
-banned = ("yamaa", "yaml", "spec", "schema", "handler", "verification",
-          "derivation")
-for path in sorted(glob.glob("benchmarks/*/prompt.md")):
-    folder = os.path.dirname(path)
-    text = open(path).read()
+uv run --project python --no-sync python - <<'PY'
+import importlib.util
+import re
+from pathlib import Path
+
+path = "evaluations/harbor/build.py"
+spec = importlib.util.spec_from_file_location("build", path)
+build = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(build)
+banned = re.compile(
+    r"\b(?:yamaa|yaml|spec|specifications?|schemas?|handlers?|verifications?"
+    r"|derivations?)\b|\bR0\d\d\b|\bREQ-\d+",
+    re.IGNORECASE,
+)
+for path in sorted(Path("benchmarks").glob("*/prompt.md")):
+    text = path.read_text()
     flat = " ".join(text.split())
-    for golden in sorted(glob.glob(f"{folder}/expected/*.csv")):
-        name = os.path.basename(golden)
-        columns = ", ".join(open(golden).readline().strip().split(","))
-        if f"/app/output/{name}" not in flat:
-            print(path, "-> no output path for", name)
-        if columns not in flat:
-            print(path, "-> column list differs from", name)
-    for word in banned:
-        if re.search(rf"\b{word}\b", text, re.IGNORECASE):
-            print(path, "-> mentions", word)
+    for match in banned.finditer(text):
+        print(path, "-> mentions", match.group(0))
+    try:
+        contract = build.contract_for(path.parent, "r")
+    except build.BuildError as exc:
+        print(path, "-> not built:", exc)
+        continue
+    for output in contract["outputs"]:
+        if f"/app/output/{output['file']}" not in flat:
+            print(path, "-> no output path for", output["file"])
+        if ", ".join(output["columns"]) not in flat:
+            print(path, "-> column list differs from", output["file"])
 PY
 ```

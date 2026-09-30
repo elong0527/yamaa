@@ -4,6 +4,8 @@ import copy
 import csv
 import importlib.util
 import json
+import subprocess
+import sys
 import tomllib
 import uuid
 from pathlib import Path
@@ -144,7 +146,7 @@ def test_an_unknown_language_is_rejected():
 
 
 def test_default_selection_skips_benchmarks_without_grader_support(tmp_path):
-    names = ["adam-adsl-age-group", "adam-adsl-bmi"]
+    names = ["adam-adsl-age-group", "adam-adsl-age-quality"]
     tasks, skipped = build.build_selection(
         names,
         languages=["r"],
@@ -154,7 +156,7 @@ def test_default_selection_skips_benchmarks_without_grader_support(tmp_path):
         strict=False,
     )
     assert [t.name for t in tasks] == ["adam-adsl-age-group-r"]
-    assert len(skipped) == 1 and skipped[0].startswith("adam-adsl-bmi-r: ")
+    assert len(skipped) == 1 and skipped[0].startswith("adam-adsl-age-quality-r: ")
     with pytest.raises(build.BuildError):
         build.build_selection(
             names,
@@ -357,8 +359,15 @@ def _fake_job(root: Path, rewards: dict[str, list[float | None]], **config) -> P
     job = root / "fake-job"
     job.mkdir()
     job_id = str(uuid.uuid4())
+    # Harbor writes the job's started_at in local time without a zone, and
+    # each trial's in UTC: 23:59 in New York is already the next day in UTC.
     (job / "result.json").write_text(
-        json.dumps({"id": job_id, "started_at": "2026-09-30T04:00:00Z"})
+        json.dumps({"id": job_id, "started_at": "2026-09-29T23:59:00"})
+    )
+    task_dir = root / "tasks"
+    task_dir.mkdir()
+    (task_dir / "task.toml").write_text(
+        '[metadata]\nyamaa_commit = "0123456789abcdef0123456789abcdef01234567"\n'
     )
     attempts = max(len(r) for r in rewards.values())
     (job / "config.json").write_text(json.dumps({"n_attempts": attempts, **config}))
@@ -373,7 +382,12 @@ def _fake_job(root: Path, rewards: dict[str, list[float | None]], **config) -> P
                 "id": str(uuid.uuid4()),
                 "trial_name": name,
                 "task_name": f"yamaa/{benchmark}",
-                "config": {"agent": {"model_name": "acme/model-1"}, **config},
+                "config": {
+                    "agent": {"model_name": "acme/model-1"},
+                    "task": {"path": str(task_dir)},
+                    **config,
+                },
+                "started_at": "2026-09-30T03:59:00Z",
                 "agent_info": {"name": "opencode", "version": "1.18.33"},
                 "agent_result": {
                     "n_input_tokens": 1200,
@@ -428,14 +442,17 @@ def test_collect_reads_a_harbor_job(tmp_path):
     assert [t["benchmark"] for t in run["trials"]] == ["b-one", "b-two"]
     assert all(uuid.UUID(t["id"]) for t in run["trials"])
     assert run["trials"][0]["agent_seconds"] == 90.0
+    assert run["date"] == "2026-09-30"
+    assert run["yamaa_commit"] == "01234567"
 
     board = _board(["b-one", "b-two"])
     page = leaderboard.render([board], [_on(run, board)])
     assert (
         "| 1 | opencode | 1.18.33 | acme/model-1 | 50.0% | 50.0% | 0 "
-        "| 2.4k | 600 | $0.020 | 2026-09-30 | [fake-job](" in page
+        "| 2.4k | 600 | $0.020 | 2026-09-30 | 01234567 "
+        "| [fake-job](results/fake-job.json) |" in page
     )
-    assert "[b-one](../benchmark/b-one.html) | **pass**, 100.0% |" in page
+    assert "[b-one](../../benchmarks/b-one/README.md) | **pass**, 100.0% |" in page
 
 
 def test_an_errored_trial_counts_as_a_failure(tmp_path):
@@ -572,3 +589,147 @@ def test_the_leaderboard_page_matches_the_recorded_results():
         leaderboard.load_leaderboards(), leaderboard.load_results()
     )
     assert leaderboard.PAGE.read_text() == page, "run leaderboard.py render"
+
+
+def test_a_text_value_of_spaces_is_not_missing():
+    assert grade.normalize("  ", "str") == "  "
+    assert grade.normalize("", "str") is None
+    assert grade.normalize(" NA ", "str") is None
+    assert grade.normalize("  ", "int") is None
+
+
+def _rerun(tmp_path: Path, benchmark: str, write) -> dict:
+    """Grade a correct submission with a fake interpreter that runs `write`
+    against the output directory, as the verifier's rerun would."""
+    contract, columns, rows = _golden(benchmark)
+    output = tmp_path / "output"
+    _write(output / contract["outputs"][0]["file"], columns, rows)
+    (output / contract["script"]).write_text("# agent script\n")
+    calls = []
+
+    def run(command, cwd, timeout):
+        calls.append(command)
+        return write(output, contract, columns, rows)
+
+    expected = ROOT / "benchmarks" / benchmark / "expected"
+    result = grade.grade(
+        contract, expected, output, tmp_path / "none.json", rerun=True, run=run
+    )
+    assert calls == [["Rscript", str(output / contract["script"])]]
+    return result
+
+
+def test_a_rerun_that_reproduces_the_golden_passes(tmp_path):
+    def write(output, contract, columns, rows):
+        _write(output / contract["outputs"][0]["file"], columns, rows)
+        return 0, ""
+
+    result = _rerun(tmp_path, "adam-adsl-age-group", write)
+    assert result["passed"] and result["reward"]["reproduced"] == 1.0
+
+
+def test_a_script_that_cannot_rerun_zeroes_a_correct_answer(tmp_path):
+    result = _rerun(tmp_path, "adam-adsl-age-group", lambda *_: (1, "Error"))
+    assert not result["passed"]
+    assert result["outputs"][0]["passed"], "the submitted dataset was right"
+    assert result["reward"]["reproduced"] == 0.0
+    assert any("adsl.csv was not written" in p for p in result["rerun"]["problems"])
+
+
+def test_a_rerun_that_writes_other_values_fails(tmp_path):
+    def write(output, contract, columns, rows):
+        changed = [{**rows[0], "AGEGR1N": "9"}, *rows[1:]]
+        _write(output / contract["outputs"][0]["file"], columns, changed)
+        return 0, ""
+
+    result = _rerun(tmp_path, "adam-adsl-age-group", write)
+    assert not result["passed"] and result["reward"]["reproduced"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("language", "command"),
+    [("r", "python3 -c 'import pandas'"), ("python", "Rscript -e 'library(dplyr)'")],
+)
+def test_calling_the_other_language_zeroes_a_correct_answer(
+    tmp_path, language, command
+):
+    _, columns, rows = _golden("adam-adsl-age-group", language)
+    trajectory = {
+        "steps": [
+            {
+                "tool_calls": [
+                    {"function_name": "bash", "arguments": {"command": command}}
+                ]
+            }
+        ]
+    }
+    result = _grade(
+        tmp_path, "adam-adsl-age-group", columns, rows, trajectory, language
+    )
+    assert not result["passed"]
+    assert result["reward"]["language_violations"] == 1.0
+
+
+def test_a_script_that_bridges_to_the_other_language_fails(tmp_path):
+    contract, columns, rows = _golden("adam-adsl-age-group", "r")
+    output = tmp_path / "output"
+    _write(output / contract["outputs"][0]["file"], columns, rows)
+    (output / "result.R").write_text("library(reticulate)\npy_run_file('x.py')\n")
+    expected = ROOT / "benchmarks" / "adam-adsl-age-group" / "expected"
+    result = grade.grade(contract, expected, output, tmp_path / "none.json")
+    assert not result["passed"]
+    assert "calls another language" in result["script"]["problems"][0]
+
+
+def test_domains_built_together_are_graded_together():
+    contract = build.contract_for(ROOT / "benchmarks" / "sdtm-dm-race-ethnicity", "r")
+    assert [o["file"] for o in contract["outputs"]] == ["dm.csv", "suppdm.csv"]
+
+
+def test_input_schemas_stay_out_of_the_agent_sandbox(tmp_path):
+    benchmark = ROOT / "benchmarks" / "adam-adsl-randomization"
+    assert (benchmark / "input" / "dm.schema.yaml").is_file()
+    task = build.build_task(benchmark, tmp_path, build.IMAGE, "test", "r")
+    inputs = sorted(p.name for p in (task / "environment" / "input").iterdir())
+    assert inputs == ["dm.parquet", "odm.csv"]
+
+
+def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
+    benchmark = ROOT / "benchmarks" / "sdtm-dm-race-ethnicity"
+    task = build.build_task(
+        benchmark, tmp_path / "tasks", build.IMAGE, "test", "python"
+    )
+    script = (task / "solution" / "result.py").read_text()
+    out = tmp_path / "out"
+    out.mkdir()
+    runnable = tmp_path / "result.py"
+    runnable.write_text(script.replace("/app/output/", f"{out}/"))
+    subprocess.run([sys.executable, str(runnable)], check=True)
+    for name in ("dm.csv", "suppdm.csv"):
+        assert (out / name).read_bytes() == (benchmark / "expected" / name).read_bytes()
+    solve = (task / "solution" / "solve.sh").read_text()
+    assert "python3 /app/output/result.py" in solve
+    assert "--rerun" in (task / "tests" / "test.sh").read_text()
+
+
+def test_a_build_removes_tasks_left_by_an_earlier_one(tmp_path, monkeypatch):
+    stale = tmp_path / "tasks" / "gone-r"
+    stale.mkdir(parents=True)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build.py",
+            "--benchmarks",
+            "adam-adsl-age-group",
+            "--language",
+            "r",
+            "--model",
+            "opencode-go/muse-spark-1.3-contributor",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+    build.main()
+    assert sorted(p.name for p in (tmp_path / "tasks").iterdir()) == [
+        "adam-adsl-age-group-r"
+    ]
