@@ -145,7 +145,7 @@ columns:
       length: 10
       codelist: EPOCH
       origin:
-        type: Derived
+        type: Assigned
         source: Sponsor
 
 verifications:
