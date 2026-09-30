@@ -121,6 +121,21 @@ def test_an_empty_script_fails(tmp_path, language):
     assert result["script"]["problems"] == [f"{contract['script']} is empty"]
 
 
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_a_non_utf8_script_fails_instead_of_erroring(tmp_path, language):
+    contract, _, _ = _golden("adam-adsl-age-group", language)
+    _, columns, rows = _golden("adam-adsl-age-group", language)
+    output = tmp_path / "output"
+    _write(output / contract["outputs"][0]["file"], columns, rows)
+    (output / contract["script"]).write_bytes(b"\xff\xfe\x00binary")
+    expected = ROOT / "benchmarks" / "adam-adsl-age-group" / "expected"
+    result = grade.grade(contract, expected, output, tmp_path / "none.json")
+    assert not result["passed"]
+    assert result["reward"]["reward"] == 0.0
+    (problem,) = result["script"]["problems"]
+    assert problem.startswith(f"{contract['script']} cannot be read: ")
+
+
 def test_an_unknown_language_is_rejected():
     with pytest.raises(build.BuildError):
         build.contract_for(ROOT / "benchmarks" / PILOTS[0], "julia")

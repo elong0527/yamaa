@@ -234,7 +234,7 @@ def grade_script(contract: dict, output_dir: Path) -> dict:
         if not path.read_text(encoding="utf-8").strip():
             result["problems"].append(f"{name} is empty")
             return result
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         result["problems"].append(f"{name} cannot be read: {exc}")
         return result
     result["passed"] = True
