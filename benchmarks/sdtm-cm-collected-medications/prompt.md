@@ -10,7 +10,7 @@ CMSEQ is the medication repeat number within the subject. CMTRT and
 CMINDC keep the reported name and indication exactly as written. CMDOSE
 holds the collected dose when it is a plain number, and has no value
 otherwise. CMDOSTXT holds the collected dose when it is not a plain
-number, such as the range 200-400, and has no value when CMDOSE carries
+number, such as a range like 50-75, and has no value when CMDOSE carries
 the dose. CMDOSU is the unit of the collected dose. CMDOSFRQ maps the
 collected frequency label to controlled terminology: Once daily becomes
 QD and Twice daily becomes BID. CMROUTE maps the collected route label:

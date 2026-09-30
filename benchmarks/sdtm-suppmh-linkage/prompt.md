@@ -13,9 +13,8 @@ Confirmed by Medical Records for MHCONF. QVAL is the collected answer, Y
 or N. QORIG is Collected for collected values. QEVAL has no value, since a
 collected value is not an assessment.
 
-A qualifier that finds no parent record is an error rather than a record
-with an empty link, so every supplemental record points at a real parent.
-A parent record with no collected qualifiers simply contributes nothing.
+A qualifier left blank gives no record, and a parent record with no
+collected qualifiers contributes nothing.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/suppmh.csv.

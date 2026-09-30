@@ -19,9 +19,10 @@ QSORRES is the response text matching the circled score: 0 is "Not at
 all", 1 is "Several days", 2 is "More than half the days", and 3 is
 "Nearly every day". It has no value on the total-score record because the
 score is computed, not collected. QSSTRESC is the collected score as text,
-or the total as text on the total record; QSSTRESN is the same value as a
-number. The total is the sum of the nine item scores and appears only for
-a visit where all nine items were answered.
+or the total as text on the total record, written without a decimal point;
+QSSTRESN is the same value as a number. The total is the sum of the nine
+item scores and appears only for a visit where all nine items were
+answered.
 
 QSSTAT is NOT DONE on the skipped-item record and on the
 refused-questionnaire record; QSREASND says why: LOGICALLY SKIPPED ITEM or

@@ -11,7 +11,8 @@ the number of exposure records for the treatment; empty when the
 treatment has no exposure record at all. NDOSVAL is the number of
 exposure records carrying a recorded dose; an explicitly recorded zero
 counts as a dose, and the count is zero (not empty) when records exist
-but every dose was left blank.
+but every dose was left blank. NDOSVAL has no value when the treatment
+has no exposure record at all.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adex.csv.

@@ -5,25 +5,26 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
 VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT
 
-Records are grouped by test rather than kept in collection order: all
-heights first, then all weights, then all temperatures, each in collection
-order. VSTESTCD is the test code as collected: HEIGHT, WEIGHT, or TEMP.
-VSTEST is the test name as collected: Height, Weight, or Temperature.
+VSSEQ is the sequence number as collected. VSTESTCD is the test code as
+collected: HEIGHT, WEIGHT, or TEMP. VSTEST is the test name as collected:
+Height, Weight, or Temperature.
 
-VSORRES is the collected result written back as text; reading it as a
-number drops trailing zeros, but the value itself is never converted.
+VSORRES is the collected result read as a number and written back as
+text, so trailing zeros after the decimal point are dropped and a whole
+number has no decimal point; the value itself is never converted.
 VSORRESU is the unit exactly as collected: cm, kg, C, LB, or F, and has no
 value when no result was collected. VSSTRESN is the result as a number in
-the test's standard unit: height passes through in cm, weight collected in
-LB is expressed in kg, and temperature collected in F is expressed in C; a
-result already in the standard unit passes through unchanged, and a result
-never collected stays missing. VSSTRESC is the same standardized value
-written as text, so it always agrees with the numeric result, and has no
-value when no result was collected. VSSTRESU is the test's standard unit:
-cm for height, kg for weight, C for temperature; it has no value when no
-result was collected. A unit that does not belong to the test stops the
-run instead of being carried through. VSSTAT is NOT DONE when no result
-was collected, and has no value otherwise.
+the test's standard unit, not rounded: height passes through in cm,
+weight collected in LB is multiplied by 0.45359237 to give kg, and
+temperature collected in F becomes (F - 32) * 5 / 9 in C; a result
+already in the standard unit passes through unchanged, and a result never
+collected has no value. VSSTRESC is the same standardized value written as
+text with at most 15 significant digits and no trailing zeros, so a whole
+number has no decimal point; it has no value when no result was
+collected. VSSTRESU is the test's standard unit: cm for height, kg for
+weight, C for temperature; it has no value when no result was collected.
+VSSTAT is NOT DONE when no result was collected, and has no value
+otherwise.
 
 A record whose result was never collected carries VSSTAT NOT DONE, no
 original unit, and no standardized value.

@@ -4,7 +4,7 @@ to create an ADRS dataset with one record per subject.
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVALC, AVAL
 
-Use PARAMCD "MDIS" and PARAM Measurable Disease at Baseline.
+Use PARAMCD "MDIS" and PARAM "Measurable Disease at Baseline".
 
 AVALC is Y when the subject has at least one screening tumor
 identification record (TUTESTCD of TUMIDENT, VISIT of SCREENING)

@@ -19,13 +19,11 @@ BORPRI orders the supported categories as 1 (complete response), 2
 (neither-complete-nor-progressive disease), 5 (progressive disease), 6
 (not evaluable); it has no value when the record supports no category.
 
-BORSEQ numbers the usable records of each study and subject in
-category order, then by analysis date, then by assessment sequence.
+BORSEQ numbers the usable records of each study and subject from 1,
+in BORPRI order, then by analysis date, then by assessment sequence.
 The record numbered 1 supplies the study-subject's best overall
 response and its supporting date. A record that supports no category
-takes no priority and no number, so numbering passes over it: it can
-never be numbered 1. A record that breaks these pairings stops the
-run, and no output is written.
+has no BORSEQ, and the numbering passes over it without a gap.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adrs.csv.

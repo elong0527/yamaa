@@ -6,7 +6,7 @@ The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC,
 ARSN, AVAL
 
-Use PARAMCD "RESP75" and PARAM EASI-75 Response.
+Use PARAMCD "RESP75" and PARAM "EASI-75 Response".
 
 The checks apply in a fixed order. A subject with a serious adverse
 event or any discontinuation reason is a non-responder whatever the

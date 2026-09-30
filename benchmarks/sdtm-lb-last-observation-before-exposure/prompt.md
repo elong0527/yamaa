@@ -6,6 +6,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT,
 LBLOBXFL
 
+LBSEQ is the ItemGroupRepeatKey of the item group that holds the result,
+so it runs across the study rather than restarting for each subject.
 LBTESTCD is the test code from the item dictionary, and LBSPEC the
 specimen from the same entry; a test measured in more than one specimen is
 flagged separately per specimen. LBORRES is the result as collected, and

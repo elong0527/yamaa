@@ -1,33 +1,28 @@
-"""Record Harbor agent runs and render the site's leaderboards.
+"""Turn Harbor jobs into Harbor Hub leaderboard rows.
 
-    python evaluations/harbor/leaderboard.py add ~/.cache/yamaa-harbor/jobs/<job>
-    python evaluations/harbor/leaderboard.py render [--check]
-    python evaluations/harbor/leaderboard.py export <leaderboard> --package <org/name>
+    python evaluations/harbor/leaderboard.py export <leaderboard> \\
+        --package <org>/<dataset> <job-dir> [<job-dir> ...]
 
 The leaderboards follow Harbor Hub's curated-leaderboard model. Each
 `leaderboards/<name>.yaml` names the tasks and attempts a run must cover and,
 under `harbor:`, the Hub definition: the metadata and metrics every row
 carries, the columns, and the ordered `rank_by` rules.
 
-`add` records one Harbor job as `results/<job>.json`: the per-trial facts and
-trial ids a row is built from, and the leaderboards the run belongs to. A
-row's metrics aggregate its trials as Harbor does: the mean counts an errored
-trial as 0, and pass@k is Harbor's unbiased estimator averaged over tasks.
-`render` rebuilds `leaderboard.md` beside this file, ranking rows with Harbor's
-own comparison; `--check` fails when the committed page is out of date.
-`export` writes the configs `harbor hub leaderboard create` and
-`harbor hub leaderboard row create` take.
+`export` reads each Harbor job directory, refuses a job that does not cover
+the leaderboard's tasks at their own timeouts, and writes the configs
+`harbor hub leaderboard create` and `harbor hub leaderboard row create` take.
+A row's metrics aggregate its trials as Harbor does: the mean counts an
+errored trial as 0, and pass@k is Harbor's unbiased estimator averaged over
+tasks. Results live on Harbor Hub, not in this repository.
 """
 
 from __future__ import annotations
 
 import argparse
-import functools
 import json
 import os
 import re
 import sys
-import textwrap
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,17 +33,12 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-RESULTS = HERE / "results"
 LEADERBOARDS = HERE / "leaderboards"
-# The page is for review in the repository, not published on the site.
-PAGE = HERE / "leaderboard.md"
-HUB_DOCS = "https://docs.harborframework.com/core-concepts/harbor-hub/leaderboards"
 EXPORT = (
     Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     / "yamaa-harbor"
     / "hub"
 )
-FORMATS = ("percent", "count", "usd")
 PHASE_MULTIPLIERS = (
     "agent_timeout_multiplier",
     "verifier_timeout_multiplier",
@@ -157,7 +147,7 @@ def _declared(schema: dict, key: str) -> bool:
 
 
 def board_problems(board: dict) -> list[str]:
-    """What keeps a leaderboard definition from rendering or exporting."""
+    """What keeps a leaderboard definition from exporting."""
     harbor = board["harbor"]
     schemas = {
         "metadata": harbor["metadata_schema"],
@@ -166,16 +156,12 @@ def board_problems(board: dict) -> list[str]:
     found = []
     if not board["tasks"] or board["attempts"] < 1:
         found.append("needs at least one task and one attempt")
-    ids = {column["id"] for column in harbor["columns"]}
     for accessor in [c["accessor"] for c in harbor["columns"]] + [
         r["accessor"] for r in harbor["rank_by"]
     ]:
         root, _, key = accessor.partition(".")
         if not _declared(schemas[root], key):
             found.append(f"{accessor} is not in the {root} schema")
-    for column, style in board.get("formats", {}).items():
-        if column not in ids or style not in FORMATS:
-            found.append(f"format {column}: {style} names no column or format")
     return found
 
 
@@ -190,10 +176,6 @@ def load_leaderboards() -> list[dict]:
             raise SystemExit(f"{path.name}: " + "; ".join(found))
         boards.append(board)
     return boards
-
-
-def load_results() -> list[dict]:
-    return [json.loads(p.read_text()) for p in sorted(RESULTS.glob("*.json"))]
 
 
 def run_problems(run: dict, board: dict) -> list[str]:
@@ -298,7 +280,6 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
         if seen.intersection(trial_ids):
             raise SystemExit(f"{run['job']} on {name}: a trial is on two rows")
         seen.update(trial_ids)
-        record = f"results/{run['job']}.json"
         rows.append(
             {
                 "metadata": {
@@ -311,7 +292,6 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "job_id": run["job_id"],
                     "harbor_version": run["harbor_version"],
                     "yamaa_commit": run.get("yamaa_commit"),
-                    "record": {"url": record, "label": run["job"]},
                 },
                 "metrics": metrics(trials),
                 "status": run["status"],
@@ -320,217 +300,6 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
             }
         )
     return rows
-
-
-def _sortable(value: object) -> float | str | None:
-    if isinstance(value, bool):
-        return float(value)
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        return value.lower()
-    return None
-
-
-def _value(row: dict, accessor: str) -> object:
-    root, _, key = accessor.partition(".")
-    return row[root].get(key)
-
-
-def rank(rows: list[dict], rank_by: list[dict]) -> list[dict]:
-    """Order rows as Harbor Hub does: rule by rule, nulls last unless the
-    rule says first, and mixed number and string values compared as text."""
-
-    def compare(a: dict, b: dict) -> int:
-        for rule in rank_by:
-            av = _sortable(_value(a, rule["accessor"]))
-            bv = _sortable(_value(b, rule["accessor"]))
-            if av is None and bv is None:
-                continue
-            nulls_first = rule.get("nulls") == "first"
-            if av is None:
-                return -1 if nulls_first else 1
-            if bv is None:
-                return 1 if nulls_first else -1
-            if isinstance(av, float) and isinstance(bv, float):
-                if av == bv:
-                    continue
-                result = -1 if av < bv else 1
-            else:
-                if str(av) == str(bv):
-                    continue
-                result = -1 if str(av) < str(bv) else 1
-            return -result if rule["direction"] == "desc" else result
-        return 0
-
-    return sorted(rows, key=functools.cmp_to_key(compare))
-
-
-def _tokens(value: float) -> str:
-    return f"{value / 1000:.1f}k" if value >= 1000 else f"{value:.0f}"
-
-
-def _cost(value: float) -> str:
-    return f"${value:.2f}" if value >= 1 else f"${value:.3f}"
-
-
-def _cell(value: object, column: dict, style: str | None) -> str:
-    if value is None:
-        return "n/a"
-    kind = column["type"]
-    if kind == "link":
-        if isinstance(value, dict):
-            return f"[{value['label']}]({value['url']})"
-        return f"<{value}>"
-    if kind == "boolean":
-        return "yes" if value else "no"
-    if kind == "number":
-        if style == "percent":
-            return f"{value:.1%}"
-        if style == "usd":
-            return _cost(value)
-        if style == "count":
-            return _tokens(value)
-        return f"{value:g}"
-    text = str(value)
-    return text if kind == "markdown" else text.replace("|", "\\|")
-
-
-def _align(column: dict) -> str:
-    align = column.get("align") or ("right" if column["type"] == "number" else "left")
-    return {"left": "---", "center": ":---:", "right": "---:"}[align]
-
-
-def _ranking(board: dict) -> str:
-    headers = {c["accessor"]: c["header"] for c in board["harbor"]["columns"]}
-    rules = [
-        f"{headers.get(r['accessor'], r['accessor']).lower()} "
-        f"({'highest' if r['direction'] == 'desc' else 'lowest'} first)"
-        for r in board["harbor"]["rank_by"]
-    ]
-    return "Rows are ranked by " + ", then ".join(rules) + "."
-
-
-def _wrap(text: str) -> str:
-    return textwrap.fill(text, width=72, break_long_words=False, break_on_hyphens=False)
-
-
-def _task_link(task: str) -> str:
-    """A task's link from the page; language-suffixed tasks point at their
-    benchmark's README."""
-    base = task
-    for suffix in ("-python", "-r"):
-        if task.endswith(suffix):
-            base = task[: -len(suffix)]
-            break
-    return f"[{task}](../../benchmarks/{base}/README.md)"
-
-
-def _board_section(board: dict, rows: list[dict]) -> list[str]:
-    harbor = board["harbor"]
-    tasks = ", ".join(_task_link(t) for t in board["tasks"])
-    attempts = board["attempts"]
-    rule = (
-        f"Tasks: {tasks}. A run is ranked here when it makes at least "
-        f"{attempts} attempt{'s' if attempts > 1 else ''} on each task at the "
-        f"tasks' own timeouts. {_ranking(board)}"
-    )
-    lines = [f"## {harbor['title']}", "", _wrap(harbor["description"]), ""]
-    lines += [_wrap(rule), ""]
-    rows = [r for r in rows if r["status"] == "display"]
-    if not rows:
-        return [*lines, "No runs are recorded on this leaderboard yet.", ""]
-
-    columns = harbor["columns"]
-    formats = board.get("formats", {})
-    lines += [
-        "| # | " + " | ".join(c["header"] for c in columns) + " | Trials |",
-        "|---:|" + "".join(f"{_align(c)}|" for c in columns) + "---:|",
-    ]
-    for position, row in enumerate(rows, 1):
-        cells = [
-            _cell(_value(row, c["accessor"]), c, formats.get(c["id"])) for c in columns
-        ]
-        lines.append(
-            f"| {position} | " + " | ".join(cells) + f" | {len(row['trials'])} |"
-        )
-
-    headers = [
-        f"#{position} `{row['metadata']['model'].rpartition('/')[2]}`"
-        for position, row in enumerate(rows, 1)
-    ]
-    lines += [
-        "",
-        "Each cell below is the task result and the share of golden cells the",
-        "agent reproduced; with several attempts, the passes out of the attempts.",
-        "",
-        "| Benchmark | " + " | ".join(headers) + " |",
-        "|---|" + "---|" * len(headers),
-    ]
-    for benchmark in board["tasks"]:
-        cells = []
-        for row in rows:
-            trials = [t for t in row["trials"] if t["benchmark"] == benchmark]
-            passed = sum(t["reward"] == 1.0 for t in trials)
-            accuracy = _mean([t["cell_accuracy"] for t in trials])
-            verdict = "**pass**" if passed == len(trials) else "fail"
-            if len(trials) > 1:
-                verdict = f"{passed} / {len(trials)} pass"
-            errors = sorted({t["error"] for t in trials if t["error"]})
-            note = f" ({', '.join(errors)})" if errors else ""
-            cells.append(f"{verdict}, {accuracy:.1%}{note}")
-        lines.append(f"| {_task_link(benchmark)} | " + " | ".join(cells) + " |")
-    return [*lines, ""]
-
-
-def render(boards: list[dict], runs: list[dict]) -> str:
-    names = {b["harbor"]["name"] for b in boards}
-    for run in runs:
-        unknown = sorted(set(run["leaderboards"]) - names)
-        if unknown:
-            raise SystemExit(f"{run['job']} names unknown leaderboards: {unknown}")
-    lines = [
-        "# Agent leaderboards",
-        "",
-        "How well AI coding agents turn a benchmark's request and input datasets",
-        "into the requested dataset. Each agent gets a system prompt naming",
-        "its language (R or Python), the benchmark's `prompt.md` and its",
-        "input files, in a sandbox that reaches nothing",
-        "but the model API, and its output is graded cell by cell against the",
-        "benchmark's golden file. A task passes when every cell matches and",
-        "the required script (`result.R` or `result.py`), rerun from a clean",
-        "state, writes the same datasets. Results are recorded in this",
-        "repository for review and are not published.",
-        "[The evaluation](README.md) runs on",
-        "[Harbor](https://github.com/harbor-framework/harbor); how each request",
-        "is written is in",
-        "[the benchmark prompt recipe](../../automation/benchmark_prompt.md).",
-        "",
-        "Each leaderboard below is defined the way",
-        f"[Harbor Hub leaderboards]({HUB_DOCS}) are: a fixed set of tasks, the",
-        "metadata and metrics each row carries, the columns shown, and ordered",
-        "ranking rules. A row is one recorded run, and its metrics aggregate the",
-        "run's trials as Harbor does, so an errored trial counts as a failure.",
-        "",
-    ]
-    for board in boards:
-        rows = rank(rows_for(board, runs), board["harbor"]["rank_by"])
-        lines += _board_section(board, rows)
-    lines += [
-        "## Reading the results",
-        "",
-        "- **Attempts.** A leaderboard that asks for one attempt per task is a",
-        "  pilot: a single pass or failure says little about a model on its",
-        "  own. With several attempts, rows also carry Harbor's pass@k.",
-        "- **Public data.** The inputs and golden files are published in this",
-        "  repository, so a model may have seen them in training; the sandbox",
-        "  only rules out looking them up during the run.",
-        "- **Contributor models.** A model whose name ends in `-contributor`",
-        "  runs at a discount in exchange for its provider training on the",
-        "  prompts and answers, which may inflate that provider's later scores.",
-        "",
-    ]
-    return "\n".join(lines)
 
 
 def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]:
@@ -542,7 +311,8 @@ def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]
         yaml.safe_dump({"package": package, **board["harbor"]}, sort_keys=False)
     )
     written = [definition]
-    rows = rank(rows_for(board, runs), board["harbor"]["rank_by"])
+    # Harbor Hub ranks rows by the board's `rank_by`; they go up in run order.
+    rows = rows_for(board, runs)
     if rows:
         hub_rows = [
             {key: row[key] for key in ("metadata", "metrics", "status", "trial_ids")}
@@ -557,62 +327,42 @@ def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    add = commands.add_parser("add", help="record a Harbor job, then render")
-    add.add_argument("job_dir", type=Path)
-    add.add_argument(
-        "--leaderboard",
-        action="append",
-        help="leaderboard to rank the run on (repeatable); default: every one "
-        "it qualifies for",
-    )
-    add.add_argument("--hide", action="store_true", help="record the run hidden")
-    check = commands.add_parser("render", help="rebuild the leaderboard page")
-    check.add_argument("--check", action="store_true")
     hub = commands.add_parser("export", help="write Harbor Hub create configs")
     hub.add_argument("leaderboard")
+    hub.add_argument("job_dirs", nargs="+", type=Path, help="Harbor job directories")
     hub.add_argument("--package", required=True, help="Hub dataset package org/name")
+    hub.add_argument("--hide", action="store_true", help="export the rows hidden")
     hub.add_argument("--out", type=Path, default=EXPORT)
     args = parser.parse_args()
 
-    boards = load_leaderboards()
-    by_name = {b["harbor"]["name"]: b for b in boards}
-    if args.command == "export":
-        if args.leaderboard not in by_name:
-            sys.exit(f"no leaderboard {args.leaderboard!r}")
-        board = by_name[args.leaderboard]
-        paths = export(board, load_results(), args.package, args.out)
-        for path in paths:
-            print(f"wrote {path}")
-        ref = f"{args.package}/{args.leaderboard}"
-        print("upload each job first: harbor upload <job-dir>")
-        print(f"then: harbor hub leaderboard create --config {paths[0]}")
-        if len(paths) > 1:
-            print(f"then: harbor hub leaderboard row create {ref} --config {paths[1]}")
-        return
-
-    if args.command == "add":
-        run = collect(args.job_dir)
-        wanted = args.leaderboard or list(by_name)
-        unknown = sorted(set(wanted) - set(by_name))
-        if unknown:
-            sys.exit(f"no leaderboard {unknown}")
-        problems = {n: run_problems(run, by_name[n]) for n in wanted}
-        summary = "; ".join(f"{n}: {', '.join(p)}" for n, p in problems.items() if p)
-        run["leaderboards"] = [n for n in wanted if not problems[n]]
-        if not run["leaderboards"] or (args.leaderboard and summary):
-            sys.exit(f"the run cannot be ranked: {summary}")
+    by_name = {b["harbor"]["name"]: b for b in load_leaderboards()}
+    if args.leaderboard not in by_name:
+        sys.exit(f"no leaderboard {args.leaderboard!r}; have {sorted(by_name)}")
+    board = by_name[args.leaderboard]
+    runs = []
+    for job_dir in args.job_dirs:
+        run = collect(job_dir)
+        problems = run_problems(run, board)
+        if problems:
+            sys.exit(f"{run['job']} cannot be ranked: {'; '.join(problems)}")
+        run["leaderboards"] = [args.leaderboard]
         run["status"] = "hide" if args.hide else "display"
-        RESULTS.mkdir(exist_ok=True)
-        path = RESULTS / f"{run['job']}.json"
-        path.write_text(json.dumps(run, indent=2) + "\n")
-        print(f"wrote {path.relative_to(ROOT)} ({', '.join(run['leaderboards'])})")
-    page = render(boards, load_results())
-    if getattr(args, "check", False):
-        if not PAGE.is_file() or PAGE.read_text() != page:
-            sys.exit(f"{PAGE.relative_to(ROOT)} is out of date; run render")
-        return
-    PAGE.write_text(page)
-    print(f"wrote {PAGE.relative_to(ROOT)}")
+        runs.append(run)
+    paths = export(board, runs, args.package, args.out)
+    for row in rows_for(board, runs):
+        m = row["metrics"]
+        print(
+            f"{row['metadata']['job']}: {row['metadata']['model']} "
+            f"reward {m['reward']:.3f}, cells {m['cell_accuracy']:.3f}, "
+            f"{m['n_trials']} trial(s), tasks from {row['metadata']['yamaa_commit']}"
+        )
+    for path in paths:
+        print(f"wrote {path}")
+    ref = f"{args.package}/{args.leaderboard}"
+    print("upload each job first: harbor upload <job-dir> --org <org> --private")
+    print(f"then: harbor hub leaderboard create --config {paths[0]}")
+    if len(paths) > 1:
+        print(f"then: harbor hub leaderboard row create {ref} --config {paths[1]}")
 
 
 if __name__ == "__main__":

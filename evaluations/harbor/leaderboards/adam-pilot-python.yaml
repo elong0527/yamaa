@@ -1,4 +1,4 @@
-# A leaderboard ranks recorded runs (`../results/<job>.json`) that name it.
+# A leaderboard ranks Harbor jobs uploaded to Harbor Hub.
 # A run belongs here only when it covers every task below with at least
 # `attempts` attempts each, at the tasks' own timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
@@ -10,18 +10,10 @@ tasks:
   - adam-adtte-dor-python
 attempts: 1
 
-# How the site formats number columns, by column id: percent, count, or
-# usd. Harbor Hub shows the raw number.
-formats:
-  reward: percent
-  cell_accuracy: percent
-  input_tokens: count
-  output_tokens: count
-  cost_usd: usd
-
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
 # --config` takes. `leaderboard.py export` adds the dataset package and
-# writes it with the rows, ready to create once the tasks are published.
+# writes it with the rows built from the jobs, ready to create once the
+# tasks are published and the jobs uploaded.
 harbor:
   name: adam-pilot-python
   title: ADaM pilot (Python)
@@ -34,7 +26,7 @@ harbor:
   visibility: private
   metadata_schema:
     type: object
-    required: [agent, agent_version, model, date, attempts, job, record]
+    required: [agent, agent_version, model, date, attempts, job]
     properties:
       agent:
         type: string
@@ -66,14 +58,6 @@ harbor:
         description: >-
           yamaa commit the tasks were built from (task.toml metadata), with
           +dirty when the tree had uncommitted changes
-      record:
-        type: object
-        description: The recorded run in the repository
-        properties:
-          url:
-            type: string
-          label:
-            type: string
   metrics_schema:
     type: object
     required: [reward, cell_accuracy, row_accuracy, n_trials, n_errors]
@@ -165,11 +149,6 @@ harbor:
       header: Tasks from
       accessor: metadata.yamaa_commit
       type: text
-    - id: record
-      header: Run
-      accessor: metadata.record
-      type: link
-      enable_sorting: false
   rank_by:
     - accessor: metrics.reward
       direction: desc

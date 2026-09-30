@@ -12,10 +12,11 @@ Docker; this folder only writes Harbor task directories and a job file.
 | `system-r.md`, `system-python.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py` |
 | `build.py` | benchmarks with a `prompt.md` -> Harbor tasks and `job.json`, one task per benchmark per language |
 | `grade.py` | the verifier, copied into every task's `tests/` |
-| `leaderboard.py` | Harbor jobs -> `results/`; `results/` -> `leaderboard.md` |
-| `leaderboard.md` | the leaderboard page, for review in the repository; not published |
+| `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
 | `leaderboards/` | leaderboard definitions, one file per leaderboard (one per language) |
-| `results/` | recorded agent runs, one file per Harbor job |
+
+Results are not kept in this repository: runs are uploaded to Harbor Hub and
+reviewed on its leaderboards.
 
 How to write a prompt is in
 [`automation/benchmark_prompt.md`](../../automation/benchmark_prompt.md).
@@ -148,13 +149,12 @@ tokens and cost. `harbor view ~/.cache/yamaa-harbor/jobs` browses them.
 Each leaderboard follows the
 [Harbor Hub model](https://docs.harborframework.com/core-concepts/harbor-hub/leaderboards):
 a curated, ranked table whose definition fixes the columns and the ranking
-rules, and whose rows are recorded runs that point back to their trials.
+rules, and whose rows are uploaded runs that point back to their trials.
 `leaderboards/<name>.yaml` holds:
 
 - `tasks` and `attempts`: the benchmarks a run must cover and the fewest
   attempts on each. A run qualifies only at the tasks' own timeouts, so
   every row answers the same question.
-- `formats`: how the site prints number columns.
 - `harbor`: the Hub definition itself, in the shape
   `harbor hub leaderboard create --config` takes: the `metadata_schema`
   and `metrics_schema` of a row, the `columns`, and the ordered `rank_by`
@@ -162,13 +162,14 @@ rules, and whose rows are recorded runs that point back to their trials.
 
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
-and `render` then refuses them. Start a new leaderboard instead. There is
+and `export` then refuses them. Start a new leaderboard instead. There is
 one leaderboard per language (`adam-pilot-r`, `adam-pilot-python`), so R
 and Python are ranked independently; one job can appear on both boards.
 
 A row's metadata comes from the job (agent, version, model, date,
-attempts, job and Harbor version, and the yamaa commit of its tasks) and its metrics from its trials on the
-leaderboard's tasks, aggregated as Harbor aggregates them:
+attempts, job and Harbor version, and the yamaa commit of its tasks) and
+its metrics from its trials on the leaderboard's tasks, aggregated as
+Harbor aggregates them:
 
 | Metric | Meaning |
 |---|---|
@@ -180,38 +181,56 @@ leaderboard's tasks, aggregated as Harbor aggregates them:
 | `agent_seconds` | mean agent time per trial |
 
 Harbor skips pass@k when a verifier writes several rewards, as `grade.py`
-does, so `leaderboard.py` computes it from `reward`. Rows are ordered with
-Harbor Hub's own comparison: each `rank_by` rule in turn, nulls last
-unless the rule says `nulls: first`. With the `harbor` group installed,
-tests check the pass@k estimator, the ordering and the exported configs
-against Harbor's own code; without it they skip.
+does, so `leaderboard.py` computes it from `reward`. Harbor Hub orders the
+rows by the board's `rank_by` rules. With the `harbor` group installed,
+tests check the pass@k estimator and the exported configs against
+Harbor's own code; without it they skip.
 
 To compare models, ask for several attempts per task: one attempt is a
 pilot, and pass@k needs at least two. Terminal-Bench 2.0, the reference
 Harbor benchmark, takes leaderboard runs with `--n-attempts 5`.
 
-### Record a run
+### Publish to Harbor Hub
+
+Everything is private to the `yamaa` organization on Harbor Hub: the task
+package, the uploaded jobs, and the leaderboards. Log in once with
+`harbor auth login` (GitHub OAuth) as a member of `yamaa`. Build the tasks
+from a committed tree, so each row's "Tasks from" commit names the prompts
+it answered (a `+dirty` suffix means uncommitted changes), and publish
+exactly the task directories the job ran, so the uploaded trials match the
+published tasks.
+
+```bash
+H="uv run --project python --no-sync harbor"
+$H dataset init yamaa/adam-pilot \
+	-o ~/.cache/yamaa-harbor/dataset \
+	--description "yamaa ADaM pilot: three benchmarks, R and Python tracks"
+$H add ~/.cache/yamaa-harbor/tasks \
+	--scan \
+	--to ~/.cache/yamaa-harbor/dataset
+$H publish ~/.cache/yamaa-harbor/dataset \
+	--private
+$H upload ~/.cache/yamaa-harbor/jobs/<job> \
+	--org yamaa \
+	--private
+```
+
+Then write each leaderboard's configs from the job directories and create
+the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	add ~/.cache/yamaa-harbor/jobs/muse-spark-1.3-pilot
+	export adam-pilot-r \
+	~/.cache/yamaa-harbor/jobs/<job> \
+	--package yamaa/adam-pilot
+$H hub leaderboard create \
+	--config ~/.cache/yamaa-harbor/hub/adam-pilot-r.leaderboard.yaml
+$H hub leaderboard row create yamaa/adam-pilot/adam-pilot-r \
+	--config ~/.cache/yamaa-harbor/hub/adam-pilot-r.rows.yaml
 ```
 
-`add` writes `results/<job>.json` (job and trial ids, agent, model,
-attempts, the yamaa commit the tasks were built from, and each trial's
-rewards, tokens, cost and time), puts the run on every leaderboard it
-qualifies for (or the ones named with `--leaderboard`), and rebuilds
-[`leaderboard.md`](leaderboard.md). It refuses a job that mixes agents or
-models, or that qualifies for no leaderboard. `--hide` records a run
-without showing it, as Harbor's row `status: hide` does. Commit the result
-and the page; a test fails when they disagree.
-
-Results are recorded in the repository for review and are not published:
-`leaderboard.md` is not part of the documentation site, and nothing is
-uploaded to Harbor Hub. Build a run's tasks from a committed tree, so its
-"Tasks from" commit names the prompts it answered (a `+dirty` suffix
-means the tree had uncommitted changes).
-
-A run recorded before the per-language split, such as the original
-`muse-spark-1.3-pilot`, names a retired leaderboard and is not carried
-forward; re-run one job per track instead.
+`export` refuses a job that mixes agents or models, misses a board task, or
+changed the tasks' timeouts; `--hide` exports its rows hidden. Repeat for
+`adam-pilot-python`; one job can feed both boards. The published tasks
+build from the local `yamaa-harbor-env:0.2` image, so they run where that
+image is built.

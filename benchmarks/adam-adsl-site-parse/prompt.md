@@ -5,8 +5,8 @@ The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, SUBJID, SITEIDP, SITEID, SUBJREF
 
 SITEIDP is the middle segment of the unique subject identifier when
-the identifier holds two dashes with four digits after the last one;
-it has no value when the identifier has any other shape.
+the identifier holds two dashes with exactly four digits after the
+last one; it has no value when the identifier has any other shape.
 
 SITEID is the site to use: the parsed site when present, otherwise the
 collected site, otherwise UNKNOWN.

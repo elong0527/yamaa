@@ -8,7 +8,8 @@ TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM, VISIT, TUDTC
 TUSEQ numbers a subject's identification records in collection order,
 starting at 1. TULNKID ties the lesion to its assessments in the tumor
 results domain: T plus the lesion number for a target lesion, NT plus the
-number for a non-target lesion, and NEW plus the number for a new lesion.
+number for a non-target lesion, and NEW plus the number for a new lesion,
+the number written in two digits as collected (target lesion 3 is T03).
 TUTESTCD is TUMIDENT and TUTEST is Tumor Identification on every record.
 TUORRES is the lesion category as collected, standardized to TARGET,
 NON-TARGET, or NEW; TUSTRESC repeats the standardized category. TULOC is

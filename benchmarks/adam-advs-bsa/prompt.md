@@ -10,9 +10,10 @@ each subject and visit that has both a height and a weight result. Mark
 it with PARAMCD "BSA" and PARAM "Body Surface Area (m^2)".
 
 AVAL keeps each collected result. On a body surface area record it is
-the Mosteller value from the visit's height in centimeters and weight
-in kilograms, a zero result still counting as a result. No record is
-added when the visit's height or weight is absent or has no result.
+the Mosteller value, the square root of the visit's height in
+centimeters times its weight in kilograms divided by 3600, not rounded;
+a zero result still counts as a result. No record is added when the
+visit's height or weight is absent or has no result.
 
 DTYPE is CALCULATION on a body surface area record and has no value on
 a collected record.

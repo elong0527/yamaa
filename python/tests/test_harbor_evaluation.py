@@ -446,13 +446,11 @@ def test_collect_reads_a_harbor_job(tmp_path):
     assert run["yamaa_commit"] == "01234567"
 
     board = _board(["b-one", "b-two"])
-    page = leaderboard.render([board], [_on(run, board)])
-    assert (
-        "| 1 | opencode | 1.18.33 | acme/model-1 | 50.0% | 50.0% | 0 "
-        "| 2.4k | 600 | $0.020 | 2026-09-30 | 01234567 "
-        "| [fake-job](results/fake-job.json) |" in page
-    )
-    assert "[b-one](../../benchmarks/b-one/README.md) | **pass**, 100.0% |" in page
+    (row,) = leaderboard.rows_for(board, [_on(run, board)])
+    assert row["metadata"]["yamaa_commit"] == "01234567"
+    assert row["metadata"]["date"] == "2026-09-30"
+    assert row["metrics"]["reward"] == 0.5
+    assert row["metrics"]["cost_usd"] == pytest.approx(0.02)
 
 
 def test_an_errored_trial_counts_as_a_failure(tmp_path):
@@ -482,50 +480,12 @@ def test_pass_at_k_matches_harbor():
         )
 
 
-def _row(reward, cells, cost):
-    return {
-        "metadata": {"model": f"m-{reward}-{cells}-{cost}"},
-        "metrics": {"reward": reward, "cell_accuracy": cells, "cost_usd": cost},
-    }
-
-
-RANK_ROWS = [
-    _row(0.5, 0.9, 0.2),
-    _row(1.0, 1.0, None),
-    _row(1.0, 1.0, 0.3),
-    _row(None, 1.0, 0.1),
-    _row(1.0, 0.8, 0.1),
-]
-
-
-def test_rank_orders_rows_by_the_rules_in_turn():
-    rank_by = leaderboard.load_leaderboards()[0]["harbor"]["rank_by"]
-    ranked = leaderboard.rank(RANK_ROWS, rank_by)
-    assert [r["metadata"]["model"] for r in ranked] == [
-        "m-1.0-1.0-0.3",
-        "m-1.0-1.0-None",
-        "m-1.0-0.8-0.1",
-        "m-0.5-0.9-0.2",
-        "m-None-1.0-0.1",
-    ]
-
-
-def test_rank_matches_harbor():
-    rank_by = leaderboard.load_leaderboards()[0]["harbor"]["rank_by"]
-    ranked = leaderboard.rank(RANK_ROWS, rank_by)
-    hub = pytest.importorskip("harbor.hub.leaderboards")
-    expected = hub.sort_rows(
-        [hub.LeaderboardRow.from_row(r) for r in RANK_ROWS], rank_by
-    )
-    assert [r["metadata"] for r in ranked] == [r.metadata for r in expected]
-
-
 def test_a_run_ranks_only_on_the_tasks_and_timeouts_it_was_given(tmp_path):
     board = _board(["b-one", "b-two"], attempts=2)
     short = leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0, 1.0]}))
     assert leaderboard.run_problems(short, board) == ["b-two has 0 of 2 attempts"]
     with pytest.raises(SystemExit, match="b-two has 0 of 2 attempts"):
-        leaderboard.render([board], [_on(short, board)])
+        leaderboard.rows_for(board, [_on(short, board)])
 
     slow = tmp_path / "slow"
     slow.mkdir()
@@ -536,45 +496,48 @@ def test_a_run_ranks_only_on_the_tasks_and_timeouts_it_was_given(tmp_path):
     ]
 
 
-def test_a_hidden_run_stays_off_the_page(tmp_path):
-    board = _board(["b-one"])
-    run = _on(leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0]})), board)
-    run["status"] = "hide"
-    page = leaderboard.render([board], [run])
-    assert "No runs are recorded on this leaderboard yet." in page
-
-
-def test_committed_leaderboards_and_rows_match_their_schemas():
-    runs = leaderboard.load_results()
-    for board in leaderboard.load_leaderboards():
+def test_leaderboards_and_rows_match_their_schemas(tmp_path):
+    for index, board in enumerate(leaderboard.load_leaderboards()):
         assert leaderboard.board_problems(board) == []
+        root_dir = tmp_path / str(index)
+        root_dir.mkdir()
+        run = leaderboard.collect(
+            _fake_job(root_dir, {task: [1.0] for task in board["tasks"]})
+        )
         harbor = board["harbor"]
-        for row in leaderboard.rows_for(board, runs):
-            for root in ("metadata", "metrics"):
-                schema = harbor[f"{root}_schema"]
-                assert set(schema["required"]) <= set(row[root])
-                for key in row[root]:
-                    assert leaderboard._declared(schema, key), f"{root}.{key}"
+        (row,) = leaderboard.rows_for(board, [_on(run, board)])
+        for root in ("metadata", "metrics"):
+            schema = harbor[f"{root}_schema"]
+            assert set(schema["required"]) <= set(row[root])
+            for key in row[root]:
+                assert leaderboard._declared(schema, key), f"{root}.{key}"
 
 
-def _export(tmp_path: Path) -> tuple[dict, dict, dict]:
+def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
     rewards = {"adam-adae-death-r": [1.0], "adam-adsl-age-group-r": [1.0]}
     rewards["adam-adtte-dor-r"] = [0.0]
     board = _board_named("adam-pilot-r")
     run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
+    run["status"] = status
     out = tmp_path / "hub"
-    definition, rows = leaderboard.export(board, [run], "yamaa/benchmarks", out)
+    definition, rows = leaderboard.export(board, [run], "yamaa/adam-pilot", out)
     return run, yaml.safe_load(definition.read_text()), yaml.safe_load(rows.read_text())
 
 
 def test_export_writes_harbor_hub_configs(tmp_path):
     run, created, rows = _export(tmp_path)
-    assert created["package"] == "yamaa/benchmarks"
+    assert created["package"] == "yamaa/adam-pilot"
     assert created["name"] == "adam-pilot-r"
     (row,) = rows["rows"]
     assert set(row) == {"metadata", "metrics", "status", "trial_ids"}
     assert row["trial_ids"] == [t["id"] for t in run["trials"]]
     assert row["metrics"]["reward"] == pytest.approx(2 / 3)
+    assert row["status"] == "display"
+
+
+def test_a_hidden_run_exports_a_hidden_row(tmp_path):
+    _, _, rows = _export(tmp_path, status="hide")
+    assert rows["rows"][0]["status"] == "hide"
 
 
 def test_exported_configs_validate_against_harbor(tmp_path):
@@ -584,11 +547,48 @@ def test_exported_configs_validate_against_harbor(tmp_path):
     hub.LeaderboardRowsCreateConfig.model_validate(rows)
 
 
-def test_the_leaderboard_page_matches_the_recorded_results():
-    page = leaderboard.render(
-        leaderboard.load_leaderboards(), leaderboard.load_results()
+def _export_cli(monkeypatch, *arguments: str) -> None:
+    monkeypatch.setattr("sys.argv", ["leaderboard.py", "export", *arguments])
+    leaderboard.main()
+
+
+def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys):
+    rewards = {f"{b}-r": [1.0] for b in PILOTS}
+    job = _fake_job(tmp_path, rewards)
+    out = tmp_path / "hub"
+    _export_cli(
+        monkeypatch,
+        "adam-pilot-r",
+        str(job),
+        "--package",
+        "yamaa/adam-pilot",
+        "--out",
+        str(out),
     )
-    assert leaderboard.PAGE.read_text() == page, "run leaderboard.py render"
+    rows = yaml.safe_load((out / "adam-pilot-r.rows.yaml").read_text())
+    assert rows["rows"][0]["metrics"]["reward"] == 1.0
+    assert "harbor hub leaderboard row create yamaa/adam-pilot/adam-pilot-r" in (
+        capsys.readouterr().out
+    )
+
+
+def test_the_export_command_refuses_a_job_off_the_board(tmp_path, monkeypatch):
+    job = _fake_job(tmp_path, {"adam-adsl-age-group-r": [1.0]})
+    with pytest.raises(SystemExit, match="cannot be ranked"):
+        _export_cli(
+            monkeypatch,
+            "adam-pilot-r",
+            str(job),
+            "--package",
+            "yamaa/adam-pilot",
+            "--out",
+            str(tmp_path / "hub"),
+        )
+
+
+def test_no_results_are_kept_in_the_repository():
+    assert not (HARBOR / "results").exists()
+    assert not (HARBOR / "leaderboard.md").exists()
 
 
 def test_a_text_value_of_spaces_is_not_missing():

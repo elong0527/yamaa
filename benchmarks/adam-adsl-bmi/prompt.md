@@ -5,11 +5,10 @@ The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI, BMI_FN
 
 BMI holds body mass index from weight in kilograms and height in
-centimetres, with height converted from centimetres to metres. It has
-no value when height is missing or zero, or when weight is missing.
-BMI_FN carries the same index calculated a second way; both columns
-agree on every record. A zero weight gives a zero index, and a missing
-height or weight leaves both empty.
+centimetres, with height converted from centimetres to metres, and is
+not rounded. It has no value when height is missing or zero, or when
+weight is missing; a zero weight gives a zero index. BMI_FN repeats
+BMI.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adsl.csv.
