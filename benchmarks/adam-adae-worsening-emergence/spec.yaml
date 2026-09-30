@@ -2,13 +2,14 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
+  AE: {path: input/ae.csv, types: {AESTDTC: datetime, AETOXGR: int}}
   ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, TRTSDTM, AESEV, TRTEMFL]
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, TRTSDTM, AESEV,
+            AETOXGR, TRTEMFL]
 
 columns:
   - name: STUDYID
@@ -49,6 +50,14 @@ columns:
       allowed_values:
         values: [MILD, MODERATE, SEVERE]
 
+  - name: AETOXGR
+    type: int
+    label: Standard Toxicity Grade
+    derivation: AE.AETOXGR
+    verifications:
+      allowed_values:
+        values: [1, 2, 3, 4, 5]
+
   # Numeric rank of the collected severity, so a later episode can be
   # compared with an earlier one for the same term. Not in the output.
   - name: AESEVN
@@ -76,14 +85,28 @@ columns:
         group_by: [STUDYID, USUBJID, AEDECOD]
         expr: "MAX(AESEVN)"
 
+  # Highest toxicity grade reached at or after first exposure,
+  # within the subject and term. Rows with no onset, no grade, or
+  # no exposure never contribute. Not in the output.
+  - name: POSTMAXG
+    type: int
+    label: Maximum Post-Treatment Toxicity Grade
+    derivation:
+      aggregate:
+        filter: "ASTDTM >= TRTSDTM"
+        group_by: [STUDYID, USUBJID, AEDECOD]
+        expr: "MAX(AETOXGR)"
+
   # A comparison with a missing value is unknown, never true, so the
-  # flag stays empty when the onset, the severity, the post-treatment
-  # maximum, or the first exposure is missing.
+  # flag stays empty when the onset or the first exposure is missing,
+  # and for an earlier event when neither the severity nor the grade
+  # rises later.
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
-      flag: "ASTDTM >= TRTSDTM OR (ASTDTM < TRTSDTM AND AESEVN < POSTMAX)"
+      flag: "ASTDTM >= TRTSDTM OR (ASTDTM < TRTSDTM AND
+        (AESEVN < POSTMAX OR AETOXGR < POSTMAXG))"
     verifications:
       allowed_values:
         values: [Y]
@@ -92,8 +115,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 12
-      max: 12
+      min: 18
+      max: 18
   - implies:
       id: treatment-emergent-event-has-known-onset-and-exposure
       when: "TRTEMFL = 'Y'"

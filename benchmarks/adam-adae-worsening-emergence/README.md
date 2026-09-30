@@ -9,21 +9,24 @@ after first exposure.
 
 **Input:** adverse event records carrying the dictionary term
 (`AEDECOD`), the onset moment (`ASTDTM`, empty when never
-collected) and severity (`AESEV`), plus the moment of first
-exposure (`TRTSDTM`) from the subject-level analysis dataset
-(ADSL), which is empty for an untreated subject.
+collected), severity (`AESEV`) and toxicity grade (`AETOXGR`,
+empty when never graded), plus the moment of first exposure
+(`TRTSDTM`) from the subject-level analysis dataset (ADSL),
+which is empty for an untreated subject.
 
 **Variables:**
 
+- `AETOXGR` holds the collected toxicity grade (1 through 5);
+  empty when the event was never graded.
 - `TRTEMFL` holds `Y` when the event started at or after first
   exposure, or when it started before but the same term reaches a
-  higher severity after exposure. It stays empty for an earlier
-  event without later worsening, and when the onset, the severity,
-  or the first exposure is missing.
+  higher severity or a higher toxicity grade after exposure. It
+  stays empty for an earlier event without later worsening, and
+  when the onset or the first exposure is missing.
 
 **Note:** worsening is judged within the subject and dictionary
 term: only a later event for the same term with a higher severity
-makes the earlier one treatment-emergent, and an untreated
-subject's events are never flagged.
+or grade makes the earlier one treatment-emergent, and an
+untreated subject's events are never flagged.
 
 **Standard:** ADaM | **Domain:** ADAE
