@@ -145,10 +145,8 @@ columns:
       length: 10
       codelist: EPOCH
       origin:
-        type: Assigned
+        type: Derived
         source: Sponsor
-      method: Epoch of the element in progress at the collection
-        date-time; missing when no element contains it.
 
 verifications:
   - unique:

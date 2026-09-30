@@ -92,10 +92,8 @@ columns:
       length: 200
       codelist: MEDDRA
       origin:
-        type: Assigned
+        type: Derived
         source: Sponsor
-      method: Preferred term from the MedDRA entry whose lowest-level
-        term equals the reported term; NOT CODED when no entry matches.
 
   - name: AEBODSYS
     type: str
@@ -107,10 +105,8 @@ columns:
       length: 200
       codelist: MEDDRA
       origin:
-        type: Assigned
+        type: Derived
         source: Sponsor
-      method: Body system from the same MedDRA entry as the preferred
-        term; NOT CODED when no entry matches.
 
 verifications:
   - unique:
