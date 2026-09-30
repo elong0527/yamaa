@@ -143,6 +143,29 @@ def test_an_unknown_language_is_rejected():
         build.system_prompt("julia")
 
 
+def test_default_selection_skips_benchmarks_without_grader_support(tmp_path):
+    names = ["adam-adsl-age-group", "adam-adsl-bmi"]
+    tasks, skipped = build.build_selection(
+        names,
+        languages=["r"],
+        tasks_dir=tmp_path,
+        image=build.IMAGE,
+        commit="test",
+        strict=False,
+    )
+    assert [t.name for t in tasks] == ["adam-adsl-age-group-r"]
+    assert len(skipped) == 1 and skipped[0].startswith("adam-adsl-bmi-r: ")
+    with pytest.raises(build.BuildError):
+        build.build_selection(
+            names,
+            languages=["r"],
+            tasks_dir=tmp_path,
+            image=build.IMAGE,
+            commit="test",
+            strict=True,
+        )
+
+
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_tasks_carry_the_system_prompt_and_script(tmp_path, language):
     tasks = [

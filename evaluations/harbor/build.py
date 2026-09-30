@@ -34,6 +34,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -327,6 +328,36 @@ def job_config(
     return config
 
 
+def build_selection(
+    names: list[str],
+    *,
+    languages: list[str],
+    tasks_dir: Path,
+    image: str,
+    commit: str,
+    strict: bool,
+) -> tuple[list[Path], list[str]]:
+    """One task per benchmark per language.
+
+    With `strict` (explicit `--benchmarks`) an unsupported benchmark
+    raises; otherwise it is skipped and reported, so the default
+    every-prompt build keeps working as new prompts land ahead of grader
+    support.
+    """
+    tasks, skipped = [], []
+    for name in names:
+        for language in languages:
+            try:
+                tasks.append(
+                    build_task(BENCHMARKS / name, tasks_dir, image, commit, language)
+                )
+            except BuildError as exc:
+                if strict:
+                    raise
+                skipped.append(f"{name}-{language}: {exc}")
+    return tasks, skipped
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--benchmarks", nargs="*", help="default: every prompt")
@@ -353,11 +384,18 @@ def main() -> None:
     )
     commit = git_commit()
     tasks_dir = args.out.resolve() / "tasks"
-    tasks = [
-        build_task(BENCHMARKS / n, tasks_dir, args.image, commit, language)
-        for n in names
-        for language in args.language
-    ]
+    tasks, skipped = build_selection(
+        names,
+        languages=args.language,
+        tasks_dir=tasks_dir,
+        image=args.image,
+        commit=commit,
+        strict=args.benchmarks is not None,
+    )
+    if not tasks:
+        raise BuildError("no buildable benchmark with a prompt.md")
+    for line in skipped:
+        print(f"skip {line}", file=sys.stderr)
     config = job_config(
         tasks,
         model=args.model,

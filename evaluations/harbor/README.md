@@ -68,6 +68,9 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
 One build covers both tracks (`--language r python`, the default); pass
 `--language r` or `--language python` to build a single track. Each
 benchmark becomes `<benchmark>-r` and `<benchmark>-python` tasks.
+Benchmarks whose datasets the grader cannot yet check (log outputs,
+project functions, multi-spec outputs) are skipped with a warning on
+stderr; naming one with `--benchmarks` fails fast instead.
 
 Harbor's `oracle` agent copies the golden files plus a placeholder script
 and must score 1 on every task; its `nop` agent writes nothing and must
