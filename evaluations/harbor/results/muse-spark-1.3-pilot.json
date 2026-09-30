@@ -1,11 +1,21 @@
 {
   "job": "muse-spark-1.3-pilot",
+  "job_id": null,
   "date": "2026-09-29",
+  "harbor_version": null,
   "agent": "opencode",
   "agent_version": "1.18.33",
   "model": "opencode-go/muse-spark-1.3-contributor",
+  "attempts": 1,
+  "default_timeouts": true,
+  "status": "display",
+  "leaderboards": [
+    "adam-pilot"
+  ],
   "trials": [
     {
+      "id": null,
+      "name": null,
       "benchmark": "adam-adae-death",
       "reward": 1.0,
       "cell_accuracy": 1.0,
@@ -18,6 +28,8 @@
       "error": null
     },
     {
+      "id": null,
+      "name": null,
       "benchmark": "adam-adsl-age-group",
       "reward": 1.0,
       "cell_accuracy": 1.0,
@@ -30,6 +42,8 @@
       "error": null
     },
     {
+      "id": null,
+      "name": null,
       "benchmark": "adam-adtte-dor",
       "reward": 1.0,
       "cell_accuracy": 1.0,

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import copy
 import csv
 import importlib.util
 import json
 import tomllib
+import uuid
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).parents[2]
 HARBOR = ROOT / "evaluations" / "harbor"
@@ -230,44 +233,208 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
 leaderboard = _load("leaderboard")
 
 
-def _fake_job(root: Path, rewards: dict[str, float]) -> Path:
+def _fake_job(root: Path, rewards: dict[str, list[float | None]], **config) -> Path:
+    # One trial per reward; None stands for a trial that errored before grading.
     job = root / "fake-job"
     job.mkdir()
-    (job / "result.json").write_text(json.dumps({"started_at": "2026-09-30T04:00:00Z"}))
-    for benchmark, reward in rewards.items():
-        trial = job / f"{benchmark}__abc"
-        trial.mkdir()
-        result = {
-            "task_name": f"yamaa/{benchmark}",
-            "config": {"agent": {"model_name": "acme/model-1"}},
-            "agent_info": {"name": "opencode", "version": "1.18.33"},
-            "agent_result": {
-                "n_input_tokens": 1200,
-                "n_output_tokens": 300,
-                "cost_usd": 0.01,
-            },
-            "verifier_result": {"rewards": {"reward": reward, "cell_accuracy": reward}},
-            "exception_info": None,
-            "agent_execution": {
-                "started_at": "2026-09-30T04:00:00Z",
-                "finished_at": "2026-09-30T04:01:30Z",
-            },
-        }
-        (trial / "result.json").write_text(json.dumps(result))
+    job_id = str(uuid.uuid4())
+    (job / "result.json").write_text(
+        json.dumps({"id": job_id, "started_at": "2026-09-30T04:00:00Z"})
+    )
+    attempts = max(len(r) for r in rewards.values())
+    (job / "config.json").write_text(json.dumps({"n_attempts": attempts, **config}))
+    (job / "lock.json").write_text(json.dumps({"harbor": {"version": "0.23.0"}}))
+    for benchmark, values in rewards.items():
+        for attempt, reward in enumerate(values):
+            name = f"{benchmark}__{attempt}"
+            trial = job / name
+            trial.mkdir()
+            graded = {"reward": reward, "cell_accuracy": reward}
+            result = {
+                "id": str(uuid.uuid4()),
+                "trial_name": name,
+                "task_name": f"yamaa/{benchmark}",
+                "config": {"agent": {"model_name": "acme/model-1"}, **config},
+                "agent_info": {"name": "opencode", "version": "1.18.33"},
+                "agent_result": {
+                    "n_input_tokens": 1200,
+                    "n_output_tokens": 300,
+                    "cost_usd": 0.01,
+                },
+                "verifier_result": None if reward is None else {"rewards": graded},
+                "exception_info": (
+                    {"exception_type": "AgentTimeoutError"} if reward is None else None
+                ),
+                "agent_execution": {
+                    "started_at": "2026-09-30T04:00:00Z",
+                    "finished_at": "2026-09-30T04:01:30Z",
+                },
+            }
+            (trial / "result.json").write_text(json.dumps(result))
     return job
 
 
+def _board(tasks: list[str], attempts: int = 1) -> dict:
+    board = copy.deepcopy(leaderboard.load_leaderboards()[0])
+    board["tasks"], board["attempts"] = tasks, attempts
+    return board
+
+
+def _on(run: dict, board: dict) -> dict:
+    run["leaderboards"] = [board["harbor"]["name"]]
+    return run
+
+
 def test_collect_reads_a_harbor_job(tmp_path):
-    run = leaderboard.collect(_fake_job(tmp_path, {"b-one": 1.0, "b-two": 0.0}))
+    run = leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0], "b-two": [0.0]}))
     assert run["model"] == "acme/model-1"
     assert run["agent_version"] == "1.18.33"
+    assert run["harbor_version"] == "0.23.0"
+    assert run["attempts"] == 1 and run["default_timeouts"]
     assert [t["benchmark"] for t in run["trials"]] == ["b-one", "b-two"]
+    assert all(uuid.UUID(t["id"]) for t in run["trials"])
     assert run["trials"][0]["agent_seconds"] == 90.0
-    page = leaderboard.render([run])
-    assert "| 1 / 2 | 50.0% | 2.4k / 600 | $0.020 | 2026-09-30 |" in page
+
+    board = _board(["b-one", "b-two"])
+    page = leaderboard.render([board], [_on(run, board)])
+    assert (
+        "| 1 | opencode | 1.18.33 | acme/model-1 | 50.0% | 50.0% | 0 "
+        "| 2.4k | 600 | $0.020 | 2026-09-30 | [fake-job](" in page
+    )
     assert "[b-one](../benchmark/b-one.html) | **pass**, 100.0% |" in page
 
 
+def test_an_errored_trial_counts_as_a_failure(tmp_path):
+    # Harbor's mean treats a trial without a reward as 0.
+    run = leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0], "b-two": [None]}))
+    metrics = leaderboard.metrics(run["trials"])
+    assert metrics["reward"] == 0.5
+    assert metrics["n_errors"] == 1 and metrics["n_trials"] == 2
+
+
+def test_pass_at_k_averages_the_unbiased_estimate_over_tasks(tmp_path):
+    rewards = {"b-one": [1.0, 0.0, 1.0, 0.0, 0.0], "b-two": [1.0] * 5}
+    run = leaderboard.collect(_fake_job(tmp_path, rewards))
+    # b-one: 1 - C(3, 2) / C(5, 2) = 0.7 at k = 2; b-two always passes.
+    assert leaderboard.pass_at_k(run["trials"]) == pytest.approx(
+        {2: 0.85, 4: 1.0, 5: 1.0}
+    )
+    assert leaderboard.metrics(run["trials"])["pass_at_2"] == pytest.approx(0.85)
+
+
+def test_pass_at_k_matches_harbor():
+    harbor = pytest.importorskip("harbor.utils.pass_at_k")
+    assert leaderboard._eligible_k(20) == harbor._eligible_k_values(20)
+    for n, c, k in [(5, 2, 2), (5, 0, 4), (10, 3, 5), (8, 8, 2)]:
+        assert leaderboard._pass_at_k_for_task(n, c, k) == pytest.approx(
+            harbor._pass_at_k_for_task(n, c, k)
+        )
+
+
+def _row(reward, cells, cost):
+    return {
+        "metadata": {"model": f"m-{reward}-{cells}-{cost}"},
+        "metrics": {"reward": reward, "cell_accuracy": cells, "cost_usd": cost},
+    }
+
+
+RANK_ROWS = [
+    _row(0.5, 0.9, 0.2),
+    _row(1.0, 1.0, None),
+    _row(1.0, 1.0, 0.3),
+    _row(None, 1.0, 0.1),
+    _row(1.0, 0.8, 0.1),
+]
+
+
+def test_rank_orders_rows_by_the_rules_in_turn():
+    rank_by = leaderboard.load_leaderboards()[0]["harbor"]["rank_by"]
+    ranked = leaderboard.rank(RANK_ROWS, rank_by)
+    assert [r["metadata"]["model"] for r in ranked] == [
+        "m-1.0-1.0-0.3",
+        "m-1.0-1.0-None",
+        "m-1.0-0.8-0.1",
+        "m-0.5-0.9-0.2",
+        "m-None-1.0-0.1",
+    ]
+
+
+def test_rank_matches_harbor():
+    rank_by = leaderboard.load_leaderboards()[0]["harbor"]["rank_by"]
+    ranked = leaderboard.rank(RANK_ROWS, rank_by)
+    hub = pytest.importorskip("harbor.hub.leaderboards")
+    expected = hub.sort_rows(
+        [hub.LeaderboardRow.from_row(r) for r in RANK_ROWS], rank_by
+    )
+    assert [r["metadata"] for r in ranked] == [r.metadata for r in expected]
+
+
+def test_a_run_ranks_only_on_the_tasks_and_timeouts_it_was_given(tmp_path):
+    board = _board(["b-one", "b-two"], attempts=2)
+    short = leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0, 1.0]}))
+    assert leaderboard.run_problems(short, board) == ["b-two has 0 of 2 attempts"]
+    with pytest.raises(SystemExit, match="b-two has 0 of 2 attempts"):
+        leaderboard.render([board], [_on(short, board)])
+
+    slow = tmp_path / "slow"
+    slow.mkdir()
+    rewards = {"b-one": [1.0, 1.0], "b-two": [1.0, 1.0]}
+    run = leaderboard.collect(_fake_job(slow, rewards, timeout_multiplier=2.0))
+    assert leaderboard.run_problems(run, board) == [
+        "the job changed the tasks' timeouts"
+    ]
+
+
+def test_a_hidden_run_stays_off_the_page(tmp_path):
+    board = _board(["b-one"])
+    run = _on(leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0]})), board)
+    run["status"] = "hide"
+    page = leaderboard.render([board], [run])
+    assert "No runs are recorded on this leaderboard yet." in page
+
+
+def test_committed_leaderboards_and_rows_match_their_schemas():
+    runs = leaderboard.load_results()
+    for board in leaderboard.load_leaderboards():
+        assert leaderboard.board_problems(board) == []
+        harbor = board["harbor"]
+        for row in leaderboard.rows_for(board, runs):
+            for root in ("metadata", "metrics"):
+                schema = harbor[f"{root}_schema"]
+                assert set(schema["required"]) <= set(row[root])
+                for key in row[root]:
+                    assert leaderboard._declared(schema, key), f"{root}.{key}"
+
+
+def _export(tmp_path: Path) -> tuple[dict, dict, dict]:
+    rewards = {"adam-adae-death": [1.0], "adam-adsl-age-group": [1.0]}
+    rewards["adam-adtte-dor"] = [0.0]
+    board = leaderboard.load_leaderboards()[0]
+    run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
+    out = tmp_path / "hub"
+    definition, rows = leaderboard.export(board, [run], "yamaa/benchmarks", out)
+    return run, yaml.safe_load(definition.read_text()), yaml.safe_load(rows.read_text())
+
+
+def test_export_writes_harbor_hub_configs(tmp_path):
+    run, created, rows = _export(tmp_path)
+    assert created["package"] == "yamaa/benchmarks"
+    assert created["name"] == "adam-pilot"
+    (row,) = rows["rows"]
+    assert set(row) == {"metadata", "metrics", "status", "trial_ids"}
+    assert row["trial_ids"] == [t["id"] for t in run["trials"]]
+    assert row["metrics"]["reward"] == pytest.approx(2 / 3)
+
+
+def test_exported_configs_validate_against_harbor(tmp_path):
+    hub = pytest.importorskip("harbor.hub.leaderboards")
+    _, created, rows = _export(tmp_path)
+    hub.LeaderboardCreateConfig.model_validate(created)
+    hub.LeaderboardRowsCreateConfig.model_validate(rows)
+
+
 def test_the_leaderboard_page_matches_the_recorded_results():
-    page = leaderboard.render(leaderboard.load_results())
+    page = leaderboard.render(
+        leaderboard.load_leaderboards(), leaderboard.load_results()
+    )
     assert leaderboard.PAGE.read_text() == page, "run leaderboard.py render"

@@ -1,0 +1,170 @@
+# A leaderboard ranks recorded runs (`../results/<job>.json`) that name it.
+# A run belongs here only when it covers every task below with at least
+# `attempts` attempts each, at the tasks' own timeouts, so every row answers
+# the same question. Metrics are computed from the listed tasks only.
+tasks:
+  - adam-adae-death
+  - adam-adsl-age-group
+  - adam-adtte-dor
+attempts: 1
+
+# How the site formats number columns, by column id: percent, count, or
+# usd. Harbor Hub shows the raw number.
+formats:
+  reward: percent
+  cell_accuracy: percent
+  input_tokens: count
+  output_tokens: count
+  cost_usd: usd
+
+# The Harbor Hub definition, in the shape `harbor hub leaderboard create
+# --config` takes. `leaderboard.py export` adds the dataset package and
+# writes it with the rows, ready to create once the tasks are published.
+harbor:
+  name: adam-pilot
+  title: ADaM pilot
+  description: >-
+    Three ADaM benchmarks: age groups in ADSL, death information on every
+    adverse event in ADAE, and duration of response in ADTTE. An agent gets
+    the benchmark's prompt and input datasets, and a task passes when its
+    output matches every golden cell.
+  visibility: private
+  metadata_schema:
+    type: object
+    required: [agent, agent_version, model, date, attempts, job, record]
+    properties:
+      agent:
+        type: string
+        description: Harbor agent name
+      agent_version:
+        type: string
+        description: Agent version the job pinned
+      model:
+        type: string
+        description: provider/model, as passed to build.py --model
+      date:
+        type: string
+        format: date
+        description: Day the job started (UTC)
+      attempts:
+        type: integer
+        description: Attempts per task (Harbor n_attempts)
+      job:
+        type: string
+        description: Harbor job name
+      job_id:
+        type: [string, "null"]
+        description: Harbor job id, when the job directory recorded it
+      harbor_version:
+        type: [string, "null"]
+        description: Harbor version from the job's lock.json
+      record:
+        type: object
+        description: The recorded run in the repository
+        properties:
+          url:
+            type: string
+          label:
+            type: string
+  metrics_schema:
+    type: object
+    required: [reward, cell_accuracy, row_accuracy, n_trials, n_errors]
+    properties:
+      reward:
+        type: number
+        description: >-
+          Mean reward over trials (Harbor's mean): the share of trials whose
+          output matches every golden cell; an errored trial counts as 0
+      cell_accuracy:
+        type: number
+        description: Mean share of golden cells reproduced
+      row_accuracy:
+        type: number
+        description: Mean share of golden rows reproduced
+      n_trials:
+        type: integer
+        description: Trials the metrics aggregate
+      n_errors:
+        type: integer
+        description: Trials that ended in an exception
+      input_tokens:
+        type: [integer, "null"]
+        description: Total input tokens, when every trial reported them
+      output_tokens:
+        type: [integer, "null"]
+        description: Total output tokens, when every trial reported them
+      cost_usd:
+        type: [number, "null"]
+        description: Total model cost, when every trial reported it
+      agent_seconds:
+        type: [number, "null"]
+        description: Mean agent execution time per trial
+    patternProperties:
+      "^pass_at_[0-9]+$":
+        type: number
+        description: >-
+          Harbor's unbiased pass@k averaged over tasks, for each k that the
+          fewest attempts on a task allow (k = 2, 4, 5, 8, 10, ...)
+  columns:
+    - id: agent
+      header: Agent
+      accessor: metadata.agent
+      type: text
+    - id: agent_version
+      header: Version
+      accessor: metadata.agent_version
+      type: text
+    - id: model
+      header: Model
+      accessor: metadata.model
+      type: text
+    - id: reward
+      header: Pass rate
+      accessor: metrics.reward
+      type: number
+      align: right
+      description: Share of trials whose output matches every golden cell
+    - id: cell_accuracy
+      header: Cell accuracy
+      accessor: metrics.cell_accuracy
+      type: number
+      align: right
+    - id: n_errors
+      header: Errors
+      accessor: metrics.n_errors
+      type: number
+      align: right
+    - id: input_tokens
+      header: Tokens in
+      accessor: metrics.input_tokens
+      type: number
+      align: right
+    - id: output_tokens
+      header: Tokens out
+      accessor: metrics.output_tokens
+      type: number
+      align: right
+    - id: cost_usd
+      header: Cost
+      accessor: metrics.cost_usd
+      type: number
+      align: right
+    - id: date
+      header: Date
+      accessor: metadata.date
+      type: date
+    - id: record
+      header: Run
+      accessor: metadata.record
+      type: link
+      enable_sorting: false
+  rank_by:
+    - accessor: metrics.reward
+      direction: desc
+      nulls: last
+    - accessor: metrics.cell_accuracy
+      direction: desc
+      nulls: last
+    - accessor: metrics.cost_usd
+      direction: asc
+      nulls: last
