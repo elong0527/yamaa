@@ -337,12 +337,21 @@ def test_rejects_reference_data_with_repeating(
     )
 
 
-def test_intermediate_lookup_admits_derived_origin() -> None:
+def test_intermediate_lookup_admits_derived_origin(tmp_path: Path) -> None:
     # A reference through a named intermediate joins and selects a record,
     # so it computes rather than copies: Derived is admitted (REQ-0897),
-    # while a bare input-dataset source refutes it (REQ-0899).
+    # while a bare input-dataset source refutes it (REQ-0899). The benchmark
+    # itself claims Assigned, which is admitted too, so claim Derived here.
     example = REPOSITORY_ROOT / "benchmarks" / "sdtm-ae-coding"
-    loaded = load_specification(example / "spec.yaml", SCHEMA_ROOT)
+    source = (example / "spec.yaml").read_text(encoding="ascii")
+    old = "        type: Assigned\n        source: Sponsor\n      method: Take PTNAME"
+    assert old in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        source.replace(old, old.replace("Assigned", "Derived"), 1),
+        encoding="ascii",
+    )
+    loaded = load_specification(path, SCHEMA_ROOT)
     columns = {column.name: column for column in loaded.specification.columns}
     assert columns["AEDECOD"].submission is not None
     assert columns["AEDECOD"].submission.origin.type == "Derived"
