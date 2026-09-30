@@ -650,6 +650,24 @@ def test_repeated_row_derivation_skips_mixed_drivers_except_literals(
     assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") in names
 
 
+def test_repeated_row_derivation_skips_columns_read_by_a_filter(
+    tmp_path: Path,
+) -> None:
+    filtered = REPEATED.replace(
+        "  - id: a\n    derivations:",
+        "  - id: a\n    filter: \"DOMAIN = 'DM'\"\n    derivations:",
+    ).replace(
+        "  - id: b\n    derivations:",
+        "  - id: b\n    filter: \"DOMAIN = 'DM'\"\n    derivations:",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, filtered), orders=ORDERS)
+    ]
+    assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in names
+    assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") in names
+
+
 REDUNDANT = """\
 schema_version: "1.0"
 domain: ADSL

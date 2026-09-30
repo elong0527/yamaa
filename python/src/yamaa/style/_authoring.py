@@ -21,6 +21,21 @@ from yamaa.specification.diagnostics import SpecificationError
 from yamaa.style._checks import Departure
 from yamaa.style._document import Document, member
 
+
+def _filter_identifiers(predicate: object) -> frozenset[str]:
+    """Bare identifiers a row filter reads; empty when unparsable."""
+    if not isinstance(predicate, str):
+        return frozenset()
+    try:
+        from yamaa.expressions import parse_predicate, predicate_identifiers
+    except ImportError:
+        return frozenset()
+    try:
+        return frozenset(predicate_identifiers(parse_predicate(predicate)))
+    except Exception:
+        return frozenset()
+
+
 _DATASET_LEVEL_OPERATIONS = frozenset(
     {
         "aggregate",
@@ -292,7 +307,8 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
     their row template, where the row phase evaluates them. A derivation
     reading a driver dataset stays as well when the row templates build
     from different datasets: the driver read and the column-phase implicit
-    join bind different records.
+    join bind different records. A column read by any row filter stays:
+    filters resolve only columns their own template derives.
     """
     rows = _row_entries(value)
     if len(rows) < 2:
@@ -311,6 +327,9 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
     blocked = _blocked_columns(entries, intermediate_ids)
     datasets = [row.get("dataset") for row in rows]
     uniform_driver = all(dataset == datasets[0] for dataset in datasets[1:])
+    filter_reads: set[str] = set()
+    for row in rows:
+        filter_reads |= _filter_identifiers(row.get("filter"))
     for row in rows:
         derivations = row.get("derivations")
         if not isinstance(derivations, Mapping):
@@ -322,6 +341,10 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
             continue
         if column in column_derivations:
             # A column-level default already exists; row overrides stay.
+            continue
+        if column in filter_reads:
+            # Grouped and ungrouped row filters resolve only columns the
+            # row template derives; a column-level default is not available.
             continue
         values = [row.get("derivations", {}).get(column, ...) for row in rows]
         if any(item is ... for item in values):

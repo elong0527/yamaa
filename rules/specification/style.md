@@ -156,7 +156,9 @@ derivations stay in their row template, where the row phase evaluates
 them, and are never reported. A derivation reading a driver dataset stays
 as well when the row templates build from different datasets: the driver
 read and the column-phase implicit join bind different records. Only a
-`literal` is driver-independent and reported across drivers. A single row
+`literal` is driver-independent and reported across drivers. A column read
+by any row `filter` stays as well: a filter resolves only columns its own
+template derives. A single row
 template, a column derived in
 only some templates, differing derivations per template, and a column
 that already has a column-level default are also never reported.
