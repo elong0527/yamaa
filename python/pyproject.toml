@@ -7,7 +7,7 @@ name = "yamaa"
 version = "0.1.0"
 description = "Python helpers for the yamaa clinical data specification"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "yamaa contributors" }]
 dependencies = [
@@ -24,6 +24,11 @@ test = [
   "pytest>=9.1.1,<10",
   "ruff>=0.16.7,<0.17",
 ]
+
+[dependency-groups]
+# Harbor runs the agent evaluations in evaluations/harbor/. Install it with
+# `uv sync --project python --group harbor`; the package never imports it.
+harbor = ["harbor==0.23.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/yamaa"]

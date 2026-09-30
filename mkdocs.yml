@@ -84,6 +84,7 @@ nav:
       - Schema reference: articles/schema.md
       - Rules: articles/rules.md
   - Benchmark: benchmark/index.md
+  - Leaderboard: articles/leaderboard.md
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder
