@@ -72,10 +72,20 @@ def expand_named_windows(
         if kind == "window_selection" and isinstance(value, str):
             if value not in definitions:
                 if strict:
+                    # `logical` names the column (`columns.VISITSEQ…`) while
+                    # `path` indexes it (`columns[2]…`); every other column
+                    # failure pins the name. `logical` carries the resolved
+                    # `.value` wrapper a handled derivation adds, which no
+                    # pin includes, so it is stripped for the diagnostic.
+                    named = logical.replace(
+                        ".derivation.value.", ".derivation."
+                    )
+                    if named.endswith(".derivation.value"):
+                        named = named[: -len(".value")]
                     diagnostics.append(
                         ValidationDiagnostic(
                             condition="unknown_window",
-                            spec_paths=(path,),
+                            spec_paths=(named,),
                             requirement="REQ-1253",
                             context={"window": value},
                         )

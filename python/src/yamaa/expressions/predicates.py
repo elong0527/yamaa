@@ -65,9 +65,12 @@ class PredicateError(ValueError):
 
     condition = "invalid_predicate"
 
-    def __init__(self, message: str, position: int) -> None:
+    def __init__(
+        self, message: str, position: int, requirement: str = "REQ-0188"
+    ) -> None:
         super().__init__(f"{message} at character {position + 1}")
         self.position = position
+        self.requirement = requirement
 
 
 def _tokenize(text: str) -> list[Token]:
@@ -310,7 +313,7 @@ class _PredicateParser:
     def parse_call(self) -> PredicateAst:
         """Parse the one Boolean function call the grammar admits.
 
-        `str_contains(source, pattern)` is the single function call REQ-0162
+        `str_contains(source, pattern)` is the single function call REQ-1244
         admits. The bare name stays an identifier: the caller only reaches
         here when `(` follows the name, so a column named `str_contains`
         still resolves as a field.
@@ -329,6 +332,7 @@ class _PredicateParser:
             raise PredicateError(
                 f"invalid regex in str_contains pattern: {error.reason}",
                 pattern_token[2],
+                "REQ-1244",
             ) from error
         self.require("RPAREN", "expected ')' to close str_contains")
         return {

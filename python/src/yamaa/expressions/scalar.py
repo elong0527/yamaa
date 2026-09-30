@@ -194,7 +194,7 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                     "validation",
                     "invalid_predicate",
                     {"predicate": when, "position": error.position},
-                    requirement="REQ-0188",
+                    requirement=error.requirement,
                     field=f"[{index}].when",
                 )
             decided = evaluate_predicate(ast, resolver)
@@ -267,7 +267,7 @@ def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
             "validation",
             "invalid_predicate",
             {"predicate": condition, "position": error.position},
-            requirement="REQ-0188",
+            requirement=error.requirement,
             field="condition",
         )
     if "false_value" in payload and "missing" not in payload:

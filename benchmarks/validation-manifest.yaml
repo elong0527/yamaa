@@ -8,7 +8,7 @@ fixtures:
   negative-unknown-window:
     rule: R007
     condition: unknown_window
-    spec_paths: ['columns[2].derivation.row_number.window']
+    spec_paths: ['columns.VISITSEQ.derivation.row_number.window']
     validator: window_contract
   negative-output-transport:
     rule: R020
@@ -363,12 +363,12 @@ fixtures:
   negative-date-conversion:
     rule: R016
     condition: incompatible_input_type
-    spec_paths: [columns.ASTDT2.derivation.to_date]
+    spec_paths: [columns.ASTDT2.derivation.to_date.source]
     validator: temporal_contract
   negative-epoch-day-non-date:
     rule: R016
     condition: incompatible_input_type
-    spec_paths: [columns.EXSTDY.derivation.to_epoch_day]
+    spec_paths: [columns.EXSTDY.derivation.to_epoch_day.source]
     validator: temporal_contract
   negative-types-unknown-field:
     rule: R014

@@ -78,21 +78,29 @@ def _condition(
 
 
 def _incompatible(
-    operation: str,
-    source: str,
+    variable: str,
     expected: str,
     value: RuntimeValue,
     requirement: str = "REQ-0606",
+    field: str | None = None,
 ) -> ConditionResult:
+    """Report `incompatible_input_type` at the field with the variable.
+
+    Every sibling reports the variable that supplied the value and its
+    actual type at the field that names it (for example
+    `columns.SITE.derivation.str_case.source` with `{source: SITENUM, …}`),
+    so a date operation does the same rather than naming the operation
+    with the field key.
+    """
     return _condition(
         "incompatible_input_type",
         {
-            "operation": operation,
-            "source": source,
+            "source": variable,
             "expected": expected,
             "actual": runtime_type_name(value),
         },
         requirement=requirement,
+        field=field,
     )
 
 
@@ -124,8 +132,8 @@ def _read(
 
 def _date_operand(
     value: RuntimeValue,
-    operation: str,
-    source: str,
+    variable: str,
+    field: str,
 ) -> DateValue | None | ConditionResult:
     """Return a `date` operand, or say why the value is not one.
 
@@ -136,7 +144,7 @@ def _date_operand(
         return None
     if isinstance(value, DateValue):
         return value
-    return _incompatible(operation, source, "date", value)
+    return _incompatible(variable, "date", value, field=field)
 
 
 def collected_precision(text: str) -> Precision | None:
@@ -279,12 +287,24 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
             requirement="REQ-0588",
         )
     if isinstance(source, DateTimeValue):
-        return _incompatible("date_impute", "source", "str", source)
+        variable = payload.get("source")
+        return _incompatible(
+            variable if isinstance(variable, str) else "source",
+            "str",
+            source,
+            field="source",
+        )
     if isinstance(source, DateValue):
         # REQ-0590 types the source `str`; a value is already complete.
         return ValueResult(value=source)
     if not isinstance(source, str):
-        return _incompatible("date_impute", "source", "str", source)
+        variable = payload.get("source")
+        return _incompatible(
+            variable if isinstance(variable, str) else "source",
+            "str",
+            source,
+            field="source",
+        )
 
     precision = collected_precision(source)
     if precision is None:
@@ -314,7 +334,12 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         read = _read(payload, "not_before", resolver, "date_impute")
         if isinstance(read, ConditionResult):
             return read
-        operand = _date_operand(read, "date_impute", "not_before")
+        variable = payload.get("not_before")
+        operand = _date_operand(
+            read,
+            variable if isinstance(variable, str) else "not_before",
+            "not_before",
+        )
         if isinstance(operand, ConditionResult):
             return operand
         bound = operand
@@ -401,9 +426,21 @@ def _date_precision(payload: object, resolver: Resolver) -> EvaluationResult:
         # flag to the date it describes rather than to the text beside it.
         return ValueResult(value=_CODES[source.collected_precision])
     if isinstance(source, DateTimeValue):
-        return _incompatible("date_precision", "source", "str or date", source)
+        variable = payload.get("source")
+        return _incompatible(
+            variable if isinstance(variable, str) else "source",
+            "str or date",
+            source,
+            field="source",
+        )
     if not isinstance(source, str):
-        return _incompatible("date_precision", "source", "str or date", source)
+        variable = payload.get("source")
+        return _incompatible(
+            variable if isinstance(variable, str) else "source",
+            "str or date",
+            source,
+            field="source",
+        )
 
     precision = collected_precision(source)
     if precision is None:
@@ -457,7 +494,14 @@ def _datetime_impute(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(source, DateTimeValue):
         return ValueResult(value=source)
     if not isinstance(source, str):
-        return _incompatible("datetime_impute", "source", "str", source, "REQ-1182")
+        variable = payload.get("source")
+        return _incompatible(
+            variable if isinstance(variable, str) else "source",
+            "str",
+            source,
+            "REQ-1182",
+            field="source",
+        )
 
     precision = collected_datetime_precision(source)
     if precision is None:
@@ -518,12 +562,13 @@ def _datetime_precision(payload: object, resolver: Resolver) -> EvaluationResult
     if isinstance(source, DateTimeValue):
         return ValueResult(value=_DATETIME_CODES[source.collected_precision])
     if not isinstance(source, str):
+        variable = payload.get("source")
         return _incompatible(
-            "datetime_precision",
-            "source",
+            variable if isinstance(variable, str) else "source",
             "str or datetime",
             source,
             "REQ-1183",
+            field="source",
         )
 
     precision = collected_datetime_precision(source)
@@ -581,12 +626,13 @@ def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
         )
     if not isinstance(source, DateTimeValue):
         # REQ-0607: in particular a `date` is not an identity spelling.
+        variable = payload.get("source")
         return _incompatible(
-            "to_date",
-            "source",
+            variable if isinstance(variable, str) else "source",
             "datetime, ISO date text, or ISO 8601 datetime text",
             source,
             requirement="REQ-0607",
+            field="source",
         )
     return ValueResult(
         value=DateValue(year=source.year, month=source.month, day=source.day)
@@ -605,7 +651,12 @@ def _study_day(payload: object, resolver: Resolver) -> EvaluationResult:
         read = _read(payload, field, resolver, "study_day")
         if isinstance(read, ConditionResult):
             return read
-        operand = _date_operand(read, "study_day", field)
+        variable = payload.get(field)
+        operand = _date_operand(
+            read,
+            variable if isinstance(variable, str) else field,
+            field,
+        )
         if isinstance(operand, ConditionResult):
             return operand
         operands.append(operand)
@@ -635,7 +686,12 @@ def _to_epoch_day(payload: object, resolver: Resolver) -> EvaluationResult:
     source = _read(payload, "source", resolver, "to_epoch_day")
     if isinstance(source, ConditionResult):
         return source
-    day = _date_operand(source, "to_epoch_day", "source")
+    variable = payload.get("source")
+    day = _date_operand(
+        source,
+        variable if isinstance(variable, str) else "source",
+        "source",
+    )
     if isinstance(day, ConditionResult):
         return day
     if day is None:
@@ -688,7 +744,12 @@ def _date_diff(payload: object, resolver: Resolver) -> EvaluationResult:
         read = _read(payload, field, resolver, "date_diff")
         if isinstance(read, ConditionResult):
             return read
-        operand = _date_operand(read, "date_diff", field)
+        variable = payload.get(field)
+        operand = _date_operand(
+            read,
+            variable if isinstance(variable, str) else field,
+            field,
+        )
         if isinstance(operand, ConditionResult):
             return operand
         operands.append(operand)
