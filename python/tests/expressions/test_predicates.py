@@ -314,8 +314,9 @@ def test_str_contains_call_rejects_a_non_string_source() -> None:
 
 
 def test_str_contains_call_rejects_an_invalid_pattern() -> None:
-    with pytest.raises(PredicateError):
+    with pytest.raises(PredicateError) as raised:
         parse_predicate("str_contains(AEDECOD, '(')")
+    assert raised.value.requirement == "REQ-1244"
 
 
 def test_str_detect_is_not_a_predicate_function() -> None:

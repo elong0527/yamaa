@@ -205,7 +205,7 @@ def _predicate(
     except PredicateError as error:
         raise DeclarationError(
             spec_path,
-            "REQ-0188",
+            error.requirement,
             str(error),
             condition="invalid_predicate",
         ) from error

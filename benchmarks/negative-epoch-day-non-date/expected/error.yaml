@@ -1,10 +1,9 @@
 phase: validation
 condition: incompatible_input_type
 spec_paths:
-- columns.EXSTDY.derivation.to_epoch_day
+  - columns.EXSTDY.derivation.to_epoch_day.source
 requirement: REQ-0606
 context:
-  operation: to_epoch_day
-  source: source
+  source: EX.EXSTDT
   expected: date
   actual: str

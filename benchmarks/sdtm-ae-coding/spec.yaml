@@ -92,7 +92,7 @@ columns:
       length: 200
       codelist: MEDDRA
       origin:
-        type: Derived
+        type: Assigned
         source: Sponsor
       method: Take PTNAME from the MEDDRA record whose LLTNAME equals
         AE_RAW.AETERM, and no match yields "NOT CODED".
@@ -107,7 +107,7 @@ columns:
       length: 200
       codelist: MEDDRA
       origin:
-        type: Derived
+        type: Assigned
         source: Sponsor
       method: Take SOCNAME from the MEDDRA record whose LLTNAME equals
         AE_RAW.AETERM, and no match yields "NOT CODED".

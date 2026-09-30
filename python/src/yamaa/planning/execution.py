@@ -1673,7 +1673,7 @@ def _parse_predicate_at(
                 "invalid_predicate",
                 path,
                 {"predicate": text, "position": error.position},
-                requirement="REQ-0188",
+                requirement=error.requirement,
             )
         )
         return None

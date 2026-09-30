@@ -916,7 +916,7 @@ class RowResolver:
                 condition=_condition(
                     "invalid_predicate",
                     {"predicate": declared, "position": error.position},
-                    requirement="REQ-0188",
+                    requirement=error.requirement,
                 )
             )
 
