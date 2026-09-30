@@ -32,12 +32,14 @@ against the benchmark's golden files.
 
 | Sees | Never sees |
 |---|---|
-| `prompt.md`, verbatim | `README.md`, `spec*.yaml`, `expected/` |
+| the system prompt for the run's language (R or Python), then `prompt.md`, verbatim | `README.md`, `spec*.yaml`, `expected/` |
 | `/app/input/`: the `input/` files | `run.py`, `run.R`, yamaa itself |
 | Python and R with common data packages | the internet (web search is off) |
 
 The agent, model, and model provider are chosen when the evaluation runs,
-so the same prompt must work unchanged for any of them. The prompt plus
+and the language is fixed by the task's system prompt (`system-r.md` or
+`system-python.md`, which also requires `result.R` or `result.py`), so the
+same benchmark prompt must work unchanged for either language. The prompt plus
 the input files must be enough to reproduce every golden cell.
 
 ## 3. Structure

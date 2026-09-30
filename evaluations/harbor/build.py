@@ -1,14 +1,16 @@
 """Build Harbor tasks and a job file from yamaa benchmarks.
 
-Every benchmark with a `prompt.md` becomes one Harbor task:
+Every benchmark with a `prompt.md` becomes one Harbor task per language:
 
-    <out>/tasks/<benchmark>/            <out> is ~/.cache/yamaa-harbor
+    <out>/tasks/<benchmark>-<language>/   <out> is ~/.cache/yamaa-harbor
       task.toml            deny-all network; the job adds the model API host
-      instruction.md       the benchmark's prompt.md, verbatim
+      instruction.md       the language's system prompt, then the
+                           benchmark's prompt.md verbatim
       environment/         FROM the base image, plus the benchmark's input/
       tests/               grade.py, contract.json and the golden files,
                            built into the separate verifier image
-      solution/            copies the golden files, for Harbor's oracle agent
+      solution/            copies the golden files plus a placeholder
+                           result.R/result.py, for Harbor's oracle agent
     <out>/job.json         the agent, model, provider host and API key name
     <out>/jobs/            Harbor job directories
 
@@ -18,6 +20,9 @@ against any provider. Run from the repository root:
     uv run --project python --group harbor python evaluations/harbor/build.py \\
         --model opencode-go/muse-spark-1.3-contributor
     uv run --project python --group harbor harbor run -c ~/.cache/yamaa-harbor/job.json
+
+Pass `--language r` or `--language python` to build only one track; the
+default builds both, so R and Python are assessed independently.
 """
 
 from __future__ import annotations
@@ -50,6 +55,13 @@ PROVIDERS = {
     "xai": ("api.x.ai", "XAI_API_KEY"),
     "opencode": ("opencode.ai", "OPENCODE_API_KEY"),
     "opencode-go": ("opencode.ai", "OPENCODE_API_KEY"),
+}
+# One system prompt per language, shared by all tasks. The benchmark's
+# prompt.md stays language-agnostic; the system prompt names the language
+# and the required script, so R and Python are assessed independently.
+LANGUAGES = {
+    "r": {"script": "result.R", "system": "system-r.md", "label": "R"},
+    "python": {"script": "result.py", "system": "system-python.md", "label": "Python"},
 }
 # Harbor installs OpenCode with nvm and npm during agent setup only.
 SETUP_HOSTS = (
@@ -86,8 +98,21 @@ def readme_tags(readme: str) -> dict[str, str]:
     }
 
 
-def contract_for(benchmark: Path) -> dict:
-    """Outputs, columns, keys and column types, checked against the golden."""
+def system_prompt(language: str) -> str:
+    """The shared system prompt for one language, read from its file."""
+    if language not in LANGUAGES:
+        raise BuildError(f"unknown language {language!r}; want r or python")
+    return (HERE / LANGUAGES[language]["system"]).read_text(encoding="utf-8").strip()
+
+
+def contract_for(benchmark: Path, language: str) -> dict:
+    """Outputs, columns, keys and column types, checked against the golden.
+
+    The contract also names the required script (`result.R` or `result.py`),
+    which the grader checks alongside the datasets.
+    """
+    if language not in LANGUAGES:
+        raise BuildError(f"unknown language {language!r}; want r or python")
     spec_path = benchmark / "spec.yaml"
     if not spec_path.is_file():
         raise BuildError(f"{benchmark.name}: only single spec.yaml benchmarks")
@@ -126,24 +151,30 @@ def contract_for(benchmark: Path) -> dict:
             raise BuildError(f"{benchmark.name}: golden holds {literal[0]!r}")
     return {
         "benchmark": benchmark.name,
+        "language": language,
+        "script": LANGUAGES[language]["script"],
         "outputs": [{"file": name, "columns": columns, "keys": keys, "types": types}],
     }
 
 
-def task_toml(benchmark: str, tags: dict[str, str], domain: str, commit: str) -> str:
+def task_toml(
+    benchmark: str, tags: dict[str, str], domain: str, commit: str, language: str
+) -> str:
     standard, lifecycle = tags["standard"], tags["lifecycle"]
+    label = LANGUAGES[language]["label"]
     return f"""\
 schema_version = "1.4"
 artifacts = ["/app", "/logs/agent/trajectory.json"]
 
 [task]
-name = "yamaa/{benchmark}"
+name = "yamaa/{benchmark}-{language}"
 version = "0.1.0"
-description = "Create the {domain} dataset of the yamaa benchmark {benchmark}."
+description = "Create the {domain} dataset of the yamaa benchmark {benchmark} in {label}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
 
 [metadata]
 benchmark = "{benchmark}"
+language = "{language}"
 standard = "{standard}"
 domain = "{domain}"
 lifecycle = "{lifecycle}"
@@ -172,20 +203,25 @@ network_mode = "no-network"
 """
 
 
-def build_task(benchmark: Path, tasks: Path, image: str, commit: str) -> Path:
-    contract = contract_for(benchmark)
+def build_task(
+    benchmark: Path, tasks: Path, image: str, commit: str, language: str
+) -> Path:
+    contract = contract_for(benchmark, language)
     readme = (benchmark / "README.md").read_text(encoding="utf-8")
     domain = yaml.safe_load((benchmark / "spec.yaml").read_text())["domain"]
-    task = tasks / benchmark.name
+    task = tasks / f"{benchmark.name}-{language}"
     if task.exists():
         shutil.rmtree(task)
     (task / "environment").mkdir(parents=True)
     (task / "tests").mkdir()
     (task / "solution").mkdir()
 
-    task_text = task_toml(benchmark.name, readme_tags(readme), domain, commit)
+    task_text = task_toml(benchmark.name, readme_tags(readme), domain, commit, language)
     (task / "task.toml").write_text(task_text)
-    shutil.copyfile(benchmark / "prompt.md", task / "instruction.md")
+    prompt = (benchmark / "prompt.md").read_text(encoding="utf-8").strip()
+    (task / "instruction.md").write_text(
+        system_prompt(language) + "\n\n---\n\n" + prompt + "\n"
+    )
 
     shutil.copytree(benchmark / "input", task / "environment" / "input")
     (task / "environment" / "Dockerfile").write_text(
@@ -212,12 +248,16 @@ def build_task(benchmark: Path, tasks: Path, image: str, commit: str) -> Path:
         "COPY expected/ /tests/expected/\n"
     )
     solve = task / "solution" / "solve.sh"
+    script = LANGUAGES[language]["script"]
     solve.write_text(
         "#!/usr/bin/env bash\n"
-        "# Oracle: the golden files, to prove packaging and grading.\n"
+        "# Oracle: the golden files plus a placeholder script, to prove\n"
+        "# packaging and grading. The placeholder satisfies the script\n"
+        "# check; the datasets carry the grade.\n"
         "set -euo pipefail\n"
         "mkdir -p /app/output\n"
         "cp /solution/expected/*.csv /app/output/\n"
+        f"printf '# oracle placeholder for {script}\\n' > /app/output/{script}\n"
     )
     solve.chmod(0o755)
     return task
@@ -290,6 +330,13 @@ def job_config(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--benchmarks", nargs="*", help="default: every prompt")
+    parser.add_argument(
+        "--language",
+        nargs="*",
+        choices=sorted(LANGUAGES),
+        default=sorted(LANGUAGES),
+        help="default: both tracks",
+    )
     parser.add_argument("--model", required=True, help="provider/model")
     parser.add_argument("--api-host", help="model API host, for other providers")
     parser.add_argument("--key-env", help="API key variable, for other providers")
@@ -306,7 +353,11 @@ def main() -> None:
     )
     commit = git_commit()
     tasks_dir = args.out.resolve() / "tasks"
-    tasks = [build_task(BENCHMARKS / n, tasks_dir, args.image, commit) for n in names]
+    tasks = [
+        build_task(BENCHMARKS / n, tasks_dir, args.image, commit, language)
+        for n in names
+        for language in args.language
+    ]
     config = job_config(
         tasks,
         model=args.model,
@@ -320,7 +371,7 @@ def main() -> None:
     )
     job = args.out.resolve() / "job.json"
     job.write_text(json.dumps(config, indent=2) + "\n")
-    print(f"built {len(tasks)} task(s) in {tasks_dir}")
+    print(f"built {len(tasks)} task(s) ({', '.join(args.language)}) in {tasks_dir}")
     print(f"job: {job}")
 
 

@@ -391,9 +391,19 @@ def _wrap(text: str) -> str:
     return textwrap.fill(text, width=72, break_long_words=False, break_on_hyphens=False)
 
 
+def _task_link(task: str) -> str:
+    """A task's site link; language-suffixed tasks point at their benchmark."""
+    base = task
+    for suffix in ("-python", "-r"):
+        if task.endswith(suffix):
+            base = task[: -len(suffix)]
+            break
+    return f"[{task}](../benchmark/{base}.html)"
+
+
 def _board_section(board: dict, rows: list[dict]) -> list[str]:
     harbor = board["harbor"]
-    tasks = ", ".join(f"[{t}](../benchmark/{t}.html)" for t in board["tasks"])
+    tasks = ", ".join(_task_link(t) for t in board["tasks"])
     attempts = board["attempts"]
     rule = (
         f"Tasks: {tasks}. A run is ranked here when it makes at least "
@@ -444,8 +454,7 @@ def _board_section(board: dict, rows: list[dict]) -> list[str]:
             errors = sorted({t["error"] for t in trials if t["error"]})
             note = f" ({', '.join(errors)})" if errors else ""
             cells.append(f"{verdict}, {accuracy:.1%}{note}")
-        link = f"[{benchmark}](../benchmark/{benchmark}.html)"
-        lines.append(f"| {link} | " + " | ".join(cells) + " |")
+        lines.append(f"| {_task_link(benchmark)} | " + " | ".join(cells) + " |")
     return [*lines, ""]
 
 
@@ -465,10 +474,12 @@ def render(boards: list[dict], runs: list[dict]) -> str:
         "# Agent leaderboards",
         "",
         "How well AI coding agents turn a benchmark's request and input datasets",
-        "into the requested dataset. Each agent gets only the benchmark's",
-        "`prompt.md` and its input files, in a sandbox that reaches nothing",
+        "into the requested dataset. Each agent gets a system prompt naming",
+        "its language (R or Python), the benchmark's `prompt.md` and its",
+        "input files, in a sandbox that reaches nothing",
         "but the model API, and its output is graded cell by cell against the",
-        "benchmark's golden file. A task passes when every cell matches.",
+        "benchmark's golden file. A task passes when every cell matches and",
+        "the required script (`result.R` or `result.py`) exists.",
         f"[The evaluation]({REPOSITORY}/evaluations/harbor/README.md) runs on",
         "[Harbor](https://github.com/harbor-framework/harbor); how each request",
         "is written is in",

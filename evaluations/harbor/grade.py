@@ -2,14 +2,16 @@
 
 Runs in Harbor's separate verifier container as `/tests/grade.py` and also
 standalone, so it uses the Python standard library only. It is a pure
-function of the submitted CSV files, the task's `contract.json`, the golden
-files, and the agent trajectory.
+function of the submitted CSV files, the required script (`result.R` or
+`result.py`), the task's `contract.json`, the golden files, and the agent
+trajectory.
 
-The reward is 1 only when every requested dataset matches its golden file:
-the same columns, the same keys, and the same value in every cell once each
-value is read as its column's type. Column order and row order are
-reported but not graded. A grader failure raises instead of writing
-`reward.json`, so Harbor records a verifier error rather than a score.
+The reward is 1 only when every requested dataset matches its golden file
+(the same columns, keys, and cell values once each value is read as its
+column's type) and the required script exists and is not empty. Column
+order and row order are reported but not graded. A grader failure raises
+instead of writing `reward.json`, so Harbor records a verifier error
+rather than a score.
 """
 
 from __future__ import annotations
@@ -218,16 +220,43 @@ def scan_trajectory(path: Path) -> dict:
     return {"checked": True, "violations": violations}
 
 
+def grade_script(contract: dict, output_dir: Path) -> dict:
+    """The required `result.R`/`result.py` exists and is not empty."""
+    name = contract.get("script")
+    result: dict = {"file": name, "passed": False, "problems": []}
+    if not name:
+        return {**result, "passed": True}
+    path = output_dir / name
+    if not path.is_file():
+        result["problems"].append(f"{name} was not written")
+        return result
+    try:
+        if not path.read_text(encoding="utf-8").strip():
+            result["problems"].append(f"{name} is empty")
+            return result
+    except OSError as exc:
+        result["problems"].append(f"{name} cannot be read: {exc}")
+        return result
+    result["passed"] = True
+    return result
+
+
 def grade(
     contract: dict, expected_dir: Path, output_dir: Path, trajectory: Path
 ) -> dict:
     outputs = [grade_output(s, expected_dir, output_dir) for s in contract["outputs"]]
+    script = grade_script(contract, output_dir)
     network = scan_trajectory(trajectory)
     cells = sum(o["expected_cells"] for o in outputs)
     rows = sum(o["expected_rows"] for o in outputs)
-    passed = all(o["passed"] for o in outputs) and not network["violations"]
+    passed = (
+        all(o["passed"] for o in outputs)
+        and script["passed"]
+        and not network["violations"]
+    )
     return {
         "benchmark": contract["benchmark"],
+        "language": contract.get("language"),
         "passed": passed,
         "reward": {
             "reward": 1.0 if passed else 0.0,
@@ -240,6 +269,7 @@ def grade(
             "web_tool_calls": float(len(network["violations"])),
         },
         "outputs": outputs,
+        "script": script,
         "network": network,
     }
 

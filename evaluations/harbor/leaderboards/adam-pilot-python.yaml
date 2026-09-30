@@ -2,10 +2,12 @@
 # A run belongs here only when it covers every task below with at least
 # `attempts` attempts each, at the tasks' own timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
+# This board is the Python track: every task carries the Python system
+# prompt and requires `/app/output/result.py` alongside the dataset.
 tasks:
-  - adam-adae-death
-  - adam-adsl-age-group
-  - adam-adtte-dor
+  - adam-adae-death-python
+  - adam-adsl-age-group-python
+  - adam-adtte-dor-python
 attempts: 1
 
 # How the site formats number columns, by column id: percent, count, or
@@ -21,13 +23,14 @@ formats:
 # --config` takes. `leaderboard.py export` adds the dataset package and
 # writes it with the rows, ready to create once the tasks are published.
 harbor:
-  name: adam-pilot
-  title: ADaM pilot
+  name: adam-pilot-python
+  title: ADaM pilot (Python)
   description: >-
-    Three ADaM benchmarks: age groups in ADSL, death information on every
-    adverse event in ADAE, and duration of response in ADTTE. An agent gets
-    the benchmark's prompt and input datasets, and a task passes when its
-    output matches every golden cell.
+    Three ADaM benchmarks solved in Python: age groups in ADSL, death
+    information on every adverse event in ADAE, and duration of response
+    in ADTTE. An agent gets the Python system prompt, the benchmark's
+    prompt and input datasets, and a task passes when its output matches
+    every golden cell and `/app/output/result.py` exists.
   visibility: private
   metadata_schema:
     type: object

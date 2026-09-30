@@ -14,6 +14,8 @@ import yaml
 ROOT = Path(__file__).parents[2]
 HARBOR = ROOT / "evaluations" / "harbor"
 PILOTS = ("adam-adsl-age-group", "adam-adae-death", "adam-adtte-dor")
+LANGUAGES = ("r", "python")
+SCRIPTS = {"r": "result.R", "python": "result.py"}
 
 
 def _load(name: str):
@@ -27,8 +29,10 @@ grade = _load("grade")
 build = _load("build")
 
 
-def _golden(benchmark: str) -> tuple[dict, list[str], list[dict[str, str]]]:
-    contract = build.contract_for(ROOT / "benchmarks" / benchmark)
+def _golden(
+    benchmark: str, language: str = "r"
+) -> tuple[dict, list[str], list[dict[str, str]]]:
+    contract = build.contract_for(ROOT / "benchmarks" / benchmark, language)
     output = contract["outputs"][0]
     path = ROOT / "benchmarks" / benchmark / "expected" / output["file"]
     with path.open(newline="") as handle:
@@ -44,10 +48,21 @@ def _write(path: Path, columns: list[str], rows: list[dict[str, str]]) -> None:
         writer.writerows(rows)
 
 
-def _grade(tmp_path: Path, benchmark: str, columns, rows, trajectory=None) -> dict:
-    contract, _, _ = _golden(benchmark)
+def _grade(
+    tmp_path: Path,
+    benchmark: str,
+    columns,
+    rows,
+    trajectory=None,
+    language: str = "r",
+    script: bool = True,
+) -> dict:
+    contract, _, _ = _golden(benchmark, language)
     output = tmp_path / "output"
     _write(output / contract["outputs"][0]["file"], columns, rows)
+    if script:
+        output.mkdir(parents=True, exist_ok=True)
+        (output / contract["script"]).write_text("# agent script\n")
     trajectory_path = tmp_path / "trajectory.json"
     if trajectory is not None:
         trajectory_path.write_text(json.dumps(trajectory))
@@ -60,20 +75,80 @@ def test_every_pilot_has_a_prompt(benchmark):
     assert (ROOT / "benchmarks" / benchmark / "prompt.md").is_file()
 
 
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_language_has_a_system_prompt(language):
+    assert (HARBOR / build.LANGUAGES[language]["system"]).is_file()
+
+
 @pytest.mark.parametrize("benchmark", PILOTS)
-def test_the_golden_scores_one(tmp_path, benchmark):
-    _, columns, rows = _golden(benchmark)
-    result = _grade(tmp_path, benchmark, columns, rows)
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_golden_scores_one(tmp_path, benchmark, language):
+    _, columns, rows = _golden(benchmark, language)
+    result = _grade(tmp_path, benchmark, columns, rows, language=language)
     assert result["passed"], result["outputs"][0]["problems"]
     assert result["reward"]["reward"] == 1.0
 
 
 @pytest.mark.parametrize("benchmark", PILOTS)
-def test_row_and_column_order_are_not_graded(tmp_path, benchmark):
-    _, columns, rows = _golden(benchmark)
-    result = _grade(tmp_path, benchmark, columns[::-1], rows[::-1])
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_row_and_column_order_are_not_graded(tmp_path, benchmark, language):
+    _, columns, rows = _golden(benchmark, language)
+    result = _grade(tmp_path, benchmark, columns[::-1], rows[::-1], language=language)
     assert result["passed"]
     assert result["outputs"][0]["column_order_matches"] is False
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_a_missing_script_fails(tmp_path, language):
+    _, columns, rows = _golden("adam-adae-death", language)
+    result = _grade(
+        tmp_path, "adam-adae-death", columns, rows, language=language, script=False
+    )
+    assert not result["passed"]
+    assert result["script"]["problems"] == [f"{SCRIPTS[language]} was not written"]
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_an_empty_script_fails(tmp_path, language):
+    contract, _, _ = _golden("adam-adsl-age-group", language)
+    _, columns, rows = _golden("adam-adsl-age-group", language)
+    output = tmp_path / "output"
+    _write(output / contract["outputs"][0]["file"], columns, rows)
+    (output / contract["script"]).write_text("  \n")
+    expected = ROOT / "benchmarks" / "adam-adsl-age-group" / "expected"
+    result = grade.grade(contract, expected, output, tmp_path / "none.json")
+    assert not result["passed"]
+    assert result["script"]["problems"] == [f"{contract['script']} is empty"]
+
+
+def test_an_unknown_language_is_rejected():
+    with pytest.raises(build.BuildError):
+        build.contract_for(ROOT / "benchmarks" / PILOTS[0], "julia")
+    with pytest.raises(build.BuildError):
+        build.system_prompt("julia")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_tasks_carry_the_system_prompt_and_script(tmp_path, language):
+    tasks = [
+        build.build_task(
+            ROOT / "benchmarks" / b, tmp_path, build.IMAGE, "test", language
+        )
+        for b in PILOTS
+    ]
+    assert sorted(t.name for t in tasks) == sorted(f"{b}-{language}" for b in PILOTS)
+    for task in tasks:
+        base = task.name.rpartition("-")[0]
+        system = (HARBOR / build.LANGUAGES[language]["system"]).read_text().strip()
+        prompt = (ROOT / "benchmarks" / base / "prompt.md").read_text().strip()
+        assert (task / "instruction.md").read_text() == f"{system}\n\n---\n\n{prompt}\n"
+        config = tomllib.loads((task / "task.toml").read_text())
+        assert config["task"]["name"] == f"yamaa/{task.name}"
+        assert config["metadata"]["language"] == language
+        contract = json.loads((task / "tests" / "contract.json").read_text())
+        assert contract["language"] == language
+        assert contract["script"] == SCRIPTS[language]
+        assert SCRIPTS[language] in (task / "solution" / "solve.sh").read_text()
 
 
 def test_pandas_and_r_spellings_of_the_same_values_pass(tmp_path):
@@ -151,6 +226,7 @@ def test_an_unwritten_output_fails(tmp_path):
     result = grade.grade(contract, expected, tmp_path, tmp_path / "none.json")
     assert not result["passed"]
     assert result["outputs"][0]["problems"] == ["adsl.csv was not written"]
+    assert result["script"]["problems"] == ["result.R was not written"]
 
 
 def test_a_web_tool_call_zeroes_a_correct_answer(tmp_path):
@@ -203,18 +279,23 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
     task_config = pytest.importorskip("harbor.models.task.config")
     job_module = pytest.importorskip("harbor.models.job.config")
     tasks = [
-        build.build_task(ROOT / "benchmarks" / b, tmp_path, build.IMAGE, "test")
+        build.build_task(
+            ROOT / "benchmarks" / b, tmp_path, build.IMAGE, "test", language
+        )
         for b in PILOTS
+        for language in LANGUAGES
     ]
+    assert len(tasks) == len(PILOTS) * len(LANGUAGES)
     for task in tasks:
         config = task_config.TaskConfig.model_validate(
             tomllib.loads((task / "task.toml").read_text())
         )
         assert config.agent.allowed_hosts == []
         assert config.verifier.environment.network_mode.value == "no-network"
-        assert (task / "instruction.md").read_text() == (
-            ROOT / "benchmarks" / task.name / "prompt.md"
-        ).read_text()
+        base, _, language = task.name.rpartition("-")
+        system = (HARBOR / build.LANGUAGES[language]["system"]).read_text().strip()
+        prompt = (ROOT / "benchmarks" / base / "prompt.md").read_text().strip()
+        assert (task / "instruction.md").read_text() == f"{system}\n\n---\n\n{prompt}\n"
     config = build.job_config(
         tasks,
         model="opencode-go/muse-spark-1.3-contributor",
@@ -278,6 +359,21 @@ def _board(tasks: list[str], attempts: int = 1) -> dict:
     board = copy.deepcopy(leaderboard.load_leaderboards()[0])
     board["tasks"], board["attempts"] = tasks, attempts
     return board
+
+
+def _board_named(name: str) -> dict:
+    for board in leaderboard.load_leaderboards():
+        if board["harbor"]["name"] == name:
+            return copy.deepcopy(board)
+    raise AssertionError(f"no leaderboard {name!r}")
+
+
+def test_two_language_boards_cover_the_pilots():
+    boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
+    assert set(boards) == {"adam-pilot-python", "adam-pilot-r"}
+    cases = (("r", boards["adam-pilot-r"]), ("python", boards["adam-pilot-python"]))
+    for language, board in cases:
+        assert sorted(board["tasks"]) == sorted(f"{b}-{language}" for b in PILOTS)
 
 
 def _on(run: dict, board: dict) -> dict:
@@ -407,9 +503,9 @@ def test_committed_leaderboards_and_rows_match_their_schemas():
 
 
 def _export(tmp_path: Path) -> tuple[dict, dict, dict]:
-    rewards = {"adam-adae-death": [1.0], "adam-adsl-age-group": [1.0]}
-    rewards["adam-adtte-dor"] = [0.0]
-    board = leaderboard.load_leaderboards()[0]
+    rewards = {"adam-adae-death-r": [1.0], "adam-adsl-age-group-r": [1.0]}
+    rewards["adam-adtte-dor-r"] = [0.0]
+    board = _board_named("adam-pilot-r")
     run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
     out = tmp_path / "hub"
     definition, rows = leaderboard.export(board, [run], "yamaa/benchmarks", out)
@@ -419,7 +515,7 @@ def _export(tmp_path: Path) -> tuple[dict, dict, dict]:
 def test_export_writes_harbor_hub_configs(tmp_path):
     run, created, rows = _export(tmp_path)
     assert created["package"] == "yamaa/benchmarks"
-    assert created["name"] == "adam-pilot"
+    assert created["name"] == "adam-pilot-r"
     (row,) = rows["rows"]
     assert set(row) == {"metadata", "metrics", "status", "trial_ids"}
     assert row["trial_ids"] == [t["id"] for t in run["trials"]]
