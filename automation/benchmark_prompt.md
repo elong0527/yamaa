@@ -153,6 +153,14 @@ Before committing, review the prompt as the agent would read it:
    show up in the prompt, and nothing contradicts them.
 6. **Keep it short.** Plain text with simple lists, straight quotes around
    literal values, prose wrapped at 79 columns, under about 40 lines.
+7. **Solve it from the prompt.** Write the solution in R and in Python
+   working only from `prompt.md` and the inputs, with only the packages the
+   track's system prompt (`evaluations/harbor/system-*.md`) lists, and save
+   it as `evaluations/harbor/solutions/<benchmark>/result.R` and
+   `result.py`. It must score 1; if it cannot without the README, the
+   prompt is missing a rule. Harbor's oracle agent then runs it, so the
+   task page shows a readable reference instead of a script that writes
+   the golden files. Follow the pilots' solutions for style.
 
 ## 6. Keep it in step
 
@@ -169,6 +177,14 @@ nothing but the one benchmark that is not built yet
 ```bash
 awk 'length > 79 { print FILENAME ":" FNR }' benchmarks/*/prompt.md
 ```
+
+```bash
+uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py \
+	-k reference_solution
+```
+
+The reference test grades every solution in `evaluations/harbor/solutions/`;
+the R ones need R with dplyr and readr, or they are skipped.
 
 ```bash
 uv run --project python --no-sync python - <<'PY'
