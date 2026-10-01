@@ -8,6 +8,8 @@ The SUPPDM dataset should contain the following columns in this order:
 STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG,
 QEVAL
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 Each collected race answer maps to a controlled term:
 - "White", "Asian", "Black or African American", "American Indian or
   Alaska Native", and "Native Hawaiian or Other Pacific Islander" give

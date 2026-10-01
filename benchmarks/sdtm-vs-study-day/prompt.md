@@ -15,10 +15,7 @@ whose start and end dates, both ends included, contain the collection
 date: SCREENING, TREATMENT, or FOLLOW-UP. A day shared by two elements
 belongs to the later element. EPOCH has no value when there is no
 collection date or no element contains it. VSDY is the study day of the
-collection date, counted from the subject's reference start date: that
-date is day 1, there is no day zero, and dates before it count back from
--1; it has no value when the result has no date or the subject has no
-reference start date.
+collection date relative to the subject's reference start date.
 
 The visit number follows the visit label while the epoch follows the
 collection date, so an unscheduled visit still falls in an epoch, and a

@@ -4,6 +4,8 @@ a DM dataset with one record per subject.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 RFICDTC is the informed consent date as collected. BRTHDTC is the birth
 date exactly as collected, cut off at the collected precision. AGE is
 the whole calendar years between the birth date and the consent date:

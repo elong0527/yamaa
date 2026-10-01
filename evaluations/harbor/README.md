@@ -10,7 +10,7 @@ Docker; this folder only writes Harbor task directories and a job file.
 |---|---|
 | `Dockerfile` | the base image: Python and R with data packages, OpenCode's offline settings |
 | `system-r.md`, `system-python.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py` |
-| `build.py` | benchmarks with a `prompt.md` -> Harbor tasks, their Harbor Hub READMEs, and `job.json`, one task per benchmark per language |
+| `build.py` | benchmarks with a `prompt.md` -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
 | `grade.py` | the verifier, copied into every task's `tests/` |
 | `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the prompt alone; the oracle runs them |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
@@ -29,9 +29,13 @@ How to write a prompt is in
   followed by the benchmark's `prompt.md`, which itself never names a
   language. The R track requires `/app/output/result.R`, the Python track
   `/app/output/result.py`, each rerunnable to reproduce the datasets. A
-  shell call to the other language's interpreter in the trajectory
-  (`python3` on the R track, `Rscript` on the Python track), or a bridge
-  package in the script (`reticulate`, `rpy2`), zeroes the trial.
+  shell call that runs the other language zeroes the trial: `python`,
+  `pip`, or `uv` on the R track, `R` or `Rscript` on the Python track, as a
+  command (also behind `env`, `sudo`, `timeout`, `bash -c`, or `$(...)`).
+  Naming one is not a call: in a `grep` pattern, a quoted string, a
+  comment, a heredoc body, or the tool call's description. So is a bridge
+  in the script: `library(reticulate)` or `system("python ...")` in R,
+  `import rpy2` or `subprocess.run(["Rscript", ...])` in Python.
 - **The agent sees only the prompt and `/app/input/`.** Specifications,
   READMEs, golden files, and input schemas (`*.schema.yaml`) never enter
   its container; the golden files live in `tests/`, which Harbor builds
@@ -44,13 +48,21 @@ How to write a prompt is in
 - **Grading.** Reward 1 when every requested dataset has the golden's
   columns, keys, and cell values, and the script, rerun by the verifier
   from a clean state (its datasets deleted first), writes datasets that
-  match too. Column and row order are reported, not graded. Cells are read
-  by column type: numbers compare as numbers within a relative 1e-9 (`1.0`
-  equals `1`), dates also accept a midnight datetime, text is compared
-  exactly (spaces included), and an empty cell, `NA`, or `.` is no value.
+  match too. Then the held-out rerun: with every third subject (by
+  `USUBJID`) dropped from the inputs, the script must write the golden
+  restricted to the subjects kept, so a script that writes its rows
+  literally fails. It applies when the task ships a reference solution
+  (`solutions/`, copied into the verifier's `tests/reference/`) and that
+  reference, rerun the same way, writes exactly the restricted golden;
+  otherwise it is skipped with a note (a derivation across subjects, or
+  inputs without `USUBJID`). Column and row order are reported, not
+  graded. Cells are read by column type: numbers compare as numbers within
+  a relative 1e-9 (`1.0` equals `1`), dates also accept a midnight
+  datetime, text is compared exactly (spaces included), and an empty cell,
+  `NA`, or `.` is no value.
   `reward.json` also carries `cell_accuracy`, `row_accuracy`, `reproduced`,
-  and `language_violations`, and `verifier/diff-<file>.csv` lists the
-  differing cells.
+  `language_violations`, `held_out_checked`, and `held_out` (when
+  checked), and `verifier/diff-<file>.csv` lists the differing cells.
 
 ## Setup
 
@@ -59,22 +71,25 @@ needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
 
 ```bash
 uv sync --project python --group harbor
-docker build -t yamaa-harbor-env:0.2 evaluations/harbor
+docker build -t yamaa-harbor-env:0.3 evaluations/harbor
 ```
 
 ## Build and check the tasks
 
-`build.py` writes the tasks and `job.json` to `~/.cache/yamaa-harbor/`
-(`$XDG_CACHE_HOME/yamaa-harbor` when set, or `--out`), and Harbor writes its
-job directories under `jobs/` there. Both stay outside the repository,
-whose validators read every file in the tree. Each build first removes the
-tasks of the previous one.
+`build.py` writes to `~/.cache/yamaa-harbor/` (`$XDG_CACHE_HOME/yamaa-harbor`
+when set, or `--out`): the tasks under `tasks/`, one dataset README per
+language under `datasets/<language>/`, and the job files under `configs/`.
+Harbor writes its job directories under `jobs/` there. All of it stays
+outside the repository, whose validators read every file in the tree. Each
+build first removes the tasks, datasets, and job files of the previous one.
 
-Each task also gets a `README.md`, its page on Harbor Hub: the benchmark's
-own README, the inputs, the outputs and keys, and the grading and network
+Each language is its own Harbor Hub dataset, `yamaa/yamaa-sdtm-adam-r` and
+`yamaa/yamaa-sdtm-adam-python` (`--dataset-prefix` changes the part before
+`-<language>`), so R and Python are published, run, and ranked apart. Each
+task gets a `README.md`, its page on Harbor Hub: the benchmark's own
+README, the inputs, the outputs and keys, and the grading and network
 rules. It sits at the task root, which never enters the agent's container.
-The build also writes `dataset/README.md`, the dataset's page, listing the
-tasks under the name `--dataset` gives (default `yamaa/benchmarks`).
+`datasets/<language>/README.md` is the dataset's page, listing its tasks.
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/build.py \
@@ -99,8 +114,10 @@ leaderboards, in both languages:
 uv run --project python --no-sync python evaluations/harbor/build.py \
 	--benchmarks adam-adsl-age-group adam-adae-death adam-adtte-dor \
 	--model opencode-go/muse-spark-1.3-contributor \
-	--dataset yamaa/adam-pilot \
-	--n-concurrent 3
+	--variant low medium high xhigh \
+	--n-attempts 3 \
+	--n-concurrent 3 \
+	--job-name muse-spark-1.3-pilot
 ```
 
 Harbor's `oracle` agent runs each task's `solution/result.R` or
@@ -135,21 +152,25 @@ when the job starts, never written to a file.
 | `xai` | `api.x.ai` | `XAI_API_KEY` |
 
 Any other provider, or a gateway, takes `--api-host` and `--key-env`.
+Each job file allows the agent 900 s to install (`override_setup_timeout_sec`),
+since many trials downloading at once slow it; the agent's own time limit
+is the task's, which leaderboard runs must keep.
+
+The build writes one job file per language and model variant,
+`configs/<job-name>-<language>-<variant>.json`, so each job is one row on
+one language's leaderboard. `--variant` takes the model's OpenCode
+variants, which set its reasoning effort; for
+`opencode-go/muse-spark-1.3-contributor` they are `minimal`, `low`,
+`medium`, `high`, and `xhigh` (`opencode models opencode-go --verbose`
+lists them). Without `--variant` there is one job per language at the
+model's default. `--job-name` is the prefix, by default the model's name.
 
 ```bash
 export OPENCODE_API_KEY=...
-uv run --project python --no-sync python evaluations/harbor/build.py \
-	--model opencode-go/muse-spark-1.3-contributor \
-	--n-attempts 1 \
-	--job-name muse-pilot
-uv run --project python --no-sync harbor run \
-	-c ~/.cache/yamaa-harbor/job.json \
-	-y
+for job in ~/.cache/yamaa-harbor/configs/*.json; do
+	uv run --project python --no-sync harbor run -c "$job" -y
+done
 ```
-
-One job can cover both tracks; name one track with `--language` and a
-matching `--job-name` (for example `--language r --job-name muse-pilot-r`)
-to record R and Python runs separately.
 
 Each trial directory under `~/.cache/yamaa-harbor/jobs/<job>/` holds the
 agent's files (`artifacts/app/`, with its `output/result.R` or
@@ -166,9 +187,11 @@ a curated, ranked table whose definition fixes the columns and the ranking
 rules, and whose rows are uploaded runs that point back to their trials.
 `leaderboards/<name>.yaml` holds:
 
+- `package`: the Harbor Hub dataset the board belongs to, the dataset of
+  its language.
 - `tasks` and `attempts`: the benchmarks a run must cover and the fewest
-  attempts on each. A run qualifies only at the tasks' own timeouts, so
-  every row answers the same question.
+  attempts on each (three on the pilot boards). A run qualifies only at the
+  tasks' own timeouts, so every row answers the same question.
 - `harbor`: the Hub definition itself, in the shape
   `harbor hub leaderboard create --config` takes: the `metadata_schema`
   and `metrics_schema` of a row, the `columns`, and the ordered `rank_by`
@@ -177,11 +200,14 @@ rules, and whose rows are uploaded runs that point back to their trials.
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
-one leaderboard per language (`adam-pilot-r`, `adam-pilot-python`), so R
-and Python are ranked independently; one job can appear on both boards.
+one leaderboard per language dataset (`yamaa/yamaa-sdtm-adam-r/adam-pilot-r`,
+`yamaa/yamaa-sdtm-adam-python/adam-pilot-python`), so R and Python are
+ranked independently.
 
-A row's metadata comes from the job (agent, version, model, date,
-attempts, job and Harbor version, and the yamaa commit of its tasks) and
+A row is one job: one agent, model, and variant, so the variants of a model
+sit side by side. Its metadata comes from the job (agent, version, model,
+variant, date, attempts, job and Harbor version, and the yamaa commit of
+its tasks) and
 its metrics from its trials on the leaderboard's tasks, aggregated as
 Harbor aggregates them:
 
@@ -206,31 +232,37 @@ Harbor benchmark, takes leaderboard runs with `--n-attempts 5`.
 
 ### Publish to Harbor Hub
 
-Everything is private to the `yamaa` organization on Harbor Hub: the task
-package, the uploaded jobs, and the leaderboards. Log in once with
+Everything is private to the `yamaa` organization on Harbor Hub: the tasks,
+the two datasets, the uploaded jobs, and the leaderboards. Log in once with
 `harbor auth login` (GitHub OAuth) as a member of `yamaa`. Build the tasks
 from a committed tree, so each row's "Tasks from" commit names the prompts
 it answered (a `+dirty` suffix means uncommitted changes), and publish
 exactly the task directories the job ran, so the uploaded trials match the
-published tasks. Publish the tasks before the dataset, whose manifest
-points at them; `dataset init` keeps the README the build wrote.
+published tasks. Publish the tasks before the datasets, whose manifests
+point at them; `dataset init` keeps the README the build wrote. For the R
+dataset (repeat with `python`):
 
 ```bash
 H="uv run --project python --no-sync harbor"
-$H publish ~/.cache/yamaa-harbor/tasks/* \
+D=~/.cache/yamaa-harbor/datasets/r
+$H publish ~/.cache/yamaa-harbor/tasks/*-r \
 	--private
-$H dataset init yamaa/adam-pilot \
-	-o ~/.cache/yamaa-harbor/dataset \
-	--description "yamaa ADaM pilot: three benchmarks, R and Python tracks"
-$H add ~/.cache/yamaa-harbor/tasks \
-	--scan \
-	--to ~/.cache/yamaa-harbor/dataset
-$H publish ~/.cache/yamaa-harbor/dataset \
+$H dataset init yamaa/yamaa-sdtm-adam-r \
+	-o $D \
+	--description "yamaa SDTM and ADaM benchmarks, R track"
+$H add ~/.cache/yamaa-harbor/tasks/*-r \
+	--to $D
+$H publish $D \
 	--private
 $H upload ~/.cache/yamaa-harbor/jobs/<job> \
 	--org yamaa \
 	--private
 ```
+
+A republish of changed tasks makes a new revision of each task and of the
+dataset. The board links dataset revisions by id, and
+`harbor hub leaderboard update <board> --dv-id <id> ...` replaces that
+list, so pass every revision its rows ran on.
 
 Then write each leaderboard's configs from the job directories and create
 the board and its rows:
@@ -238,20 +270,23 @@ the board and its rows:
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
 	export adam-pilot-r \
-	~/.cache/yamaa-harbor/jobs/<job> \
-	--package yamaa/adam-pilot
+	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-pilot-r-*
 $H hub leaderboard create \
 	--config ~/.cache/yamaa-harbor/hub/adam-pilot-r.leaderboard.yaml
-$H hub leaderboard row create yamaa/adam-pilot/adam-pilot-r \
+$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/adam-pilot-r \
 	--config ~/.cache/yamaa-harbor/hub/adam-pilot-r.rows.yaml
 ```
+
+`export` takes the board's dataset from its `package`; `--package`
+overrides it.
 
 An uploaded job keeps each trial's artifacts, so the agent's script stays
 on the Hub under the trial's `artifacts/app/output/`, and
 `harbor job download <job-id>` brings a whole job back, scripts included.
 
-`export` refuses a job that mixes agents or models, misses a board task, or
-changed the tasks' timeouts; `--hide` exports its rows hidden. Repeat for
-`adam-pilot-python`; one job can feed both boards. The published tasks
-build from the local `yamaa-harbor-env:0.2` image, so they run where that
+`export` refuses a job that mixes agents, models, or variants, misses a
+board task or attempts, or changed the tasks' timeouts; `--hide` exports
+its rows hidden. Repeat for `adam-pilot-python` with the Python jobs. The
+published tasks
+build from the local `yamaa-harbor-env:0.3` image, so they run where that
 image is built.

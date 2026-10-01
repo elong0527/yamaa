@@ -351,6 +351,7 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
     )
     job = job_module.JobConfig.model_validate(config)
     assert job.agents[0].extra_allowed_hosts == ["opencode.ai"]
+    assert job.agents[0].override_setup_timeout_sec == build.SETUP_TIMEOUT_SEC
 
 
 leaderboard = _load("leaderboard")
@@ -422,12 +423,25 @@ def _board_named(name: str) -> dict:
     raise AssertionError(f"no leaderboard {name!r}")
 
 
-def test_two_language_boards_cover_the_pilots():
+def test_each_language_has_a_pilot_board_and_a_full_board():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
-    assert set(boards) == {"adam-pilot-python", "adam-pilot-r"}
-    cases = (("r", boards["adam-pilot-r"]), ("python", boards["adam-pilot-python"]))
-    for language, board in cases:
-        assert sorted(board["tasks"]) == sorted(f"{b}-{language}" for b in PILOTS)
+    assert set(boards) == {
+        f"{board}-{language}"
+        for board in ("adam-pilot", "sdtm-adam")
+        for language in LANGUAGES
+    }
+    buildable = []
+    for prompt in sorted((ROOT / "benchmarks").glob("*/prompt.md")):
+        try:
+            build.contract_for(prompt.parent, "r")
+        except build.BuildError:
+            continue
+        buildable.append(prompt.parent.name)
+    for language in LANGUAGES:
+        pilot = boards[f"adam-pilot-{language}"]["tasks"]
+        assert sorted(pilot) == sorted(f"{b}-{language}" for b in PILOTS)
+        full = boards[f"sdtm-adam-{language}"]["tasks"]
+        assert sorted(full) == sorted(f"{b}-{language}" for b in buildable)
 
 
 def _on(run: dict, board: dict) -> dict:
@@ -438,6 +452,7 @@ def _on(run: dict, board: dict) -> dict:
 def test_collect_reads_a_harbor_job(tmp_path):
     run = leaderboard.collect(_fake_job(tmp_path, {"b-one": [1.0], "b-two": [0.0]}))
     assert run["model"] == "acme/model-1"
+    assert run["variant"] == "default"
     assert run["agent_version"] == "1.18.33"
     assert run["harbor_version"] == "0.23.0"
     assert run["attempts"] == 1 and run["default_timeouts"]
@@ -453,6 +468,39 @@ def test_collect_reads_a_harbor_job(tmp_path):
     assert row["metadata"]["date"] == "2026-09-30"
     assert row["metrics"]["reward"] == 0.5
     assert row["metrics"]["cost_usd"] == pytest.approx(0.02)
+
+
+def _set_variants(job: Path, variants: list[str]) -> None:
+    for path, variant in zip(sorted(job.glob("*/result.json")), variants, strict=True):
+        result = json.loads(path.read_text())
+        result["config"]["agent"]["kwargs"] = {"variant": variant}
+        path.write_text(json.dumps(result))
+
+
+def test_a_row_names_its_variant_and_a_job_may_not_mix_them(tmp_path):
+    job = _fake_job(tmp_path, {"b-one": [1.0], "b-two": [1.0]})
+    _set_variants(job, ["xhigh", "xhigh"])
+    run = leaderboard.collect(job)
+    assert run["variant"] == "xhigh"
+    board = _board(["b-one", "b-two"])
+    (row,) = leaderboard.rows_for(board, [_on(run, board)])
+    assert row["metadata"]["variant"] == "xhigh"
+    _set_variants(job, ["low", "xhigh"])
+    with pytest.raises(SystemExit, match="mixes agents, models, or variants"):
+        leaderboard.collect(job)
+
+
+def test_each_board_names_its_language_dataset():
+    for board in leaderboard.load_leaderboards():
+        language = board["harbor"]["name"].rpartition("-")[2]
+        assert board["package"] == f"yamaa/yamaa-sdtm-adam-{language}"
+        assert board["package"] == build.dataset_name(build.DATASET_PREFIX, language)
+        assert all(task.endswith(f"-{language}") for task in board["tasks"])
+    board = _board(["b-one"])
+    del board["package"]
+    assert leaderboard.board_problems(board) == [
+        "needs the Hub dataset package as package: <org>/<name>"
+    ]
 
 
 def test_an_errored_trial_counts_as_a_failure(tmp_path):
@@ -504,7 +552,9 @@ def test_leaderboards_and_rows_match_their_schemas(tmp_path):
         root_dir = tmp_path / str(index)
         root_dir.mkdir()
         run = leaderboard.collect(
-            _fake_job(root_dir, {task: [1.0] for task in board["tasks"]})
+            _fake_job(
+                root_dir, {task: [1.0] * board["attempts"] for task in board["tasks"]}
+            )
         )
         harbor = board["harbor"]
         (row,) = leaderboard.rows_for(board, [_on(run, board)])
@@ -516,8 +566,8 @@ def test_leaderboards_and_rows_match_their_schemas(tmp_path):
 
 
 def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
-    rewards = {"adam-adae-death-r": [1.0], "adam-adsl-age-group-r": [1.0]}
-    rewards["adam-adtte-dor-r"] = [0.0]
+    rewards = {"adam-adae-death-r": [1.0] * 3, "adam-adsl-age-group-r": [1.0] * 3}
+    rewards["adam-adtte-dor-r"] = [0.0] * 3
     board = _board_named("adam-pilot-r")
     run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
     run["status"] = status
@@ -555,7 +605,7 @@ def _export_cli(monkeypatch, *arguments: str) -> None:
 
 
 def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys):
-    rewards = {f"{b}-r": [1.0] for b in PILOTS}
+    rewards = {f"{b}-r": [1.0] * 3 for b in PILOTS}
     job = _fake_job(tmp_path, rewards)
     out = tmp_path / "hub"
     _export_cli(
@@ -571,6 +621,20 @@ def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys)
     assert rows["rows"][0]["metrics"]["reward"] == 1.0
     assert "harbor hub leaderboard row create yamaa/adam-pilot/adam-pilot-r" in (
         capsys.readouterr().out
+    )
+
+
+def test_the_export_command_defaults_to_the_boards_dataset(
+    tmp_path, monkeypatch, capsys
+):
+    job = _fake_job(tmp_path, {f"{b}-python": [1.0] * 3 for b in PILOTS})
+    out = tmp_path / "hub"
+    _export_cli(monkeypatch, "adam-pilot-python", str(job), "--out", str(out))
+    created = yaml.safe_load((out / "adam-pilot-python.leaderboard.yaml").read_text())
+    assert created["package"] == "yamaa/yamaa-sdtm-adam-python"
+    assert (
+        "row create yamaa/yamaa-sdtm-adam-python/adam-pilot-python"
+        in capsys.readouterr().out
     )
 
 
@@ -670,6 +734,193 @@ def test_calling_the_other_language_zeroes_a_correct_answer(
     )
     assert not result["passed"]
     assert result["reward"]["language_violations"] == 1.0
+
+
+# Shell calls from real trajectories and their variants: the first list runs
+# the other language, the second only mentions it.
+OTHER_LANGUAGE_CALLS = {
+    "r": [
+        "python3 -c 'import pandas'",
+        'ls -R /app && python3 -c "\nfrom datetime import date\nprint(1)\n"',
+        "cd /app; /opt/yamaa-eval/venv/bin/python -V",
+        "env FOO=1 python3.12 check.py | head",
+        'echo "$(python3 -V)"',
+        "bash -c 'pip list'",
+        "uv run python -V",
+        "timeout 60 python3 x.py",
+        "cat <<EOF > notes.txt\nnot a call\nEOF\npython3 -V",
+    ],
+    "python": [
+        "Rscript -e 'library(dplyr)'",
+        "R -e 1",
+        "R CMD BATCH x.R",
+        "sudo -u agent /usr/local/bin/Rscript x.R",
+        "echo `Rscript --version`",
+    ],
+}
+OTHER_LANGUAGE_MENTIONS = {
+    "r": [
+        (
+            'grep -inE "reticulate|system\\(|python|install\\.packages" '
+            '/app/output/result.R || echo "clean"'
+        ),
+        'grep -Ei "python|reticulate" /app/output/result.R || echo ok',
+        "Rscript /app/output/result.R  # no python here",
+        "cat > /tmp/notes.md <<'EOF'\npython3 is not used\nEOF\nRscript x.R",
+        "echo 'python3 x.py'",
+        "ls /opt/yamaa-eval/venv/bin/python3",
+    ],
+    "python": [
+        (
+            "python3 -c \"text = open('/app/output/result.py').read()\n"
+            "print('Rscript' in text, 'subprocess' in text)\""
+        ),
+        'grep -i -E "subprocess|Rscript|rpy" /app/output/result.py || echo none',
+        "python3 /app/output/result.py && echo 'R is not used'",
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("language", "command"),
+    [(lang, c) for lang, calls in OTHER_LANGUAGE_CALLS.items() for c in calls],
+)
+def test_a_shell_call_that_runs_the_other_language_is_found(language, command):
+    assert grade.other_language_calls(command, language), command
+
+
+@pytest.mark.parametrize(
+    ("language", "command"),
+    [(lang, c) for lang, mentions in OTHER_LANGUAGE_MENTIONS.items() for c in mentions],
+)
+def test_naming_the_other_language_is_not_calling_it(language, command):
+    assert grade.other_language_calls(command, language) == [], command
+
+
+def test_a_shell_calls_description_is_not_scanned(tmp_path):
+    trajectory = tmp_path / "trajectory.json"
+    call = {
+        "function_name": "bash",
+        "arguments": {
+            "command": "Rscript /app/output/result.R",
+            "description": "Run the script; python3 is not used",
+        },
+    }
+    trajectory.write_text(json.dumps({"steps": [{"tool_calls": [call]}]}))
+    assert grade.scan_trajectory(trajectory, "r")["language_violations"] == []
+
+
+@pytest.mark.parametrize(
+    ("language", "text", "bridges"),
+    [
+        ("r", "library(reticulate)\npy_run_file('x.py')\n", True),
+        ("r", 'x <- reticulate::import("os")\n', True),
+        ("r", 'system("python3 x.py")\n', True),
+        ("r", "# Uses dplyr only: no reticulate, no python.\nx <- 1\n", False),
+        ("python", "import rpy2.robjects\n", True),
+        ("python", 'subprocess.run(["Rscript", "x.R"])\n', True),
+        ("python", 'os.system("/usr/local/bin/Rscript x.R")\n', True),
+        ("python", '# No Rscript or rpy2 here.\nprint("Rscript" in "")\n', False),
+    ],
+)
+def test_the_script_check_finds_bridges_not_mentions(tmp_path, language, text, bridges):
+    script = SCRIPTS[language]
+    (tmp_path / script).write_text(text)
+    result = grade.grade_script({"script": script, "language": language}, tmp_path)
+    assert result["passed"] is not bridges, result
+
+
+def _held_out_case(tmp_path: Path, agent: str, reference: str | None) -> dict:
+    """Grade, with the verifier's reruns, a Python-track submission of
+    adam-adsl-age-group whose script is `agent` ("reference" or "hardcode")
+    against `reference` ("reference", "hardcode", or None)."""
+    benchmark = ROOT / "benchmarks" / "adam-adsl-age-group"
+    contract = build.contract_for(benchmark, "python")
+    app = tmp_path / "app"
+    shutil.copytree(benchmark / "input", app / "input")
+    (app / "output").mkdir()
+    golden = [benchmark / "expected" / o["file"] for o in contract["outputs"]]
+    texts = {
+        "reference": (build.SOLUTIONS / benchmark.name / "result.py").read_text(),
+        "hardcode": build.oracle_script("python", golden),
+    }
+
+    def at_app(text: str) -> str:
+        return text.replace("/app/", f"{app}/")
+
+    (app / "output" / "result.py").write_text(at_app(texts[agent]))
+    reference_path = None
+    if reference:
+        reference_path = tmp_path / "reference" / "result.py"
+        reference_path.parent.mkdir()
+        reference_path.write_text(at_app(texts[reference]))
+
+    def run(command, cwd, timeout):
+        return grade.run_script([sys.executable, *command[1:]], cwd, timeout)
+
+    assert run([None, str(app / "output" / "result.py")], app, 60)[0] == 0
+    before = {p.name: p.read_bytes() for p in (app / "input").iterdir()}
+    result = grade.grade(
+        contract,
+        benchmark / "expected",
+        app / "output",
+        tmp_path / "none.json",
+        rerun=True,
+        run=run,
+        reference=reference_path,
+    )
+    after = {p.name: p.read_bytes() for p in (app / "input").iterdir()}
+    assert before == after, "the held-out rerun restores the inputs"
+    assert (app / "output" / "result.py").is_file()
+    return result
+
+
+def test_a_dropped_subject_leaves_every_table_under_any_subject_column(tmp_path):
+    source, target = tmp_path / "in", tmp_path / "out"
+    source.mkdir()
+    (source / "dm.csv").write_text("USUBJID,AGE\nS-01-101,30\nS-01-102,40\n")
+    (source / "odm.csv").write_text("SubjectKey,Value\nS-01-101,a\nS-01-102,b\n")
+    (source / "raw.csv").write_text("SUBJID,X\n101,1\n102,2\n")
+    (source / "notes.txt").write_text("kept as is\n")
+    grade._subset_inputs(source, target, {"S-01-102"})
+    assert (target / "dm.csv").read_text() == "USUBJID,AGE\nS-01-101,30\n"
+    assert (target / "odm.csv").read_text() == "SubjectKey,Value\nS-01-101,a\n"
+    assert (target / "raw.csv").read_text() == "SUBJID,X\n101,1\n"
+    assert (target / "notes.txt").read_text() == "kept as is\n"
+
+
+def test_the_held_out_rerun_passes_a_script_that_derives(tmp_path):
+    result = _held_out_case(tmp_path, "reference", "reference")
+    assert result["held_out"]["checked"] and result["passed"]
+    assert result["reward"]["held_out"] == 1.0
+    assert result["held_out"]["dropped"] == [
+        "YAMAA-01-103",
+        "YAMAA-01-106",
+        "YAMAA-01-109",
+    ]
+
+
+def test_the_held_out_rerun_catches_a_script_that_writes_its_rows(tmp_path):
+    result = _held_out_case(tmp_path, "hardcode", "reference")
+    assert result["reward"]["reproduced"] == 1.0, "the plain rerun cannot tell"
+    assert result["held_out"]["checked"] and not result["held_out"]["passed"]
+    assert not result["passed"] and result["reward"]["held_out"] == 0.0
+
+
+def test_the_held_out_rerun_is_skipped_without_a_reference(tmp_path):
+    result = _held_out_case(tmp_path, "hardcode", None)
+    assert not result["held_out"]["checked"]
+    assert result["held_out"]["notes"] == ["no reference solution"]
+    assert "held_out" not in result["reward"]
+
+
+def test_the_held_out_rerun_is_skipped_when_the_reference_is_not_per_subject(
+    tmp_path,
+):
+    # A reference that ignores its inputs cannot write the restricted golden.
+    result = _held_out_case(tmp_path, "reference", "hardcode")
+    assert not result["held_out"]["checked"] and result["passed"]
+    assert "not per subject" in result["held_out"]["notes"][0]
 
 
 def test_a_script_that_bridges_to_the_other_language_fails(tmp_path):
@@ -854,10 +1105,14 @@ def test_a_task_readme_describes_the_task_outside_the_agent_sandbox(tmp_path, la
     assert not list((task / "environment").rglob("README.md"))
 
 
-def test_a_build_writes_the_dataset_readme(tmp_path, monkeypatch):
-    stale = tmp_path / "dataset" / "dataset.toml"
+def test_a_build_writes_one_dataset_per_language_and_one_job_per_variant(
+    tmp_path, monkeypatch
+):
+    stale = tmp_path / "datasets" / "r" / "dataset.toml"
     stale.parent.mkdir(parents=True)
     stale.write_text("# from an earlier build\n")
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "old.json").write_text("{}")
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -866,21 +1121,60 @@ def test_a_build_writes_the_dataset_readme(tmp_path, monkeypatch):
             *PILOTS,
             "--model",
             "opencode-go/muse-spark-1.3-contributor",
-            "--dataset",
-            "yamaa/adam-pilot",
+            "--variant",
+            "low",
+            "xhigh",
+            "--job-name",
+            "pilot",
             "--out",
             str(tmp_path),
         ],
     )
     build.main()
-    dataset = tmp_path / "dataset"
-    assert sorted(p.name for p in dataset.iterdir()) == ["README.md"]
-    readme = (dataset / "README.md").read_text()
-    assert readme.startswith("# yamaa/adam-pilot\n")
-    for benchmark in PILOTS:
-        for language in LANGUAGES:
+    for language, other in (("r", "python"), ("python", "r")):
+        dataset = tmp_path / "datasets" / language
+        assert sorted(p.name for p in dataset.iterdir()) == ["README.md"]
+        readme = (dataset / "README.md").read_text()
+        assert readme.startswith(f"# yamaa/yamaa-sdtm-adam-{language}\n")
+        assert f"`yamaa/yamaa-sdtm-adam-{other}`" in readme
+        for benchmark in PILOTS:
             assert f"| `yamaa/{benchmark}-{language}` |" in readme
-    assert "| Pool Subjects into Age Groups | ADaM | ADSL | R |" in readme
+            assert f"`yamaa/{benchmark}-{other}`" not in readme
+    configs = tmp_path / "configs"
+    assert sorted(p.name for p in configs.iterdir()) == [
+        f"pilot-{language}-{variant}.json"
+        for language in ("python", "r")
+        for variant in ("low", "xhigh")
+    ]
+    config = json.loads((configs / "pilot-r-xhigh.json").read_text())
+    assert config["job_name"] == "pilot-r-xhigh"
+    assert config["agents"][0]["kwargs"]["variant"] == "xhigh"
+    assert sorted(Path(t["path"]).name for t in config["tasks"]) == sorted(
+        f"{b}-r" for b in PILOTS
+    )
+
+
+def test_a_build_without_variants_writes_one_job_per_language(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build.py",
+            "--benchmarks",
+            "adam-adsl-age-group",
+            "--model",
+            "opencode-go/muse-spark-1.3-contributor",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+    build.main()
+    configs = sorted(p.name for p in (tmp_path / "configs").iterdir())
+    assert configs == [
+        "muse-spark-1.3-contributor-python.json",
+        "muse-spark-1.3-contributor-r.json",
+    ]
+    config = json.loads((tmp_path / "configs" / configs[1]).read_text())
+    assert "variant" not in config["agents"][0]["kwargs"]
 
 
 def test_a_build_removes_tasks_left_by_an_earlier_one(tmp_path, monkeypatch):

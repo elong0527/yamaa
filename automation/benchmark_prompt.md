@@ -153,7 +153,13 @@ Before committing, review the prompt as the agent would read it:
    show up in the prompt, and nothing contradicts them.
 6. **Keep it short.** Plain text with simple lists, straight quotes around
    literal values, prose wrapped at 79 columns, under about 40 lines.
-7. **Solve it from the prompt.** Write the solution in R and in Python
+7. **Name the sponsor's conventions, not the standard's.** State every
+   choice a CDISC programmer could reasonably make another way, such as
+   how STUDYID and USUBJID come from the ODM study OID and subject key
+   (as given, or joined with a hyphen). Leave out what the standard
+   already fixes, such as the study day rule (day 1 is the reference
+   date, no day 0): a reader who knows CDISC applies it unprompted.
+8. **Solve it from the prompt.** Write the solution in R and in Python
    working only from `prompt.md` and the inputs, with only the packages the
    track's system prompt (`evaluations/harbor/system-*.md`) lists, and save
    it as `evaluations/harbor/solutions/<benchmark>/result.R` and

@@ -4,6 +4,8 @@ a CM dataset with one record per reported medication course.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDTC, CMENDTC, CMROUTE, CMINDC
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 Each form repeat within a visit repeat is a separate course, so a form
 repeat number reused at a later visit starts a separate course, and a
 medication reported in two courses gives two records. Only CM forms are

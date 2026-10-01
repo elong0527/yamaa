@@ -5,6 +5,8 @@ medication.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 CMSEQ is the medication repeat number within the subject. CMTRT keeps
 the medication name exactly as written. CMDECOD is the preferred name
 of the drug record the coder chose for the reported name, and has no

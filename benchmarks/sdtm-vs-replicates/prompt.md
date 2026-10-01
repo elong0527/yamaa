@@ -6,6 +6,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM,
 VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 VISIT is VISIT 1 for study event SE.VISIT1 and VISIT 2 for SE.VISIT2.
 VSTESTCD and VSTEST are SYSBP and Systolic Blood Pressure, or DIABP and
 Diastolic Blood Pressure, from the collected item. VSSEQ numbers every

@@ -7,6 +7,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT, QSORRES, QSSTRESC,
 QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL, VISITNUM, QSDTC
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 QSSEQ numbers each subject's records by visit, then by test short name, so
 the total-score record follows the nine items and the
 refused-questionnaire record comes last. QSTESTCD is PHQ901 through PHQ909

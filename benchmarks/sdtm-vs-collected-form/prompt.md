@@ -6,6 +6,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
 VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 VSSEQ numbers each subject's records by visit date, then in test order
 within each visit. VISIT is the visit name and VSDTC the measurement date.
 VSTESTCD is SYSBP, DIABP, PULSE, RESP, TEMP, or WEIGHT; VSTEST is Systolic

@@ -1,4 +1,4 @@
-"""Build Harbor tasks and a job file from yamaa benchmarks.
+"""Build Harbor tasks, datasets, and job files from yamaa benchmarks.
 
 Every benchmark with a `prompt.md` becomes one Harbor task per language:
 
@@ -8,24 +8,29 @@ Every benchmark with a `prompt.md` becomes one Harbor task per language:
                            benchmark's prompt.md verbatim
       README.md            the task's page on Harbor Hub
       environment/         FROM the base image, plus the benchmark's input/
-      tests/               grade.py, contract.json and the golden files,
-                           built into the separate verifier image
+      tests/               grade.py, contract.json, the golden files, and the
+                           reference solution for the held-out rerun, built
+                           into the separate verifier image
       solution/            the result.R/result.py Harbor's oracle agent runs:
                            the benchmark's reference solution in solutions/,
                            or else a script that writes the golden files
-    <out>/dataset/README.md  the dataset's page on Harbor Hub
-    <out>/job.json         the agent, model, provider host and API key name
+    <out>/datasets/<language>/README.md   the page of the language's Harbor
+                           Hub dataset, <prefix>-<language>
+    <out>/configs/<job>.json   one Harbor job per language and variant: the
+                           agent, model, variant, provider host and key name
     <out>/jobs/            Harbor job directories
 
-Tasks never name a model or provider; `job.json` does, so one build runs
-against any provider. Run from the repository root:
+Each language is its own dataset (`yamaa/yamaa-sdtm-adam-r`,
+`yamaa/yamaa-sdtm-adam-python`), so R and Python are assessed and ranked
+independently. Tasks never name a model or provider; the job files do, so
+one build runs against any provider. Run from the repository root:
 
     uv run --project python --group harbor python evaluations/harbor/build.py \\
-        --model opencode-go/muse-spark-1.3-contributor
-    uv run --project python --group harbor harbor run -c ~/.cache/yamaa-harbor/job.json
+        --model opencode-go/muse-spark-1.3-contributor --variant low high
+    uv run --project python --group harbor harbor run \\
+        -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
-Pass `--language r` or `--language python` to build only one track; the
-default builds both, so R and Python are assessed independently.
+Pass `--language r` or `--language python` to build only one track.
 """
 
 from __future__ import annotations
@@ -49,7 +54,9 @@ BENCHMARKS = ROOT / "benchmarks"
 # written from the benchmark's prompt.md and inputs alone.
 SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
-IMAGE = "yamaa-harbor-env:0.2"
+# One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
+DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
+IMAGE = "yamaa-harbor-env:0.3"
 OPENCODE_VERSION = "1.18.33"
 OPENCODE_MODELS_PATH = "/opt/yamaa-eval/opencode-models.json"
 # Build output and Harbor job directories stay outside the repository, whose
@@ -79,6 +86,7 @@ SETUP_HOSTS = (
     "registry.npmjs.org",
 )
 WEB_TOOLS_DENIED = {"webfetch": "deny", "websearch": "deny"}
+SETUP_TIMEOUT_SEC = 900.0
 NULL_TOKENS = {"", "NA", "NaN", "nan", ".", "NULL", "None"}
 
 
@@ -307,7 +315,7 @@ allowed_hosts = []
 
 [verifier]
 environment_mode = "separate"
-timeout_sec = 300.0
+timeout_sec = 900.0
 
 [verifier.environment]
 network_mode = "no-network"
@@ -426,10 +434,16 @@ never enter the agent's container.
   Column and row order are not graded.
 - `/app/output/{script}`, rerun by the verifier with `{runner}` after its
   output is deleted, writes the same data again.
+- Held out: rerun on the inputs without every third subject, it writes the
+  expected data of the subjects kept, so a script that writes its rows
+  literally fails. This applies when the reference solution, rerun the
+  same way, writes exactly that data, as it does when the derivation is
+  per subject.
 - The trajectory and the script use no {other} and no web tool.
 
 `reward.json` also reports `cell_accuracy`, `row_accuracy`, `reproduced`,
-`web_tool_calls`, and `language_violations`.
+`web_tool_calls`, `language_violations`, `held_out_checked`, and
+`held_out`.
 
 ## Oracle
 
@@ -438,52 +452,65 @@ An agent's own script is in its trial's artifacts at `/app/output/{script}`.
 """
 
 
-def dataset_readme(
-    name: str, tasks: list[Path], commit: str, languages: list[str]
-) -> str:
-    """The dataset page on Harbor Hub: the tasks and how every one is run."""
+def task_language(task: Path) -> str:
+    """The track of a built task, the last part of its `<benchmark>-<language>`
+    name."""
+    return task.name.rpartition("-")[2]
+
+
+def dataset_name(prefix: str, language: str) -> str:
+    return f"{prefix}-{language}"
+
+
+def dataset_readme(prefix: str, language: str, tasks: list[Path], commit: str) -> str:
+    """The page of one language's dataset on Harbor Hub: its tasks and how
+    every one is run."""
     rows = []
     for task in sorted(tasks):
         config = (task / "task.toml").read_text(encoding="utf-8")
         benchmark = re.search(r'^benchmark = "(.+)"$', config, re.MULTILINE).group(1)
         domain = re.search(r'^domain = "(.+)"$', config, re.MULTILINE).group(1)
         standard = re.search(r'^standard = "(.+)"$', config, re.MULTILINE).group(1)
-        language = re.search(r'^language = "(.+)"$', config, re.MULTILINE).group(1)
         rows.append(
             f"| `yamaa/{task.name}` | {benchmark_title(BENCHMARKS / benchmark)} "
-            f"| {standard} | {domain} | {LANGUAGES[language]['label']} |"
+            f"| {standard} | {domain} |"
         )
-    tracks = " and ".join(LANGUAGES[lang]["label"] for lang in sorted(languages))
+    label, script = LANGUAGES[language]["label"], LANGUAGES[language]["script"]
+    article = "an" if language == "r" else "a"
+    other = next(lang for lang in LANGUAGES if lang != language)
+    other_label = LANGUAGES[other]["label"]
     return f"""\
-# {name}
+# {dataset_name(prefix, language)}
 
-Agent evaluation tasks built from [yamaa]({REPO}) benchmarks. In each task an
-AI coding agent gets a benchmark's prompt and input data in a sandbox with
-no internet, writes a script that derives the requested CDISC dataset, and
-is graded cell by cell against the benchmark's expected data. Each
-benchmark is one task per language ({tracks}), and each track is ranked on
-its own leaderboard.
+Agent evaluation tasks built from [yamaa]({REPO}) benchmarks, {label} track.
+In each task an AI coding agent gets a benchmark's prompt and input data in
+a sandbox with no internet, writes {article} {label} script that derives the
+requested CDISC dataset, and is graded cell by cell against the benchmark's
+expected data. The same benchmarks in {other_label} are the dataset
+`{dataset_name(prefix, other)}`, ranked on their own leaderboard.
 
 Built from yamaa commit {_commit_label(commit)} by
 {_source_link(commit, "evaluations/harbor/build.py")}.
 
 ## Tasks
 
-| Task | Benchmark | Standard | Domain | Track |
-|---|---|---|---|---|
+| Task | Benchmark | Standard | Domain |
+|---|---|---|---|
 {chr(10).join(rows)}
 
 ## How every task runs
 
-- **One language.** The instruction is the track's system prompt, then the
-  benchmark's `prompt.md`. The agent must write `/app/output/result.R` or
-  `/app/output/result.py`; calling the other language zeroes the trial.
+- **{label} only.** The instruction is the {label} system prompt, then the
+  benchmark's `prompt.md`. The agent must write `/app/output/{script}`;
+  calling {other_label} zeroes the trial.
 - **Closed book.** The agent sees only its instruction and `/app/input/`.
   While it works, only the model provider's API host is reachable, and
   OpenCode's web tools are denied. The verifier has no network.
 - **Graded on reproduced data.** The reward is 1 when every requested
   dataset matches the expected data cell by cell, and the verifier's rerun
-  of the agent's script from a clean state writes the same data.
+  of the agent's script from a clean state writes the same data. Rerun
+  again without every third subject, the script must write the expected
+  data of the subjects kept, so writing the rows literally does not pass.
 - **Oracle.** Each task's `solution/` holds the script Harbor's oracle agent
   runs: the benchmark's reference solution, written from its prompt alone,
   or, where there is none yet, a script that writes the expected data
@@ -541,14 +568,19 @@ def build_task(
         "set -euo pipefail\n"
         "python3 /tests/grade.py --rerun\n"
     )
+    script = LANGUAGES[language]["script"]
+    reference = reference_solution(benchmark, language)
+    # The verifier's held-out rerun checks the agent against the reference.
+    if reference:
+        (task / "tests" / "reference").mkdir()
+        shutil.copyfile(reference, task / "tests" / "reference" / script)
     (task / "tests" / "Dockerfile").write_text(
         f"FROM {image}\n"
         "COPY --chmod=755 test.sh /tests/test.sh\n"
         "COPY grade.py contract.json /tests/\n"
         "COPY expected/ /tests/expected/\n"
+        + ("COPY reference/ /tests/reference/\n" if reference else "")
     )
-    script = LANGUAGES[language]["script"]
-    reference = reference_solution(benchmark, language)
     if reference:
         shutil.copyfile(reference, task / "solution" / script)
     else:
@@ -623,6 +655,9 @@ def job_config(
                     "OPENCODE_DISABLE_CLAUDE_CODE": "1",
                 },
                 "extra_allowed_hosts": [host],
+                # Installing OpenCode is slow when many trials download at
+                # once; the agent's own time limit stays the task's.
+                "override_setup_timeout_sec": SETUP_TIMEOUT_SEC,
             }
         ],
         "tasks": [{"path": str(t)} for t in tasks],
@@ -675,12 +710,18 @@ def main() -> None:
     parser.add_argument("--model", required=True, help="provider/model")
     parser.add_argument("--api-host", help="model API host, for other providers")
     parser.add_argument("--key-env", help="API key variable, for other providers")
-    parser.add_argument("--variant", help="OpenCode reasoning variant")
+    parser.add_argument(
+        "--variant",
+        nargs="*",
+        help="OpenCode model variants (reasoning effort), one job each",
+    )
     parser.add_argument("--n-attempts", type=int, default=1)
     parser.add_argument("--n-concurrent", type=int, default=1)
-    parser.add_argument("--job-name")
+    parser.add_argument("--job-name", help="job name prefix; default: the model's name")
     parser.add_argument(
-        "--dataset", default="yamaa/benchmarks", help="Harbor Hub dataset name"
+        "--dataset-prefix",
+        default=DATASET_PREFIX,
+        help="Harbor Hub dataset name, before -<language>",
     )
     parser.add_argument("--image", default=IMAGE)
     parser.add_argument("--out", type=Path, default=OUT)
@@ -690,11 +731,16 @@ def main() -> None:
         p.parent.name for p in BENCHMARKS.glob("*/prompt.md")
     )
     commit = git_commit()
-    tasks_dir = args.out.resolve() / "tasks"
-    dataset_dir = args.out.resolve() / "dataset"
+    out = args.out.resolve()
+    tasks_dir, datasets_dir, configs_dir = (
+        out / "tasks",
+        out / "datasets",
+        out / "configs",
+    )
     # Start clean: a task left from an earlier build would still be picked up
-    # by `harbor run -p <tasks>`, and a dataset manifest would still list it.
-    for directory in (tasks_dir, dataset_dir):
+    # by `harbor run -p <tasks>`, a dataset manifest would still list it, and
+    # a job file would still run it.
+    for directory in (tasks_dir, datasets_dir, configs_dir):
         if directory.exists():
             shutil.rmtree(directory)
     tasks, skipped = build_selection(
@@ -709,26 +755,31 @@ def main() -> None:
         raise BuildError("no buildable benchmark with a prompt.md")
     for line in skipped:
         print(f"skip {line}", file=sys.stderr)
-    config = job_config(
-        tasks,
-        model=args.model,
-        api_host=args.api_host,
-        key_env=args.key_env,
-        variant=args.variant,
-        n_attempts=args.n_attempts,
-        n_concurrent=args.n_concurrent,
-        job_name=args.job_name,
-        jobs_dir=args.out.resolve() / "jobs",
-    )
-    job = args.out.resolve() / "job.json"
-    job.write_text(json.dumps(config, indent=2) + "\n")
-    dataset_dir.mkdir(parents=True)
-    (dataset_dir / "README.md").write_text(
-        dataset_readme(args.dataset, tasks, commit, args.language)
-    )
+    base = args.job_name or args.model.rpartition("/")[2]
+    configs_dir.mkdir(parents=True)
     print(f"built {len(tasks)} task(s) ({', '.join(args.language)}) in {tasks_dir}")
-    print(f"job: {job}")
-    print(f"dataset README: {dataset_dir / 'README.md'}")
+    for language in sorted({task_language(t) for t in tasks}):
+        own = [t for t in tasks if task_language(t) == language]
+        readme = datasets_dir / language / "README.md"
+        readme.parent.mkdir(parents=True)
+        readme.write_text(dataset_readme(args.dataset_prefix, language, own, commit))
+        print(f"dataset {dataset_name(args.dataset_prefix, language)}: {readme}")
+        for variant in args.variant or [None]:
+            name = "-".join(part for part in (base, language, variant) if part)
+            config = job_config(
+                own,
+                model=args.model,
+                api_host=args.api_host,
+                key_env=args.key_env,
+                variant=variant,
+                n_attempts=args.n_attempts,
+                n_concurrent=args.n_concurrent,
+                job_name=name,
+                jobs_dir=out / "jobs",
+            )
+            job = configs_dir / f"{name}.json"
+            job.write_text(json.dumps(config, indent=2) + "\n")
+            print(f"job: {job}")
 
 
 if __name__ == "__main__":
