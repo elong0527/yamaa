@@ -107,15 +107,13 @@ Naming one with `--benchmarks` fails fast instead. Domains built together
 (`spec_dm.yaml` and `spec_suppdm.yaml`) are one task that grades both
 datasets.
 
-The pilot for development is the three ADaM benchmarks on the
-leaderboards, in both languages:
+For development, a pilot of three ADaM benchmarks in both languages is a
+quick check before a full run:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/build.py \
 	--benchmarks adam-adsl-age-group adam-adae-death adam-adtte-dor \
 	--model opencode-go/muse-spark-1.3-contributor \
-	--variant low medium high xhigh \
-	--n-attempts 3 \
 	--n-concurrent 3 \
 	--job-name muse-spark-1.3-pilot
 ```
@@ -190,8 +188,9 @@ rules, and whose rows are uploaded runs that point back to their trials.
 - `package`: the Harbor Hub dataset the board belongs to, the dataset of
   its language.
 - `tasks` and `attempts`: the benchmarks a run must cover and the fewest
-  attempts on each (three on the pilot boards). A run qualifies only at the
-  tasks' own timeouts, so every row answers the same question.
+  attempts on each (every buildable benchmark, one attempt). A run
+  qualifies only at the tasks' own timeouts, so every row answers the same
+  question.
 - `harbor`: the Hub definition itself, in the shape
   `harbor hub leaderboard create --config` takes: the `metadata_schema`
   and `metrics_schema` of a row, the `columns`, and the ordered `rank_by`
@@ -200,8 +199,8 @@ rules, and whose rows are uploaded runs that point back to their trials.
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
-one leaderboard per language dataset (`yamaa/yamaa-sdtm-adam-r/adam-pilot-r`,
-`yamaa/yamaa-sdtm-adam-python/adam-pilot-python`), so R and Python are
+one leaderboard per language dataset (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-r`,
+`yamaa/yamaa-sdtm-adam-python/sdtm-adam-python`), so R and Python are
 ranked independently.
 
 A row is one job: one agent, model, and variant, so the variants of a model
@@ -269,12 +268,12 @@ the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	export adam-pilot-r \
-	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-pilot-r-*
+	export sdtm-adam-r \
+	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-contributor-r-low
 $H hub leaderboard create \
-	--config ~/.cache/yamaa-harbor/hub/adam-pilot-r.leaderboard.yaml
-$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/adam-pilot-r \
-	--config ~/.cache/yamaa-harbor/hub/adam-pilot-r.rows.yaml
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-r.leaderboard.yaml
+$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/sdtm-adam-r \
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-r.rows.yaml
 ```
 
 `export` takes the board's dataset from its `package`; `--package`
@@ -286,7 +285,7 @@ on the Hub under the trial's `artifacts/app/output/`, and
 
 `export` refuses a job that mixes agents, models, or variants, misses a
 board task or attempts, or changed the tasks' timeouts; `--hide` exports
-its rows hidden. Repeat for `adam-pilot-python` with the Python jobs. The
+its rows hidden. Repeat for `sdtm-adam-python` with the Python jobs. The
 published tasks
 build from the local `yamaa-harbor-env:0.3` image, so they run where that
 image is built.
