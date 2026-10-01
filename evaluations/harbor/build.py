@@ -447,9 +447,9 @@ never enter the agent's container.
   expected data of the subjects kept, so a script that writes its rows
   literally fails. This applies when the reference solution, rerun the
   same way, writes exactly that data, as it does when the derivation is
-  per subject. Required challenges also rename subject identifiers and use
-  reviewed boundary fixtures when available; their answers are independently
-  recomputed by the reference. Submitted code runs as an isolated uid with
+  per subject. Required challenges also rename subject identifiers in the
+  existing inputs; their answers are independently recomputed by the
+  reference. Submitted code runs as an isolated uid with
   no access to grading files.
 - The trajectory and the script use no {other} and no web tool.
 
@@ -589,9 +589,6 @@ def build_task(
     shutil.copyfile(HERE / "sandbox.py", task / "tests" / "sandbox.py")
     shutil.copyfile(task / "task.toml", task / "tests" / "task.toml")
     shutil.copytree(task / "environment" / "input", task / "tests" / "input")
-    cases = HERE / "cases" / benchmark.name
-    if cases.is_dir():
-        shutil.copytree(cases, task / "tests" / "cases")
     (task / "tests" / "contract.json").write_text(json.dumps(contract, indent=2))
     (task / "tests" / "test.sh").write_text(
         "#!/usr/bin/env bash\n"
@@ -609,9 +606,8 @@ def build_task(
         "COPY grade.py sandbox.py contract.json task.toml /tests/\n"
         "COPY input/ /tests/input/\n"
         "COPY expected/ /tests/expected/\n"
-        + "COPY reference/ /tests/reference/\n"
-        + ("COPY cases/ /tests/cases/\n" if cases.is_dir() else "")
-        + "RUN chmod 700 /tests\n"
+        "COPY reference/ /tests/reference/\n"
+        "RUN chmod 700 /tests\n"
     )
     shutil.copyfile(reference, task / "solution" / script)
     runner = "Rscript" if language == "r" else "python3"

@@ -15,7 +15,6 @@ Docker; this folder only writes Harbor task directories and a job file.
 | `build.py` | benchmarks with a full prompt -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
 | `grade.py` | the verifier, copied into every task's `tests/` |
 | `sandbox.py` | runs submitted code as a separate uid, with protected inputs and grading assets |
-| `cases/` | verifier-only clinical boundary fixtures and independently reviewed goldens |
 | `smoke.py` | runs oracle/nop through Docker on both tracks; `--full` covers all tasks |
 | `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
@@ -84,10 +83,9 @@ How to write a prompt is in
 
   Tasks with subject-level outputs also require changed-input challenges:
   subject identifiers are renamed, and the script must produce the answer
-  independently recomputed by the reference. The three development tasks
-  also have reviewed fixtures for age boundaries, fatal-event precedence,
-  and response-duration ties and censoring. References must match the
-  original golden and any reviewed challenge golden. A reference crash is
+  independently recomputed by the reference. These checks transform the
+  existing benchmark inputs. References must match the original golden
+  before generating the transformed answer. A reference crash is
   a verifier error; it never exempts a submission from these checks.
   `challenge_checked` and `challenge_passed` record their result.
   Integer columns compare exactly, including values beyond float precision.

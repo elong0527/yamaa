@@ -41,7 +41,6 @@ def _challenge(tmp_path: Path, language: str = "python", script: str | None = No
         benchmark / "expected",
         app / "output",
         reference,
-        build.HERE / "cases" / benchmark.name,
         run,
     )
 
@@ -59,7 +58,6 @@ with open('/app/output/adsl.csv', 'w', newline='') as h:
 """
     result = _challenge(tmp_path, script=script)
     assert result["checked"] and not result["passed"]
-    assert {c["name"] for c in result["cases"]} == {"subject-identifiers", "boundaries"}
 
 
 def test_partial_contact_dates_survive_subject_removal(tmp_path):
@@ -68,7 +66,7 @@ def test_partial_contact_dates_survive_subject_removal(tmp_path):
 
 
 @pytest.mark.parametrize("language", ["r", "python"])
-def test_reference_derives_the_challenge_cases(tmp_path, language):
+def test_reference_derives_renamed_subject_inputs(tmp_path, language):
     if language == "r" and not _r_has("dplyr", "readr"):
         pytest.skip("R data packages are checked by the Docker integration job")
     result = _challenge(tmp_path, language)

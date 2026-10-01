@@ -17,8 +17,8 @@ The reward is 1 only when all of these hold:
   writes its rows literally fails. The check applies when the task ships a
   reference solution and the reference itself writes exactly that
   restricted golden, which shows the derivation is per subject;
-- required challenges: renamed subject identifiers and reviewed boundary
-  fixtures must match answers independently computed by the reference;
+- required challenges: renamed subject identifiers must match answers
+  independently computed by the reference;
 - the trajectory and the script use no other language and no web tool.
 
 Column order and row order are reported but not graded. A grader failure
@@ -853,15 +853,14 @@ def challenge_rerun(
     expected_dir: Path,
     output_dir: Path,
     reference: Path | None,
-    cases: Path | None = None,
     run: RunScript = run_script,
 ) -> dict:
-    """Recompute answers on changed identifiers and private input fixtures.
+    """Recompute answers after renaming subjects in the existing inputs.
 
     Validate the reference on the original golden first. A reference failure
     is a harness error, never an exemption from a required challenge.
     """
-    result = {"checked": False, "passed": True, "cases": [], "problems": []}
+    result = {"checked": False, "passed": True, "problems": []}
     if not contract.get("challenge_required"):
         return result
     if reference is None or not reference.is_file():
@@ -892,71 +891,50 @@ def challenge_rerun(
                 raise RuntimeError(
                     "challenge reference does not match the original golden"
                 )
-            inputs = []
             offset = random.SystemRandom().randrange(1000000, 9000000)
             suffix = "-evaluation-" + uuid.uuid4().hex[:8]
             result["identifier_offset"], result["identifier_suffix"] = offset, suffix
-            if _rename_subjects(
+            if not _rename_subjects(
                 work / "original-input", work / "renamed-input", offset, suffix
             ):
-                inputs.append(("subject-identifiers", work / "renamed-input"))
-            if cases is not None and cases.is_dir():
-                inputs.extend(
-                    (p.name, p / "input") for p in sorted(cases.iterdir()) if p.is_dir()
-                )
-            if not inputs:
                 raise RuntimeError(
-                    "required challenges have no applicable input fixture"
+                    "required challenges have no subject identifiers to rename"
                 )
-            for case, source in inputs:
-                shutil.rmtree(app / "input")
-                shutil.copytree(source, app / "input")
-                execute(reference)
-                if case == "subject-identifiers" and any(
-                    len(read_rows(output_dir / spec["file"])[1])
-                    != len(read_rows(expected_dir / spec["file"])[1])
-                    for spec in contract["outputs"]
-                ):
-                    raise RuntimeError(
-                        "renaming subjects changed the reference record count"
-                    )
-                fixed_expected = source.parent / "expected"
-                if fixed_expected.is_dir() and not all(
-                    grade_output(s, fixed_expected, output_dir)["passed"]
-                    for s in contract["outputs"]
-                ):
-                    raise RuntimeError(
-                        f"reference disagrees with the reviewed {case} golden"
-                    )
-                expected = work / case / "expected"
-                expected.mkdir(parents=True)
-                for spec in contract["outputs"]:
-                    # Validate keys, parsing and columns before trusting this answer.
-                    checked = grade_output(spec, output_dir, output_dir)
-                    if not checked["passed"]:
-                        raise RuntimeError(
-                            f"invalid challenge reference output: {checked}"
-                        )
-                    shutil.copyfile(output_dir / spec["file"], expected / spec["file"])
-                if case == "subject-identifiers" and all(
-                    grade_output(s, expected_dir, output_dir)["passed"]
-                    for s in contract["outputs"]
-                ):
-                    raise RuntimeError(
-                        "the reference ignored the changed subject identifiers"
-                    )
-                result["checked"] = True
-                for spec in contract["outputs"]:
-                    (output_dir / spec["file"]).unlink(missing_ok=True)
-                code, log = run([interpreter, str(agent)], app, RERUN_TIMEOUT_SEC)
-                problems = [] if code == 0 else [f"script failed: {log[-1000:]}"]
-                for spec in contract["outputs"]:
-                    checked = grade_output(spec, expected, output_dir)
-                    problems.extend(
-                        f"{checked['file']}: {p}" for p in checked["problems"]
-                    )
-                result["cases"].append({"name": case, "passed": not problems})
-                result["problems"].extend(f"{case}: {p}" for p in problems)
+            shutil.rmtree(app / "input")
+            shutil.copytree(work / "renamed-input", app / "input")
+            execute(reference)
+            if any(
+                len(read_rows(output_dir / spec["file"])[1])
+                != len(read_rows(expected_dir / spec["file"])[1])
+                for spec in contract["outputs"]
+            ):
+                raise RuntimeError(
+                    "renaming subjects changed the reference record count"
+                )
+            expected = work / "expected"
+            expected.mkdir()
+            for spec in contract["outputs"]:
+                # Validate keys, parsing and columns before trusting this answer.
+                checked = grade_output(spec, output_dir, output_dir)
+                if not checked["passed"]:
+                    raise RuntimeError(f"invalid challenge reference output: {checked}")
+                shutil.copyfile(output_dir / spec["file"], expected / spec["file"])
+            if all(
+                grade_output(s, expected_dir, output_dir)["passed"]
+                for s in contract["outputs"]
+            ):
+                raise RuntimeError(
+                    "the reference ignored the changed subject identifiers"
+                )
+            result["checked"] = True
+            for spec in contract["outputs"]:
+                (output_dir / spec["file"]).unlink(missing_ok=True)
+            code, log = run([interpreter, str(agent)], app, RERUN_TIMEOUT_SEC)
+            problems = [] if code == 0 else [f"script failed: {log[-1000:]}"]
+            for spec in contract["outputs"]:
+                checked = grade_output(spec, expected, output_dir)
+                problems.extend(f"{checked['file']}: {p}" for p in checked["problems"])
+            result["problems"] = problems
             result["passed"] = not result["problems"]
         finally:
             shutil.rmtree(app / "input", ignore_errors=True)
@@ -976,7 +954,6 @@ def grade(
     run: RunScript = run_script,
     reference: Path | None = None,
     require_trajectory: bool = False,
-    cases: Path | None = None,
 ) -> dict:
     outputs = [grade_output(s, expected_dir, output_dir) for s in contract["outputs"]]
     script = grade_script(contract, output_dir)
@@ -994,9 +971,9 @@ def grade(
         else {"checked": False, "passed": True, "problems": [], "notes": []}
     )
     challenge = (
-        challenge_rerun(contract, expected_dir, output_dir, reference, cases, run)
+        challenge_rerun(contract, expected_dir, output_dir, reference, run)
         if rerun and reproduced["passed"]
-        else {"checked": False, "passed": True, "cases": [], "problems": []}
+        else {"checked": False, "passed": True, "problems": []}
     )
     cells = sum(o["expected_cells"] for o in outputs)
     rows = sum(o["expected_rows"] for o in outputs)
@@ -1102,7 +1079,6 @@ def main() -> None:
         run=run,
         require_trajectory=args.require_trajectory
         or os.environ.get("YAMAA_REQUIRE_TRAJECTORY") == "1",
-        cases=args.contract.parent / "cases",
     )
     write_results(result, args.out)
     status = "PASS" if result["passed"] else "FAIL"

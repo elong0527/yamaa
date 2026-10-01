@@ -53,7 +53,6 @@ subprocess.Popen(['sh', '-c', 'sleep 1; touch /tmp/yamaa-escaped-worker'],
         rerun=True,
         run=sandbox.run,
         reference=reference,
-        cases=tests / "cases",
     )
     if not result["passed"]:
         raise RuntimeError(f"a valid script failed the sandbox probes: {result}")
