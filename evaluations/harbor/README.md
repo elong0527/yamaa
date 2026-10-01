@@ -1,8 +1,8 @@
 # Agent evaluation with Harbor
 
 Runs yamaa benchmarks as agent evaluations: an AI coding agent gets a
-benchmark's `prompt.md` and its input datasets, writes the requested
-dataset, and is graded cell by cell against the benchmark's golden file.
+benchmark's prompt and its input datasets, writes the requested dataset,
+and is graded cell by cell against the benchmark's golden file.
 [Harbor](https://github.com/harbor-framework/harbor) runs the agent in
 Docker; this folder only writes Harbor task directories and a job file.
 
@@ -10,14 +10,23 @@ Docker; this folder only writes Harbor task directories and a job file.
 |---|---|
 | `Dockerfile` | the base image: Python and R with data packages, OpenCode's offline settings |
 | `system-r.md`, `system-python.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py` |
-| `build.py` | benchmarks with a `prompt.md` -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
+| `prompts/` | the prompts, `<benchmark>/full.md` and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
+| `brief.py` | writes each `brief.md` from its `full.md` |
+| `build.py` | benchmarks with a full prompt -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
 | `grade.py` | the verifier, copied into every task's `tests/` |
-| `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the prompt alone; the oracle runs them |
+| `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
 | `leaderboards/` | leaderboard definitions, one file per leaderboard (one per language) |
 
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
+
+Tasks are built from the full prompt. The Harbor Evaluation workflow
+(`.github/workflows/harbor-evaluation.yml`) reruns every reference
+solution, in R and in Python, against its benchmark's current data, and
+checks that every prompt still asks for the datasets and columns the
+expected data holds, so a change to a benchmark that breaks either fails
+its pull request.
 
 How to write a prompt is in
 [`automation/benchmark_prompt.md`](../../automation/benchmark_prompt.md).
@@ -26,7 +35,7 @@ How to write a prompt is in
 
 - **One language per task.** Each task's `instruction.md` is the shared
   system prompt for its language (`system-r.md` or `system-python.md`)
-  followed by the benchmark's `prompt.md`, which itself never names a
+  followed by the benchmark's full prompt, which itself never names a
   language. The R track requires `/app/output/result.R`, the Python track
   `/app/output/result.py`, each rerunnable to reproduce the datasets. A
   shell call that runs the other language zeroes the trial: `python`,
@@ -121,8 +130,8 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
 Harbor's `oracle` agent runs each task's `solution/result.R` or
 `result.py` and must score 1 on every task, rerun included; its `nop`
 agent writes nothing and must score 0. That script is the benchmark's
-reference solution from `solutions/`, written from `prompt.md` and the
-inputs alone, which also shows the prompt can be solved. A benchmark
+reference solution from `solutions/`, written from the full prompt and
+the inputs alone, which also shows the prompt can be solved. A benchmark
 without one gets a script that writes the golden files byte for byte,
 holding each as readable text (a parquet golden as bytes), with a header
 saying it is a harness check, not a derivation:

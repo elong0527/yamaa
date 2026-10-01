@@ -1,10 +1,11 @@
 # Benchmark prompt recipe
 
-Canonical recipe for writing a benchmark's `prompt.md`: the request an AI
-coding agent receives when the benchmark runs as an agent evaluation
-(through Harbor). The agent gets this file and the benchmark's input
-datasets, nothing else, and its output datasets are graded cell by cell
-against the benchmark's golden files.
+Canonical recipe for writing a benchmark's full prompt,
+`evaluations/harbor/prompts/<name>/full.md`: the request an AI coding agent
+receives when the benchmark runs as an agent evaluation (through Harbor).
+The agent gets this file and the benchmark's input datasets, nothing else,
+and its output datasets are graded cell by cell against the benchmark's
+golden files.
 
 - write the request a statistician would send a statistical programmer:
   the standard, the inputs, the output and its record level, every output
@@ -27,7 +28,10 @@ against the benchmark's golden files.
   not built yet. A generated document (`define.xml`) is not graded; only
   its datasets are. A project function (`environment.yaml`) is the
   agent's to compute: state what the value is, as for any other column.
-- **Where.** `benchmarks/<name>/prompt.md`, beside the README.
+- **Where.** `evaluations/harbor/prompts/<name>/full.md`, beside the
+  benchmark's other prompt tiers. `brief.md`, the same request without its
+  outcome block, is written from it by `evaluations/harbor/brief.py`; what
+  each tier means is in `evaluations/harbor/prompts/README.md`.
 - **Worked examples.** `adam-adsl-age-group` (categories and codes),
   `adam-adae-death` (two inputs, precedence, ties), and `adam-adtte-dor`
   (three inputs, event and censoring rules, source tracing).
@@ -36,7 +40,7 @@ against the benchmark's golden files.
 
 | Sees | Never sees |
 |---|---|
-| the system prompt for the run's language (R or Python), then `prompt.md`, verbatim | `README.md`, `spec*.yaml`, `expected/` |
+| the system prompt for the run's language (R or Python), then the full prompt, verbatim | `README.md`, `spec*.yaml`, `expected/` |
 | `/app/input/`: the `input/` data files | `run.py`, `run.R`, yamaa itself, input schemas (`*.schema.yaml`) |
 | Python and R with common data packages | the internet (web search is off) |
 
@@ -74,6 +78,10 @@ Read the source datasets from /app/input and save the completed dataset as
 - **Output file.** Use the golden file name under `/app/output/`. A
   benchmark with several golden datasets (`spec_<domain>.yaml`) names each
   dataset with its own column list and file.
+- **Paragraphs.** Keep each block its own paragraph, the column lists of
+  several datasets together in the second. The brief tier keeps the first,
+  second, and last paragraphs verbatim, and `brief.py` rejects a prompt
+  whose blocks it cannot find.
 
 ## 4. The outcome block
 
@@ -160,7 +168,7 @@ Before committing, review the prompt as the agent would read it:
    already fixes, such as the study day rule (day 1 is the reference
    date, no day 0): a reader who knows CDISC applies it unprompted.
 8. **Solve it from the prompt.** Write the solution in R and in Python
-   working only from `prompt.md` and the inputs, with only the packages the
+   working only from the full prompt and the inputs, with only the packages the
    track's system prompt (`evaluations/harbor/system-*.md`) lists, and save
    it as `evaluations/harbor/solutions/<benchmark>/result.R` and
    `result.py`. It must score 1; if it cannot without the README, the
@@ -170,57 +178,26 @@ Before committing, review the prompt as the agent would read it:
 
 ## 6. Keep it in step
 
-Change `prompt.md` in the same change as any edit to that benchmark's
-README, inputs, or golden files.
+Change `full.md` in the same change as any edit to that benchmark's
+README, inputs, or golden files, then rerun `evaluations/harbor/brief.py`
+to rewrite its `brief.md`.
 
 ## Checks to run before finishing
 
-Run from the repository root. The second check uses the evaluation's own
-build, so it checks exactly the datasets that are graded; both print
-nothing but the one benchmark that is not built yet
-(`adam-adsl-age-quality`).
-
-```bash
-awk 'length > 79 { print FILENAME ":" FNR }' benchmarks/*/prompt.md
-```
+Run from the repository root:
 
 ```bash
 uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py \
-	-k reference_solution
+	-k "prompt or reference_solution"
 ```
 
-The reference test grades every solution in `evaluations/harbor/solutions/`;
-an R one is skipped when R lacks a package its script loads.
-
-```bash
-uv run --project python --no-sync python - <<'PY'
-import importlib.util
-import re
-from pathlib import Path
-
-path = "evaluations/harbor/build.py"
-spec = importlib.util.spec_from_file_location("build", path)
-build = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(build)
-banned = re.compile(
-    r"\b(?:yamaa|yaml|spec|specifications?|schemas?|handlers?|verifications?"
-    r"|derivations?)\b|\bR0\d\d\b|\bREQ-\d+",
-    re.IGNORECASE,
-)
-for path in sorted(Path("benchmarks").glob("*/prompt.md")):
-    text = path.read_text()
-    flat = " ".join(text.split())
-    for match in banned.finditer(text):
-        print(path, "-> mentions", match.group(0))
-    try:
-        contract = build.contract_for(path.parent, "r")
-    except build.BuildError as exc:
-        print(path, "-> not built:", exc)
-        continue
-    for output in contract["outputs"]:
-        if f"/app/output/{output['file']}" not in flat:
-            print(path, "-> no output path for", output["file"])
-        if ", ".join(output["columns"]) not in flat:
-            print(path, "-> column list differs from", output["file"])
-PY
-```
+The prompt tests check every tier of every benchmark: the four blocks of
+the full prompt, the brief prompt against `brief.py`, the column lists and
+output paths against the graded datasets (the evaluation's own build, so a
+benchmark it does not build yet, `adam-adsl-age-quality`, is skipped), the
+79-column width, and the words a prompt never uses. The reference test
+grades every solution in `evaluations/harbor/solutions/` against the
+benchmark's current data; an R one is skipped when R lacks a package its
+script loads. The Harbor Evaluation workflow runs the same tests with R
+installed on every pull request that changes a benchmark or the
+evaluation, so there a missing R package fails instead.

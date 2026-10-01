@@ -4,6 +4,7 @@ import copy
 import csv
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -31,6 +32,8 @@ def _load(name: str):
 
 grade = _load("grade")
 build = _load("build")
+brief = _load("brief")
+PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
 
 
 def _golden(
@@ -76,12 +79,75 @@ def _grade(
 
 @pytest.mark.parametrize("benchmark", PILOTS)
 def test_every_pilot_has_a_prompt(benchmark):
-    assert (ROOT / "benchmarks" / benchmark / "prompt.md").is_file()
+    assert benchmark in PROMPTED
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_language_has_a_system_prompt(language):
     assert (HARBOR / build.LANGUAGES[language]["system"]).is_file()
+
+
+def test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation():
+    benchmarks = ROOT / "benchmarks"
+    positive = sorted(
+        p.name for p in benchmarks.iterdir() if p.name.startswith(("sdtm-", "adam-"))
+    )
+    assert PROMPTED == positive
+    assert not list(benchmarks.glob("*/prompt.md"))
+    for folder in sorted(p for p in build.PROMPTS.iterdir() if p.is_dir()):
+        tiers = sorted(p.name for p in folder.iterdir())
+        assert tiers == ["brief.md", "full.md"], folder.name
+
+
+@pytest.mark.parametrize("benchmark", PROMPTED)
+def test_a_brief_prompt_is_its_full_prompt_without_the_rules(benchmark):
+    full = (build.PROMPTS / benchmark / "full.md").read_text(encoding="utf-8")
+    written = (build.PROMPTS / benchmark / "brief.md").read_text(encoding="utf-8")
+    assert written == brief.brief(full), "rerun evaluations/harbor/brief.py"
+
+
+def test_a_prompt_without_its_four_parts_is_rejected():
+    full = (build.PROMPTS / "adam-adex-cumulative-dose" / "full.md").read_text()
+    opening, columns, rules, paths = brief.parts(full)
+    with pytest.raises(ValueError, match="rules"):
+        brief.parts(f"{opening}\n\n{columns}\n\n{paths}")
+    with pytest.raises(ValueError, match="last paragraph"):
+        brief.parts(f"{opening}\n\n{columns}\n\n{rules[0]}\n\n{rules[0]}")
+    with pytest.raises(ValueError, match="second paragraph"):
+        brief.parts(f"{opening}\n\n{rules[0]}\n\n{columns}\n\n{paths}")
+
+
+@pytest.mark.parametrize("benchmark", PROMPTED)
+@pytest.mark.parametrize("tier", ("full.md", "brief.md"))
+def test_every_prompt_tier_asks_for_the_graded_datasets(benchmark, tier):
+    try:
+        contract = build.contract_for(ROOT / "benchmarks" / benchmark, "r")
+    except build.BuildError as exc:
+        pytest.skip(str(exc))
+    text = " ".join((build.PROMPTS / benchmark / tier).read_text().split())
+    asked = re.findall(
+        r"in this order: ((?:[A-Z][A-Z0-9_]*, )*[A-Z][A-Z0-9_]*\b)", text
+    )
+    graded = [", ".join(o["columns"]) for o in contract["outputs"]]
+    assert sorted(asked) == sorted(graded)
+    saved = re.findall(r"/app/output/([\w-]+\.\w+)", text)
+    assert sorted(saved) == sorted(o["file"] for o in contract["outputs"])
+
+
+# What a prompt never mentions (automation/benchmark_prompt.md).
+UNSAID = re.compile(
+    r"\b(?:yamaa|yaml|spec|specifications?|schemas?|handlers?|verifications?"
+    r"|derivations?)\b|\bR0\d\d\b|\bREQ-\d+",
+    re.IGNORECASE,
+)
+
+
+@pytest.mark.parametrize("benchmark", PROMPTED)
+@pytest.mark.parametrize("tier", ("full.md", "brief.md"))
+def test_every_prompt_tier_keeps_to_the_recipe(benchmark, tier):
+    text = (build.PROMPTS / benchmark / tier).read_text(encoding="utf-8")
+    assert [m.group(0) for m in UNSAID.finditer(text)] == []
+    assert [line for line in text.splitlines() if len(line) > 79] == []
 
 
 @pytest.mark.parametrize("benchmark", PILOTS)
@@ -182,7 +248,7 @@ def test_tasks_carry_the_system_prompt_and_script(tmp_path, language):
     for task in tasks:
         base = task.name.rpartition("-")[0]
         system = (HARBOR / build.LANGUAGES[language]["system"]).read_text().strip()
-        prompt = (ROOT / "benchmarks" / base / "prompt.md").read_text().strip()
+        prompt = (build.PROMPTS / base / "full.md").read_text().strip()
         assert (task / "instruction.md").read_text() == f"{system}\n\n---\n\n{prompt}\n"
         config = tomllib.loads((task / "task.toml").read_text())
         assert config["task"]["name"] == f"yamaa/{task.name}"
@@ -336,7 +402,7 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
         assert config.verifier.environment.network_mode.value == "no-network"
         base, _, language = task.name.rpartition("-")
         system = (HARBOR / build.LANGUAGES[language]["system"]).read_text().strip()
-        prompt = (ROOT / "benchmarks" / base / "prompt.md").read_text().strip()
+        prompt = (build.PROMPTS / base / "full.md").read_text().strip()
         assert (task / "instruction.md").read_text() == f"{system}\n\n---\n\n{prompt}\n"
     config = build.job_config(
         tasks,
@@ -427,12 +493,12 @@ def test_each_language_has_a_full_board():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
     assert set(boards) == {f"sdtm-adam-{language}" for language in LANGUAGES}
     buildable = []
-    for prompt in sorted((ROOT / "benchmarks").glob("*/prompt.md")):
+    for benchmark in PROMPTED:
         try:
-            build.contract_for(prompt.parent, "r")
+            build.contract_for(ROOT / "benchmarks" / benchmark, "r")
         except build.BuildError:
             continue
-        buildable.append(prompt.parent.name)
+        buildable.append(benchmark)
     for language in LANGUAGES:
         full = boards[f"sdtm-adam-{language}"]["tasks"]
         assert sorted(full) == sorted(f"{b}-{language}" for b in buildable)
@@ -1012,7 +1078,7 @@ REFERENCES = sorted(
 def _r_has(*packages: str) -> bool:
     if shutil.which("Rscript") is None:
         return False
-    loads = "; ".join(f"library({p})" for p in packages)
+    loads = "; ".join(f"library({p})" for p in packages) or "invisible()"
     check = subprocess.run(["Rscript", "-e", loads], capture_output=True, check=False)
     return check.returncode == 0
 
@@ -1022,7 +1088,7 @@ def test_every_reference_solution_belongs_to_a_benchmark_track():
     for reference in REFERENCES:
         benchmark, script = reference.split("/")
         assert script in SCRIPTS.values(), reference
-        assert (ROOT / "benchmarks" / benchmark / "prompt.md").is_file(), reference
+        assert benchmark in PROMPTED, reference
     for benchmark in PILOTS:
         for script in SCRIPTS.values():
             assert f"{benchmark}/{script}" in REFERENCES
@@ -1038,7 +1104,11 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
             set(re.findall(r"library\(([\w.]+)", text))
             | set(re.findall(r"(\w+)::", text))
         )
-        if not libs or not _r_has(*libs):
+        if not _r_has(*libs):
+            # The solutions workflow has R and sets this, so there a missing
+            # package fails the solution instead of skipping it.
+            if os.environ.get("YAMAA_REQUIRE_R"):
+                pytest.fail(f"Rscript with {', '.join(libs)} is not installed")
             pytest.skip("R with the solution's packages is not installed")
     shutil.copytree(
         ROOT / "benchmarks" / benchmark / "input",
@@ -1059,6 +1129,24 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
     expected = ROOT / "benchmarks" / benchmark / "expected"
     result = grade.grade(contract, expected, output, tmp_path / "none.json")
     assert result["reward"]["reward"] == 1.0, result
+
+
+def test_the_evaluation_workflow_runs_the_images_r():
+    dockerfile = (HARBOR / "Dockerfile").read_text()
+    path = ROOT / ".github" / "workflows" / "harbor-evaluation.yml"
+    job = yaml.safe_load(path.read_text())["jobs"]["solutions"]
+
+    def arg(name: str) -> str:
+        return re.search(rf"^ARG {name}=(\S+)$", dockerfile, re.MULTILINE).group(1)
+
+    assert re.search(r"^FROM rocker/r-ver:\$\{R_VERSION\}$", dockerfile, re.MULTILINE)
+    assert job["container"] == f"rocker/r-ver:{arg('R_VERSION')}"
+    assert job["env"]["CRAN_SNAPSHOT"] == arg("CRAN_SNAPSHOT")
+    repository = re.search(r"https://p3m\.dev/\S+?\$\{CRAN_SNAPSHOT\}", dockerfile)
+    assert repository.group(0) in path.read_text()
+    packages = re.search(r"pkgs <- c\(([^)]*)\)", dockerfile).group(1)
+    assert job["env"]["R_PACKAGES"].split() == re.findall(r"'([\w.]+)'", packages)
+    assert job["env"]["YAMAA_REQUIRE_R"] == "1"
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
@@ -1097,6 +1185,8 @@ def test_a_task_readme_describes_the_task_outside_the_agent_sandbox(tmp_path, la
     assert "`/app/output/adtte.csv`, keyed by `STUDYID`, `USUBJID`, `PARAMCD`" in readme
     assert f"`/app/output/{SCRIPTS[language]}`" in readme
     assert f"{build.REPO}/tree/{commit}/benchmarks/adam-adtte-dor" in readme
+    prompt = "evaluations/harbor/prompts/adam-adtte-dor/full.md"
+    assert f"{build.REPO}/tree/{commit}/{prompt}" in readme
     assert "`afb7fb4e`" in readme
     assert "[![" not in readme
     # The README is for reviewers: it never enters the agent's container.
