@@ -12,16 +12,18 @@ Docker; this folder only writes Harbor task directories and a job file.
 | `system-r.md`, `system-python.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py` |
 | `prompts/` | the prompts, `<benchmark>/full.md`, `conventions.md`, and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
 | `brief.py` | writes each `brief.md` from its `full.md` |
-| `build.py` | benchmarks with a full prompt -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
+| `build.py` | benchmarks with a prompt -> Harbor tasks per prompt tier and language with their Harbor Hub READMEs, one dataset README per tier and language, and one job file per tier, language, and model variant |
 | `grade.py` | the verifier, copied into every task's `tests/` |
 | `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
-| `leaderboards/` | leaderboard definitions, one file per leaderboard (one per language) |
+| `leaderboards/` | leaderboard definitions, one file per leaderboard (one per prompt tier and language) |
 
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
 
-Tasks are built from the full prompt. The Harbor Evaluation workflow
+Tasks are built from the full prompt unless `--prompt` names the
+conventions or brief tier (see [Prompt tiers](#prompt-tiers)). The Harbor
+Evaluation workflow
 (`.github/workflows/harbor-evaluation.yml`) reruns every reference
 solution, in R and in Python, against its benchmark's current data, and
 checks that every prompt still asks for the datasets and columns the
@@ -35,9 +37,10 @@ How to write a prompt is in
 
 - **One language per task.** Each task's `instruction.md` is the shared
   system prompt for its language (`system-r.md` or `system-python.md`)
-  followed by the benchmark's full prompt, which itself never names a
-  language. The R track requires `/app/output/result.R`, the Python track
-  `/app/output/result.py`, each rerunnable to reproduce the datasets. A
+  followed by the benchmark's prompt of the task's tier, which itself
+  never names a language. The R track requires `/app/output/result.R`,
+  the Python track `/app/output/result.py`, each rerunnable to reproduce
+  the datasets. A
   shell call that runs the other language zeroes the trial: `python`,
   `pip`, or `uv` on the R track, `R` or `Rscript` on the Python track, as a
   command (also behind `env`, `sudo`, `timeout`, `bash -c`, or `$(...)`).
@@ -115,6 +118,31 @@ not one the grader knows, or no specification writes a golden dataset.
 Naming one with `--benchmarks` fails fast instead. Domains built together
 (`spec_dm.yaml` and `spec_suppdm.yaml`) are one task that grades both
 datasets.
+
+### Prompt tiers
+
+`--prompt` picks the prompt tiers to build: `full` (the default),
+`conventions`, and `brief`; [`prompts/README.md`](prompts/README.md) says
+what each keeps. Every tier is its own Hub dataset per language,
+`yamaa/yamaa-sdtm-adam-<tier>-<language>`, with tasks
+`<benchmark>-<tier>-<language>`, its page in `datasets/<tier>-<language>/`,
+and job files `<job-name>-<tier>-<language>[-<variant>].json`; the full
+prompt keeps the names above. Inputs, expected data, the grader, and the
+reference solution are the same in every tier, so the oracle scores 1 on
+every task and `nop` 0. On a shorter prompt that shows the task builds and
+grades, not that the prompt can be solved, and each tier task's page says
+so.
+
+```bash
+uv run --project python --no-sync python evaluations/harbor/build.py \
+	--prompt conventions brief \
+	--model opencode-go/muse-spark-1.3-contributor \
+	--variant low \
+	--out ~/.cache/yamaa-harbor-tiers
+```
+
+To compare tiers, run the same model and variant, with the same attempts,
+on all three, and read its rows on the three boards of one language.
 
 For development, a pilot of three ADaM benchmarks in both languages is a
 quick check before a full run:
@@ -208,9 +236,12 @@ rules, and whose rows are uploaded runs that point back to their trials.
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
-one leaderboard per language dataset (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-r`,
-`yamaa/yamaa-sdtm-adam-python/sdtm-adam-python`), so R and Python are
-ranked independently.
+one leaderboard per dataset, so one per language and prompt tier
+(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-r`,
+`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-brief-r`, ...), and R, Python, and
+each tier are ranked independently. The conventions and brief boards rank
+by cell accuracy before pass rate, since their tasks can need a sponsor
+choice the prompt no longer states.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,
@@ -247,8 +278,11 @@ from a committed tree, so each row's "Tasks from" commit names the prompts
 it answered (a `+dirty` suffix means uncommitted changes), and publish
 exactly the task directories the job ran, so the uploaded trials match the
 published tasks. Publish the tasks before the datasets, whose manifests
-point at them; `dataset init` keeps the README the build wrote. For the R
-dataset (repeat with `python`):
+point at them; `dataset init` keeps the README the build wrote. Publish one
+tier from a build of that tier alone, in its own `--out`: `tasks/*-r` also
+matches `*-brief-r` and `*-conventions-r`. For the R dataset of the full
+prompt (repeat with `python`; for a tier, use its dataset name and its
+`datasets/<tier>-r` folder):
 
 ```bash
 H="uv run --project python --no-sync harbor"

@@ -1,0 +1,317 @@
+# A leaderboard ranks Harbor jobs uploaded to Harbor Hub, one row per job:
+# one agent, model, and variant (reasoning effort).
+# A run belongs here only when it covers every task below with at least
+# `attempts` attempts each, at the tasks' own timeouts, so every row answers
+# the same question. Metrics are computed from the listed tasks only.
+# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
+# rows rank by cell accuracy first, since a task here can need a
+# sponsor choice the prompt no longer states.
+# This board is the whole Python track on the conventions prompts: every buildable
+# SDTM and ADaM benchmark, each requiring `/app/output/result.py`.
+package: yamaa/yamaa-sdtm-adam-conventions-python
+tasks:
+  - adam-adae-death-conventions-python
+  - adam-adae-occurrence-flags-conventions-python
+  - adam-adae-onset-emergence-conventions-python
+  - adam-adae-partial-dates-conventions-python
+  - adam-adae-post-covid-conventions-python
+  - adam-adae-prior-serious-event-conventions-python
+  - adam-adae-protocol-review-conventions-python
+  - adam-adae-query-flags-conventions-python
+  - adam-adae-review-order-conventions-python
+  - adam-adae-serious-events-conventions-python
+  - adam-adae-serious-sequence-conventions-python
+  - adam-adae-severity-conventions-python
+  - adam-adae-severity-override-conventions-python
+  - adam-adae-severity-rank-conventions-python
+  - adam-adae-text-cleanup-conventions-python
+  - adam-adae-worsening-emergence-conventions-python
+  - adam-adae-worst-severity-conventions-python
+  - adam-adce-worst-toxicity-conventions-python
+  - adam-adcm-atc-classes-conventions-python
+  - adam-adcm-on-treatment-conventions-python
+  - adam-adeg-derived-intervals-conventions-python
+  - adam-adex-cumulative-dose-conventions-python
+  - adam-adex-dose-reduction-conventions-python
+  - adam-adex-uncollected-conventions-python
+  - adam-adlb-bds-conventions-python
+  - adam-adlb-closest-visit-conventions-python
+  - adam-adlb-end-of-treatment-conventions-python
+  - adam-adlb-lymphocytes-conventions-python
+  - adam-adlb-mean-conventions-python
+  - adam-adlb-ordered-sum-conventions-python
+  - adam-adlb-reported-precision-conventions-python
+  - adam-adlb-shift-criteria-conventions-python
+  - adam-adlb-supplb-padded-key-conventions-python
+  - adam-adlbc-row-window-conventions-python
+  - adam-adlbc-window-chain-conventions-python
+  - adam-adoe-study-eye-conventions-python
+  - adam-adqs-missed-visit-locf-conventions-python
+  - adam-adqs-subscale-score-conventions-python
+  - adam-adrs-best-response-conventions-python
+  - adam-adrs-composite-response-conventions-python
+  - adam-adrs-confirmed-response-conventions-python
+  - adam-adrs-measurable-disease-conventions-python
+  - adam-adrs-response-prep-conventions-python
+  - adam-adrs-response-records-conventions-python
+  - adam-adsl-age-group-conventions-python
+  - adam-adsl-alive-date-conventions-python
+  - adam-adsl-analysis-age-conventions-python
+  - adam-adsl-bmi-conventions-python
+  - adam-adsl-completion-flag-conventions-python
+  - adam-adsl-country-region-conventions-python
+  - adam-adsl-crossover-periods-conventions-python
+  - adam-adsl-demographics-conventions-python
+  - adam-adsl-disposition-conventions-python
+  - adam-adsl-dose-adjustment-conventions-python
+  - adam-adsl-duration-conventions-python
+  - adam-adsl-flag-chain-conventions-python
+  - adam-adsl-investigator-comment-conventions-python
+  - adam-adsl-new-therapy-conventions-python
+  - adam-adsl-randomization-conventions-python
+  - adam-adsl-rescue-med-conventions-python
+  - adam-adsl-site-parse-conventions-python
+  - adam-adsl-treatment-conventions-python
+  - adam-adtr-nadir-conventions-python
+  - adam-adtr-sum-conventions-python
+  - adam-adtte-dor-conventions-python
+  - adam-adtte-first-ae-conventions-python
+  - adam-adtte-os-conventions-python
+  - adam-adtte-pfs-conventions-python
+  - adam-advs-bmi-conventions-python
+  - adam-advs-bsa-conventions-python
+  - adam-advs-carryforward-conventions-python
+  - adam-advs-first-observed-carry-conventions-python
+  - adam-advs-locf-conventions-python
+  - adam-advs-locf-record-conventions-python
+  - adam-advs-map-conventions-python
+  - adam-advs-percentiles-conventions-python
+  - adam-advs-prior-result-conventions-python
+  - adam-advs-window-table-conventions-python
+  - adam-advs-windows-conventions-python
+  - sdtm-ae-coding-conventions-python
+  - sdtm-ae-meddra-hierarchy-conventions-python
+  - sdtm-ae-odm-repeated-conventions-python
+  - sdtm-ae-partial-dates-conventions-python
+  - sdtm-ae-seriousness-conventions-python
+  - sdtm-cm-collected-medications-conventions-python
+  - sdtm-cm-odm-repeated-conventions-python
+  - sdtm-cm-whodrug-coding-conventions-python
+  - sdtm-dm-age-conventions-python
+  - sdtm-dm-arms-conventions-python
+  - sdtm-dm-basic-conventions-python
+  - sdtm-dm-dates-conventions-python
+  - sdtm-dm-death-conventions-python
+  - sdtm-dm-metadata-conventions-python
+  - sdtm-dm-race-ethnicity-conventions-python
+  - sdtm-ds-multi-form-disposition-conventions-python
+  - sdtm-ds-reasons-conventions-python
+  - sdtm-ds-sequence-conventions-python
+  - sdtm-ec-collected-exposure-conventions-python
+  - sdtm-ex-combination-conventions-python
+  - sdtm-ex-from-ec-conventions-python
+  - sdtm-ex-intervals-conventions-python
+  - sdtm-fa-event-findings-conventions-python
+  - sdtm-fa-fever-conventions-python
+  - sdtm-fa-odm-multitest-conventions-python
+  - sdtm-fa-reactogenicity-diary-conventions-python
+  - sdtm-lb-character-results-conventions-python
+  - sdtm-lb-compartments-conventions-python
+  - sdtm-lb-findings-conventions-python
+  - sdtm-lb-grading-conventions-python
+  - sdtm-lb-lab-specific-ranges-conventions-python
+  - sdtm-lb-last-observation-before-exposure-conventions-python
+  - sdtm-lb-metadata-conventions-python
+  - sdtm-lb-multiform-conventions-python
+  - sdtm-lb-ranges-conventions-python
+  - sdtm-mh-ongoing-conditions-conventions-python
+  - sdtm-mh-prespecified-conditions-conventions-python
+  - sdtm-pr-procedures-conventions-python
+  - sdtm-qs-questionnaire-items-conventions-python
+  - sdtm-relrec-dataset-level-conventions-python
+  - sdtm-relrec-links-conventions-python
+  - sdtm-rs-timepoint-response-conventions-python
+  - sdtm-se-subject-elements-conventions-python
+  - sdtm-suppmh-linkage-conventions-python
+  - sdtm-suppmh-qualifiers-conventions-python
+  - sdtm-sv-subject-visits-conventions-python
+  - sdtm-tr-tumor-measurements-conventions-python
+  - sdtm-tu-tumor-identification-conventions-python
+  - sdtm-vs-collected-form-conventions-python
+  - sdtm-vs-epoch-from-subject-elements-conventions-python
+  - sdtm-vs-planned-time-points-conventions-python
+  - sdtm-vs-replicates-conventions-python
+  - sdtm-vs-study-day-conventions-python
+  - sdtm-vs-units-conventions-python
+attempts: 1
+
+# The Harbor Hub definition, in the shape `harbor hub leaderboard create
+# --config` takes. `leaderboard.py export` adds `package` above and writes
+# it with the rows built from the jobs, ready to create once the dataset is
+# published and the jobs uploaded.
+harbor:
+  name: sdtm-adam-conventions-python
+  title: yamaa SDTM and ADaM, conventions prompts (Python)
+  description: >-
+    Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved in
+    Python. An agent gets the Python system prompt, the benchmark's
+    conventions prompt (the full prompt with its rules cut down to the
+    sponsor's conventions) and input datasets, with no internet but the
+    model's API. A task passes when its output matches every golden cell,
+    the verifier's rerun of `/app/output/result.py` from a clean state
+    writes the same output, the held-out rerun without every third subject
+    writes the golden of the subjects kept, and the agent used no R and no
+    web tool. One row per model variant.
+  visibility: private
+  metadata_schema:
+    type: object
+    required: [agent, agent_version, model, variant, date, attempts, job]
+    properties:
+      agent:
+        type: string
+        description: Harbor agent name
+      agent_version:
+        type: string
+        description: Agent version the job pinned
+      model:
+        type: string
+        description: provider/model, as passed to build.py --model
+      variant:
+        type: string
+        description: >-
+          The agent's model variant, OpenCode's reasoning effort (low,
+          medium, high, xhigh), or default when the job set none
+      date:
+        type: string
+        format: date
+        description: Day the first trial started (UTC)
+      attempts:
+        type: integer
+        description: Attempts per task (Harbor n_attempts)
+      job:
+        type: string
+        description: Harbor job name
+      job_id:
+        type: [string, "null"]
+        description: Harbor job id, when the job directory recorded it
+      harbor_version:
+        type: [string, "null"]
+        description: Harbor version from the job's lock.json
+      yamaa_commit:
+        type: [string, "null"]
+        description: >-
+          yamaa commit the tasks were built from (task.toml metadata), with
+          +dirty when the tree had uncommitted changes
+  metrics_schema:
+    type: object
+    required: [reward, cell_accuracy, row_accuracy, n_trials, n_errors]
+    properties:
+      reward:
+        type: number
+        description: >-
+          Mean reward over trials (Harbor's mean): the share of trials that
+          pass (every golden cell matches, the rerun reproduces the output,
+          no other language or web tool); an errored trial counts as 0
+      cell_accuracy:
+        type: number
+        description: Mean share of golden cells reproduced
+      row_accuracy:
+        type: number
+        description: Mean share of golden rows reproduced
+      n_trials:
+        type: integer
+        description: Trials the metrics aggregate
+      n_errors:
+        type: integer
+        description: Trials that ended in an exception
+      input_tokens:
+        type: [integer, "null"]
+        description: Total input tokens, when every trial reported them
+      output_tokens:
+        type: [integer, "null"]
+        description: Total output tokens, when every trial reported them
+      cost_usd:
+        type: [number, "null"]
+        description: Total model cost, when every trial reported it
+      agent_seconds:
+        type: [number, "null"]
+        description: Mean agent execution time per trial
+    patternProperties:
+      "^pass_at_[0-9]+$":
+        type: number
+        description: >-
+          Harbor's unbiased pass@k averaged over tasks, for each k that the
+          fewest attempts on a task allow (k = 2, 4, 5, 8, 10, ...)
+  columns:
+    - id: agent
+      header: Agent
+      accessor: metadata.agent
+      type: text
+    - id: agent_version
+      header: Version
+      accessor: metadata.agent_version
+      type: text
+    - id: model
+      header: Model
+      accessor: metadata.model
+      type: text
+    - id: variant
+      header: Variant
+      accessor: metadata.variant
+      type: text
+    - id: reward
+      header: Pass rate
+      accessor: metrics.reward
+      type: number
+      align: right
+      description: >-
+        Share of trials that pass: every golden cell matches, the rerun
+        reproduces the output, and no other language or web tool was used
+    - id: pass_at_2
+      header: Pass@2
+      accessor: metrics.pass_at_2
+      type: number
+      align: right
+    - id: cell_accuracy
+      header: Cell accuracy
+      accessor: metrics.cell_accuracy
+      type: number
+      align: right
+    - id: n_errors
+      header: Errors
+      accessor: metrics.n_errors
+      type: number
+      align: right
+    - id: input_tokens
+      header: Tokens in
+      accessor: metrics.input_tokens
+      type: number
+      align: right
+    - id: output_tokens
+      header: Tokens out
+      accessor: metrics.output_tokens
+      type: number
+      align: right
+    - id: cost_usd
+      header: Cost
+      accessor: metrics.cost_usd
+      type: number
+      align: right
+    - id: date
+      header: Date
+      accessor: metadata.date
+      type: date
+    - id: yamaa_commit
+      header: Tasks from
+      accessor: metadata.yamaa_commit
+      type: text
+  rank_by:
+    - accessor: metrics.cell_accuracy
+      direction: desc
+      nulls: last
+    - accessor: metrics.reward
+      direction: desc
+      nulls: last
+    - accessor: metrics.cost_usd
+      direction: asc
+      nulls: last
