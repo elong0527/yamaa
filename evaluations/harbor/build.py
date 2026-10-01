@@ -51,8 +51,9 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 BENCHMARKS = ROOT / "benchmarks"
-# The prompt tiers, `prompts/<benchmark>/full.md` and `brief.md`; what each
-# tier means is in `prompts/README.md`. Tasks are built from the full prompt.
+# The prompt tiers, `prompts/<benchmark>/full.md`, `conventions.md`, and
+# `brief.md`; what each tier means is in `prompts/README.md`. Tasks are built
+# from the full prompt.
 PROMPTS = HERE / "prompts"
 # Reference solutions, `solutions/<benchmark>/result.R` and `result.py`,
 # written from the benchmark's full prompt and inputs alone.

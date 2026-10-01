@@ -29,9 +29,10 @@ golden files.
   its datasets are. A project function (`environment.yaml`) is the
   agent's to compute: state what the value is, as for any other column.
 - **Where.** `evaluations/harbor/prompts/<name>/full.md`, beside the
-  benchmark's other prompt tiers. `brief.md`, the same request without its
-  outcome block, is written from it by `evaluations/harbor/brief.py`; what
-  each tier means is in `evaluations/harbor/prompts/README.md`.
+  benchmark's other prompt tiers: `conventions.md`, written from it by
+  hand, keeps only the sponsor's conventions of the outcome block, and
+  `brief.md`, written from it by `evaluations/harbor/brief.py`, drops the
+  block. What each tier means is in `evaluations/harbor/prompts/README.md`.
 - **Worked examples.** `adam-adsl-age-group` (categories and codes),
   `adam-adae-death` (two inputs, precedence, ties), and `adam-adtte-dor`
   (three inputs, event and censoring rules, source tracing).
@@ -179,8 +180,8 @@ Before committing, review the prompt as the agent would read it:
 ## 6. Keep it in step
 
 Change `full.md` in the same change as any edit to that benchmark's
-README, inputs, or golden files, then rerun `evaluations/harbor/brief.py`
-to rewrite its `brief.md`.
+README, inputs, or golden files, rewrite its `conventions.md` to match, and
+rerun `evaluations/harbor/brief.py` to rewrite its `brief.md`.
 
 ## Checks to run before finishing
 
@@ -192,12 +193,13 @@ uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py 
 ```
 
 The prompt tests check every tier of every benchmark: the four blocks of
-the full prompt, the brief prompt against `brief.py`, the column lists and
-output paths against the graded datasets (the evaluation's own build, so a
+the full prompt, the brief prompt against `brief.py`, the conventions
+prompt against the full prompt it narrows, the column lists and output
+paths against the graded datasets (the evaluation's own build, so a
 benchmark it does not build yet, `adam-adsl-age-quality`, is skipped), the
 79-column width, and the words a prompt never uses. The reference test
 grades every solution in `evaluations/harbor/solutions/` against the
 benchmark's current data; an R one is skipped when R lacks a package its
 script loads. The Harbor Evaluation workflow runs the same tests with R
-installed on every pull request that changes a benchmark or the
-evaluation, so there a missing R package fails instead.
+installed on every pull request that changes a benchmark or the evaluation,
+so there a missing R package fails instead.

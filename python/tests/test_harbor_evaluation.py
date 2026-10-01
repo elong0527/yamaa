@@ -96,7 +96,7 @@ def test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation():
     assert not list(benchmarks.glob("*/prompt.md"))
     for folder in sorted(p for p in build.PROMPTS.iterdir() if p.is_dir()):
         tiers = sorted(p.name for p in folder.iterdir())
-        assert tiers == ["brief.md", "full.md"], folder.name
+        assert tiers == ["brief.md", "conventions.md", "full.md"], folder.name
 
 
 @pytest.mark.parametrize("benchmark", PROMPTED)
@@ -104,6 +104,26 @@ def test_a_brief_prompt_is_its_full_prompt_without_the_rules(benchmark):
     full = (build.PROMPTS / benchmark / "full.md").read_text(encoding="utf-8")
     written = (build.PROMPTS / benchmark / "brief.md").read_text(encoding="utf-8")
     assert written == brief.brief(full), "rerun evaluations/harbor/brief.py"
+
+
+# What a conventions prompt may name: a quoted value, an upper-case code or
+# variable, or a number. Each must come from the full prompt.
+LITERALS = re.compile(r'"[^"]*"|\b[A-Z][A-Z0-9_]+\b|\b\d+(?:\.\d+)?\b')
+
+
+@pytest.mark.parametrize("benchmark", PROMPTED)
+def test_a_conventions_prompt_only_narrows_the_full_prompt(benchmark):
+    full = (build.PROMPTS / benchmark / "full.md").read_text(encoding="utf-8")
+    text = (build.PROMPTS / benchmark / "conventions.md").read_text(encoding="utf-8")
+    opening, columns, rules, paths = brief.parts(full)
+    paragraphs = [p for p in re.split(r"\n[ \t]*\n", text.strip()) if p.strip()]
+    assert paragraphs[:2] == [opening, columns]
+    assert paragraphs[-1] == paths
+    assert text == "\n\n".join(paragraphs) + "\n"
+    kept = " ".join(" ".join(paragraphs[2:-1]).split())
+    assert len(kept) <= len(" ".join(" ".join(rules).split()))
+    named = set(LITERALS.findall(" ".join(full.split())))
+    assert sorted(set(LITERALS.findall(kept)) - named) == []
 
 
 def test_a_prompt_without_its_four_parts_is_rejected():
@@ -117,8 +137,11 @@ def test_a_prompt_without_its_four_parts_is_rejected():
         brief.parts(f"{opening}\n\n{rules[0]}\n\n{columns}\n\n{paths}")
 
 
+TIERS = ("full.md", "conventions.md", "brief.md")
+
+
 @pytest.mark.parametrize("benchmark", PROMPTED)
-@pytest.mark.parametrize("tier", ("full.md", "brief.md"))
+@pytest.mark.parametrize("tier", TIERS)
 def test_every_prompt_tier_asks_for_the_graded_datasets(benchmark, tier):
     try:
         contract = build.contract_for(ROOT / "benchmarks" / benchmark, "r")
@@ -143,7 +166,7 @@ UNSAID = re.compile(
 
 
 @pytest.mark.parametrize("benchmark", PROMPTED)
-@pytest.mark.parametrize("tier", ("full.md", "brief.md"))
+@pytest.mark.parametrize("tier", TIERS)
 def test_every_prompt_tier_keeps_to_the_recipe(benchmark, tier):
     text = (build.PROMPTS / benchmark / tier).read_text(encoding="utf-8")
     assert [m.group(0) for m in UNSAID.finditer(text)] == []
