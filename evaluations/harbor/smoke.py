@@ -22,7 +22,7 @@ def main() -> None:
     parser.add_argument("--image", default=build.IMAGE)
     args = parser.parse_args()
     names = (
-        sorted(p.parent.name for p in build.BENCHMARKS.glob("*/prompt.md"))
+        sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
         if args.full
         else ["adam-adsl-age-group", "adam-adae-death", "adam-adtte-dor"]
     )

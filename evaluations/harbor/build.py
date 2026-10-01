@@ -80,7 +80,7 @@ PROVIDERS = {
     "opencode-go": ("opencode.ai", "OPENCODE_API_KEY"),
 }
 # One system prompt per language, shared by all tasks. The benchmark's
-# prompt.md stays language-agnostic; the system prompt names the language
+# full prompt stays language-agnostic; the system prompt names the language
 # and the required script, so R and Python are assessed independently.
 LANGUAGES = {
     "r": {"script": "result.R", "system": "system-r.md", "label": "R"},
