@@ -8,8 +8,7 @@ STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 Mark a body surface area record with PARAMCD "BSA" and PARAM
 "Body Surface Area (m^2)".
 
-On a body surface area record AVAL is the Mosteller value, not rounded,
-with height in centimeters and weight in kilograms.
+On a body surface area record AVAL is the Mosteller value, not rounded.
 
 DTYPE is CALCULATION or has no value.
 

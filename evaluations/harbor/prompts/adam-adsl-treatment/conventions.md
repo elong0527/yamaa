@@ -9,8 +9,7 @@ TRT01A is the treatment in upper case, or the text NOT TREATED.
 
 TRTSTMF and TRTETMF each hold H or have no value.
 
-TRTDURD is the number of days from TRTSDT to TRTEDT, counting both the
-first and the last day. SAFFL is Y or N.
+TRTDURD counts both the first and the last day. SAFFL is Y or N.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adsl.csv.

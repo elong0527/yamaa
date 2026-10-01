@@ -8,7 +8,5 @@ SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES
 VISITNUM is the planned visit number; distinct numbers starting at 99.1
 identify a subject's unscheduled visits.
 
-SVSTDY and SVENDY are study days, with no day zero.
-
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/sv.csv.

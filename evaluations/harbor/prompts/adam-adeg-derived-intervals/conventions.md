@@ -10,7 +10,7 @@ New records use these parameters:
 - "QTCFR" with PARAM
   "QTcF - Fridericia's Correction Formula Rederived (ms)";
 - "RRR" with PARAM "RR Duration Rederived (ms)".
-New records use AVALU "ms", and their AVAL is not rounded.
+The AVAL of a new record is not rounded.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adeg.csv.

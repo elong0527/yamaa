@@ -9,8 +9,7 @@ ABLFL, BASE, CHG, PCHG, ASEQ
 Use these parameters:
 - PARAMCD "ALT" with PARAM "Alanine Aminotransferase" and "AST" with
   PARAM "Aspartate Aminotransferase";
-- PARAMCD "ALTSI" with PARAM "Alanine Aminotransferase (SI)", holding the
-  ALT result times 0.0167 with AVALU "ukat/L".
+- PARAMCD "ALTSI" with PARAM "Alanine Aminotransferase (SI)".
 
 ABLFL is Y or has no value.
 

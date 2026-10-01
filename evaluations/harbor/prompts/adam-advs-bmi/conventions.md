@@ -9,8 +9,7 @@ PARAMCD keeps each collected test code and marks each new record "BMI";
 PARAM keeps each collected test name and labels each new record
 "Body Mass Index (kg/m^2)".
 
-On a BMI record AVAL is not rounded, with weight in kilograms and height
-in metres.
+On a BMI record AVAL is not rounded.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/advs.csv.

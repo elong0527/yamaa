@@ -8,7 +8,5 @@ LBSTRESN, LBSTRESU, LBDTC
 LBTESTCD is GLUC for glucose rows and CREAT for creatinine rows; LBTEST is
 Glucose when the test code is GLUC and Creatinine when it is CREAT.
 
-LBORRESU and LBSTRESU are mg/dL for every record.
-
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/lb.csv.

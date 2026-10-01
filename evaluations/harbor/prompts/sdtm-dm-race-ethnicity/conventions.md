@@ -9,13 +9,11 @@ STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG,
 QEVAL
 
 Each collected race answer gives the same name in upper case, except that
-"Other, specify: Fijian" gives OTHER and "Subject refused" gives UNKNOWN.
-ETHNIC maps the collected answer to the same name in upper case.
-
-RDOMAIN is DM and IDVAR is USUBJID. QNAM is RACE1, RACE2, and so on, with
-QLABEL Race 1, Race 2, and so on, numbered in alphabetical order of the
-collected answer. QVAL maps the race as RACE does. QORIG is always CRF, and
-QEVAL has no value.
+"Other, specify: Fijian" gives OTHER and "Subject refused" gives UNKNOWN;
+ETHNIC maps the collected answer to the same name in upper case. In SUPPDM,
+IDVAR is USUBJID; QNAM and QLABEL are RACE1 and Race 1, RACE2 and Race 2,
+and so on, in alphabetical order of the collected answer; QVAL maps the race
+as RACE does; and QORIG is CRF.
 
 Read the source datasets from /app/input and save the completed DM
 dataset as /app/output/dm.csv and the completed SUPPDM dataset as

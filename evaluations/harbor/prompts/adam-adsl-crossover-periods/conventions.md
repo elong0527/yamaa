@@ -7,8 +7,7 @@ WASHDUR
 
 TRT01A and TRT02A are VITAMIN D3 or PLACEBO, or empty.
 
-WASHDUR is the number of days strictly between the end of period one and the
-start of period two, counting neither endpoint.
+WASHDUR counts neither the end of period one nor the start of period two.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adsl.csv.

@@ -51,9 +51,8 @@ stay verbatim; part 3 keeps only:
   <18`, `M for Male`, `"Subject refused" gives UNKNOWN`), and a catch-all
   or sentinel code as one of the values, without the condition that
   gives it (`SEX is M for Male, F for Female, or U`).
-- **Units and counting.** Units and scale (days, a percentage, kg),
-  conversion factors and constants, and how a duration or an age counts
-  (`counting both days`, a February 29 birthday).
+- **Counting.** How a duration or an age counts (`counting both days`,
+  a February 29 birthday), and a fixed constant such as a target day.
 - **Named references.** A named method or dictionary version the values
   follow (the Mosteller value, MedDRA version 26.1), without its formula.
 - **Precision.** The rounding of a value, or that it is not rounded.
@@ -65,14 +64,16 @@ stay verbatim; part 3 keeps only:
 It does not restate what a CDISC programmer applies unprompted: how
 STUDYID, USUBJID, and SUBJID are formed, how a `--SEQ` number runs (ASEQ
 included), what a standard variable holds (`--STRESN` is the result in
-standard units, `--STRESU` the standard unit, PCHG a percentage, RDOMAIN
-the related domain), and a controlled term that is the collected value's
-standard term (MULTIPLE for several races, QD for once daily). A mapping
-that only puts the collected value in upper case says so once and lists
-just its exceptions (`Each collected race answer gives the same name in
-upper case, except that "Other, specify: Fijian" gives OTHER ...`). The
-full prompt states all of it; the conventions prompt leaves it to the
-reader, as it leaves the logic.
+standard units, RDOMAIN the related domain), a controlled term that is the
+collected value's standard term (MULTIPLE for several races, QD for once
+daily), and units: a value's unit or scale, the unit variables (`--ORRESU`,
+`--STRESU`, AVALU, AGEU), and conversion factors. A PARAM label keeps the
+unit written in it, since the label is a literal value. A mapping that only
+puts the collected value in upper case says so once and lists just its
+exceptions (`Each collected race answer gives the same name in upper case,
+except that "Other, specify: Fijian" gives OTHER ...`). The full prompt
+states all of it; the conventions prompt leaves it to the reader, as it
+leaves the logic.
 
 Everything else in part 3 is the logic under test and is dropped: which
 records exist beyond the record level, which value a record gets, what a
@@ -84,11 +85,12 @@ subject has a fatal adverse event ..., and has no value otherwise`
 becomes `DTHFL is Y or has no value`), and it never names a value, code,
 or number the full prompt does not.
 
-A conventions prompt is written by hand from the full prompt. Where the
-rules hold no convention it equals the brief prompt, and where they hold
-nothing but conventions it equals the full prompt (`adam-adsl-age-group`);
-either way the benchmark adds no signal at that step. Rewrite it in the
-same change as its full prompt.
+A conventions prompt is written by hand from the full prompt and runs to at
+most 20 lines, its conventions said in as few paragraphs as they fit. Where
+the rules hold no convention it equals the brief prompt, and where they
+hold nothing but conventions it equals the full prompt
+(`adam-adsl-age-group`); either way the benchmark adds no signal at that
+step. Rewrite it in the same change as its full prompt.
 
 ## brief
 
@@ -128,8 +130,8 @@ own.
 - every full prompt has the four parts, and every brief prompt is exactly
   what `brief.py` writes from it;
 - every conventions prompt keeps the full prompt's parts 1, 2, and 4
-  verbatim, is no longer than the full prompt, and names no quoted value,
-  upper-case code, or number the full prompt does not;
+  verbatim, is no longer than the full prompt or 20 lines, and names no
+  quoted value, upper-case code, or number the full prompt does not;
 - every tier of a graded benchmark asks for exactly its output files and
   column lists, as the expected data holds them;
 - every tier keeps to the recipe's 79-column width and never names the

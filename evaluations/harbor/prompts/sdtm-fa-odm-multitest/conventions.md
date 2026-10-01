@@ -7,9 +7,8 @@ FAORRESU, FASTRESC, FASTAT, FATPT, FADTC
 
 FATESTCD and FATEST are OCCUR and Occurrence Indicator, SEV and
 Severity/Intensity, or LDIAM and Longest Diameter. FACAT is REACTOGENICITY
-for every diary finding. FAORRESU is mm for diameter only. FASTAT is NOT
-DONE or has no value. FATPT is END DAY 1 for a DAY1 occurrence and END DAY 2
-for a DAY2 occurrence.
+for every diary finding. FASTAT is NOT DONE or has no value. FATPT is END
+DAY 1 for a DAY1 occurrence and END DAY 2 for a DAY2 occurrence.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/fa.csv.

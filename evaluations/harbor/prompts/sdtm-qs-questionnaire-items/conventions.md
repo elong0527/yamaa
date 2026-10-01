@@ -8,17 +8,13 @@ DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT, QSORRES, QSSTRESC,
 QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL, VISITNUM, QSDTC
 
 QSTESTCD is PHQ901 through PHQ909 for the nine items, PHQ9T for the total-
-score record, and QSALL for the refused questionnaire. QSTEST is the item
-text from the item table; the total record reads "Patient Health
-Questionnaire 9 item total score" and the refused record reads "All
-Questionnaires". QSCAT is always PHQ-9.
-
-QSORRES is the response text matching the circled score: 0 is "Not at all", 1
-is "Several days", 2 is "More than half the days", and 3 is "Nearly every day".
-QSSTRESC is written without a decimal point.
-
-QSSTAT is NOT DONE or has no value; QSREASND says why: LOGICALLY SKIPPED ITEM
-or SUBJECT REFUSED. QSDRVFL is Y or has no value. QSBLFL is Y or has no value.
+score record, and QSALL for the refused questionnaire; QSTEST is the item
+text from the item table, "Patient Health Questionnaire 9 item total score",
+or "All Questionnaires". QSCAT is always PHQ-9. QSORRES is "Not at all",
+"Several days", "More than half the days", or "Nearly every day" for a
+circled score of 0 through 3. QSSTRESC is written without a decimal point.
+QSSTAT is NOT DONE or has no value, with QSREASND LOGICALLY SKIPPED ITEM or
+SUBJECT REFUSED. QSDRVFL and QSBLFL are Y or have no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/qs.csv.

@@ -10,10 +10,9 @@ VSTESTCD is SYSBP, DIABP, PULSE, RESP, TEMP, or WEIGHT; VSTEST is Systolic
 Blood Pressure, Diastolic Blood Pressure, Pulse Rate, Respiratory Rate,
 Temperature, or Weight.
 
-VSORRESU is mmHg, beats/min, breaths/min, C, or kg, or has no value. In
-VSSTRESC a whole number is written without a decimal point. VSPOS is SITTING
-or has no value. VSMETHOD is ORAL or has no value. VSSTAT is NOT DONE or has
-no value.
+In VSSTRESC a whole number is written without a decimal point. VSPOS is
+SITTING or has no value. VSMETHOD is ORAL or has no value. VSSTAT is NOT
+DONE or has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/vs.csv.

@@ -11,7 +11,7 @@ VSTESTCD and VSTEST are SYSBP and Systolic Blood Pressure, or DIABP and
 Diastolic Blood Pressure, from the collected item.
 
 VSORRES is written as text; a whole number is written without a decimal
-point. VSORRESU is mmHg for every record. VSDRVFL is Y or has no value.
+point. VSDRVFL is Y or has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/vs.csv.

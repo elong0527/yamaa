@@ -8,8 +8,7 @@ LBSTRESN, LBSTRESU, LBSTAT, LBDTC
 LBTESTCD is CA for calcium rows and CREAT for creatinine rows; LBTEST is
 Calcium when the test code is CA and Creatinine when it is CREAT.
 
-LBORRESU and LBSTRESU are mg/dL or have no value. LBSTAT is NOT DONE or has
-no value.
+LBSTAT is NOT DONE or has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/lb.csv.

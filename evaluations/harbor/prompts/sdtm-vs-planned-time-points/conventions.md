@@ -10,7 +10,7 @@ VISIT is DAY 1 for study event SE.D1. VSTPT is PRE-DOSE, 30 MIN POST-DOSE, 1
 H POST-DOSE, or 4 H POST-DOSE. VSTPTNUM is 1 through 4 in schedule order.
 VSELTM is -PT15M before the dose, then PT30M, PT1H, and PT4H after it.
 
-VSTESTCD is PULSE, SYSBP, or DIABP. VSORRESU is beats/min or mmHg.
+VSTESTCD is PULSE, SYSBP, or DIABP.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/vs.csv.

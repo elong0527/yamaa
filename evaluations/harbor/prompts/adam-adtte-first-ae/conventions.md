@@ -8,7 +8,7 @@ SRCDOM, SRCVAR, SRCSEQ
 
 Use PARAMCD "TTAE" and PARAM "Time to First Adverse Event".
 
-AVAL is the number of days from STARTDT to ADT, counting both days.
+AVAL counts both STARTDT and ADT.
 
 CNSR is 0 for an event and 1 for a censored record. Describe each record
 with EVNTDESC AE or END OF STUDY, from SRCDOM ADAE with SRCVAR ASTDT or from

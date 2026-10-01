@@ -8,10 +8,9 @@ CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ
 
 Use PARAMCD "OS" and PARAM "Overall Survival".
 
-AVAL is the number of days from STARTDT to ADT, counting both days. CNSR
-is 0 for a death and 1 otherwise. EVNTDESC is Death, Alive, or
-Randomization. CNSDTDSC holds Alive During Study or Randomization, or
-has no value.
+AVAL counts both STARTDT and ADT. CNSR is 0 for a death and 1 otherwise.
+EVNTDESC is Death, Alive, or Randomization. CNSDTDSC holds Alive During
+Study or Randomization, or has no value.
 
 Trace ADT with SRCDOM, SRCVAR, and SRCSEQ, as one of: ADRS, ADT, and the
 death record sequence; ADSL, LSTALVDT, and no sequence; or ADSL and

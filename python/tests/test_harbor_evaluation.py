@@ -120,6 +120,7 @@ def test_a_conventions_prompt_only_narrows_the_full_prompt(benchmark):
     assert paragraphs[:2] == [opening, columns]
     assert paragraphs[-1] == paths
     assert text == "\n\n".join(paragraphs) + "\n"
+    assert len(text.splitlines()) <= 20
     kept = " ".join(" ".join(paragraphs[2:-1]).split())
     assert len(kept) <= len(" ".join(" ".join(rules).split()))
     named = set(LITERALS.findall(" ".join(full.split())))

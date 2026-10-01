@@ -5,7 +5,5 @@ exposure.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC
 
-EXDOSU is mg, except the AUC target keeps AUC.
-
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/ex.csv.
