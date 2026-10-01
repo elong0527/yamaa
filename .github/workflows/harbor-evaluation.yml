@@ -56,6 +56,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # actions/checkout marks the workspace safe only in a temporary git
+      # config. The build tests call git as the container's root user, which
+      # does not own the workspace, so git would refuse the repository.
+      - name: Mark the checkout safe for git
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
       - name: Install the evaluation image's R packages
         run: |
           Rscript -e "options(repos = c(CRAN = 'https://p3m.dev/cran/__linux__/noble/${CRAN_SNAPSHOT}')); \
