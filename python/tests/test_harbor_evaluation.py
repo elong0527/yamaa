@@ -4,6 +4,7 @@ import copy
 import csv
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -695,7 +696,9 @@ def test_input_schemas_stay_out_of_the_agent_sandbox(tmp_path):
     assert inputs == ["dm.parquet", "odm.csv"]
 
 
-def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
+def test_the_python_oracle_writes_the_golden_bytes(tmp_path, monkeypatch):
+    # The fallback oracle, for a benchmark without a reference solution.
+    monkeypatch.setattr(build, "SOLUTIONS", tmp_path / "no-solutions")
     benchmark = ROOT / "benchmarks" / "sdtm-dm-race-ethnicity"
     task = build.build_task(
         benchmark, tmp_path / "tasks", build.IMAGE, "test", "python"
@@ -780,8 +783,14 @@ def test_every_reference_solution_belongs_to_a_benchmark_track():
 def test_a_reference_solution_scores_one(tmp_path, reference):
     benchmark, script = reference.split("/")
     language = "r" if script == "result.R" else "python"
-    if language == "r" and not _r_has("dplyr", "readr"):
-        pytest.skip("R with dplyr and readr is not installed")
+    text = (build.SOLUTIONS / reference).read_text()
+    if language == "r":
+        libs = sorted(
+            set(re.findall(r"library\(([\w.]+)", text))
+            | set(re.findall(r"(\w+)::", text))
+        )
+        if not libs or not _r_has(*libs):
+            pytest.skip("R with the solution's packages is not installed")
     shutil.copytree(
         ROOT / "benchmarks" / benchmark / "input",
         tmp_path / "input",
@@ -789,7 +798,6 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
     )
     output = tmp_path / "output"
     output.mkdir()
-    text = (build.SOLUTIONS / reference).read_text()
     runnable = output / script
     runnable.write_text(
         text.replace("/app/input", str(tmp_path / "input")).replace(
@@ -806,7 +814,7 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_a_task_runs_its_reference_solution_or_else_writes_the_golden(
-    tmp_path, language
+    tmp_path, monkeypatch, language
 ):
     script = SCRIPTS[language]
     pilot = build.build_task(
@@ -815,6 +823,8 @@ def test_a_task_runs_its_reference_solution_or_else_writes_the_golden(
     reference = build.SOLUTIONS / "adam-adtte-dor" / script
     assert (pilot / "solution" / script).read_bytes() == reference.read_bytes()
     assert "is the benchmark's reference solution" in (pilot / "README.md").read_text()
+    # The fallback oracle, for a benchmark without a reference solution.
+    monkeypatch.setattr(build, "SOLUTIONS", tmp_path / "no-solutions")
     other = build.build_task(
         ROOT / "benchmarks" / "sdtm-dm-race-ethnicity",
         tmp_path,
