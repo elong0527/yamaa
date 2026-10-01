@@ -283,6 +283,38 @@ def test_tasks_carry_the_system_prompt_and_script(tmp_path, language):
         assert SCRIPTS[language] in (task / "solution" / "solve.sh").read_text()
 
 
+@pytest.mark.parametrize("tier", list(build.TIERS))
+def test_a_task_carries_the_prompt_of_its_tier(tmp_path, tier):
+    benchmark = ROOT / "benchmarks" / "adam-adtte-dor"
+    task = build.build_task(benchmark, tmp_path, build.IMAGE, "test", "r", tier)
+    name = "adam-adtte-dor-r" if tier == "full" else f"adam-adtte-dor-{tier}-r"
+    assert task.name == name
+    assert build.task_language(task) == "r"
+    assert build.task_tier(task) == tier
+    system = (HARBOR / "system-r.md").read_text().strip()
+    prompt = (build.PROMPTS / "adam-adtte-dor" / f"{tier}.md").read_text().strip()
+    assert (task / "instruction.md").read_text() == f"{system}\n\n---\n\n{prompt}\n"
+    config = tomllib.loads((task / "task.toml").read_text())
+    assert config["task"]["name"] == f"yamaa/{name}"
+    assert config["metadata"]["prompt"] == tier
+    readme = (task / "README.md").read_text()
+    assert readme.startswith(f"# yamaa/{name}\n")
+    assert f"| Prompt | {tier}: `evaluations/harbor/prompts/adam-adtte-dor/" in readme
+    assert f"then the benchmark's {tier}\n  prompt verbatim" in readme
+    # The reference was written from the full prompt; on another tier the
+    # page says a passing oracle does not show that tier can be solved.
+    unproven = "does not\nshow that this prompt alone can be solved"
+    assert (unproven in readme) == (tier != "full")
+
+
+def test_an_unknown_prompt_tier_is_rejected(tmp_path):
+    benchmark = ROOT / "benchmarks" / PILOTS[0]
+    with pytest.raises(build.BuildError):
+        build.prompt_file(benchmark, "terse")
+    with pytest.raises(build.BuildError):
+        build.build_task(benchmark, tmp_path, build.IMAGE, "test", "r", "terse")
+
+
 def test_pandas_and_r_spellings_of_the_same_values_pass(tmp_path):
     _, columns, rows = _golden("adam-adae-death")
     styled = [
@@ -412,22 +444,24 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
     job_module = pytest.importorskip("harbor.models.job.config")
     tasks = [
         build.build_task(
-            ROOT / "benchmarks" / b, tmp_path, build.IMAGE, "test", language
+            ROOT / "benchmarks" / b, tmp_path, build.IMAGE, "test", language, tier
         )
         for b in PILOTS
         for language in LANGUAGES
+        for tier in build.TIERS
     ]
-    assert len(tasks) == len(PILOTS) * len(LANGUAGES)
+    assert len(tasks) == len(PILOTS) * len(LANGUAGES) * len(build.TIERS)
     for task in tasks:
-        config = task_config.TaskConfig.model_validate(
-            tomllib.loads((task / "task.toml").read_text())
-        )
+        raw = tomllib.loads((task / "task.toml").read_text())
+        config = task_config.TaskConfig.model_validate(raw)
         assert config.agent.allowed_hosts == []
         assert config.verifier.environment.network_mode.value == "no-network"
-        base, _, language = task.name.rpartition("-")
-        system = (HARBOR / build.LANGUAGES[language]["system"]).read_text().strip()
-        prompt = (build.PROMPTS / base / "full.md").read_text().strip()
-        assert (task / "instruction.md").read_text() == f"{system}\n\n---\n\n{prompt}\n"
+        meta = raw["metadata"]
+        system = (HARBOR / build.LANGUAGES[meta["language"]]["system"]).read_text()
+        tier_file = build.PROMPTS / meta["benchmark"] / f"{meta['prompt']}.md"
+        prompt = tier_file.read_text().strip()
+        expected = f"{system.strip()}\n\n---\n\n{prompt}\n"
+        assert (task / "instruction.md").read_text() == expected
     config = build.job_config(
         tasks,
         model="opencode-go/muse-spark-1.3-contributor",
@@ -513,9 +547,15 @@ def _board_named(name: str) -> dict:
     raise AssertionError(f"no leaderboard {name!r}")
 
 
-def test_each_language_has_a_full_board():
+def _board_name(language: str, tier: str) -> str:
+    return f"sdtm-adam-{language}" if tier == "full" else f"sdtm-adam-{tier}-{language}"
+
+
+def test_each_language_has_a_board_per_prompt_tier():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
-    assert set(boards) == {f"sdtm-adam-{language}" for language in LANGUAGES}
+    assert set(boards) == {
+        _board_name(language, tier) for language in LANGUAGES for tier in build.TIERS
+    }
     buildable = []
     for benchmark in PROMPTED:
         try:
@@ -524,8 +564,15 @@ def test_each_language_has_a_full_board():
             continue
         buildable.append(benchmark)
     for language in LANGUAGES:
-        full = boards[f"sdtm-adam-{language}"]["tasks"]
-        assert sorted(full) == sorted(f"{b}-{language}" for b in buildable)
+        for tier in build.TIERS:
+            board = boards[_board_name(language, tier)]
+            assert sorted(board["tasks"]) == sorted(
+                build.task_name(b, language, tier) for b in buildable
+            )
+            # A shorter prompt leaves sponsor choices unstated, so its boards
+            # rank by how much of the data an agent reproduced.
+            first = "metrics.reward" if tier == "full" else "metrics.cell_accuracy"
+            assert board["harbor"]["rank_by"][0]["accessor"] == first
 
 
 def _on(run: dict, board: dict) -> dict:
@@ -574,12 +621,14 @@ def test_a_row_names_its_variant_and_a_job_may_not_mix_them(tmp_path):
         leaderboard.collect(job)
 
 
-def test_each_board_names_its_language_dataset():
+def test_each_board_names_its_language_and_tier_dataset():
     for board in leaderboard.load_leaderboards():
-        language = board["harbor"]["name"].rpartition("-")[2]
-        assert board["package"] == f"yamaa/yamaa-sdtm-adam-{language}"
-        assert board["package"] == build.dataset_name(build.DATASET_PREFIX, language)
-        assert all(task.endswith(f"-{language}") for task in board["tasks"])
+        parts = board["harbor"]["name"].split("-")
+        language, tier = parts[-1], parts[2] if len(parts) == 4 else "full"
+        package = build.dataset_name(build.DATASET_PREFIX, language, tier)
+        assert board["package"] == package
+        suffix = f"-{language}" if tier == "full" else f"-{tier}-{language}"
+        assert all(task.endswith(suffix) for task in board["tasks"])
     board = _board(["b-one"])
     del board["package"]
     assert leaderboard.board_problems(board) == [
@@ -682,6 +731,11 @@ def test_exported_configs_validate_against_harbor(tmp_path):
     _, created, rows = _export(tmp_path)
     hub.LeaderboardCreateConfig.model_validate(created)
     hub.LeaderboardRowsCreateConfig.model_validate(rows)
+    # Every board, each prompt tier's included, is a valid Hub definition.
+    for board in leaderboard.load_leaderboards():
+        hub.LeaderboardCreateConfig.model_validate(
+            {"package": board["package"], **board["harbor"]}
+        )
 
 
 def _export_cli(monkeypatch, *arguments: str) -> None:
@@ -1263,6 +1317,52 @@ def test_a_build_writes_one_dataset_per_language_and_one_job_per_variant(
     assert config["agents"][0]["kwargs"]["variant"] == "xhigh"
     assert sorted(Path(t["path"]).name for t in config["tasks"]) == sorted(
         f"{b}-r" for b in PILOTS
+    )
+
+
+def test_a_build_writes_a_dataset_and_job_per_prompt_tier(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build.py",
+            "--benchmarks",
+            *PILOTS,
+            "--prompt",
+            "conventions",
+            "brief",
+            "--model",
+            "opencode-go/muse-spark-1.3-contributor",
+            "--variant",
+            "low",
+            "--job-name",
+            "pilot",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+    build.main()
+    assert sorted(p.name for p in (tmp_path / "datasets").iterdir()) == [
+        f"{tier}-{language}"
+        for tier in ("brief", "conventions")
+        for language in ("python", "r")
+    ]
+    readme = (tmp_path / "datasets" / "brief-r" / "README.md").read_text()
+    assert readme.startswith("# yamaa/yamaa-sdtm-adam-brief-r\n")
+    assert "`yamaa/yamaa-sdtm-adam-brief-python`" in readme
+    assert "dataset `yamaa/yamaa-sdtm-adam-r`." in readme
+    for benchmark in PILOTS:
+        assert f"| `yamaa/{benchmark}-brief-r` |" in readme
+        assert f"`yamaa/{benchmark}-conventions-r`" not in readme
+    configs = tmp_path / "configs"
+    assert sorted(p.name for p in configs.iterdir()) == [
+        f"pilot-{tier}-{language}-low.json"
+        for tier in ("brief", "conventions")
+        for language in ("python", "r")
+    ]
+    config = json.loads((configs / "pilot-conventions-python-low.json").read_text())
+    assert config["job_name"] == "pilot-conventions-python-low"
+    assert sorted(Path(t["path"]).name for t in config["tasks"]) == sorted(
+        f"{b}-conventions-python" for b in PILOTS
     )
 
 

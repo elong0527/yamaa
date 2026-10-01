@@ -1,12 +1,15 @@
 """Build Harbor tasks, datasets, and job files from yamaa benchmarks.
 
 Every benchmark with a full prompt, `prompts/<benchmark>/full.md`, becomes one
-Harbor task per language:
+Harbor task per prompt tier and language. `--prompt` picks the tiers (full,
+conventions, brief; what each means is in `prompts/README.md`), the full
+prompt by default:
 
-    <out>/tasks/<benchmark>-<language>/   <out> is ~/.cache/yamaa-harbor
+    <out>/tasks/<benchmark>[-<tier>]-<language>/   <out> is ~/.cache/yamaa-harbor;
+                           a full-prompt task has no tier in its name
       task.toml            deny-all network; the job adds the model API host
       instruction.md       the language's system prompt, then the
-                           benchmark's full prompt verbatim
+                           benchmark's prompt of that tier verbatim
       README.md            the task's page on Harbor Hub
       environment/         FROM the base image, plus the benchmark's input/
       tests/               grade.py, contract.json, the golden files, and the
@@ -15,15 +18,16 @@ Harbor task per language:
       solution/            the result.R/result.py Harbor's oracle agent runs:
                            the benchmark's reference solution in solutions/,
                            or else a script that writes the golden files
-    <out>/datasets/<language>/README.md   the page of the language's Harbor
-                           Hub dataset, <prefix>-<language>
-    <out>/configs/<job>.json   one Harbor job per language and variant: the
-                           agent, model, variant, provider host and key name
+    <out>/datasets/[<tier>-]<language>/README.md   the page of one Harbor Hub
+                           dataset, <prefix>-[<tier>-]<language>
+    <out>/configs/<job>.json   one Harbor job per tier, language, and
+                           variant: the agent, model, variant, provider host
+                           and key name
     <out>/jobs/            Harbor job directories
 
 Each language is its own dataset (`yamaa/yamaa-sdtm-adam-r`,
 `yamaa/yamaa-sdtm-adam-python`), so R and Python are assessed and ranked
-independently. Tasks never name a model or provider; the job files do, so
+independently, and so is each tier (`yamaa/yamaa-sdtm-adam-brief-r`). Tasks never name a model or provider; the job files do, so
 one build runs against any provider. Run from the repository root:
 
     uv run --project python --group harbor python evaluations/harbor/build.py \\
@@ -31,7 +35,8 @@ one build runs against any provider. Run from the repository root:
     uv run --project python --group harbor harbor run \\
         -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
-Pass `--language r` or `--language python` to build only one track.
+Pass `--language r` or `--language python` to build only one track, and
+`--prompt conventions brief` to build the ablation tiers.
 """
 
 from __future__ import annotations
@@ -51,10 +56,16 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 BENCHMARKS = ROOT / "benchmarks"
-# The prompt tiers, `prompts/<benchmark>/full.md`, `conventions.md`, and
-# `brief.md`; what each tier means is in `prompts/README.md`. Tasks are built
-# from the full prompt.
+# The prompt tiers, `prompts/<benchmark>/<tier>.md`; what each tier means is
+# in `prompts/README.md`. A task is built from one tier, by default the full
+# prompt, and the task and dataset pages say which.
 PROMPTS = HERE / "prompts"
+TIERS = {
+    "full": "the complete request, every rule an expected cell depends on",
+    "conventions": "the full prompt with its rules cut down to the sponsor's "
+    "conventions",
+    "brief": "the full prompt without its rules",
+}
 # Reference solutions, `solutions/<benchmark>/result.R` and `result.py`,
 # written from the benchmark's full prompt and inputs alone.
 SOLUTIONS = HERE / "solutions"
@@ -280,25 +291,40 @@ def oracle_script(language: str, golden: list[Path]) -> str:
     return "\n".join(lines)
 
 
+def task_name(benchmark: str, language: str, tier: str = "full") -> str:
+    """`<benchmark>-<language>`, with the tier before the language unless it
+    is the full prompt; the language stays last (`task_language`)."""
+    if tier not in TIERS:
+        raise BuildError(f"unknown prompt tier {tier!r}; want {', '.join(TIERS)}")
+    return "-".join(p for p in (benchmark, tier, language) if p and p != "full")
+
+
 def task_toml(
-    benchmark: str, tags: dict[str, str], domain: str, commit: str, language: str
+    benchmark: str,
+    tags: dict[str, str],
+    domain: str,
+    commit: str,
+    language: str,
+    tier: str = "full",
 ) -> str:
     standard, lifecycle = tags["standard"], tags["lifecycle"]
     noun = "datasets" if " and " in domain else "dataset"
     label = LANGUAGES[language]["label"]
+    source = "" if tier == "full" else f", from its {tier} prompt"
     return f"""\
 schema_version = "1.4"
 artifacts = ["/app", "/logs/agent/trajectory.json"]
 
 [task]
-name = "yamaa/{benchmark}-{language}"
+name = "yamaa/{task_name(benchmark, language, tier)}"
 version = "0.1.0"
-description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}."
+description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}{source}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
 
 [metadata]
 benchmark = "{benchmark}"
 language = "{language}"
+prompt = "{tier}"
 standard = "{standard}"
 domain = "{domain}"
 lifecycle = "{lifecycle}"
@@ -358,8 +384,10 @@ def _benchmark_body(benchmark: Path) -> str:
     return "\n".join(body).strip()
 
 
-def full_prompt(benchmark: Path) -> Path:
-    return PROMPTS / benchmark.name / "full.md"
+def prompt_file(benchmark: Path, tier: str = "full") -> Path:
+    if tier not in TIERS:
+        raise BuildError(f"unknown prompt tier {tier!r}; want {', '.join(TIERS)}")
+    return PROMPTS / benchmark.name / f"{tier}.md"
 
 
 def reference_solution(benchmark: Path, language: str) -> Path | None:
@@ -367,7 +395,9 @@ def reference_solution(benchmark: Path, language: str) -> Path | None:
     return path if path.is_file() else None
 
 
-def task_readme(benchmark: Path, contract: dict, inputs: list[str], commit: str) -> str:
+def task_readme(
+    benchmark: Path, contract: dict, inputs: list[str], commit: str, tier: str = "full"
+) -> str:
     """The task page on Harbor Hub: what the agent gets and how it is graded.
 
     It sits at the task root, which never enters the agent's container."""
@@ -378,11 +408,19 @@ def task_readme(benchmark: Path, contract: dict, inputs: list[str], commit: str)
     runner = "Rscript" if language == "r" else "python3"
     tags = readme_tags((benchmark / "README.md").read_text(encoding="utf-8"))
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
-    if reference_solution(benchmark, language):
+    tiers = _source_link(commit, "evaluations/harbor/prompts/README.md")
+    if reference_solution(benchmark, language) and tier == "full":
         oracle = f"""\
 `solution/{script}` is the benchmark's reference solution, written from its
 full prompt and inputs alone. Harbor's oracle agent runs it to check that
 the prompt can be solved and that the grader scores a correct answer 1."""
+    elif reference_solution(benchmark, language):
+        oracle = f"""\
+`solution/{script}` is the benchmark's reference solution, written from its
+full prompt and inputs alone. Harbor's oracle agent runs it to check that
+the task builds and that the grader scores a correct answer 1. The agent
+gets the {tier} prompt, which states less, so a passing oracle does not
+show that this prompt alone can be solved."""
     else:
         oracle = f"""\
 `solution/{script}` writes the expected data exactly as stored, for
@@ -394,17 +432,24 @@ derivation; this benchmark has no reference solution yet."""
         f" with columns {', '.join(f'`{c}`' for c in o['columns'])}."
         for o in contract["outputs"]
     )
+    given = (
+        ""
+        if tier == "full"
+        else f"\nThe agent gets the benchmark's {tier} prompt: {TIERS[tier]}.\n"
+        f"{tiers} says what each prompt tier keeps.\n"
+    )
+    prompt = f"evaluations/harbor/prompts/{benchmark.name}/{tier}.md"
     return f"""\
-# yamaa/{benchmark.name}-{language}
+# yamaa/{task_name(benchmark.name, language, tier)}
 
 The agent writes the {domain} data of the yamaa benchmark
 `{benchmark.name}` with {article} {label} script, in a sandbox with no internet, and
 is graded cell by cell against the benchmark's expected data.
-
+{given}
 | | |
 |---|---|
 | Benchmark | {_source_link(commit, f"benchmarks/{benchmark.name}")} |
-| Prompt | {_source_link(commit, f"evaluations/harbor/prompts/{benchmark.name}/full.md")} |
+| Prompt | {tier}: {_source_link(commit, prompt)} |
 | Standard and domain | {tags["standard"]}, {domain} |
 | Track | {label}: `/app/output/{script}`, rerun with `{runner}` |
 | Lifecycle | {tags["lifecycle"]} |
@@ -416,7 +461,7 @@ is graded cell by cell against the benchmark's expected data.
 
 ## What the agent gets
 
-- `instruction.md`: the {label} system prompt, then the benchmark's full
+- `instruction.md`: the {label} system prompt, then the benchmark's {tier}
   prompt verbatim.
 - Its input data in `/app/input/`: {", ".join(f"`{name}`" for name in inputs)}.
 - {label} with the packages the system prompt lists, preinstalled; it may
@@ -468,13 +513,26 @@ def task_language(task: Path) -> str:
     return task.name.rpartition("-")[2]
 
 
-def dataset_name(prefix: str, language: str) -> str:
-    return f"{prefix}-{language}"
+def task_tier(task: Path) -> str:
+    """The prompt tier a built task was made from (`task.toml` metadata)."""
+    config = (task / "task.toml").read_text(encoding="utf-8")
+    return re.search(r'^prompt = "(.+)"$', config, re.MULTILINE).group(1)
 
 
-def dataset_readme(prefix: str, language: str, tasks: list[Path], commit: str) -> str:
-    """The page of one language's dataset on Harbor Hub: its tasks and how
-    every one is run."""
+def dataset_name(prefix: str, language: str, tier: str = "full") -> str:
+    return f"{prefix}-{language}" if tier == "full" else f"{prefix}-{tier}-{language}"
+
+
+def dataset_dir(language: str, tier: str = "full") -> str:
+    """The build's folder for a dataset: its name after the prefix."""
+    return language if tier == "full" else f"{tier}-{language}"
+
+
+def dataset_readme(
+    prefix: str, language: str, tasks: list[Path], commit: str, tier: str = "full"
+) -> str:
+    """The page of one language's dataset on Harbor Hub, for one prompt tier:
+    its tasks and how every one is run."""
     rows = []
     for task in sorted(tasks):
         config = (task / "task.toml").read_text(encoding="utf-8")
@@ -489,15 +547,25 @@ def dataset_readme(prefix: str, language: str, tasks: list[Path], commit: str) -
     article = "an" if language == "r" else "a"
     other = next(lang for lang in LANGUAGES if lang != language)
     other_label = LANGUAGES[other]["label"]
+    track = f"{label} track" if tier == "full" else f"{label} track, {tier} prompts"
+    given = (
+        ""
+        if tier == "full"
+        else f"\n\nEvery task gives the agent the benchmark's {tier} prompt: "
+        f"{TIERS[tier]}.\n"
+        f"{_source_link(commit, 'evaluations/harbor/prompts/README.md')} says "
+        "what each prompt tier keeps. The same tasks on the full prompt are the\n"
+        f"dataset `{dataset_name(prefix, language)}`."
+    )
     return f"""\
-# {dataset_name(prefix, language)}
+# {dataset_name(prefix, language, tier)}
 
-Agent evaluation tasks built from [yamaa]({REPO}) benchmarks, {label} track.
+Agent evaluation tasks built from [yamaa]({REPO}) benchmarks, {track}.
 In each task an AI coding agent gets a benchmark's prompt and input data in
 a sandbox with no internet, writes {article} {label} script that derives the
 requested CDISC dataset, and is graded cell by cell against the benchmark's
 expected data. The same benchmarks in {other_label} are the dataset
-`{dataset_name(prefix, other)}`, ranked on their own leaderboard.
+`{dataset_name(prefix, other, tier)}`, ranked on their own leaderboard.{given}
 
 Built from yamaa commit {_commit_label(commit)} by
 {_source_link(commit, "evaluations/harbor/build.py")}.
@@ -511,7 +579,7 @@ Built from yamaa commit {_commit_label(commit)} by
 ## How every task runs
 
 - **{label} only.** The instruction is the {label} system prompt, then the
-  benchmark's full prompt. The agent must write `/app/output/{script}`;
+  benchmark's {tier} prompt. The agent must write `/app/output/{script}`;
   calling {other_label} zeroes the trial.
 - **Closed book.** The agent sees only its instruction and `/app/input/`.
   While it works, only the model provider's API host is reachable, and
@@ -522,7 +590,7 @@ Built from yamaa commit {_commit_label(commit)} by
   again without every third subject, the script must write the expected
   data of the subjects kept, so writing the rows literally does not pass.
 - **Oracle.** Each task's `solution/` holds the script Harbor's oracle agent
-  runs: the benchmark's reference solution, written from its prompt alone,
+  runs: the benchmark's reference solution, written from its full prompt,
   or, where there is none yet, a script that writes the expected data
   verbatim. Either must score 1.
 
@@ -533,21 +601,28 @@ The harness is described in
 
 
 def build_task(
-    benchmark: Path, tasks: Path, image: str, commit: str, language: str
+    benchmark: Path,
+    tasks: Path,
+    image: str,
+    commit: str,
+    language: str,
+    tier: str = "full",
 ) -> Path:
     contract = contract_for(benchmark, language)
     readme = (benchmark / "README.md").read_text(encoding="utf-8")
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
-    task = tasks / f"{benchmark.name}-{language}"
+    prompt = prompt_file(benchmark, tier).read_text(encoding="utf-8").strip()
+    task = tasks / task_name(benchmark.name, language, tier)
     if task.exists():
         shutil.rmtree(task)
     (task / "environment").mkdir(parents=True)
     (task / "tests").mkdir()
     (task / "solution").mkdir()
 
-    task_text = task_toml(benchmark.name, readme_tags(readme), domain, commit, language)
+    task_text = task_toml(
+        benchmark.name, readme_tags(readme), domain, commit, language, tier
+    )
     (task / "task.toml").write_text(task_text)
-    prompt = full_prompt(benchmark).read_text(encoding="utf-8").strip()
     (task / "instruction.md").write_text(
         system_prompt(language) + "\n\n---\n\n" + prompt + "\n"
     )
@@ -563,7 +638,9 @@ def build_task(
         f"FROM {image}\nCOPY --chown=agent:agent input/ /app/input/\n"
     )
     inputs = sorted(p.name for p in (task / "environment" / "input").iterdir())
-    (task / "README.md").write_text(task_readme(benchmark, contract, inputs, commit))
+    (task / "README.md").write_text(
+        task_readme(benchmark, contract, inputs, commit, tier)
+    )
 
     golden = [benchmark / "expected" / o["file"] for o in contract["outputs"]]
     for directory in (task / "tests" / "expected", task / "solution" / "expected"):
@@ -685,8 +762,9 @@ def build_selection(
     image: str,
     commit: str,
     strict: bool,
+    tiers: tuple[str, ...] = ("full",),
 ) -> tuple[list[Path], list[str]]:
-    """One task per benchmark per language.
+    """One task per benchmark per prompt tier per language.
 
     With `strict` (explicit `--benchmarks`) an unsupported benchmark
     raises; otherwise it is skipped and reported, so the default
@@ -695,15 +773,18 @@ def build_selection(
     """
     tasks, skipped = [], []
     for name in names:
-        for language in languages:
-            try:
-                tasks.append(
-                    build_task(BENCHMARKS / name, tasks_dir, image, commit, language)
-                )
-            except BuildError as exc:
-                if strict:
-                    raise
-                skipped.append(f"{name}-{language}: {exc}")
+        for tier in tiers:
+            for language in languages:
+                try:
+                    tasks.append(
+                        build_task(
+                            BENCHMARKS / name, tasks_dir, image, commit, language, tier
+                        )
+                    )
+                except BuildError as exc:
+                    if strict:
+                        raise
+                    skipped.append(f"{task_name(name, language, tier)}: {exc}")
     return tasks, skipped
 
 
@@ -716,6 +797,13 @@ def main() -> None:
         choices=sorted(LANGUAGES),
         default=sorted(LANGUAGES),
         help="default: both tracks",
+    )
+    parser.add_argument(
+        "--prompt",
+        nargs="*",
+        choices=list(TIERS),
+        default=["full"],
+        help="prompt tiers, one dataset and job each; default: the full prompt",
     )
     parser.add_argument("--model", required=True, help="provider/model")
     parser.add_argument("--api-host", help="model API host, for other providers")
@@ -731,7 +819,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset-prefix",
         default=DATASET_PREFIX,
-        help="Harbor Hub dataset name, before -<language>",
+        help="Harbor Hub dataset name, before -[<tier>-]<language>",
     )
     parser.add_argument("--image", default=IMAGE)
     parser.add_argument("--out", type=Path, default=OUT)
@@ -758,6 +846,7 @@ def main() -> None:
         image=args.image,
         commit=commit,
         strict=args.benchmarks is not None,
+        tiers=tuple(args.prompt),
     )
     if not tasks:
         raise BuildError("no buildable benchmark with a full prompt")
@@ -765,15 +854,22 @@ def main() -> None:
         print(f"skip {line}", file=sys.stderr)
     base = args.job_name or args.model.rpartition("/")[2]
     configs_dir.mkdir(parents=True)
-    print(f"built {len(tasks)} task(s) ({', '.join(args.language)}) in {tasks_dir}")
-    for language in sorted({task_language(t) for t in tasks}):
-        own = [t for t in tasks if task_language(t) == language]
-        readme = datasets_dir / language / "README.md"
+    print(
+        f"built {len(tasks)} task(s) ({', '.join(args.prompt)}; "
+        f"{', '.join(args.language)}) in {tasks_dir}"
+    )
+    groups = sorted({(task_tier(t), task_language(t)) for t in tasks})
+    for tier, language in groups:
+        own = [t for t in tasks if (task_tier(t), task_language(t)) == (tier, language)]
+        readme = datasets_dir / dataset_dir(language, tier) / "README.md"
         readme.parent.mkdir(parents=True)
-        readme.write_text(dataset_readme(args.dataset_prefix, language, own, commit))
-        print(f"dataset {dataset_name(args.dataset_prefix, language)}: {readme}")
+        readme.write_text(
+            dataset_readme(args.dataset_prefix, language, own, commit, tier)
+        )
+        print(f"dataset {dataset_name(args.dataset_prefix, language, tier)}: {readme}")
+        stem = (base, None if tier == "full" else tier, language)
         for variant in args.variant or [None]:
-            name = "-".join(part for part in (base, language, variant) if part)
+            name = "-".join(part for part in (*stem, variant) if part)
             config = job_config(
                 own,
                 model=args.model,

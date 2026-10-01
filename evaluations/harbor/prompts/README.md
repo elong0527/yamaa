@@ -32,9 +32,10 @@ four parts, in order:
    break, and what a variable holds when its inputs give no value.
 4. **Paths.** Where the inputs are and where each dataset is saved.
 
-The full prompt is the source of every other tier, and the one
-[`../build.py`](../build.py) builds Harbor tasks from. Change it in the same
-change as any edit to its benchmark's README, inputs, or expected data.
+The full prompt is the source of every other tier. [`../build.py`](../build.py)
+builds Harbor tasks from any tier (`--prompt`), the full prompt by default.
+Change it in the same change as any edit to its benchmark's README, inputs,
+or expected data.
 
 ## conventions
 

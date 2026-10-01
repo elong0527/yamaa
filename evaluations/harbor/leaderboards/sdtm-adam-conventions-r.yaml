@@ -1,0 +1,317 @@
+# A leaderboard ranks Harbor jobs uploaded to Harbor Hub, one row per job:
+# one agent, model, and variant (reasoning effort).
+# A run belongs here only when it covers every task below with at least
+# `attempts` attempts each, at the tasks' own timeouts, so every row answers
+# the same question. Metrics are computed from the listed tasks only.
+# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
+# rows rank by cell accuracy first, since a task here can need a
+# sponsor choice the prompt no longer states.
+# This board is the whole R track on the conventions prompts: every buildable
+# SDTM and ADaM benchmark, each requiring `/app/output/result.R`.
+package: yamaa/yamaa-sdtm-adam-conventions-r
+tasks:
+  - adam-adae-death-conventions-r
+  - adam-adae-occurrence-flags-conventions-r
+  - adam-adae-onset-emergence-conventions-r
+  - adam-adae-partial-dates-conventions-r
+  - adam-adae-post-covid-conventions-r
+  - adam-adae-prior-serious-event-conventions-r
+  - adam-adae-protocol-review-conventions-r
+  - adam-adae-query-flags-conventions-r
+  - adam-adae-review-order-conventions-r
+  - adam-adae-serious-events-conventions-r
+  - adam-adae-serious-sequence-conventions-r
+  - adam-adae-severity-conventions-r
+  - adam-adae-severity-override-conventions-r
+  - adam-adae-severity-rank-conventions-r
+  - adam-adae-text-cleanup-conventions-r
+  - adam-adae-worsening-emergence-conventions-r
+  - adam-adae-worst-severity-conventions-r
+  - adam-adce-worst-toxicity-conventions-r
+  - adam-adcm-atc-classes-conventions-r
+  - adam-adcm-on-treatment-conventions-r
+  - adam-adeg-derived-intervals-conventions-r
+  - adam-adex-cumulative-dose-conventions-r
+  - adam-adex-dose-reduction-conventions-r
+  - adam-adex-uncollected-conventions-r
+  - adam-adlb-bds-conventions-r
+  - adam-adlb-closest-visit-conventions-r
+  - adam-adlb-end-of-treatment-conventions-r
+  - adam-adlb-lymphocytes-conventions-r
+  - adam-adlb-mean-conventions-r
+  - adam-adlb-ordered-sum-conventions-r
+  - adam-adlb-reported-precision-conventions-r
+  - adam-adlb-shift-criteria-conventions-r
+  - adam-adlb-supplb-padded-key-conventions-r
+  - adam-adlbc-row-window-conventions-r
+  - adam-adlbc-window-chain-conventions-r
+  - adam-adoe-study-eye-conventions-r
+  - adam-adqs-missed-visit-locf-conventions-r
+  - adam-adqs-subscale-score-conventions-r
+  - adam-adrs-best-response-conventions-r
+  - adam-adrs-composite-response-conventions-r
+  - adam-adrs-confirmed-response-conventions-r
+  - adam-adrs-measurable-disease-conventions-r
+  - adam-adrs-response-prep-conventions-r
+  - adam-adrs-response-records-conventions-r
+  - adam-adsl-age-group-conventions-r
+  - adam-adsl-alive-date-conventions-r
+  - adam-adsl-analysis-age-conventions-r
+  - adam-adsl-bmi-conventions-r
+  - adam-adsl-completion-flag-conventions-r
+  - adam-adsl-country-region-conventions-r
+  - adam-adsl-crossover-periods-conventions-r
+  - adam-adsl-demographics-conventions-r
+  - adam-adsl-disposition-conventions-r
+  - adam-adsl-dose-adjustment-conventions-r
+  - adam-adsl-duration-conventions-r
+  - adam-adsl-flag-chain-conventions-r
+  - adam-adsl-investigator-comment-conventions-r
+  - adam-adsl-new-therapy-conventions-r
+  - adam-adsl-randomization-conventions-r
+  - adam-adsl-rescue-med-conventions-r
+  - adam-adsl-site-parse-conventions-r
+  - adam-adsl-treatment-conventions-r
+  - adam-adtr-nadir-conventions-r
+  - adam-adtr-sum-conventions-r
+  - adam-adtte-dor-conventions-r
+  - adam-adtte-first-ae-conventions-r
+  - adam-adtte-os-conventions-r
+  - adam-adtte-pfs-conventions-r
+  - adam-advs-bmi-conventions-r
+  - adam-advs-bsa-conventions-r
+  - adam-advs-carryforward-conventions-r
+  - adam-advs-first-observed-carry-conventions-r
+  - adam-advs-locf-conventions-r
+  - adam-advs-locf-record-conventions-r
+  - adam-advs-map-conventions-r
+  - adam-advs-percentiles-conventions-r
+  - adam-advs-prior-result-conventions-r
+  - adam-advs-window-table-conventions-r
+  - adam-advs-windows-conventions-r
+  - sdtm-ae-coding-conventions-r
+  - sdtm-ae-meddra-hierarchy-conventions-r
+  - sdtm-ae-odm-repeated-conventions-r
+  - sdtm-ae-partial-dates-conventions-r
+  - sdtm-ae-seriousness-conventions-r
+  - sdtm-cm-collected-medications-conventions-r
+  - sdtm-cm-odm-repeated-conventions-r
+  - sdtm-cm-whodrug-coding-conventions-r
+  - sdtm-dm-age-conventions-r
+  - sdtm-dm-arms-conventions-r
+  - sdtm-dm-basic-conventions-r
+  - sdtm-dm-dates-conventions-r
+  - sdtm-dm-death-conventions-r
+  - sdtm-dm-metadata-conventions-r
+  - sdtm-dm-race-ethnicity-conventions-r
+  - sdtm-ds-multi-form-disposition-conventions-r
+  - sdtm-ds-reasons-conventions-r
+  - sdtm-ds-sequence-conventions-r
+  - sdtm-ec-collected-exposure-conventions-r
+  - sdtm-ex-combination-conventions-r
+  - sdtm-ex-from-ec-conventions-r
+  - sdtm-ex-intervals-conventions-r
+  - sdtm-fa-event-findings-conventions-r
+  - sdtm-fa-fever-conventions-r
+  - sdtm-fa-odm-multitest-conventions-r
+  - sdtm-fa-reactogenicity-diary-conventions-r
+  - sdtm-lb-character-results-conventions-r
+  - sdtm-lb-compartments-conventions-r
+  - sdtm-lb-findings-conventions-r
+  - sdtm-lb-grading-conventions-r
+  - sdtm-lb-lab-specific-ranges-conventions-r
+  - sdtm-lb-last-observation-before-exposure-conventions-r
+  - sdtm-lb-metadata-conventions-r
+  - sdtm-lb-multiform-conventions-r
+  - sdtm-lb-ranges-conventions-r
+  - sdtm-mh-ongoing-conditions-conventions-r
+  - sdtm-mh-prespecified-conditions-conventions-r
+  - sdtm-pr-procedures-conventions-r
+  - sdtm-qs-questionnaire-items-conventions-r
+  - sdtm-relrec-dataset-level-conventions-r
+  - sdtm-relrec-links-conventions-r
+  - sdtm-rs-timepoint-response-conventions-r
+  - sdtm-se-subject-elements-conventions-r
+  - sdtm-suppmh-linkage-conventions-r
+  - sdtm-suppmh-qualifiers-conventions-r
+  - sdtm-sv-subject-visits-conventions-r
+  - sdtm-tr-tumor-measurements-conventions-r
+  - sdtm-tu-tumor-identification-conventions-r
+  - sdtm-vs-collected-form-conventions-r
+  - sdtm-vs-epoch-from-subject-elements-conventions-r
+  - sdtm-vs-planned-time-points-conventions-r
+  - sdtm-vs-replicates-conventions-r
+  - sdtm-vs-study-day-conventions-r
+  - sdtm-vs-units-conventions-r
+attempts: 1
+
+# The Harbor Hub definition, in the shape `harbor hub leaderboard create
+# --config` takes. `leaderboard.py export` adds `package` above and writes
+# it with the rows built from the jobs, ready to create once the dataset is
+# published and the jobs uploaded.
+harbor:
+  name: sdtm-adam-conventions-r
+  title: yamaa SDTM and ADaM, conventions prompts (R)
+  description: >-
+    Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved in R.
+    An agent gets the R system prompt, the benchmark's conventions prompt
+    (the full prompt with its rules cut down to the sponsor's conventions)
+    and input datasets, with no internet but the model's API. A task passes
+    when its output matches every golden cell, the verifier's rerun of
+    `/app/output/result.R` from a clean state writes the same output, the
+    held-out rerun without every third subject writes the golden of the
+    subjects kept, and the agent used no Python and no web tool. One row per
+    model variant.
+  visibility: private
+  metadata_schema:
+    type: object
+    required: [agent, agent_version, model, variant, date, attempts, job]
+    properties:
+      agent:
+        type: string
+        description: Harbor agent name
+      agent_version:
+        type: string
+        description: Agent version the job pinned
+      model:
+        type: string
+        description: provider/model, as passed to build.py --model
+      variant:
+        type: string
+        description: >-
+          The agent's model variant, OpenCode's reasoning effort (low,
+          medium, high, xhigh), or default when the job set none
+      date:
+        type: string
+        format: date
+        description: Day the first trial started (UTC)
+      attempts:
+        type: integer
+        description: Attempts per task (Harbor n_attempts)
+      job:
+        type: string
+        description: Harbor job name
+      job_id:
+        type: [string, "null"]
+        description: Harbor job id, when the job directory recorded it
+      harbor_version:
+        type: [string, "null"]
+        description: Harbor version from the job's lock.json
+      yamaa_commit:
+        type: [string, "null"]
+        description: >-
+          yamaa commit the tasks were built from (task.toml metadata), with
+          +dirty when the tree had uncommitted changes
+  metrics_schema:
+    type: object
+    required: [reward, cell_accuracy, row_accuracy, n_trials, n_errors]
+    properties:
+      reward:
+        type: number
+        description: >-
+          Mean reward over trials (Harbor's mean): the share of trials that
+          pass (every golden cell matches, the rerun reproduces the output,
+          no other language or web tool); an errored trial counts as 0
+      cell_accuracy:
+        type: number
+        description: Mean share of golden cells reproduced
+      row_accuracy:
+        type: number
+        description: Mean share of golden rows reproduced
+      n_trials:
+        type: integer
+        description: Trials the metrics aggregate
+      n_errors:
+        type: integer
+        description: Trials that ended in an exception
+      input_tokens:
+        type: [integer, "null"]
+        description: Total input tokens, when every trial reported them
+      output_tokens:
+        type: [integer, "null"]
+        description: Total output tokens, when every trial reported them
+      cost_usd:
+        type: [number, "null"]
+        description: Total model cost, when every trial reported it
+      agent_seconds:
+        type: [number, "null"]
+        description: Mean agent execution time per trial
+    patternProperties:
+      "^pass_at_[0-9]+$":
+        type: number
+        description: >-
+          Harbor's unbiased pass@k averaged over tasks, for each k that the
+          fewest attempts on a task allow (k = 2, 4, 5, 8, 10, ...)
+  columns:
+    - id: agent
+      header: Agent
+      accessor: metadata.agent
+      type: text
+    - id: agent_version
+      header: Version
+      accessor: metadata.agent_version
+      type: text
+    - id: model
+      header: Model
+      accessor: metadata.model
+      type: text
+    - id: variant
+      header: Variant
+      accessor: metadata.variant
+      type: text
+    - id: reward
+      header: Pass rate
+      accessor: metrics.reward
+      type: number
+      align: right
+      description: >-
+        Share of trials that pass: every golden cell matches, the rerun
+        reproduces the output, and no other language or web tool was used
+    - id: pass_at_2
+      header: Pass@2
+      accessor: metrics.pass_at_2
+      type: number
+      align: right
+    - id: cell_accuracy
+      header: Cell accuracy
+      accessor: metrics.cell_accuracy
+      type: number
+      align: right
+    - id: n_errors
+      header: Errors
+      accessor: metrics.n_errors
+      type: number
+      align: right
+    - id: input_tokens
+      header: Tokens in
+      accessor: metrics.input_tokens
+      type: number
+      align: right
+    - id: output_tokens
+      header: Tokens out
+      accessor: metrics.output_tokens
+      type: number
+      align: right
+    - id: cost_usd
+      header: Cost
+      accessor: metrics.cost_usd
+      type: number
+      align: right
+    - id: date
+      header: Date
+      accessor: metadata.date
+      type: date
+    - id: yamaa_commit
+      header: Tasks from
+      accessor: metadata.yamaa_commit
+      type: text
+  rank_by:
+    - accessor: metrics.cell_accuracy
+      direction: desc
+      nulls: last
+    - accessor: metrics.reward
+      direction: desc
+      nulls: last
+    - accessor: metrics.cost_usd
+      direction: asc
+      nulls: last
