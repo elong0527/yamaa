@@ -1,0 +1,76 @@
+name: Harbor Evaluation
+
+# Each reference solution in evaluations/harbor/solutions/ reads its
+# benchmark's current input/ and must still write its expected/ exactly, and
+# each prompt in evaluations/harbor/prompts/ must still ask for the datasets
+# and columns the expected data holds. So a change to a benchmark's data that
+# breaks a solution or leaves a prompt behind fails here, in both tracks.
+#
+# The package tests have no R and skip every result.R. This job runs in the
+# R version, CRAN snapshot, and R packages of the evaluation image
+# (evaluations/harbor/Dockerfile); a test keeps the two in step.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'benchmarks/**'
+      - 'evaluations/harbor/**'
+      - 'python/tests/test_harbor_evaluation.py'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - '.github/workflows/harbor-evaluation.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+      - 'evaluations/harbor/**'
+      - 'python/tests/test_harbor_evaluation.py'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - '.github/workflows/harbor-evaluation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  solutions:
+    name: reference-solutions (R and Python)
+    runs-on: ubuntu-24.04
+    container: rocker/r-ver:4.6.1
+    timeout-minutes: 30
+    env:
+      CRAN_SNAPSHOT: '2026-09-27'
+      R_PACKAGES: dplyr tidyr readr stringr lubridate purrr haven xml2 nanoparquet
+      # A result.R whose packages are missing fails instead of skipping.
+      YAMAA_REQUIRE_R: '1'
+    steps:
+      - name: Install git, Python, and the R packages' system libraries
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git python3 python3-venv \
+            libxml2-dev zlib1g-dev libicu-dev
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the evaluation image's R packages
+        run: |
+          Rscript -e "options(repos = c(CRAN = 'https://p3m.dev/cran/__linux__/noble/${CRAN_SNAPSHOT}')); \
+            pkgs <- strsplit(Sys.getenv('R_PACKAGES'), ' ')[[1]]; \
+            install.packages(pkgs, Ncpus = 4); \
+            stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)))"
+
+      - name: Install uv
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/uv"
+          "${RUNNER_TEMP}/uv/bin/pip" install uv==0.11.6
+          echo "${RUNNER_TEMP}/uv/bin" >> "${GITHUB_PATH}"
+
+      - name: Create locked environment
+        run: uv sync --project python --extra test --locked --no-editable
+
+      - name: Grade every reference solution and check every prompt
+        run: uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py

@@ -1,11 +1,12 @@
 """Build Harbor tasks, datasets, and job files from yamaa benchmarks.
 
-Every benchmark with a `prompt.md` becomes one Harbor task per language:
+Every benchmark with a full prompt, `prompts/<benchmark>/full.md`, becomes one
+Harbor task per language:
 
     <out>/tasks/<benchmark>-<language>/   <out> is ~/.cache/yamaa-harbor
       task.toml            deny-all network; the job adds the model API host
       instruction.md       the language's system prompt, then the
-                           benchmark's prompt.md verbatim
+                           benchmark's full prompt verbatim
       README.md            the task's page on Harbor Hub
       environment/         FROM the base image, plus the benchmark's input/
       tests/               grade.py, contract.json, the golden files, and the
@@ -50,8 +51,11 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 BENCHMARKS = ROOT / "benchmarks"
+# The prompt tiers, `prompts/<benchmark>/full.md` and `brief.md`; what each
+# tier means is in `prompts/README.md`. Tasks are built from the full prompt.
+PROMPTS = HERE / "prompts"
 # Reference solutions, `solutions/<benchmark>/result.R` and `result.py`,
-# written from the benchmark's prompt.md and inputs alone.
+# written from the benchmark's full prompt and inputs alone.
 SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
 # One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
@@ -353,6 +357,10 @@ def _benchmark_body(benchmark: Path) -> str:
     return "\n".join(body).strip()
 
 
+def full_prompt(benchmark: Path) -> Path:
+    return PROMPTS / benchmark.name / "full.md"
+
+
 def reference_solution(benchmark: Path, language: str) -> Path | None:
     path = SOLUTIONS / benchmark.name / LANGUAGES[language]["script"]
     return path if path.is_file() else None
@@ -372,7 +380,7 @@ def task_readme(benchmark: Path, contract: dict, inputs: list[str], commit: str)
     if reference_solution(benchmark, language):
         oracle = f"""\
 `solution/{script}` is the benchmark's reference solution, written from its
-`prompt.md` and inputs alone. Harbor's oracle agent runs it to check that
+full prompt and inputs alone. Harbor's oracle agent runs it to check that
 the prompt can be solved and that the grader scores a correct answer 1."""
     else:
         oracle = f"""\
@@ -395,6 +403,7 @@ is graded cell by cell against the benchmark's expected data.
 | | |
 |---|---|
 | Benchmark | {_source_link(commit, f"benchmarks/{benchmark.name}")} |
+| Prompt | {_source_link(commit, f"evaluations/harbor/prompts/{benchmark.name}/full.md")} |
 | Standard and domain | {tags["standard"]}, {domain} |
 | Track | {label}: `/app/output/{script}`, rerun with `{runner}` |
 | Lifecycle | {tags["lifecycle"]} |
@@ -406,8 +415,8 @@ is graded cell by cell against the benchmark's expected data.
 
 ## What the agent gets
 
-- `instruction.md`: the {label} system prompt, then the benchmark's
-  `prompt.md` verbatim.
+- `instruction.md`: the {label} system prompt, then the benchmark's full
+  prompt verbatim.
 - Its input data in `/app/input/`: {", ".join(f"`{name}`" for name in inputs)}.
 - {label} with the packages the system prompt lists, preinstalled; it may
   not install others.
@@ -501,7 +510,7 @@ Built from yamaa commit {_commit_label(commit)} by
 ## How every task runs
 
 - **{label} only.** The instruction is the {label} system prompt, then the
-  benchmark's `prompt.md`. The agent must write `/app/output/{script}`;
+  benchmark's full prompt. The agent must write `/app/output/{script}`;
   calling {other_label} zeroes the trial.
 - **Closed book.** The agent sees only its instruction and `/app/input/`.
   While it works, only the model provider's API host is reachable, and
@@ -537,7 +546,7 @@ def build_task(
 
     task_text = task_toml(benchmark.name, readme_tags(readme), domain, commit, language)
     (task / "task.toml").write_text(task_text)
-    prompt = (benchmark / "prompt.md").read_text(encoding="utf-8").strip()
+    prompt = full_prompt(benchmark).read_text(encoding="utf-8").strip()
     (task / "instruction.md").write_text(
         system_prompt(language) + "\n\n---\n\n" + prompt + "\n"
     )
@@ -727,9 +736,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
 
-    names = args.benchmarks or sorted(
-        p.parent.name for p in BENCHMARKS.glob("*/prompt.md")
-    )
+    names = args.benchmarks or sorted(p.parent.name for p in PROMPTS.glob("*/full.md"))
     commit = git_commit()
     out = args.out.resolve()
     tasks_dir, datasets_dir, configs_dir = (
@@ -752,7 +759,7 @@ def main() -> None:
         strict=args.benchmarks is not None,
     )
     if not tasks:
-        raise BuildError("no buildable benchmark with a prompt.md")
+        raise BuildError("no buildable benchmark with a full prompt")
     for line in skipped:
         print(f"skip {line}", file=sys.stderr)
     base = args.job_name or args.model.rpartition("/")[2]
