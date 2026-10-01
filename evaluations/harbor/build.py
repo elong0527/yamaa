@@ -6,11 +6,14 @@ Every benchmark with a `prompt.md` becomes one Harbor task per language:
       task.toml            deny-all network; the job adds the model API host
       instruction.md       the language's system prompt, then the
                            benchmark's prompt.md verbatim
+      README.md            the task's page on Harbor Hub
       environment/         FROM the base image, plus the benchmark's input/
       tests/               grade.py, contract.json and the golden files,
                            built into the separate verifier image
-      solution/            copies the golden files plus a placeholder
-                           result.R/result.py, for Harbor's oracle agent
+      solution/            the result.R/result.py Harbor's oracle agent runs:
+                           the benchmark's reference solution in solutions/,
+                           or else a script that writes the golden files
+    <out>/dataset/README.md  the dataset's page on Harbor Hub
     <out>/job.json         the agent, model, provider host and API key name
     <out>/jobs/            Harbor job directories
 
@@ -42,6 +45,10 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 BENCHMARKS = ROOT / "benchmarks"
+# Reference solutions, `solutions/<benchmark>/result.R` and `result.py`,
+# written from the benchmark's prompt.md and inputs alone.
+SOLUTIONS = HERE / "solutions"
+REPO = "https://github.com/elong0527/yamaa"
 IMAGE = "yamaa-harbor-env:0.2"
 OPENCODE_VERSION = "1.18.33"
 OPENCODE_MODELS_PATH = "/opt/yamaa-eval/opencode-models.json"
@@ -183,28 +190,81 @@ def contract_for(benchmark: Path, language: str) -> dict:
     }
 
 
+def _as_text(data: bytes) -> str | None:
+    """The file as text a script can hold verbatim, or None for binary data.
+
+    A carriage return or other control character could be rewritten when the
+    script itself is read, so such a file is written from its bytes instead.
+    """
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if any(ord(c) < 32 and c not in "\n\t" for c in text):
+        return None
+    return text
+
+
+def _variable(name: str, language: str) -> str:
+    base = re.sub(r"\W", "_", name)
+    return base.lower() if language == "r" else base.upper()
+
+
+def _r_literal(text: str) -> str:
+    # An R raw string r"-(...)-" ends at the first `)-"`; add dashes until the
+    # text holds no such sequence.
+    dashes = "---"
+    while f'){dashes}"' in text:
+        dashes += "-"
+    return f'r"{dashes}({text}){dashes}"'
+
+
+def _python_literal(text: str) -> str:
+    body = text.replace("\\", "\\\\")
+    if '"""' in body or body.endswith('"'):
+        body = body.replace('"', '\\"')
+    return f'"""\\\n{body}"""'
+
+
 def oracle_script(language: str, golden: list[Path]) -> str:
     """A script in the track's language that writes the golden files byte for
-    byte, so the oracle also passes the grader's rerun."""
-    lines = []
-    if language == "r":
-        lines.append("# Oracle: writes the golden datasets byte for byte.")
-        for path in golden:
-            data = path.read_bytes()
-            values = ", ".join(f"0x{b:02x}" for b in data)
-            lines.append(f"writeBin(as.raw(c({values})), '/app/output/{path.name}')")
-    else:
-        lines += [
-            "# Oracle: writes the golden datasets byte for byte.",
-            "from pathlib import Path",
-            "",
-        ]
-        for path in golden:
-            lines.append(
-                f"Path('/app/output/{path.name}').write_bytes("
-                f"bytes.fromhex('{path.read_bytes().hex()}'))"
-            )
-    return "\n".join(lines) + "\n"
+    byte, so the oracle also passes the grader's rerun.
+
+    It holds each golden as readable text, so a reviewer can see what the
+    oracle writes; only a binary golden (parquet) is held as bytes.
+    """
+    label = LANGUAGES[language]["label"]
+    script = LANGUAGES[language]["script"]
+    lines = [
+        f"# Oracle for Harbor's oracle agent ({label} track).",
+        "#",
+        "# Not a derivation: it writes the benchmark's expected datasets exactly",
+        "# as stored, to check that the task builds, that the verifier's rerun",
+        "# reproduces the output, and that the grader scores 1. An agent's own",
+        f"# script is in its trial's artifacts at /app/output/{script}.",
+        "",
+    ]
+    if language == "python":
+        lines += ["from pathlib import Path", ""]
+    for path in golden:
+        data = path.read_bytes()
+        text = _as_text(data)
+        target = f"/app/output/{path.name}"
+        variable = _variable(path.name, language)
+        if language == "r":
+            if text is None:
+                values = ", ".join(f"0x{b:02x}" for b in data)
+                lines.append(f"{variable} <- as.raw(c({values}))")
+            else:
+                lines.append(f"{variable} <- charToRaw({_r_literal(text)})")
+            lines += [f'writeBin({variable}, "{target}")', ""]
+        else:
+            if text is None:
+                lines.append(f'{variable} = bytes.fromhex("{data.hex()}")')
+            else:
+                lines.append(f"{variable} = {_python_literal(text)}.encode()")
+            lines += [f'Path("{target}").write_bytes({variable})', ""]
+    return "\n".join(lines)
 
 
 def task_toml(
@@ -254,6 +314,187 @@ network_mode = "no-network"
 """
 
 
+def _source_link(commit: str, path: str) -> str:
+    """`path` at the build's commit on GitHub, or the bare path when the
+    build is not from a commit (a test) or not from a clean tree."""
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        return f"`{path}`"
+    return f"[`{path}`]({REPO}/tree/{commit}/{path})"
+
+
+def _commit_label(commit: str) -> str:
+    sha, dirty, _ = commit.partition("+")
+    label = f"`{sha[:8]}`" if re.fullmatch(r"[0-9a-f]{40}", sha) else f"`{sha}`"
+    return label + (" with uncommitted changes" if dirty else "")
+
+
+def benchmark_title(benchmark: Path) -> str:
+    readme = (benchmark / "README.md").read_text(encoding="utf-8")
+    title = re.search(r"^# (.+)$", readme, re.MULTILINE)
+    return title.group(1).strip() if title else benchmark.name
+
+
+def _benchmark_body(benchmark: Path) -> str:
+    """The benchmark README without its title and badge lines."""
+    lines = (benchmark / "README.md").read_text(encoding="utf-8").splitlines()
+    body = [
+        line
+        for line in lines
+        if not line.startswith("# ") and not line.startswith("[![")
+    ]
+    return "\n".join(body).strip()
+
+
+def reference_solution(benchmark: Path, language: str) -> Path | None:
+    path = SOLUTIONS / benchmark.name / LANGUAGES[language]["script"]
+    return path if path.is_file() else None
+
+
+def task_readme(benchmark: Path, contract: dict, inputs: list[str], commit: str) -> str:
+    """The task page on Harbor Hub: what the agent gets and how it is graded.
+
+    It sits at the task root, which never enters the agent's container."""
+    language = contract["language"]
+    label, script = LANGUAGES[language]["label"], contract["script"]
+    other = "Python" if language == "r" else "R"
+    article = "an" if language == "r" else "a"
+    runner = "Rscript" if language == "r" else "python3"
+    tags = readme_tags((benchmark / "README.md").read_text(encoding="utf-8"))
+    domain = " and ".join(s["domain"] for s in output_specs(benchmark))
+    if reference_solution(benchmark, language):
+        oracle = f"""\
+`solution/{script}` is the benchmark's reference solution, written from its
+`prompt.md` and inputs alone. Harbor's oracle agent runs it to check that
+the prompt can be solved and that the grader scores a correct answer 1."""
+    else:
+        oracle = f"""\
+`solution/{script}` writes the expected data exactly as stored, for
+Harbor's oracle agent: it checks that the task builds, that the rerun
+reproduces the data, and that the grader scores 1, but it is not a
+derivation; this benchmark has no reference solution yet."""
+    outputs = "\n".join(
+        f"- `/app/output/{o['file']}`, keyed by {', '.join(f'`{k}`' for k in o['keys'])},"
+        f" with columns {', '.join(f'`{c}`' for c in o['columns'])}."
+        for o in contract["outputs"]
+    )
+    return f"""\
+# yamaa/{benchmark.name}-{language}
+
+The agent writes the {domain} data of the yamaa benchmark
+`{benchmark.name}` with {article} {label} script, in a sandbox with no internet, and
+is graded cell by cell against the benchmark's expected data.
+
+| | |
+|---|---|
+| Benchmark | {_source_link(commit, f"benchmarks/{benchmark.name}")} |
+| Standard and domain | {tags["standard"]}, {domain} |
+| Track | {label}: `/app/output/{script}`, rerun with `{runner}` |
+| Lifecycle | {tags["lifecycle"]} |
+| Built from | yamaa commit {_commit_label(commit)} |
+
+## The benchmark: {benchmark_title(benchmark)}
+
+{_benchmark_body(benchmark)}
+
+## What the agent gets
+
+- `instruction.md`: the {label} system prompt, then the benchmark's
+  `prompt.md` verbatim.
+- Its input data in `/app/input/`: {", ".join(f"`{name}`" for name in inputs)}.
+- {label} with the packages the system prompt lists, preinstalled; it may
+  not install others.
+
+The benchmark's specification, README, expected data, and input schemas
+never enter the agent's container.
+
+## Network
+
+- **While the agent works:** only the model provider's API host, which the
+  job adds. Every other host is blocked, and OpenCode's `webfetch` and
+  `websearch` tools are denied.
+- **During setup:** the job also opens the hosts Harbor installs OpenCode
+  from (GitHub, `nodejs.org`, the npm registry), before the agent starts.
+- **The verifier:** no network.
+
+## Grading
+
+`tests/grade.py` sets the reward to 1 only when all of these hold:
+
+{outputs}
+- Each cell matches the expected value read as its column's type: numbers
+  within a relative 1e-9, dates also as midnight datetimes, text exactly.
+  Column and row order are not graded.
+- `/app/output/{script}`, rerun by the verifier with `{runner}` after its
+  output is deleted, writes the same data again.
+- The trajectory and the script use no {other} and no web tool.
+
+`reward.json` also reports `cell_accuracy`, `row_accuracy`, `reproduced`,
+`web_tool_calls`, and `language_violations`.
+
+## Oracle
+
+{oracle}
+An agent's own script is in its trial's artifacts at `/app/output/{script}`.
+"""
+
+
+def dataset_readme(
+    name: str, tasks: list[Path], commit: str, languages: list[str]
+) -> str:
+    """The dataset page on Harbor Hub: the tasks and how every one is run."""
+    rows = []
+    for task in sorted(tasks):
+        config = (task / "task.toml").read_text(encoding="utf-8")
+        benchmark = re.search(r'^benchmark = "(.+)"$', config, re.MULTILINE).group(1)
+        domain = re.search(r'^domain = "(.+)"$', config, re.MULTILINE).group(1)
+        standard = re.search(r'^standard = "(.+)"$', config, re.MULTILINE).group(1)
+        language = re.search(r'^language = "(.+)"$', config, re.MULTILINE).group(1)
+        rows.append(
+            f"| `yamaa/{task.name}` | {benchmark_title(BENCHMARKS / benchmark)} "
+            f"| {standard} | {domain} | {LANGUAGES[language]['label']} |"
+        )
+    tracks = " and ".join(LANGUAGES[lang]["label"] for lang in sorted(languages))
+    return f"""\
+# {name}
+
+Agent evaluation tasks built from [yamaa]({REPO}) benchmarks. In each task an
+AI coding agent gets a benchmark's prompt and input data in a sandbox with
+no internet, writes a script that derives the requested CDISC dataset, and
+is graded cell by cell against the benchmark's expected data. Each
+benchmark is one task per language ({tracks}), and each track is ranked on
+its own leaderboard.
+
+Built from yamaa commit {_commit_label(commit)} by
+{_source_link(commit, "evaluations/harbor/build.py")}.
+
+## Tasks
+
+| Task | Benchmark | Standard | Domain | Track |
+|---|---|---|---|---|
+{chr(10).join(rows)}
+
+## How every task runs
+
+- **One language.** The instruction is the track's system prompt, then the
+  benchmark's `prompt.md`. The agent must write `/app/output/result.R` or
+  `/app/output/result.py`; calling the other language zeroes the trial.
+- **Closed book.** The agent sees only its instruction and `/app/input/`.
+  While it works, only the model provider's API host is reachable, and
+  OpenCode's web tools are denied. The verifier has no network.
+- **Graded on reproduced data.** The reward is 1 when every requested
+  dataset matches the expected data cell by cell, and the verifier's rerun
+  of the agent's script from a clean state writes the same data.
+- **Oracle.** Each task's `solution/` holds the script Harbor's oracle agent
+  runs: the benchmark's reference solution, written from its prompt alone,
+  or, where there is none yet, a script that writes the expected data
+  verbatim. Either must score 1.
+
+Each task's README has its benchmark, inputs, outputs, and grading rules.
+The harness is described in
+{_source_link(commit, "evaluations/harbor/README.md")}.
+"""
+
+
 def build_task(
     benchmark: Path, tasks: Path, image: str, commit: str, language: str
 ) -> Path:
@@ -284,6 +525,8 @@ def build_task(
     (task / "environment" / "Dockerfile").write_text(
         f"FROM {image}\nCOPY --chown=agent:agent input/ /app/input/\n"
     )
+    inputs = sorted(p.name for p in (task / "environment" / "input").iterdir())
+    (task / "README.md").write_text(task_readme(benchmark, contract, inputs, commit))
 
     golden = [benchmark / "expected" / o["file"] for o in contract["outputs"]]
     for directory in (task / "tests" / "expected", task / "solution" / "expected"):
@@ -305,13 +548,17 @@ def build_task(
         "COPY expected/ /tests/expected/\n"
     )
     script = LANGUAGES[language]["script"]
-    (task / "solution" / script).write_text(oracle_script(language, golden))
+    reference = reference_solution(benchmark, language)
+    if reference:
+        shutil.copyfile(reference, task / "solution" / script)
+    else:
+        (task / "solution" / script).write_text(oracle_script(language, golden))
     runner = "Rscript" if language == "r" else "python3"
     solve = task / "solution" / "solve.sh"
     solve.write_text(
         "#!/usr/bin/env bash\n"
-        "# Oracle: a script that writes the golden files, to prove packaging,\n"
-        "# the rerun, and grading.\n"
+        "# Oracle: runs the reference solution, or a script that writes the\n"
+        "# golden files, to prove packaging, the rerun, and grading.\n"
         "set -euo pipefail\n"
         "mkdir -p /app/output\n"
         f"cp /solution/{script} /app/output/{script}\n"
@@ -432,6 +679,9 @@ def main() -> None:
     parser.add_argument("--n-attempts", type=int, default=1)
     parser.add_argument("--n-concurrent", type=int, default=1)
     parser.add_argument("--job-name")
+    parser.add_argument(
+        "--dataset", default="yamaa/benchmarks", help="Harbor Hub dataset name"
+    )
     parser.add_argument("--image", default=IMAGE)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
@@ -441,10 +691,12 @@ def main() -> None:
     )
     commit = git_commit()
     tasks_dir = args.out.resolve() / "tasks"
+    dataset_dir = args.out.resolve() / "dataset"
     # Start clean: a task left from an earlier build would still be picked up
-    # by `harbor run -p <tasks>`.
-    if tasks_dir.exists():
-        shutil.rmtree(tasks_dir)
+    # by `harbor run -p <tasks>`, and a dataset manifest would still list it.
+    for directory in (tasks_dir, dataset_dir):
+        if directory.exists():
+            shutil.rmtree(directory)
     tasks, skipped = build_selection(
         names,
         languages=args.language,
@@ -470,8 +722,13 @@ def main() -> None:
     )
     job = args.out.resolve() / "job.json"
     job.write_text(json.dumps(config, indent=2) + "\n")
+    dataset_dir.mkdir(parents=True)
+    (dataset_dir / "README.md").write_text(
+        dataset_readme(args.dataset, tasks, commit, args.language)
+    )
     print(f"built {len(tasks)} task(s) ({', '.join(args.language)}) in {tasks_dir}")
     print(f"job: {job}")
+    print(f"dataset README: {dataset_dir / 'README.md'}")
 
 
 if __name__ == "__main__":

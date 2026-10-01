@@ -4,6 +4,7 @@ import copy
 import csv
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -710,6 +711,166 @@ def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
     solve = (task / "solution" / "solve.sh").read_text()
     assert "python3 /app/output/result.py" in solve
     assert "--rerun" in (task / "tests" / "test.sh").read_text()
+
+
+# Goldens that stress the oracle's literals: plain text, text with `"""`,
+# non-ASCII text, and a binary parquet file.
+ORACLE_GOLDENS = (
+    "adam-adsl-age-group/expected/adsl.csv",
+    "adam-adsl-investigator-comment/expected/adsl.csv",
+    "schema-text-functions/expected/adsl.csv",
+    "schema-parquet/expected/adsl.parquet",
+)
+INTERPRETERS = {"r": ["Rscript"], "python": [sys.executable]}
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("golden", ORACLE_GOLDENS)
+def test_the_oracle_writes_each_golden_byte_for_byte(tmp_path, language, golden):
+    if language == "r" and shutil.which("Rscript") is None:
+        pytest.skip("Rscript is not installed")
+    path = ROOT / "benchmarks" / golden
+    script = build.oracle_script(language, [path])
+    runnable = tmp_path / SCRIPTS[language]
+    runnable.write_text(script.replace("/app/output/", f"{tmp_path}/"))
+    subprocess.run([*INTERPRETERS[language], str(runnable)], check=True)
+    assert (tmp_path / path.name).read_bytes() == path.read_bytes()
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_oracle_shows_a_text_golden_as_text(language):
+    path = ROOT / "benchmarks" / "adam-adsl-age-group" / "expected" / "adsl.csv"
+    script = build.oracle_script(language, [path])
+    for line in path.read_text().splitlines():
+        assert line in script
+    assert "Not a derivation" in script
+    assert "as.raw" not in script and "fromhex" not in script
+    parquet = ROOT / "benchmarks" / "schema-parquet" / "expected" / "adsl.parquet"
+    binary = build.oracle_script(language, [parquet])
+    assert ("as.raw" if language == "r" else "fromhex") in binary
+
+
+REFERENCES = sorted(
+    p.relative_to(build.SOLUTIONS).as_posix()
+    for p in build.SOLUTIONS.rglob("*")
+    if p.is_file()
+)
+
+
+def _r_has(*packages: str) -> bool:
+    if shutil.which("Rscript") is None:
+        return False
+    loads = "; ".join(f"library({p})" for p in packages)
+    check = subprocess.run(["Rscript", "-e", loads], capture_output=True, check=False)
+    return check.returncode == 0
+
+
+def test_every_reference_solution_belongs_to_a_benchmark_track():
+    assert REFERENCES
+    for reference in REFERENCES:
+        benchmark, script = reference.split("/")
+        assert script in SCRIPTS.values(), reference
+        assert (ROOT / "benchmarks" / benchmark / "prompt.md").is_file(), reference
+    for benchmark in PILOTS:
+        for script in SCRIPTS.values():
+            assert f"{benchmark}/{script}" in REFERENCES
+
+
+@pytest.mark.parametrize("reference", REFERENCES)
+def test_a_reference_solution_scores_one(tmp_path, reference):
+    benchmark, script = reference.split("/")
+    language = "r" if script == "result.R" else "python"
+    if language == "r" and not _r_has("dplyr", "readr"):
+        pytest.skip("R with dplyr and readr is not installed")
+    shutil.copytree(
+        ROOT / "benchmarks" / benchmark / "input",
+        tmp_path / "input",
+        ignore=shutil.ignore_patterns("*.yaml", "*.yml"),
+    )
+    output = tmp_path / "output"
+    output.mkdir()
+    text = (build.SOLUTIONS / reference).read_text()
+    runnable = output / script
+    runnable.write_text(
+        text.replace("/app/input", str(tmp_path / "input")).replace(
+            "/app/output", str(output)
+        )
+    )
+    command = ["Rscript"] if language == "r" else [sys.executable]
+    subprocess.run([*command, str(runnable)], check=True)
+    contract = build.contract_for(ROOT / "benchmarks" / benchmark, language)
+    expected = ROOT / "benchmarks" / benchmark / "expected"
+    result = grade.grade(contract, expected, output, tmp_path / "none.json")
+    assert result["reward"]["reward"] == 1.0, result
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_a_task_runs_its_reference_solution_or_else_writes_the_golden(
+    tmp_path, language
+):
+    script = SCRIPTS[language]
+    pilot = build.build_task(
+        ROOT / "benchmarks" / "adam-adtte-dor", tmp_path, build.IMAGE, "test", language
+    )
+    reference = build.SOLUTIONS / "adam-adtte-dor" / script
+    assert (pilot / "solution" / script).read_bytes() == reference.read_bytes()
+    assert "is the benchmark's reference solution" in (pilot / "README.md").read_text()
+    other = build.build_task(
+        ROOT / "benchmarks" / "sdtm-dm-race-ethnicity",
+        tmp_path,
+        build.IMAGE,
+        "test",
+        language,
+    )
+    assert "Not a derivation" in (other / "solution" / script).read_text()
+    assert "no reference solution yet" in (other / "README.md").read_text()
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_a_task_readme_describes_the_task_outside_the_agent_sandbox(tmp_path, language):
+    commit = "afb7fb4e39767f6256fe7a51834c2ed9c436d539"
+    benchmark = ROOT / "benchmarks" / "adam-adtte-dor"
+    task = build.build_task(benchmark, tmp_path, build.IMAGE, commit, language)
+    readme = (task / "README.md").read_text()
+    assert readme.startswith(f"# yamaa/adam-adtte-dor-{language}\n")
+    assert "## The benchmark: Duration of Response" in readme
+    assert "`adrs_raw.csv`, `adsl.csv`, `ds.csv`" in readme
+    assert "`/app/output/adtte.csv`, keyed by `STUDYID`, `USUBJID`, `PARAMCD`" in readme
+    assert f"`/app/output/{SCRIPTS[language]}`" in readme
+    assert f"{build.REPO}/tree/{commit}/benchmarks/adam-adtte-dor" in readme
+    assert "`afb7fb4e`" in readme
+    assert "[![" not in readme
+    # The README is for reviewers: it never enters the agent's container.
+    assert not list((task / "environment").rglob("README.md"))
+
+
+def test_a_build_writes_the_dataset_readme(tmp_path, monkeypatch):
+    stale = tmp_path / "dataset" / "dataset.toml"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("# from an earlier build\n")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build.py",
+            "--benchmarks",
+            *PILOTS,
+            "--model",
+            "opencode-go/muse-spark-1.3-contributor",
+            "--dataset",
+            "yamaa/adam-pilot",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+    build.main()
+    dataset = tmp_path / "dataset"
+    assert sorted(p.name for p in dataset.iterdir()) == ["README.md"]
+    readme = (dataset / "README.md").read_text()
+    assert readme.startswith("# yamaa/adam-pilot\n")
+    for benchmark in PILOTS:
+        for language in LANGUAGES:
+            assert f"| `yamaa/{benchmark}-{language}` |" in readme
+    assert "| Pool Subjects into Age Groups | ADaM | ADSL | R |" in readme
 
 
 def test_a_build_removes_tasks_left_by_an_earlier_one(tmp_path, monkeypatch):
