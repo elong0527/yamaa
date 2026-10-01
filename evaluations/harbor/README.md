@@ -10,7 +10,7 @@ Docker; this folder only writes Harbor task directories and a job file.
 |---|---|
 | `Dockerfile` | the base image: Python and R with data packages, OpenCode's offline settings |
 | `system-r.md`, `system-python.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py` |
-| `prompts/` | the prompts, `<benchmark>/full.md` and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
+| `prompts/` | the prompts, `<benchmark>/full.md`, `conventions.md`, and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
 | `brief.py` | writes each `brief.md` from its `full.md` |
 | `build.py` | benchmarks with a full prompt -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
 | `grade.py` | the verifier, copied into every task's `tests/` |

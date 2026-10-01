@@ -9,7 +9,11 @@ measures what the stated rules are worth.
 | File | Tier | What it keeps | Question it answers |
 |---|---|---|---|
 | `full.md` | full | the opening, the column list, every rule an expected cell depends on, and the paths | Can the agent follow a complete specification? |
+| `conventions.md` | conventions | the opening, the column list, the sponsor's conventions, and the paths | Given the sponsor's vocabulary, can the agent reason out the derivation? |
 | `brief.md` | brief | the opening, the column list, and the paths | How much of the specification can the agent rebuild from CDISC practice, the column names, and the data? |
+
+Each tier states no more than the one above it: brief within
+conventions, conventions within full.
 
 ## full
 
@@ -31,6 +35,62 @@ four parts, in order:
 The full prompt is the source of every other tier, and the one
 [`../build.py`](../build.py) builds Harbor tasks from. Change it in the same
 change as any edit to its benchmark's README, inputs, or expected data.
+
+## conventions
+
+The full prompt with its rules cut down to the sponsor's conventions: what
+the values look like, never which value a record gets. Parts 1, 2, and 4
+stay verbatim; part 3 keeps only:
+
+- **Literal values.** Category labels, flag values, fixed PARAMCD and
+  PARAM, descriptive text, the values of a column that is the same on
+  every record (one that never has a value included), and the set of
+  values a text column takes, "has no value" among them when the full
+  prompt names it.
+- **Codes.** A code and the label or source value it stands for (`1 for
+  <18`, `M for Male`, `"Subject refused" gives UNKNOWN`), and a catch-all
+  or sentinel code as one of the values, without the condition that
+  gives it (`SEX is M for Male, F for Female, or U`).
+- **Counting.** How a duration or an age counts (`counting both days`,
+  a February 29 birthday), and a fixed constant such as a target day.
+- **Named references.** A named method or dictionary version the values
+  follow (the Mosteller value, MedDRA version 26.1), without its formula.
+- **Precision.** The rounding of a value, or that it is not rounded.
+- **Text form.** How a number or date is written in a text column (an
+  IDVARVAL padded to eight characters).
+- **Ranks.** How a rank runs: in which order, within what, how ties share
+  or break, and where a record with nothing to rank by goes.
+
+It does not restate what a CDISC programmer applies unprompted: how
+STUDYID, USUBJID, and SUBJID are formed, how a `--SEQ` number runs (ASEQ
+included), what a standard variable holds (`--STRESN` is the result in
+standard units, RDOMAIN the related domain), a controlled term that is the
+collected value's standard term (MULTIPLE for several races, QD for once
+daily), and units: a value's unit or scale, the unit variables (`--ORRESU`,
+`--STRESU`, AVALU, AGEU), and conversion factors. A PARAM label keeps the
+unit written in it, since the label is a literal value. A mapping that only
+puts the collected value in upper case says so once and lists just its
+exceptions (`Each collected race answer gives the same name in upper case,
+except that "Other, specify: Fijian" gives OTHER ...`). The full prompt
+states all of it; the conventions prompt leaves it to the reader, as it
+leaves the logic.
+
+Everything else in part 3 is the logic under test and is dropped: which
+records exist beyond the record level, which value a record gets, what a
+value means, what counts as an event, censoring, precedence, ties,
+windows, imputation, and what a variable holds at an edge (a zero, a
+missing input, a duplicate). A sentence that mixes the two is narrowed to
+its convention in the full prompt's own words (`DTHFL is Y when the
+subject has a fatal adverse event ..., and has no value otherwise`
+becomes `DTHFL is Y or has no value`), and it never names a value, code,
+or number the full prompt does not.
+
+A conventions prompt is written by hand from the full prompt and runs to at
+most 20 lines, its conventions said in as few paragraphs as they fit. Where
+the rules hold no convention it equals the brief prompt, and where they
+hold nothing but conventions it equals the full prompt
+(`adam-adsl-age-group`); either way the benchmark adds no signal at that
+step. Rewrite it in the same change as its full prompt.
 
 ## brief
 
@@ -57,18 +117,21 @@ own.
   prompt for the language, and grading are shared by every tier.
 - **A tier's meaning is fixed here.** Changing what a tier keeps makes a
   new tier with a new name, since runs on the old one would no longer
-  compare. A new tier, such as one that keeps the sponsor's conventions
-  but drops the study rules, is defined in this file before any task is
-  built from it.
+  compare. A new tier is defined in this file before any task is built
+  from it.
 
 ## Checks
 
 `python/tests/test_harbor_evaluation.py` checks that:
 
 - every `sdtm-*` and `adam-*` benchmark has a folder here, holding
-  `full.md` and `brief.md`, and no prompt is left under `benchmarks/`;
+  `full.md`, `conventions.md`, and `brief.md`, and no prompt is left under
+  `benchmarks/`;
 - every full prompt has the four parts, and every brief prompt is exactly
   what `brief.py` writes from it;
+- every conventions prompt keeps the full prompt's parts 1, 2, and 4
+  verbatim, is no longer than the full prompt or 20 lines, and names no
+  quoted value, upper-case code, or number the full prompt does not;
 - every tier of a graded benchmark asks for exactly its output files and
   column lists, as the expected data holds them;
 - every tier keeps to the recipe's 79-column width and never names the

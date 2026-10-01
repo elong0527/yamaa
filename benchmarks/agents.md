@@ -414,8 +414,9 @@ check reports is a variable the README does not explain.
 4. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
-   [benchmark prompt recipe](../automation/benchmark_prompt.md), and write
-   its `brief.md` with `evaluations/harbor/brief.py`.
+   [benchmark prompt recipe](../automation/benchmark_prompt.md), its
+   `conventions.md` from it, and its `brief.md` with
+   `evaluations/harbor/brief.py`.
 5. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 
