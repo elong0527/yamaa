@@ -14,6 +14,9 @@ Docker; this folder only writes Harbor task directories and a job file.
 | `brief.py` | writes each `brief.md` from its `full.md` |
 | `build.py` | benchmarks with a full prompt -> Harbor tasks with their Harbor Hub READMEs, one dataset README per language, and one job file per language and model variant |
 | `grade.py` | the verifier, copied into every task's `tests/` |
+| `sandbox.py` | runs submitted code as a separate uid, with protected inputs and grading assets |
+| `cases/` | verifier-only clinical boundary fixtures and independently reviewed goldens |
+| `smoke.py` | runs oracle/nop through Docker on both tracks; `--full` covers all tasks |
 | `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
 | `leaderboards/` | leaderboard definitions, one file per leaderboard (one per language) |
@@ -73,6 +76,24 @@ How to write a prompt is in
   `language_violations`, `held_out_checked`, and `held_out` (when
   checked), and `verifier/diff-<file>.csv` lists the differing cells.
 
+  The verifier runs submitted code as the dedicated `submission` user,
+  with no access to `/tests`, verifier logs, or the grader's temporary
+  files. It restores inputs from the verifier image and clears all output
+  sidecars before each rerun. The script is the only retained submission
+  dependency; keep it self-contained. Symlink outputs are rejected.
+
+  Tasks with subject-level outputs also require changed-input challenges:
+  subject identifiers are renamed, and the script must produce the answer
+  independently recomputed by the reference. The three development tasks
+  also have reviewed fixtures for age boundaries, fatal-event precedence,
+  and response-duration ties and censoring. References must match the
+  original golden and any reviewed challenge golden. A reference crash is
+  a verifier error; it never exempts a submission from these checks.
+  `challenge_checked` and `challenge_passed` record their result.
+  Integer columns compare exactly, including values beyond float precision.
+  Model jobs require a valid trajectory; missing audit evidence cannot pass
+  or be exported as a ranked run. Oracle/nop harness checks need no trajectory.
+
 ## Setup
 
 A Docker engine whose kernel supports nftables `fib` (Harbor's allowlist
@@ -80,7 +101,7 @@ needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
 
 ```bash
 uv sync --project python --group harbor
-docker build -t yamaa-harbor-env:0.3 evaluations/harbor
+docker build -t yamaa-harbor-env:0.4 evaluations/harbor
 ```
 
 ## Build and check the tasks
@@ -90,7 +111,11 @@ when set, or `--out`): the tasks under `tasks/`, one dataset README per
 language under `datasets/<language>/`, and the job files under `configs/`.
 Harbor writes its job directories under `jobs/` there. All of it stays
 outside the repository, whose validators read every file in the tree. Each
-build first removes the tasks, datasets, and job files of the previous one.
+build writes a new `builds/<build-id>/` directory. `tasks/`, `datasets/`, and
+`configs/` are aliases to its contents; job configs name the preserved
+build directory directly, so later builds cannot replace an older job's
+tasks. Existing directories from the earlier layout are preserved under
+`builds/legacy-<id>/`. Keep each build until its jobs have been uploaded.
 
 Each language is its own Harbor Hub dataset, `yamaa/yamaa-sdtm-adam-r` and
 `yamaa/yamaa-sdtm-adam-python` (`--dataset-prefix` changes the part before
@@ -131,10 +156,9 @@ Harbor's `oracle` agent runs each task's `solution/result.R` or
 `result.py` and must score 1 on every task, rerun included; its `nop`
 agent writes nothing and must score 0. That script is the benchmark's
 reference solution from `solutions/`, written from the full prompt and
-the inputs alone, which also shows the prompt can be solved. A benchmark
-without one gets a script that writes the golden files byte for byte,
-holding each as readable text (a parquet golden as bytes), with a header
-saying it is a harness check, not a derivation:
+the inputs alone, which also shows the prompt can be solved. Every built task
+requires a derivation reference; a script that writes the golden literally
+cannot validate changed inputs:
 
 ```bash
 uv run --project python --no-sync harbor run \
@@ -200,6 +224,8 @@ rules, and whose rows are uploaded runs that point back to their trials.
   attempts on each (every buildable benchmark, one attempt). A run
   qualifies only at the tasks' own timeouts, so every row answers the same
   question.
+- `grading_protocol`: the verifier protocol required for a ranked run.
+  Protocol 2 uses isolated script execution and changed-input challenges.
 - `harbor`: the Hub definition itself, in the shape
   `harbor hub leaderboard create --config` takes: the `metadata_schema`
   and `metrics_schema` of a row, the `columns`, and the ordered `rank_by`
@@ -208,8 +234,8 @@ rules, and whose rows are uploaded runs that point back to their trials.
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
-one leaderboard per language dataset (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-r`,
-`yamaa/yamaa-sdtm-adam-python/sdtm-adam-python`), so R and Python are
+one leaderboard per language dataset (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v2-r`,
+`yamaa/yamaa-sdtm-adam-python/sdtm-adam-v2-python`), so R and Python are
 ranked independently.
 
 A row is one job: one agent, model, and variant, so the variants of a model
@@ -221,11 +247,14 @@ Harbor aggregates them:
 
 | Metric | Meaning |
 |---|---|
-| `reward` | mean reward, the pass rate; an errored trial counts as 0 (Harbor's mean) |
+| `reward` | mean of each task's pass rate; an errored trial counts as 0 |
+| `trial_reward` | mean over trials, matching Harbor's aggregation |
+| `reward_ci_low`, `reward_ci_high` | 95% percentile bootstrap interval over task pass rates; null for one task |
 | `cell_accuracy`, `row_accuracy` | mean share of golden cells and rows reproduced |
 | `pass_at_<k>` | Harbor's unbiased pass@k averaged over tasks, for k = 2, 4, 5, 8, 10, ... up to the fewest attempts on a task |
 | `n_trials`, `n_errors` | trials aggregated, and trials that ended in an exception |
 | `input_tokens`, `output_tokens`, `cost_usd` | totals, when every trial reported them |
+| `cost_per_trial_usd` | mean cost per attempt, used for cost tie-breaking |
 | `agent_seconds` | mean agent time per trial |
 
 Harbor skips pass@k when a verifier writes several rewards, as `grade.py`
@@ -237,6 +266,23 @@ Harbor's own code; without it they skip.
 To compare models, ask for several attempts per task: one attempt is a
 pilot, and pass@k needs at least two. Terminal-Bench 2.0, the reference
 Harbor benchmark, takes leaderboard runs with `--n-attempts 5`.
+
+Ranked runs must have equal attempt counts across the board's tasks, one
+clean task commit, one image reference, and preserved grading and trajectory
+evidence. Explicit timeout or resource overrides, extra file mounts, expanded
+network access, extra skills, and replacement verifiers are refused. Each
+verifier saves its actual `task.toml` with its grade, so export
+reads the run's provenance even after the original task directory is gone.
+Legacy jobs without this evidence remain inspectable but cannot enter the
+protocol 2 boards. The task bootstrap describes variation across tasks;
+it does not measure within-task sampling uncertainty and can collapse when
+every task has the same score. Use repeated attempts and inspect per-task
+results alongside the interval.
+
+The protocol 2 boards have new names, `sdtm-adam-v2-r` and
+`sdtm-adam-v2-python`. Create them on the new dataset revisions; keep the
+historical protocol 1 boards and rows on Harbor Hub. Existing results must
+be rerun before they can enter these boards.
 
 ### Publish to Harbor Hub
 
@@ -277,12 +323,12 @@ the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	export sdtm-adam-r \
+	export sdtm-adam-v2-r \
 	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-contributor-r-low
 $H hub leaderboard create \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-r.leaderboard.yaml
-$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/sdtm-adam-r \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-r.rows.yaml
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v2-r.leaderboard.yaml
+$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/sdtm-adam-v2-r \
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v2-r.rows.yaml
 ```
 
 `export` takes the board's dataset from its `package`; `--package`
@@ -294,7 +340,23 @@ on the Hub under the trial's `artifacts/app/output/`, and
 
 `export` refuses a job that mixes agents, models, or variants, misses a
 board task or attempts, or changed the tasks' timeouts; `--hide` exports
-its rows hidden. Repeat for `sdtm-adam-python` with the Python jobs. The
+its rows hidden. Repeat for `sdtm-adam-v2-python` with the Python jobs. The
 published tasks
-build from the local `yamaa-harbor-env:0.3` image, so they run where that
+build from the local `yamaa-harbor-env:0.4` image, so they run where that
 image is built.
+
+## Integration checks
+
+`.github/workflows/harbor.yml` installs the pinned Harbor dependency,
+validates the harness and Hub schemas, and runs oracle/nop through the real
+Docker verifier in both languages on pull requests. Its weekly run and
+manual `full` option cover every buildable task. The development smoke
+check can also be run locally without a model key:
+
+```bash
+uv run --project python --no-sync python evaluations/harbor/smoke.py \
+    --out /tmp/yamaa-harbor-smoke
+```
+
+Choose a fresh output directory per invocation. Verifier errors fail the
+check, and every required challenge must actually run.

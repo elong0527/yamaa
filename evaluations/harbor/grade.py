@@ -1,10 +1,10 @@
 """Grade one agent submission against a benchmark's golden datasets.
 
 Runs in Harbor's separate verifier container as `/tests/grade.py` and also
-standalone, so it uses the Python standard library only. It is a pure
-function of the submitted CSV files, the required script (`result.R` or
-`result.py`), the task's `contract.json`, the golden files, and the agent
-trajectory; with `--rerun` it also runs that script.
+standalone. CSV grading uses the Python standard library; parquet needs
+pyarrow. It checks the submitted files, required script (`result.R` or
+`result.py`), task contract, golden files, and agent trajectory. With
+`--rerun` it also runs that script on original and changed inputs.
 
 The reward is 1 only when all of these hold:
 
@@ -17,6 +17,8 @@ The reward is 1 only when all of these hold:
   writes its rows literally fails. The check applies when the task ships a
   reference solution and the reference itself writes exactly that
   restricted golden, which shows the derivation is per subject;
+- required challenges: renamed subject identifiers and reviewed boundary
+  fixtures must match answers independently computed by the reference;
 - the trajectory and the script use no other language and no web tool.
 
 Column order and row order are reported but not graded. A grader failure
@@ -30,12 +32,16 @@ import argparse
 import csv
 import json
 import math
+import os
+import random
 import re
 import shutil
 import subprocess
 import tempfile
+import uuid
 from collections.abc import Callable
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 NULL_TOKENS = frozenset({"", "NA", "NaN", "nan", ".", "NULL", "None"})
@@ -100,7 +106,15 @@ def normalize(value: str, kind: str) -> object:
         return value
     if text in NULL_TOKENS:
         return None
-    if kind in ("int", "float"):
+    if kind == "int":
+        try:
+            number = Decimal(text)
+        except InvalidOperation:
+            return ("unparsed", text)
+        if not number.is_finite() or number != number.to_integral_value():
+            return ("unparsed", text)
+        return int(number)
+    if kind == "float":
         try:
             number = float(text)
         except ValueError:
@@ -201,6 +215,9 @@ def grade_output(spec: dict, expected_dir: Path, output_dir: Path) -> dict:
     result.update(matched_rows=0, matched_cells=0)
 
     path = output_dir / name
+    if path.is_symlink():
+        result["problems"].append(f"{name} must not be a symlink")
+        return result
     if not path.is_file():
         result["problems"].append(f"{name} was not written")
         return result
@@ -432,10 +449,22 @@ def scan_trajectory(path: Path, language: str | None) -> dict:
     agent's ATIF trajectory, when there is one."""
     if not path.is_file():
         return {"checked": False, "violations": [], "language_violations": []}
-    trajectory = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        trajectory = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"checked": False, "violations": [], "language_violations": []}
+    if not isinstance(trajectory, dict) or not isinstance(
+        trajectory.get("steps"), list
+    ):
+        return {"checked": False, "violations": [], "language_violations": []}
     violations, language_violations = [], []
     for index, step in enumerate(trajectory.get("steps") or []):
-        for call in (step or {}).get("tool_calls") or []:
+        if not isinstance(step, dict):
+            return {"checked": False, "violations": [], "language_violations": []}
+        calls = step.get("tool_calls") or []
+        if not isinstance(calls, list) or any(not isinstance(c, dict) for c in calls):
+            return {"checked": False, "violations": [], "language_violations": []}
+        for call in calls:
             tool = str(call.get("function_name") or call.get("name") or "")
             if tool.lower() in WEB_TOOLS:
                 violations.append({"step": index, "tool": tool})
@@ -688,8 +717,9 @@ def held_out_rerun(
     it against the golden restricted to the subjects kept.
 
     The check applies only when the task's reference solution, run the same
-    way, writes exactly that restricted golden; otherwise it is skipped with
-    a note and does not count against the trial. Destructive while it runs
+    way, writes exactly that restricted golden. A successful reference whose
+    data differs skips the check; a reference crash is a harness error.
+    Destructive while it runs
     (it swaps the input directory), but it restores `/app` afterwards.
     """
     result: dict = {"checked": False, "passed": True, "problems": [], "notes": []}
@@ -744,7 +774,10 @@ def held_out_rerun(
         own_reference = work / "reference" / name
         own_reference.parent.mkdir()
         shutil.copyfile(reference, own_reference)
-        if run_and_grade(own_reference, expected):
+        reference_problems = run_and_grade(own_reference, expected)
+        if reference_problems and reference_problems[0].startswith(f"{name} failed:"):
+            raise RuntimeError(f"held-out reference failed: {reference_problems[0]}")
+        if reference_problems:
             return skip(
                 "the reference solution does not write the restricted golden, "
                 "so the derivation is not per subject"
@@ -761,6 +794,178 @@ def held_out_rerun(
         shutil.rmtree(work, ignore_errors=True)
 
 
+def _renamed_subject(value: object, offset: int, suffix: str) -> object:
+    if value in (None, ""):
+        return value
+    if isinstance(value, int):
+        return value + offset
+    text = str(value)
+    prefix, separator, tail = text.rpartition("-")
+    if (tail if separator else text).isdigit():
+        number = str(int(tail if separator else text) + offset)
+        return prefix + separator + number if separator else number
+    return text + suffix
+
+
+def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bool:
+    """Change subject identifiers while preserving numeric parquet types."""
+    shutil.copytree(source, target)
+    changed = False
+    for path in sorted(target.rglob("*")):
+        if not path.is_file():
+            continue
+        columns = [c for c in HOLDOUT_INPUT_SUBJECTS if c in _columns(path)]
+        if not columns:
+            continue
+        changed = True
+        if path.suffix == ".csv":
+            header, rows = read_rows(path)
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=header)
+                writer.writeheader()
+                writer.writerows(
+                    {
+                        k: _renamed_subject(v, offset, suffix) if k in columns else v
+                        for k, v in row.items()
+                    }
+                    for row in rows
+                )
+        else:
+            arrow, parquet, _ = _parquet()
+            table = parquet.read_table(path)
+            for column in columns:
+                field = table.schema.field(column)
+                values = [
+                    _renamed_subject(v, offset, suffix)
+                    for v in table[column].to_pylist()
+                ]
+                table = table.set_column(
+                    table.schema.get_field_index(column),
+                    field,
+                    arrow.array(values, type=field.type),
+                )
+            parquet.write_table(table, path)
+    return changed
+
+
+def challenge_rerun(
+    contract: dict,
+    expected_dir: Path,
+    output_dir: Path,
+    reference: Path | None,
+    cases: Path | None = None,
+    run: RunScript = run_script,
+) -> dict:
+    """Recompute answers on changed identifiers and private input fixtures.
+
+    Validate the reference on the original golden first. A reference failure
+    is a harness error, never an exemption from a required challenge.
+    """
+    result = {"checked": False, "passed": True, "cases": [], "problems": []}
+    if not contract.get("challenge_required"):
+        return result
+    if reference is None or not reference.is_file():
+        raise RuntimeError("required challenges have no reference solution")
+    app, name = output_dir.parent, contract["script"]
+    interpreter = INTERPRETERS[contract["language"]]
+    with tempfile.TemporaryDirectory(prefix="yamaa-challenges-") as temporary:
+        work = Path(temporary)
+        shutil.copytree(app / "input", work / "original-input")
+        shutil.copytree(output_dir, work / "original-output")
+        agent = work / "agent" / name
+        agent.parent.mkdir()
+        shutil.copyfile(output_dir / name, agent)
+
+        def execute(script: Path) -> None:
+            for spec in contract["outputs"]:
+                (output_dir / spec["file"]).unlink(missing_ok=True)
+            code, log = run([interpreter, str(script)], app, RERUN_TIMEOUT_SEC)
+            if code != 0:
+                raise RuntimeError(f"challenge reference failed: {log[-1000:]}")
+
+        try:
+            execute(reference)
+            baseline = [
+                grade_output(s, expected_dir, output_dir) for s in contract["outputs"]
+            ]
+            if not all(o["passed"] for o in baseline):
+                raise RuntimeError(
+                    "challenge reference does not match the original golden"
+                )
+            inputs = []
+            offset = random.SystemRandom().randrange(1000000, 9000000)
+            suffix = "-evaluation-" + uuid.uuid4().hex[:8]
+            result["identifier_offset"], result["identifier_suffix"] = offset, suffix
+            if _rename_subjects(
+                work / "original-input", work / "renamed-input", offset, suffix
+            ):
+                inputs.append(("subject-identifiers", work / "renamed-input"))
+            if cases is not None and cases.is_dir():
+                inputs.extend(
+                    (p.name, p / "input") for p in sorted(cases.iterdir()) if p.is_dir()
+                )
+            if not inputs:
+                raise RuntimeError(
+                    "required challenges have no applicable input fixture"
+                )
+            for case, source in inputs:
+                shutil.rmtree(app / "input")
+                shutil.copytree(source, app / "input")
+                execute(reference)
+                if case == "subject-identifiers" and any(
+                    len(read_rows(output_dir / spec["file"])[1])
+                    != len(read_rows(expected_dir / spec["file"])[1])
+                    for spec in contract["outputs"]
+                ):
+                    raise RuntimeError(
+                        "renaming subjects changed the reference record count"
+                    )
+                fixed_expected = source.parent / "expected"
+                if fixed_expected.is_dir() and not all(
+                    grade_output(s, fixed_expected, output_dir)["passed"]
+                    for s in contract["outputs"]
+                ):
+                    raise RuntimeError(
+                        f"reference disagrees with the reviewed {case} golden"
+                    )
+                expected = work / case / "expected"
+                expected.mkdir(parents=True)
+                for spec in contract["outputs"]:
+                    # Validate keys, parsing and columns before trusting this answer.
+                    checked = grade_output(spec, output_dir, output_dir)
+                    if not checked["passed"]:
+                        raise RuntimeError(
+                            f"invalid challenge reference output: {checked}"
+                        )
+                    shutil.copyfile(output_dir / spec["file"], expected / spec["file"])
+                if case == "subject-identifiers" and all(
+                    grade_output(s, expected_dir, output_dir)["passed"]
+                    for s in contract["outputs"]
+                ):
+                    raise RuntimeError(
+                        "the reference ignored the changed subject identifiers"
+                    )
+                result["checked"] = True
+                for spec in contract["outputs"]:
+                    (output_dir / spec["file"]).unlink(missing_ok=True)
+                code, log = run([interpreter, str(agent)], app, RERUN_TIMEOUT_SEC)
+                problems = [] if code == 0 else [f"script failed: {log[-1000:]}"]
+                for spec in contract["outputs"]:
+                    checked = grade_output(spec, expected, output_dir)
+                    problems.extend(
+                        f"{checked['file']}: {p}" for p in checked["problems"]
+                    )
+                result["cases"].append({"name": case, "passed": not problems})
+                result["problems"].extend(f"{case}: {p}" for p in problems)
+            result["passed"] = not result["problems"]
+        finally:
+            shutil.rmtree(app / "input", ignore_errors=True)
+            shutil.copytree(work / "original-input", app / "input")
+            shutil.rmtree(output_dir, ignore_errors=True)
+            shutil.copytree(work / "original-output", output_dir)
+    return result
+
+
 def grade(
     contract: dict,
     expected_dir: Path,
@@ -770,6 +975,8 @@ def grade(
     rerun: bool = False,
     run: RunScript = run_script,
     reference: Path | None = None,
+    require_trajectory: bool = False,
+    cases: Path | None = None,
 ) -> dict:
     outputs = [grade_output(s, expected_dir, output_dir) for s in contract["outputs"]]
     script = grade_script(contract, output_dir)
@@ -786,6 +993,11 @@ def grade(
         if rerun and reproduced["passed"]
         else {"checked": False, "passed": True, "problems": [], "notes": []}
     )
+    challenge = (
+        challenge_rerun(contract, expected_dir, output_dir, reference, cases, run)
+        if rerun and reproduced["passed"]
+        else {"checked": False, "passed": True, "cases": [], "problems": []}
+    )
     cells = sum(o["expected_cells"] for o in outputs)
     rows = sum(o["expected_rows"] for o in outputs)
     passed = (
@@ -793,8 +1005,10 @@ def grade(
         and script["passed"]
         and reproduced["passed"]
         and held_out["passed"]
+        and challenge["passed"]
         and not network["violations"]
         and not network["language_violations"]
+        and (network["checked"] or not require_trajectory)
     )
     return {
         "benchmark": contract["benchmark"],
@@ -814,6 +1028,8 @@ def grade(
             else 0.0,
             "language_violations": float(len(network["language_violations"])),
             "held_out_checked": 1.0 if held_out["checked"] else 0.0,
+            "challenge_checked": float(challenge["checked"]),
+            "challenge_passed": float(challenge["checked"] and challenge["passed"]),
             **(
                 {"held_out": 1.0 if held_out["passed"] else 0.0}
                 if held_out["checked"]
@@ -824,6 +1040,7 @@ def grade(
         "script": script,
         "rerun": reproduced,
         "held_out": held_out,
+        "challenge": challenge,
         "network": network,
     }
 
@@ -848,6 +1065,14 @@ def main() -> None:
     parser.add_argument("--expected", type=Path, default=Path("/tests/expected"))
     parser.add_argument("--output", type=Path, default=Path("/app/output"))
     parser.add_argument(
+        "--sandbox", action="store_true", help="run submissions as the isolated worker"
+    )
+    parser.add_argument(
+        "--require-trajectory",
+        action="store_true",
+        help="require a valid agent trajectory",
+    )
+    parser.add_argument(
         "--trajectory", type=Path, default=Path("/logs/agent/trajectory.json")
     )
     parser.add_argument("--out", type=Path, default=Path("/logs/verifier"))
@@ -858,6 +1083,12 @@ def main() -> None:
         "(destructive: for the verifier container)",
     )
     args = parser.parse_args()
+    run = run_script
+    if args.sandbox:
+        import sandbox
+
+        sandbox.prepare(args.output.parent, args.contract.parent, args.out)
+        run = sandbox.run
     contract = json.loads(args.contract.read_text(encoding="utf-8"))
     # The task's reference solution, beside this file in the verifier image.
     reference = Path(__file__).resolve().parent / "reference" / contract["script"]
@@ -868,6 +1099,10 @@ def main() -> None:
         args.trajectory,
         rerun=args.rerun,
         reference=reference if reference.is_file() else None,
+        run=run,
+        require_trajectory=args.require_trajectory
+        or os.environ.get("YAMAA_REQUIRE_TRAJECTORY") == "1",
+        cases=args.contract.parent / "cases",
     )
     write_results(result, args.out)
     status = "PASS" if result["passed"] else "FAIL"
@@ -881,6 +1116,10 @@ def main() -> None:
         print(f"  held out: {problem}")
     for note in result["held_out"]["notes"]:
         print(f"  held out skipped: {note}")
+    for problem in result["challenge"]["problems"]:
+        print(f"  challenge: {problem}")
+    if not result["network"]["checked"]:
+        print("  trajectory audit unavailable")
     for violation in result["network"].get("language_violations", []):
         print(f"  other language at step {violation['step']}: {violation['excerpt']}")
 

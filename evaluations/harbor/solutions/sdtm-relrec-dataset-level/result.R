@@ -15,8 +15,13 @@ cm <- read_csv(
   "/app/input/cm.csv",
   col_types = cols(.default = col_character())
 )
+tr <- read_csv(
+  "/app/input/tr.csv",
+  col_types = cols(.default = col_character())
+)
 
-studyid <- ae$STUDYID[[1]]
+# AE can be empty after subject removal; the dataset relationship remains.
+studyid <- if (nrow(ae) > 0) ae$STUDYID[[1]] else tr$STUDYID[[1]]
 
 # Whole domains rather than subject records: one tumor identification
 # relates to many tumor results.

@@ -4,7 +4,7 @@
 # verifier. Python and R with common data packages; no yamaa, no benchmark
 # files, no network at run time beyond the model API.
 #
-#   docker build -t yamaa-harbor-env:0.3 evaluations/harbor
+#   docker build -t yamaa-harbor-env:0.4 evaluations/harbor
 #
 # Bump the tag in build.py (IMAGE) whenever this file changes.
 
@@ -51,6 +51,7 @@ RUN R -q -e "options(repos = c(CRAN = 'https://p3m.dev/cran/__linux__/noble/${CR
 
 # --- Non-root agent user ----------------------------------------------------
 RUN useradd --create-home --uid 1001 --shell /bin/bash agent \
+    && useradd --no-create-home --uid 1002 --shell /usr/sbin/nologin submission \
     && mkdir -p /app/input /app/output /logs/agent /logs/verifier /logs/artifacts \
     && chown -R agent:agent /app /logs
 
