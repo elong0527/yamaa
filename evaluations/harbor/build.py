@@ -56,7 +56,7 @@ SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
 # One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
 DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
-IMAGE = "yamaa-harbor-env:0.2"
+IMAGE = "yamaa-harbor-env:0.3"
 OPENCODE_VERSION = "1.18.33"
 OPENCODE_MODELS_PATH = "/opt/yamaa-eval/opencode-models.json"
 # Build output and Harbor job directories stay outside the repository, whose

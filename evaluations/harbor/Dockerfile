@@ -4,7 +4,7 @@
 # verifier. Python and R with common data packages; no yamaa, no benchmark
 # files, no network at run time beyond the model API.
 #
-#   docker build -t yamaa-harbor-env:0.2 evaluations/harbor
+#   docker build -t yamaa-harbor-env:0.3 evaluations/harbor
 #
 # Bump the tag in build.py (IMAGE) whenever this file changes.
 
@@ -68,6 +68,24 @@ RUN set -eux; \
     npm install --prefix "${HOME}/.config/opencode" --no-fund --no-audit \
         "@opencode-ai/plugin@${OPENCODE_VERSION}"; \
     npm cache clean --force
+
+# --- Harbor's OpenCode install, done ahead -----------------------------------
+# What Harbor's OpenCode installer pins (harbor/agents/installed/node_install.py).
+ARG NVM_VERSION=v0.40.2
+ARG NODE_MAJOR=22
+# Harbor installs nvm, Node, and opencode-ai as the agent user at every
+# trial's setup. Doing the same here makes that step find them in place and
+# fetch only small metadata, instead of Node and OpenCode for every trial.
+# nvm.sh needs bash and fails under `set -u`.
+RUN bash -c 'set -eo pipefail; \
+    export HOME=/home/agent NVM_DIR=/home/agent/.nvm; \
+    curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" \
+        | env -u NODE_VERSION bash; \
+    . "${NVM_DIR}/nvm.sh"; \
+    nvm install "${NODE_MAJOR}"; \
+    nvm alias default "${NODE_MAJOR}"; \
+    npm i -g "opencode-ai@${OPENCODE_VERSION}"; \
+    opencode --version'
 USER root
 
 WORKDIR /app

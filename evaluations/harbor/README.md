@@ -71,7 +71,7 @@ needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
 
 ```bash
 uv sync --project python --group harbor
-docker build -t yamaa-harbor-env:0.2 evaluations/harbor
+docker build -t yamaa-harbor-env:0.3 evaluations/harbor
 ```
 
 ## Build and check the tasks
@@ -285,5 +285,5 @@ on the Hub under the trial's `artifacts/app/output/`, and
 board task or attempts, or changed the tasks' timeouts; `--hide` exports
 its rows hidden. Repeat for `adam-pilot-python` with the Python jobs. The
 published tasks
-build from the local `yamaa-harbor-env:0.2` image, so they run where that
+build from the local `yamaa-harbor-env:0.3` image, so they run where that
 image is built.
