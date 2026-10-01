@@ -3,32 +3,161 @@
 # A run belongs here only when it covers every task below with at least
 # `attempts` attempts each, at the tasks' own timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# This board is the Python track: every task carries the Python system
-# prompt and requires `/app/output/result.py` alongside the dataset.
-package: yamaa/yamaa-sdtm-adam-python
+# This board is the whole R track: every buildable SDTM and ADaM
+# benchmark with a prompt, each requiring `/app/output/result.R`.
+package: yamaa/yamaa-sdtm-adam-r
 tasks:
-  - adam-adae-death-python
-  - adam-adsl-age-group-python
-  - adam-adtte-dor-python
-attempts: 3
+  - adam-adae-death-r
+  - adam-adae-occurrence-flags-r
+  - adam-adae-onset-emergence-r
+  - adam-adae-partial-dates-r
+  - adam-adae-post-covid-r
+  - adam-adae-prior-serious-event-r
+  - adam-adae-protocol-review-r
+  - adam-adae-query-flags-r
+  - adam-adae-review-order-r
+  - adam-adae-serious-events-r
+  - adam-adae-serious-sequence-r
+  - adam-adae-severity-r
+  - adam-adae-severity-override-r
+  - adam-adae-severity-rank-r
+  - adam-adae-text-cleanup-r
+  - adam-adae-worsening-emergence-r
+  - adam-adae-worst-severity-r
+  - adam-adce-worst-toxicity-r
+  - adam-adcm-atc-classes-r
+  - adam-adcm-on-treatment-r
+  - adam-adeg-derived-intervals-r
+  - adam-adex-cumulative-dose-r
+  - adam-adex-dose-reduction-r
+  - adam-adex-uncollected-r
+  - adam-adlb-bds-r
+  - adam-adlb-closest-visit-r
+  - adam-adlb-end-of-treatment-r
+  - adam-adlb-lymphocytes-r
+  - adam-adlb-mean-r
+  - adam-adlb-ordered-sum-r
+  - adam-adlb-reported-precision-r
+  - adam-adlb-shift-criteria-r
+  - adam-adlb-supplb-padded-key-r
+  - adam-adlbc-row-window-r
+  - adam-adlbc-window-chain-r
+  - adam-adoe-study-eye-r
+  - adam-adqs-missed-visit-locf-r
+  - adam-adqs-subscale-score-r
+  - adam-adrs-best-response-r
+  - adam-adrs-composite-response-r
+  - adam-adrs-confirmed-response-r
+  - adam-adrs-measurable-disease-r
+  - adam-adrs-response-prep-r
+  - adam-adrs-response-records-r
+  - adam-adsl-age-group-r
+  - adam-adsl-alive-date-r
+  - adam-adsl-analysis-age-r
+  - adam-adsl-bmi-r
+  - adam-adsl-completion-flag-r
+  - adam-adsl-country-region-r
+  - adam-adsl-crossover-periods-r
+  - adam-adsl-demographics-r
+  - adam-adsl-disposition-r
+  - adam-adsl-dose-adjustment-r
+  - adam-adsl-duration-r
+  - adam-adsl-flag-chain-r
+  - adam-adsl-investigator-comment-r
+  - adam-adsl-new-therapy-r
+  - adam-adsl-randomization-r
+  - adam-adsl-rescue-med-r
+  - adam-adsl-site-parse-r
+  - adam-adsl-treatment-r
+  - adam-adtr-nadir-r
+  - adam-adtr-sum-r
+  - adam-adtte-dor-r
+  - adam-adtte-first-ae-r
+  - adam-adtte-os-r
+  - adam-adtte-pfs-r
+  - adam-advs-bmi-r
+  - adam-advs-bsa-r
+  - adam-advs-carryforward-r
+  - adam-advs-first-observed-carry-r
+  - adam-advs-locf-r
+  - adam-advs-locf-record-r
+  - adam-advs-map-r
+  - adam-advs-percentiles-r
+  - adam-advs-prior-result-r
+  - adam-advs-window-table-r
+  - adam-advs-windows-r
+  - sdtm-ae-coding-r
+  - sdtm-ae-meddra-hierarchy-r
+  - sdtm-ae-odm-repeated-r
+  - sdtm-ae-partial-dates-r
+  - sdtm-ae-seriousness-r
+  - sdtm-cm-collected-medications-r
+  - sdtm-cm-odm-repeated-r
+  - sdtm-cm-whodrug-coding-r
+  - sdtm-dm-age-r
+  - sdtm-dm-arms-r
+  - sdtm-dm-basic-r
+  - sdtm-dm-dates-r
+  - sdtm-dm-death-r
+  - sdtm-dm-metadata-r
+  - sdtm-dm-race-ethnicity-r
+  - sdtm-ds-multi-form-disposition-r
+  - sdtm-ds-reasons-r
+  - sdtm-ds-sequence-r
+  - sdtm-ec-collected-exposure-r
+  - sdtm-ex-combination-r
+  - sdtm-ex-from-ec-r
+  - sdtm-ex-intervals-r
+  - sdtm-fa-event-findings-r
+  - sdtm-fa-fever-r
+  - sdtm-fa-odm-multitest-r
+  - sdtm-fa-reactogenicity-diary-r
+  - sdtm-lb-character-results-r
+  - sdtm-lb-compartments-r
+  - sdtm-lb-findings-r
+  - sdtm-lb-grading-r
+  - sdtm-lb-lab-specific-ranges-r
+  - sdtm-lb-last-observation-before-exposure-r
+  - sdtm-lb-metadata-r
+  - sdtm-lb-multiform-r
+  - sdtm-lb-ranges-r
+  - sdtm-mh-ongoing-conditions-r
+  - sdtm-mh-prespecified-conditions-r
+  - sdtm-pr-procedures-r
+  - sdtm-qs-questionnaire-items-r
+  - sdtm-relrec-dataset-level-r
+  - sdtm-relrec-links-r
+  - sdtm-rs-timepoint-response-r
+  - sdtm-se-subject-elements-r
+  - sdtm-suppmh-linkage-r
+  - sdtm-suppmh-qualifiers-r
+  - sdtm-sv-subject-visits-r
+  - sdtm-tr-tumor-measurements-r
+  - sdtm-tu-tumor-identification-r
+  - sdtm-vs-collected-form-r
+  - sdtm-vs-epoch-from-subject-elements-r
+  - sdtm-vs-planned-time-points-r
+  - sdtm-vs-replicates-r
+  - sdtm-vs-study-day-r
+  - sdtm-vs-units-r
+attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
 # --config` takes. `leaderboard.py export` adds `package` above and writes
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: adam-pilot-python
-  title: ADaM pilot (Python)
+  name: sdtm-adam-r
+  title: yamaa SDTM and ADaM (R)
   description: >-
-    Three ADaM benchmarks solved in Python: age groups in ADSL, death
-    information on every adverse event in ADAE, and duration of response
-    in ADTTE. An agent gets the Python system prompt, the benchmark's prompt
-    and input datasets, with no internet but the model's API. A task passes
-    when its output matches every golden cell, the verifier's rerun of
-    `/app/output/result.py` from a clean state writes the same output, the
-    held-out rerun without every third subject writes the golden of the
-    subjects kept, and the agent used no R and no web tool. One row
-    per model variant, each with at least three attempts per task.
+    Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved
+    in R. An agent gets the R system prompt, the benchmark's
+    prompt and input datasets, with no internet but the model's API. A task
+    passes when its output matches every golden cell, the verifier's rerun
+    of `/app/output/result.R` from a clean state writes the same output,
+    the held-out rerun without every third subject writes the golden of the
+    subjects kept, and the agent used no Python and no web tool. One row
+    per model variant.
   visibility: private
   metadata_schema:
     type: object

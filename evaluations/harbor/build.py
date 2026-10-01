@@ -8,8 +8,9 @@ Every benchmark with a `prompt.md` becomes one Harbor task per language:
                            benchmark's prompt.md verbatim
       README.md            the task's page on Harbor Hub
       environment/         FROM the base image, plus the benchmark's input/
-      tests/               grade.py, contract.json and the golden files,
-                           built into the separate verifier image
+      tests/               grade.py, contract.json, the golden files, and the
+                           reference solution for the held-out rerun, built
+                           into the separate verifier image
       solution/            the result.R/result.py Harbor's oracle agent runs:
                            the benchmark's reference solution in solutions/,
                            or else a script that writes the golden files
@@ -313,7 +314,7 @@ allowed_hosts = []
 
 [verifier]
 environment_mode = "separate"
-timeout_sec = 300.0
+timeout_sec = 900.0
 
 [verifier.environment]
 network_mode = "no-network"
@@ -432,10 +433,16 @@ never enter the agent's container.
   Column and row order are not graded.
 - `/app/output/{script}`, rerun by the verifier with `{runner}` after its
   output is deleted, writes the same data again.
+- Held out: rerun on the inputs without every third subject, it writes the
+  expected data of the subjects kept, so a script that writes its rows
+  literally fails. This applies when the reference solution, rerun the
+  same way, writes exactly that data, as it does when the derivation is
+  per subject.
 - The trajectory and the script use no {other} and no web tool.
 
 `reward.json` also reports `cell_accuracy`, `row_accuracy`, `reproduced`,
-`web_tool_calls`, and `language_violations`.
+`web_tool_calls`, `language_violations`, `held_out_checked`, and
+`held_out`.
 
 ## Oracle
 
@@ -500,7 +507,9 @@ Built from yamaa commit {_commit_label(commit)} by
   OpenCode's web tools are denied. The verifier has no network.
 - **Graded on reproduced data.** The reward is 1 when every requested
   dataset matches the expected data cell by cell, and the verifier's rerun
-  of the agent's script from a clean state writes the same data.
+  of the agent's script from a clean state writes the same data. Rerun
+  again without every third subject, the script must write the expected
+  data of the subjects kept, so writing the rows literally does not pass.
 - **Oracle.** Each task's `solution/` holds the script Harbor's oracle agent
   runs: the benchmark's reference solution, written from its prompt alone,
   or, where there is none yet, a script that writes the expected data
@@ -558,14 +567,19 @@ def build_task(
         "set -euo pipefail\n"
         "python3 /tests/grade.py --rerun\n"
     )
+    script = LANGUAGES[language]["script"]
+    reference = reference_solution(benchmark, language)
+    # The verifier's held-out rerun checks the agent against the reference.
+    if reference:
+        (task / "tests" / "reference").mkdir()
+        shutil.copyfile(reference, task / "tests" / "reference" / script)
     (task / "tests" / "Dockerfile").write_text(
         f"FROM {image}\n"
         "COPY --chmod=755 test.sh /tests/test.sh\n"
         "COPY grade.py contract.json /tests/\n"
         "COPY expected/ /tests/expected/\n"
+        + ("COPY reference/ /tests/reference/\n" if reference else "")
     )
-    script = LANGUAGES[language]["script"]
-    reference = reference_solution(benchmark, language)
     if reference:
         shutil.copyfile(reference, task / "solution" / script)
     else:

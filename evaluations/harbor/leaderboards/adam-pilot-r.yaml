@@ -25,9 +25,10 @@ harbor:
     in ADTTE. An agent gets the R system prompt, the benchmark's prompt
     and input datasets, with no internet but the model's API. A task passes
     when its output matches every golden cell, the verifier's rerun of
-    `/app/output/result.R` from a clean state writes the same output, and
-    the agent used no Python and no web tool. One row per model variant,
-    each with at least three attempts per task.
+    `/app/output/result.R` from a clean state writes the same output, the
+    held-out rerun without every third subject writes the golden of the
+    subjects kept, and the agent used no Python and no web tool. One row
+    per model variant, each with at least three attempts per task.
   visibility: private
   metadata_schema:
     type: object

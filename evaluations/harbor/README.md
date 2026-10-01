@@ -48,13 +48,21 @@ How to write a prompt is in
 - **Grading.** Reward 1 when every requested dataset has the golden's
   columns, keys, and cell values, and the script, rerun by the verifier
   from a clean state (its datasets deleted first), writes datasets that
-  match too. Column and row order are reported, not graded. Cells are read
-  by column type: numbers compare as numbers within a relative 1e-9 (`1.0`
-  equals `1`), dates also accept a midnight datetime, text is compared
-  exactly (spaces included), and an empty cell, `NA`, or `.` is no value.
+  match too. Then the held-out rerun: with every third subject (by
+  `USUBJID`) dropped from the inputs, the script must write the golden
+  restricted to the subjects kept, so a script that writes its rows
+  literally fails. It applies when the task ships a reference solution
+  (`solutions/`, copied into the verifier's `tests/reference/`) and that
+  reference, rerun the same way, writes exactly the restricted golden;
+  otherwise it is skipped with a note (a derivation across subjects, or
+  inputs without `USUBJID`). Column and row order are reported, not
+  graded. Cells are read by column type: numbers compare as numbers within
+  a relative 1e-9 (`1.0` equals `1`), dates also accept a midnight
+  datetime, text is compared exactly (spaces included), and an empty cell,
+  `NA`, or `.` is no value.
   `reward.json` also carries `cell_accuracy`, `row_accuracy`, `reproduced`,
-  and `language_violations`, and `verifier/diff-<file>.csv` lists the
-  differing cells.
+  `language_violations`, `held_out_checked`, and `held_out` (when
+  checked), and `verifier/diff-<file>.csv` lists the differing cells.
 
 ## Setup
 

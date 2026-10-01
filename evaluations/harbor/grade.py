@@ -12,6 +12,11 @@ The reward is 1 only when all of these hold:
   and cell values once each value is read as its column's type;
 - with `--rerun` (the verifier), the script, run from a clean state by its
   language's interpreter, writes datasets that match the golden too;
+- held out: rerun on the inputs without every third subject, the script
+  writes the golden restricted to the subjects kept, so a script that
+  writes its rows literally fails. The check applies when the task ships a
+  reference solution and the reference itself writes exactly that
+  restricted golden, which shows the derivation is per subject;
 - the trajectory and the script use no other language and no web tool.
 
 Column order and row order are reported but not graded. A grader failure
@@ -26,7 +31,9 @@ import csv
 import json
 import math
 import re
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
@@ -36,6 +43,13 @@ WEB_TOOLS = frozenset({"webfetch", "websearch", "web_fetch", "web_search"})
 RELATIVE_TOLERANCE = 1e-9
 MAX_REPORTED = 200
 RERUN_TIMEOUT_SEC = 300.0
+# The held-out rerun drops every third subject from the inputs, by the first
+# of these columns they carry: USUBJID, or the raw subject id an SDTM task
+# builds USUBJID from (ODM SubjectKey, SUBJID, PATNUM). An output row belongs
+# to a dropped subject when its USUBJID is that id or ends in "-<id>".
+HOLDOUT_SUBJECT = "USUBJID"
+HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM")
+HOLDOUT_EVERY = 3
 # How each track's script is run, and what counts as reaching for the other
 # language: running one of its programs in a shell call, or a bridge in the
 # script. Only a call counts: the program's name in a grep pattern, a quoted
@@ -541,6 +555,198 @@ def rerun_script(
     return result
 
 
+def _parquet():
+    import pyarrow
+    import pyarrow.compute
+    import pyarrow.parquet
+
+    return pyarrow, pyarrow.parquet, pyarrow.compute
+
+
+def _columns(path: Path) -> list[str]:
+    if path.suffix == ".csv":
+        with path.open(newline="", encoding="utf-8") as handle:
+            return next(csv.reader(handle), [])
+    if path.suffix == ".parquet":
+        _, parquet, _ = _parquet()
+        return parquet.read_schema(path).names
+    return []
+
+
+def _input_subjects(input_dir: Path) -> tuple[str | None, list[str]]:
+    """The subject column the inputs carry and its values, sorted."""
+    tables = [
+        p for p in sorted(input_dir.rglob("*")) if p.suffix in (".csv", ".parquet")
+    ]
+    columns = {p: _columns(p) for p in tables}
+    for column in HOLDOUT_INPUT_SUBJECTS:
+        holders = [p for p in tables if column in columns[p]]
+        if not holders:
+            continue
+        subjects: set[str] = set()
+        for path in holders:
+            if path.suffix == ".csv":
+                with path.open(newline="", encoding="utf-8") as handle:
+                    subjects |= {r[column] for r in csv.DictReader(handle) if r[column]}
+            else:
+                _, parquet, _ = _parquet()
+                values = parquet.read_table(path, columns=[column])[column].to_pylist()
+                subjects |= {str(v) for v in values if v not in (None, "")}
+        return column, sorted(subjects)
+    return None, []
+
+
+def _subset_inputs(source: Path, target: Path, column: str, drop: set[str]) -> None:
+    """Copy the input directory without the rows of the dropped subjects."""
+    for path in sorted(source.rglob("*")):
+        dest = target / path.relative_to(source)
+        if path.is_dir():
+            dest.mkdir(parents=True, exist_ok=True)
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if path.suffix == ".csv":
+            with path.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.reader(handle))
+            if rows and column in rows[0]:
+                at = rows[0].index(column)
+                rows = [rows[0]] + [
+                    r for r in rows[1:] if len(r) <= at or r[at] not in drop
+                ]
+                with dest.open("w", newline="", encoding="utf-8") as handle:
+                    csv.writer(handle, lineterminator="\n").writerows(rows)
+                continue
+        elif path.suffix == ".parquet" and column in _columns(path):
+            pyarrow, parquet, compute = _parquet()
+            table = parquet.read_table(path)
+            dropped = compute.is_in(
+                table[column].cast(pyarrow.string()),
+                value_set=pyarrow.array(sorted(drop), type=pyarrow.string()),
+            )
+            parquet.write_table(table.filter(compute.invert(dropped)), dest)
+            continue
+        shutil.copy2(path, dest)
+
+
+def _belongs(usubjid: str, drop: set[str]) -> bool:
+    return usubjid in drop or any(usubjid.endswith(f"-{d}") for d in drop)
+
+
+def _restricted_golden(contract: dict, expected_dir: Path, drop: set[str]) -> dict:
+    """Each golden's rows without the dropped subjects', by file."""
+    restricted = {}
+    for spec in contract["outputs"]:
+        with (expected_dir / spec["file"]).open(newline="", encoding="utf-8") as h:
+            rows = list(csv.reader(h))
+        at = rows[0].index(HOLDOUT_SUBJECT)
+        restricted[spec["file"]] = (
+            rows,
+            [rows[0]] + [r for r in rows[1:] if not _belongs(r[at], drop)],
+        )
+    return restricted
+
+
+def _drop_set(contract, expected_dir, subjects: list[str]):
+    """The first candidate set of subjects to drop that removes some output
+    rows and keeps some in every output, with the restricted goldens."""
+    if len(subjects) >= HOLDOUT_EVERY:
+        candidates = [subjects[i::HOLDOUT_EVERY] for i in (HOLDOUT_EVERY - 1, 1, 0)]
+    else:
+        candidates = [[s] for s in reversed(subjects)]
+    for candidate in candidates:
+        drop = set(candidate)
+        restricted = _restricted_golden(contract, expected_dir, drop)
+        removes = any(len(kept) < len(full) for full, kept in restricted.values())
+        keeps = all(len(kept) > 1 for _, kept in restricted.values())
+        if removes and keeps:
+            return drop, {name: kept for name, (_, kept) in restricted.items()}
+    return None, {}
+
+
+def held_out_rerun(
+    contract: dict,
+    expected_dir: Path,
+    output_dir: Path,
+    reference: Path | None,
+    run: RunScript = run_script,
+    timeout: float = RERUN_TIMEOUT_SEC,
+) -> dict:
+    """Rerun the script on the inputs without every third subject and grade
+    it against the golden restricted to the subjects kept.
+
+    The check applies only when the task's reference solution, run the same
+    way, writes exactly that restricted golden; otherwise it is skipped with
+    a note and does not count against the trial. Destructive while it runs
+    (it swaps the input directory), but it restores `/app` afterwards.
+    """
+    result: dict = {"checked": False, "passed": True, "problems": [], "notes": []}
+    name, language = contract.get("script"), contract.get("language")
+    app = output_dir.parent
+    input_dir = app / "input"
+
+    def skip(note: str) -> dict:
+        result["notes"].append(note)
+        return result
+
+    if not name or language not in INTERPRETERS:
+        return skip("no script to rerun")
+    if reference is None or not reference.is_file():
+        return skip("no reference solution")
+    if not all(HOLDOUT_SUBJECT in o["columns"] for o in contract["outputs"]):
+        return skip(f"an output has no {HOLDOUT_SUBJECT}")
+    try:
+        column, subjects = _input_subjects(input_dir)
+    except ImportError:
+        return skip("parquet inputs need pyarrow")
+    if column is None:
+        return skip("the inputs carry no subject id")
+    if len(subjects) < 2:
+        return skip("fewer than two subjects")
+    drop, restricted = _drop_set(contract, expected_dir, subjects)
+    if drop is None:
+        return skip("no subjects to drop change the output")
+    result["subject_column"], result["dropped"] = column, sorted(drop)
+    work = Path(tempfile.mkdtemp(prefix="yamaa-held-out-"))
+    saved_input, saved_output = work / "input", work / "output"
+    shutil.move(str(input_dir), saved_input)
+    shutil.copytree(output_dir, saved_output)
+
+    def run_and_grade(script: Path, expected: Path) -> list[str]:
+        for spec in contract["outputs"]:
+            (output_dir / spec["file"]).unlink(missing_ok=True)
+        returncode, log = run([INTERPRETERS[language], str(script)], app, timeout)
+        problems = [] if returncode == 0 else [f"{script.name} failed: {log[-300:]}"]
+        for spec in contract["outputs"]:
+            graded = grade_output(spec, expected, output_dir)
+            problems.extend(f"{graded['file']}: {p}" for p in graded["problems"])
+        return problems
+
+    try:
+        _subset_inputs(saved_input, input_dir, column, drop)
+        expected = work / "expected"
+        expected.mkdir()
+        for name_, rows in restricted.items():
+            with (expected / name_).open("w", newline="", encoding="utf-8") as h:
+                csv.writer(h, lineterminator="\n").writerows(rows)
+        own_reference = work / "reference" / name
+        own_reference.parent.mkdir()
+        shutil.copyfile(reference, own_reference)
+        if run_and_grade(own_reference, expected):
+            return skip(
+                "the reference solution does not write the restricted golden, "
+                "so the derivation is not per subject"
+            )
+        result["checked"] = True
+        result["problems"] = run_and_grade(output_dir / name, expected)
+        result["passed"] = not result["problems"]
+        return result
+    finally:
+        shutil.rmtree(input_dir, ignore_errors=True)
+        shutil.move(str(saved_input), input_dir)
+        shutil.rmtree(output_dir, ignore_errors=True)
+        shutil.copytree(saved_output, output_dir)
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def grade(
     contract: dict,
     expected_dir: Path,
@@ -549,6 +755,7 @@ def grade(
     *,
     rerun: bool = False,
     run: RunScript = run_script,
+    reference: Path | None = None,
 ) -> dict:
     outputs = [grade_output(s, expected_dir, output_dir) for s in contract["outputs"]]
     script = grade_script(contract, output_dir)
@@ -560,12 +767,18 @@ def grade(
     )
     if rerun and not script["passed"]:
         reproduced["problems"].append("no script to rerun")
+    held_out = (
+        held_out_rerun(contract, expected_dir, output_dir, reference, run)
+        if rerun and reproduced["passed"]
+        else {"checked": False, "passed": True, "problems": [], "notes": []}
+    )
     cells = sum(o["expected_cells"] for o in outputs)
     rows = sum(o["expected_rows"] for o in outputs)
     passed = (
         all(o["passed"] for o in outputs)
         and script["passed"]
         and reproduced["passed"]
+        and held_out["passed"]
         and not network["violations"]
         and not network["language_violations"]
     )
@@ -586,10 +799,17 @@ def grade(
             if reproduced["passed"] and not reproduced.get("skipped")
             else 0.0,
             "language_violations": float(len(network["language_violations"])),
+            "held_out_checked": 1.0 if held_out["checked"] else 0.0,
+            **(
+                {"held_out": 1.0 if held_out["passed"] else 0.0}
+                if held_out["checked"]
+                else {}
+            ),
         },
         "outputs": outputs,
         "script": script,
         "rerun": reproduced,
+        "held_out": held_out,
         "network": network,
     }
 
@@ -625,8 +845,15 @@ def main() -> None:
     )
     args = parser.parse_args()
     contract = json.loads(args.contract.read_text(encoding="utf-8"))
+    # The task's reference solution, beside this file in the verifier image.
+    reference = Path(__file__).resolve().parent / "reference" / contract["script"]
     result = grade(
-        contract, args.expected, args.output, args.trajectory, rerun=args.rerun
+        contract,
+        args.expected,
+        args.output,
+        args.trajectory,
+        rerun=args.rerun,
+        reference=reference if reference.is_file() else None,
     )
     write_results(result, args.out)
     status = "PASS" if result["passed"] else "FAIL"
@@ -636,6 +863,10 @@ def main() -> None:
             print(f"  {output['file']}: {problem}")
     for problem in result["script"]["problems"] + result["rerun"]["problems"]:
         print(f"  {problem}")
+    for problem in result["held_out"]["problems"]:
+        print(f"  held out: {problem}")
+    for note in result["held_out"]["notes"]:
+        print(f"  held out skipped: {note}")
     for violation in result["network"].get("language_violations", []):
         print(f"  other language at step {violation['step']}: {violation['excerpt']}")
 

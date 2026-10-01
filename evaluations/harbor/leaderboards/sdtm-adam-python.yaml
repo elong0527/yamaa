@@ -3,32 +3,161 @@
 # A run belongs here only when it covers every task below with at least
 # `attempts` attempts each, at the tasks' own timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# This board is the Python track: every task carries the Python system
-# prompt and requires `/app/output/result.py` alongside the dataset.
+# This board is the whole Python track: every buildable SDTM and ADaM
+# benchmark with a prompt, each requiring `/app/output/result.py`.
 package: yamaa/yamaa-sdtm-adam-python
 tasks:
   - adam-adae-death-python
+  - adam-adae-occurrence-flags-python
+  - adam-adae-onset-emergence-python
+  - adam-adae-partial-dates-python
+  - adam-adae-post-covid-python
+  - adam-adae-prior-serious-event-python
+  - adam-adae-protocol-review-python
+  - adam-adae-query-flags-python
+  - adam-adae-review-order-python
+  - adam-adae-serious-events-python
+  - adam-adae-serious-sequence-python
+  - adam-adae-severity-python
+  - adam-adae-severity-override-python
+  - adam-adae-severity-rank-python
+  - adam-adae-text-cleanup-python
+  - adam-adae-worsening-emergence-python
+  - adam-adae-worst-severity-python
+  - adam-adce-worst-toxicity-python
+  - adam-adcm-atc-classes-python
+  - adam-adcm-on-treatment-python
+  - adam-adeg-derived-intervals-python
+  - adam-adex-cumulative-dose-python
+  - adam-adex-dose-reduction-python
+  - adam-adex-uncollected-python
+  - adam-adlb-bds-python
+  - adam-adlb-closest-visit-python
+  - adam-adlb-end-of-treatment-python
+  - adam-adlb-lymphocytes-python
+  - adam-adlb-mean-python
+  - adam-adlb-ordered-sum-python
+  - adam-adlb-reported-precision-python
+  - adam-adlb-shift-criteria-python
+  - adam-adlb-supplb-padded-key-python
+  - adam-adlbc-row-window-python
+  - adam-adlbc-window-chain-python
+  - adam-adoe-study-eye-python
+  - adam-adqs-missed-visit-locf-python
+  - adam-adqs-subscale-score-python
+  - adam-adrs-best-response-python
+  - adam-adrs-composite-response-python
+  - adam-adrs-confirmed-response-python
+  - adam-adrs-measurable-disease-python
+  - adam-adrs-response-prep-python
+  - adam-adrs-response-records-python
   - adam-adsl-age-group-python
+  - adam-adsl-alive-date-python
+  - adam-adsl-analysis-age-python
+  - adam-adsl-bmi-python
+  - adam-adsl-completion-flag-python
+  - adam-adsl-country-region-python
+  - adam-adsl-crossover-periods-python
+  - adam-adsl-demographics-python
+  - adam-adsl-disposition-python
+  - adam-adsl-dose-adjustment-python
+  - adam-adsl-duration-python
+  - adam-adsl-flag-chain-python
+  - adam-adsl-investigator-comment-python
+  - adam-adsl-new-therapy-python
+  - adam-adsl-randomization-python
+  - adam-adsl-rescue-med-python
+  - adam-adsl-site-parse-python
+  - adam-adsl-treatment-python
+  - adam-adtr-nadir-python
+  - adam-adtr-sum-python
   - adam-adtte-dor-python
-attempts: 3
+  - adam-adtte-first-ae-python
+  - adam-adtte-os-python
+  - adam-adtte-pfs-python
+  - adam-advs-bmi-python
+  - adam-advs-bsa-python
+  - adam-advs-carryforward-python
+  - adam-advs-first-observed-carry-python
+  - adam-advs-locf-python
+  - adam-advs-locf-record-python
+  - adam-advs-map-python
+  - adam-advs-percentiles-python
+  - adam-advs-prior-result-python
+  - adam-advs-window-table-python
+  - adam-advs-windows-python
+  - sdtm-ae-coding-python
+  - sdtm-ae-meddra-hierarchy-python
+  - sdtm-ae-odm-repeated-python
+  - sdtm-ae-partial-dates-python
+  - sdtm-ae-seriousness-python
+  - sdtm-cm-collected-medications-python
+  - sdtm-cm-odm-repeated-python
+  - sdtm-cm-whodrug-coding-python
+  - sdtm-dm-age-python
+  - sdtm-dm-arms-python
+  - sdtm-dm-basic-python
+  - sdtm-dm-dates-python
+  - sdtm-dm-death-python
+  - sdtm-dm-metadata-python
+  - sdtm-dm-race-ethnicity-python
+  - sdtm-ds-multi-form-disposition-python
+  - sdtm-ds-reasons-python
+  - sdtm-ds-sequence-python
+  - sdtm-ec-collected-exposure-python
+  - sdtm-ex-combination-python
+  - sdtm-ex-from-ec-python
+  - sdtm-ex-intervals-python
+  - sdtm-fa-event-findings-python
+  - sdtm-fa-fever-python
+  - sdtm-fa-odm-multitest-python
+  - sdtm-fa-reactogenicity-diary-python
+  - sdtm-lb-character-results-python
+  - sdtm-lb-compartments-python
+  - sdtm-lb-findings-python
+  - sdtm-lb-grading-python
+  - sdtm-lb-lab-specific-ranges-python
+  - sdtm-lb-last-observation-before-exposure-python
+  - sdtm-lb-metadata-python
+  - sdtm-lb-multiform-python
+  - sdtm-lb-ranges-python
+  - sdtm-mh-ongoing-conditions-python
+  - sdtm-mh-prespecified-conditions-python
+  - sdtm-pr-procedures-python
+  - sdtm-qs-questionnaire-items-python
+  - sdtm-relrec-dataset-level-python
+  - sdtm-relrec-links-python
+  - sdtm-rs-timepoint-response-python
+  - sdtm-se-subject-elements-python
+  - sdtm-suppmh-linkage-python
+  - sdtm-suppmh-qualifiers-python
+  - sdtm-sv-subject-visits-python
+  - sdtm-tr-tumor-measurements-python
+  - sdtm-tu-tumor-identification-python
+  - sdtm-vs-collected-form-python
+  - sdtm-vs-epoch-from-subject-elements-python
+  - sdtm-vs-planned-time-points-python
+  - sdtm-vs-replicates-python
+  - sdtm-vs-study-day-python
+  - sdtm-vs-units-python
+attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
 # --config` takes. `leaderboard.py export` adds `package` above and writes
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: adam-pilot-python
-  title: ADaM pilot (Python)
+  name: sdtm-adam-python
+  title: yamaa SDTM and ADaM (Python)
   description: >-
-    Three ADaM benchmarks solved in Python: age groups in ADSL, death
-    information on every adverse event in ADAE, and duration of response
-    in ADTTE. An agent gets the Python system prompt, the benchmark's prompt
-    and input datasets, with no internet but the model's API. A task passes
-    when its output matches every golden cell, the verifier's rerun of
-    `/app/output/result.py` from a clean state writes the same output, the
-    held-out rerun without every third subject writes the golden of the
+    Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved
+    in Python. An agent gets the Python system prompt, the benchmark's
+    prompt and input datasets, with no internet but the model's API. A task
+    passes when its output matches every golden cell, the verifier's rerun
+    of `/app/output/result.py` from a clean state writes the same output,
+    the held-out rerun without every third subject writes the golden of the
     subjects kept, and the agent used no R and no web tool. One row
-    per model variant, each with at least three attempts per task.
+    per model variant.
   visibility: private
   metadata_schema:
     type: object

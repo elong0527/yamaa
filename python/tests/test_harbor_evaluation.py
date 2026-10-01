@@ -422,12 +422,25 @@ def _board_named(name: str) -> dict:
     raise AssertionError(f"no leaderboard {name!r}")
 
 
-def test_two_language_boards_cover_the_pilots():
+def test_each_language_has_a_pilot_board_and_a_full_board():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
-    assert set(boards) == {"adam-pilot-python", "adam-pilot-r"}
-    cases = (("r", boards["adam-pilot-r"]), ("python", boards["adam-pilot-python"]))
-    for language, board in cases:
-        assert sorted(board["tasks"]) == sorted(f"{b}-{language}" for b in PILOTS)
+    assert set(boards) == {
+        f"{board}-{language}"
+        for board in ("adam-pilot", "sdtm-adam")
+        for language in LANGUAGES
+    }
+    buildable = []
+    for prompt in sorted((ROOT / "benchmarks").glob("*/prompt.md")):
+        try:
+            build.contract_for(prompt.parent, "r")
+        except build.BuildError:
+            continue
+        buildable.append(prompt.parent.name)
+    for language in LANGUAGES:
+        pilot = boards[f"adam-pilot-{language}"]["tasks"]
+        assert sorted(pilot) == sorted(f"{b}-{language}" for b in PILOTS)
+        full = boards[f"sdtm-adam-{language}"]["tasks"]
+        assert sorted(full) == sorted(f"{b}-{language}" for b in buildable)
 
 
 def _on(run: dict, board: dict) -> dict:
@@ -814,6 +827,85 @@ def test_the_script_check_finds_bridges_not_mentions(tmp_path, language, text, b
     (tmp_path / script).write_text(text)
     result = grade.grade_script({"script": script, "language": language}, tmp_path)
     assert result["passed"] is not bridges, result
+
+
+def _held_out_case(tmp_path: Path, agent: str, reference: str | None) -> dict:
+    """Grade, with the verifier's reruns, a Python-track submission of
+    adam-adsl-age-group whose script is `agent` ("reference" or "hardcode")
+    against `reference` ("reference", "hardcode", or None)."""
+    benchmark = ROOT / "benchmarks" / "adam-adsl-age-group"
+    contract = build.contract_for(benchmark, "python")
+    app = tmp_path / "app"
+    shutil.copytree(benchmark / "input", app / "input")
+    (app / "output").mkdir()
+    golden = [benchmark / "expected" / o["file"] for o in contract["outputs"]]
+    texts = {
+        "reference": (build.SOLUTIONS / benchmark.name / "result.py").read_text(),
+        "hardcode": build.oracle_script("python", golden),
+    }
+
+    def at_app(text: str) -> str:
+        return text.replace("/app/", f"{app}/")
+
+    (app / "output" / "result.py").write_text(at_app(texts[agent]))
+    reference_path = None
+    if reference:
+        reference_path = tmp_path / "reference" / "result.py"
+        reference_path.parent.mkdir()
+        reference_path.write_text(at_app(texts[reference]))
+
+    def run(command, cwd, timeout):
+        return grade.run_script([sys.executable, *command[1:]], cwd, timeout)
+
+    assert run([None, str(app / "output" / "result.py")], app, 60)[0] == 0
+    before = {p.name: p.read_bytes() for p in (app / "input").iterdir()}
+    result = grade.grade(
+        contract,
+        benchmark / "expected",
+        app / "output",
+        tmp_path / "none.json",
+        rerun=True,
+        run=run,
+        reference=reference_path,
+    )
+    after = {p.name: p.read_bytes() for p in (app / "input").iterdir()}
+    assert before == after, "the held-out rerun restores the inputs"
+    assert (app / "output" / "result.py").is_file()
+    return result
+
+
+def test_the_held_out_rerun_passes_a_script_that_derives(tmp_path):
+    result = _held_out_case(tmp_path, "reference", "reference")
+    assert result["held_out"]["checked"] and result["passed"]
+    assert result["reward"]["held_out"] == 1.0
+    assert result["held_out"]["dropped"] == [
+        "YAMAA-01-103",
+        "YAMAA-01-106",
+        "YAMAA-01-109",
+    ]
+
+
+def test_the_held_out_rerun_catches_a_script_that_writes_its_rows(tmp_path):
+    result = _held_out_case(tmp_path, "hardcode", "reference")
+    assert result["reward"]["reproduced"] == 1.0, "the plain rerun cannot tell"
+    assert result["held_out"]["checked"] and not result["held_out"]["passed"]
+    assert not result["passed"] and result["reward"]["held_out"] == 0.0
+
+
+def test_the_held_out_rerun_is_skipped_without_a_reference(tmp_path):
+    result = _held_out_case(tmp_path, "hardcode", None)
+    assert not result["held_out"]["checked"]
+    assert result["held_out"]["notes"] == ["no reference solution"]
+    assert "held_out" not in result["reward"]
+
+
+def test_the_held_out_rerun_is_skipped_when_the_reference_is_not_per_subject(
+    tmp_path,
+):
+    # A reference that ignores its inputs cannot write the restricted golden.
+    result = _held_out_case(tmp_path, "reference", "hardcode")
+    assert not result["held_out"]["checked"] and result["passed"]
+    assert "not per subject" in result["held_out"]["notes"][0]
 
 
 def test_a_script_that_bridges_to_the_other_language_fails(tmp_path):
