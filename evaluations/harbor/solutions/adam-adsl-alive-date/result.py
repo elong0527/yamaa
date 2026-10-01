@@ -9,13 +9,13 @@ from pathlib import Path
 import polars as pl
 
 adsl_raw = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("TRTEDT").str.to_date(strict=False)
+    pl.col("TRTEDT").str.to_date("%Y-%m-%d", strict=False)
 )
 adae = pl.read_csv("/app/input/adae.csv", infer_schema=False).with_columns(
-    pl.col("AENDT").str.to_date(strict=False)
+    pl.col("AENDT").str.to_date("%Y-%m-%d", strict=False)
 )
 advs = pl.read_csv("/app/input/advs.csv", infer_schema=False).with_columns(
-    pl.col("ADATE").str.to_date(strict=False)
+    pl.col("ADATE").str.to_date("%Y-%m-%d", strict=False)
 )
 
 # The contact text completed to a day: a full date stands, a year and month
@@ -23,9 +23,9 @@ advs = pl.read_csv("/app/input/advs.csv", infer_schema=False).with_columns(
 # else leaves the date missing.
 adsl_raw = adsl_raw.with_columns(
     LSTCNTDT=pl.coalesce(
-        pl.col("LSTCNTDC").str.to_date(strict=False),
-        (pl.col("LSTCNTDC") + "-01").str.to_date(strict=False),
-        (pl.col("LSTCNTDC") + "-01-01").str.to_date(strict=False),
+        pl.col("LSTCNTDC").str.to_date("%Y-%m-%d", strict=False),
+        (pl.col("LSTCNTDC") + "-01").str.to_date("%Y-%m-%d", strict=False),
+        (pl.col("LSTCNTDC") + "-01-01").str.to_date("%Y-%m-%d", strict=False),
     )
 )
 
