@@ -6,8 +6,6 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC,
 PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC
 
-USUBJID is the study and subject identifiers with a hyphen between them.
-
 PRCAT names the form: PRIOR CANCER SURGERY or PRIOR RADIOTHERAPY. PRPRESP is
 Y or has no value. PROCCUR is Y or N, or has no value.
 

@@ -57,20 +57,22 @@ stay verbatim; part 3 keeps only:
 - **Named references.** A named method or dictionary version the values
   follow (the Mosteller value, MedDRA version 26.1), without its formula.
 - **Precision.** The rounding of a value, or that it is not rounded.
-- **Text form.** How a number or date is written in a text column.
-- **Identifiers formed another way.** An identifier that is not the
-  source's own, as given: a USUBJID joining study and subject with a
-  hyphen, a SUBJID that repeats USUBJID or keeps its leading zeros, an
-  IDVARVAL padded to eight characters.
+- **Text form.** How a number or date is written in a text column (an
+  IDVARVAL padded to eight characters).
 - **Ranks.** How a rank runs: in which order, within what, how ties share
   or break, and where a record with nothing to rank by goes.
 
-It does not restate what a CDISC programmer applies unprompted: STUDYID
-and USUBJID carried as the source gives them, how a `--SEQ` number runs
-(ASEQ included), and what a standard variable holds (`--STRESN` is the
-result in standard units, `--STRESU` the standard unit, PCHG a
-percentage, RDOMAIN the related domain). The full prompt states them; the
-conventions prompt leaves them to the reader, as it leaves the logic.
+It does not restate what a CDISC programmer applies unprompted: how
+STUDYID, USUBJID, and SUBJID are formed, how a `--SEQ` number runs (ASEQ
+included), what a standard variable holds (`--STRESN` is the result in
+standard units, `--STRESU` the standard unit, PCHG a percentage, RDOMAIN
+the related domain), and a controlled term that is the collected value's
+standard term (MULTIPLE for several races, QD for once daily). A mapping
+that only puts the collected value in upper case says so once and lists
+just its exceptions (`Each collected race answer gives the same name in
+upper case, except that "Other, specify: Fijian" gives OTHER ...`). The
+full prompt states all of it; the conventions prompt leaves it to the
+reader, as it leaves the logic.
 
 Everything else in part 3 is the logic under test and is dropped: which
 records exist beyond the record level, which value a record gets, what a

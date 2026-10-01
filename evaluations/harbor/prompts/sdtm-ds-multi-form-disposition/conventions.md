@@ -5,7 +5,6 @@ consent, randomization, end of treatment, and end of study.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC
 
-USUBJID is the study and subject identifiers with a hyphen between them.
 Consent gives DSTERM and DSDECOD INFORMED CONSENT OBTAINED; randomization
 gives RANDOMIZED. Both are protocol milestones, with DSSCAT INFORMED CONSENT
 and RANDOMIZATION. End of treatment gives COMPLETED or the collected reason

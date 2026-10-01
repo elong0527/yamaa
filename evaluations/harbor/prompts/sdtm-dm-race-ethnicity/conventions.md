@@ -8,23 +8,14 @@ The SUPPDM dataset should contain the following columns in this order:
 STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG,
 QEVAL
 
-Each collected race answer maps to a controlled term:
-- "White", "Asian", "Black or African American", "American Indian or
-  Alaska Native", and "Native Hawaiian or Other Pacific Islander" give
-  the same name in upper case;
-- "Other, specify: Fijian" gives OTHER;
-- "Subject refused" gives UNKNOWN;
-- "Not reported" gives NOT REPORTED.
+Each collected race answer gives the same name in upper case, except that
+"Other, specify: Fijian" gives OTHER and "Subject refused" gives UNKNOWN.
+ETHNIC maps the collected answer to the same name in upper case.
 
-RACE is MULTIPLE or a mapped term. ETHNIC maps the collected answer: "Hispanic
-or Latino" gives HISPANIC OR LATINO, "Not Hispanic or Latino" gives NOT
-HISPANIC OR LATINO, "Not reported" gives NOT REPORTED, and "Unknown" gives
-UNKNOWN. SUBJID repeats USUBJID.
-
-RDOMAIN is DM, IDVAR is USUBJID, and IDVARVAL is the subject identifier. QNAM
-is RACE1, RACE2, and so on, with QLABEL Race 1, Race 2, and so on, numbered in
-alphabetical order of the collected answer. QVAL maps the race as RACE does.
-QORIG is always CRF, and QEVAL has no value.
+RDOMAIN is DM and IDVAR is USUBJID. QNAM is RACE1, RACE2, and so on, with
+QLABEL Race 1, Race 2, and so on, numbered in alphabetical order of the
+collected answer. QVAL maps the race as RACE does. QORIG is always CRF, and
+QEVAL has no value.
 
 Read the source datasets from /app/input and save the completed DM
 dataset as /app/output/dm.csv and the completed SUPPDM dataset as
