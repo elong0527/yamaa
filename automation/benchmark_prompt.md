@@ -184,7 +184,7 @@ uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py 
 ```
 
 The reference test grades every solution in `evaluations/harbor/solutions/`;
-the R ones need R with dplyr and readr, or they are skipped.
+an R one is skipped when R lacks a package its script loads.
 
 ```bash
 uv run --project python --no-sync python - <<'PY'
