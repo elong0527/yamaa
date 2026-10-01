@@ -1,12 +1,13 @@
 """Turn Harbor jobs into Harbor Hub leaderboard rows.
 
     python evaluations/harbor/leaderboard.py export <leaderboard> \\
-        --package <org>/<dataset> <job-dir> [<job-dir> ...]
+        <job-dir> [<job-dir> ...]
 
 The leaderboards follow Harbor Hub's curated-leaderboard model. Each
-`leaderboards/<name>.yaml` names the tasks and attempts a run must cover and,
-under `harbor:`, the Hub definition: the metadata and metrics every row
-carries, the columns, and the ordered `rank_by` rules.
+`leaderboards/<name>.yaml` names its Hub dataset package, the tasks and
+attempts a run must cover and, under `harbor:`, the Hub definition: the
+metadata and metrics every row carries, the columns, and the ordered
+`rank_by` rules. One row is one job: one agent, model, and variant.
 
 `export` reads each Harbor job directory, refuses a job that does not cover
 the leaderboard's tasks at their own timeouts, and writes the configs
@@ -90,8 +91,10 @@ def collect(job_dir: Path) -> dict:
             started.append(datetime.fromisoformat(result["started_at"]))
         commits.add(_task_commit(config))
         info = result.get("agent_info") or {}
-        model = (config.get("agent") or {}).get("model_name")
-        agents.add((info.get("name"), info.get("version"), model))
+        agent_config = config.get("agent") or {}
+        model = agent_config.get("model_name")
+        variant = (agent_config.get("kwargs") or {}).get("variant")
+        agents.add((info.get("name"), info.get("version"), model, variant))
         default_timeouts = default_timeouts and _default_timeouts(config)
         rewards = (result.get("verifier_result") or {}).get("rewards") or {}
         usage = result.get("agent_result") or {}
@@ -115,8 +118,10 @@ def collect(job_dir: Path) -> dict:
     if not trials:
         raise SystemExit(f"{job_dir} holds no trial results")
     if len(agents) != 1:
-        raise SystemExit(f"{job_dir} mixes agents or models: {sorted(agents)}")
-    ((agent, version, model),) = agents
+        raise SystemExit(
+            f"{job_dir} mixes agents, models, or variants: {sorted(agents, key=str)}"
+        )
+    ((agent, version, model, variant),) = agents
     job = json.loads((job_dir / "result.json").read_text())
     attempts = _read_json(job_dir / "config.json").get("n_attempts")
     lock = _read_json(job_dir / "lock.json")
@@ -132,6 +137,9 @@ def collect(job_dir: Path) -> dict:
         "agent": agent,
         "agent_version": version,
         "model": model,
+        # The agent's model variant (OpenCode's reasoning effort), or
+        # "default" when the job set none.
+        "variant": variant or "default",
         "attempts": attempts or min(Counter(t["benchmark"] for t in trials).values()),
         "default_timeouts": default_timeouts,
         "status": "display",
@@ -154,6 +162,8 @@ def board_problems(board: dict) -> list[str]:
         "metrics": harbor["metrics_schema"],
     }
     found = []
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", board.get("package") or ""):
+        found.append("needs the Hub dataset package as package: <org>/<name>")
     if not board["tasks"] or board["attempts"] < 1:
         found.append("needs at least one task and one attempt")
     for accessor in [c["accessor"] for c in harbor["columns"]] + [
@@ -286,6 +296,7 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "agent": run["agent"],
                     "agent_version": run["agent_version"],
                     "model": run["model"],
+                    "variant": run["variant"],
                     "date": run["date"],
                     "attempts": run["attempts"],
                     "job": run["job"],
@@ -330,7 +341,9 @@ def main() -> None:
     hub = commands.add_parser("export", help="write Harbor Hub create configs")
     hub.add_argument("leaderboard")
     hub.add_argument("job_dirs", nargs="+", type=Path, help="Harbor job directories")
-    hub.add_argument("--package", required=True, help="Hub dataset package org/name")
+    hub.add_argument(
+        "--package", help="Hub dataset package org/name; default: the board's"
+    )
     hub.add_argument("--hide", action="store_true", help="export the rows hidden")
     hub.add_argument("--out", type=Path, default=EXPORT)
     args = parser.parse_args()
@@ -339,6 +352,7 @@ def main() -> None:
     if args.leaderboard not in by_name:
         sys.exit(f"no leaderboard {args.leaderboard!r}; have {sorted(by_name)}")
     board = by_name[args.leaderboard]
+    package = args.package or board["package"]
     runs = []
     for job_dir in args.job_dirs:
         run = collect(job_dir)
@@ -348,17 +362,18 @@ def main() -> None:
         run["leaderboards"] = [args.leaderboard]
         run["status"] = "hide" if args.hide else "display"
         runs.append(run)
-    paths = export(board, runs, args.package, args.out)
+    paths = export(board, runs, package, args.out)
     for row in rows_for(board, runs):
         m = row["metrics"]
         print(
             f"{row['metadata']['job']}: {row['metadata']['model']} "
+            f"({row['metadata']['variant']}) "
             f"reward {m['reward']:.3f}, cells {m['cell_accuracy']:.3f}, "
             f"{m['n_trials']} trial(s), tasks from {row['metadata']['yamaa_commit']}"
         )
     for path in paths:
         print(f"wrote {path}")
-    ref = f"{args.package}/{args.leaderboard}"
+    ref = f"{package}/{args.leaderboard}"
     print("upload each job first: harbor upload <job-dir> --org <org> --private")
     print(f"then: harbor hub leaderboard create --config {paths[0]}")
     if len(paths) > 1:

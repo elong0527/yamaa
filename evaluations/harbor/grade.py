@@ -37,18 +37,36 @@ RELATIVE_TOLERANCE = 1e-9
 MAX_REPORTED = 200
 RERUN_TIMEOUT_SEC = 300.0
 # How each track's script is run, and what counts as reaching for the other
-# language: its interpreter in a shell call, or a bridge package in the
-# script.
+# language: running one of its programs in a shell call, or a bridge in the
+# script. Only a call counts: the program's name in a grep pattern, a quoted
+# string, a comment, or a heredoc body is not one.
 INTERPRETERS = {"r": "Rscript", "python": "python3"}
-OTHER_LANGUAGE_COMMANDS = {
-    "r": re.compile(r"(?<![\w.-])(?:python(?:3(?:\.\d+)?)?|pip3?)(?![\w/.-])"),
-    "python": re.compile(r"(?<![\w.-])(?:Rscript(?![\w/.-])|R\s+(?:-e|-f|--\w|CMD))"),
+OTHER_LANGUAGE_PROGRAMS = {
+    "r": re.compile(r"python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?"),
+    # `r` is littler, the R front end rocker images install.
+    "python": re.compile(r"R|Rscript|r"),
 }
 OTHER_LANGUAGE_IN_SCRIPT = {
-    "r": re.compile(r"\breticulate\b|\bsystem2?\s*\([^)]*python"),
-    "python": re.compile(r"\brpy2\b|['\"]Rscript['\"]|\bRscript\s"),
+    "r": re.compile(
+        r"\b(?:library|require|requireNamespace)\s*\(\s*['\"]?reticulate\b"
+        r"|\breticulate::"
+        r"|\bsystem2?\s*\(\s*['\"][^'\"]*\b(?:python[\d.]*|pip[\d.]*)\b"
+    ),
+    "python": re.compile(
+        r"\b(?:import|from)\s+rpy2\b"
+        r"|\b(?:subprocess\.\w+|os\.(?:system|popen|exec\w*|spawn\w*))\s*\("
+        r"\s*\[?\s*['\"](?:[^'\"]*/)?(?:Rscript|R)\b"
+    ),
 }
 SHELL_TOOLS = ("bash", "shell", "exec", "terminal", "command")
+# Programs that run the command after them, and shells that run a `-c` script.
+WRAPPERS = {"sudo", "env", "time", "exec", "nohup", "command", "nice", "timeout"}
+WRAPPERS |= {"xargs", "stdbuf", "builtin"}
+# Wrapper options followed by a value: `sudo -u agent`, `nice -n 5`,
+# `timeout -s KILL 60`, `env -u NAME`.
+WRAPPER_VALUE_OPTIONS = {"-u", "-g", "-n", "-s", "-k", "-C", "-p"}
+SHELLS = {"bash", "sh", "dash", "zsh"}
+HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)([\w.-]+)\2")
 
 
 class SubmissionError(ValueError):
@@ -246,27 +264,180 @@ def _strings(value: object) -> list[str]:
     return []
 
 
+def _matching(text: str, start: int, opening: str, closing: str) -> int:
+    """The index just past the bracket that closes the one before `start`."""
+    depth, i = 1, start
+    while i < len(text) and depth:
+        depth += {opening: 1, closing: -1}.get(text[i], 0)
+        i += 1
+    return i
+
+
+def shell_commands(script: str) -> list[list[str]]:
+    """The simple commands of a shell script, each as its words.
+
+    Quotes keep their contents in one word, so a separator or a program name
+    inside them is text. A comment and a heredoc body are not commands.
+    `$(...)` and backticks are commands of their own, and so is the script a
+    shell runs with `-c`.
+    """
+    commands: list[list[str]] = []
+    words: list[str] = []
+    word: list[str] = []
+    in_word = False
+    heredocs: list[tuple[bool, str]] = []
+    quote = ""
+    i = 0
+
+    def end_word() -> None:
+        nonlocal word, in_word
+        if in_word:
+            words.append("".join(word))
+        word, in_word = [], False
+
+    def end_command() -> None:
+        nonlocal words
+        end_word()
+        if words:
+            commands.append(words)
+        words = []
+
+    while i < len(script):
+        char = script[i]
+        if quote == "'":
+            if char == "'":
+                quote = ""
+            else:
+                word.append(char)
+            i += 1
+            continue
+        if char == "\\" and i + 1 < len(script):
+            if script[i + 1] != "\n":
+                word.append(script[i + 1])
+                in_word = True
+            i += 2
+            continue
+        if script.startswith("$(", i) and not script.startswith("$((", i):
+            end = _matching(script, i + 2, "(", ")")
+            commands.extend(shell_commands(script[i + 2 : end - 1]))
+            in_word, i = True, end
+            continue
+        if char == "`":
+            end = script.find("`", i + 1)
+            end = len(script) if end < 0 else end
+            commands.extend(shell_commands(script[i + 1 : end]))
+            in_word, i = True, end + 1
+            continue
+        if quote == '"':
+            if char == '"':
+                quote = ""
+            else:
+                word.append(char)
+            i += 1
+            continue
+        if char in "'\"":
+            quote, in_word = char, True
+            i += 1
+            continue
+        if char == "#" and not in_word:
+            newline = script.find("\n", i)
+            i = len(script) if newline < 0 else newline
+            continue
+        heredoc = HEREDOC.match(script, i) if char == "<" else None
+        if heredoc:
+            end_word()
+            heredocs.append((heredoc.group(1) == "-", heredoc.group(3)))
+            i = heredoc.end()
+            continue
+        if char == "\n":
+            end_command()
+            i += 1
+            for strip_tabs, delimiter in heredocs:
+                while i < len(script):
+                    newline = script.find("\n", i)
+                    newline = len(script) if newline < 0 else newline
+                    line = script[i:newline]
+                    i = newline + 1
+                    if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                        break
+            heredocs = []
+            continue
+        if char in ";&|()":
+            end_command()
+        elif char in "<> \t\r":
+            end_word()
+        else:
+            word.append(char)
+            in_word = True
+        i += 1
+    end_command()
+    nested = []
+    for command in commands:
+        program, arguments = _program(command)
+        if program in SHELLS and "-c" in arguments:
+            position = arguments.index("-c") + 1
+            if position < len(arguments):
+                nested.extend(shell_commands(arguments[position]))
+    return commands + nested
+
+
+def _program(command: list[str]) -> tuple[str, list[str]]:
+    """The program a simple command runs, past variable assignments and
+    wrappers such as `env` or `timeout 60`, and its arguments."""
+    words = list(command)
+    while words:
+        name = words[0].rsplit("/", 1)[-1]
+        if re.fullmatch(r"[A-Za-z_]\w*=.*", words[0]):
+            words.pop(0)
+        elif name in WRAPPERS:
+            words.pop(0)
+            while words and re.fullmatch(r"-\S*|\d+[smhd]?", words[0]):
+                option = words.pop(0)
+                if option in WRAPPER_VALUE_OPTIONS and words:
+                    words.pop(0)
+        else:
+            return name, words[1:]
+    return "", []
+
+
+def other_language_calls(script: str, language: str | None) -> list[str]:
+    """The commands in a shell script that run the other track's language."""
+    pattern = OTHER_LANGUAGE_PROGRAMS.get(language or "")
+    if pattern is None:
+        return []
+    calls = []
+    for command in shell_commands(script):
+        program, _ = _program(command)
+        if pattern.fullmatch(program):
+            calls.append(" ".join(command))
+    return calls
+
+
 def scan_trajectory(path: Path, language: str | None) -> dict:
     """Web tool calls, and shell calls to the other track's language, in the
     agent's ATIF trajectory, when there is one."""
     if not path.is_file():
         return {"checked": False, "violations": [], "language_violations": []}
     trajectory = json.loads(path.read_text(encoding="utf-8"))
-    pattern = OTHER_LANGUAGE_COMMANDS.get(language or "")
     violations, language_violations = [], []
     for index, step in enumerate(trajectory.get("steps") or []):
         for call in (step or {}).get("tool_calls") or []:
             tool = str(call.get("function_name") or call.get("name") or "")
             if tool.lower() in WEB_TOOLS:
                 violations.append({"step": index, "tool": tool})
-            if pattern is None or not any(h in tool.lower() for h in SHELL_TOOLS):
+            if not any(h in tool.lower() for h in SHELL_TOOLS):
                 continue
-            for text in _strings(call.get("arguments")):
-                match = pattern.search(text)
-                if match:
-                    start = max(0, match.start() - 40)
+            # The command a shell tool ran, not its free-text description.
+            arguments = call.get("arguments")
+            if isinstance(arguments, dict) and "command" in arguments:
+                scripts = _strings(arguments["command"])
+            else:
+                scripts = _strings(arguments)
+            for script in scripts:
+                calls = other_language_calls(script, language)
+                if calls:
                     language_violations.append(
-                        {"step": index, "excerpt": text[start : match.end() + 60]}
+                        {"step": index, "excerpt": calls[0][:200]}
                     )
                     break
     return {
