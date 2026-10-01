@@ -6,6 +6,9 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC,
 PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC
 
+STUDYID is the ODM StudyOID. USUBJID is the study and subject
+identifiers with a hyphen between them.
+
 PRSEQ numbers each subject's records by PRSTDTC and then by PRTRT. PRTRT
 is the reported procedure name. PRCAT names the form: PRIOR CANCER SURGERY
 or PRIOR RADIOTHERAPY. PRPRESP is Y for the pre-specified radiotherapy

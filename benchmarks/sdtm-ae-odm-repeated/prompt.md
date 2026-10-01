@@ -4,6 +4,8 @@ an AE dataset with one record per reported adverse event.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 Each AE item group occurrence is its own event: items sharing subject,
 visit, visit repeat, item group, and item group repeat key
 (ItemGroupRepeatKey) belong to one event, so a repeat key reused at a

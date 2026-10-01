@@ -7,6 +7,8 @@ DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT,
 LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT,
 LBDTC
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 LBSEQ numbers each subject's records from 1 by collection date, then test
 code and specimen; lesional results come before non-lesional ones from the
 same form. VISIT is SCREENING, BASELINE, DAY 21, or UNSCHEDULED for the

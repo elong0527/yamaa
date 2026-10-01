@@ -6,6 +6,8 @@ DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMINDC, CMDOSE, CMDOSTXT,
 CMDOSU, CMDOSFRQ, CMROUTE, CMSTDTC, CMENDTC, CMSTRTPT, CMSTTPT,
 CMENRTPT, CMENTPT
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 CMSEQ is the medication repeat number within the subject. CMTRT and
 CMINDC keep the reported name and indication exactly as written. CMDOSE
 holds the collected dose when it is a plain number, and has no value

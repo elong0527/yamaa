@@ -351,6 +351,7 @@ def test_built_tasks_and_job_validate_against_harbor(tmp_path):
     )
     job = job_module.JobConfig.model_validate(config)
     assert job.agents[0].extra_allowed_hosts == ["opencode.ai"]
+    assert job.agents[0].override_setup_timeout_sec == build.SETUP_TIMEOUT_SEC
 
 
 leaderboard = _load("leaderboard")
@@ -872,6 +873,20 @@ def _held_out_case(tmp_path: Path, agent: str, reference: str | None) -> dict:
     assert before == after, "the held-out rerun restores the inputs"
     assert (app / "output" / "result.py").is_file()
     return result
+
+
+def test_a_dropped_subject_leaves_every_table_under_any_subject_column(tmp_path):
+    source, target = tmp_path / "in", tmp_path / "out"
+    source.mkdir()
+    (source / "dm.csv").write_text("USUBJID,AGE\nS-01-101,30\nS-01-102,40\n")
+    (source / "odm.csv").write_text("SubjectKey,Value\nS-01-101,a\nS-01-102,b\n")
+    (source / "raw.csv").write_text("SUBJID,X\n101,1\n102,2\n")
+    (source / "notes.txt").write_text("kept as is\n")
+    grade._subset_inputs(source, target, {"S-01-102"})
+    assert (target / "dm.csv").read_text() == "USUBJID,AGE\nS-01-101,30\n"
+    assert (target / "odm.csv").read_text() == "SubjectKey,Value\nS-01-101,a\n"
+    assert (target / "raw.csv").read_text() == "SUBJID,X\n101,1\n"
+    assert (target / "notes.txt").read_text() == "kept as is\n"
 
 
 def test_the_held_out_rerun_passes_a_script_that_derives(tmp_path):

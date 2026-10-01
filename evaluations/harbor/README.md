@@ -152,6 +152,9 @@ when the job starts, never written to a file.
 | `xai` | `api.x.ai` | `XAI_API_KEY` |
 
 Any other provider, or a gateway, takes `--api-host` and `--key-env`.
+Each job file allows the agent 900 s to install (`override_setup_timeout_sec`),
+since many trials downloading at once slow it; the agent's own time limit
+is the task's, which leaderboard runs must keep.
 
 The build writes one job file per language and model variant,
 `configs/<job-name>-<language>-<variant>.json`, so each job is one row on

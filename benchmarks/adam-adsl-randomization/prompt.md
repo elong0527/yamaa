@@ -7,11 +7,8 @@ STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC
 RANDDT is the randomization date as collected, and has no value when
 no randomization date was collected.
 
-RANDDY is the study day of randomization measured from the subject
-reference start date: the reference date itself is day 1, later dates
-count forward inclusively, and earlier dates count backward with no
-day 0, so the day before the reference date is day -1. It has no value
-when either date is missing.
+RANDDY is the study day of randomization relative to the subject reference
+start date.
 
 RANDDTC is the collected randomization moment written as ISO 8601 text
 with a T between date and time, at whole-second precision. It has no

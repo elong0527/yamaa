@@ -5,6 +5,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES,
 FAORRESU, FASTRESC, FASTAT, FATPT, FADTC
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 FATESTCD and FATEST are OCCUR and Occurrence Indicator, SEV and
 Severity/Intensity, or LDIAM and Longest Diameter, following the
 collected result item. FAOBJ is the reaction name exactly as reported

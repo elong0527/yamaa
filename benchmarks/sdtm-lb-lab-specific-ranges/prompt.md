@@ -5,6 +5,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN, LBORRESU,
 LBSTNRLO, LBSTNRHI, LBNRIND
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 LBTESTCD is the collected test code, SEX the recorded sex, LBNAM the
 collecting lab, and LBSTRESN the numeric result in standard units, which
 has no value when the result was not collected. LBSEQ is the panel repeat

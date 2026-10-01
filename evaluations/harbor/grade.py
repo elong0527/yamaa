@@ -596,35 +596,49 @@ def _input_subjects(input_dir: Path) -> tuple[str | None, list[str]]:
     return None, []
 
 
-def _subset_inputs(source: Path, target: Path, column: str, drop: set[str]) -> None:
-    """Copy the input directory without the rows of the dropped subjects."""
+def _same_subject(value: str, drop: set[str]) -> bool:
+    """A value of any subject column names a dropped subject: the same id, or
+    one of them is the other with a study prefix ("YAMAA-01-101" and "101")."""
+    return bool(value) and any(
+        value == d or value.endswith(f"-{d}") or d.endswith(f"-{value}") for d in drop
+    )
+
+
+def _subset_inputs(source: Path, target: Path, drop: set[str]) -> None:
+    """Copy the input directory without the rows of the dropped subjects, in
+    every table and under whichever subject column it carries."""
     for path in sorted(source.rglob("*")):
         dest = target / path.relative_to(source)
         if path.is_dir():
             dest.mkdir(parents=True, exist_ok=True)
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if path.suffix == ".csv":
+        columns = [c for c in HOLDOUT_INPUT_SUBJECTS if c in _columns(path)]
+        if columns and path.suffix == ".csv":
             with path.open(newline="", encoding="utf-8") as handle:
                 rows = list(csv.reader(handle))
-            if rows and column in rows[0]:
-                at = rows[0].index(column)
-                rows = [rows[0]] + [
-                    r for r in rows[1:] if len(r) <= at or r[at] not in drop
-                ]
-                with dest.open("w", newline="", encoding="utf-8") as handle:
-                    csv.writer(handle, lineterminator="\n").writerows(rows)
-                continue
-        elif path.suffix == ".parquet" and column in _columns(path):
-            pyarrow, parquet, compute = _parquet()
+            at = [rows[0].index(c) for c in columns]
+            rows = [rows[0]] + [
+                r
+                for r in rows[1:]
+                if not any(i < len(r) and _same_subject(r[i], drop) for i in at)
+            ]
+            with dest.open("w", newline="", encoding="utf-8") as handle:
+                csv.writer(handle, lineterminator="\n").writerows(rows)
+        elif columns and path.suffix == ".parquet":
+            _, parquet, _ = _parquet()
             table = parquet.read_table(path)
-            dropped = compute.is_in(
-                table[column].cast(pyarrow.string()),
-                value_set=pyarrow.array(sorted(drop), type=pyarrow.string()),
-            )
-            parquet.write_table(table.filter(compute.invert(dropped)), dest)
-            continue
-        shutil.copy2(path, dest)
+            values = [table[c].to_pylist() for c in columns]
+            keep = [
+                not any(
+                    _same_subject("" if v[i] is None else str(v[i]), drop)
+                    for v in values
+                )
+                for i in range(table.num_rows)
+            ]
+            parquet.write_table(table.filter(keep), dest)
+        else:
+            shutil.copy2(path, dest)
 
 
 def _belongs(usubjid: str, drop: set[str]) -> bool:
@@ -721,7 +735,7 @@ def held_out_rerun(
         return problems
 
     try:
-        _subset_inputs(saved_input, input_dir, column, drop)
+        _subset_inputs(saved_input, input_dir, drop)
         expected = work / "expected"
         expected.mkdir()
         for name_, rows in restricted.items():

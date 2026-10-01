@@ -6,6 +6,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD,
 VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY
 
+STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
+
 VSSEQ numbers the records per subject from 1 in schedule order, then
 pulse, systolic, and diastolic blood pressure within each time point.
 VISIT is DAY 1 for study event SE.D1. VSTPT is the planned time point name
@@ -23,9 +25,7 @@ units; pulse and blood pressure were collected in standard units, so it
 equals the original result. VSSTRESU is the standard unit, carried from
 the original unit. VSDTC is the actual collection datetime from the form's
 datetime item row, shared by every result on that form. VSDY is the study
-day of the collection datetime, counted from the subject's reference start
-date: that date is day 1, there is no day zero, and dates before it count
-back from -1; it has no value when the subject has no reference start
+day of the collection datetime relative to the subject's reference start
 date.
 
 The planned elapsed time stays next to the actual collection datetime, so

@@ -86,6 +86,7 @@ SETUP_HOSTS = (
     "registry.npmjs.org",
 )
 WEB_TOOLS_DENIED = {"webfetch": "deny", "websearch": "deny"}
+SETUP_TIMEOUT_SEC = 900.0
 NULL_TOKENS = {"", "NA", "NaN", "nan", ".", "NULL", "None"}
 
 
@@ -654,6 +655,9 @@ def job_config(
                     "OPENCODE_DISABLE_CLAUDE_CODE": "1",
                 },
                 "extra_allowed_hosts": [host],
+                # Installing OpenCode is slow when many trials download at
+                # once; the agent's own time limit stays the task's.
+                "override_setup_timeout_sec": SETUP_TIMEOUT_SEC,
             }
         ],
         "tasks": [{"path": str(t)} for t in tasks],
