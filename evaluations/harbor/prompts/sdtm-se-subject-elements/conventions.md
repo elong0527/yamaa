@@ -6,9 +6,6 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC,
 SEENDTC, SESTDY, SEENDY, SEUPDES
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-SESEQ numbers the subject's elements in planned order, so it equals TAETORD.
 SEUPDES always has no value.
 
 Read the source datasets from /app/input and save the completed dataset as

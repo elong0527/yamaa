@@ -5,13 +5,10 @@ treatment and end of study.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-DSSEQ is 1 for end of treatment and 2 for end of study. DSCAT is always
-DISPOSITION EVENT. DSSCAT names the milestone: STUDY TREATMENT for the
-end-of-treatment form and STUDY for the end-of-study form. DSTERM holds the
-reported term: COMPLETED or the collected reason text. DSDECOD holds the
-controlled term: COMPLETED, ADVERSE EVENT, or OTHER.
+DSCAT is always DISPOSITION EVENT. DSSCAT names the milestone: STUDY
+TREATMENT for the end-of-treatment form and STUDY for the end-of-study form.
+DSTERM holds the reported term: COMPLETED or the collected reason text.
+DSDECOD holds the controlled term: COMPLETED, ADVERSE EVENT, or OTHER.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/ds.csv.

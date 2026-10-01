@@ -5,8 +5,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
 VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT
 
-VSSEQ is the sequence number as collected. VSTESTCD is HEIGHT, WEIGHT, or TEMP.
-VSTEST is Height, Weight, or Temperature.
+VSTESTCD is HEIGHT, WEIGHT, or TEMP. VSTEST is Height, Weight, or
+Temperature.
 
 VSORRES is the collected result read as a number and written back as text, so
 trailing zeros after the decimal point are dropped and a whole number has no

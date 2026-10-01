@@ -13,8 +13,5 @@ BORPRI orders the categories as 1 (complete response), 2 (partial response), 3
 (stable disease), 4 (neither-complete-nor-progressive disease), 5 (progressive
 disease), 6 (not evaluable).
 
-BORSEQ numbers the usable records of each study and subject from 1, in BORPRI
-order, then by analysis date, then by assessment sequence.
-
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adrs.csv.

@@ -6,11 +6,7 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT,
 LBLOBXFL
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-LBSEQ is the ItemGroupRepeatKey of the item group that holds the result, so it
-runs across the study rather than restarting for each subject. LBSTAT is NOT
-DONE or has no value.
+LBSTAT is NOT DONE or has no value.
 
 LBLOBXFL is Y or has no value.
 

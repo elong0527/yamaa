@@ -5,8 +5,8 @@ hemoglobin result.
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR
 
-LBSEQ is the sequence number as collected. LBTESTCD is ANC for absolute
-neutrophil count or HGB for hemoglobin. LBTOXGR is 4, 3, 2, 1, or 0.
+LBTESTCD is ANC for absolute neutrophil count or HGB for hemoglobin. LBTOXGR
+is 4, 3, 2, 1, or 0.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/lb.csv.

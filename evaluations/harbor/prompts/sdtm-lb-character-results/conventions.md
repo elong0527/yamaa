@@ -5,12 +5,8 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU,
 LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-LBSEQ numbers each subject's records in collection order (protein, creatine
-kinase, glucose, ketones, creatinine), then by form repeat. The test code and
-name are PROT and Protein, GLUC and Glucose, KETON and Ketones, CREAT and
-Creatinine, or CK and Creatine Kinase.
+The test code and name are PROT and Protein, GLUC and Glucose, KETON and
+Ketones, CREAT and Creatinine, or CK and Creatine Kinase.
 
 LBSTRESC folds known dipstick spellings to NEGATIVE, TRACE, 1+, or 2+. LBNRIND
 is LOW, HIGH, or has no value.

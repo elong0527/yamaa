@@ -58,11 +58,19 @@ stay verbatim; part 3 keeps only:
   follow (the Mosteller value, MedDRA version 26.1), without its formula.
 - **Precision.** The rounding of a value, or that it is not rounded.
 - **Text form.** How a number or date is written in a text column.
-- **Identifiers.** How STUDYID, USUBJID, SUBJID, SITEID, IDVARVAL, and
-  similar identifiers are formed from the source.
-- **Numbering.** How a sequence number or a rank runs: from where, in
-  which order, within what, how ties share or break, and where a record
-  with nothing to order by goes.
+- **Identifiers formed another way.** An identifier that is not the
+  source's own, as given: a USUBJID joining study and subject with a
+  hyphen, a SUBJID that repeats USUBJID or keeps its leading zeros, an
+  IDVARVAL padded to eight characters.
+- **Ranks.** How a rank runs: in which order, within what, how ties share
+  or break, and where a record with nothing to rank by goes.
+
+It does not restate what a CDISC programmer applies unprompted: STUDYID
+and USUBJID carried as the source gives them, how a `--SEQ` number runs
+(ASEQ included), and what a standard variable holds (`--STRESN` is the
+result in standard units, `--STRESU` the standard unit, PCHG a
+percentage, RDOMAIN the related domain). The full prompt states them; the
+conventions prompt leaves them to the reader, as it leaves the logic.
 
 Everything else in part 3 is the logic under test and is dropped: which
 records exist beyond the record level, which value a record gets, what a

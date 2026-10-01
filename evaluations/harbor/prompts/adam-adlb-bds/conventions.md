@@ -14,11 +14,7 @@ Use these parameters:
 
 ABLFL is Y or has no value.
 
-PCHG is expressed as a percentage. AVAL, BASE, CHG, and PCHG are not
-rounded.
-
-ASEQ numbers each subject's records from 1, ordered by PARAMCD (ALT,
-then ALTSI, then AST) and then by ADT.
+AVAL, BASE, CHG, and PCHG are not rounded.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adlb.csv.

@@ -6,14 +6,13 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC
 
 USUBJID is the study and subject identifiers with a hyphen between them.
-Consent gives DSTERM and DSDECOD INFORMED CONSENT OBTAINED; randomization gives
-RANDOMIZED. Both are protocol milestones, with DSSCAT INFORMED CONSENT and
-RANDOMIZATION. End of treatment gives COMPLETED or the collected reason with
-the collected standardized reason; DSSCAT is END OF TREATMENT. End of study
-gives COMPLETED, SCREEN FAILURE, or the collected reason with the collected
-standardized reason; DSSCAT is END OF STUDY. End-of-treatment and end-of-study
-records are disposition events. DSSEQ numbers each subject's records in the
-order they happened, by date and then by reported term.
+Consent gives DSTERM and DSDECOD INFORMED CONSENT OBTAINED; randomization
+gives RANDOMIZED. Both are protocol milestones, with DSSCAT INFORMED CONSENT
+and RANDOMIZATION. End of treatment gives COMPLETED or the collected reason
+with the collected standardized reason; DSSCAT is END OF TREATMENT. End of
+study gives COMPLETED, SCREEN FAILURE, or the collected reason with the
+collected standardized reason; DSSCAT is END OF STUDY. End-of-treatment and
+end-of-study records are disposition events.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/ds.csv.

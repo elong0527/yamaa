@@ -5,9 +5,9 @@ The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES,
 LBORRESU, LBSTRESN, LBSTAT
 
-LBTESTCD is IL13, LBTEST is Interleukin 13, and LBSPEC is SKIN on every record.
-LBSEQ numbers each subject's records with the lesional record first. LBLOC is
-LESIONAL on the lesional record and NON-LESIONAL on the non-lesional record.
+LBTESTCD is IL13, LBTEST is Interleukin 13, and LBSPEC is SKIN on every
+record. LBLOC is LESIONAL on the lesional record and NON-LESIONAL on the
+non-lesional record.
 
 LBSTAT is NOT DONE or has no value.
 
