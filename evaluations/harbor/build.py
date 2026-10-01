@@ -73,6 +73,10 @@ REPO = "https://github.com/elong0527/yamaa"
 # One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
 DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
 IMAGE = "yamaa-harbor-env:0.3"
+# What the verifier checks, recorded in every task and required by the
+# leaderboards: 2 adds the changed-input challenge, the sandboxed reruns, and
+# the trajectory requirement, so scores under an older protocol do not mix.
+GRADING_PROTOCOL = "2"
 OPENCODE_VERSION = "1.18.33"
 OPENCODE_MODELS_PATH = "/opt/yamaa-eval/opencode-models.json"
 # Build output and Harbor job directories stay outside the repository, whose
@@ -211,6 +215,9 @@ def contract_for(benchmark: Path, language: str) -> dict:
         "language": language,
         "script": LANGUAGES[language]["script"],
         "outputs": outputs,
+        # Outputs keyed by subject are rechecked on inputs whose subject
+        # identifiers are renamed, so a lookup of the expected rows fails.
+        "challenge_required": any("USUBJID" in o["columns"] for o in outputs),
     }
 
 
@@ -306,6 +313,9 @@ def task_toml(
     commit: str,
     language: str,
     tier: str = "full",
+    *,
+    image: str = IMAGE,
+    challenge_required: bool = False,
 ) -> str:
     standard, lifecycle = tags["standard"], tags["lifecycle"]
     noun = "datasets" if " and " in domain else "dataset"
@@ -317,7 +327,7 @@ artifacts = ["/app", "/logs/agent/trajectory.json"]
 
 [task]
 name = "yamaa/{task_name(benchmark, language, tier)}"
-version = "0.1.0"
+version = "0.2.0"
 description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}{source}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
 
@@ -329,6 +339,9 @@ standard = "{standard}"
 domain = "{domain}"
 lifecycle = "{lifecycle}"
 yamaa_commit = "{commit}"
+grading_protocol = "{GRADING_PROTOCOL}"
+image_reference = {json.dumps(image)}
+challenge_required = {str(challenge_required).lower()}
 publicly_indexed = true
 
 [agent]
@@ -409,24 +422,18 @@ def task_readme(
     tags = readme_tags((benchmark / "README.md").read_text(encoding="utf-8"))
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
     tiers = _source_link(commit, "evaluations/harbor/prompts/README.md")
-    if reference_solution(benchmark, language) and tier == "full":
+    if tier == "full":
         oracle = f"""\
 `solution/{script}` is the benchmark's reference solution, written from its
 full prompt and inputs alone. Harbor's oracle agent runs it to check that
 the prompt can be solved and that the grader scores a correct answer 1."""
-    elif reference_solution(benchmark, language):
+    else:
         oracle = f"""\
 `solution/{script}` is the benchmark's reference solution, written from its
 full prompt and inputs alone. Harbor's oracle agent runs it to check that
 the task builds and that the grader scores a correct answer 1. The agent
 gets the {tier} prompt, which states less, so a passing oracle does not
 show that this prompt alone can be solved."""
-    else:
-        oracle = f"""\
-`solution/{script}` writes the expected data exactly as stored, for
-Harbor's oracle agent: it checks that the task builds, that the rerun
-reproduces the data, and that the grader scores 1, but it is not a
-derivation; this benchmark has no reference solution yet."""
     outputs = "\n".join(
         f"- `/app/output/{o['file']}`, keyed by {', '.join(f'`{k}`' for k in o['keys'])},"
         f" with columns {', '.join(f'`{c}`' for c in o['columns'])}."
@@ -484,8 +491,9 @@ never enter the agent's container.
 `tests/grade.py` sets the reward to 1 only when all of these hold:
 
 {outputs}
-- Each cell matches the expected value read as its column's type: numbers
-  within a relative 1e-9, dates also as midnight datetimes, text exactly.
+- Each cell matches the expected value read as its column's type: integers
+  exactly, other numbers within a relative 1e-9, dates also as midnight
+  datetimes, text exactly.
   Column and row order are not graded.
 - `/app/output/{script}`, rerun by the verifier with `{runner}` after its
   output is deleted, writes the same data again.
@@ -493,12 +501,21 @@ never enter the agent's container.
   expected data of the subjects kept, so a script that writes its rows
   literally fails. This applies when the reference solution, rerun the
   same way, writes exactly that data, as it does when the derivation is
-  per subject.
-- The trajectory and the script use no {other} and no web tool.
+  per subject; a reference that crashes is a verifier error, not an
+  exemption.
+- Changed inputs: when the output is keyed by subject, rerun on the inputs
+  with every subject identifier renamed, it writes the data the reference
+  computes from those inputs, so a lookup of the expected rows fails.
+- The trajectory and the script use no {other} and no web tool, and a
+  model's job must leave a trajectory to check.
+
+Every rerun restores the original inputs and runs the script as an
+unprivileged user that cannot read the grading files; an output that is a
+symlink is rejected.
 
 `reward.json` also reports `cell_accuracy`, `row_accuracy`, `reproduced`,
-`web_tool_calls`, `language_violations`, `held_out_checked`, and
-`held_out`.
+`web_tool_calls`, `language_violations`, `held_out_checked`, `held_out`,
+`challenge_checked`, and `challenge_passed`.
 
 ## Oracle
 
@@ -591,8 +608,7 @@ Built from yamaa commit {_commit_label(commit)} by
   data of the subjects kept, so writing the rows literally does not pass.
 - **Oracle.** Each task's `solution/` holds the script Harbor's oracle agent
   runs: the benchmark's reference solution, written from its full prompt,
-  or, where there is none yet, a script that writes the expected data
-  verbatim. Either must score 1.
+  which must score 1, changed-input reruns included.
 
 Each task's README has its benchmark, inputs, outputs, and grading rules.
 The harness is described in
@@ -609,6 +625,13 @@ def build_task(
     tier: str = "full",
 ) -> Path:
     contract = contract_for(benchmark, language)
+    # The held-out and changed-input reruns compute their answers with the
+    # reference, so a task cannot be graded without one.
+    reference = reference_solution(benchmark, language)
+    if reference is None:
+        raise BuildError(
+            f"{benchmark.name}-{language}: a derivation reference is required"
+        )
     readme = (benchmark / "README.md").read_text(encoding="utf-8")
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
     prompt = prompt_file(benchmark, tier).read_text(encoding="utf-8").strip()
@@ -620,7 +643,14 @@ def build_task(
     (task / "solution").mkdir()
 
     task_text = task_toml(
-        benchmark.name, readme_tags(readme), domain, commit, language, tier
+        benchmark.name,
+        readme_tags(readme),
+        domain,
+        commit,
+        language,
+        tier,
+        image=image,
+        challenge_required=contract["challenge_required"],
     )
     (task / "task.toml").write_text(task_text)
     (task / "instruction.md").write_text(
@@ -648,36 +678,39 @@ def build_task(
         for path in golden:
             shutil.copyfile(path, directory / path.name)
     shutil.copyfile(HERE / "grade.py", task / "tests" / "grade.py")
+    # The sandbox runs the agent's script as an unprivileged user, restores
+    # these original inputs before every rerun, and keeps /tests private.
+    shutil.copyfile(HERE / "sandbox.py", task / "tests" / "sandbox.py")
+    shutil.copyfile(task / "task.toml", task / "tests" / "task.toml")
+    shutil.copytree(task / "environment" / "input", task / "tests" / "input")
     (task / "tests" / "contract.json").write_text(json.dumps(contract, indent=2))
     (task / "tests" / "test.sh").write_text(
         "#!/usr/bin/env bash\n"
         "# No reward.json on a grader crash, so Harbor records a verifier error.\n"
         "set -euo pipefail\n"
-        "python3 /tests/grade.py --rerun\n"
+        "python3 /tests/grade.py --rerun --sandbox\n"
     )
     script = LANGUAGES[language]["script"]
-    reference = reference_solution(benchmark, language)
-    # The verifier's held-out rerun checks the agent against the reference.
-    if reference:
-        (task / "tests" / "reference").mkdir()
-        shutil.copyfile(reference, task / "tests" / "reference" / script)
+    # The verifier's held-out and changed-input reruns check the agent
+    # against the reference.
+    (task / "tests" / "reference").mkdir()
+    shutil.copyfile(reference, task / "tests" / "reference" / script)
     (task / "tests" / "Dockerfile").write_text(
         f"FROM {image}\n"
         "COPY --chmod=755 test.sh /tests/test.sh\n"
-        "COPY grade.py contract.json /tests/\n"
+        "COPY grade.py sandbox.py contract.json task.toml /tests/\n"
+        "COPY input/ /tests/input/\n"
         "COPY expected/ /tests/expected/\n"
-        + ("COPY reference/ /tests/reference/\n" if reference else "")
+        "COPY reference/ /tests/reference/\n"
+        "RUN chmod 700 /tests\n"
     )
-    if reference:
-        shutil.copyfile(reference, task / "solution" / script)
-    else:
-        (task / "solution" / script).write_text(oracle_script(language, golden))
+    shutil.copyfile(reference, task / "solution" / script)
     runner = "Rscript" if language == "r" else "python3"
     solve = task / "solution" / "solve.sh"
     solve.write_text(
         "#!/usr/bin/env bash\n"
-        "# Oracle: runs the reference solution, or a script that writes the\n"
-        "# golden files, to prove packaging, the rerun, and grading.\n"
+        "# Oracle: runs the reference solution to prove packaging, the reruns,\n"
+        "# and grading.\n"
         "set -euo pipefail\n"
         "mkdir -p /app/output\n"
         f"cp /solution/{script} /app/output/{script}\n"
@@ -727,6 +760,9 @@ def job_config(
             "type": "docker",
             "extra_allowed_hosts": sorted({host, *SETUP_HOSTS}),
         },
+        # Without a trajectory the language and web-tool audit has nothing
+        # to read, so a model's trial must leave one.
+        "verifier": {"env": {"YAMAA_REQUIRE_TRAJECTORY": "1"}},
         "agents": [
             {
                 "name": "opencode",

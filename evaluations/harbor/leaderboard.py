@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import re
 import sys
 from collections import Counter, defaultdict
@@ -60,27 +61,88 @@ def _read_json(path: Path) -> dict:
 
 
 def _default_timeouts(config: dict) -> bool:
-    return config.get("timeout_multiplier", 1.0) == 1.0 and all(
-        config.get(name) in (None, 1.0) for name in PHASE_MULTIPLIERS
+    return (
+        config.get("timeout_multiplier", 1.0) == 1.0
+        and all(config.get(name) in (None, 1.0) for name in PHASE_MULTIPLIERS)
+        and all(
+            (config.get(phase) or {}).get(key) is None
+            for phase in ("agent", "verifier")
+            for key in ("override_timeout_sec", "max_timeout_sec")
+        )
     )
 
 
-def _task_commit(config: dict) -> str | None:
+def _default_resources(config: dict) -> bool:
+    environment = config.get("environment") or {}
+    return (
+        not any(
+            value is not None and key.startswith("override_")
+            for key, value in environment.items()
+        )
+        and not any(environment.get(key) for key in ("mounts", "extra_docker_compose"))
+        and not environment.get("import_path")
+        and not environment.get("kwargs")
+        and all(
+            environment.get(key, "auto") in ("auto", "limit")
+            for key in ("cpu_enforcement_policy", "memory_enforcement_policy")
+        )
+    )
+
+
+def _default_network(config: dict) -> bool:
+    agent = config.get("agent") or {}
+    hosts = agent.get("extra_allowed_hosts") or []
+    setup = {
+        "raw.githubusercontent.com",
+        "github.com",
+        "nodejs.org",
+        "registry.npmjs.org",
+    }
+    baseline = (config.get("environment") or {}).get("extra_allowed_hosts") or []
+    return (
+        len(hosts) <= 1
+        and set(baseline) <= setup | set(hosts)
+        and not agent.get("skills")
+    )
+
+
+def _default_verifier(config: dict) -> bool:
+    verifier = config.get("verifier") or {}
+    return not any(verifier.get(k) for k in ("disable", "import_path", "kwargs"))
+
+
+def _task_metadata(config: dict, trial: Path) -> dict:
+    """The `task.toml` metadata of a trial's task. The verifier saves the file
+    with its results, so a later build into the same task directory cannot
+    change what an earlier trial reports; a trial that never reached the
+    verifier falls back to the task directory."""
+    snapshot = trial / "verifier" / "task.toml"
+    if not snapshot.is_file():
+        snapshot = Path((config.get("task") or {}).get("path") or "") / "task.toml"
+    return (
+        tomllib.loads(snapshot.read_text()).get("metadata", {})
+        if snapshot.is_file()
+        else {}
+    )
+
+
+def _task_commit(config: dict, trial: Path) -> str | None:
     """The yamaa commit a trial's task was built from (`task.toml`
-    metadata), shortened; `None` when the task directory is gone."""
-    path = Path((config.get("task") or {}).get("path") or "") / "task.toml"
-    if not path.is_file():
-        return None
-    commit = tomllib.loads(path.read_text()).get("metadata", {}).get("yamaa_commit")
+    metadata), preserved in the verifier logs; `None` when unavailable."""
+    commit = _task_metadata(config, trial).get("yamaa_commit")
     if not commit:
         return None
-    sha, _, dirty = commit.partition("+")
-    return sha[:8] + (f"+{dirty}" if dirty else "")
+    return commit
 
 
 def collect(job_dir: Path) -> dict:
     """The facts of one Harbor job that a leaderboard row is built from."""
     trials = []
+    protocols, images = set(), set()
+    default_resources = True
+    default_network = True
+    default_verifier = True
+    evidence_problems = []
     agents = set()
     default_timeouts = _default_timeouts(_read_json(job_dir / "config.json"))
     started, commits = [], set()
@@ -89,7 +151,13 @@ def collect(job_dir: Path) -> dict:
         config = result.get("config") or {}
         if result.get("started_at"):
             started.append(datetime.fromisoformat(result["started_at"]))
-        commits.add(_task_commit(config))
+        metadata = _task_metadata(config, path.parent)
+        commits.add(_task_commit(config, path.parent))
+        protocols.add(metadata.get("grading_protocol"))
+        images.add(metadata.get("image_reference"))
+        default_resources = default_resources and _default_resources(config)
+        default_network = default_network and _default_network(config)
+        default_verifier = default_verifier and _default_verifier(config)
         info = result.get("agent_info") or {}
         agent_config = config.get("agent") or {}
         model = agent_config.get("model_name")
@@ -99,6 +167,22 @@ def collect(job_dir: Path) -> dict:
         rewards = (result.get("verifier_result") or {}).get("rewards") or {}
         usage = result.get("agent_result") or {}
         error = result.get("exception_info") or {}
+        evidence = _read_json(path.parent / "verifier" / "grade.json")
+        if not error and (
+            not evidence or not (evidence.get("network") or {}).get("checked")
+        ):
+            evidence_problems.append(
+                f"{result.get('trial_name')}: missing grading or trajectory evidence"
+            )
+        if (
+            not error
+            and rewards.get("reward") == 1
+            and metadata.get("challenge_required")
+            and (not (evidence.get("challenge") or {}).get("checked"))
+        ):
+            evidence_problems.append(
+                f"{result.get('trial_name')}: required challenge was not checked"
+            )
         trials.append(
             {
                 "id": result.get("id"),
@@ -142,6 +226,12 @@ def collect(job_dir: Path) -> dict:
         "variant": variant or "default",
         "attempts": attempts or min(Counter(t["benchmark"] for t in trials).values()),
         "default_timeouts": default_timeouts,
+        "default_resources": default_resources,
+        "default_network": default_network,
+        "default_verifier": default_verifier,
+        "grading_protocols": protocols,
+        "image_references": images,
+        "evidence_problems": evidence_problems,
         "status": "display",
         "leaderboards": [],
         "trials": sorted(trials, key=lambda t: (t["benchmark"], t["name"] or "")),
@@ -198,6 +288,31 @@ def run_problems(run: dict, board: dict) -> list[str]:
     ]
     if not run["default_timeouts"]:
         found.append("the job changed the tasks' timeouts")
+    if not run.get("default_resources", True):
+        found.append("the job changed the tasks' resources or mounted extra files")
+    if not run.get("default_network", True):
+        found.append("the job expanded network access or supplied extra skills")
+    if not run.get("default_verifier", True):
+        found.append("the job replaced or disabled the task verifier")
+    if len({counts[t] for t in board["tasks"] if counts[t]}) > 1:
+        found.append("attempt counts must be equal on every board task")
+    if board.get("grading_protocol") and run.get("grading_protocols") != {
+        board["grading_protocol"]
+    }:
+        found.append("the job does not use this board's grading protocol")
+    if (
+        run.get("yamaa_commit") is None
+        or "unknown" in run.get("yamaa_commit", "")
+        or "," in run.get("yamaa_commit", "")
+    ):
+        found.append("the job needs one preserved task commit")
+    if "+dirty" in run.get("yamaa_commit", ""):
+        found.append("ranked tasks must be built from a committed tree")
+    if len(run.get("image_references", set())) != 1 or None in run.get(
+        "image_references", set()
+    ):
+        found.append("the job needs one preserved image reference")
+    found.extend(run.get("evidence_problems", []))
     return found
 
 
@@ -255,17 +370,35 @@ def _total(trials: list[dict], field: str) -> float | None:
 
 
 def metrics(trials: list[dict]) -> dict:
-    """Harbor's aggregation of the trials' rewards, plus usage totals."""
+    """Task-weighted rewards, a task bootstrap interval, and usage totals."""
     seconds = [t["agent_seconds"] for t in trials]
+    by_task = defaultdict(list)
+    for trial in trials:
+        by_task[trial["benchmark"]].append(trial["reward"])
+    task_rates = [_mean(values) for values in by_task.values()]
+    randomizer = random.Random(0)
+    samples = (
+        sorted(
+            _mean(randomizer.choices(task_rates, k=len(task_rates)))
+            for _ in range(2000)
+        )
+        if len(task_rates) > 1
+        else []
+    )
+    cost = _total(trials, "cost_usd")
     result = {
-        "reward": _mean([t["reward"] for t in trials]),
+        "reward": _mean(task_rates),
+        "trial_reward": _mean([t["reward"] for t in trials]),
+        "reward_ci_low": samples[49] if samples else None,
+        "reward_ci_high": samples[1949] if samples else None,
         "cell_accuracy": _mean([t["cell_accuracy"] for t in trials]),
         "row_accuracy": _mean([t["row_accuracy"] for t in trials]),
         "n_trials": len(trials),
         "n_errors": sum(t["error"] is not None for t in trials),
         "input_tokens": _total(trials, "input_tokens"),
         "output_tokens": _total(trials, "output_tokens"),
-        "cost_usd": _total(trials, "cost_usd"),
+        "cost_usd": cost,
+        "cost_per_trial_usd": cost / len(trials) if cost is not None else None,
         "agent_seconds": None if None in seconds else _mean(seconds),
     }
     for k, value in pass_at_k(trials).items():
@@ -298,11 +431,13 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "model": run["model"],
                     "variant": run["variant"],
                     "date": run["date"],
-                    "attempts": run["attempts"],
+                    "attempts": min(Counter(t["benchmark"] for t in trials).values()),
                     "job": run["job"],
                     "job_id": run["job_id"],
                     "harbor_version": run["harbor_version"],
                     "yamaa_commit": run.get("yamaa_commit"),
+                    "grading_protocol": next(iter(run["grading_protocols"])),
+                    "image_reference": next(iter(run["image_references"])),
                 },
                 "metrics": metrics(trials),
                 "status": run["status"],

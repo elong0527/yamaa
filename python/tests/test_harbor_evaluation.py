@@ -504,6 +504,19 @@ def _fake_job(root: Path, rewards: dict[str, list[float | None]], **config) -> P
             name = f"{benchmark}__{attempt}"
             trial = job / name
             trial.mkdir()
+            # The verifier saves the task's task.toml with its results, and
+            # grade.json records that the trajectory and challenge were checked.
+            (trial / "verifier").mkdir()
+            (trial / "verifier" / "task.toml").write_text(
+                (task_dir / "task.toml").read_text()
+                + f'grading_protocol = "{build.GRADING_PROTOCOL}"\n'
+                + f'image_reference = "{build.IMAGE}"\n'
+            )
+            (trial / "verifier" / "grade.json").write_text(
+                json.dumps(
+                    {"network": {"checked": True}, "challenge": {"checked": True}}
+                )
+            )
             graded = {"reward": reward, "cell_accuracy": reward}
             result = {
                 "id": str(uuid.uuid4()),
@@ -548,7 +561,9 @@ def _board_named(name: str) -> dict:
 
 
 def _board_name(language: str, tier: str) -> str:
-    return f"sdtm-adam-{language}" if tier == "full" else f"sdtm-adam-{tier}-{language}"
+    if tier == "full":
+        return f"sdtm-adam-v2-{language}"
+    return f"sdtm-adam-v2-{tier}-{language}"
 
 
 def test_each_language_has_a_board_per_prompt_tier():
@@ -591,11 +606,11 @@ def test_collect_reads_a_harbor_job(tmp_path):
     assert all(uuid.UUID(t["id"]) for t in run["trials"])
     assert run["trials"][0]["agent_seconds"] == 90.0
     assert run["date"] == "2026-09-30"
-    assert run["yamaa_commit"] == "01234567"
+    assert run["yamaa_commit"] == "0123456789abcdef0123456789abcdef01234567"
 
     board = _board(["b-one", "b-two"])
     (row,) = leaderboard.rows_for(board, [_on(run, board)])
-    assert row["metadata"]["yamaa_commit"] == "01234567"
+    assert row["metadata"]["yamaa_commit"] == "0123456789abcdef0123456789abcdef01234567"
     assert row["metadata"]["date"] == "2026-09-30"
     assert row["metrics"]["reward"] == 0.5
     assert row["metrics"]["cost_usd"] == pytest.approx(0.02)
@@ -623,8 +638,10 @@ def test_a_row_names_its_variant_and_a_job_may_not_mix_them(tmp_path):
 
 def test_each_board_names_its_language_and_tier_dataset():
     for board in leaderboard.load_leaderboards():
+        # sdtm-adam-v2-<language> or sdtm-adam-v2-<tier>-<language>
         parts = board["harbor"]["name"].split("-")
-        language, tier = parts[-1], parts[2] if len(parts) == 4 else "full"
+        language, tier = parts[-1], parts[3] if len(parts) == 5 else "full"
+        assert board["grading_protocol"] == build.GRADING_PROTOCOL
         package = build.dataset_name(build.DATASET_PREFIX, language, tier)
         assert board["package"] == package
         suffix = f"-{language}" if tier == "full" else f"-{tier}-{language}"
@@ -701,7 +718,7 @@ def test_leaderboards_and_rows_match_their_schemas(tmp_path):
 def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
     rewards = {"adam-adae-death-r": [1.0], "adam-adsl-age-group-r": [1.0]}
     rewards["adam-adtte-dor-r"] = [0.0]
-    board = _board_named("sdtm-adam-r")
+    board = _board_named("sdtm-adam-v2-r")
     board["tasks"] = sorted(rewards)
     run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
     run["status"] = status
@@ -713,7 +730,7 @@ def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
 def test_export_writes_harbor_hub_configs(tmp_path):
     run, created, rows = _export(tmp_path)
     assert created["package"] == "yamaa/example"
-    assert created["name"] == "sdtm-adam-r"
+    assert created["name"] == "sdtm-adam-v2-r"
     (row,) = rows["rows"]
     assert set(row) == {"metadata", "metrics", "status", "trial_ids"}
     assert row["trial_ids"] == [t["id"] for t in run["trials"]]
@@ -745,7 +762,7 @@ def _export_cli(monkeypatch, *arguments: str) -> None:
 
 def _full_job(tmp_path: Path, language: str) -> Path:
     """A fake job with one passing trial on every task of a full board."""
-    tasks = _board_named(f"sdtm-adam-{language}")["tasks"]
+    tasks = _board_named(f"sdtm-adam-v2-{language}")["tasks"]
     return _fake_job(tmp_path, {task: [1.0] for task in tasks})
 
 
@@ -754,16 +771,16 @@ def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys)
     out = tmp_path / "hub"
     _export_cli(
         monkeypatch,
-        "sdtm-adam-r",
+        "sdtm-adam-v2-r",
         str(job),
         "--package",
         "yamaa/example",
         "--out",
         str(out),
     )
-    rows = yaml.safe_load((out / "sdtm-adam-r.rows.yaml").read_text())
+    rows = yaml.safe_load((out / "sdtm-adam-v2-r.rows.yaml").read_text())
     assert rows["rows"][0]["metrics"]["reward"] == 1.0
-    assert "harbor hub leaderboard row create yamaa/example/sdtm-adam-r" in (
+    assert "harbor hub leaderboard row create yamaa/example/sdtm-adam-v2-r" in (
         capsys.readouterr().out
     )
 
@@ -773,11 +790,11 @@ def test_the_export_command_defaults_to_the_boards_dataset(
 ):
     job = _full_job(tmp_path, "python")
     out = tmp_path / "hub"
-    _export_cli(monkeypatch, "sdtm-adam-python", str(job), "--out", str(out))
-    created = yaml.safe_load((out / "sdtm-adam-python.leaderboard.yaml").read_text())
+    _export_cli(monkeypatch, "sdtm-adam-v2-python", str(job), "--out", str(out))
+    created = yaml.safe_load((out / "sdtm-adam-v2-python.leaderboard.yaml").read_text())
     assert created["package"] == "yamaa/yamaa-sdtm-adam-python"
     assert (
-        "row create yamaa/yamaa-sdtm-adam-python/sdtm-adam-python"
+        "row create yamaa/yamaa-sdtm-adam-python/sdtm-adam-v2-python"
         in capsys.readouterr().out
     )
 
@@ -787,7 +804,7 @@ def test_the_export_command_refuses_a_job_off_the_board(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="cannot be ranked"):
         _export_cli(
             monkeypatch,
-            "sdtm-adam-r",
+            "sdtm-adam-v2-r",
             str(job),
             "--out",
             str(tmp_path / "hub"),
@@ -810,6 +827,7 @@ def _rerun(tmp_path: Path, benchmark: str, write) -> dict:
     """Grade a correct submission with a fake interpreter that runs `write`
     against the output directory, as the verifier's rerun would."""
     contract, columns, rows = _golden(benchmark)
+    contract["challenge_required"] = False
     output = tmp_path / "output"
     _write(output / contract["outputs"][0]["file"], columns, rows)
     (output / contract["script"]).write_text("# agent script\n")
@@ -972,12 +990,19 @@ def test_the_script_check_finds_bridges_not_mentions(tmp_path, language, text, b
     assert result["passed"] is not bridges, result
 
 
-def _held_out_case(tmp_path: Path, agent: str, reference: str | None) -> dict:
+def _held_out_case(
+    tmp_path: Path,
+    agent: str,
+    reference: str | None,
+    benchmark_name: str = "adam-adsl-age-group",
+) -> dict:
     """Grade, with the verifier's reruns, a Python-track submission of
-    adam-adsl-age-group whose script is `agent` ("reference" or "hardcode")
-    against `reference` ("reference", "hardcode", or None)."""
-    benchmark = ROOT / "benchmarks" / "adam-adsl-age-group"
+    `benchmark_name` whose script is `agent` ("reference" or "hardcode")
+    against `reference` ("reference", "hardcode", or None). The changed-input
+    challenge is off, so the held-out rerun is checked on its own."""
+    benchmark = ROOT / "benchmarks" / benchmark_name
     contract = build.contract_for(benchmark, "python")
+    contract["challenge_required"] = False
     app = tmp_path / "app"
     shutil.copytree(benchmark / "input", app / "input")
     (app / "output").mkdir()
@@ -1089,14 +1114,14 @@ def test_input_schemas_stay_out_of_the_agent_sandbox(tmp_path):
     assert inputs == ["dm.parquet", "odm.csv"]
 
 
-def test_the_python_oracle_writes_the_golden_bytes(tmp_path, monkeypatch):
-    # The fallback oracle, for a benchmark without a reference solution.
-    monkeypatch.setattr(build, "SOLUTIONS", tmp_path / "no-solutions")
+def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
     benchmark = ROOT / "benchmarks" / "sdtm-dm-race-ethnicity"
     task = build.build_task(
         benchmark, tmp_path / "tasks", build.IMAGE, "test", "python"
     )
-    script = (task / "solution" / "result.py").read_text()
+    script = build.oracle_script(
+        "python", [benchmark / "expected" / n for n in ("dm.csv", "suppdm.csv")]
+    )
     out = tmp_path / "out"
     out.mkdir()
     runnable = tmp_path / "result.py"
@@ -1106,7 +1131,7 @@ def test_the_python_oracle_writes_the_golden_bytes(tmp_path, monkeypatch):
         assert (out / name).read_bytes() == (benchmark / "expected" / name).read_bytes()
     solve = (task / "solution" / "solve.sh").read_text()
     assert "python3 /app/output/result.py" in solve
-    assert "--rerun" in (task / "tests" / "test.sh").read_text()
+    assert "--rerun --sandbox" in (task / "tests" / "test.sh").read_text()
 
 
 # Goldens that stress the oracle's literals: plain text, text with `"""`,
@@ -1228,9 +1253,7 @@ def test_the_evaluation_workflow_runs_the_images_r():
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
-def test_a_task_runs_its_reference_solution_or_else_writes_the_golden(
-    tmp_path, monkeypatch, language
-):
+def test_a_task_requires_a_derivation_reference(tmp_path, monkeypatch, language):
     script = SCRIPTS[language]
     pilot = build.build_task(
         ROOT / "benchmarks" / "adam-adtte-dor", tmp_path, build.IMAGE, "test", language
@@ -1238,17 +1261,17 @@ def test_a_task_runs_its_reference_solution_or_else_writes_the_golden(
     reference = build.SOLUTIONS / "adam-adtte-dor" / script
     assert (pilot / "solution" / script).read_bytes() == reference.read_bytes()
     assert "is the benchmark's reference solution" in (pilot / "README.md").read_text()
-    # The fallback oracle, for a benchmark without a reference solution.
+    # The held-out and changed-input reruns need a derivation to compute
+    # their answers, so a benchmark without a reference is not built.
     monkeypatch.setattr(build, "SOLUTIONS", tmp_path / "no-solutions")
-    other = build.build_task(
-        ROOT / "benchmarks" / "sdtm-dm-race-ethnicity",
-        tmp_path,
-        build.IMAGE,
-        "test",
-        language,
-    )
-    assert "Not a derivation" in (other / "solution" / script).read_text()
-    assert "no reference solution yet" in (other / "README.md").read_text()
+    with pytest.raises(build.BuildError, match="derivation reference is required"):
+        build.build_task(
+            ROOT / "benchmarks" / "sdtm-dm-race-ethnicity",
+            tmp_path,
+            build.IMAGE,
+            "test",
+            language,
+        )
 
 
 @pytest.mark.parametrize("language", LANGUAGES)

@@ -63,18 +63,34 @@ How to write a prompt is in
   match too. Then the held-out rerun: with every third subject (by
   `USUBJID`) dropped from the inputs, the script must write the golden
   restricted to the subjects kept, so a script that writes its rows
-  literally fails. It applies when the task ships a reference solution
-  (`solutions/`, copied into the verifier's `tests/reference/`) and that
-  reference, rerun the same way, writes exactly the restricted golden;
-  otherwise it is skipped with a note (a derivation across subjects, or
-  inputs without `USUBJID`). Column and row order are reported, not
-  graded. Cells are read by column type: numbers compare as numbers within
-  a relative 1e-9 (`1.0` equals `1`), dates also accept a midnight
-  datetime, text is compared exactly (spaces included), and an empty cell,
-  `NA`, or `.` is no value.
+  literally fails. Every task ships its reference solution (`solutions/`,
+  copied into the verifier's `tests/reference/`), and the check applies
+  when that reference, rerun the same way, writes exactly the restricted
+  golden; it is skipped with a note when the reference's data differs (a
+  derivation across subjects, or inputs without `USUBJID`), and a
+  reference that crashes is a verifier error, never an exemption. Then,
+  when an output carries `USUBJID`, the changed-input challenge: every
+  subject identifier in the inputs is renamed, the reference computes the
+  answer from those inputs, and the script must write it, so a lookup of
+  the expected rows filtered to the subjects present fails. Column and row
+  order are reported, not graded. Cells are read by column type: integers
+  compare exactly (`1.0` equals `1`), other numbers within a relative 1e-9,
+  dates also accept a midnight datetime, text is compared exactly (spaces
+  included), and an empty cell, `NA`, or `.` is no value. An output that is a symlink
+  is rejected.
   `reward.json` also carries `cell_accuracy`, `row_accuracy`, `reproduced`,
-  `language_violations`, `held_out_checked`, and `held_out` (when
-  checked), and `verifier/diff-<file>.csv` lists the differing cells.
+  `language_violations`, `held_out_checked`, `held_out` (when checked),
+  `challenge_checked`, and `challenge_passed`, and
+  `verifier/diff-<file>.csv` lists the differing cells.
+- **Sandboxed reruns.** The verifier runs the agent's script, and the
+  reference, as the image's unprivileged `nobody` user (`sandbox.py`):
+  `/tests`, with the golden and the reference, is readable by root only,
+  every rerun restores the original inputs from `tests/input/` and starts
+  from an empty output folder, and every process the script left is
+  killed. A model's job also requires the agent's trajectory
+  (`YAMAA_REQUIRE_TRAJECTORY`), so the language and web-tool audit always
+  has a record to read. The verifier saves the task's `task.toml` with its
+  results, so a later build cannot change the commit a trial reports.
 
 ## Setup
 
@@ -159,10 +175,10 @@ Harbor's `oracle` agent runs each task's `solution/result.R` or
 `result.py` and must score 1 on every task, rerun included; its `nop`
 agent writes nothing and must score 0. That script is the benchmark's
 reference solution from `solutions/`, written from the full prompt and
-the inputs alone, which also shows the prompt can be solved. A benchmark
-without one gets a script that writes the golden files byte for byte,
-holding each as readable text (a parquet golden as bytes), with a header
-saying it is a harness check, not a derivation:
+the inputs alone, which also shows the prompt can be solved. Every task
+needs one, since the held-out and changed-input reruns compute their
+answers with it, and a benchmark without one is not built. To run the
+oracle:
 
 ```bash
 uv run --project python --no-sync harbor run \
@@ -171,6 +187,22 @@ uv run --project python --no-sync harbor run \
 	-o ~/.cache/yamaa-harbor/jobs \
 	--job-name oracle \
 	-y
+```
+
+`smoke.py` does both checks offline in one step: it builds the tasks,
+probes the verifier sandbox (`probe.py`: the script cannot read the golden
+files, change the inputs or the grader's logs, or leave a process
+behind), then runs `oracle`, which must score 1 with every required
+challenge checked, and `nop`, which must score 0. The Harbor Oracle
+workflow (`.github/workflows/harbor-oracle.yml`) runs it on the three
+development tasks for each pull request, and on every benchmark on
+Mondays or on request; before a model run, run it on every benchmark:
+
+```bash
+uv run --project python --no-sync python evaluations/harbor/smoke.py \
+	--full \
+	--n-concurrent 8 \
+	--out ~/.cache/yamaa-harbor-smoke
 ```
 
 ## Run an agent
@@ -223,11 +255,12 @@ rules, and whose rows are uploaded runs that point back to their trials.
 `leaderboards/<name>.yaml` holds:
 
 - `package`: the Harbor Hub dataset the board belongs to, the dataset of
-  its language.
+  its language and prompt tier.
+- `grading_protocol`: the verifier's checks a run must have been graded
+  with (`GRADING_PROTOCOL` in `build.py`, recorded in every task).
 - `tasks` and `attempts`: the benchmarks a run must cover and the fewest
-  attempts on each (every buildable benchmark, one attempt). A run
-  qualifies only at the tasks' own timeouts, so every row answers the same
-  question.
+  attempts on each (every buildable benchmark, one attempt), with the
+  same number of attempts on every task.
 - `harbor`: the Hub definition itself, in the shape
   `harbor hub leaderboard create --config` takes: the `metadata_schema`
   and `metrics_schema` of a row, the `columns`, and the ordered `rank_by`
@@ -237,26 +270,33 @@ A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
 one leaderboard per dataset, so one per language and prompt tier
-(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-r`,
-`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-brief-r`, ...), and R, Python, and
-each tier are ranked independently. The conventions and brief boards rank
-by cell accuracy before pass rate, since their tasks can need a sponsor
-choice the prompt no longer states.
+(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v2-r`,
+`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v2-brief-r`, ...), and R, Python,
+and each tier are ranked independently. The conventions and brief boards
+rank by cell accuracy before pass rate, since their tasks can need a
+sponsor choice the prompt no longer states. The boards are `v2` because
+grading protocol 2 adds the changed-input challenge, the sandboxed reruns,
+and the trajectory requirement: runs graded before it stay on the earlier
+`sdtm-adam-r` and `sdtm-adam-python` boards on Harbor Hub, whose
+definitions this folder no longer keeps.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,
-variant, date, attempts, job and Harbor version, and the yamaa commit of
-its tasks) and
-its metrics from its trials on the leaderboard's tasks, aggregated as
-Harbor aggregates them:
+variant, date, attempts, job and Harbor version, and the yamaa commit,
+grading protocol, and image of its tasks, read from the `task.toml` each
+trial's verifier saved) and its metrics from its trials on the
+leaderboard's tasks:
 
 | Metric | Meaning |
 |---|---|
-| `reward` | mean reward, the pass rate; an errored trial counts as 0 (Harbor's mean) |
+| `reward` | the pass rate: each task's mean reward, averaged over tasks; an errored trial counts as 0 |
+| `trial_reward` | the mean reward over trials (Harbor's mean) |
+| `reward_ci_low`, `reward_ci_high` | a 95% bootstrap interval of `reward` over tasks (2,000 resamples); it shows how much the score depends on which tasks are in, not the noise within a task |
 | `cell_accuracy`, `row_accuracy` | mean share of golden cells and rows reproduced |
 | `pass_at_<k>` | Harbor's unbiased pass@k averaged over tasks, for k = 2, 4, 5, 8, 10, ... up to the fewest attempts on a task |
 | `n_trials`, `n_errors` | trials aggregated, and trials that ended in an exception |
 | `input_tokens`, `output_tokens`, `cost_usd` | totals, when every trial reported them |
+| `cost_per_trial_usd` | `cost_usd` per trial |
 | `agent_seconds` | mean agent time per trial |
 
 Harbor skips pass@k when a verifier writes several rewards, as `grade.py`
@@ -311,12 +351,12 @@ the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	export sdtm-adam-r \
+	export sdtm-adam-v2-r \
 	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-contributor-r-low
 $H hub leaderboard create \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-r.leaderboard.yaml
-$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/sdtm-adam-r \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-r.rows.yaml
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v2-r.leaderboard.yaml
+$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/sdtm-adam-v2-r \
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v2-r.rows.yaml
 ```
 
 `export` takes the board's dataset from its `package`; `--package`
@@ -327,8 +367,13 @@ on the Hub under the trial's `artifacts/app/output/`, and
 `harbor job download <job-id>` brings a whole job back, scripts included.
 
 `export` refuses a job that mixes agents, models, or variants, misses a
-board task or attempts, or changed the tasks' timeouts; `--hide` exports
-its rows hidden. Repeat for `sdtm-adam-python` with the Python jobs. The
+board task or attempts, has unequal attempts across tasks, or changed the
+tasks' timeouts, resources, mounts, network access, skills, or verifier.
+It also refuses a trial without the grading evidence `grade.json` keeps
+(a checked trajectory, and the challenge where one is required), and a
+job whose tasks do not share one committed (not `+dirty`) yamaa commit,
+the board's grading protocol, and one image. `--hide` exports its rows
+hidden. Repeat for `sdtm-adam-v2-python` with the Python jobs. The
 published tasks
 build from the local `yamaa-harbor-env:0.3` image, so they run where that
 image is built.

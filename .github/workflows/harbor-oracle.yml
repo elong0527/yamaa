@@ -1,0 +1,69 @@
+name: Harbor Oracle
+
+# Builds the evaluation image and runs Harbor's own oracle and nop agents
+# through the separate Docker verifier (evaluations/harbor/smoke.py), offline:
+# the oracle must score 1 with every required check run, nop must score 0.
+# It also probes the verifier sandbox (probe.py): the agent's script cannot
+# read the golden files, change the inputs or the grader's logs, or leave a
+# process behind. Pull requests check the three development tasks; Mondays,
+# and on request, every benchmark in both languages. A test keeps the image
+# tag here equal to build.py's IMAGE.
+
+on:
+  pull_request:
+    paths:
+      - evaluations/harbor/**
+      - python/tests/test_harbor*.py
+      - python/pyproject.toml
+      - python/uv.lock
+      - benchmarks/**
+      - .github/workflows/harbor-oracle.yml
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run oracle/nop on all benchmarks
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Install locked Harbor and test dependencies
+        run: |
+          python -m pip install uv==0.11.6
+          uv sync --project python --extra test --group harbor --locked
+      - name: Check harness and regression tests
+        run: |
+          uv run --project python --no-sync ruff check evaluations/harbor/*.py python/tests/test_harbor*.py
+          uv run --project python --no-sync ruff format --check evaluations/harbor/*.py python/tests/test_harbor*.py
+          uv run --project python --no-sync pytest python/tests/test_harbor*.py
+      - name: Build evaluation image
+        run: docker build -t yamaa-harbor-env:0.3 evaluations/harbor
+      - name: Run both tracks through the separate Docker verifier
+        env:
+          FULL: ${{ github.event_name == 'schedule' || inputs.full }}
+        run: |
+          args=()
+          if [[ "$FULL" == "true" ]]; then args+=(--full); fi
+          uv run --project python --no-sync python evaluations/harbor/smoke.py \
+            --out "${{ runner.temp }}/harbor" "${args[@]}"
+      - name: Upload verifier diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: harbor-verification
+          path: ${{ runner.temp }}/harbor/jobs
+          if-no-files-found: ignore
