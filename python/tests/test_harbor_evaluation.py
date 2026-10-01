@@ -423,13 +423,9 @@ def _board_named(name: str) -> dict:
     raise AssertionError(f"no leaderboard {name!r}")
 
 
-def test_each_language_has_a_pilot_board_and_a_full_board():
+def test_each_language_has_a_full_board():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
-    assert set(boards) == {
-        f"{board}-{language}"
-        for board in ("adam-pilot", "sdtm-adam")
-        for language in LANGUAGES
-    }
+    assert set(boards) == {f"sdtm-adam-{language}" for language in LANGUAGES}
     buildable = []
     for prompt in sorted((ROOT / "benchmarks").glob("*/prompt.md")):
         try:
@@ -438,8 +434,6 @@ def test_each_language_has_a_pilot_board_and_a_full_board():
             continue
         buildable.append(prompt.parent.name)
     for language in LANGUAGES:
-        pilot = boards[f"adam-pilot-{language}"]["tasks"]
-        assert sorted(pilot) == sorted(f"{b}-{language}" for b in PILOTS)
         full = boards[f"sdtm-adam-{language}"]["tasks"]
         assert sorted(full) == sorted(f"{b}-{language}" for b in buildable)
 
@@ -566,20 +560,21 @@ def test_leaderboards_and_rows_match_their_schemas(tmp_path):
 
 
 def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
-    rewards = {"adam-adae-death-r": [1.0] * 3, "adam-adsl-age-group-r": [1.0] * 3}
-    rewards["adam-adtte-dor-r"] = [0.0] * 3
-    board = _board_named("adam-pilot-r")
+    rewards = {"adam-adae-death-r": [1.0], "adam-adsl-age-group-r": [1.0]}
+    rewards["adam-adtte-dor-r"] = [0.0]
+    board = _board_named("sdtm-adam-r")
+    board["tasks"] = sorted(rewards)
     run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
     run["status"] = status
     out = tmp_path / "hub"
-    definition, rows = leaderboard.export(board, [run], "yamaa/adam-pilot", out)
+    definition, rows = leaderboard.export(board, [run], "yamaa/example", out)
     return run, yaml.safe_load(definition.read_text()), yaml.safe_load(rows.read_text())
 
 
 def test_export_writes_harbor_hub_configs(tmp_path):
     run, created, rows = _export(tmp_path)
-    assert created["package"] == "yamaa/adam-pilot"
-    assert created["name"] == "adam-pilot-r"
+    assert created["package"] == "yamaa/example"
+    assert created["name"] == "sdtm-adam-r"
     (row,) = rows["rows"]
     assert set(row) == {"metadata", "metrics", "status", "trial_ids"}
     assert row["trial_ids"] == [t["id"] for t in run["trials"]]
@@ -604,22 +599,27 @@ def _export_cli(monkeypatch, *arguments: str) -> None:
     leaderboard.main()
 
 
+def _full_job(tmp_path: Path, language: str) -> Path:
+    """A fake job with one passing trial on every task of a full board."""
+    tasks = _board_named(f"sdtm-adam-{language}")["tasks"]
+    return _fake_job(tmp_path, {task: [1.0] for task in tasks})
+
+
 def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys):
-    rewards = {f"{b}-r": [1.0] * 3 for b in PILOTS}
-    job = _fake_job(tmp_path, rewards)
+    job = _full_job(tmp_path, "r")
     out = tmp_path / "hub"
     _export_cli(
         monkeypatch,
-        "adam-pilot-r",
+        "sdtm-adam-r",
         str(job),
         "--package",
-        "yamaa/adam-pilot",
+        "yamaa/example",
         "--out",
         str(out),
     )
-    rows = yaml.safe_load((out / "adam-pilot-r.rows.yaml").read_text())
+    rows = yaml.safe_load((out / "sdtm-adam-r.rows.yaml").read_text())
     assert rows["rows"][0]["metrics"]["reward"] == 1.0
-    assert "harbor hub leaderboard row create yamaa/adam-pilot/adam-pilot-r" in (
+    assert "harbor hub leaderboard row create yamaa/example/sdtm-adam-r" in (
         capsys.readouterr().out
     )
 
@@ -627,13 +627,13 @@ def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys)
 def test_the_export_command_defaults_to_the_boards_dataset(
     tmp_path, monkeypatch, capsys
 ):
-    job = _fake_job(tmp_path, {f"{b}-python": [1.0] * 3 for b in PILOTS})
+    job = _full_job(tmp_path, "python")
     out = tmp_path / "hub"
-    _export_cli(monkeypatch, "adam-pilot-python", str(job), "--out", str(out))
-    created = yaml.safe_load((out / "adam-pilot-python.leaderboard.yaml").read_text())
+    _export_cli(monkeypatch, "sdtm-adam-python", str(job), "--out", str(out))
+    created = yaml.safe_load((out / "sdtm-adam-python.leaderboard.yaml").read_text())
     assert created["package"] == "yamaa/yamaa-sdtm-adam-python"
     assert (
-        "row create yamaa/yamaa-sdtm-adam-python/adam-pilot-python"
+        "row create yamaa/yamaa-sdtm-adam-python/sdtm-adam-python"
         in capsys.readouterr().out
     )
 
@@ -643,10 +643,8 @@ def test_the_export_command_refuses_a_job_off_the_board(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="cannot be ranked"):
         _export_cli(
             monkeypatch,
-            "adam-pilot-r",
+            "sdtm-adam-r",
             str(job),
-            "--package",
-            "yamaa/adam-pilot",
             "--out",
             str(tmp_path / "hub"),
         )
