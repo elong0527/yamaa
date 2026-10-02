@@ -1,0 +1,111 @@
+# Benchmark factory
+
+An agentic loop for proposing, testing, and reviewing new yamaa
+benchmarks. It adapts the AutoBenchmark recipe
+(https://facebookresearch.github.io/RAM/blogs/autobench/) to this
+repository: a research agent drafts a benchmark, solvers attempt it, and
+judges review it, with a human directing what to build and gating what
+ships.
+
+## Why this fits yamaa
+
+AutoBenchmark asks a research agent to emit a Harbor-compatible
+evaluation package: task instructions, the evidence the solver sees, a
+reference solution, and machine-checkable grading criteria. That is
+already what `evaluations/harbor/build.py` assembles from a directory
+under `benchmarks/`. Two yamaa properties make the loop stronger here
+than in the paper:
+
+- **The engine is a free correctness oracle.** The agent proposes
+  `spec.yaml`; running it through the engine produces the artifact the
+  golden file must match. Correctness is mechanical, not LLM-judged.
+- **The verifier already detects reward hacking.** The paper holds out
+  solvers to check that difficulty transfers. `evaluations/harbor`
+  goes further: the held-out rerun drops every third subject and the
+  changed-input challenge renames subjects and alters values, so a
+  script that hard-codes rows fails. A generated benchmark inherits
+  both checks unchanged.
+
+The paper's headline finding shapes the loop below: fully autonomous
+runs produce saturated, low-validity benchmarks, while fine-grained
+human direction (a detailed spec plus curated grounding material)
+roughly halves solver scores. The human therefore owns *what* to build
+and *whether* it ships; the agent owns the drafting and the revisions.
+
+## The loop
+
+```
+Stage 0  HUMAN DIRECTION      pick a coverage gap, curate example data,
+                              write the derivation intent (task-spec.md)
+        |
+Stage 1  PROPOSAL             research agent drafts benchmarks/<name>/
+                              (spec, fixtures, README, prompt)
+        |
+Stage 2  MECHANICAL ADMISSION run the repo validators, the engine, and
+                              the oracle/nop smoke checks; failures go
+                              back to Stage 1 with the log attached
+        |
+Stage 3  DIFFICULTY PILOT     run 1-2 solver models on the candidate;
+                              saturated  -> harden fixtures (Stage 1)
+                              models fail, oracle passes -> clarify the
+                              prompt (Stage 1)
+        |
+Stage 4  JUDGE REVIEW         LLM judges score the five criteria in
+                              judges.md; revise or reject accordingly
+        |
+Stage 5  HUMAN GATE           lifecycle draft -> reviewed -> finalized
+                              stays a human decision
+```
+
+Stages 2 and the Harbor half of Stage 3 reuse existing machinery; this
+folder supplies the parts the repository does not have yet: the task
+spec template, the proposer instructions, the judge rubrics, and the
+scaffolding script.
+
+## Files
+
+| File | Role |
+|---|---|
+| `task-spec.md` | The Stage 0/1 contract: fixed rules plus the per-run human direction slots. |
+| `proposer.md` | Instructions for the research agent that drafts a benchmark. |
+| `judges.md` | The five review criteria adapted to yamaa, with verdict format. |
+| `factory.sh` | Portable scaffolding: `scaffold`, `validate`, and `packet` subcommands. |
+| `gap-report.md` | Sourced proposals: new benchmarks to add, and existing ones to enhance, combine, or retire. |
+
+## Running one cycle
+
+1. Fill in `task-spec.md` for the gap you want closed (see
+   `gap-report.md` for sourced candidates). Curate the example input
+   data yourself: the paper shows this is the highest-leverage input.
+2. Hand `task-spec.md` and `proposer.md` to a research agent. It writes
+   `benchmarks/<name>/` following `../benchmarks/agents.md`.
+3. `./factory.sh validate <name>` runs the mechanical admission
+   (Stage 2). Fix or regenerate until clean.
+4. Build the Harbor task and pilot it (Stage 3):
+   `python evaluations/harbor/build.py --benchmarks <name> ...` then
+   `python evaluations/harbor/smoke.py`. The pilot needs Docker and a
+   model key; it is the only stage that leaves this machine.
+5. Score the candidate against `judges.md` (Stage 4), revise, and keep
+   the best accepted revision as the checkpoint for the next round.
+6. Open the pull request. A human moves the lifecycle badge from
+   `draft` to `reviewed` to `finalized` (Stage 5).
+
+## What the loop does not do
+
+- It never rewrites a golden file from the engine's output. A golden
+  is an independent contract: reproduce it by hand or in a short
+  script and compare, per `../benchmarks/agents.md`. `factory.sh` has
+  no regenerate-expected command on purpose.
+- It never writes the grader. `evaluations/harbor/grade.py` is reused
+  unchanged; the agent's job is the task content, not the rubric.
+- It never finalizes. The `finalized` badge is a human decision, as is
+  any retirement proposed in `gap-report.md`.
+
+## Portability
+
+Everything the loop needs besides the repository itself is in this
+folder: two markdown contracts, one rubric, and one POSIX shell script
+with no dependencies beyond what the repo already uses (`uv`, `python3`,
+`git`). The Docker/model stages shell out to `evaluations/harbor` and
+degrade gracefully when those are unavailable: Stages 0-2 and 4 run
+anywhere.
