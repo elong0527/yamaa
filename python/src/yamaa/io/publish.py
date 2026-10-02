@@ -62,13 +62,25 @@ def publish_artifact(target: ArtifactTarget, artifact: Artifact) -> Path:
         raise ValueError(
             f"a {artifact.profile} artifact cannot be published to {target.path.name!r}"
         )
-    content = render_artifact(artifact)
+    return publish_bytes(target.path, render_artifact(artifact))
+
+
+def publish_bytes(path: Path, content: bytes) -> Path:
+    """Atomically replace one explicit regular-file target with complete bytes.
+
+    Document writers share R020's publication procedure without adding XML
+    or JSON to the dataset profile registry.
+    """
+    if not path.is_absolute() or not path.parent.is_dir():
+        raise ValueError("a publication target is absolute in an existing directory")
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ValueError("a publication target is a regular file")
     temporary: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="wb",
-            dir=target.path.parent,
-            prefix=f".{target.path.name}.",
+            dir=path.parent,
+            prefix=f".{path.name}.",
             suffix=".part",
             delete=False,
         ) as handle:
@@ -76,7 +88,7 @@ def publish_artifact(target: ArtifactTarget, artifact: Artifact) -> Path:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, target.path)
+        os.replace(temporary, path)
     except OSError as error:
         if temporary is not None:
             try:
@@ -90,8 +102,8 @@ def publish_artifact(target: ArtifactTarget, artifact: Artifact) -> Path:
                     condition="publication_failed",
                     spec_paths=("output.path",),
                     requirement="REQ-0764",
-                    context={"target": str(target.path), "reason": str(error)},
+                    context={"target": str(path), "reason": str(error)},
                 )
             ]
         ) from error
-    return target.path
+    return path

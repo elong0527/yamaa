@@ -38,6 +38,16 @@ result = write_odm_parquet("input.xml", "clinical-items.parquet")
 See the [ODM helper documentation](src/yamaa/odm/README.md) for the fixed schema
 and supported XML layouts.
 
+## Submission documents
+
+`yamaa.generate_study_document("define.yaml")` composes the declared datasets
+into deterministic, schema-validated Define-XML 2.1. Entries declaring
+`dataset_json` also produce Dataset-JSON 1.1 from already-published artifacts.
+Passing `study_document="define.yaml"` to `yamaa_domain` enforces bound,
+non-extensible codelists during execution. See the
+[submission documentation](src/yamaa/submission/README.md) for usage and
+publication behavior.
+
 ## Specification loader
 
 Load one specification against the repository schema bundle:

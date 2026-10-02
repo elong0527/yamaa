@@ -223,6 +223,7 @@ def yamaa_domain(
     data_roots: Iterable[str | Path] | None = None,
     read_project_configuration: bool = True,
     dispatcher: ExpressionDispatcher | None = None,
+    study_document: str | Path | None = None,
 ) -> DomainRun:
     """Load, validate, and execute one domain specification exactly once.
 
@@ -232,6 +233,10 @@ def yamaa_domain(
     and hand it in. The engine itself never imports or orchestrates such an
     extension. Without it, a specification calling project functions reports
     ``function`` as an unimplemented operation (REQ-0662).
+
+    ``study_document`` explicitly supplies the codelists bound by submission
+    metadata. No adjacent study document is discovered implicitly. Bound
+    non-extensible lists are checked at each column's verification boundary.
     """
     entry = Path(entry_path)
     if not entry.is_file():
@@ -263,7 +268,37 @@ def yamaa_domain(
     entry_node = next(
         node for node in workflow.nodes if node.entry_path == workflow.entry_path
     )
-    execution = execute_workflow(workflow, resources, dispatcher=dispatcher)
+    hooks_for_specification = None
+    if study_document is not None:
+        from yamaa.specification.terminology import (
+            load_study_document,
+            validate_spec_codelist_bindings,
+        )
+        from yamaa.submission.verification import submission_hooks
+
+        try:
+            study = load_study_document(study_document, selected_schema)
+            for node in workflow.nodes:
+                diagnostics = validate_spec_codelist_bindings(
+                    node.resolved.specification, study.document
+                )
+                if diagnostics:
+                    raise SpecificationError(diagnostics)
+        except SpecificationError as error:
+            return DomainRun(
+                entry,
+                entry_node.resolved.specification,
+                {},
+                None,
+                _issues_frame(_diagnostic_rows(error.diagnostics)),
+            )
+        hooks_for_specification = lambda spec: submission_hooks(study.document, spec)
+    execution = execute_workflow(
+        workflow,
+        resources,
+        dispatcher=dispatcher,
+        hooks_for_specification=hooks_for_specification,
+    )
     sources = dict(execution.sources.get(workflow.entry_path, {}))
     result = execution.result
     return DomainRun(

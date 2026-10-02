@@ -2517,6 +2517,7 @@ name = "yamaa"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "jsonschema" },
     { name = "lxml" },
     { name = "polars" },
     { name = "py-yaml12" },
@@ -2538,6 +2539,7 @@ harbor = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jsonschema", specifier = ">=4.25,<5" },
     { name = "lxml", specifier = ">=6.1.0,<7" },
     { name = "polars", specifier = ">=1.35.2,<2" },
     { name = "py-yaml12", specifier = ">=0.2.0,<0.3" },
