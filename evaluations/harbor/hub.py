@@ -13,6 +13,204 @@ from collections import defaultdict
 from pathlib import Path
 
 
+def prepare_job_leaderboards(job_dir: Path, datasets: list[dict]) -> list[dict]:
+    """Calculate ranked rows from complete local evidence before any cleanup."""
+    from leaderboard import collect, definition_for, load_leaderboards, rows_for
+
+    try:
+        run = collect(job_dir)
+    except SystemExit as error:
+        raise ValueError(str(error)) from error
+    submissions = []
+    for dataset in datasets:
+        task_names = {name.split("/", 1)[1] for name in dataset["task_names"]}
+        boards = [b for b in load_leaderboards() if set(b["tasks"]) == task_names]
+        if len(boards) != 1:
+            raise ValueError(
+                "a ranked job must cover one complete leaderboard task set"
+            )
+        board = boards[0]
+        run["leaderboards"] = [board["harbor"]["name"]]
+        try:
+            rows = rows_for(board, [run])
+        except SystemExit as error:
+            raise ValueError(str(error)) from error
+        definition = definition_for(board, rows, dataset["name"])
+        definition["dataset_version_ids"] = [dataset["version_id"]]
+        submissions.append(
+            {
+                "definition": definition,
+                "row": {
+                    k: rows[0][k]
+                    for k in ("metadata", "metrics", "status", "trial_ids")
+                },
+            }
+        )
+    if not submissions:
+        raise ValueError("a ranked job must have a dataset")
+    return submissions
+
+
+async def _leaderboard_rows(client, board_id: str):
+    rows, page = [], 1
+    while True:
+        board, response = await client.list_rows(
+            leaderboard_id=board_id, page=page, page_size=1000
+        )
+        rows.extend(response.items)
+        if page >= response.total_pages:
+            return board, rows
+        page += 1
+
+
+async def publish_job_leaderboards(submissions: list[dict]) -> list[dict]:
+    """Publish once per job, then confirm scores, ranking, versions and trial links."""
+    from harbor.hub.leaderboards import (
+        LeaderboardClient,
+        LeaderboardCreateConfig,
+        LeaderboardDefinitionUpdateConfig,
+        LeaderboardRowCreate,
+    )
+
+    client = LeaderboardClient()
+    published = []
+    for submission in submissions:
+        definition = LeaderboardCreateConfig.model_validate(
+            submission["definition"]
+        ).to_request()
+        desired = LeaderboardRowCreate.model_validate(submission["row"]).to_request()
+        if definition["rank_by"][0]["accessor"] != "metrics.reward":
+            raise ValueError("task pass rate must be the primary leaderboard score")
+        package, name = definition["package"], definition["name"]
+        existing = [
+            b for b in await client.list_leaderboards(package=package) if b.name == name
+        ]
+        if len(existing) > 1:
+            raise RuntimeError("Harbor returned duplicate leaderboard identities")
+        if existing:
+            board = await client.get(leaderboard_id=existing[0].id)
+            for key in ("yamaa_commit", "image_reference"):
+                actual = (
+                    board.metadata_schema.get("properties", {})
+                    .get(key, {})
+                    .get("const")
+                )
+                expected = definition["metadata_schema"]["properties"][key]["const"]
+                if actual != expected:
+                    raise ValueError(
+                        "existing leaderboard covers a different task release or runtime"
+                    )
+            changes = {
+                k: v
+                for k, v in definition.items()
+                if k not in ("package", "name", "dataset_version_ids")
+                and getattr(board, k) != v
+            }
+            versions = sorted(
+                set(board.dataset_version_ids or [])
+                | set(definition["dataset_version_ids"])
+            )
+            if set(versions) != set(board.dataset_version_ids or []):
+                changes["dataset_version_ids"] = versions
+            if changes:
+                update = LeaderboardDefinitionUpdateConfig.model_validate(
+                    changes
+                ).to_request()
+                await client.update_definition(
+                    {
+                        "leaderboard_id": board.id,
+                        "expected_updated_at": board.updated_at,
+                        **update,
+                    }
+                )
+        else:
+            board = await client.create(definition)
+
+        board, rows = await _leaderboard_rows(client, board.id)
+        matches = [
+            r for r in rows if r.metadata.get("job_id") == desired["metadata"]["job_id"]
+        ]
+        if len(matches) > 1:
+            raise RuntimeError("the job already has duplicate leaderboard rows")
+        if not matches:
+            await client.create_rows({"leaderboard_id": board.id, "rows": [desired]})
+            board, rows = await _leaderboard_rows(client, board.id)
+            matches = [
+                r
+                for r in rows
+                if r.metadata.get("job_id") == desired["metadata"]["job_id"]
+            ]
+        if len(matches) != 1:
+            raise RuntimeError("Harbor has not confirmed the job's leaderboard row")
+        row = matches[0]
+        if any(
+            getattr(row, key) != desired[key]
+            for key in ("metadata", "metrics", "status")
+        ):
+            await client.update_rows(
+                {
+                    "rows": [
+                        {
+                            "id": row.id,
+                            "expected_updated_at": row.updated_at,
+                            **{
+                                k: desired[k] for k in ("metadata", "metrics", "status")
+                            },
+                        }
+                    ]
+                }
+            )
+            row = await client.get_row(row.id)
+        linked, page = set(), 1
+        while True:
+            response = await client.list_row_trials(row.id, page=page, page_size=1000)
+            linked.update(t.trial_id for t in response.items)
+            if page >= response.total_pages:
+                break
+            page += 1
+        if linked != set(desired["trial_ids"]):
+            raise RuntimeError("Harbor has not confirmed every leaderboard trial link")
+        board = await client.get(leaderboard_id=board.id)
+        row = await client.get_row(row.id)
+        if (
+            any(
+                getattr(row, key) != desired[key]
+                for key in ("metadata", "metrics", "status")
+            )
+            or any(
+                getattr(board, key) != definition[key]
+                for key in (
+                    "rank_by",
+                    "columns",
+                    "metadata_schema",
+                    "metrics_schema",
+                    "visibility",
+                )
+            )
+            or not set(definition["dataset_version_ids"])
+            <= set(board.dataset_version_ids or [])
+        ):
+            raise RuntimeError(
+                "Harbor has not confirmed the leaderboard scores and definition"
+            )
+        published.append(
+            {
+                "id": board.id,
+                "name": name,
+                "package": package,
+                "row_id": row.id,
+                "url": f"https://hub.harborframework.com/datasets/{package}?tab=leaderboard&leaderboard={name}",
+                "primary_metric": "reward",
+                "task_pass_rate": row.metrics["reward"],
+                "passed_trials": row.metrics["n_passed_trials"],
+                "total_trials": row.metrics["n_trials"],
+            }
+        )
+    if not published:
+        raise ValueError("a ranked job must have a leaderboard submission")
+    return published
+
+
 async def harbor_command(log: Path, *args: str) -> None:
     """Use the job's installed Harbor CLI to write its native dataset manifest."""
     with log.open("a") as output:

@@ -40,6 +40,19 @@ def hub(monkeypatch):
 
     monkeypatch.setattr(module, "publish_job_datasets", publish)
     monkeypatch.setattr(module, "link_job_datasets", link)
+
+    async def rank(submissions):
+        assert submissions == [
+            {"row": {"trial_ids": TRIAL_IDS, "metadata": {"job_id": JOB_ID}}}
+        ]
+        return [{"url": "https://hub.harborframework.com/leaderboards/test"}]
+
+    monkeypatch.setattr(
+        module,
+        "prepare_job_leaderboards",
+        lambda *_: [{"row": {"trial_ids": TRIAL_IDS, "metadata": {"job_id": JOB_ID}}}],
+    )
+    monkeypatch.setattr(module, "publish_job_leaderboards", rank)
     return module
 
 
@@ -195,6 +208,8 @@ def test_cleanup_rejects_paths_outside_the_job(completed_job, name):
         "verified_at": "verified",
         "dataset_verified_at": "verified",
         "datasets": DATASETS,
+        "leaderboard_verified_at": "verified",
+        "leaderboards": [{"id": "board"}],
         "trial_directories": [name],
     }
     with pytest.raises(ValueError):
@@ -217,6 +232,101 @@ def test_cleanup_requires_verified_dataset_links(completed_job):
             {"status": "uploaded", "verified_at": "verified", "datasets": DATASETS},
         )
     assert (completed_job / "passed/artifact.txt").is_file()
+
+
+def test_cleanup_requires_verified_leaderboard_scores_and_trial_links(completed_job):
+    runner = _load("run")
+    with pytest.raises(ValueError, match="confirmed Harbor Hub"):
+        runner.cleanup_uploaded_job(
+            completed_job,
+            {
+                "status": "uploaded",
+                "verified_at": "verified",
+                "dataset_verified_at": "verified",
+                "datasets": DATASETS,
+            },
+        )
+    assert (completed_job / "passed/artifact.txt").is_file()
+
+
+def test_failed_leaderboard_publication_keeps_evidence_and_retries_without_reupload(
+    completed_job, monkeypatch, hub_db, hub
+):
+    uploader = pytest.importorskip("harbor.upload.uploader")
+    runner = _load("run")
+    uploads = []
+
+    class FakeUploader:
+        db = hub_db
+
+        async def upload_job(self, job_dir, **kwargs):
+            uploads.append(job_dir)
+            return SimpleNamespace(
+                job_id=JOB_ID,
+                n_trials_uploaded=2,
+                n_trials_skipped=0,
+                n_trials_failed=0,
+            )
+
+    rank = hub.publish_job_leaderboards
+
+    async def unavailable(submissions):
+        raise RuntimeError("leaderboard unavailable")
+
+    monkeypatch.setattr(uploader, "Uploader", FakeUploader)
+    monkeypatch.setattr(hub, "publish_job_leaderboards", unavailable)
+    assert not asyncio.run(runner.upload_completed_job(completed_job))
+    receipt = json.loads((completed_job / "hub-upload.json").read_text())
+    assert receipt["verified_at"] and receipt["dataset_verified_at"]
+    assert receipt["leaderboard_submissions"] and not receipt.get(
+        "leaderboard_verified_at"
+    )
+    assert (completed_job / "passed/artifact.txt").exists()
+    monkeypatch.setattr(hub, "publish_job_leaderboards", rank)
+    monkeypatch.setattr(
+        hub,
+        "prepare_job_leaderboards",
+        lambda *_: pytest.fail("retry must reuse preserved scores"),
+    )
+    assert asyncio.run(runner.upload_completed_job(completed_job))
+    assert len(uploads) == 1
+    receipt = json.loads((completed_job / "hub-upload.json").read_text())
+    assert receipt["leaderboard_verified_at"] and "error" not in receipt
+    assert not (completed_job / "passed").exists()
+
+
+@pytest.mark.parametrize("mismatch", ["job", "missing_attempt", "duplicate_attempt"])
+def test_cleanup_refuses_a_cached_submission_for_another_job_or_attempt_set(
+    completed_job, monkeypatch, hub_db, hub, mismatch
+):
+    uploader = pytest.importorskip("harbor.upload.uploader")
+    runner = _load("run")
+
+    class FakeUploader:
+        db = hub_db
+
+        async def upload_job(self, *args, **kwargs):
+            return SimpleNamespace(
+                job_id=JOB_ID,
+                n_trials_uploaded=2,
+                n_trials_skipped=0,
+                n_trials_failed=0,
+            )
+
+    row = {"metadata": {"job_id": JOB_ID}, "trial_ids": list(TRIAL_IDS)}
+    if mismatch == "job":
+        row["metadata"]["job_id"] = "another-job"
+    elif mismatch == "missing_attempt":
+        row["trial_ids"].pop()
+    else:
+        row["trial_ids"][1] = row["trial_ids"][0]
+    monkeypatch.setattr(uploader, "Uploader", FakeUploader)
+    monkeypatch.setattr(hub, "prepare_job_leaderboards", lambda *_: [{"row": row}])
+    assert not asyncio.run(runner.upload_completed_job(completed_job))
+    receipt = json.loads((completed_job / "hub-upload.json").read_text())
+    assert "every uploaded attempt" in receipt["error"]
+    assert not receipt.get("leaderboard_verified_at")
+    assert (completed_job / "passed/artifact.txt").exists()
 
 
 def test_upload_keeps_failed_attempts_and_uses_private_yamaa_org(
@@ -246,6 +356,7 @@ def test_upload_keeps_failed_attempts_and_uses_private_yamaa_org(
     assert receipt["status"] == "uploaded" and receipt["uploaded_trials"] == 2
     assert receipt["verified_at"] and receipt["local_cleanup"] == "completed"
     assert receipt["datasets"] == DATASETS and receipt["dataset_verified_at"]
+    assert receipt["leaderboards"] and receipt["leaderboard_verified_at"]
     assert not (completed_job / "passed").exists()
     assert not (completed_job / "failed").exists()
     assert not (completed_job / "task-snapshots").exists()

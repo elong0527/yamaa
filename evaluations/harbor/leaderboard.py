@@ -508,8 +508,13 @@ def metrics(trials: list[dict]) -> dict:
         else []
     )
     cost = _total(trials, "cost_usd")
+    pass_rate = _mean(task_rates)
+    passed = sum(t["reward"] == 1.0 for t in trials)
     result = {
-        "reward": _mean(task_rates),
+        "reward": pass_rate,
+        "task_pass_rate_display": f"{pass_rate:.1%}",
+        "n_passed_trials": passed,
+        "passed_trials_display": f"{passed}/{len(trials)}",
         "trial_reward": _mean([t["reward"] for t in trials]),
         "reward_ci_low": samples[49] if samples else None,
         "reward_ci_high": samples[1949] if samples else None,
@@ -564,6 +569,7 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "attempts": min(Counter(t["benchmark"] for t in trials).values()),
                     "job": run["job"],
                     "job_id": run["job_id"],
+                    "job_url": f"https://hub.harborframework.com/jobs/{run['job_id']}",
                     "harbor_version": run["harbor_version"],
                     "yamaa_commit": run.get("yamaa_commit"),
                     "grading_protocol": next(iter(run["grading_protocols"])),
@@ -578,14 +584,8 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
     return rows
 
 
-def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]:
-    """Write the Hub create configs for one leaderboard and its rows."""
-    name = board["harbor"]["name"]
-    out.mkdir(parents=True, exist_ok=True)
-    definition = out / f"{name}.leaderboard.yaml"
-    written = [definition]
-    # Harbor Hub ranks rows by the board's `rank_by`; they go up in run order.
-    rows = rows_for(board, runs)
+def definition_for(board: dict, rows: list[dict], package: str) -> dict:
+    """Pin a leaderboard definition to the task release and runtime of its rows."""
     release = copy.deepcopy(board["harbor"])
     if rows:
         commit = rows[0]["metadata"]["yamaa_commit"]
@@ -594,8 +594,18 @@ def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]
         release["metadata_schema"]["properties"]["image_reference"]["const"] = rows[0][
             "metadata"
         ]["image_reference"]
+    return {"package": package, **release}
+
+
+def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]:
+    """Write the Hub create configs for one leaderboard and its rows."""
+    name = board["harbor"]["name"]
+    out.mkdir(parents=True, exist_ok=True)
+    definition = out / f"{name}.leaderboard.yaml"
+    written = [definition]
+    rows = rows_for(board, runs)
     definition.write_text(
-        yaml.safe_dump({"package": package, **release}, sort_keys=False)
+        yaml.safe_dump(definition_for(board, rows, package), sort_keys=False)
     )
     if rows:
         hub_rows = [

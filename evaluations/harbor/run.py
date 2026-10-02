@@ -5,8 +5,8 @@
 The job owns a copy of each task, including its metadata. Later builds cannot
 change its inputs or provenance, even when setup fails before verification.
 Completed model jobs are uploaded privately to yamaa on Harbor Hub. After
-the task versions, dataset links, and archives are confirmed, local artifacts
-are removed and completion metadata remains.
+the task versions, dataset links, archives and leaderboard rows are confirmed,
+local artifacts are removed and completion metadata remains.
 """
 
 from __future__ import annotations
@@ -73,6 +73,8 @@ def cleanup_uploaded_job(job_dir: Path, receipt: dict) -> None:
         or not receipt.get("verified_at")
         or not receipt.get("dataset_verified_at")
         or not receipt.get("datasets")
+        or not receipt.get("leaderboard_verified_at")
+        or not receipt.get("leaderboards")
     ):
         raise ValueError("local cleanup requires a confirmed Harbor Hub upload")
     names = receipt["trial_directories"]
@@ -129,6 +131,8 @@ async def upload_completed_job(job_dir: Path) -> bool:
         confirmed
         and previous.get("local_cleanup") == "completed"
         and previous.get("dataset_verified_at")
+        and previous.get("leaderboard_verified_at")
+        and previous.get("leaderboards")
     ):
         print(f"Already uploaded and cleaned: {previous['url']}")
         return True
@@ -173,7 +177,29 @@ async def upload_completed_job(job_dir: Path) -> bool:
             ):
                 raise RuntimeError("Harbor Hub did not receive every trial")
         await confirm_uploaded_job(uploader, receipt)
+        from hub import prepare_job_leaderboards, publish_job_leaderboards
+
+        if not receipt.get("leaderboard_submissions"):
+            receipt["leaderboard_submissions"] = prepare_job_leaderboards(
+                job_dir, receipt["datasets"]
+            )
+            save_upload_receipt(job_dir, receipt)
+        rows = [item["row"] for item in receipt["leaderboard_submissions"]]
+        linked = [trial_id for row in rows for trial_id in row["trial_ids"]]
+        if (
+            len(linked) != expected
+            or set(linked) != set(receipt["trial_ids"])
+            or any(row["metadata"]["job_id"] != result["id"] for row in rows)
+        ):
+            raise ValueError(
+                "leaderboard submissions must cover every uploaded attempt of this job"
+            )
+        receipt["leaderboards"] = await publish_job_leaderboards(
+            receipt["leaderboard_submissions"]
+        )
+        receipt["leaderboard_verified_at"] = datetime.now(UTC).isoformat()
         receipt["status"] = "uploaded"
+        receipt.pop("error", None)
     except Exception as error:  # noqa: BLE001 -- upload failures must not stop later model jobs
         receipt.update(status="failed", error=str(error))
         print(f"Harbor Hub upload failed for {job_dir}: {error}", file=sys.stderr)
