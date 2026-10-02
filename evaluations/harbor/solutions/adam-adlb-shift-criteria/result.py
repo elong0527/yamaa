@@ -44,7 +44,7 @@ with_base = based.join(
 
 # SHIFT1 joins the baseline mark and the record's own mark; R2BASE is the
 # record as a multiple of the baseline; CRIT1 assesses greater than three
-# times the upper limit.
+# times the upper limit; CRIT2 assesses less than the lower limit.
 adlb = (
     with_base.with_columns(
         SHIFT1=pl.when(
@@ -74,6 +74,18 @@ adlb = (
         .when(pl.col("AVAL") > pl.col("CRITLIM"))
         .then(pl.lit("Y"))
         .otherwise(pl.lit("N")),
+        CRIT2=pl.when(
+            pl.col("AVAL").is_not_null() & pl.col("ANRLO").is_not_null()
+        )
+        .then(pl.lit("Result less than LLN"))
+        .otherwise(None),
+        CRIT2FL=pl.when(
+            pl.col("AVAL").is_null() | pl.col("ANRLO").is_null()
+        )
+        .then(None)
+        .when(pl.col("AVAL") < pl.col("ANRLO"))
+        .then(pl.lit("Y"))
+        .otherwise(pl.lit("N")),
     )
     .select(
         "STUDYID",
@@ -93,6 +105,8 @@ adlb = (
         "R2BASE",
         "CRIT1",
         "CRIT1FL",
+        "CRIT2",
+        "CRIT2FL",
     )
     .sort(["USUBJID", "ASEQ"])
 )

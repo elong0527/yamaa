@@ -42,7 +42,7 @@ with_base <- based |>
 
 # SHIFT1 joins the baseline mark and the record's own mark; R2BASE is the
 # record as a multiple of the baseline; CRIT1 assesses greater than three
-# times the upper limit.
+# times the upper limit; CRIT2 assesses less than the lower limit.
 adlb <- with_base |>
   mutate(
     SHIFT1 = if_else(
@@ -65,12 +65,23 @@ adlb <- with_base |>
       is.na(AVAL) | is.na(CRITLIM) ~ NA_character_,
       AVAL > CRITLIM ~ "Y",
       .default = "N"
+    ),
+    CRIT2 = if_else(
+      !is.na(AVAL) & !is.na(ANRLO),
+      "Result less than LLN",
+      NA_character_
+    ),
+    CRIT2FL = case_when(
+      is.na(AVAL) | is.na(ANRLO) ~ NA_character_,
+      AVAL < ANRLO ~ "Y",
+      .default = "N"
     )
   ) |>
   arrange(USUBJID, ASEQ) |>
   select(
     STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI,
-    ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL
+    ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL,
+    CRIT2, CRIT2FL
   )
 
 dir.create("/app/output", showWarnings = FALSE)
