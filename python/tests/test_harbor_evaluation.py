@@ -1364,6 +1364,7 @@ def test_a_build_writes_one_dataset_per_language_and_one_job_per_variant(
     ]
     config = json.loads((configs / "pilot-r-xhigh.json").read_text())
     assert config["job_name"] == "pilot-r-xhigh"
+    assert {t["source"] for t in config["tasks"]} == {"yamaa/yamaa-sdtm-adam-r"}
     assert config["agents"][0]["kwargs"]["variant"] == "xhigh"
     assert sorted(Path(t["path"]).name for t in config["tasks"]) == sorted(
         f"{b}-r" for b in PILOTS
@@ -1411,6 +1412,9 @@ def test_a_build_writes_a_dataset_and_job_per_prompt_tier(tmp_path, monkeypatch)
     ]
     config = json.loads((configs / "pilot-conventions-python-low.json").read_text())
     assert config["job_name"] == "pilot-conventions-python-low"
+    assert {t["source"] for t in config["tasks"]} == {
+        "yamaa/yamaa-sdtm-adam-conventions-python"
+    }
     assert sorted(Path(t["path"]).name for t in config["tasks"]) == sorted(
         f"{b}-conventions-python" for b in PILOTS
     )

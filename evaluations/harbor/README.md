@@ -13,6 +13,7 @@ Docker; this folder only writes Harbor task directories and a job file.
 | `prompts/` | the prompts, `<benchmark>/full.md`, `conventions.md`, and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
 | `brief.py` | writes each `brief.md` from its `full.md` |
 | `build.py` | benchmarks with a prompt -> Harbor tasks per prompt tier and language with their Harbor Hub READMEs, one dataset README per tier and language, and one job file per tier, language, and model variant |
+| `hub.py` | a job's preserved tasks -> private Hub task and dataset revisions, with verified job associations |
 | `grade.py` | the verifier, copied into every task's `tests/` |
 | `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
@@ -267,13 +268,24 @@ keep their evidence after a Hub download.
 After each complete model job, the wrapper uploads every trial and its
 artifacts privately to the `yamaa` organization on Harbor Hub, including
 failed attempts. Authenticate once with `harbor auth login` as a member of
-`yamaa`. Oracle and nop preflight jobs stay local. After the Hub confirms
-the finalized job archive and every trial archive, the wrapper deletes
-the local trial artifacts, task snapshots, logs, and upload caches. It keeps
+`yamaa`. The wrapper first publishes the job's exact task snapshots and a
+dataset revision for each language and prompt tier. Generated task configs
+carry their dataset source, including a custom `--dataset-prefix`.
+Oracle and nop preflight jobs stay local. After the Hub confirms
+the finalized job archive, every trial archive, and every dataset association,
+the wrapper deletes the local trial artifacts, task snapshots, logs, and upload
+caches. It keeps
 only `config.json`, `result.json`, and `hub-upload.json` as completion records
 for batch status and the Hub link. Unrelated files in the job directory are
 left alone. Upload or verification failures retain the local artifacts.
-`hub-upload.json` records upload, verification, and cleanup status.
+`hub-upload.json` records upload, verification, and cleanup status, along with
+the dataset names, immutable revisions, IDs, and links. Before associating a
+job, the wrapper checks that every uploaded attempt matches the published
+dataset's exact task versions. Harbor Hub's job config uses those pinned
+dataset references; `local_task_snapshots` retains the original execution
+paths there without selecting the same tasks twice for replay. Trial source
+labels also name their dataset. Publishing or association failures keep the
+local artifacts and can be retried with the same command as an upload failure.
 An upload failure is
 reported without stopping subsequent benchmark jobs; retry the upload,
 without rerunning the model, with:

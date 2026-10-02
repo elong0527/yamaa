@@ -5,7 +5,8 @@
 The job owns a copy of each task, including its metadata. Later builds cannot
 change its inputs or provenance, even when setup fails before verification.
 Completed model jobs are uploaded privately to yamaa on Harbor Hub. After
-remote confirmation, local artifacts are removed and completion metadata remains.
+the task versions, dataset links, and archives are confirmed, local artifacts
+are removed and completion metadata remains.
 """
 
 from __future__ import annotations
@@ -47,8 +48,15 @@ async def confirm_uploaded_job(uploader, receipt: dict) -> None:
         raise RuntimeError(
             "Harbor Hub has not confirmed the complete job and trial archives"
         )
+    from hub import link_job_datasets
+
+    await link_job_datasets(
+        str(job_id), receipt["datasets"], receipt["expected_trials"]
+    )
     receipt.update(
-        verified_at=datetime.now(UTC).isoformat(), archive_path=remote["archive_path"]
+        verified_at=datetime.now(UTC).isoformat(),
+        dataset_verified_at=datetime.now(UTC).isoformat(),
+        archive_path=remote["archive_path"],
     )
 
 
@@ -60,7 +68,12 @@ def save_upload_receipt(job_dir: Path, receipt: dict) -> None:
 
 def cleanup_uploaded_job(job_dir: Path, receipt: dict) -> None:
     """Remove job artifacts while retaining the supervisor's completion records."""
-    if receipt.get("status") != "uploaded" or not receipt.get("verified_at"):
+    if (
+        receipt.get("status") != "uploaded"
+        or not receipt.get("verified_at")
+        or not receipt.get("dataset_verified_at")
+        or not receipt.get("datasets")
+    ):
         raise ValueError("local cleanup requires a confirmed Harbor Hub upload")
     names = receipt["trial_directories"]
     if any(
@@ -71,6 +84,7 @@ def cleanup_uploaded_job(job_dir: Path, receipt: dict) -> None:
         *names,
         "task-snapshots",
         ".harbor-upload",
+        "hub-datasets",
         "job.log",
         "lock.json",
         "evaluation.json",
@@ -111,7 +125,11 @@ async def upload_completed_job(job_dir: Path) -> bool:
         or (not confirmed and len(trial_paths) != expected)
     ):
         raise ValueError("only finished jobs with all declared attempts are uploaded")
-    if confirmed and previous.get("local_cleanup") == "completed":
+    if (
+        confirmed
+        and previous.get("local_cleanup") == "completed"
+        and previous.get("dataset_verified_at")
+    ):
         print(f"Already uploaded and cleaned: {previous['url']}")
         return True
     receipt = (
@@ -131,6 +149,11 @@ async def upload_completed_job(job_dir: Path) -> bool:
     save_upload_receipt(job_dir, receipt)
     try:
         uploader = Uploader()
+        if not receipt.get("datasets"):
+            from hub import publish_job_datasets
+
+            receipt["datasets"] = await publish_job_datasets(job_dir)
+            save_upload_receipt(job_dir, receipt)
         if not confirmed:
             uploaded = await uploader.upload_job(
                 job_dir, org="yamaa", visibility="private"
@@ -183,12 +206,21 @@ def preserve_tasks(config: dict, job_dir: Path) -> dict:
         source = Path(entry["path"]).resolve()
         task = tomllib.loads((source / "task.toml").read_text())
         name = task["task"]["name"]
+        metadata = task.get("metadata", {})
+        language, tier = metadata.get("language"), metadata.get("prompt")
+        if not entry.get("source") and language and tier:
+            suffix = language if tier == "full" else f"{tier}-{language}"
+            entry["source"] = f"yamaa/yamaa-sdtm-adam-{suffix}"
         if name in tasks:
             raise ValueError(f"duplicate task: {name}")
         destination = job_dir / "task-snapshots" / source.name
         shutil.copytree(source, destination)
         entry["path"] = str(destination.resolve())
-        tasks[name] = {"path": entry["path"], "task": task}
+        tasks[name] = {
+            "path": entry["path"],
+            "source": entry.get("source"),
+            "task": task,
+        }
     (job_dir / "evaluation.json").write_text(
         json.dumps({"tasks": tasks}, indent=2, sort_keys=True) + "\n"
     )
