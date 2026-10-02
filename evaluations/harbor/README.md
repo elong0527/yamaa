@@ -202,16 +202,20 @@ uv run --project python --no-sync harbor run \
 `smoke.py` does both checks offline in one step: it builds the tasks,
 probes the verifier sandbox (`probe.py`: the script cannot read the golden
 files, change the inputs or the grader's logs, or leave a process
-behind), then runs `oracle`, which must score 1 with every required
-challenge checked, and `nop`, which must score 0. The Harbor Oracle
-workflow (`.github/workflows/harbor-oracle.yml`) runs it on all three prompt
-tiers of the development tasks for each pull request, and on every benchmark on
-Mondays or on request; before a model run, run it on every benchmark:
+behind), then randomly samples ten buildable tasks without replacement.
+Both `oracle` and `nop` run the same sample: ten trials each, twenty total.
+`oracle` must score 1 with every required challenge checked, and `nop` must
+score 0. If fewer than ten tasks are available, it checks all of them.
+`sample.json` saves the selected tasks and random seed; pass that seed with
+`--seed` to repeat the sample from the same source and prompt tiers.
+The Harbor Oracle workflow (`.github/workflows/harbor-oracle.yml`) samples
+across all three prompt tiers and both languages on pull requests, Mondays,
+and manual runs. Before a model run, use the same sampled preflight:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/smoke.py \
-	--full \
-	--n-concurrent 8 \
+	--prompt full conventions brief \
+	--n-concurrent 6 \
 	--out ~/.cache/yamaa-harbor-smoke
 ```
 
@@ -252,19 +256,40 @@ done
 Use this wrapper for ranked runs. It refuses an existing job directory;
 choose a new job name for a new complete run. Automatic retries are disabled.
 Do not select successful attempts from an interrupted or failed job.
-Keep the job's `evaluation.json` and `task-snapshots/` with its results.
+Keep the job's `evaluation.json` and `task-snapshots/` with its results until
+the Hub confirms the upload.
 At trial start the wrapper also saves the task metadata and manifest under
 `verifier/`, which Harbor includes in its upload/download archives. It restores
 the manifest after verification resets that directory, retaining the verifier's
 own task snapshot for comparison. Successful and failed setup trials therefore
 keep their evidence after a Hub download.
 
+After each complete model job, the wrapper uploads every trial and its
+artifacts privately to the `yamaa` organization on Harbor Hub, including
+failed attempts. Authenticate once with `harbor auth login` as a member of
+`yamaa`. Oracle and nop preflight jobs stay local. After the Hub confirms
+the finalized job archive and every trial archive, the wrapper deletes
+the local trial artifacts, task snapshots, logs, and upload caches. It keeps
+only `config.json`, `result.json`, and `hub-upload.json` as completion records
+for batch status and the Hub link. Unrelated files in the job directory are
+left alone. Upload or verification failures retain the local artifacts.
+`hub-upload.json` records upload, verification, and cleanup status.
+An upload failure is
+reported without stopping subsequent benchmark jobs; retry the upload,
+without rerunning the model, with:
+
+```bash
+uv run --project python --no-sync python evaluations/harbor/run.py \
+	--upload-only ~/.cache/yamaa-harbor/jobs/<job>
+```
+
 Each trial directory under `~/.cache/yamaa-harbor/jobs/<job>/` holds the
 agent's files (`artifacts/app/`, with its `output/result.R` or
 `output/result.py`) and trajectory (`agent/trajectory.json`),
 the grade (`verifier/grade.json`, `verifier/reward.json`, and a
 `diff-<file>.csv` when cells differ), and Harbor's `result.json` with
-tokens and cost. `harbor view ~/.cache/yamaa-harbor/jobs` browses them.
+tokens and cost until upload is confirmed. To browse or export results after
+cleanup, restore the job with `harbor job download <job-id>`.
 
 ## Leaderboards
 
