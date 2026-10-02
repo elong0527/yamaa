@@ -5,8 +5,7 @@
 # timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
 # What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
-# rows rank by cell accuracy first, since a task here can need a
-# sponsor choice the prompt no longer states.
+# rows rank by complete task pass rate first; cell accuracy is secondary.
 # This board is the whole R track on the conventions prompts: every buildable
 # SDTM and ADaM benchmark, each requiring `/app/output/result.R`.
 grading_protocol: "3"
@@ -197,6 +196,9 @@ harbor:
       job:
         type: string
         description: Harbor job name
+      job_url:
+        type: string
+        description: Link to the uploaded Harbor job
       job_id:
         type: [string, "null"]
         description: Harbor job id, when the job directory recorded it
@@ -225,6 +227,15 @@ harbor:
           Mean per-task pass rate: the share of attempts that
           pass (every golden cell matches, the rerun reproduces the output,
           no other language or web tool); an errored trial counts as 0
+      task_pass_rate_display:
+        type: string
+        description: Task pass rate formatted as a percentage
+      n_passed_trials:
+        type: integer
+        description: Attempts that passed every required check
+      passed_trials_display:
+        type: string
+        description: Successful attempts / total attempts
       cell_accuracy:
         type: number
         description: Mean share of golden cells reproduced
@@ -285,13 +296,26 @@ harbor:
       accessor: metadata.variant
       type: text
     - id: reward
-      header: Pass rate
+      header: Task pass rate
       accessor: metrics.reward
       type: number
+      display_accessor: metrics.task_pass_rate_display
+      display_type: text
       align: right
       description: >-
         Mean per-task pass rate: every golden cell matches, the rerun
         reproduces the output, and no other language or web tool was used
+    - id: passed_trials
+      header: Passed / attempts
+      accessor: metrics.n_passed_trials
+      type: number
+      display_accessor: metrics.passed_trials_display
+      display_type: text
+      align: right
+    - id: job
+      header: Job
+      accessor: metadata.job_url
+      type: link
     - id: pass_at_2
       header: Pass@2
       accessor: metrics.pass_at_2
@@ -346,10 +370,10 @@ harbor:
       accessor: metadata.yamaa_commit
       type: text
   rank_by:
-    - accessor: metrics.cell_accuracy
+    - accessor: metrics.reward
       direction: desc
       nulls: last
-    - accessor: metrics.reward
+    - accessor: metrics.cell_accuracy
       direction: desc
       nulls: last
     - accessor: metrics.cost_per_trial_usd

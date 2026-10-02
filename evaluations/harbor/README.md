@@ -272,19 +272,28 @@ failed attempts. Authenticate once with `harbor auth login` as a member of
 dataset revision for each language and prompt tier. Generated task configs
 carry their dataset source, including a custom `--dataset-prefix`.
 Oracle and nop preflight jobs stay local. After the Hub confirms
-the finalized job archive, every trial archive, and every dataset association,
+the finalized job archive, every trial archive, every dataset association,
+and the leaderboard row's scores and trial links,
 the wrapper deletes the local trial artifacts, task snapshots, logs, and upload
 caches. It keeps
 only `config.json`, `result.json`, and `hub-upload.json` as completion records
 for batch status and the Hub link. Unrelated files in the job directory are
 left alone. Upload or verification failures retain the local artifacts.
 `hub-upload.json` records upload, verification, and cleanup status, along with
-the dataset names, immutable revisions, IDs, and links. Before associating a
+the dataset and leaderboard names, immutable revisions, IDs, and links.
+It retains the calculated leaderboard submission so a failed publication or
+partial cleanup can be retried without rerunning the model. Before associating a
 job, the wrapper checks that every uploaded attempt matches the published
 dataset's exact task versions. Harbor Hub's job config uses those pinned
 dataset references; `local_task_snapshots` retains the original execution
 paths there without selecting the same tasks twice for replay. Trial source
-labels also name their dataset. Publishing or association failures keep the
+labels also name their dataset. After checking the complete grading evidence,
+the wrapper submits one row per job to the board for its task release, language
+and prompt tier. Every board ranks by task pass rate (`reward`), shows that score
+as a percentage and displays successful attempts / total attempts. Cell accuracy
+is a secondary metric. Each row links to its job and every trial, including
+failed attempts. Repeated uploads reuse the existing row.
+Publishing, association or leaderboard verification failures keep the
 local artifacts and can be retried with the same command as an upload failure.
 An upload failure is
 reported without stopping subsequent benchmark jobs; retry the upload,
@@ -330,9 +339,10 @@ and `export` then refuses them. Start a new leaderboard instead. There is
 one leaderboard per dataset, so one per language and prompt tier
 (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v3-r`,
 `yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v3-brief-r`, ...), and R, Python,
-and each tier are ranked independently. The conventions and brief boards
-rank by cell accuracy before pass rate, since their tasks can need a
-sponsor choice the prompt no longer states. The boards are `v3` because
+and each tier are ranked independently. All boards rank by complete task pass
+rate before cell accuracy. Shorter prompts can leave sponsor choices unstated,
+so their strict pass rates include the model's ability to infer those choices.
+The boards are `v3` because
 grading protocol 3 changes derivation inputs, grades regenerated partial
 answers, and requires complete job evidence. Older scores stay on their
 existing boards. Export appends the full source commit to the Hub board name
@@ -381,7 +391,7 @@ are not independent evidence of generalization.
 ### Publish to Harbor Hub
 
 Everything is private to the `yamaa` organization on Harbor Hub: the tasks,
-the two datasets, the uploaded jobs, and the leaderboards. Log in once with
+the six datasets, the uploaded jobs, and the leaderboards. Log in once with
 `harbor auth login` (GitHub OAuth) as a member of `yamaa`. Build the tasks
 from a committed tree, so each row's "Tasks from" commit names the prompts
 it answered (a `+dirty` suffix means uncommitted changes), and publish
@@ -415,8 +425,10 @@ dataset. The board links dataset revisions by id, and
 `harbor hub leaderboard update <board> --dv-id <id> ...` replaces that
 list, so pass every revision its rows ran on.
 
-Then write each leaderboard's configs from the job directories and create
-the board and its rows:
+The runner publishes the board and its row automatically before cleanup.
+For manual publication or older jobs, restore cleaned jobs with
+`harbor job download <job-id>`, then write each leaderboard's configs from
+the job directories and create the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \

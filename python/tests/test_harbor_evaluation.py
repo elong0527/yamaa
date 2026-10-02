@@ -611,10 +611,7 @@ def test_each_language_has_a_board_per_prompt_tier():
             assert sorted(board["tasks"]) == sorted(
                 build.task_name(b, language, tier) for b in buildable
             )
-            # A shorter prompt leaves sponsor choices unstated, so its boards
-            # rank by how much of the data an agent reproduced.
-            first = "metrics.reward" if tier == "full" else "metrics.cell_accuracy"
-            assert board["harbor"]["rank_by"][0]["accessor"] == first
+            assert board["harbor"]["rank_by"][0]["accessor"] == "metrics.reward"
 
 
 def _on(run: dict, board: dict) -> dict:
