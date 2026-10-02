@@ -24,6 +24,7 @@ conditions:
   codelist_values_conflict: {phases: [validation]}
   conversion_failed: {phases: [convert]}
   core_mandatory_conflict: {phases: [validation]}
+  correlated_derivation_with_unique_verification: {phases: [validation]}
   correlated_filter_with_unique_verification: {phases: [validation]}
   dataset_json_path_collision: {phases: [validation]}
   dataset_json_without_data: {phases: [validation]}

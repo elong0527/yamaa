@@ -164,6 +164,8 @@ class PlannedIntermediate(_FrozenModel):
     # REQ-1185: derivations are computed per record before matching; the map
     # is empty when the author declared none.
     derived: tuple[tuple[str, HandledExpression], ...] = ()
+    # REQ-1185: qualified driver reads, with their expression paths.
+    derivation_references: tuple[tuple[str, str], ...] = ()
     # REQ-1245: checks over the source-only filtered donor records.
     unique_checks: tuple[PlannedIntermediateUnique, ...] = ()
 
@@ -184,14 +186,15 @@ class PlannedIntermediate(_FrozenModel):
         """Return the current-row variables REQ-0050 makes this intermediate need.
 
         Donor fields contribute no current-row dependency. Matching values,
-        range values and correlated filter fields must be available before
-        selecting the shared record. REQ-1259: an expression match value
+        range values, and correlated filter and derivation fields must be
+        available before selecting the shared record. REQ-1259: an expression match value
         contributes the identifiers its expression reads, not its synthetic
         match name.
         """
         synthetic = {keyed.name for keyed in self.match_expressions}
         names = [name for name in self.match_variables if name not in synthetic]
         names.extend(self.filter_variables)
+        names.extend(name for name, _ in self.derivation_references)
         for keyed in self.match_expressions:
             names.extend(keyed.variables)
         if self.between_value is not None:
@@ -1902,9 +1905,17 @@ def _validate_qualified_reference(
     if qualifier in intermediates and qualifier not in drivers:
         intermediate = intermediates[qualifier]
         _validate_intermediate_reference(reference, intermediate, bindings, diagnostics)
-        for name in intermediate.filter_variables:
+        driver_references = [
+            (name, f"{intermediate.path}.filter", "REQ-0120")
+            for name in intermediate.filter_variables
+        ]
+        driver_references.extend(
+            (name, path, "REQ-1185")
+            for name, path in intermediate.derivation_references
+        )
+        for name, path, requirement in driver_references:
             _validate_qualified_reference(
-                _Reference(name, f"{intermediate.path}.filter", current_driver=True),
+                _Reference(name, path, current_driver=True, requirement=requirement),
                 drivers,
                 bindings,
                 column_types,
@@ -1919,7 +1930,7 @@ def _validate_qualified_reference(
                 "unknown_field",
                 reference.path,
                 {"identifier": reference.name, "drivers": sorted(drivers)},
-                requirement="REQ-0120",
+                requirement=reference.requirement,
             )
         )
         return
@@ -2787,6 +2798,7 @@ def _plan_lookups(
 
         failed = False
         intermediate_reads: list[_IntermediateRead] = []
+        driver_reads: list[_Reference] = []
         derived = _validate_intermediate_derivations(
             intermediate,
             path,
@@ -2797,6 +2809,8 @@ def _plan_lookups(
             dataset_fields=dataset_fields,
             intermediate_ids=intermediate_ids,
             reads=intermediate_reads,
+            driver_reads=driver_reads,
+            row_drivers=row_drivers,
         )
         # REQ-1185: a name whose derivation failed validation is already
         # reported at its derivation path; the key below must not repeat the
@@ -3053,6 +3067,16 @@ def _plan_lookups(
                     )
                 )
                 failed = True
+            if driver_reads:
+                diagnostics.append(
+                    _diagnostic(
+                        "correlated_derivation_with_unique_verification",
+                        check_path,
+                        {"intermediate": intermediate.id},
+                        requirement="REQ-1245",
+                    )
+                )
+                failed = True
             unique_checks.append(
                 PlannedIntermediateUnique(
                     columns=tuple(columns),
@@ -3108,6 +3132,7 @@ def _plan_lookups(
             no_match=intermediate.no_match,
             no_match_declared="no_match" in intermediate.model_fields_set,
             derived=tuple(derived.items()),
+            derivation_references=tuple((ref.name, ref.path) for ref in driver_reads),
             unique_checks=tuple(unique_checks),
         )
         if intermediate_reads:
@@ -3260,18 +3285,21 @@ def _validate_intermediate_derivations(
     dataset_fields: Mapping[str, Collection[str]] | None = None,
     intermediate_ids: Collection[str] = (),
     reads: list[_IntermediateRead] | None = None,
+    driver_reads: list[_Reference] | None = None,
+    row_drivers: Collection[str | None] = (),
 ) -> dict[str, HandledExpression]:
     """Validate one intermediate's REQ-1185 derivations.
 
     A derivation reads the intermediate's own stored dataset fields plus the
     derivations declared before it in the same map: a bare name means the
     dataset's field or an earlier derived name, and a qualified name must
-    name the dataset. A name qualified by another declared intermediate is a
-    REQ-1263 read, collected into `reads` for `_validate_intermediate_reads`
-    once every intermediate is planned. Anything else - a driver field, a
-    later derivation in the same map, a read of another intermediate inside
-    a window, or a name the dataset does not store - fails as
-    `unknown_field`. A derived name must not shadow a stored column. Returns
+    name the dataset or the current driver. Driver reads are checked against
+    the actual driver at each use, just like a correlated filter. A name
+    qualified by another declared intermediate is a REQ-1263 read, collected
+    into `reads` for `_validate_intermediate_reads` once every intermediate
+    is planned. Anything else - a later derivation in the same map, a read of
+    the driver or another intermediate inside a window, or an unknown field -
+    fails as `unknown_field`. A derived name must not shadow a stored column. Returns
     the valid declarations in author order.
     """
     dataset = intermediate.dataset
@@ -3299,11 +3327,13 @@ def _validate_intermediate_derivations(
             expression_path(derivation_path, declaration),
             supported_operations,
             dataset_fields=dataset_fields,
+            scope=_Scope(column_phase=False),
         )
         unsupported.extend(info.unsupported)
         diagnostics.extend(info.diagnostics)
         ok = True
         name_reads: list[_IntermediateRead] = []
+        name_driver_reads: list[_Reference] = []
         for reference in info.references:
             identifier = reference.name
             if "." in identifier:
@@ -3312,6 +3342,15 @@ def _validate_intermediate_derivations(
                 # reference may read an earlier derived name as well as a
                 # stored field; a later one is not in scope yet.
                 allowed = qualifier == dataset and (field in fields or field in derived)
+                if (
+                    not allowed
+                    and qualifier != dataset
+                    and (qualifier not in intermediate_ids or qualifier in row_drivers)
+                    and field in (dataset_fields or {}).get(qualifier, ())
+                    and not _in_window(reference.path, derivation_path)
+                ):
+                    name_driver_reads.append(reference)
+                    continue
                 if (
                     not allowed
                     and qualifier in intermediate_ids
@@ -3349,6 +3388,8 @@ def _validate_intermediate_derivations(
             derived[name] = declaration
             if reads is not None:
                 reads.extend(name_reads)
+            if driver_reads is not None:
+                driver_reads.extend(name_driver_reads)
     return derived
 
 
@@ -4389,6 +4430,7 @@ def _bind_intermediate_drivers(
     specification: Specification,
     bindings: BindingPlan,
     diagnostics: list[ExecutionDiagnostic],
+    supported_operations: Collection[str],
 ) -> BindingPlan:
     """Expose source-only intermediate records as typed row drivers."""
     declared = {item.id: item for item in specification.intermediates or ()}
@@ -4417,6 +4459,21 @@ def _bind_intermediate_drivers(
                 filter_names = ()
             if any(name.partition(".")[0] != item.dataset for name in filter_names):
                 prohibited.append("filter")
+        for name, declaration in (item.derivations or {}).items():
+            info = _expression_info(
+                declaration.value,
+                f"intermediates.{identifier}.derivations.{name}",
+                supported_operations,
+                scope=_Scope(column_phase=False),
+            )
+            if any(
+                ref.name.partition(".")[0] in specification.input
+                and ref.name.partition(".")[0] != item.dataset
+                for ref in info.references
+                if "." in ref.name
+            ):
+                prohibited.append("derivations")
+                break
         if "no_match" in item.model_fields_set:
             prohibited.append("no_match")
         if prohibited:
@@ -4509,7 +4566,9 @@ def plan_execution(
             )
         )
         raise ExecutionPlanningError(diagnostics) from error
-    bindings = _bind_intermediate_drivers(specification, bindings, diagnostics)
+    bindings = _bind_intermediate_drivers(
+        specification, bindings, diagnostics, supported_operations
+    )
 
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}

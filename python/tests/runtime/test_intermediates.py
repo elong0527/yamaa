@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from yamaa.expressions import ResolvedValue, parse_predicate
 from yamaa.expressions.dispatch import ExpressionDispatcher
 from yamaa.io.polars import frame_from_values
@@ -640,6 +642,128 @@ def test_a_derived_order_term_ranks_donor_records() -> None:
     assert outcome.condition is None
     assert outcome.record is not None
     assert outcome.record.values["IDVARVAL"] == "    7"
+
+
+def correlated_selector(**extra: object) -> IntermediateSelector:
+    plan = PlannedIntermediate(
+        identifier="PICK",
+        dataset="SRC",
+        path="intermediates[0]",
+        match_variables=extra.pop("match_variables", ("ID",)),
+        match_fields=extra.pop("match_fields", ("ID",)),
+        derived=extra.pop(
+            "derived",
+            (
+                (
+                    "DIST",
+                    HandledExpression(
+                        value=Expression(
+                            root={"compute": {"expr": "ABS(DAY - BASE.REF)"}}
+                        )
+                    ),
+                ),
+            ),
+        ),
+        derivation_references=(
+            ("BASE.REF", "intermediates[0].derivations.DIST.compute.expr"),
+        ),
+        order_terms=((OrderTerm(variable="SRC.DIST"), "DIST"),),
+        keep="first",
+        no_match_declared=True,
+        **extra,
+    )
+    return IntermediateSelector(
+        [plan],
+        {
+            "SRC": relation(
+                "SRC", [("ID", "str"), ("DAY", "int")], [["S1", 2], ["S1", 11]]
+            )
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "clauses",
+    [
+        {},
+        {"filter_predicate": parse_predicate("SRC.DIST <= 1")},
+        {"match_variables": ("ID", "WANTED"), "match_fields": ("ID", "DIST")},
+    ],
+)
+def test_correlated_values_and_match_indexes_are_local_to_each_driver(
+    clauses: dict[str, object],
+) -> None:
+    select = correlated_selector(**clauses)
+    # Same match key, different references, then the original reference again.
+    # Neither the augmented records, the filter, nor the derived key's index
+    # may retain another driver's values.
+    for reference, day in [(10, 11), (3, 2), (10, 11)]:
+        outcome = select.select(
+            "PICK", {"ID": "S1", "BASE.REF": reference, "WANTED": 1}
+        )
+        assert outcome.condition is None
+        assert outcome.record is not None
+        assert outcome.record.values == {"ID": "S1", "DAY": day, "DIST": 1}
+
+
+def test_a_correlated_missing_value_does_not_poison_the_next_driver() -> None:
+    select = correlated_selector(
+        filter_predicate=parse_predicate("SRC.DIST IS NOT NULL")
+    )
+    absent = select.select("PICK", {"ID": "S1", "BASE.REF": MISSING})
+    assert absent.condition is None
+    assert absent.record is None
+    selected = select.select("PICK", {"ID": "S1", "BASE.REF": 10})
+    assert selected.record is not None
+    assert selected.record.values["DAY"] == 11
+
+
+def test_a_window_reads_the_distance_derived_for_this_driver() -> None:
+    distance = correlated_selector().plans["PICK"].derived
+    select = correlated_selector(
+        derived=(
+            *distance,
+            (
+                "RN",
+                HandledExpression(
+                    value=Expression(
+                        root={
+                            "row_number": {
+                                "window": {"group_by": ["ID"], "order_by": ["DIST"]}
+                            }
+                        }
+                    )
+                ),
+            ),
+        ),
+        filter_predicate=parse_predicate("SRC.RN = 1"),
+    )
+    for reference, day in [(10, 11), (3, 2)]:
+        outcome = select.select("PICK", {"ID": "S1", "BASE.REF": reference})
+        assert outcome.record is not None
+        assert outcome.record.values["DAY"] == day
+        assert outcome.record.values["RN"] == 1
+
+
+def test_a_correlated_derivation_failure_keeps_its_expression_path() -> None:
+    select = correlated_selector(
+        derived=(
+            (
+                "DIST",
+                HandledExpression(
+                    value=Expression(root={"compute": {"expr": "DAY / BASE.REF"}})
+                ),
+            ),
+        ),
+    )
+    outcome = select.select("PICK", {"ID": "S1", "BASE.REF": 0})
+    assert outcome.condition is not None
+    assert outcome.condition.condition.condition == "division_by_zero"
+    assert outcome.spec_path == "intermediates[0].derivations.DIST"
+    # A failure belongs to this driver as well.
+    successful = select.select("PICK", {"ID": "S1", "BASE.REF": 1})
+    assert successful.condition is None
+    assert successful.record is not None
 
 
 def test_a_derived_readable_column_resolves_from_the_selected_record() -> None:

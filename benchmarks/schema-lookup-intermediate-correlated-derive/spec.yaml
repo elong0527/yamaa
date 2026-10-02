@@ -1,0 +1,44 @@
+schema_version: "1.0"
+domain: OUT
+keys: [ID, REF]
+input:
+  BASE: {path: input/base.csv, types: {REF: int}}
+  SRC: {path: input/src.csv, types: {DAY: int}}
+base: BASE
+
+output:
+  path: out.csv
+  columns: [ID, REF, VALUE, DIST]
+
+intermediates:
+  - id: PICK
+    dataset: SRC
+    key: [ID]
+    filter: "SRC.DIST IS NOT NULL"
+    order_by: [SRC.DIST]
+    keep: first
+    columns: [VALUE, DIST]
+    no_match: null
+    derivations:
+      DIST: {compute: {expr: "ABS(DAY - BASE.REF)"}}
+
+columns:
+  - name: ID
+    type: str
+    label: Subject Identifier
+    derivation: BASE.ID
+
+  - name: REF
+    type: int
+    label: Reference Day
+    derivation: BASE.REF
+
+  - name: VALUE
+    type: str
+    label: Closest Measurement
+    derivation: PICK.VALUE
+
+  - name: DIST
+    type: int
+    label: Distance from Reference Day
+    derivation: PICK.DIST

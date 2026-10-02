@@ -1,0 +1,7 @@
+ID,DAY,VALUE
+S1,2,a
+S1,11,b
+S1,,missing-day
+S2,9,c
+S2,11,d
+S3,10,orphan

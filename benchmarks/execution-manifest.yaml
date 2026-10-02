@@ -897,6 +897,9 @@ examples:
   schema-lookup-intermediate-derived-filter:
     status: executable
     runtimes: ['python']
+  schema-lookup-intermediate-correlated-derive:
+    status: executable
+    runtimes: ['python']
   schema-lookup-intermediate-unique:
     status: executable
     runtimes: ['python']
