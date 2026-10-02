@@ -20,6 +20,7 @@ tasks. Results live on Harbor Hub, not in this repository.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import random
@@ -113,16 +114,67 @@ def _default_verifier(config: dict) -> bool:
 
 def _task_metadata(config: dict, trial: Path) -> dict:
     """The `task.toml` metadata of a trial's task. The verifier saves the file
-    with its results, so a later build into the same task directory cannot
-    change what an earlier trial reports; a trial that never reached the
-    verifier falls back to the task directory."""
+    with its results. A trial that never reached verification uses the
+    job's pre-execution snapshot, never a mutable task directory."""
     snapshot = trial / "verifier" / "task.toml"
-    if not snapshot.is_file():
-        snapshot = Path((config.get("task") or {}).get("path") or "") / "task.toml"
-    return (
-        tomllib.loads(snapshot.read_text()).get("metadata", {})
-        if snapshot.is_file()
-        else {}
+    if snapshot.is_file():
+        return tomllib.loads(snapshot.read_text()).get("metadata", {})
+    saved = _read_json(trial.parent / "evaluation.json").get("tasks", {})
+    name = _read_json(trial / "result.json").get("task_name")
+    entry = (
+        saved.get(name)
+        or _read_json(trial / "verifier" / "evaluation.json").get("task")
+        or {}
+    )
+    if entry.get("path") != (config.get("task") or {}).get("path"):
+        return {}
+    return (entry.get("task") or {}).get("metadata", {})
+
+
+def agent_configuration(config: dict) -> dict:
+    """Effective behavior settings, with credentials excluded from evidence."""
+
+    def redact(value):
+        if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
+            try:
+                decoded = json.loads(value)
+            except ValueError:
+                pass
+            else:
+                return json.dumps(redact(decoded), sort_keys=True)
+        if isinstance(value, list):
+            return [redact(v) for v in value]
+        if not isinstance(value, dict):
+            return value
+        result = {}
+        for key, item in value.items():
+            normalized = re.sub(r"[_-]", "", key).lower()
+            secret = normalized in {
+                "token",
+                "accesstoken",
+                "refreshtoken",
+                "authorization",
+                "cookie",
+                "secret",
+            } or normalized.endswith(("apikey", "password", "secretkey"))
+            result[key] = "<redacted>" if secret else redact(item)
+        return result
+
+    agent = config.get("agent") or {}
+    return redact(
+        {
+            "kwargs": agent.get("kwargs") or {},
+            "import_path": agent.get("import_path"),
+            "skills": agent.get("skills") or [],
+            "extra_allowed_hosts": sorted(agent.get("extra_allowed_hosts") or []),
+            "env": {
+                k: v
+                for k, v in (agent.get("env") or {}).items()
+                if k.startswith("OPENCODE_")
+            },
+            "extra_instructions": config.get("extra_instructions") or [],
+            "extra_instruction_paths": config.get("extra_instruction_paths") or [],
+        }
     )
 
 
@@ -144,10 +196,16 @@ def collect(job_dir: Path) -> dict:
     default_verifier = True
     evidence_problems = []
     agents = set()
-    default_timeouts = _default_timeouts(_read_json(job_dir / "config.json"))
+    configurations = set()
+    task_names = set()
+    job_config = _read_json(job_dir / "config.json")
+    preserved = _read_json(job_dir / "evaluation.json").get("tasks", {})
+    expected_tasks = set(preserved)
+    default_timeouts = _default_timeouts(job_config)
     started, commits = [], set()
     for path in sorted(job_dir.glob("*/result.json")):
         result = json.loads(path.read_text())
+        task_names.add(result["task_name"])
         config = result.get("config") or {}
         if result.get("started_at"):
             started.append(datetime.fromisoformat(result["started_at"]))
@@ -163,6 +221,33 @@ def collect(job_dir: Path) -> dict:
         model = agent_config.get("model_name")
         variant = (agent_config.get("kwargs") or {}).get("variant")
         agents.add((info.get("name"), info.get("version"), model, variant))
+        configurations.add(
+            json.dumps(
+                agent_configuration(config), sort_keys=True, separators=(",", ":")
+            )
+        )
+        archived = _read_json(path.parent / "verifier" / "evaluation.json")
+        entry = preserved.get(result["task_name"]) or archived.get("task") or {}
+        recorded_tasks = set(archived.get("expected_tasks") or [])
+        if recorded_tasks:
+            if expected_tasks and recorded_tasks != expected_tasks:
+                evidence_problems.append("the job mixes pre-execution task manifests")
+            expected_tasks |= recorded_tasks
+        if archived and archived.get("n_attempts") != job_config.get("n_attempts", 1):
+            evidence_problems.append("the job changed its pre-execution attempt count")
+        if entry.get("path") != (config.get("task") or {}).get("path"):
+            evidence_problems.append(
+                f"{result.get('trial_name')}: missing pre-execution task evidence"
+            )
+        snapshot = path.parent / "verifier" / "task.toml"
+        if (
+            snapshot.is_file()
+            and entry
+            and tomllib.loads(snapshot.read_text()) != entry.get("task")
+        ):
+            evidence_problems.append(
+                f"{result.get('trial_name')}: task evidence changed during execution"
+            )
         default_timeouts = default_timeouts and _default_timeouts(config)
         rewards = (result.get("verifier_result") or {}).get("rewards") or {}
         usage = result.get("agent_result") or {}
@@ -176,7 +261,7 @@ def collect(job_dir: Path) -> dict:
             )
         if (
             not error
-            and rewards.get("reward") == 1
+            and (rewards.get("reward") == 1 or rewards.get("cell_accuracy", 0) > 0)
             and metadata.get("challenge_required")
             and (not (evidence.get("challenge") or {}).get("checked"))
         ):
@@ -205,9 +290,30 @@ def collect(job_dir: Path) -> dict:
         raise SystemExit(
             f"{job_dir} mixes agents, models, or variants: {sorted(agents, key=str)}"
         )
+    if len(configurations) != 1:
+        evidence_problems.append("the job mixes effective agent configurations")
     ((agent, version, model, variant),) = agents
     job = json.loads((job_dir / "result.json").read_text())
-    attempts = _read_json(job_dir / "config.json").get("n_attempts")
+    attempts = job_config.get("n_attempts", 1)
+    stats = job.get("stats") or {}
+    complete = (
+        bool(job_config)
+        and bool(job.get("finished_at"))
+        and task_names == expected_tasks
+        and isinstance(attempts, int)
+        and len(trials) == len(expected_tasks) * attempts
+        and job.get("n_total_trials") == len(trials)
+        and stats.get("n_completed_trials") == len(trials)
+        and not any(
+            stats.get(k, 0)
+            for k in (
+                "n_pending_trials",
+                "n_running_trials",
+                "n_cancelled_trials",
+                "n_retries",
+            )
+        )
+    )
     lock = _read_json(job_dir / "lock.json")
     return {
         "job": job_dir.name,
@@ -224,7 +330,9 @@ def collect(job_dir: Path) -> dict:
         # The agent's model variant (OpenCode's reasoning effort), or
         # "default" when the job set none.
         "variant": variant or "default",
-        "attempts": attempts or min(Counter(t["benchmark"] for t in trials).values()),
+        "attempts": attempts,
+        "complete": complete,
+        "agent_configuration": json.loads(next(iter(configurations))),
         "default_timeouts": default_timeouts,
         "default_resources": default_resources,
         "default_network": default_network,
@@ -286,6 +394,16 @@ def run_problems(run: dict, board: dict) -> list[str]:
         for task in board["tasks"]
         if counts[task] < board["attempts"]
     ]
+    if not run.get("complete"):
+        found.append(
+            "the job must preserve every completed attempt, without retries or cancellation"
+        )
+    if (
+        not isinstance(run.get("attempts"), int)
+        or run["attempts"] < 1
+        or any(count != run["attempts"] for count in counts.values())
+    ):
+        found.append("trial counts must match the job's declared attempts")
     if not run["default_timeouts"]:
         found.append("the job changed the tasks' timeouts")
     if not run.get("default_resources", True):
@@ -312,6 +430,10 @@ def run_problems(run: dict, board: dict) -> list[str]:
         "image_references", set()
     ):
         found.append("the job needs one preserved image reference")
+    if board.get("image_reference") and run.get("image_references") != {
+        board["image_reference"]
+    }:
+        found.append("the job does not use this board's runtime image reference")
     found.extend(run.get("evidence_problems", []))
     return found
 
@@ -412,6 +534,9 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
     name = board["harbor"]["name"]
     tasks = set(board["tasks"])
     rows, seen = [], set()
+    commits = {run.get("yamaa_commit") for run in runs if name in run["leaderboards"]}
+    if len(commits) > 1:
+        raise SystemExit(f"{name}: compared runs must use the same task commit")
     for run in runs:
         if name not in run["leaderboards"]:
             continue
@@ -420,6 +545,10 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
             raise SystemExit(f"{run['job']} on {name}: " + "; ".join(found))
         trials = [t for t in run["trials"] if t["benchmark"] in tasks]
         trial_ids = [t["id"] for t in trials if t["id"]]
+        if len(trial_ids) != len(trials) or len(set(trial_ids)) != len(trial_ids):
+            raise SystemExit(
+                f"{run['job']} on {name}: trials need unique preserved ids"
+            )
         if seen.intersection(trial_ids):
             raise SystemExit(f"{run['job']} on {name}: a trial is on two rows")
         seen.update(trial_ids)
@@ -430,6 +559,7 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "agent_version": run["agent_version"],
                     "model": run["model"],
                     "variant": run["variant"],
+                    "agent_configuration": run["agent_configuration"],
                     "date": run["date"],
                     "attempts": min(Counter(t["benchmark"] for t in trials).values()),
                     "job": run["job"],
@@ -453,12 +583,20 @@ def export(board: dict, runs: list[dict], package: str, out: Path) -> list[Path]
     name = board["harbor"]["name"]
     out.mkdir(parents=True, exist_ok=True)
     definition = out / f"{name}.leaderboard.yaml"
-    definition.write_text(
-        yaml.safe_dump({"package": package, **board["harbor"]}, sort_keys=False)
-    )
     written = [definition]
     # Harbor Hub ranks rows by the board's `rank_by`; they go up in run order.
     rows = rows_for(board, runs)
+    release = copy.deepcopy(board["harbor"])
+    if rows:
+        commit = rows[0]["metadata"]["yamaa_commit"]
+        release["name"] += f"-{commit}"
+        release["metadata_schema"]["properties"]["yamaa_commit"]["const"] = commit
+        release["metadata_schema"]["properties"]["image_reference"]["const"] = rows[0][
+            "metadata"
+        ]["image_reference"]
+    definition.write_text(
+        yaml.safe_dump({"package": package, **release}, sort_keys=False)
+    )
     if rows:
         hub_rows = [
             {key: row[key] for key in ("metadata", "metrics", "status", "trial_ids")}
@@ -508,7 +646,7 @@ def main() -> None:
         )
     for path in paths:
         print(f"wrote {path}")
-    ref = f"{package}/{args.leaderboard}"
+    ref = f"{package}/{yaml.safe_load(paths[0].read_text())['name']}"
     print("upload each job first: harbor upload <job-dir> --org <org> --private")
     print(f"then: harbor hub leaderboard create --config {paths[0]}")
     if len(paths) > 1:

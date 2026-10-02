@@ -17,8 +17,8 @@ The reward is 1 only when all of these hold:
   writes its rows literally fails. The check applies when the task ships a
   reference solution and the reference itself writes exactly that
   restricted golden, which shows the derivation is per subject;
-- required challenges: renamed subject identifiers must match answers
-  independently computed by the reference;
+- required challenges: changed identifiers, supported measurements and dates
+  must match answers independently computed by the reference;
 - the trajectory and the script use no other language and no web tool.
 
 Column order and row order are reported but not graded. A grader failure
@@ -38,9 +38,8 @@ import re
 import shutil
 import subprocess
 import tempfile
-import uuid
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -56,6 +55,7 @@ RERUN_TIMEOUT_SEC = 300.0
 HOLDOUT_SUBJECT = "USUBJID"
 HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM")
 HOLDOUT_EVERY = 3
+CHALLENGE_SEED = 20261001
 # How each track's script is run, and what counts as reaching for the other
 # language: running one of its programs in a shell call, or a bridge in the
 # script. Only a call counts: the program's name in a grep pattern, a quoted
@@ -207,11 +207,21 @@ def grade_output(spec: dict, expected_dir: Path, output_dir: Path) -> dict:
     golden_header, golden_rows = read_rows(expected_dir / name)
     if golden_header != columns:
         raise RuntimeError(f"golden {name} header differs from the contract")
+    for row in golden_rows:
+        for column in columns:
+            parsed = normalize(row[column], types[column])
+            if isinstance(parsed, tuple) and parsed[:1] == ("unparsed",):
+                raise RuntimeError(
+                    f"golden {name} has an invalid {types[column]} value in {column}: {row[column]!r}"
+                )
     golden, golden_problems = index_rows(golden_rows, keys, types)
     if golden_problems:
         raise RuntimeError(f"golden {name}: {golden_problems[0]}")
-    cells = len(golden) * (len(columns) - len(keys))
+    value_columns = [c for c in columns if c not in keys] or columns
+    cells = len(golden) * len(value_columns)
     result.update(expected_rows=len(golden), expected_cells=cells)
+    result.update(scored_rows=len(golden), scored_cells=cells)
+    result["column_accuracy"] = dict.fromkeys(value_columns, 0.0)
     result.update(matched_rows=0, matched_cells=0)
 
     path = output_dir / name
@@ -230,6 +240,11 @@ def grade_output(spec: dict, expected_dir: Path, output_dir: Path) -> dict:
     missing = [c for c in columns if c not in header]
     extra = [c for c in header if c not in columns]
     duplicated = sorted({c for c in header if header.count(c) > 1})
+    # Count extra records, including duplicate or missing keys, in partial
+    # credit. A correct subset of an oversized output is not a perfect answer.
+    excess_rows = max(0, len(rows) - len(golden))
+    result["scored_rows"] += excess_rows
+    result["scored_cells"] += excess_rows * len(value_columns) + len(extra) * len(rows)
     result["column_order_matches"] = header == columns
     if missing:
         result["problems"].append(f"missing columns: {', '.join(missing)}")
@@ -253,18 +268,20 @@ def grade_output(spec: dict, expected_dir: Path, output_dir: Path) -> dict:
             f"{len(unexpected)} unexpected row(s), first: {display(unexpected[0])}"
         )
 
-    compared = [c for c in columns if c not in keys and c not in missing]
+    compared = [c for c in value_columns if c not in missing]
+    column_matches = dict.fromkeys(value_columns, 0)
     matched_rows = matched_cells = 0
     for key, want in golden.items():
         got = actual.get(key)
         if got is None:
             continue
-        row_ok = True
+        row_ok = not missing and not extra and not key_problems
         for column in compared:
             expected = normalize(want[column], types[column])
             value = normalize(got[column], types[column])
             if same(expected, value):
                 matched_cells += 1
+                column_matches[column] += 1
                 continue
             row_ok = False
             if len(result["diffs"]) < MAX_REPORTED:
@@ -278,6 +295,11 @@ def grade_output(spec: dict, expected_dir: Path, output_dir: Path) -> dict:
                 )
         matched_rows += row_ok
     result.update(matched_rows=matched_rows, matched_cells=matched_cells)
+    denominator = result["scored_rows"]
+    result["column_accuracy"] = {
+        column: count / denominator if denominator else float(column not in missing)
+        for column, count in column_matches.items()
+    }
     mismatched = cells - matched_cells
     if mismatched:
         result["problems"].append(f"{mismatched} cell(s) differ from the golden")
@@ -754,15 +776,17 @@ def held_out_rerun(
     shutil.move(str(input_dir), saved_input)
     shutil.copytree(output_dir, saved_output)
 
-    def run_and_grade(script: Path, expected: Path) -> list[str]:
+    def run_and_grade(script: Path, expected: Path) -> tuple[list[str], list[dict]]:
         for spec in contract["outputs"]:
             (output_dir / spec["file"]).unlink(missing_ok=True)
         returncode, log = run([INTERPRETERS[language], str(script)], app, timeout)
         problems = [] if returncode == 0 else [f"{script.name} failed: {log[-300:]}"]
+        outputs = []
         for spec in contract["outputs"]:
             graded = grade_output(spec, expected, output_dir)
+            outputs.append(graded)
             problems.extend(f"{graded['file']}: {p}" for p in graded["problems"])
-        return problems
+        return problems, outputs
 
     try:
         _subset_inputs(saved_input, input_dir, drop)
@@ -774,7 +798,7 @@ def held_out_rerun(
         own_reference = work / "reference" / name
         own_reference.parent.mkdir()
         shutil.copyfile(reference, own_reference)
-        reference_problems = run_and_grade(own_reference, expected)
+        reference_problems, _ = run_and_grade(own_reference, expected)
         if reference_problems and reference_problems[0].startswith(f"{name} failed:"):
             raise RuntimeError(f"held-out reference failed: {reference_problems[0]}")
         if reference_problems:
@@ -783,7 +807,12 @@ def held_out_rerun(
                 "so the derivation is not per subject"
             )
         result["checked"] = True
-        result["problems"] = run_and_grade(output_dir / name, expected)
+        result["problems"], result["outputs"] = run_and_grade(
+            output_dir / name, expected
+        )
+        result["executed"] = not any(
+            p.startswith(f"{name} failed:") for p in result["problems"]
+        )
         result["passed"] = not result["problems"]
         return result
     finally:
@@ -848,6 +877,94 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
     return changed
 
 
+def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
+    """Change supported measurements and complete dates in existing inputs.
+
+    One date shift is shared by every table, preserving chronology and joins.
+    Identifiers, missing values, partial dates and categorical codes stay intact.
+    The reference computes the answers; changes are recorded for replay.
+    """
+    date_shift = randomizer.randint(1, 7)
+    age_shift = randomizer.choice((1, 2, 3))
+    factor = randomizer.choice((1.01, 1.02, 1.03))
+    measurements = {
+        "HEIGHT",
+        "HEIGHTCM",
+        "HT",
+        "WEIGHT",
+        "WEIGHTKG",
+        "WT",
+        "LBORRES",
+        "VSORRES",
+    }
+    changes = []
+
+    def change(column: str, value: object) -> object:
+        if value is None or value == "":
+            return value
+        if isinstance(value, (date, datetime)):
+            return value + timedelta(days=date_shift)
+        if isinstance(value, str):
+            try:
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:T.*)?", value):
+                    parsed = (
+                        date.fromisoformat(value)
+                        if len(value) == 10
+                        else datetime.fromisoformat(value)
+                    )
+                    return (parsed + timedelta(days=date_shift)).isoformat()
+            except ValueError:
+                pass
+        name = column.upper()
+        if name not in measurements and name not in {"AGE", "AGE_YEARS"}:
+            return value
+        try:
+            number = float(value)
+        except (ValueError, TypeError):
+            return value
+        if not math.isfinite(number):
+            return value
+        updated = (
+            number + age_shift
+            if name in {"AGE", "AGE_YEARS"}
+            else round(number * factor, 6)
+        )
+        if isinstance(value, str):
+            return str(int(updated)) if updated.is_integer() else str(updated)
+        return int(updated) if isinstance(value, int) else updated
+
+    for path in sorted(input_dir.rglob("*")):
+        if path.suffix not in {".csv", ".parquet"}:
+            continue
+        if path.suffix == ".csv":
+            columns, rows = read_rows(path)
+        else:
+            arrow, parquet, _ = _parquet()
+            table = parquet.read_table(path)
+            columns, rows = table.column_names, table.to_pylist()
+        counts = {}
+        for row in rows:
+            for column in columns:
+                before = row[column]
+                after = change(column, before)
+                if after != before:
+                    row[column] = after
+                    counts[column] = counts.get(column, 0) + 1
+        if not counts:
+            continue
+        changes.append({"file": str(path.relative_to(input_dir)), "columns": counts})
+        if path.suffix == ".csv":
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=columns)
+                writer.writeheader()
+                writer.writerows(rows)
+        else:
+            parquet.write_table(
+                arrow.Table.from_pylist(rows, schema=table.schema), path
+            )
+    return changes
+
+
 def challenge_rerun(
     contract: dict,
     expected_dir: Path,
@@ -855,7 +972,7 @@ def challenge_rerun(
     reference: Path | None,
     run: RunScript = run_script,
 ) -> dict:
-    """Recompute answers after renaming subjects in the existing inputs.
+    """Recompute answers after changing identifiers and derivation inputs.
 
     Validate the reference on the original golden first. A reference failure
     is a harness error, never an exemption from a required challenge.
@@ -891,8 +1008,11 @@ def challenge_rerun(
                 raise RuntimeError(
                     "challenge reference does not match the original golden"
                 )
-            offset = random.SystemRandom().randrange(1000000, 9000000)
-            suffix = "-evaluation-" + uuid.uuid4().hex[:8]
+            seed = contract.get("challenge_seed", CHALLENGE_SEED)
+            randomizer = random.Random(f"{seed}:{contract['benchmark']}")
+            offset = randomizer.randrange(1000000, 9000000)
+            suffix = f"-evaluation-{randomizer.randrange(10000000, 99999999)}"
+            result["seed"] = seed
             result["identifier_offset"], result["identifier_suffix"] = offset, suffix
             if not _rename_subjects(
                 work / "original-input", work / "renamed-input", offset, suffix
@@ -900,17 +1020,12 @@ def challenge_rerun(
                 raise RuntimeError(
                     "required challenges have no subject identifiers to rename"
                 )
+            result["value_changes"] = _perturb_values(
+                work / "renamed-input", randomizer
+            )
             shutil.rmtree(app / "input")
             shutil.copytree(work / "renamed-input", app / "input")
             execute(reference)
-            if any(
-                len(read_rows(output_dir / spec["file"])[1])
-                != len(read_rows(expected_dir / spec["file"])[1])
-                for spec in contract["outputs"]
-            ):
-                raise RuntimeError(
-                    "renaming subjects changed the reference record count"
-                )
             expected = work / "expected"
             expected.mkdir()
             for spec in contract["outputs"]:
@@ -930,9 +1045,12 @@ def challenge_rerun(
             for spec in contract["outputs"]:
                 (output_dir / spec["file"]).unlink(missing_ok=True)
             code, log = run([interpreter, str(agent)], app, RERUN_TIMEOUT_SEC)
+            result["executed"] = code == 0
             problems = [] if code == 0 else [f"script failed: {log[-1000:]}"]
+            result["outputs"] = []
             for spec in contract["outputs"]:
                 checked = grade_output(spec, expected, output_dir)
+                result["outputs"].append(checked)
                 problems.extend(f"{checked['file']}: {p}" for p in checked["problems"])
             result["problems"] = problems
             result["passed"] = not result["problems"]
@@ -942,6 +1060,21 @@ def challenge_rerun(
             shutil.rmtree(output_dir, ignore_errors=True)
             shutil.copytree(work / "original-output", output_dir)
     return result
+
+
+def _accuracies(outputs: list[dict]) -> tuple[float, float]:
+    scores = []
+    for unit in ("cells", "rows"):
+        numerator = denominator = 0
+        for output in outputs:
+            weight = output.get(f"scored_{unit}", output[f"expected_{unit}"])
+            # An empty expected dataset still requires a correctly shaped file.
+            denominator += weight or 1
+            numerator += (
+                output[f"matched_{unit}"] if weight else float(output["passed"])
+            )
+        scores.append(numerator / denominator if denominator else 0.0)
+    return tuple(scores)
 
 
 def grade(
@@ -967,16 +1100,32 @@ def grade(
         reproduced["problems"].append("no script to rerun")
     held_out = (
         held_out_rerun(contract, expected_dir, output_dir, reference, run)
-        if rerun and reproduced["passed"]
+        if rerun and script["passed"] and reproduced.get("returncode") == 0
         else {"checked": False, "passed": True, "problems": [], "notes": []}
     )
     challenge = (
         challenge_rerun(contract, expected_dir, output_dir, reference, run)
-        if rerun and reproduced["passed"]
+        if rerun and script["passed"] and reproduced.get("returncode") == 0
         else {"checked": False, "passed": True, "problems": []}
     )
-    cells = sum(o["expected_cells"] for o in outputs)
-    rows = sum(o["expected_rows"] for o in outputs)
+    eligible = (
+        script["passed"]
+        and not network["violations"]
+        and not network["language_violations"]
+        and (network["checked"] or not require_trajectory)
+    )
+    scores = [_accuracies(outputs)]
+    if rerun:
+        if reproduced.get("returncode") != 0 or reproduced.get("skipped"):
+            eligible = False
+        scores.append(_accuracies(reproduced["outputs"]))
+        for check in (held_out, challenge):
+            if check["checked"]:
+                if not check.get("executed"):
+                    eligible = False
+                scores.append(_accuracies(check["outputs"]))
+        if contract.get("challenge_required") and not challenge["checked"]:
+            eligible = False
     passed = (
         all(o["passed"] for o in outputs)
         and script["passed"]
@@ -993,12 +1142,9 @@ def grade(
         "passed": passed,
         "reward": {
             "reward": 1.0 if passed else 0.0,
-            "cell_accuracy": sum(o["matched_cells"] for o in outputs) / cells
-            if cells
-            else 1.0,
-            "row_accuracy": sum(o["matched_rows"] for o in outputs) / rows
-            if rows
-            else 1.0,
+            "cell_accuracy": min(s[0] for s in scores) if eligible else 0.0,
+            "row_accuracy": min(s[1] for s in scores) if eligible else 0.0,
+            "policy_eligible": float(eligible),
             "web_tool_calls": float(len(network["violations"])),
             "reproduced": 1.0
             if reproduced["passed"] and not reproduced.get("skipped")

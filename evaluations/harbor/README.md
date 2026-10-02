@@ -70,9 +70,11 @@ How to write a prompt is in
   derivation across subjects, or inputs without `USUBJID`), and a
   reference that crashes is a verifier error, never an exemption. Then,
   when an output carries `USUBJID`, the changed-input challenge: every
-  subject identifier in the inputs is renamed, the reference computes the
-  answer from those inputs, and the script must write it, so a lookup of
-  the expected rows filtered to the subjects present fails. Column and row
+  subject identifier in the inputs is renamed and supported ages,
+  measurements and complete dates are changed. The reference computes the
+  answer from those inputs, and the script must write it. The grade records
+  the shared seed and changed columns. This checks supported counterfactuals;
+  it does not prove generalization to every possible input. Column and row
   order are reported, not graded. Cells are read by column type: integers
   compare exactly (`1.0` equals `1`), other numbers within a relative 1e-9,
   dates also accept a midnight datetime, text is compared exactly (spaces
@@ -82,6 +84,12 @@ How to write a prompt is in
   `language_violations`, `held_out_checked`, `held_out` (when checked),
   `challenge_checked`, and `challenge_passed`, and
   `verifier/diff-<file>.csv` lists the differing cells.
+  Partial accuracy is the minimum across the submitted datasets and every
+  checked rerun. Failed execution or a language/web policy violation gets
+  zero partial credit; an executable, partly correct derivation keeps its
+  credit. Extra rows and columns reduce accuracy, and a row missing any
+  required column is not fully correct. Each output in `grade.json` also
+  reports `column_accuracy` for comparisons of individual variables.
 - **Sandboxed reruns.** The verifier runs the agent's script, and the
   reference, as the image's unprivileged `nobody` user (`sandbox.py`):
   `/tests`, with the golden and the reference, is readable by root only,
@@ -89,8 +97,10 @@ How to write a prompt is in
   from an empty output folder, and every process the script left is
   killed. A model's job also requires the agent's trajectory
   (`YAMAA_REQUIRE_TRAJECTORY`), so the language and web-tool audit always
-  has a record to read. The verifier saves the task's `task.toml` with its
-  results, so a later build cannot change the commit a trial reports.
+  has a record to read. `run.py` copies each task into the job and saves
+  `evaluation.json` before execution, so setup failures retain provenance
+  and later builds cannot change what the job runs. The verifier's saved
+  `task.toml` must agree with that snapshot.
 
 ## Setup
 
@@ -99,7 +109,7 @@ needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
 
 ```bash
 uv sync --project python --group harbor
-docker build -t yamaa-harbor-env:0.3 evaluations/harbor
+docker build -t yamaa-harbor-env:0.5 evaluations/harbor
 ```
 
 ## Build and check the tasks
@@ -194,8 +204,8 @@ probes the verifier sandbox (`probe.py`: the script cannot read the golden
 files, change the inputs or the grader's logs, or leave a process
 behind), then runs `oracle`, which must score 1 with every required
 challenge checked, and `nop`, which must score 0. The Harbor Oracle
-workflow (`.github/workflows/harbor-oracle.yml`) runs it on the three
-development tasks for each pull request, and on every benchmark on
+workflow (`.github/workflows/harbor-oracle.yml`) runs it on all three prompt
+tiers of the development tasks for each pull request, and on every benchmark on
 Mondays or on request; before a model run, run it on every benchmark:
 
 ```bash
@@ -235,9 +245,19 @@ model's default. `--job-name` is the prefix, by default the model's name.
 ```bash
 export OPENCODE_API_KEY=...
 for job in ~/.cache/yamaa-harbor/configs/*.json; do
-	uv run --project python --no-sync harbor run -c "$job" -y
+	uv run --project python --no-sync python evaluations/harbor/run.py -c "$job"
 done
 ```
+
+Use this wrapper for ranked runs. It refuses an existing job directory;
+choose a new job name for a new complete run. Automatic retries are disabled.
+Do not select successful attempts from an interrupted or failed job.
+Keep the job's `evaluation.json` and `task-snapshots/` with its results.
+At trial start the wrapper also saves the task metadata and manifest under
+`verifier/`, which Harbor includes in its upload/download archives. It restores
+the manifest after verification resets that directory, retaining the verifier's
+own task snapshot for comparison. Successful and failed setup trials therefore
+keep their evidence after a Hub download.
 
 Each trial directory under `~/.cache/yamaa-harbor/jobs/<job>/` holds the
 agent's files (`artifacts/app/`, with its `output/result.R` or
@@ -258,6 +278,7 @@ rules, and whose rows are uploaded runs that point back to their trials.
   its language and prompt tier.
 - `grading_protocol`: the verifier's checks a run must have been graded
   with (`GRADING_PROTOCOL` in `build.py`, recorded in every task).
+- `image_reference`: the runtime reference every ranked row must use.
 - `tasks` and `attempts`: the benchmarks a run must cover and the fewest
   attempts on each (every buildable benchmark, one attempt), with the
   same number of attempts on every task.
@@ -270,21 +291,23 @@ A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
 one leaderboard per dataset, so one per language and prompt tier
-(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v2-r`,
-`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v2-brief-r`, ...), and R, Python,
+(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v3-r`,
+`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v3-brief-r`, ...), and R, Python,
 and each tier are ranked independently. The conventions and brief boards
 rank by cell accuracy before pass rate, since their tasks can need a
-sponsor choice the prompt no longer states. The boards are `v2` because
-grading protocol 2 adds the changed-input challenge, the sandboxed reruns,
-and the trajectory requirement: runs graded before it stay on the earlier
-`sdtm-adam-r` and `sdtm-adam-python` boards on Harbor Hub, whose
-definitions this folder no longer keeps.
+sponsor choice the prompt no longer states. The boards are `v3` because
+grading protocol 3 changes derivation inputs, grades regenerated partial
+answers, and requires complete job evidence. Older scores stay on their
+existing boards. Export appends the full source commit to the Hub board name
+and pins that commit and image reference in its metadata schema, so separately
+published runs cannot mix releases. Compared jobs must share the same commit.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,
 variant, date, attempts, job and Harbor version, and the yamaa commit,
 grading protocol, and image of its tasks, read from the `task.toml` each
-trial's verifier saved) and its metrics from its trials on the
+trial's verifier saved), the effective agent configuration with credentials
+redacted, and its metrics from its trials on the
 leaderboard's tasks:
 
 | Metric | Meaning |
@@ -292,7 +315,7 @@ leaderboard's tasks:
 | `reward` | the pass rate: each task's mean reward, averaged over tasks; an errored trial counts as 0 |
 | `trial_reward` | the mean reward over trials (Harbor's mean) |
 | `reward_ci_low`, `reward_ci_high` | a 95% bootstrap interval of `reward` over tasks (2,000 resamples); it shows how much the score depends on which tasks are in, not the noise within a task |
-| `cell_accuracy`, `row_accuracy` | mean share of golden cells and rows reproduced |
+| `cell_accuracy`, `row_accuracy` | mean minimum accuracy across submitted and regenerated datasets, with penalties for extra records/columns and zero for failed execution or policy violations |
 | `pass_at_<k>` | Harbor's unbiased pass@k averaged over tasks, for k = 2, 4, 5, 8, 10, ... up to the fewest attempts on a task |
 | `n_trials`, `n_errors` | trials aggregated, and trials that ended in an exception |
 | `input_tokens`, `output_tokens`, `cost_usd` | totals, when every trial reported them |
@@ -308,6 +331,15 @@ Harbor's own code; without it they skip.
 To compare models, ask for several attempts per task: one attempt is a
 pilot, and pass@k needs at least two. Terminal-Bench 2.0, the reference
 Harbor benchmark, takes leaderboard runs with `--n-attempts 5`.
+
+Choose the attempt count before running any compared model and keep it equal.
+Compare prompt tiers in paired runs of the same tasks, model, variant and
+configuration. Inspect `column_accuracy` in the original, replay and challenge
+outputs separately: copied input values, derived values, and withheld sponsor
+labels answer different questions. A brief score includes guesses about
+unstated sponsor choices and is not a standalone measure of CDISC correctness.
+Report differences by task/domain as well as an overall mean; related tasks
+are not independent evidence of generalization.
 
 ### Publish to Harbor Hub
 
@@ -351,16 +383,18 @@ the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	export sdtm-adam-v2-r \
+	export sdtm-adam-v3-r \
 	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-contributor-r-low
 $H hub leaderboard create \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v2-r.leaderboard.yaml
-$H hub leaderboard row create yamaa/yamaa-sdtm-adam-r/sdtm-adam-v2-r \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v2-r.rows.yaml
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v3-r.leaderboard.yaml
 ```
 
 `export` takes the board's dataset from its `package`; `--package`
 overrides it.
+Then run the `row create` command printed by `export`. It uses the exported
+name, including its full source commit. Reuse that board only for that release
+and runtime reference;
+do not update it to admit incompatible revisions.
 
 An uploaded job keeps each trial's artifacts, so the agent's script stays
 on the Hub under the trial's `artifacts/app/output/`, and
@@ -369,11 +403,20 @@ on the Hub under the trial's `artifacts/app/output/`, and
 `export` refuses a job that mixes agents, models, or variants, misses a
 board task or attempts, has unequal attempts across tasks, or changed the
 tasks' timeouts, resources, mounts, network access, skills, or verifier.
+It requires a finished job with all declared attempts and checks uniform
+effective agent settings within each row.
 It also refuses a trial without the grading evidence `grade.json` keeps
 (a checked trajectory, and the challenge where one is required), and a
 job whose tasks do not share one committed (not `+dirty`) yamaa commit,
 the board's grading protocol, and one image. `--hide` exports its rows
-hidden. Repeat for `sdtm-adam-v2-python` with the Python jobs. The
-published tasks
-build from the local `yamaa-harbor-env:0.3` image, so they run where that
-image is built.
+hidden. Repeat for `sdtm-adam-v3-python` with the Python jobs. The published
+tasks build from the local `yamaa-harbor-env:0.5` image, so they run where
+that image is built.
+
+Build the runtime once for a comparison and reuse that artifact reference.
+The catalog comes from the pinned OpenCode binary, with model fetching off;
+there is no live catalog download during the image build. Package managers
+still resolve system and Node packages during builds, so rebuilding a local
+tag is not a reproducibility guarantee. For shared evaluations, publish the
+image once under an immutable versioned reference and set `image_reference`
+on the board to that reference before running it (`build.py --image`).

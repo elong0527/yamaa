@@ -9,7 +9,8 @@
 # sponsor choice the prompt no longer states.
 # This board is the whole Python track on the conventions prompts: every buildable
 # SDTM and ADaM benchmark, each requiring `/app/output/result.py`.
-grading_protocol: "2"
+grading_protocol: "3"
+image_reference: yamaa-harbor-env:0.5
 package: yamaa/yamaa-sdtm-adam-conventions-python
 tasks:
   - adam-adae-death-conventions-python
@@ -152,8 +153,8 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v2-conventions-python
-  title: yamaa SDTM and ADaM v2, conventions prompts (Python)
+  name: sdtm-adam-v3-conventions-python
+  title: yamaa SDTM and ADaM v3, conventions prompts (Python)
   description: >-
     Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved in
     Python. An agent gets the Python system prompt, the benchmark's
@@ -168,7 +169,7 @@ harbor:
   metadata_schema:
     type: object
     required: [agent, agent_version, model, variant, date, attempts, job,
-      grading_protocol, image_reference, yamaa_commit]
+      grading_protocol, image_reference, yamaa_commit, agent_configuration]
     properties:
       agent:
         type: string
@@ -184,6 +185,9 @@ harbor:
         description: >-
           The agent's model variant, OpenCode's reasoning effort (low,
           medium, high, xhigh), or default when the job set none
+      agent_configuration:
+        type: object
+        description: Preserved behavior settings with credentials redacted
       date:
         type: string
         format: date
@@ -202,7 +206,7 @@ harbor:
         description: Harbor version from the job's lock.json
       grading_protocol:
         type: string
-        const: "2"
+        const: "3"
         description: Version of the grading and submission isolation protocol
       image_reference:
         type: string

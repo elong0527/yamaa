@@ -20,6 +20,9 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--image", default=build.IMAGE)
+    parser.add_argument(
+        "--prompt", nargs="+", choices=list(build.TIERS), default=["full"]
+    )
     parser.add_argument("--n-concurrent", type=int, default=4)
     args = parser.parse_args()
     names = (
@@ -34,6 +37,7 @@ def main() -> None:
         image=args.image,
         commit=build.git_commit(),
         strict=not args.full,
+        tiers=tuple(args.prompt),
     )
     for note in skipped:
         print(f"skip {note}")
@@ -66,23 +70,25 @@ def main() -> None:
             stdout=subprocess.DEVNULL,
         )
     for agent, reward in (("oracle", 1.0), ("nop", 0.0)):
+        config_path = args.out / f"{agent}.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "jobs_dir": str(args.out / "jobs"),
+                    "job_name": agent,
+                    "n_concurrent_trials": args.n_concurrent,
+                    "environment": {"type": "docker"},
+                    "agents": [{"name": agent}],
+                    "tasks": [{"path": str(t)} for t in tasks],
+                }
+            )
+        )
         subprocess.run(
             [
                 sys.executable,
+                str(build.HERE / "run.py"),
                 "-c",
-                "from harbor.cli.main import app; app()",
-                "run",
-                "-p",
-                str(args.out / "tasks"),
-                "-a",
-                agent,
-                "-o",
-                str(args.out / "jobs"),
-                "--job-name",
-                agent,
-                "-n",
-                str(args.n_concurrent),
-                "-y",
+                str(config_path),
             ],
             check=True,
         )

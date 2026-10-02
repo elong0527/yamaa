@@ -7,144 +7,145 @@
 # What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
 # rows rank by cell accuracy first, since a task here can need a
 # sponsor choice the prompt no longer states.
-# This board is the whole R track on the conventions prompts: every buildable
+# This board is the whole R track on the brief prompts: every buildable
 # SDTM and ADaM benchmark, each requiring `/app/output/result.R`.
-grading_protocol: "2"
-package: yamaa/yamaa-sdtm-adam-conventions-r
+grading_protocol: "3"
+image_reference: yamaa-harbor-env:0.5
+package: yamaa/yamaa-sdtm-adam-brief-r
 tasks:
-  - adam-adae-death-conventions-r
-  - adam-adae-occurrence-flags-conventions-r
-  - adam-adae-onset-emergence-conventions-r
-  - adam-adae-partial-dates-conventions-r
-  - adam-adae-post-covid-conventions-r
-  - adam-adae-prior-serious-event-conventions-r
-  - adam-adae-protocol-review-conventions-r
-  - adam-adae-query-flags-conventions-r
-  - adam-adae-review-order-conventions-r
-  - adam-adae-serious-events-conventions-r
-  - adam-adae-serious-sequence-conventions-r
-  - adam-adae-severity-conventions-r
-  - adam-adae-severity-override-conventions-r
-  - adam-adae-severity-rank-conventions-r
-  - adam-adae-text-cleanup-conventions-r
-  - adam-adae-worsening-emergence-conventions-r
-  - adam-adae-worst-severity-conventions-r
-  - adam-adce-worst-toxicity-conventions-r
-  - adam-adcm-atc-classes-conventions-r
-  - adam-adcm-on-treatment-conventions-r
-  - adam-adeg-derived-intervals-conventions-r
-  - adam-adex-cumulative-dose-conventions-r
-  - adam-adex-dose-reduction-conventions-r
-  - adam-adex-uncollected-conventions-r
-  - adam-adlb-bds-conventions-r
-  - adam-adlb-closest-visit-conventions-r
-  - adam-adlb-end-of-treatment-conventions-r
-  - adam-adlb-lymphocytes-conventions-r
-  - adam-adlb-mean-conventions-r
-  - adam-adlb-ordered-sum-conventions-r
-  - adam-adlb-reported-precision-conventions-r
-  - adam-adlb-shift-criteria-conventions-r
-  - adam-adlb-supplb-padded-key-conventions-r
-  - adam-adlbc-row-window-conventions-r
-  - adam-adlbc-window-chain-conventions-r
-  - adam-adoe-study-eye-conventions-r
-  - adam-adqs-missed-visit-locf-conventions-r
-  - adam-adqs-subscale-score-conventions-r
-  - adam-adrs-best-response-conventions-r
-  - adam-adrs-composite-response-conventions-r
-  - adam-adrs-confirmed-response-conventions-r
-  - adam-adrs-measurable-disease-conventions-r
-  - adam-adrs-response-prep-conventions-r
-  - adam-adrs-response-records-conventions-r
-  - adam-adsl-age-group-conventions-r
-  - adam-adsl-alive-date-conventions-r
-  - adam-adsl-analysis-age-conventions-r
-  - adam-adsl-bmi-conventions-r
-  - adam-adsl-completion-flag-conventions-r
-  - adam-adsl-country-region-conventions-r
-  - adam-adsl-crossover-periods-conventions-r
-  - adam-adsl-demographics-conventions-r
-  - adam-adsl-disposition-conventions-r
-  - adam-adsl-dose-adjustment-conventions-r
-  - adam-adsl-duration-conventions-r
-  - adam-adsl-flag-chain-conventions-r
-  - adam-adsl-investigator-comment-conventions-r
-  - adam-adsl-new-therapy-conventions-r
-  - adam-adsl-randomization-conventions-r
-  - adam-adsl-rescue-med-conventions-r
-  - adam-adsl-site-parse-conventions-r
-  - adam-adsl-treatment-conventions-r
-  - adam-adtr-nadir-conventions-r
-  - adam-adtr-sum-conventions-r
-  - adam-adtte-dor-conventions-r
-  - adam-adtte-first-ae-conventions-r
-  - adam-adtte-os-conventions-r
-  - adam-adtte-pfs-conventions-r
-  - adam-advs-bmi-conventions-r
-  - adam-advs-bsa-conventions-r
-  - adam-advs-carryforward-conventions-r
-  - adam-advs-first-observed-carry-conventions-r
-  - adam-advs-locf-conventions-r
-  - adam-advs-locf-record-conventions-r
-  - adam-advs-map-conventions-r
-  - adam-advs-percentiles-conventions-r
-  - adam-advs-prior-result-conventions-r
-  - adam-advs-window-table-conventions-r
-  - adam-advs-windows-conventions-r
-  - sdtm-ae-coding-conventions-r
-  - sdtm-ae-meddra-hierarchy-conventions-r
-  - sdtm-ae-odm-repeated-conventions-r
-  - sdtm-ae-partial-dates-conventions-r
-  - sdtm-ae-seriousness-conventions-r
-  - sdtm-cm-collected-medications-conventions-r
-  - sdtm-cm-odm-repeated-conventions-r
-  - sdtm-cm-whodrug-coding-conventions-r
-  - sdtm-dm-age-conventions-r
-  - sdtm-dm-arms-conventions-r
-  - sdtm-dm-basic-conventions-r
-  - sdtm-dm-dates-conventions-r
-  - sdtm-dm-death-conventions-r
-  - sdtm-dm-metadata-conventions-r
-  - sdtm-dm-race-ethnicity-conventions-r
-  - sdtm-ds-multi-form-disposition-conventions-r
-  - sdtm-ds-reasons-conventions-r
-  - sdtm-ds-sequence-conventions-r
-  - sdtm-ec-collected-exposure-conventions-r
-  - sdtm-ex-combination-conventions-r
-  - sdtm-ex-from-ec-conventions-r
-  - sdtm-ex-intervals-conventions-r
-  - sdtm-fa-event-findings-conventions-r
-  - sdtm-fa-fever-conventions-r
-  - sdtm-fa-odm-multitest-conventions-r
-  - sdtm-fa-reactogenicity-diary-conventions-r
-  - sdtm-lb-character-results-conventions-r
-  - sdtm-lb-compartments-conventions-r
-  - sdtm-lb-findings-conventions-r
-  - sdtm-lb-grading-conventions-r
-  - sdtm-lb-lab-specific-ranges-conventions-r
-  - sdtm-lb-last-observation-before-exposure-conventions-r
-  - sdtm-lb-metadata-conventions-r
-  - sdtm-lb-multiform-conventions-r
-  - sdtm-lb-ranges-conventions-r
-  - sdtm-mh-ongoing-conditions-conventions-r
-  - sdtm-mh-prespecified-conditions-conventions-r
-  - sdtm-pr-procedures-conventions-r
-  - sdtm-qs-questionnaire-items-conventions-r
-  - sdtm-relrec-dataset-level-conventions-r
-  - sdtm-relrec-links-conventions-r
-  - sdtm-rs-timepoint-response-conventions-r
-  - sdtm-se-subject-elements-conventions-r
-  - sdtm-suppmh-linkage-conventions-r
-  - sdtm-suppmh-qualifiers-conventions-r
-  - sdtm-sv-subject-visits-conventions-r
-  - sdtm-tr-tumor-measurements-conventions-r
-  - sdtm-tu-tumor-identification-conventions-r
-  - sdtm-vs-collected-form-conventions-r
-  - sdtm-vs-epoch-from-subject-elements-conventions-r
-  - sdtm-vs-planned-time-points-conventions-r
-  - sdtm-vs-replicates-conventions-r
-  - sdtm-vs-study-day-conventions-r
-  - sdtm-vs-units-conventions-r
+  - adam-adae-death-brief-r
+  - adam-adae-occurrence-flags-brief-r
+  - adam-adae-onset-emergence-brief-r
+  - adam-adae-partial-dates-brief-r
+  - adam-adae-post-covid-brief-r
+  - adam-adae-prior-serious-event-brief-r
+  - adam-adae-protocol-review-brief-r
+  - adam-adae-query-flags-brief-r
+  - adam-adae-review-order-brief-r
+  - adam-adae-serious-events-brief-r
+  - adam-adae-serious-sequence-brief-r
+  - adam-adae-severity-brief-r
+  - adam-adae-severity-override-brief-r
+  - adam-adae-severity-rank-brief-r
+  - adam-adae-text-cleanup-brief-r
+  - adam-adae-worsening-emergence-brief-r
+  - adam-adae-worst-severity-brief-r
+  - adam-adce-worst-toxicity-brief-r
+  - adam-adcm-atc-classes-brief-r
+  - adam-adcm-on-treatment-brief-r
+  - adam-adeg-derived-intervals-brief-r
+  - adam-adex-cumulative-dose-brief-r
+  - adam-adex-dose-reduction-brief-r
+  - adam-adex-uncollected-brief-r
+  - adam-adlb-bds-brief-r
+  - adam-adlb-closest-visit-brief-r
+  - adam-adlb-end-of-treatment-brief-r
+  - adam-adlb-lymphocytes-brief-r
+  - adam-adlb-mean-brief-r
+  - adam-adlb-ordered-sum-brief-r
+  - adam-adlb-reported-precision-brief-r
+  - adam-adlb-shift-criteria-brief-r
+  - adam-adlb-supplb-padded-key-brief-r
+  - adam-adlbc-row-window-brief-r
+  - adam-adlbc-window-chain-brief-r
+  - adam-adoe-study-eye-brief-r
+  - adam-adqs-missed-visit-locf-brief-r
+  - adam-adqs-subscale-score-brief-r
+  - adam-adrs-best-response-brief-r
+  - adam-adrs-composite-response-brief-r
+  - adam-adrs-confirmed-response-brief-r
+  - adam-adrs-measurable-disease-brief-r
+  - adam-adrs-response-prep-brief-r
+  - adam-adrs-response-records-brief-r
+  - adam-adsl-age-group-brief-r
+  - adam-adsl-alive-date-brief-r
+  - adam-adsl-analysis-age-brief-r
+  - adam-adsl-bmi-brief-r
+  - adam-adsl-completion-flag-brief-r
+  - adam-adsl-country-region-brief-r
+  - adam-adsl-crossover-periods-brief-r
+  - adam-adsl-demographics-brief-r
+  - adam-adsl-disposition-brief-r
+  - adam-adsl-dose-adjustment-brief-r
+  - adam-adsl-duration-brief-r
+  - adam-adsl-flag-chain-brief-r
+  - adam-adsl-investigator-comment-brief-r
+  - adam-adsl-new-therapy-brief-r
+  - adam-adsl-randomization-brief-r
+  - adam-adsl-rescue-med-brief-r
+  - adam-adsl-site-parse-brief-r
+  - adam-adsl-treatment-brief-r
+  - adam-adtr-nadir-brief-r
+  - adam-adtr-sum-brief-r
+  - adam-adtte-dor-brief-r
+  - adam-adtte-first-ae-brief-r
+  - adam-adtte-os-brief-r
+  - adam-adtte-pfs-brief-r
+  - adam-advs-bmi-brief-r
+  - adam-advs-bsa-brief-r
+  - adam-advs-carryforward-brief-r
+  - adam-advs-first-observed-carry-brief-r
+  - adam-advs-locf-brief-r
+  - adam-advs-locf-record-brief-r
+  - adam-advs-map-brief-r
+  - adam-advs-percentiles-brief-r
+  - adam-advs-prior-result-brief-r
+  - adam-advs-window-table-brief-r
+  - adam-advs-windows-brief-r
+  - sdtm-ae-coding-brief-r
+  - sdtm-ae-meddra-hierarchy-brief-r
+  - sdtm-ae-odm-repeated-brief-r
+  - sdtm-ae-partial-dates-brief-r
+  - sdtm-ae-seriousness-brief-r
+  - sdtm-cm-collected-medications-brief-r
+  - sdtm-cm-odm-repeated-brief-r
+  - sdtm-cm-whodrug-coding-brief-r
+  - sdtm-dm-age-brief-r
+  - sdtm-dm-arms-brief-r
+  - sdtm-dm-basic-brief-r
+  - sdtm-dm-dates-brief-r
+  - sdtm-dm-death-brief-r
+  - sdtm-dm-metadata-brief-r
+  - sdtm-dm-race-ethnicity-brief-r
+  - sdtm-ds-multi-form-disposition-brief-r
+  - sdtm-ds-reasons-brief-r
+  - sdtm-ds-sequence-brief-r
+  - sdtm-ec-collected-exposure-brief-r
+  - sdtm-ex-combination-brief-r
+  - sdtm-ex-from-ec-brief-r
+  - sdtm-ex-intervals-brief-r
+  - sdtm-fa-event-findings-brief-r
+  - sdtm-fa-fever-brief-r
+  - sdtm-fa-odm-multitest-brief-r
+  - sdtm-fa-reactogenicity-diary-brief-r
+  - sdtm-lb-character-results-brief-r
+  - sdtm-lb-compartments-brief-r
+  - sdtm-lb-findings-brief-r
+  - sdtm-lb-grading-brief-r
+  - sdtm-lb-lab-specific-ranges-brief-r
+  - sdtm-lb-last-observation-before-exposure-brief-r
+  - sdtm-lb-metadata-brief-r
+  - sdtm-lb-multiform-brief-r
+  - sdtm-lb-ranges-brief-r
+  - sdtm-mh-ongoing-conditions-brief-r
+  - sdtm-mh-prespecified-conditions-brief-r
+  - sdtm-pr-procedures-brief-r
+  - sdtm-qs-questionnaire-items-brief-r
+  - sdtm-relrec-dataset-level-brief-r
+  - sdtm-relrec-links-brief-r
+  - sdtm-rs-timepoint-response-brief-r
+  - sdtm-se-subject-elements-brief-r
+  - sdtm-suppmh-linkage-brief-r
+  - sdtm-suppmh-qualifiers-brief-r
+  - sdtm-sv-subject-visits-brief-r
+  - sdtm-tr-tumor-measurements-brief-r
+  - sdtm-tu-tumor-identification-brief-r
+  - sdtm-vs-collected-form-brief-r
+  - sdtm-vs-epoch-from-subject-elements-brief-r
+  - sdtm-vs-planned-time-points-brief-r
+  - sdtm-vs-replicates-brief-r
+  - sdtm-vs-study-day-brief-r
+  - sdtm-vs-units-brief-r
 attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
@@ -152,22 +153,22 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v2-conventions-r
-  title: yamaa SDTM and ADaM v2, conventions prompts (R)
+  name: sdtm-adam-v3-brief-r
+  title: yamaa SDTM and ADaM v3, brief prompts (R)
   description: >-
     Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved in R.
-    An agent gets the R system prompt, the benchmark's conventions prompt
-    (the full prompt with its rules cut down to the sponsor's conventions)
-    and input datasets, with no internet but the model's API. A task passes
-    when its output matches every golden cell, the verifier's rerun of
-    `/app/output/result.R` from a clean state writes the same output, the
-    held-out rerun and required changed-input challenges pass, and the agent
-    used no Python and no web tool. One row per model variant.
+    An agent gets the R system prompt, the benchmark's brief prompt (the
+    full prompt without its rules) and input datasets, with no internet but
+    the model's API. A task passes when its output matches every golden
+    cell, the verifier's rerun of `/app/output/result.R` from a clean state
+    writes the same output, the held-out rerun and required changed-input
+    challenges pass, and the agent used no Python and no web tool. One row
+    per model variant.
   visibility: private
   metadata_schema:
     type: object
     required: [agent, agent_version, model, variant, date, attempts, job,
-      grading_protocol, image_reference, yamaa_commit]
+      grading_protocol, image_reference, yamaa_commit, agent_configuration]
     properties:
       agent:
         type: string
@@ -183,6 +184,9 @@ harbor:
         description: >-
           The agent's model variant, OpenCode's reasoning effort (low,
           medium, high, xhigh), or default when the job set none
+      agent_configuration:
+        type: object
+        description: Preserved behavior settings with credentials redacted
       date:
         type: string
         format: date
@@ -201,7 +205,7 @@ harbor:
         description: Harbor version from the job's lock.json
       grading_protocol:
         type: string
-        const: "2"
+        const: "3"
         description: Version of the grading and submission isolation protocol
       image_reference:
         type: string
