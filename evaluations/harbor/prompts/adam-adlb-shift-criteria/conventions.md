@@ -8,16 +8,13 @@ CRIT2, CRIT2FL
 
 ANRIND is LOW, HIGH, or NORMAL, or has no value.
 
-SHIFT1 joins the baseline mark and the record's own mark, baseline first, so a
-result that stayed normal reads "NORMAL to NORMAL".
+SHIFT1 joins the baseline mark and the record's own mark, baseline first.
 
 R2BASE is not rounded.
 
 CRIT1 is "Result greater than 3 x ULN" or has no value. CRIT1FL is Y or N, or
-has no value.
-
-CRIT2 is "Result less than LLN" or has no value. CRIT2FL is Y or N, or
-has no value.
+has no value. CRIT2 is "Result less than LLN" or has no value. CRIT2FL is Y
+or N, or has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adlb.csv.
