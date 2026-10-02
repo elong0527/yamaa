@@ -1,12 +1,13 @@
-# Classify a Result, Its Shift from Baseline, and One Criterion
+# Classify a Result, Its Shift from Baseline, and Two Criteria
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-shift-criteria.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** derive `ANRIND`, `BASE`, `BNRIND`, `SHIFT1`, `R2BASE`,
-`CRIT1`, and `CRIT1FL`: mark where each analysis value sits
-against its normal range, how that mark moved since baseline, and
-whether the record met one high-result criterion.
+`CRIT1`, `CRIT1FL`, `CRIT2`, and `CRIT2FL`: mark where each analysis
+value sits against its normal range, how that mark moved since
+baseline, and whether the record met a high-result criterion or a
+low-result criterion.
 
 **Input:** laboratory records carrying the analysis value `AVAL`, the
 normal range limits `ANRLO` and `ANRHI`, and the baseline flag
@@ -42,10 +43,20 @@ and parameter).
   A result exactly at three times the limit does not meet it - the
   comparison is strictly greater than.
 
+- `CRIT2` states the second criterion the record was assessed
+  against, a result less than the lower limit of normal (LLN):
+  `Result less than LLN`; empty when `AVAL` or `ANRLO` is missing,
+  since the comparison cannot be made. It is assessed independently
+  of the first: a record whose upper limit is missing can still
+  meet the low criterion.
+- `CRIT2FL` says whether the record met it, `Y` or `N`; empty where
+  it could not be assessed. A result exactly at the lower limit
+  does not meet it - the comparison is strictly less than.
+
 **Note:** the shift joins the baseline mark with the record's own
 mark and the ratio rests on the flagged baseline value, while the
-mark and the criterion rest on the record's own value and limits;
-the criterion text and its flag always arrive together, as do the mark
+mark and the criteria rest on the record's own value and limits;
+each criterion text and its flag always arrive together, as do the mark
 and the shift. A record that breaks these pairings stops the run, and
 no output is written.
 

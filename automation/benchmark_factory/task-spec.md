@@ -8,6 +8,31 @@ barely improves on the autonomous baseline, while a detailed spec plus
 curated grounding material roughly halves solver scores. Put the effort
 in the second half.
 
+## Work item types
+
+A run either creates a benchmark or maintains existing ones. Name the
+type first; the rest of the spec is read against it.
+
+- **create**: a new benchmark closing a coverage gap. The existing
+  behavior; everything below applies as written.
+- **enhance**: extend an existing benchmark in place: new variables,
+  new edge-case rows, harder fixtures. The golden may gain columns
+  or rows, but every value the work item does not intend to change
+  must stay byte-identical. An enhancement resets the lifecycle
+  badge to `draft`: the content changed, so it is re-reviewed.
+- **combine**: merge two or more benchmarks into one using the
+  `spec_<variant>.yaml` convention. Coverage must not shrink: every
+  rule the absorbed benchmarks pinned stays pinned. Absorbed
+  directories are removed only after `factory.sh retire-check` is
+  clean on each and a human approves.
+- **retire**: remove a benchmark. Requires a clean
+  `factory.sh retire-check`, a recorded reason, and a human
+  decision. The agent prepares the evidence; it never deletes.
+- **recalibrate**: re-run the difficulty pilot on an existing
+  benchmark and harden or clarify from the results, without
+  changing what it measures. Fixture-only changes; the golden
+  values for existing rows do not move.
+
 ## Fixed rules (do not edit per run)
 
 The proposed benchmark must satisfy, in order:
@@ -44,8 +69,26 @@ The proposed benchmark must satisfy, in order:
 7. **No leakage.** The solver sees the prompt and `/app/input/` only.
    The prompt must not reveal the specification's structure, name
    derivation verbs, or otherwise hand over the answer's shape.
+8. **Maintenance golden discipline.** For enhance/combine/
+   recalibrate, diff the golden before and after: every moved value
+   is named in the proposal report with its reason, per
+   `../benchmarks/agents.md` ("changing a golden file is a
+   decision"). Unmoved values must be byte-identical; verify with
+   `git diff`.
+9. **Prompt parity.** After any maintenance change, the Harbor
+   prompt (`full.md`, `conventions.md`, `brief.md`) must still ask
+   for exactly the datasets and columns the golden holds. Rebuild
+   `brief.md` with `evaluations/harbor/brief.py`; the repo's CI
+   checks the rest.
 
 ## Human direction (fill in per run)
+
+### Work item
+
+_Type (create / enhance / combine / retire / recalibrate), the target
+benchmark(s), and the one-paragraph change. For create, this section
+is "what to measure" as below; for the maintenance types, name the
+benchmarks and the intended end state._
 
 ### What to measure
 

@@ -102,3 +102,29 @@ Next: <the single most important change, or "ready for the human gate">
 Keep the evidence to one quoted item per criterion. The verdict is a
 screening tool for the human gate, not a replacement for it: an
 accepted benchmark still needs a human to move the lifecycle badge.
+
+## Maintenance checks
+
+Apply in addition to the five criteria when the work item maintains
+an existing benchmark.
+
+**No silent regression (enhance / recalibrate).** Diff the golden
+before and after. Every moved value is named with its reason in the
+proposal report; everything else is byte-identical. A moved value
+with no reason is a **fail**.
+
+**No coverage loss (combine / retire).** Every construct and rule
+the old benchmarks pinned is still pinned: check
+`vocabulary-coverage.yaml` and `validation-manifest.yaml` entries
+still resolve, and the merged benchmark's fixtures still exercise
+each absorbed benchmark's edge cases. Lost coverage is a **fail**.
+
+**Prompt parity.** The Harbor prompt asks for exactly what the new
+golden holds -- same datasets, same columns, same rules. A prompt
+that still describes the pre-change benchmark is a **revise**.
+
+**Retire bar.** A retire verdict of accept needs all three: a clean
+`factory.sh retire-check`, a recorded reason (redundant, trivial,
+or off-mission -- with the evidence), and an explicit human
+decision. The judge prepares the first two; it never supplies the
+third.

@@ -9,7 +9,8 @@ input:
 output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI,
-            ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL]
+            ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL,
+            CRIT2, CRIT2FL]
 
 columns:
   - name: STUDYID
@@ -158,15 +159,43 @@ columns:
       allowed_values:
         values: [Y, N]
 
+  # The low tail: a result below the lower limit of normal (LLN).
+  - name: CRIT2
+    type: str
+    label: Analysis Criterion 2
+    derivation:
+      case:
+        - when: "AVAL IS NOT NULL AND ANRLO IS NOT NULL"
+          then: {literal: Result less than LLN}
+
+  # Y below the limit and N at or above it. Independent missingness from
+  # CRIT1FL: only the value and the lower limit decide assessability.
+  - name: CRIT2FL
+    type: str
+    label: Criterion 2 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "AVAL IS NULL OR ANRLO IS NULL"
+          then: {literal: null}
+        - when: "AVAL < ANRLO"
+          then: {literal: Y}
+        - otherwise: {literal: N}
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ASEQ]
   - row_count:
-      min: 15
-      max: 15
+      min: 17
+      max: 17
   - all_or_none:
       id: criterion-text-accompanies-its-flag
       columns: [CRIT1, CRIT1FL]
+  - all_or_none:
+      id: criterion-2-text-accompanies-its-flag
+      columns: [CRIT2, CRIT2FL]
   - all_or_none:
       id: shift-needs-both-of-its-classifications
       columns: [ANRIND, SHIFT1]
@@ -182,3 +211,7 @@ verifications:
       id: criterion-is-met-only-above-its-limit
       when: "CRIT1FL = 'Y'"
       then: "AVAL > CRITLIM"
+  - implies:
+      id: criterion-2-is-met-only-below-its-limit
+      when: "CRIT2FL = 'Y'"
+      then: "AVAL < ANRLO"

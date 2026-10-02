@@ -100,3 +100,39 @@ index row, a validation log showing `./factory.sh validate <name>`
 clean, and a one-page proposal report: what the benchmark measures,
 what you grounded it in, the edge cases and where they live in the
 fixtures, and the revision changelog.
+
+## Maintenance work
+
+When the work item type is enhance, combine, retire, or recalibrate,
+the protocol above applies with these changes.
+
+**Read before touching.** Read the target benchmark(s) end to end:
+spec, fixtures, golden, README, and the Harbor prompt. Quote the
+lines your change affects in the proposal report. Never judge a
+benchmark by its directory name alone: `adam-adsl-investigator-
+comment` looked like a trivial copy until its fixtures showed
+comma, quote, and line-break fidelity cases.
+
+**Enhance.** Keep every golden value the work item does not intend
+to move; confirm with `git diff` on `expected/`. New columns go
+through the same README and prompt treatment as a new benchmark.
+Update `full.md`, rewrite `conventions.md` from it, and rebuild
+`brief.md` with `evaluations/harbor/brief.py`. Reset the lifecycle
+badge to `draft`. Run `./factory.sh validate` and the drift check
+(`pytest python/tests/test_examples.py -k <name>`); both must pass.
+
+**Combine.** One surviving directory, variants as `spec_<variant>.yaml`
+per `benchmarks/agents.md`. The merged README's data contract must
+cover every variant's columns. The index keeps one row. Update the
+prompts. Run `factory.sh retire-check` on each absorbed benchmark;
+only a human deletes the absorbed directories.
+
+**Retire.** Prepare the evidence, never the deletion: a clean
+`factory.sh retire-check`, the reason, and what covers the
+construct now (or why it is not worth covering). A human decides.
+
+**Recalibrate.** Fixture-only changes. If the pilot shows
+saturation, add the traps from the task spec as new fixture rows
+(the golden gains rows; existing values do not move). If solvers
+fail where the oracle passes, clarify the prompt instead. Never
+harden by making the task ambiguous.

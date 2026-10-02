@@ -1,11 +1,17 @@
 # Benchmark factory
 
-An agentic loop for proposing, testing, and reviewing new yamaa
-benchmarks. It adapts the AutoBenchmark recipe
+An agentic loop for creating and maintaining yamaa benchmarks. It
+adapts the AutoBenchmark recipe
 (https://facebookresearch.github.io/RAM/blogs/autobench/) to this
-repository: a research agent drafts a benchmark, solvers attempt it, and
-judges review it, with a human directing what to build and gating what
-ships.
+repository: a research agent drafts a benchmark change, solvers
+attempt it, and judges review it, with a human directing what to
+build and gating what ships.
+
+A run's work item is either a **creation** (a new benchmark closing
+a coverage gap) or **maintenance** of existing benchmarks: enhance
+(new variables or edge cases), combine (merge overlaps into
+variants), retire (remove with evidence), or recalibrate (harden
+or clarify from pilot results).
 
 ## Why this fits yamaa
 
@@ -35,14 +41,16 @@ and *whether* it ships; the agent owns the drafting and the revisions.
 ## The loop
 
 ```
-Stage 0  HUMAN DIRECTION      pick a coverage gap, curate example data,
-                              write the derivation intent (task-spec.md)
+Stage 0  HUMAN DIRECTION      work item: create / enhance / combine /
+                              retire / recalibrate (task-spec.md); for
+                              create, curate example data
         |
-Stage 1  PROPOSAL             research agent drafts benchmarks/<name>/
-                              (spec, fixtures, README, prompt)
+Stage 1  PROPOSAL             research agent drafts the change:
+                              a new benchmarks/<name>/, or edits to
+                              existing ones (proposer.md)
         |
-Stage 2  MECHANICAL ADMISSION run the repo validators, the engine, and
-                              the oracle/nop smoke checks; failures go
+Stage 2  MECHANICAL ADMISSION repo validators, the engine, drift
+                              checks, oracle/nop smoke; failures go
                               back to Stage 1 with the log attached
         |
 Stage 3  DIFFICULTY PILOT     run 1-2 solver models on the candidate;
@@ -51,10 +59,13 @@ Stage 3  DIFFICULTY PILOT     run 1-2 solver models on the candidate;
                               prompt (Stage 1)
         |
 Stage 4  JUDGE REVIEW         LLM judges score the five criteria in
-                              judges.md; revise or reject accordingly
+                              judges.md, plus the maintenance checks
+                              for enhance/combine/retire; revise or
+                              reject accordingly
         |
 Stage 5  HUMAN GATE           lifecycle draft -> reviewed -> finalized
-                              stays a human decision
+                              stays a human decision; so does any
+                              retire or combine
 ```
 
 Stages 2 and the Harbor half of Stage 3 reuse existing machinery; this
@@ -66,19 +77,22 @@ scaffolding script.
 
 | File | Role |
 |---|---|
-| `task-spec.md` | The Stage 0/1 contract: fixed rules plus the per-run human direction slots. |
-| `proposer.md` | Instructions for the research agent that drafts a benchmark. |
-| `judges.md` | The five review criteria adapted to yamaa, with verdict format. |
-| `factory.sh` | Portable scaffolding: `scaffold`, `validate`, and `packet` subcommands. |
+| `task-spec.md` | The Stage 0/1 contract: work-item types, fixed rules, and the per-run human direction slots. |
+| `proposer.md` | Instructions for the research agent that drafts a benchmark or a maintenance change. |
+| `judges.md` | The five review criteria adapted to yamaa, plus maintenance checks, with verdict format. |
+| `factory.sh` | Portable scaffolding and checks: `scaffold`, `validate`, `packet`, `retire-check`, `drift-check`. |
 | `gap-report.md` | Sourced proposals: new benchmarks to add, and existing ones to enhance, combine, or retire. |
+| `work-items/` | Filled-in task specs, one per run: the factory's work log. |
 
 ## Running one cycle
 
-1. Fill in `task-spec.md` for the gap you want closed (see
-   `gap-report.md` for sourced candidates). Curate the example input
-   data yourself: the paper shows this is the highest-leverage input.
-2. Hand `task-spec.md` and `proposer.md` to a research agent. It writes
-   `benchmarks/<name>/` following `../benchmarks/agents.md`.
+1. Write the work item (`work-items/<slug>.md` from `task-spec.md`).
+   For a creation, curate the example input data yourself: the paper
+   shows this is the highest-leverage input. For maintenance, name
+   the target benchmark(s) and the intended end state.
+2. Hand the work item and `proposer.md` to a research agent. It
+   writes a new `benchmarks/<name>/` or edits existing ones,
+   following `../benchmarks/agents.md`.
 3. `./factory.sh validate <name>` runs the mechanical admission
    (Stage 2). Fix or regenerate until clean.
 4. Build the Harbor task and pilot it (Stage 3):

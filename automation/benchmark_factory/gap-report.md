@@ -99,23 +99,27 @@ with the derivation below and the admiral function as grounding.
 
 ## B. Enhance candidates
 
-1. **`adam-adlb-bds`** -- add percent change from baseline (`PCHG`,
-   cf. `derive_var_pchg()`) and the reference-range indicator
-   (`ANRIND`, cf. `derive_var_anrind()`). It currently covers
-   baseline and change only.
-2. **`adam-adlb-shift-criteria`** -- extend to multiple criteria
-   (`CRIT1FL`/`CRIT2FL`), or keep it single-criterion and let
-   `adam-adlb-hys-law` (above) be the multi-criterion showcase.
-   Decide one way; do not do both.
+1. **`adam-adlb-shift-criteria`** ("classify a result, its shift from
+   baseline, and one criterion") -- extend from a single criterion
+   to two (CRIT2/CRIT2FL, a low-tail criterion against LLN),
+   exercising the multi-criterion pattern admiral's
+   `derive_vars_crit_flag()` supports. Keep backward-compatible
+   with the existing golden: existing values do not move. *Status:
+   chosen as the factory's first maintenance pilot; see
+   work-items/shift-criteria-crit2.md.*
+2. **`adam-adlb-lymphocytes`** -- verify against
+   `derive_param_wbc_abs()` ("lab differentials converted to
+   absolute values"); if it matches, generalize the benchmark to
+   all differentials rather than lymphocytes alone.
 3. **`adam-advs-windows`** -- add expected/missing visit records
    (cf. `derive_expected_records()`): planned visits with no
    collected result are a realistic gap in the current fixtures.
    Same question applies to `adam-adqs-missed-visit-locf`; inspect
    both fixtures before deciding.
-4. **`adam-adlb-lymphocytes`** -- verify against
-   `derive_param_wbc_abs()` ("lab differentials converted to
-   absolute values"); if it matches, generalize the benchmark to
-   all differentials rather than lymphocytes alone.
+
+Dropped from this list: `adam-adlb-bds` already carries PCHG
+(verified in the golden), and ANRIND is covered by
+`adam-adlb-shift-criteria`.
 
 ## C. Combine candidates
 
@@ -150,15 +154,16 @@ benchmark, parametric variants.
 Conservative list; retirement is a human Stage 5 decision, never an
 agent's.
 
-1. **`adam-adsl-investigator-comment`** -- "keep an investigator
-   comment exactly as collected": a trivial direct copy of a text
-   field with near-zero discrimination value for an agent
-   benchmark.
-2. **`adam-adsl-site-parse`** -- "parse the site from the subject
+Correction (2026-10-02): `adam-adsl-investigator-comment` was listed
+here as a trivial copy, but its fixtures test comma, quote, and
+line-break fidelity plus empty-vs-spaces handling -- real CSV edge
+cases. Removed from the retire list; it stays.
+
+1. **`adam-adsl-site-parse`** -- "parse the site from the subject
    identifier": a string-parsing exercise rather than a CDISC
    derivation. Realistic (sites do encode site ID in USUBJID), so
    "deprioritize" is fairer than "retire".
-3. **`adam-adae-post-covid`** -- the COVID-specific framing is dated,
+2. **`adam-adae-post-covid`** -- the COVID-specific framing is dated,
    but the underlying pattern (flag events after a reference event)
    is generic and worth keeping. Generalize/repurpose rather than
    delete.

@@ -8,6 +8,11 @@
 #   factory.sh scaffold <name>    create benchmarks/<name>/ skeleton
 #   factory.sh validate <name>    run the mechanical admission (Stage 2)
 #   factory.sh packet <name>      print a Stage 4/5 review packet as markdown
+#   factory.sh retire-check <name> list every repo reference to a benchmark
+#                                 (evidence for a retire/combine work item)
+#   factory.sh drift-check <name>  run the repo's example tests scoped to a
+#                                 benchmark: the spec must still produce the
+#                                 golden (needs uv)
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -19,8 +24,8 @@ need() { command -v "$1" >/dev/null 2>&1 || die "need '$1' on PATH"; }
 
 name="${2:-}"
 case "${1:-}" in
-  scaffold|validate|packet) ;;
-  *) die "usage: factory.sh {scaffold|validate|packet} <benchmark-name>" ;;
+  scaffold|validate|packet|retire-check|drift-check) ;;
+  *) die "usage: factory.sh {scaffold|validate|packet|retire-check|drift-check} <benchmark-name>" ;;
 esac
 [ -n "$name" ] || die "benchmark name required"
 case "$name" in
@@ -158,6 +163,41 @@ PY
   [ "$FAIL" = 0 ] && echo "PASS: $name admitted to Stage 3" \
     || { echo "FAIL: $name needs work before Stage 3"; exit 1; }
   exit 0
+fi
+
+# ---------------------------------------------------------- retire-check
+# retire-check: every repo reference to a benchmark, outside its own
+# directory. Clean output is the evidence a retire/combine work item
+# needs; any hit must be handled before a directory is removed.
+if [ "$1" = "retire-check" ]; then
+  [ -d "$DIR" ] || die "no such benchmark: $DIR"
+  HITS="$(cd "$ROOT" && grep -rln --exclude-dir="$name" "$name" \
+    benchmarks/README.md benchmarks/execution-manifest.yaml \
+    benchmarks/validation-manifest.yaml benchmarks/vocabulary-coverage.yaml \
+    evaluations docs automation mkdocs.yml .github 2>/dev/null)"
+  if [ -z "$HITS" ]; then
+    echo "CLEAN: nothing outside benchmarks/$name/ references it"
+  else
+    echo "REFERENCES FOUND:"
+    echo "$HITS"
+    exit 1
+  fi
+  exit 0
+fi
+
+# ------------------------------------------------------------ drift-check
+# drift-check: the repo's example tests, scoped to one benchmark. The
+# spec must still produce the golden (positive) or still fail as the
+# error contract says (negative). Needs uv; skipped without it.
+if [ "$1" = "drift-check" ]; then
+  [ -d "$DIR" ] || die "no such benchmark: $DIR"
+  command -v uv >/dev/null 2>&1 || { echo "SKIP: drift-check needs uv"; exit 0; }
+  cd "$ROOT" || die "cannot cd to $ROOT"
+  # shellcheck disable=SC2086
+  $PY pytest python/tests/test_examples.py -k "$name" -q >/tmp/factory-drift.log 2>&1
+  CODE=$?
+  tail -3 /tmp/factory-drift.log
+  exit $CODE
 fi
 
 # ----------------------------------------------------------------- packet
