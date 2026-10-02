@@ -3,7 +3,8 @@ create an ADLB dataset with one record per laboratory record.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI,
-ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL
+ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL,
+CRIT2, CRIT2FL
 
 ANRIND is the record's own mark: LOW below the lower limit, HIGH above
 the upper limit, and NORMAL between them, limits included, so a result
@@ -31,6 +32,13 @@ greater than three times the upper limit of normal (ULN):
 upper limit is missing. CRIT1FL says whether the record met it, Y or N;
 it has no value where it could not be assessed. A result exactly at
 three times the limit does not meet it.
+
+CRIT2 states a second criterion, a result less than the lower limit of
+normal (LLN): "Result less than LLN". It has no value when the result
+or the lower limit is missing, and it is assessed independently of the
+first criterion. CRIT2FL says whether the record met it, Y or N; it has
+no value where it could not be assessed. A result exactly at the lower
+limit does not meet it.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adlb.csv.
