@@ -484,11 +484,11 @@ def load_study_document(
     """Load one study document and validate its terminology composition.
 
     Reads ``define.yaml`` against ``schema_define.yaml``, loads every
-    dataset entry's specification with the specification loader, then
+    dataset entry's specification with the inheritance resolver, then
     checks controlled terminology (REQ-0926..REQ-0958) across the two.
     Raises SpecificationError when any stage fails.
     """
-    from yamaa.specification.loader import load_specification
+    from yamaa.schema.inheritance import resolve_specification
 
     written_path = Path(define_path)
     origin_path = written_path.resolve()
@@ -503,6 +503,7 @@ def load_study_document(
     normalized = normalize_document(raw, bundle, "define_class")
     assert isinstance(normalized, dict)
     define: dict[str, Any] = dict(normalized)
+    specification_bundle = load_schema_bundle(schema_root)
 
     specifications: dict[str, Specification] = {}
     for entry in define.get("datasets") or []:
@@ -513,7 +514,7 @@ def load_study_document(
         if not isinstance(dataset_id, str) or not isinstance(spec_ref, str):
             continue
         spec_path = (origin_path.parent / spec_ref).resolve()
-        loaded = load_specification(spec_path, schema_root)
+        loaded = resolve_specification(spec_path, specification_bundle)
         specifications[dataset_id] = loaded.specification
 
     diagnostics = validate_study_terminology(define, specifications)

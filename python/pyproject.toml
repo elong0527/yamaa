@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "yamaa contributors" }]
 dependencies = [
+  "jsonschema>=4.25,<5",
   "lxml>=6.1.0,<7",
   "polars>=1.35.2,<2",
   "py-yaml12>=0.2.0,<0.3",

@@ -456,6 +456,7 @@ def execute_workflow(
     *,
     dispatcher: ExpressionDispatcher | None = None,
     hooks: ExecutionHooks | None = None,
+    hooks_for_specification: Callable[[Specification], ExecutionHooks] | None = None,
     event: WorkflowEvent | None = None,
 ) -> WorkflowExecution:
     """Execute each shared producer once, then its consumers, in memory."""
@@ -515,7 +516,9 @@ def execute_workflow(
             node.resolved.specification,
             provide,
             dispatcher=selected_dispatcher,
-            hooks=hooks,
+            hooks=hooks_for_specification(node.resolved.specification)
+            if hooks_for_specification
+            else hooks,
         )
         results[node.entry_path] = latest
         observed_sources[node.entry_path] = node_sources
