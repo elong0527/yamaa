@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import build
+import tomllib
 
 
 def main() -> None:
@@ -41,7 +42,11 @@ def main() -> None:
     )
     for note in skipped:
         print(f"skip {note}")
-    probe_task = next(t for t in tasks if t.name == "adam-adsl-age-group-python")
+    probe_task = next(
+        t
+        for t in tasks
+        if t.name.startswith("adam-adsl-age-group-") and t.name.endswith("-python")
+    )
     probe_image = "yamaa-harbor-sandbox-probe:local"
     try:
         subprocess.run(
@@ -92,11 +97,24 @@ def main() -> None:
             ],
             check=True,
         )
-        results = list((args.out / "jobs" / agent).glob("*/result.json"))
+        job_dir = args.out / "jobs" / agent
+        manifest = json.loads((job_dir / "evaluation.json").read_text())["tasks"]
+        results = list(job_dir.glob("*/result.json"))
         if len(results) != len(tasks):
             raise RuntimeError(f"{agent}: {len(results)} trials for {len(tasks)} tasks")
         for path in results:
             result = json.loads(path.read_text())
+            evidence = json.loads(
+                (path.parent / "verifier/evaluation.json").read_text()
+            )
+            snapshot = tomllib.loads((path.parent / "verifier/task.toml").read_text())
+            if (
+                evidence["task"] != manifest[result["task_name"]]
+                or set(evidence["expected_tasks"]) != set(manifest)
+                or evidence["n_attempts"] != 1
+                or snapshot != evidence["task"]["task"]
+            ):
+                raise RuntimeError(f"{path}: pre-execution evidence was not retained")
             rewards = (result.get("verifier_result") or {}).get("rewards") or {}
             if result.get("exception_info") or rewards.get("reward") != reward:
                 raise RuntimeError(
