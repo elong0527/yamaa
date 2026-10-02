@@ -735,6 +735,7 @@ def job_config(
     n_concurrent: int,
     job_name: str | None,
     jobs_dir: Path,
+    dataset: str | None = None,
 ) -> dict:
     provider = model.partition("/")[0]
     known_host, known_key = PROVIDERS.get(provider, (None, None))
@@ -787,7 +788,9 @@ def job_config(
                 "override_setup_timeout_sec": SETUP_TIMEOUT_SEC,
             }
         ],
-        "tasks": [{"path": str(t)} for t in tasks],
+        "tasks": [
+            {"path": str(t), **({"source": dataset} if dataset else {})} for t in tasks
+        ],
     }
     if job_name:
         config["job_name"] = job_name
@@ -920,6 +923,7 @@ def main() -> None:
                 n_concurrent=args.n_concurrent,
                 job_name=name,
                 jobs_dir=out / "jobs",
+                dataset=dataset_name(args.dataset_prefix, language, tier),
             )
             job = configs_dir / f"{name}.json"
             job.write_text(json.dumps(config, indent=2) + "\n")

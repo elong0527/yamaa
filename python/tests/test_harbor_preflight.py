@@ -17,6 +17,30 @@ TRIAL_IDS = [
     "00000000-0000-0000-0000-000000000001",
     "00000000-0000-0000-0000-000000000002",
 ]
+DATASETS = [
+    {
+        "name": "yamaa/yamaa-sdtm-adam-python",
+        "revision": 5,
+        "version_id": "dataset-version",
+        "task_names": ["yamaa/one", "yamaa/two"],
+    }
+]
+
+
+@pytest.fixture(autouse=True)
+def hub(monkeypatch):
+    module = _load("hub")
+    monkeypatch.setitem(sys.modules, "hub", module)
+
+    async def publish(job_dir):
+        return DATASETS
+
+    async def link(job_id, datasets, expected):
+        assert job_id == JOB_ID and datasets == DATASETS and expected == 2
+
+    monkeypatch.setattr(module, "publish_job_datasets", publish)
+    monkeypatch.setattr(module, "link_job_datasets", link)
+    return module
 
 
 @pytest.fixture
@@ -169,6 +193,8 @@ def test_cleanup_rejects_paths_outside_the_job(completed_job, name):
     receipt = {
         "status": "uploaded",
         "verified_at": "verified",
+        "dataset_verified_at": "verified",
+        "datasets": DATASETS,
         "trial_directories": [name],
     }
     with pytest.raises(ValueError):
@@ -180,6 +206,16 @@ def test_cleanup_requires_remote_confirmation(completed_job):
     runner = _load("run")
     with pytest.raises(ValueError, match="confirmed Harbor Hub"):
         runner.cleanup_uploaded_job(completed_job, {"status": "uploaded"})
+    assert (completed_job / "passed/artifact.txt").is_file()
+
+
+def test_cleanup_requires_verified_dataset_links(completed_job):
+    runner = _load("run")
+    with pytest.raises(ValueError, match="confirmed Harbor Hub"):
+        runner.cleanup_uploaded_job(
+            completed_job,
+            {"status": "uploaded", "verified_at": "verified", "datasets": DATASETS},
+        )
     assert (completed_job / "passed/artifact.txt").is_file()
 
 
@@ -209,6 +245,7 @@ def test_upload_keeps_failed_attempts_and_uses_private_yamaa_org(
     receipt = json.loads((completed_job / "hub-upload.json").read_text())
     assert receipt["status"] == "uploaded" and receipt["uploaded_trials"] == 2
     assert receipt["verified_at"] and receipt["local_cleanup"] == "completed"
+    assert receipt["datasets"] == DATASETS and receipt["dataset_verified_at"]
     assert not (completed_job / "passed").exists()
     assert not (completed_job / "failed").exists()
     assert not (completed_job / "task-snapshots").exists()
@@ -418,3 +455,33 @@ def test_upload_failure_preserves_results_and_records_retry(
     assert (completed_job / "result.json").read_bytes() == before
     receipt = json.loads((completed_job / "hub-upload.json").read_text())
     assert receipt["status"] == "failed" and receipt["error"]
+
+
+@pytest.mark.parametrize("failure", ["publish", "link"])
+def test_dataset_failures_preserve_local_results(
+    completed_job, monkeypatch, hub, hub_db, failure
+):
+    uploader = pytest.importorskip("harbor.upload.uploader")
+    runner = _load("run")
+
+    class FakeUploader:
+        db = hub_db
+
+        async def upload_job(self, job_dir, **kwargs):
+            return SimpleNamespace(
+                job_id=JOB_ID,
+                n_trials_uploaded=2,
+                n_trials_skipped=0,
+                n_trials_failed=0,
+            )
+
+    async def unavailable(*args):
+        raise RuntimeError("dataset association unavailable")
+
+    monkeypatch.setattr(uploader, "Uploader", FakeUploader)
+    method = "publish_job_datasets" if failure == "publish" else "link_job_datasets"
+    monkeypatch.setattr(hub, method, unavailable)
+    assert not asyncio.run(runner.upload_completed_job(completed_job))
+    assert (completed_job / "passed/artifact.txt").is_file()
+    receipt = json.loads((completed_job / "hub-upload.json").read_text())
+    assert receipt["status"] == "failed" and not receipt.get("dataset_verified_at")
