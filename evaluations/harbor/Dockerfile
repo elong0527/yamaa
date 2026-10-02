@@ -4,7 +4,7 @@
 # verifier. Python and R with common data packages; no yamaa, no benchmark
 # files, no network at run time beyond the model API.
 #
-#   docker build -t yamaa-harbor-env:0.3 evaluations/harbor
+#   docker build -t yamaa-harbor-env:0.5 evaluations/harbor
 #
 # Bump the tag in build.py (IMAGE) whenever this file changes.
 
@@ -54,14 +54,10 @@ RUN useradd --create-home --uid 1001 --shell /bin/bash agent \
     && mkdir -p /app/input /app/output /logs/agent /logs/verifier /logs/artifacts \
     && chown -R agent:agent /app /logs
 
-# --- OpenCode offline settings: model catalog and plugin package ------------
-# The run allows only the model API host, so OpenCode cannot fetch its model
-# catalog (OPENCODE_MODELS_PATH) or its plugin package at startup.
-RUN mkdir -p /opt/yamaa-eval \
-    && curl -fsSL -o /opt/yamaa-eval/opencode-models.json https://models.dev/api.json \
-    && python -c "import json, sys; d = json.load(open(sys.argv[1])); assert d['opencode-go']['models'] and d['anthropic']['models']" \
-        /opt/yamaa-eval/opencode-models.json \
-    && chmod 644 /opt/yamaa-eval/opencode-models.json
+# --- OpenCode offline settings ---------------------------------------------
+# Use the catalog embedded in the pinned OpenCode binary, with model fetching
+# disabled by the job. Fetching models.dev here would change the same image
+# reference on every rebuild. Its plugin is installed ahead for offline use.
 USER agent
 RUN set -eux; \
     export HOME=/home/agent; \
@@ -71,6 +67,7 @@ RUN set -eux; \
 
 # --- Harbor's OpenCode install, done ahead -----------------------------------
 # What Harbor's OpenCode installer pins (harbor/agents/installed/node_install.py).
+ENV OPENCODE_DISABLE_MODELS_FETCH=1
 ARG NVM_VERSION=v0.40.2
 ARG NODE_MAJOR=22
 # Harbor installs nvm, Node, and opencode-ai as the agent user at every

@@ -32,7 +32,7 @@ one build runs against any provider. Run from the repository root:
 
     uv run --project python --group harbor python evaluations/harbor/build.py \\
         --model opencode-go/muse-spark-1.3-contributor --variant low high
-    uv run --project python --group harbor harbor run \\
+    uv run --project python --group harbor python evaluations/harbor/run.py \\
         -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
 Pass `--language r` or `--language python` to build only one track, and
@@ -72,13 +72,12 @@ SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
 # One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
 DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
-IMAGE = "yamaa-harbor-env:0.3"
+IMAGE = "yamaa-harbor-env:0.5"
 # What the verifier checks, recorded in every task and required by the
-# leaderboards: 2 adds the changed-input challenge, the sandboxed reruns, and
-# the trajectory requirement, so scores under an older protocol do not mix.
-GRADING_PROTOCOL = "2"
+# leaderboards: 3 adds changed derivation values, replayed partial credit and
+# complete job evidence, so scores under an older protocol do not mix.
+GRADING_PROTOCOL = "3"
 OPENCODE_VERSION = "1.18.33"
-OPENCODE_MODELS_PATH = "/opt/yamaa-eval/opencode-models.json"
 # Build output and Harbor job directories stay outside the repository, whose
 # validators read every file in the tree.
 OUT = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "yamaa-harbor"
@@ -216,7 +215,7 @@ def contract_for(benchmark: Path, language: str) -> dict:
         "script": LANGUAGES[language]["script"],
         "outputs": outputs,
         # Outputs keyed by subject are rechecked on inputs whose subject
-        # identifiers are renamed, so a lookup of the expected rows fails.
+        # identifiers and supported derivation inputs are changed at runtime.
         "challenge_required": any("USUBJID" in o["columns"] for o in outputs),
     }
 
@@ -327,7 +326,7 @@ artifacts = ["/app", "/logs/agent/trajectory.json"]
 
 [task]
 name = "yamaa/{task_name(benchmark, language, tier)}"
-version = "0.2.0"
+version = "0.3.0"
 description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}{source}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
 
@@ -503,9 +502,10 @@ never enter the agent's container.
   same way, writes exactly that data, as it does when the derivation is
   per subject; a reference that crashes is a verifier error, not an
   exemption.
-- Changed inputs: when the output is keyed by subject, rerun on the inputs
-  with every subject identifier renamed, it writes the data the reference
-  computes from those inputs, so a lookup of the expected rows fails.
+- Changed inputs: when the output carries subjects, rerun with identifiers
+  renamed and supported ages, measurements and complete dates changed, it
+  writes the data the reference computes from those inputs. The seed and
+  changed columns are recorded in the grade.
 - The trajectory and the script use no {other} and no web tool, and a
   model's job must leave a trajectory to check.
 
@@ -516,6 +516,10 @@ symlink is rejected.
 `reward.json` also reports `cell_accuracy`, `row_accuracy`, `reproduced`,
 `web_tool_calls`, `language_violations`, `held_out_checked`, `held_out`,
 `challenge_checked`, and `challenge_passed`.
+Partial accuracy is the minimum across the submitted files and every checked
+rerun. A failed execution or policy violation gets zero partial credit, while
+an executable, partly correct derivation keeps credit. Extra rows and columns
+reduce accuracy; missing columns cannot count as fully correct rows.
 
 ## Oracle
 
@@ -756,6 +760,7 @@ def job_config(
         "jobs_dir": str(jobs_dir),
         "n_attempts": n_attempts,
         "n_concurrent_trials": n_concurrent,
+        "retry": {"max_retries": 0},
         "environment": {
             "type": "docker",
             "extra_allowed_hosts": sorted({host, *SETUP_HOSTS}),
@@ -772,7 +777,6 @@ def job_config(
                     key: "${" + key + "}",
                     "OPENCODE_PERMISSION": json.dumps(WEB_TOOLS_DENIED),
                     "OPENCODE_DISABLE_MODELS_FETCH": "1",
-                    "OPENCODE_MODELS_PATH": OPENCODE_MODELS_PATH,
                     "OPENCODE_DISABLE_AUTOUPDATE": "1",
                     "OPENCODE_DISABLE_LSP_DOWNLOAD": "1",
                     "OPENCODE_DISABLE_CLAUDE_CODE": "1",

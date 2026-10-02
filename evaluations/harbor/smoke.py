@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import build
+import tomllib
 
 
 def main() -> None:
@@ -20,6 +21,9 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--image", default=build.IMAGE)
+    parser.add_argument(
+        "--prompt", nargs="+", choices=list(build.TIERS), default=["full"]
+    )
     parser.add_argument("--n-concurrent", type=int, default=4)
     args = parser.parse_args()
     names = (
@@ -34,10 +38,15 @@ def main() -> None:
         image=args.image,
         commit=build.git_commit(),
         strict=not args.full,
+        tiers=tuple(args.prompt),
     )
     for note in skipped:
         print(f"skip {note}")
-    probe_task = next(t for t in tasks if t.name == "adam-adsl-age-group-python")
+    probe_task = next(
+        t
+        for t in tasks
+        if t.name.startswith("adam-adsl-age-group-") and t.name.endswith("-python")
+    )
     probe_image = "yamaa-harbor-sandbox-probe:local"
     try:
         subprocess.run(
@@ -66,31 +75,46 @@ def main() -> None:
             stdout=subprocess.DEVNULL,
         )
     for agent, reward in (("oracle", 1.0), ("nop", 0.0)):
+        config_path = args.out / f"{agent}.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "jobs_dir": str(args.out / "jobs"),
+                    "job_name": agent,
+                    "n_concurrent_trials": args.n_concurrent,
+                    "environment": {"type": "docker"},
+                    "agents": [{"name": agent}],
+                    "tasks": [{"path": str(t)} for t in tasks],
+                }
+            )
+        )
         subprocess.run(
             [
                 sys.executable,
+                str(build.HERE / "run.py"),
                 "-c",
-                "from harbor.cli.main import app; app()",
-                "run",
-                "-p",
-                str(args.out / "tasks"),
-                "-a",
-                agent,
-                "-o",
-                str(args.out / "jobs"),
-                "--job-name",
-                agent,
-                "-n",
-                str(args.n_concurrent),
-                "-y",
+                str(config_path),
             ],
             check=True,
         )
-        results = list((args.out / "jobs" / agent).glob("*/result.json"))
+        job_dir = args.out / "jobs" / agent
+        manifest = json.loads((job_dir / "evaluation.json").read_text())["tasks"]
+        results = list(job_dir.glob("*/result.json"))
         if len(results) != len(tasks):
             raise RuntimeError(f"{agent}: {len(results)} trials for {len(tasks)} tasks")
         for path in results:
             result = json.loads(path.read_text())
+            evidence = json.loads(
+                (path.parent / "verifier/evaluation.json").read_text()
+            )
+            snapshot = tomllib.loads((path.parent / "verifier/task.toml").read_text())
+            if (
+                evidence["task"] != manifest[result["task_name"]]
+                or set(evidence["expected_tasks"]) != set(manifest)
+                or evidence["n_attempts"] != 1
+                or snapshot != evidence["task"]["task"]
+            ):
+                raise RuntimeError(f"{path}: pre-execution evidence was not retained")
             rewards = (result.get("verifier_result") or {}).get("rewards") or {}
             if result.get("exception_info") or rewards.get("reward") != reward:
                 raise RuntimeError(

@@ -489,7 +489,15 @@ def _fake_job(root: Path, rewards: dict[str, list[float | None]], **config) -> P
     # Harbor writes the job's started_at in local time without a zone, and
     # each trial's in UTC: 23:59 in New York is already the next day in UTC.
     (job / "result.json").write_text(
-        json.dumps({"id": job_id, "started_at": "2026-09-29T23:59:00"})
+        json.dumps(
+            {
+                "id": job_id,
+                "started_at": "2026-09-29T23:59:00",
+                "finished_at": "2026-09-30T00:30:00",
+                "n_total_trials": sum(map(len, rewards.values())),
+                "stats": {"n_completed_trials": sum(map(len, rewards.values()))},
+            }
+        )
     )
     task_dir = root / "tasks"
     task_dir.mkdir()
@@ -544,6 +552,25 @@ def _fake_job(root: Path, rewards: dict[str, list[float | None]], **config) -> P
                 },
             }
             (trial / "result.json").write_text(json.dumps(result))
+    preserved = {
+        f"yamaa/{benchmark}": {
+            "path": str(task_dir),
+            "task": tomllib.loads(next(job.glob("*/verifier/task.toml")).read_text()),
+        }
+        for benchmark in rewards
+    }
+    (job / "evaluation.json").write_text(json.dumps({"tasks": preserved}))
+    for path in job.glob("*/result.json"):
+        result = json.loads(path.read_text())
+        (path.parent / "verifier/evaluation.json").write_text(
+            json.dumps(
+                {
+                    "task": preserved[result["task_name"]],
+                    "expected_tasks": sorted(preserved),
+                    "n_attempts": attempts,
+                }
+            )
+        )
     return job
 
 
@@ -562,8 +589,8 @@ def _board_named(name: str) -> dict:
 
 def _board_name(language: str, tier: str) -> str:
     if tier == "full":
-        return f"sdtm-adam-v2-{language}"
-    return f"sdtm-adam-v2-{tier}-{language}"
+        return f"sdtm-adam-v3-{language}"
+    return f"sdtm-adam-v3-{tier}-{language}"
 
 
 def test_each_language_has_a_board_per_prompt_tier():
@@ -638,7 +665,7 @@ def test_a_row_names_its_variant_and_a_job_may_not_mix_them(tmp_path):
 
 def test_each_board_names_its_language_and_tier_dataset():
     for board in leaderboard.load_leaderboards():
-        # sdtm-adam-v2-<language> or sdtm-adam-v2-<tier>-<language>
+        # sdtm-adam-v3-<language> or sdtm-adam-v3-<tier>-<language>
         parts = board["harbor"]["name"].split("-")
         language, tier = parts[-1], parts[3] if len(parts) == 5 else "full"
         assert board["grading_protocol"] == build.GRADING_PROTOCOL
@@ -718,7 +745,7 @@ def test_leaderboards_and_rows_match_their_schemas(tmp_path):
 def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
     rewards = {"adam-adae-death-r": [1.0], "adam-adsl-age-group-r": [1.0]}
     rewards["adam-adtte-dor-r"] = [0.0]
-    board = _board_named("sdtm-adam-v2-r")
+    board = _board_named("sdtm-adam-v3-r")
     board["tasks"] = sorted(rewards)
     run = _on(leaderboard.collect(_fake_job(tmp_path, rewards)), board)
     run["status"] = status
@@ -730,7 +757,7 @@ def _export(tmp_path: Path, status: str = "display") -> tuple[dict, dict, dict]:
 def test_export_writes_harbor_hub_configs(tmp_path):
     run, created, rows = _export(tmp_path)
     assert created["package"] == "yamaa/example"
-    assert created["name"] == "sdtm-adam-v2-r"
+    assert created["name"] == f"sdtm-adam-v3-r-{run['yamaa_commit']}"
     (row,) = rows["rows"]
     assert set(row) == {"metadata", "metrics", "status", "trial_ids"}
     assert row["trial_ids"] == [t["id"] for t in run["trials"]]
@@ -762,7 +789,7 @@ def _export_cli(monkeypatch, *arguments: str) -> None:
 
 def _full_job(tmp_path: Path, language: str) -> Path:
     """A fake job with one passing trial on every task of a full board."""
-    tasks = _board_named(f"sdtm-adam-v2-{language}")["tasks"]
+    tasks = _board_named(f"sdtm-adam-v3-{language}")["tasks"]
     return _fake_job(tmp_path, {task: [1.0] for task in tasks})
 
 
@@ -771,16 +798,16 @@ def test_the_export_command_reads_job_directories(tmp_path, monkeypatch, capsys)
     out = tmp_path / "hub"
     _export_cli(
         monkeypatch,
-        "sdtm-adam-v2-r",
+        "sdtm-adam-v3-r",
         str(job),
         "--package",
         "yamaa/example",
         "--out",
         str(out),
     )
-    rows = yaml.safe_load((out / "sdtm-adam-v2-r.rows.yaml").read_text())
+    rows = yaml.safe_load((out / "sdtm-adam-v3-r.rows.yaml").read_text())
     assert rows["rows"][0]["metrics"]["reward"] == 1.0
-    assert "harbor hub leaderboard row create yamaa/example/sdtm-adam-v2-r" in (
+    assert "harbor hub leaderboard row create yamaa/example/sdtm-adam-v3-r" in (
         capsys.readouterr().out
     )
 
@@ -790,11 +817,11 @@ def test_the_export_command_defaults_to_the_boards_dataset(
 ):
     job = _full_job(tmp_path, "python")
     out = tmp_path / "hub"
-    _export_cli(monkeypatch, "sdtm-adam-v2-python", str(job), "--out", str(out))
-    created = yaml.safe_load((out / "sdtm-adam-v2-python.leaderboard.yaml").read_text())
+    _export_cli(monkeypatch, "sdtm-adam-v3-python", str(job), "--out", str(out))
+    created = yaml.safe_load((out / "sdtm-adam-v3-python.leaderboard.yaml").read_text())
     assert created["package"] == "yamaa/yamaa-sdtm-adam-python"
     assert (
-        "row create yamaa/yamaa-sdtm-adam-python/sdtm-adam-v2-python"
+        "row create yamaa/yamaa-sdtm-adam-python/sdtm-adam-v3-python"
         in capsys.readouterr().out
     )
 
@@ -804,7 +831,7 @@ def test_the_export_command_refuses_a_job_off_the_board(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="cannot be ranked"):
         _export_cli(
             monkeypatch,
-            "sdtm-adam-v2-r",
+            "sdtm-adam-v3-r",
             str(job),
             "--out",
             str(tmp_path / "hub"),
