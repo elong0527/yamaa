@@ -308,3 +308,61 @@ def test_a_filter_naming_another_relation_reads_no_record() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "unknown_field"
+
+
+def _kinds(rows: list[list[object]]) -> TypedTable:
+    return _table(["GroupID", "RecordKind", "Value"], rows)
+
+
+def _filtered_value(table: TypedTable) -> object:
+    feeding = runtime_rows(table)
+    # The row's own record is the first one, so it is the record a read
+    # outside the filter would reach.
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+    return evaluate_expression(
+        {"source": {"variable": "ODM.Value", "filter": "ODM.RecordKind = 'TARGET'"}},
+        context,
+    )
+
+
+def test_a_selected_record_without_the_value_never_reads_an_unselected_one() -> None:
+    # #1567: the filter is the boundary of what the source reads, so the
+    # unselected record's value cannot stand in for the selected one's.
+    table = _kinds([["G1", "UNRELATED", "unrelated"], ["G1", "TARGET", None]])
+
+    assert _filtered_value(table) == ValueResult(value=MISSING)
+
+
+def test_several_selected_records_without_the_value_read_as_missing() -> None:
+    table = _kinds(
+        [
+            ["G1", "UNRELATED", "unrelated"],
+            ["G1", "TARGET", None],
+            ["G1", "TARGET", None],
+        ]
+    )
+
+    assert _filtered_value(table) == ValueResult(value=MISSING)
+
+
+def test_one_selected_value_among_selected_missing_ones_is_that_value() -> None:
+    table = _kinds(
+        [
+            ["G1", "UNRELATED", "unrelated"],
+            ["G1", "TARGET", None],
+            ["G1", "TARGET", "target"],
+        ]
+    )
+
+    assert _filtered_value(table) == ValueResult(value="target")
+
+
+def test_permuting_unselected_records_leaves_the_filtered_read_alone() -> None:
+    selected = ["G1", "TARGET", None]
+    first = _kinds([["G1", "OTHER", "other"], selected, ["G1", "UNRELATED", "x"]])
+    second = _kinds([["G1", "UNRELATED", "x"], selected, ["G1", "OTHER", "other"]])
+    last = _kinds([selected, ["G1", "UNRELATED", "x"], ["G1", "OTHER", "other"]])
+
+    assert {repr(_filtered_value(table)) for table in (first, second, last)} == {
+        repr(ValueResult(value=MISSING))
+    }

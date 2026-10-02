@@ -321,7 +321,9 @@ class RuntimeContext:
         ]
         present = _distinct_values(feeding_row[bound.field] for feeding_row in carrying)
         if not present:
-            return ResolvedValue(value=runtime_value(row[bound.field]))
+            # The records read carry no value, and that is the answer: the
+            # row's own record may sit outside a filter, so it is no fallback.
+            return ResolvedValue(value=MISSING)
         if len(present) > 1:
             if multiple_matches is not None:
                 # REQ-0353: the specification says which of the records it
