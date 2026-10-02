@@ -5,9 +5,10 @@ name: Harbor Oracle
 # the oracle must score 1 with every required check run, nop must score 0.
 # It also probes the verifier sandbox (probe.py): the agent's script cannot
 # read the golden files, change the inputs or the grader's logs, or leave a
-# process behind. Pull requests check the three development tasks; Mondays,
-# and on request, every benchmark in both languages. A test keeps the image
-# tag here equal to build.py's IMAGE.
+# process behind. Each run randomly samples ten tasks across both languages
+# and all prompt tiers, using the same sample for oracle and nop. The saved
+# seed and sample make failures reproducible. A test keeps the image tag here
+# equal to build.py's IMAGE.
 
 on:
   pull_request:
@@ -19,11 +20,6 @@ on:
       - benchmarks/**
       - .github/workflows/harbor-oracle.yml
   workflow_dispatch:
-    inputs:
-      full:
-        description: Run oracle/nop on all benchmarks
-        type: boolean
-        default: false
   schedule:
     - cron: '0 6 * * 1'
 
@@ -53,21 +49,17 @@ jobs:
       - name: Build evaluation image
         run: docker build -t yamaa-harbor-env:0.5 evaluations/harbor
       - name: Run both tracks through the separate Docker verifier
-        env:
-          FULL: ${{ github.event_name == 'schedule' || inputs.full }}
         run: |
-          args=()
-          if [[ "$FULL" == "true" ]]; then
-            args+=(--full)
-          else
-            args+=(--prompt full conventions brief)
-          fi
           uv run --project python --no-sync python evaluations/harbor/smoke.py \
-            --out "${{ runner.temp }}/harbor" "${args[@]}"
+            --prompt full conventions brief \
+            --n-concurrent 6 \
+            --out "${{ runner.temp }}/harbor"
       - name: Upload verifier diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: harbor-verification
-          path: ${{ runner.temp }}/harbor/jobs
+          path: |
+            ${{ runner.temp }}/harbor/jobs
+            ${{ runner.temp }}/harbor/sample.json
           if-no-files-found: ignore

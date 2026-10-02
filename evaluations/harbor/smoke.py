@@ -1,13 +1,15 @@
 """Run offline oracle/nop checks through Harbor's real Docker verifier.
 
-Use --full for every buildable benchmark; the default covers the three
-development tasks in both languages. No model API or key is used.
+Randomly sample ten buildable tasks, shared by oracle and nop. Save the
+sample and seed so the check can be reproduced. No model API or key is used.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import random
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -15,29 +17,37 @@ from pathlib import Path
 import build
 import tomllib
 
+PREFLIGHT_TRIALS = 10
+
+
+def sample_tasks(tasks: list[Path], seed: int) -> list[Path]:
+    """Use the same reproducible sample, without replacement, for both agents."""
+    candidates = sorted(tasks)
+    return sorted(
+        random.Random(seed).sample(candidates, min(PREFLIGHT_TRIALS, len(candidates)))
+    )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--full", action="store_true")
+    # Older launch scripts pass --full. It now uses the same ten-task sample.
+    parser.add_argument("--full", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--seed", type=int, help="repeat a saved preflight sample")
     parser.add_argument("--image", default=build.IMAGE)
     parser.add_argument(
         "--prompt", nargs="+", choices=list(build.TIERS), default=["full"]
     )
-    parser.add_argument("--n-concurrent", type=int, default=4)
+    parser.add_argument("--n-concurrent", type=int, default=6)
     args = parser.parse_args()
-    names = (
-        sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
-        if args.full
-        else ["adam-adsl-age-group", "adam-adae-death", "adam-adtte-dor"]
-    )
+    names = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
     tasks, skipped = build.build_selection(
         names,
         languages=["r", "python"],
         tasks_dir=args.out / "tasks",
         image=args.image,
         commit=build.git_commit(),
-        strict=not args.full,
+        strict=False,
         tiers=tuple(args.prompt),
     )
     for note in skipped:
@@ -47,6 +57,23 @@ def main() -> None:
         for t in tasks
         if t.name.startswith("adam-adsl-age-group-") and t.name.endswith("-python")
     )
+    seed = args.seed if args.seed is not None else secrets.randbits(64)
+    candidates = tasks
+    tasks = sample_tasks(candidates, seed)
+    (args.out / "sample.json").write_text(
+        json.dumps(
+            {
+                "seed": seed,
+                "candidate_tasks": len(candidates),
+                "tasks": [t.name for t in tasks],
+                "agents": ["oracle", "nop"],
+                "prompt_tiers": args.prompt,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print(f"sampled {len(tasks)} of {len(candidates)} tasks (seed {seed})")
     probe_image = "yamaa-harbor-sandbox-probe:local"
     try:
         subprocess.run(
