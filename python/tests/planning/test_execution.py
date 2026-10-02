@@ -2869,27 +2869,114 @@ def _derivation_diagnostic(
     return diagnostics[0]
 
 
-def test_an_intermediate_derivation_rejects_a_driver_reference() -> None:
-    # REQ-1185: the driver is out of scope for an intermediate derivation.
-    diagnostic = _derivation_diagnostic(
-        {"IDVARVAL_U": {"str_case": {"source": "SRC.LBSEQ", "to": "upper"}}},
-        "unknown_field",
+def test_an_intermediate_derivation_reads_a_qualified_driver_field() -> None:
+    spec = _intermediate_spec(
+        {"DIST": {"compute": {"expr": "ABS(SRC.LBSEQ - 260)"}}},
+        key=["STUDYID"],
+    )
+    plan = plan_execution(
+        spec,
+        {"SRC": _src_table(), "SUPP": _supp_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+    intermediate = plan.intermediates[0]
+    assert intermediate.derivation_references == (
+        ("SRC.LBSEQ", "intermediates[0].derivations.DIST.compute.expr"),
+    )
+    assert intermediate.dependencies == ("STUDYID", "SRC.LBSEQ")
+
+
+def test_an_intermediate_derivation_cannot_read_an_unrelated_input() -> None:
+    spec = _intermediate_spec(
+        {"DIST": {"compute": {"expr": "ABS(OTHER.LBSEQ - 260)"}}},
+        key=["STUDYID"],
+    )
+    spec = spec.model_copy(
+        update={"input": {**spec.input, "OTHER": DatasetSource(path="other.csv")}}
+    )
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _src_table(), "SUPP": _supp_table(), "OTHER": _src_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+    assert any(
+        diagnostic.condition == "unknown_field"
+        and diagnostic.requirement == "REQ-1185"
+        and diagnostic.spec_paths == ("intermediates[0].derivations.DIST.compute.expr",)
+        for diagnostic in raised.value.diagnostics
     )
 
-    assert diagnostic.requirement == "REQ-1185"
-    assert diagnostic.spec_paths == (
-        "intermediates[0].derivations.IDVARVAL_U.str_case.source",
+
+def test_correlated_intermediate_derivations_cannot_verify_a_source_relation() -> None:
+    spec = _intermediate_spec(
+        {"DIST": {"compute": {"expr": "ABS(SRC.LBSEQ - 260)"}}},
+        key=["STUDYID"],
+        verifications=[{"unique": ["DIST"]}],
+    )
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _src_table(), "SUPP": _supp_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+    assert any(
+        diagnostic.condition == "correlated_derivation_with_unique_verification"
+        and diagnostic.requirement == "REQ-1245"
+        for diagnostic in raised.value.diagnostics
     )
 
 
-def test_an_intermediate_derivation_rejects_another_dataset_reference() -> None:
-    # REQ-1185: a qualified name must name the intermediate's own dataset.
+def test_an_intermediate_derivation_rejects_an_unknown_driver_field() -> None:
     diagnostic = _derivation_diagnostic(
         {"IDVARVAL_U": {"str_case": {"source": "SRC.IDVARVAL", "to": "upper"}}},
         "unknown_field",
     )
 
     assert diagnostic.requirement == "REQ-1185"
+
+
+def test_an_intermediate_window_cannot_read_the_driver_directly() -> None:
+    diagnostic = _derivation_diagnostic(
+        {"RN": {"row_number": {"window": {"order_by": [{"variable": "SRC.LBSEQ"}]}}}},
+        "unknown_field",
+    )
+    assert diagnostic.requirement == "REQ-1185"
+    assert diagnostic.spec_paths == (
+        "intermediates[0].derivations.RN.row_number.window.order_by[0]",
+    )
+
+
+def test_a_correlated_derivation_obeys_group_key_scope() -> None:
+    spec = _intermediate_spec(
+        {"DIST": {"compute": {"expr": "ABS(SRC.LBSEQ - 260)"}}},
+        key=["STUDYID"],
+    ).model_copy(
+        update={
+            "rows": [
+                Row(
+                    id="subjects",
+                    dataset="SRC",
+                    group_by=["SRC.STUDYID"],
+                    derivations={
+                        "STUDYID": derivation({"source": "SRC.STUDYID"}),
+                        "EPFLAG": derivation({"source": "SUP_EP.QVAL"}),
+                    },
+                )
+            ]
+        }
+    )
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": _src_table(), "SUPP": _supp_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+    assert any(
+        diagnostic.condition == "ungrouped_driver_field"
+        and diagnostic.spec_paths == ("intermediates[0].derivations.DIST.compute.expr",)
+        for diagnostic in raised.value.diagnostics
+    )
 
 
 def test_an_intermediate_derivation_reads_an_earlier_sibling() -> None:

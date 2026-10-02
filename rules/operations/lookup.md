@@ -385,21 +385,30 @@ surviving records counts one `multiple_matches` handling, and a declared
 
 **REQ-1185.** An intermediate may declare `derivations:`, a map of names to
 derivations written in the same expression language as row-template
-`derivations:`. The derivations evaluate in declaration order: each is
-computed once per record of the intermediate's dataset, and a derivation
+`derivations:`. The derivations evaluate in declaration order: a derivation
 may read the dataset's stored fields plus the derivations declared before
 it. A bare name reads the dataset's stored field or an earlier derived
-name, and a qualified name must name the dataset or, under
+name. A qualified name may read the intermediate's dataset, the current
+input record under the same scope as a correlated `filter`
+([REQ-0120](lookup.md#req-0120)), or, under
 [REQ-1263](lookup.md#req-1263), another named intermediate. A reference to
-a driver field, a derivation declared later in the same map, or anything
-else the dataset does not store fails as `unknown_field`; a derived name
+an unrelated input dataset, a derivation declared later in the same map,
+or an unknown field fails as `unknown_field`; a derived name
 that shadows a stored column fails as `duplicate_derivation`.
+
+Derivations that read only donor records are computed once per record.
+When any derivation reads the current input record, the map evaluates for
+each lookup's current record, and its augmented donor records, filters,
+and match indexes cannot be reused for another current record. Every
+column reading the intermediate still shares the same selection
+([REQ-0138](lookup.md#req-0138)).
 
 A derivation may use a window function. The window partitions the donor
 records as augmented by every derivation declared before it, so its
 `group_by`, `order_by`, and `filter` may read a stored field or an earlier
-derived name, bare or dataset-qualified. Base-record order is the final
-tie-break.
+derived name, bare or dataset-qualified. A window's fields cannot read the
+current input record directly: derive that value first and let the window
+read the derived name. Base-record order is the final tie-break.
 
 The derived values augment each donor record before `filter`, matching,
 `order_by` selection, and `columns` projection. A derived name may therefore
@@ -423,6 +432,23 @@ intermediates:
     order_by: [DS.EOT_FALLBACK]
     keep: first
     columns: [DSDECOD, EOT_FALLBACK]
+```
+
+For a measurement closest to a reference on the current input record:
+
+```yaml
+base: BASE
+intermediates:
+  - id: PICK
+    dataset: SRC
+    key: [ID]
+    derivations:
+      DIST: {compute: {expr: "ABS(DAY - BASE.REF)"}}
+    filter: "SRC.DIST IS NOT NULL"
+    order_by: [SRC.DIST]
+    keep: first
+    columns: [VALUE, DIST]
+    no_match: null
 ```
 
 <a id="req-1263"></a>
@@ -518,8 +544,11 @@ name, or fail as `unknown_field`. A `filter` or `derivations:` entry that
 fails to materialize fails the run here as well: the verification is
 load-bearing, so its failure cannot wait for a selection that may never
 happen. A `filter` that references the current
-driver row is evaluated per row and admits no single run-wide donor set,
+input record is evaluated per record and admits no single run-wide donor set,
 so it cannot combine with `verifications:` and fails validation.
+A derivation that reads the current input record likewise cannot combine
+with `verifications:` and fails as
+`correlated_derivation_with_unique_verification`.
 `keep` stays a positional selection requiring `order_by`; an unordered
 `keep: first` is not an exactly-one assertion.
 
@@ -673,7 +702,7 @@ paired key column to have the same comparable type.
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Stored and derived columns the lookup may read; defaults to every available column. |
-| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns and the records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)), available to `key`, `filter`, `order_by`, `columns`, and `verifications.unique` ([REQ-1185](lookup.md#req-1185)). |
+| `intermediate_class.derivations` | Per-record derivations over donor fields, the current input record, and records other named intermediates select for it ([REQ-1263](lookup.md#req-1263)); available to `key`, `filter`, `order_by`, and `columns`, and to source-only `verifications.unique` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.verifications` | Uniqueness checks over the filtered donor records ([REQ-1245](lookup.md#req-1245)). |
 | `intermediate_class.no_match` | Value returned when the lookup yields nothing; without it, yielding nothing fails ([REQ-0124](lookup.md#req-0124)). |
 

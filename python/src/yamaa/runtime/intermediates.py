@@ -366,7 +366,8 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
     identical for every record, so rebuilding per record is pure waste.
     `exclude` names the in-progress derivation, which the planner keeps
     out of its own scope. `read` answers a REQ-1263 read of another
-    intermediate for this record.
+    intermediate for this record. `current` carries only the qualified
+    driver fields planned for the enclosing lookup (REQ-1185).
     """
 
     def __init__(
@@ -377,6 +378,7 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
         partition_cache: dict[tuple[str, object], _PreparedPartitions] | None = None,
         exclude: str | None = None,
         read: _IntermediateReader | None = None,
+        current: Mapping[str, RuntimeValue] | None = None,
     ) -> None:
         super().__init__(dataset, values_list[index])
         self._values_list = values_list
@@ -384,9 +386,12 @@ class _IntermediateDerivationResolver(_DerivedRecordResolver):
         self._partition_cache = partition_cache
         self._exclude = (exclude,) if exclude is not None else ()
         self._read = read
+        self._current = current or {}
 
     def resolve(self, variable: str) -> Resolution:
         qualifier, separator, field = variable.partition(".")
+        if separator and qualifier != self._dataset and variable in self._current:
+            return ResolvedValue(value=self._current[variable])
         if separator and qualifier != self._dataset and self._read is not None:
             # REQ-1263: a name qualified by another intermediate reads the
             # record that intermediate selects for this donor record.
@@ -568,12 +573,25 @@ class IntermediateSelector:
         return eligible
 
     def _filtered(
-        self, plan: PlannedIntermediate
+        self,
+        plan: PlannedIntermediate,
+        current: Mapping[str, RuntimeValue] | None = None,
     ) -> tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure:
         """Cache source-only filtering over augmented donor records.
 
         A target-dependent result must never enter this run-wide cache.
         """
+        if plan.derivation_references:
+            driver_values = {
+                name: (current or {}).get(name, MISSING)
+                for name, _ in plan.derivation_references
+            }
+            records = self._augment_all(plan, self._source_records(plan), driver_values)
+            if isinstance(records, _DerivationFailure):
+                return records
+            predicate = None if plan.filter_variables else plan.filter_predicate
+            kept = _filter_records(records, predicate, plan.dataset)
+            return kept if isinstance(kept, ConditionResult) else tuple(kept)
         cached = self._eligible.get(plan.identifier)
         if cached is None:
             records = self._records(plan)
@@ -598,11 +616,7 @@ class IntermediateSelector:
         declared before it, so later derivations read its per-record
         result.
         """
-        source = (
-            self._self_records
-            if plan.dataset == "SELF"
-            else self._relations[plan.dataset].records
-        )
+        source = self._source_records(plan)
         if not plan.derived:
             return tuple(source)
         cached = self._derived.get(plan.identifier)
@@ -611,10 +625,18 @@ class IntermediateSelector:
             self._derived[plan.identifier] = cached
         return cached
 
+    def _source_records(self, plan: PlannedIntermediate) -> tuple[IndexedRecord, ...]:
+        return (
+            self._self_records
+            if plan.dataset == "SELF"
+            else self._relations[plan.dataset].records
+        )
+
     def _augment_all(
         self,
         plan: PlannedIntermediate,
         source: Sequence[IndexedRecord],
+        current: Mapping[str, RuntimeValue] | None = None,
     ) -> tuple[IndexedRecord, ...] | _DerivationFailure:
         """Compute every derivation in declaration order.
 
@@ -632,7 +654,7 @@ class IntermediateSelector:
                 failure = self._augment_window(plan, name, declaration, values_list)
             else:
                 failure = self._augment_scalar(
-                    plan, name, declaration, values_list, selections
+                    plan, name, declaration, values_list, selections, current
                 )
             if failure is not None:
                 return failure
@@ -648,6 +670,7 @@ class IntermediateSelector:
         declaration: HandledExpression,
         values_list: list[dict[str, RuntimeValue]],
         selections: list[dict[str, IntermediateOutcome]],
+        current: Mapping[str, RuntimeValue] | None = None,
     ) -> _DerivationFailure | None:
         """Compute one scalar derivation for every donor record.
 
@@ -665,6 +688,7 @@ class IntermediateSelector:
                 index,
                 partition_cache=partition_cache,
                 exclude=name,
+                current=current,
                 read=partial(
                     self._read_for_record,
                     selected=selections[index],
@@ -779,7 +803,7 @@ class IntermediateSelector:
     ) -> IntermediateOutcome:
         """Choose this row's record, using its resolver for relational key expressions."""
         plan = self.plans[identifier]
-        eligible = self._filtered(plan)
+        eligible = self._filtered(plan, current)
         if isinstance(eligible, ConditionResult):
             return IntermediateOutcome(
                 condition=eligible, spec_path=f"{plan.path}.filter"
@@ -822,7 +846,12 @@ class IntermediateSelector:
                 resolved_current[keyed.name] = result.value
             current = resolved_current
         return _select_eligible(
-            plan, eligible, current, index=self._match_index_for(plan, eligible)
+            plan,
+            eligible,
+            current,
+            index=_build_match_index(eligible, plan.match_fields)
+            if plan.derivation_references
+            else self._match_index_for(plan, eligible),
         )
 
     def verify_uniqueness(

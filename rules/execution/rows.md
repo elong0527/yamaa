@@ -29,8 +29,10 @@ row template reads those fields through the intermediate's qualifier as its
 current driver record, not through a keyed lookup. Records retain source
 order. A driver intermediate must read an `input` dataset and may not declare
 `key`, `between`, `order_by`, `keep`, or `no_match`.
-Its filter may read only its own donor fields and earlier derived names; it
-may not reference a current row.
+Its filter may read only its own donor fields and earlier derived names.
+Its derivations may also read the records other intermediates select for
+each donor under [REQ-1263](../operations/lookup.md#req-1263).
+Neither its filter nor its derivations may reference a current row.
 An exposed derived field must have a determinable type: `source` keeps its
 source type, including a read of another intermediate's column under
 [REQ-1263](../operations/lookup.md#req-1263), a string/integer/float

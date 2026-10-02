@@ -38,6 +38,7 @@ ARTIFACT_EXAMPLES = [
     "sdtm-dm-dates",
     "adam-adlb-mean",
     "adam-adlb-supplb-padded-key",
+    "schema-lookup-intermediate-correlated-derive",
     # REQ-1263: a supplemental qualifier read per laboratory record feeds the
     # window that ranks each subject's records for one test.
     "adam-adlb-end-of-treatment",
@@ -141,6 +142,73 @@ columns:
 
     result = _run(tmp_path)
 
+    assert isinstance(result, ExecutionSuccess), result
+    assert render_csv(result.artifact) == b"ID,VALUE\nS1,b\n"
+
+
+@pytest.mark.parametrize("donor_field", ["DAY", "SRC.DAY"])
+@pytest.mark.parametrize("construction", ["base", "rows"])
+@pytest.mark.parametrize("input_type", ["int", "date"])
+def test_an_intermediate_derives_distance_from_the_driver(
+    tmp_path: Path, donor_field: str, construction: str, input_type: str
+) -> None:
+    rows = (
+        "base: BASE"
+        if construction == "base"
+        else """rows:
+  - id: all
+    dataset: BASE
+    derivations:
+      ID: BASE.ID
+      VALUE: PICK.VALUE"""
+    )
+    value_derivation = "    derivation: PICK.VALUE" if construction == "base" else ""
+    distance_derivations = (
+        f'      DIST: {{compute: {{expr: "ABS({donor_field} - BASE.REF)"}}}}'
+        if input_type == "int"
+        else f"""      DAYS: {{date_diff: {{start: {donor_field}, end: BASE.REF, unit: day}}}}
+      DIST: {{compute: {{expr: "ABS(DAYS)"}}}}"""
+    )
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(
+        f"""\
+schema_version: "1.0"
+domain: OUT
+keys: [ID]
+input:
+  BASE: {{path: input/base.csv, types: {{REF: {input_type}}}}}
+  SRC: {{path: input/src.csv, types: {{DAY: {input_type}}}}}
+{rows}
+intermediates:
+  - id: PICK
+    dataset: SRC
+    key: [ID]
+    derivations:
+{distance_derivations}
+    order_by: [SRC.DIST]
+    keep: first
+    columns: [VALUE]
+output: {{path: out.csv, columns: [ID, VALUE]}}
+columns:
+  - name: ID
+    type: str
+    derivation: BASE.ID
+  - name: VALUE
+    type: str
+{value_derivation}
+""",
+        encoding="utf-8",
+    )
+    reference = "10" if input_type == "int" else "2025-01-10"
+    early = "2" if input_type == "int" else "2025-01-02"
+    late = "11" if input_type == "int" else "2025-01-11"
+    (tmp_path / "input/base.csv").write_text(
+        f"ID,REF\nS1,{reference}\n", encoding="utf-8"
+    )
+    (tmp_path / "input/src.csv").write_text(
+        f"ID,DAY,VALUE\nS1,{early},a\nS1,{late},b\n", encoding="utf-8"
+    )
+    result = _run(tmp_path)
     assert isinstance(result, ExecutionSuccess), result
     assert render_csv(result.artifact) == b"ID,VALUE\nS1,b\n"
 

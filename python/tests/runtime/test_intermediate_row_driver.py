@@ -287,13 +287,21 @@ def test_grouped_rows_partition_the_filtered_intermediate_records() -> None:
     ]
 
 
-def test_another_lookup_can_match_against_the_intermediate_driver() -> None:
+@pytest.mark.parametrize("correlation", ["filter", "derivation"])
+def test_another_lookup_can_match_against_the_intermediate_driver(
+    correlation: str,
+) -> None:
     specification, source = example()
     prior = Intermediate(
         id="PRIOR",
         dataset="LB",
         key={"USUBJID": "EOTFB.USUBJID", "LBTESTCD": "EOTFB.LBTESTCD"},
-        filter="LB.VISITNUM < EOTFB.VISITNUM",
+        filter="LB.VISITNUM < EOTFB.VISITNUM"
+        if correlation == "filter"
+        else "LB.GAP > 0",
+        derivations=None
+        if correlation == "filter"
+        else {"GAP": derive({"compute": {"expr": "EOTFB.VISITNUM - VISITNUM"}})},
         order_by=[OrderTerm(variable="LB.VISITNUM")],
         keep="last",
         columns=["LBSTRESN"],
@@ -371,6 +379,35 @@ def test_a_correlated_intermediate_cannot_drive_rows() -> None:
     assert any(
         diagnostic.condition == "invalid_intermediate_driver"
         and "filter" in diagnostic.context["fields"]
+        for diagnostic in result.diagnostics
+    )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [{"source": "OTHER.LBSEQ"}, {"compute": {"expr": "LBSEQ + OTHER.LBSEQ"}}],
+)
+def test_a_correlated_derivation_cannot_supply_row_driver_records(
+    expression: dict[str, object],
+) -> None:
+    specification, source = example()
+    intermediate = specification.intermediates[0].model_copy(
+        update={"derivations": {"REF": derive(expression)}}
+    )
+    specification = specification.model_copy(
+        update={
+            "input": {
+                **specification.input,
+                "OTHER": DatasetSource(path="input/other.csv"),
+            },
+            "intermediates": [intermediate],
+        }
+    )
+    result = execute_specification(specification, {"LB": source, "OTHER": source})
+    assert isinstance(result, ExecutionFailure)
+    assert any(
+        diagnostic.condition == "invalid_intermediate_driver"
+        and "derivations" in diagnostic.context["fields"]
         for diagnostic in result.diagnostics
     )
 
