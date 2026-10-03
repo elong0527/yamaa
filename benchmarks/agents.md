@@ -105,6 +105,33 @@ beside the entry's, and the runner binds every domain, the entry last:
 `input/` instead only records where an input came from, and its artifact is
 not a golden.
 
+## Input staging
+
+A benchmark's inputs come from the true upstream stage of the pipeline,
+never from a halfway shape:
+
+- `sdtm-*` benchmarks map collected data, so their inputs are ODM
+  exports (or the collected form the EDC produces). A benchmark whose
+  pattern is a derivation rather than a mapping (age from a birth
+  date, a coding dictionary applied to a term) takes whatever upstream
+  input feeds it; forcing ODM there only bloats the fixture.
+- `adam-*` benchmarks derive from SDTM domains, plus ADSL for
+  subject-level inputs other ADaM datasets need. Pre-ADaM `*_raw`
+  inputs are a controlled isolation, not a defect: keep one when it
+  isolates the pattern, and re-stage to SDTM when the input shape
+  starts hiding the derivation.
+- `schema-*` benchmarks demonstrate the specification language
+  itself; their inputs are whatever smallest fixture exercises the
+  construct.
+- `negative-*` benchmarks pin a failure; their inputs are whatever
+  smallest fixture triggers it.
+
+One derivation idea per benchmark still holds: staging the input at
+the true upstream stage must not smuggle in extra derivation steps.
+When the honest input would add a second pattern (deriving the study
+day before windowing on it), split the pipeline across benchmarks and
+let each pin its own pattern.
+
 ## A benchmark that needs project code
 
 A `function` call names a logical contract and a project supplies the code,

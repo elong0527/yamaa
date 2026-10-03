@@ -168,6 +168,32 @@ cases. Removed from the retire list; it stays.
    is generic and worth keeping. Generalize/repurpose rather than
    delete.
 
+## E. Pipeline integration candidates
+
+Not pattern benchmarks: end-to-end chains that prove the stages plug
+together, each with per-stage verified goldens (the pilot7 model:
+ODM -> SDTM -> ADaM with a golden at every stage). These catch
+interface mismatches the unit benchmarks cannot, and they demo the
+product story. Keep them few and clearly labeled; they complement,
+never replace, the stage-separated benchmarks.
+
+1. **`pipe-vs-advs`** -- ODM vital-signs form -> SDTM VS -> ADVS with
+   analysis windows and expected records. Reuses the `sdtm-vs-*`
+   mapping patterns and the `adam-advs-windows` derivation; the new
+   work is the handoff (VSDTC/VSDY/VSSTRESN into ADT/ADY/AVAL).
+   Grounding: pilot7 `submission-pilot3` (define + yamaa specs).
+2. **`pipe-lb-adlb`** -- ODM lab form -> SDTM LB -> ADLB with baseline,
+   change, and shift criteria. Reuses `sdtm-lb-*` and the
+   `adam-adlb-shift-criteria` derivation.
+3. **`pipe-dm-adsl`** -- ODM demographics form -> SDTM DM -> ADSL with
+   treatment dates and population flags. The smallest chain; a good
+   first one.
+
+Each is one `create` run with two goldens (the SDTM stage and the
+ADaM stage); a stage failure must be diagnosable to its stage, so
+keep the per-stage specs in separate files even when one benchmark
+directory holds them.
+
 ## Uncertainties
 
 - Combine candidates (C): overlap assessed from names and one-line
