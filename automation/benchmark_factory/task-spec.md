@@ -80,6 +80,10 @@ The proposed benchmark must satisfy, in order:
    for exactly the datasets and columns the golden holds. Rebuild
    `brief.md` with `evaluations/harbor/brief.py`; the repo's CI
    checks the rest.
+10. **Reference solutions stay fresh.** The R and Python reference
+    solutions in `evaluations/harbor/solutions/<name>/` are the
+    oracle: they must produce the golden and score 1. Any
+    maintenance change to the golden's columns updates them too.
 
 ## Human direction (fill in per run)
 

@@ -116,10 +116,15 @@ comma, quote, and line-break fidelity cases.
 **Enhance.** Keep every golden value the work item does not intend
 to move; confirm with `git diff` on `expected/`. New columns go
 through the same README and prompt treatment as a new benchmark.
-Update `full.md`, rewrite `conventions.md` from it, and rebuild
-`brief.md` with `evaluations/harbor/brief.py`. Reset the lifecycle
+Update `full.md`, rewrite `conventions.md` from it (20-line
+prompt-tier limit), and rebuild `brief.md` with
+`evaluations/harbor/brief.py`. If the golden's columns change, update
+both reference solutions in `evaluations/harbor/solutions/<name>/`:
+the oracle check grades them and must score 1. Reset the lifecycle
 badge to `draft`. Run `./factory.sh validate` and the drift check
-(`pytest python/tests/test_examples.py -k <name>`); both must pass.
+(`pytest python/tests/test_examples.py -k <name>`); both must pass,
+plus the prompt-tier and reference-solution tests in
+`python/tests/test_harbor_evaluation.py`.
 
 **Combine.** One surviving directory, variants as `spec_<variant>.yaml`
 per `benchmarks/agents.md`. The merged README's data contract must
