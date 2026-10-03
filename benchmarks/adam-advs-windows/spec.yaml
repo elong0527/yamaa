@@ -13,46 +13,16 @@ output:
             AVISIT, AVISITN, ANL01FL]
 
 intermediates:
-  # Collected coverage of a planned window: the collected record with the
-  # highest sequence number whose study day falls in the window, resolved
-  # over the completed collected rows. A record with no study day belongs
-  # to no window, so it never counts as coverage. The open-ended
-  # POST-TREATMENT window never gets an expected record, so it has no
-  # coverage intermediate. One intermediate per window because an
-  # intermediate key cannot reference SELF's derived columns, so the
-  # window cannot be a key and is fixed in the filter instead.
-  - id: SCREENING_COVER
+  # Collected coverage per planned window: the collected record with the
+  # highest sequence number whose study day falls in the window. One
+  # intermediate serves all four expected-record templates: the bare
+  # AVISIT in the key reads the window each reading template derives,
+  # pairing it with the donor's AVISIT.
+  - id: WINDOW_COVER
     dataset: SELF
     key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
-          PARAMCD: VS.VSTESTCD}
-    filter: "SELF.AVISIT = 'SCREENING'"
-    order_by: [SELF.VSSEQ]
-    keep: last
-    no_match: null
-
-  - id: BASELINE_COVER
-    dataset: SELF
-    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
-          PARAMCD: VS.VSTESTCD}
-    filter: "SELF.AVISIT = 'BASELINE'"
-    order_by: [SELF.VSSEQ]
-    keep: last
-    no_match: null
-
-  - id: WEEK2_COVER
-    dataset: SELF
-    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
-          PARAMCD: VS.VSTESTCD}
-    filter: "SELF.AVISIT = 'WEEK 2'"
-    order_by: [SELF.VSSEQ]
-    keep: last
-    no_match: null
-
-  - id: WEEK4_COVER
-    dataset: SELF
-    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
-          PARAMCD: VS.VSTESTCD}
-    filter: "SELF.AVISIT = 'WEEK 4'"
+          PARAMCD: VS.VSTESTCD, AVISIT: AVISIT}
+    filter: "SELF.AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
     order_by: [SELF.VSSEQ]
     keep: last
     no_match: null
@@ -210,7 +180,7 @@ rows:
       AVAL: {literal: null}
       AVISIT: {literal: SCREENING}
       AVISITN: {literal: -1}
-      WINDOW_COVERED: SCREENING_COVER.VSSEQ
+      WINDOW_COVERED: WINDOW_COVER.VSSEQ
 
   - id: expected_baseline
     dataset: VS
@@ -230,7 +200,7 @@ rows:
       AVAL: {literal: null}
       AVISIT: {literal: BASELINE}
       AVISITN: {literal: 0}
-      WINDOW_COVERED: BASELINE_COVER.VSSEQ
+      WINDOW_COVERED: WINDOW_COVER.VSSEQ
 
   - id: expected_week2
     dataset: VS
@@ -250,7 +220,7 @@ rows:
       AVAL: {literal: null}
       AVISIT: {literal: WEEK 2}
       AVISITN: {literal: 2}
-      WINDOW_COVERED: WEEK2_COVER.VSSEQ
+      WINDOW_COVERED: WINDOW_COVER.VSSEQ
 
   - id: expected_week4
     dataset: VS
@@ -270,7 +240,7 @@ rows:
       AVAL: {literal: null}
       AVISIT: {literal: WEEK 4}
       AVISITN: {literal: 4}
-      WINDOW_COVERED: WEEK4_COVER.VSSEQ
+      WINDOW_COVERED: WINDOW_COVER.VSSEQ
 
 verifications:
   - unique:
