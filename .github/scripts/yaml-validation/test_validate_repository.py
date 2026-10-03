@@ -4682,6 +4682,80 @@ columns:
 
         self.assertEqual(self.validate(), [])
 
+    def test_absent_artifact_ordinal_checks_the_producer_output_contract(self):
+        """Reject known CSV/Parquet field collisions before production runs."""
+        for profile in ('csv', 'parquet'):
+            for ordinal in ('AGE', 'OriginalPosition'):
+                with self.subTest(profile=profile, ordinal=ordinal):
+                    self.write_producer_spec(self.VALID_PRODUCER_SPEC.replace(
+                        'path: dm.csv', f'path: dm.{profile}'
+                    ))
+                    source = {
+                        'path': f'input/absent.{profile}',
+                        'schema': 'input/dm.schema.yaml',
+                        'ordinal': ordinal,
+                    }
+                    consumer = {
+                        'schema_version': '1.0', 'domain': 'ADSL',
+                        'keys': ['STUDYID'], 'input': {'DM': source},
+                        'output': {'path': 'adsl.csv', 'columns': ['STUDYID']},
+                        'columns': [{
+                            'name': 'STUDYID', 'type': 'str',
+                            'label': 'Study Identifier',
+                            'derivation': 'DM.STUDYID',
+                        }],
+                    }
+                    findings = VALIDATOR.validate_spec_document(
+                        consumer, 'example/spec.yaml', self.spec_path, self.env
+                    )
+                    if ordinal == 'OriginalPosition':
+                        self.assertEqual(findings, [])
+                    else:
+                        [finding] = findings
+                        self.assertEqual(finding.condition,
+                                         'ordinal_field_collision')
+                        self.assertEqual(finding.path,
+                                         'example/spec.yaml.input.DM.ordinal')
+                        self.assertEqual(finding.context,
+                                         {'dataset': 'DM', 'field': 'AGE'})
+
+    def test_internal_producer_column_does_not_shadow_generated_ordinal(self):
+        """Only published producer fields constrain consumer ordinal names."""
+        producer = yaml.safe_load(self.VALID_PRODUCER_SPEC)
+        producer['columns'].append({
+            'name': 'OriginalPosition', 'type': 'str',
+            'label': 'Internal Position', 'derivation': {'literal': 'private'},
+        })
+        self.write_producer_spec(yaml.safe_dump(producer, sort_keys=False))
+        source = {
+            'path': 'input/absent.csv', 'schema': 'input/dm.schema.yaml',
+            'ordinal': 'OriginalPosition',
+        }
+        self.assertEqual(self.validate(source), [])
+        catalog = VALIDATOR.dataset_type_catalog(
+            {'input': {'DM': source}}, self.spec_path, self.env
+        )
+        self.assertEqual(catalog['DM']['OriginalPosition'], 'int')
+        del source['ordinal']
+        catalog = VALIDATOR.dataset_type_catalog(
+            {'input': {'DM': source}}, self.spec_path, self.env
+        )
+        self.assertNotIn('OriginalPosition', catalog['DM'])
+
+    def test_ordinal_collision_uses_the_resolved_producer_contract(self):
+        """Inherited output fields reject ordinal collisions before ingestion."""
+        self.write_producer_spec()
+        (self.input_dir / 'child.schema.yaml').write_text(
+            'schema_version: "1.0"\nparents: dm.schema.yaml\n',
+            encoding='ascii',
+        )
+        [finding] = self.validate({
+            'path': 'input/absent.csv', 'schema': 'input/child.schema.yaml',
+            'ordinal': 'AGE',
+        })
+        self.assertEqual(finding.condition, 'ordinal_field_collision')
+        self.assertEqual(finding.context, {'dataset': 'DM', 'field': 'AGE'})
+
     def test_rejects_inline_types_with_producing_spec(self):
         self.write_producer_spec()
 
@@ -8048,7 +8122,10 @@ class TestKeyColumnOrder(unittest.TestCase):
 
 
 class TestSourceOrdinal(unittest.TestCase):
+    """Validate generated source fields without changing stored field meaning."""
+
     def setUp(self):
+        """Create a header-only source and its opt-in ordinal declaration."""
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -8060,11 +8137,13 @@ class TestSourceOrdinal(unittest.TestCase):
         (self.root / 'source.csv').write_text('GroupID,RecordLabel,Include\n')
 
     def findings(self):
+        """Return static contract findings for this test's source declaration."""
         return VALIDATOR.validate_spec_contracts(
             self.spec, 'spec.yaml', self.spec_path
         )
 
     def test_catalog_exposes_an_opt_in_integer(self):
+        """The generated field is int and disappears without an opt-in."""
         self.assertEqual(self.findings(), [])
         catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
         self.assertEqual(catalog['SOURCE']['SourceOrdinal'], 'int')
@@ -8073,6 +8152,7 @@ class TestSourceOrdinal(unittest.TestCase):
         self.assertNotIn('SourceOrdinal', catalog['SOURCE'])
 
     def test_rejects_collision_with_a_header_only_source(self):
+        """An empty source reserves its stored field names against ordinals."""
         (self.root / 'source.csv').write_text(
             'GroupID,RecordLabel,Include,SourceOrdinal\n'
         )
@@ -8086,11 +8166,13 @@ class TestSourceOrdinal(unittest.TestCase):
         self.assertEqual(catalog['SOURCE']['SourceOrdinal'], 'str')
 
     def test_rejects_a_type_for_the_generated_field(self):
+        """Generated positions cannot be typed as if they were stored fields."""
         self.spec['input']['SOURCE']['types'] = {'SourceOrdinal': 'int'}
         [finding] = self.findings()
         self.assertEqual(finding.condition, 'unknown_field')
 
     def test_rejects_parquet_collision(self):
+        """Parquet field names are checked before an ordinal is exposed."""
         import pyarrow as pa
         import pyarrow.parquet as pq
 
@@ -8101,6 +8183,7 @@ class TestSourceOrdinal(unittest.TestCase):
         self.assertEqual(finding.condition, 'ordinal_field_collision')
 
     def test_rejects_an_ordinal_on_a_fixed_schema_odm_input(self):
+        """ODM inputs cannot extend their fixed schema with an ordinal."""
         self.spec['columns'][0]['derivation'] = {'odm': 'SOURCE.IT.DM.ID'}
         findings = VALIDATOR.validate_spec_odm_reads(
             self.spec, 'spec.yaml', self.spec_path

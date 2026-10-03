@@ -14,10 +14,12 @@ BENCHMARK = ROOT / "benchmarks/schema-source-ordinal"
 
 
 def _spec() -> dict:
+    """Return a fresh specification from the source-ordinal benchmark."""
     return yaml.safe_load((BENCHMARK / "spec.yaml").read_text())
 
 
 def _run(tmp_path: Path, spec: dict, records: str | None = None):
+    """Ingest the supplied records and execute a specification to its artifact."""
     (tmp_path / "input").mkdir(exist_ok=True)
     (tmp_path / "input/source.csv").write_text(
         records or (BENCHMARK / "input/source.csv").read_text()
@@ -34,6 +36,7 @@ def _run(tmp_path: Path, spec: dict, records: str | None = None):
 
 
 def test_filter_keeps_positions_and_numbers_identical_records(tmp_path: Path) -> None:
+    """Filtering preserves positions while sequences restart for each group."""
     assert _run(tmp_path, _spec()).rows() == [
         ("G1", 1, "ROW_B", 2),
         ("G1", 2, "ROW_A", 5),
@@ -44,6 +47,7 @@ def test_filter_keeps_positions_and_numbers_identical_records(tmp_path: Path) ->
 
 
 def test_ordinal_orders_a_record_driven_base_without_row_templates(tmp_path: Path):
+    """Implicit row construction can order sequences by original positions."""
     spec = _spec()
     del spec["rows"]
     assert _run(tmp_path, spec).rows()[:4] == [
@@ -56,6 +60,7 @@ def test_ordinal_orders_a_record_driven_base_without_row_templates(tmp_path: Pat
 
 @pytest.mark.parametrize("labels", [("ROW_B", "ROW_A"), ("ROW_A", "ROW_B")])
 def test_swapping_physical_records_swaps_sequence_assignment(tmp_path: Path, labels):
+    """Record labels receive sequence numbers determined by stored order."""
     spec = _spec()
     records = "GroupID,RecordLabel,Include\n" + "".join(
         f"G1,{label},Y\n" for label in labels
@@ -67,6 +72,7 @@ def test_swapping_physical_records_swaps_sequence_assignment(tmp_path: Path, lab
 
 
 def test_generated_field_is_not_automatically_emitted(tmp_path: Path) -> None:
+    """A generated input field stays absent from unselected output columns."""
     spec = _spec()
     spec["output"]["columns"].remove("SOURCE_ORDINAL")
     spec["columns"] = [
@@ -78,6 +84,7 @@ def test_generated_field_is_not_automatically_emitted(tmp_path: Path) -> None:
 
 
 def test_grouped_template_can_reduce_and_order_by_the_ordinal(tmp_path: Path) -> None:
+    """Grouped templates can reduce source positions before ranking groups."""
     spec = _spec()
     spec["keys"] = ["GROUP_ID"]
     spec["output"]["columns"] = ["GROUP_ID", "SOURCE_ORDINAL", "ROW_SEQUENCE"]
@@ -97,6 +104,7 @@ def test_grouped_template_can_reduce_and_order_by_the_ordinal(tmp_path: Path) ->
 
 
 def test_multiple_templates_retain_the_same_input_positions(tmp_path: Path) -> None:
+    """Reusing a record in another template retains its original position."""
     spec = _spec()
     spec["keys"] = ["GROUP_ID", "ROW_SEQUENCE"]
     spec["rows"].append(
@@ -116,6 +124,7 @@ def test_multiple_templates_retain_the_same_input_positions(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("ordinal", ["", "SOURCE.Position", "1Position", 1, None])
 def test_ordinal_declaration_requires_an_identifier(tmp_path: Path, ordinal) -> None:
+    """Invalid generated field names fail specification loading."""
     spec = _spec()
     spec["input"]["SOURCE"]["ordinal"] = ordinal
     (tmp_path / "spec.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))

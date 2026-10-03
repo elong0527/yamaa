@@ -844,6 +844,7 @@ def test_changed_content_is_reported_at_ingest_with_written_path(
 def test_source_ordinal_is_an_opt_in_int_field(
     tmp_path: Path, profile: str, labels: list[str]
 ) -> None:
+    """Opt-in declarations share snapshots and expose independent int fields."""
     path = tmp_path / f"source.{profile}"
     if profile == "csv":
         path.write_text("Label\n" + "".join(f"{label}\n" for label in labels))
@@ -871,6 +872,7 @@ def test_source_ordinal_is_an_opt_in_int_field(
 
 
 def test_csv_ordinal_counts_records_rather_than_physical_lines(tmp_path: Path) -> None:
+    """Quoted newlines do not consume additional record positions."""
     (tmp_path / "source.csv").write_bytes(b'Label\r\n"one\ntwo"\r\nlast')
     loaded = load_source_table(
         "SOURCE",
@@ -885,6 +887,7 @@ def test_csv_ordinal_counts_records_rather_than_physical_lines(tmp_path: Path) -
 def test_source_ordinal_cannot_shadow_a_stored_field(
     tmp_path: Path, profile: str, empty: bool
 ) -> None:
+    """Stored fields reserve their names even when the source has no records."""
     path = tmp_path / f"source.{profile}"
     if profile == "csv":
         path.write_text("Position\n" + ("collected\n" if not empty else ""))
@@ -911,6 +914,7 @@ def test_source_ordinal_cannot_shadow_a_stored_field(
 
 
 def test_csv_types_cannot_redeclare_a_generated_ordinal(tmp_path: Path) -> None:
+    """Inline source types apply only to fields stored in the CSV."""
     (tmp_path / "source.csv").write_text("Label\nROW_B\n")
     with pytest.raises(SourceError) as raised:
         load_source_table(
@@ -927,6 +931,7 @@ def test_csv_types_cannot_redeclare_a_generated_ordinal(tmp_path: Path) -> None:
 def test_ordinal_is_added_after_checking_the_producer_contract(
     tmp_path: Path, profile: str
 ) -> None:
+    """Consumer ordinals preserve producer typing and cannot replace fields."""
     path = tmp_path / f"source.{profile}"
     if profile == "csv":
         path.write_text("Value\n42\n")
@@ -953,6 +958,7 @@ def test_ordinal_is_added_after_checking_the_producer_contract(
 
 
 def test_fixed_schema_odm_input_rejects_ordinal_before_reading(tmp_path: Path) -> None:
+    """Fixed-schema ODM inputs reject generated fields before source access."""
     with pytest.raises(SourceError) as raised:
         load_source_tables(
             {"ODM": DatasetSource(path="absent.csv", ordinal="Position")},
