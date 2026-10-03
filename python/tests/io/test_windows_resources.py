@@ -69,12 +69,13 @@ def test_junction_replacement_is_detected_before_ingestion(tmp_path: Path) -> No
 
 
 def test_alternate_data_stream_is_not_a_child_file(tmp_path: Path) -> None:
-    (tmp_path / "dm.csv").write_bytes(b"ID\n001\n")
-    (tmp_path / "dm.csv:hidden").write_bytes(b"not a dataset")
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input/dm.csv").write_bytes(b"ID\n001\n")
+    (tmp_path / "input/dm.csv:hidden").write_bytes(b"not a dataset")
     resources = ProjectResources(tmp_path)
 
     with pytest.raises(ResourceFailure) as raised:
-        resources.capture("dm.csv:hidden")
+        resources.capture("input/dm.csv:hidden")
 
     assert raised.value.condition == "resource_path_missing"
     assert resources.capture_reads == 0
