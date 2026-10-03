@@ -1,6 +1,7 @@
 use yamaa_core::temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP};
 
 #[test]
+/// Check range endpoints and the Gregorian leap-century exception.
 fn calendar_boundaries_and_gregorian_century_rules() {
     for text in [
         "0001-01-01",
@@ -30,6 +31,7 @@ fn calendar_boundaries_and_gregorian_century_rules() {
 }
 
 #[test]
+/// Reject noncanonical forms and non-ASCII field layouts without panicking.
 fn lexical_forms_reject_partial_dates_zones_offsets_and_unicode_digits() {
     for text in [
         "2025-01",
@@ -64,6 +66,7 @@ fn lexical_forms_reject_partial_dates_zones_offsets_and_unicode_digits() {
 }
 
 #[test]
+/// Confirm omitted seconds become zero and civil times have no DST gaps.
 fn minute_form_is_complete_to_second_and_dst_has_no_effect() {
     let minute: DateTime = "2025-01-12T14:00".parse().unwrap();
     assert_eq!(minute.to_string(), "2025-01-12T14:00:00");
@@ -79,6 +82,7 @@ fn minute_form_is_complete_to_second_and_dst_has_no_effect() {
 }
 
 #[test]
+/// Preserve collected precision internally and drop it at the canonical-text boundary.
 fn precision_survives_selection_but_not_equality_or_canonical_text() {
     let parsed: Date = "2025-01-12".parse().unwrap();
     for precision in [DP::Year, DP::Month, DP::Day] {
@@ -110,6 +114,7 @@ fn precision_survives_selection_but_not_equality_or_canonical_text() {
 }
 
 #[test]
+/// Check one complete Gregorian cycle for valid, distinct, ordered round-trip dates.
 fn a_full_gregorian_cycle_has_146097_distinct_ordered_days() {
     let mut count = 0;
     let mut previous = None;

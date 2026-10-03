@@ -10,10 +10,12 @@ use crate::temporal::{Date, DateTime};
 pub struct FiniteFloat(f64);
 
 impl FiniteFloat {
+    /// Return a finite wrapper, or None for any NaN or infinity; preserve signed zero.
     pub fn new(value: f64) -> Option<Self> {
         value.is_finite().then_some(Self(value))
     }
 
+    /// Return the held finite binary64 value without rounding or normalization.
     pub fn get(self) -> f64 {
         self.0
     }
@@ -54,10 +56,12 @@ pub enum Value {
 }
 
 impl Value {
+    /// Normalize a host binary64 value to a finite float or the missing value.
     pub fn float(value: f64) -> Self {
         FiniteFloat::new(value).map_or(Self::Missing, Self::Float)
     }
 
+    /// Return the closed runtime type, or None for the explicit missing value.
     pub fn value_type(&self) -> Option<ValueType> {
         match self {
             Self::Missing => None,
@@ -103,6 +107,7 @@ fn compare_int_float(integer: i64, float: f64) -> Ordering {
     }
 }
 
+/// Order finite binary64 values numerically, treating both zero signs as equal.
 fn compare_floats(left: f64, right: f64) -> Ordering {
     if left < right {
         Ordering::Less

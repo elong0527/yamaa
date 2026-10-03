@@ -21,6 +21,7 @@ with FIXTURE.open(encoding="utf-8", newline="") as stream:
 
 
 def _operand(token: str):
+    """Decode one typed fixture operand without conflating missing with text."""
     if token == "missing":
         return MISSING
     kind, value = token.split(":", 1)
@@ -32,6 +33,7 @@ def _operand(token: str):
 
 @pytest.mark.parametrize("vector", VECTORS, ids=[row["id"] for row in VECTORS])
 def test_reference_matches_independent_core_vector(vector):
+    """Check the Python reference against the same independent Rust test vector."""
     expression = vector["expression"]
     result = evaluate_numeric(
         parse_numeric(expression),

@@ -6,6 +6,7 @@ use yamaa_core::value::{
 };
 
 #[test]
+/// Check finite bit preservation and missing normalization across non-finite encodings.
 fn boundary_normalization_preserves_finite_bits_and_rejects_every_nonfinite_kind() {
     for bits in [
         0,
@@ -34,6 +35,7 @@ fn boundary_normalization_preserves_finite_bits_and_rejects_every_nonfinite_kind
 }
 
 #[test]
+/// Protect the closed value distinctions and full-range integer representation.
 fn missing_absence_empty_text_boolean_and_i64_are_distinct() {
     assert_ne!(Selection::Absent, Selection::Present(Value::Missing));
     assert_ne!(Value::Missing, Value::Str(String::new()));
@@ -52,6 +54,7 @@ fn missing_absence_empty_text_boolean_and_i64_are_distinct() {
 }
 
 #[test]
+/// Exercise mixed comparisons where rounding integers to binary64 changes ordering.
 fn mixed_numeric_comparison_keeps_full_integer_precision() {
     for (integer, float, expected) in [
         (9_007_199_254_740_993, 9_007_199_254_740_992.0, Greater),
@@ -80,6 +83,7 @@ fn mixed_numeric_comparison_keeps_full_integer_precision() {
 }
 
 #[test]
+/// Check text and temporal ordering and reject coercion or implicit null placement.
 fn ordered_comparison_does_not_coerce_or_choose_missing_placement() {
     assert_eq!(
         compare_present(&Value::Missing, &Value::Int(1)),

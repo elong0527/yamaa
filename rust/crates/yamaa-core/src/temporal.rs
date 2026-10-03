@@ -33,6 +33,7 @@ pub struct Date {
 }
 
 impl Date {
+    /// Validate complete calendar fields and attach the supplied collected precision.
     pub fn new(
         year: u16,
         month: u8,
@@ -59,16 +60,19 @@ impl Date {
         })
     }
 
+    /// Return civil fields in most-significant-first chronological order.
     pub fn fields(self) -> (u16, u8, u8) {
         (self.year, self.month, self.day)
     }
 
+    /// Return the finest field supplied by collection, excluding imputed fields.
     pub fn collected_precision(self) -> DatePrecision {
         self.precision
     }
 }
 
 impl PartialEq for Date {
+    /// Compare civil fields only; collected precision does not affect equality.
     fn eq(&self, other: &Self) -> bool {
         self.fields() == other.fields()
     }
@@ -77,23 +81,27 @@ impl PartialEq for Date {
 impl Eq for Date {}
 
 impl PartialOrd for Date {
+    /// Return the total chronological order, ignoring collected precision.
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Date {
+    /// Order complete civil fields lexicographically, ignoring collected precision.
     fn cmp(&self, other: &Self) -> Ordering {
         self.fields().cmp(&other.fields())
     }
 }
 
 impl fmt::Display for Date {
+    /// Write canonical fixed-width text, omitting collected precision metadata.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
 }
 
+/// Parse a two- or four-byte ASCII decimal field from a validated layout.
 fn digits(bytes: &[u8]) -> Result<u16, TemporalError> {
     bytes.iter().try_fold(0, |number, byte| {
         if byte.is_ascii_digit() {
@@ -104,6 +112,7 @@ fn digits(bytes: &[u8]) -> Result<u16, TemporalError> {
     })
 }
 
+/// Parse the exact ten-byte date form and reject invalid Gregorian fields.
 fn parse_date(bytes: &[u8]) -> Result<Date, TemporalError> {
     if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
         return Err(TemporalError::InvalidForm);
@@ -119,6 +128,7 @@ fn parse_date(bytes: &[u8]) -> Result<Date, TemporalError> {
 impl FromStr for Date {
     type Err = TemporalError;
 
+    /// Parse the closed temporal lexical form without zones or implicit field imputation.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         parse_date(text.as_bytes())
     }
@@ -155,6 +165,7 @@ impl DateTime {
         })
     }
 
+    /// Return civil fields in most-significant-first chronological order.
     pub fn fields(self) -> (u16, u8, u8, u8, u8, u8) {
         (
             self.date.year,
@@ -166,12 +177,14 @@ impl DateTime {
         )
     }
 
+    /// Return the finest field supplied by collection, excluding imputed fields.
     pub fn collected_precision(self) -> DateTimePrecision {
         self.precision
     }
 }
 
 impl PartialEq for DateTime {
+    /// Compare civil fields only; collected precision does not affect equality.
     fn eq(&self, other: &Self) -> bool {
         self.fields() == other.fields()
     }
@@ -180,18 +193,21 @@ impl PartialEq for DateTime {
 impl Eq for DateTime {}
 
 impl PartialOrd for DateTime {
+    /// Return the total chronological order, ignoring collected precision.
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for DateTime {
+    /// Order complete civil fields lexicographically, ignoring collected precision.
     fn cmp(&self, other: &Self) -> Ordering {
         self.fields().cmp(&other.fields())
     }
 }
 
 impl fmt::Display for DateTime {
+    /// Write canonical fixed-width text, omitting collected precision metadata.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -204,6 +220,7 @@ impl fmt::Display for DateTime {
 impl FromStr for DateTime {
     type Err = TemporalError;
 
+    /// Parse the closed temporal lexical form without zones or implicit field imputation.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let bytes = text.as_bytes();
         if !matches!(bytes.len(), 16 | 19)

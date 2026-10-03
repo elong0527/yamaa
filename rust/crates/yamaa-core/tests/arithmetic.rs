@@ -2,6 +2,7 @@ use yamaa_core::numeric::{
     binary, unary, ArithmeticErrorKind, BinaryOperator as B, Number, UnaryOperator as U,
 };
 
+/// Decode one test operand while preserving explicit integer and float types.
 fn number(token: &str) -> Number {
     if token == "missing" {
         return Number::Missing;
@@ -15,6 +16,7 @@ fn number(token: &str) -> Number {
 }
 
 #[test]
+/// Check shared hand-written values, float bits and complete arithmetic conditions.
 fn independently_specified_arithmetic_vectors() {
     for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
         let columns: Vec<_> = row.split('\t').collect();
@@ -58,6 +60,7 @@ fn independently_specified_arithmetic_vectors() {
 }
 
 #[test]
+/// Ensure a non-finite intermediate becomes missing before a later zero divisor.
 fn every_operator_normalizes_before_the_next_operator() {
     let overflow = binary(B::Multiply, Number::float(1e308), Number::Int(2), "L * 2").unwrap();
     assert_eq!(overflow, Number::Missing);
@@ -68,6 +71,7 @@ fn every_operator_normalizes_before_the_next_operator() {
 }
 
 #[test]
+/// Protect the required left-to-right binary64 addition result from reassociation.
 fn ordered_float_addition_does_not_reassociate() {
     let first = binary(B::Add, Number::float(0.1), Number::float(0.2), "0.1 + 0.2").unwrap();
     let sum = binary(B::Add, first, Number::float(0.3), "(0.1 + 0.2) + 0.3").unwrap();
@@ -78,6 +82,7 @@ fn ordered_float_addition_does_not_reassociate() {
 }
 
 #[test]
+/// Verify each primitive applies missing propagation before exceptional arithmetic.
 fn missing_propagates_for_every_operator_before_arithmetic() {
     for operator in [B::Add, B::Subtract, B::Multiply, B::Divide, B::Modulo] {
         for present in [

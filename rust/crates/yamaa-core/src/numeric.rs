@@ -15,10 +15,12 @@ pub enum Number {
 }
 
 impl Number {
+    /// Normalize binary64 input or an operator result before another numeric consumer.
     pub fn float(value: f64) -> Self {
         FiniteFloat::new(value).map_or(Self::Missing, Self::Float)
     }
 
+    /// Promote a present number to binary64, retaining missing as None.
     fn as_float(self) -> Option<f64> {
         match self {
             Self::Int(value) => Some(value as f64),
@@ -31,6 +33,7 @@ impl Number {
 impl TryFrom<&Value> for Number {
     type Error = ValueType;
 
+    /// Accept only numeric or missing values; return the incompatible type otherwise.
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
             Value::Missing => Ok(Self::Missing),
@@ -45,6 +48,7 @@ impl TryFrom<&Value> for Number {
 }
 
 impl From<Number> for Value {
+    /// Preserve the numeric variant when embedding it in the runtime value model.
     fn from(number: Number) -> Self {
         match number {
             Number::Missing => Self::Missing,
@@ -85,10 +89,12 @@ pub struct ArithmeticError {
 }
 
 impl ArithmeticError {
+    /// Return the derivation phase owned by arithmetic evaluation failures.
     pub fn phase(&self) -> &'static str {
         "derivation"
     }
 
+    /// Return the portable condition vocabulary entry for this arithmetic failure.
     pub fn condition(&self) -> &'static str {
         match self.kind {
             ArithmeticErrorKind::IntegerOverflow { .. } => "integer_overflow",
@@ -96,6 +102,7 @@ impl ArithmeticError {
         }
     }
 
+    /// Return the normative arithmetic requirement, matching the Python reference.
     pub fn requirement(&self) -> &'static str {
         match self.kind {
             ArithmeticErrorKind::IntegerOverflow { .. } => "REQ-0434",
@@ -104,6 +111,7 @@ impl ArithmeticError {
     }
 }
 
+/// Narrow an exact intermediate to i64 or retain its full overflow diagnostic value.
 fn checked_integer(value: i128, expression: &str) -> Result<Number, ArithmeticError> {
     i64::try_from(value)
         .map(Number::Int)
@@ -113,6 +121,8 @@ fn checked_integer(value: i128, expression: &str) -> Result<Number, ArithmeticEr
         })
 }
 
+/// Apply a binary primitive to evaluated operands; propagate missing before arithmetic
+/// and return structured overflow or zero-divisor failures with expression context.
 pub fn binary(
     operator: BinaryOperator,
     left: Number,
@@ -153,6 +163,7 @@ pub fn binary(
     Ok(Number::float(result))
 }
 
+/// Apply a unary primitive, preserving numeric type and missing; reject i64 overflow.
 pub fn unary(
     operator: UnaryOperator,
     value: Number,
