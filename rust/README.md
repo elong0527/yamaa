@@ -195,3 +195,37 @@ Local `R CMD check --no-manual --no-build-vignettes` passes installation and
 tests, but reports one compiled-code warning for Rust's linked `_abort` symbol.
 The prototype is not CRAN-qualified. R process safety and panic/condition
 translation still require the explicit boundary tests in step 5 of #1585.
+
+## Remaining math compatibility gate
+
+`EXP`, `LN` and `POWER` remain unsupported by `compile_numeric`. The candidate
+libm functions do not reproduce Python platform math bit-for-bit on the assessed
+sample. `tools/assess_math.py --output /tmp/math-assessment.json` measures this
+without modifying expected fixtures or accepting a numerical tolerance. Run it
+from `rust/` with Cargo and Python available. It samples 10,011 inputs per function,
+including range boundaries, observed mismatch inputs and a deterministic sequence.
+Only finite EXP inputs, positive LN inputs and positive POWER bases are included;
+domain diagnostics and the remaining negative/zero POWER cases require separate
+qualification.
+
+On macOS arm64 with Python 3.14.7 and libm 0.2.16 (default features disabled), the
+sample has 989 EXP, 279 LN and 950 POWER mismatches. Each is one adjacent binary64
+value apart. That is a measured difference, not an accepted error bound or proof
+that either implementation is correctly rounded. The exact operands and both
+results are retained in the JSON report, along with host/version information.
+The native Python CI matrix uploads separate reports for Linux/macOS/Windows and
+both Python versions; results may differ with the platform math implementation.
+
+A successful assessment process means the report was produced. Its qualification
+is `blocked-by-mismatches` when any difference exists, otherwise `not-qualified`:
+a finite sample cannot establish complete parity. Domain/missingness, zero sign,
+finite bit differences and ULP distance must not be collapsed into an overall pass.
+The report is observational evidence and never regenerated expected truth.
+
+Before enabling these functions, select and document a common numerical policy:
+either reproduce the supported reference behavior, or make an explicit shared
+semantics change and qualify both hosts, dependent calculations, rounding and CSV
+outputs against independent truth. Do not enable libm behind a broad tolerance.
+Decimal expression rounding has its own reference algorithm and remains a
+separate implementation gate. Cargo locking and dataset execution remain later
+release gates.

@@ -17,6 +17,7 @@ through the Python backend only, as declared by
 | Numeric selection: REQ-0415-0416, 0424-0427 | GREATEST, LEAST, NULLIF and COALESCE in primitives/typed evaluation/compilation; 51 shared value, promotion, missingness and eager-resolution cases | No dataset execution | No dataset execution | Remaining math/rounding functions, completed-result conversion and handlers (steps 4, 7) |
 | Integral-valued numeric functions: REQ-0415, 0424, 0426-0427 | CEIL, FLOOR and TRUNC in primitives/typed evaluation/compilation; 100 shared cases with exact float bits, full-range i64, subnormals, signed zero and failures; standard-library differential tests across every finite exponent | No dataset execution | No dataset execution | Remaining transcendental/rounding functions, completed-result conversion and handlers (steps 4, 7) |
 | Square root: REQ-0424, 0426-0427, 0431 | SQRT primitive, typed evaluation and compilation; 32 shared exact-value/domain/failure cases and 110,188 bit-exact Python comparisons in native CI; pinned no_std libm | No dataset execution | No dataset execution | EXP/LN/POWER and decimal rounding, completed-result conversion and handlers (steps 4, 7) |
+| Remaining math compatibility: EXP/LN/POWER | Candidate-only probe and per-platform JSON observations; exact differences block qualification, even at one ULP; compiler still returns Unsupported | No dataset execution | No dataset execution | Choose and qualify explicit shared numerical behavior; include domain/zero/missing and dependent rounding/output contracts before enabling (steps 4, 11) |
 | Temporal values: REQ-0539-0555, 0559-0561, 0567-0573 | Validated civil fields, strict parsing, canonical text, precision, equality and chronological order; 400-year calendar cycle | No dataset execution | No dataset execution | Imputation, temporal operations, function/artifact boundaries (steps 4, 5, 8, 9) |
 | Conversion: REQ-0009-0013, 0015-0018, 0020-0021, 0601 | Full scalar matrix, strict numeric text, exact range/integrality checks, canonical numeric/temporal text, structured failures; shared reference vectors and deterministic float-text differential check | No dataset execution | No dataset execution | Integration at the completed-result lifecycle boundary and actual handler application (steps 4, 7, 8) |
 | Regex and remaining scalar grammars | Not implemented | No dataset execution | No dataset execution | Replay existing grammar/regex vectors, including backreferences and lookarounds (step 4) |
@@ -130,3 +131,11 @@ centuries, zone rejection, precision retention and loss on text round trips.
 No new native API, default backend, benchmark manifest entry, or golden artifact
 changes in this slice. Build qualification and the outstanding Cargo-lockfile
 policy / R compiled-code warning are recorded in [`README.md`](README.md).
+
+The candidate math assessment is not a new executable capability. On the local
+macOS arm64/Python 3.14.7 sample, libm 0.2.16 differs in 989 EXP, 279 LN and 950
+POWER results out of 10,011 inputs each (one ULP per observed difference). Native
+CI retains complete per-platform observations as `math-assessment-*` artifacts.
+Even a zero-mismatch sample is labeled `not-qualified`; functions remain explicitly
+unsupported until a shared numerical policy is implemented and independently
+qualified. Existing SQRT bit-exact checks remain strict and are not relaxed.
