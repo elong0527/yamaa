@@ -63,16 +63,15 @@ artifact's module and a same-named installed package is invisible to it.
 An organization resolver maps `runtime.artifact.reference` to wherever that
 organization publishes runtimes. `ProjectArtifactDirectory` is the local
 one: a project root that vendors its runtime at `runtime/` serves it from
-there, and the declared digest still decides whether those bytes are the
-artifact that was pinned. `MappedArtifacts` takes an explicit mapping when
-a runner resolved references itself.
+there. `MappedArtifacts` takes an explicit reference-to-directory mapping when
+an organization resolver has already selected the artifact. The reference is
+the identity; no digest is calculated or checked. A reference must name one
+immutable artifact throughout a process because imported modules are cached
+under that reference.
 
-The digest of a directory is a hash over a manifest of every file it
-carries -- each file's path relative to the artifact root, then the hash of
-its bytes, in path order. A host bytecode cache (`__pycache__`, `.pyc`) is
-excluded: it is written beside the sources it was compiled from, is not
-project code, and would otherwise change an artifact's identity merely by
-running it.
+Contract fingerprints are the canonical RFC 8785 JSON itself. Activation cache
+keys join the declared identities and vector content directly. Resource
+snapshots retain and compare bytes. None of these identities is a content hash.
 
 ## What crosses the boundary
 
@@ -144,7 +143,7 @@ implements in R:
 
 ```text
 bmi-python/
-  environment.yaml        # language: python, artifact reference and digest
+  environment.yaml        # language: python, artifact reference
   conformance/bmi.yaml    # the same vector content the R root runs
   runtime/projectbmi.py   # the pinned code the binding resolves to
 ```

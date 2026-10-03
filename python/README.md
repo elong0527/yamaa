@@ -720,3 +720,8 @@ Run this component's focused tests from the repository root:
 ```bash
 uv run --project python --isolated --extra test pytest python/tests/adapters
 ```
+
+## Engine migration
+
+See [Engine migration compatibility](ENGINE_COMPATIBILITY.md) for the public API,
+extension hooks, R compatibility, and validation boundaries preserved for #1585.

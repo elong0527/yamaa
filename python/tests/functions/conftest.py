@@ -154,9 +154,9 @@ class ProjectRoot:
 def isolated_process_state():
     """Keep one case's activated artifacts and cached success out of the next.
 
-    An artifact is identified by its content, so two roots holding the same
-    code are one artifact and share one imported module. That is what
-    pinning by content means in a run; between cases it would leak, so the
+    An artifact is identified by its reference, so roots declaring the same
+    reference share imported modules. Each reference must name one immutable
+    artifact during a run; independent test cases reuse references, so the
     process state an activation leaves behind is cleared around each one.
     """
     _clear_activated_artifacts()
