@@ -83,7 +83,7 @@ uv tool run --from maturin==1.9.6 maturin build \
 python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaanative
 cd /tmp/yamaa-dist
 R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaanative
-R CMD INSTALL --library=/path/to/empty/R-library yamaanative_0.1.0.tar.gz
+R CMD INSTALL --library=/path/to/empty/R-library yamaanative_*.tar.gz
 ```
 
 Use `cargo +1.90.0` or `RUSTUP_TOOLCHAIN=1.90.0` when launching a build from
