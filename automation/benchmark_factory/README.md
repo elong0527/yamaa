@@ -82,6 +82,7 @@ scaffolding script.
 | `judges.md` | The five review criteria adapted to yamaa, plus maintenance checks, with verdict format. |
 | `factory.sh` | Portable scaffolding and checks: `scaffold`, `validate`, `packet`, `retire-check`, `drift-check`. |
 | `gap-report.md` | Sourced proposals: new benchmarks to add, and existing ones to enhance, combine, or retire. |
+| `references.md` | Curated external grounding sources (PharmaSUG, pharmaverse, CDISC TAUGs, FDA/PHUSE, ODM-to-SDTM/define.xml/ARM): work items cite these when claiming real-world relevance. |
 | `work-items/` | Filled-in task specs, one per run: the factory's work log. |
 
 ## Running one cycle
