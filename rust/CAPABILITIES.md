@@ -11,7 +11,8 @@ through the Python backend only, as declared by
 | Closed values: REQ-0002, 0006-0007, 0014 | Unit tests: distinct bool/column types, missing/absent selection, UTF-8 strings, full i64, finite binary64 wrapper | No dataset execution | No dataset execution | Host normalization, typed tables, source and function boundaries (#1585 steps 5-8) |
 | Comparison: REQ-0004-0005, 0324 | Unit tests: present text, numeric and temporal values; exact mixed comparisons at large i64 values | No dataset execution | No dataset execution | Predicate grammar, operation-specific diagnostics, missing ordering policies (steps 4, 7, 9) |
 | Basic arithmetic: REQ-0420-0421, 0424 (ABS/MOD only), 0427, 0430, 0434 | Shared hand-written vectors replayed by Rust primitives and Python evaluator; overflow, division, types, missingness, float bits | No dataset execution | No dataset execution | Remaining functions and rounding; parser and handler integration (steps 4, 7) |
-| Typed numeric evaluation: REQ-0426-0427, 0429, 0438, 0443-0444 | Typed literal/identifier/unary/binary nodes, fake resolver port, ordered evaluation, exact failure provenance; 22 shared evaluation/trace vectors plus 49 arithmetic cases through the plan | No dataset execution | No dataset execution | Numeric text parser, full function vocabulary, source character spans, compiler resource budgets and handlers (steps 4, 7) |
+| Typed numeric evaluation: REQ-0426-0427, 0429, 0438, 0443-0444 | Typed literal/identifier/unary/binary nodes, fake resolver port, ordered evaluation, exact failure provenance; 22 shared evaluation/trace vectors plus 49 arithmetic cases through the plan | No dataset execution | No dataset execution | Connect parsed syntax to executable IR, full function execution, failure source spans, compiler/resolution budgets and handlers (steps 4, 7) |
+| Numeric syntax: REQ-0413-0415, 0439-0441 | Bounded arena parser; all 44 shared grammar cases, closed function/arity/reserved-word checks, diagnostic positions and deterministic Python comparisons | No dataset execution | No dataset execution | Lower syntax into supported typed evaluation; preflight unsupported functions; lifecycle diagnostics (steps 4, 7) |
 | Temporal values: REQ-0539-0555, 0559-0561, 0567-0573 | Validated civil fields, strict parsing, canonical text, precision, equality and chronological order; 400-year calendar cycle | No dataset execution | No dataset execution | Imputation, temporal operations, function/artifact boundaries (steps 4, 5, 8, 9) |
 | Conversion: REQ-0009-0013, 0015-0018, 0020-0021, 0601 | Full scalar matrix, strict numeric text, exact range/integrality checks, canonical numeric/temporal text, structured failures; shared reference vectors and deterministic float-text differential check | No dataset execution | No dataset execution | Integration at the completed-result lifecycle boundary and actual handler application (steps 4, 7, 8) |
 | Regex and remaining scalar grammars | Not implemented | No dataset execution | No dataset execution | Replay existing grammar/regex vectors, including backreferences and lookarounds (step 4) |
@@ -39,11 +40,19 @@ retain condition, phase, requirement, exact arithmetic overflow, original text,
 specification path and the structural operand route. The route is not a source
 character span. No handler is selected, applied or counted by this evaluator.
 
-This is an internal typed IR, not a numeric text parser or a public host API.
-The recursive tree/evaluator expects compiler-owned inputs; depth/resource
-budgets must be defined before compiling or exposing untrusted expressions.
-Literal lexical validation, full function vocabulary, source character spans,
-diagnostic transport and lifecycle integration remain outstanding.
+This evaluator remains an internal typed IR, not a public host API. A separate
+`numeric_parser` now accepts the full numeric syntax, preserves literal spelling
+without converting it, and records half-open UTF-8 spans plus Unicode scalar error
+offsets. Its immutable arena is protected by byte/token/node/depth budgets; depth
+is capped at 64 even when a caller requests more. Resource exhaustion is separate
+from grammar conditions. The parser handles every allowed function syntactically;
+that does not claim execution support for those functions.
+
+The next compiler slice must connect this syntax to the typed evaluator, preserve
+source spans for runtime failures, reject valid unsupported features before any
+resolution, and enforce evaluation/resolution budgets. The caller-supplied
+`NumericPlan` API itself remains unbounded. Diagnostic transport and lifecycle
+integration remain outstanding.
 
 Conversion failures retain the parsed source type/value used by Python, the
 destination, phase, condition, eligible handler and owning requirement. An

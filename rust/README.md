@@ -18,8 +18,8 @@ The existing Python engine remains the default; the legacy R package is unchange
 Core and engine use `no_std` and forbid unsafe code. The dependency guard checks
 all Cargo dependency kinds, including build, development, and target-specific
 edges. New dependencies require a deliberate update to its allowlist. There are
-no evaluation ports or fake application services yet: those belong with their
-first actual use cases.
+no workflow application services yet. The numeric resolver port belongs to
+the typed scalar evaluator; workflow ports will arrive with their first use cases.
 
 The first core slice implements closed runtime values, validated civil temporal
 values, present-value comparison, and basic arithmetic primitives. See
@@ -39,8 +39,27 @@ tree through a core-owned resolver. It preserves operand order, association,
 missing versus absent values, opaque resolution failures, and diagnostic
 provenance. Shared evaluation fixtures compare values and resolution traces with
 Python's real numeric parser/evaluator. The test-only postfix tree notation is
-not an implementation of the numeric grammar. Parsing, compiler resource
-budgets, the remaining functions, and lifecycle handlers are separate gates.
+not an implementation of the numeric grammar.
+
+`numeric_parser::parse_numeric` separately parses the full closed grammar into an
+immutable arena. CI reads all 44 cases and the function/reserved-word tables from
+`yaml/grammar/numeric.yaml`, then compares deterministic diagnostic/shape samples
+against Python. Nodes retain exact UTF-8 source spans, literal spelling, function
+names and grouping; errors carry both byte and Unicode scalar offsets. Numeric
+range errors are deferred to future compilation/evaluation, not raised by parsing.
+
+Parsing defaults to 65,536 source bytes, 8,192 tokens (excluding EOF), 4,096 nodes
+(including groups), and depth 64 (a leaf has depth one). Callers can choose budgets;
+depth is always capped at 64, including descent before a node exists. These are
+prototype resource policies, not additions to the language grammar. Limit outcomes
+remain separate from grammar conditions. Lexing completes before syntax checking
+unless a budget is exhausted. The arena avoids recursive destruction of rejected
+input. Parsing never resolves identifiers or invokes host code.
+
+The parser is not wired into `NumericPlan` yet. Compiling its valid syntax into the
+supported evaluator subset, preflighting valid unimplemented functions before
+resolution, preserving source spans in evaluation failures, and bounding resolver
+calls remain the next gate. Remaining functions and lifecycle handlers follow.
 
 ## Packaging decision
 
@@ -79,6 +98,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test
 python tools/check_dependencies.py
 python tools/check_float_text.py
+uv run --project ../python --locked python tools/check_numeric_grammar.py
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 

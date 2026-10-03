@@ -44,6 +44,7 @@ jobs:
           cargo test
           cargo test -p yamaa-core --release
           python tools/check_float_text.py
+          uv run --project ../python --locked python tools/check_numeric_grammar.py
           python tools/check_dependencies.py
           python -m unittest discover -s tests -p 'test_*.py'
       - name: Build wheel and source archive
