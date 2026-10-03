@@ -126,7 +126,7 @@ def contract_fingerprint(name: str, contract: FunctionContract) -> str:
     }
     # RFC 8785 fixes member order and UTF-8 encoding. With no numeric value
     # left in the payload, sorted compact JSON is that canonical form, so no
-    # host number formatting reaches the hash.
+    # host number formatting reaches the canonical identity.
     return json.dumps(
         payload,
         ensure_ascii=False,

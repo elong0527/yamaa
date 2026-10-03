@@ -92,8 +92,8 @@ class ProjectArtifactDirectory:
     An organization resolver answers a reference from wherever it publishes
     runtimes. A project root that ships its own runtime -- a test root, or a
     project reviewed as one directory -- answers every reference with that
-    one directory, and the declared digest still decides whether the bytes
-    found there are the artifact the environment pinned.
+    one directory. The reference is the artifact identity; the resolver does
+    not calculate or validate a content digest.
     """
 
     root: Path
