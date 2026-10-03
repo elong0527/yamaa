@@ -279,7 +279,7 @@ def test_captures_one_immutable_snapshot_per_physical_file(tmp_path: Path) -> No
 
 
 def test_snapshot_keeps_binary_bytes_and_unicode_file_names(tmp_path: Path) -> None:
-    name = "données-\U0001f9ea.csv"
+    name = "donn\u00e9es-\U0001f9ea.csv"
     content = b"ID\r\n001\x1a\x00\r\n"
     (tmp_path / name).write_bytes(content)
     resources = ProjectResources(tmp_path)
@@ -519,7 +519,7 @@ def test_layer_outside_narrower_project_never_reads_beside_itself(
         resources.validate("dm.csv")
     assert raised.value.condition == "resource_path_missing"
 
-    (project / "dm.csv").write_text("ID\nproject\n")
+    (project / "dm.csv").write_bytes(b"ID\nproject\n")
     assert resources.capture("dm.csv").content == b"ID\nproject\n"
 
 

@@ -44,9 +44,9 @@ def _challenge(tmp_path: Path, language: str = "python", script: str | None = No
     reference = tmp_path / "reference" / contract["script"]
     reference.parent.mkdir()
     text = (build.SOLUTIONS / AGE_GROUP.name / contract["script"]).read_text()
-    reference.write_text(text.replace("/app/", f"{app}/"))
+    reference.write_text(text.replace("/app/", f"{app.as_posix()}/"))
     submitted = app / "output" / contract["script"]
-    submitted.write_text((script or text).replace("/app/", f"{app}/"))
+    submitted.write_text((script or text).replace("/app/", f"{app.as_posix()}/"))
     return grade.challenge_rerun(
         contract, AGE_GROUP / "expected", app / "output", reference, _run(language)
     )
