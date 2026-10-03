@@ -5,6 +5,11 @@ version: "1.0"
 # registered condition at every declared path. Blocked entries name the open
 # issue that owns the missing diagnostic.
 fixtures:
+  negative-source-ordinal-collision:
+    rule: R014
+    condition: ordinal_field_collision
+    spec_paths: [input.SOURCE.ordinal]
+    validator: source_contract
   negative-unknown-window:
     rule: R007
     condition: unknown_window

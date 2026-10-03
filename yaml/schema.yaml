@@ -249,6 +249,10 @@ dataset_class:
         default: missing
         values: [missing, present]
         description: See REQ-1158.
+    - ordinal:
+        type: identifier
+        required: false
+        description: See REQ-1291.
 
 intermediate_id:
     type: str

@@ -2354,6 +2354,11 @@ requirements:
   REQ-1288: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:repeated-row-derivation"]}
   REQ-1289: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:redundant-intermediate"]}
   REQ-1290: {"file": "specification/style.md", "sources": ["yamaa:issue-1510:missing-label"]}
+  REQ-1291: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-declaration", "schema.yaml:dataset_class.ordinal.description"]}
+  REQ-1292: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-assignment"]}
+  REQ-1293: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-use"]}
+  REQ-1294: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-collision"]}
+  REQ-1295: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-odm"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2683,6 +2688,12 @@ schema_prose:
   - {"source": "schema_shared.yaml:comment:3", "text": "Types shared by specification and project-environment schema entry points.", "owner": "values/types", "group": "module", "target": "REQ-1150"}
   - {"source": "schema_verification.yaml:comment:43", "text": "Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies both bounds to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. A grouped count requires id, which an ungrouped count does not.", "owner": "execution/verification", "group": "dataset_verifications.row_count", "target": "REQ-1152"}
 provenance_addenda:
+  - {"source": "schema.yaml:dataset_class.ordinal.description", "text": "Issue #1566: Input datasets may expose a generated source record ordinal.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1291"}
+  - {"source": "yamaa:issue-1566:ordinal-declaration", "text": "Issue #1566: ordinal optionally names an appended int field on CSV and Parquet inputs.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1291"}
+  - {"source": "yamaa:issue-1566:ordinal-assignment", "text": "Issue #1566: One-based data record positions are assigned before filtering and retained across row templates.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1292"}
+  - {"source": "yamaa:issue-1566:ordinal-use", "text": "Issue #1566: The ordinal is an ordinary input field, emitted only through an explicitly selected output column.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1293"}
+  - {"source": "yamaa:issue-1566:ordinal-collision", "text": "Issue #1566: A stored field with the generated ordinal's name fails validation with ordinal_field_collision.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1294"}
+  - {"source": "yamaa:issue-1566:ordinal-odm", "text": "Issue #1566: An ordinal declared on a fixed-schema ODM input fails validation with odm_schema_field_type.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1295"}
   - {"source": "schema_expression_core.yaml:keep_policy.description", "text": "Ordered selection policy: keep the first or last match.", "owner": "operations/lookup", "group": "keep_policy", "target": "REQ-0119"}
   - {"source": "schema.yaml:record_between_class.value.description", "text": "Value read from the current row.", "owner": "operations/lookup", "group": "record_between_class", "target": "REQ-1049"}
   - {"source": "schema.yaml:record_between_class.lower.description", "text": "Bare donor-record field for the inclusive lower bound; optional.", "owner": "operations/lookup", "group": "record_between_class", "target": "REQ-1049"}

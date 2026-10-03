@@ -94,3 +94,32 @@ or the explicit template's `dataset`. `order_by` and `keep` select one donor
 from the surviving candidates. Use an explicit planning input for visits
 that do not yet have observed records. See the [window contract](../rules/operations/windows.md)
 and [lookup contract](../rules/operations/lookup.md).
+
+## Explicit source record order
+
+Declare `ordinal` on a CSV or Parquet input to expose its original one-based
+data record position as an `int` field:
+
+```yaml
+input:
+  SOURCE:
+    path: input/source.csv
+    ordinal: SourceOrdinal
+```
+
+A sequence column can then state its ordering explicitly:
+
+```yaml
+derivation:
+  row_number:
+    window:
+      group_by: [GROUP_ID]
+      order_by: [SOURCE.SourceOrdinal]
+```
+
+Filters retain the original positions, while `row_number` assigns consecutive
+numbers within each group. The generated name must be absent from the stored
+fields. It is typed automatically and is emitted only through a selected
+output column that derives it. Fixed-schema ODM inputs do not accept `ordinal`.
+See the [source ingestion contract](../rules/storage/ingestion.md#req-1291)
+and [source ordinal benchmark](../benchmarks/schema-source-ordinal/spec.yaml).

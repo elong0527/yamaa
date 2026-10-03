@@ -399,6 +399,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'group', 'group_count', 'pattern',
     },
     ('R023', 'source_profile_unknown'): {'path'},
+    ('R014', 'ordinal_field_collision'): {'dataset', 'field'},
 }
 VALIDATION_CONDITION_REGISTRY = {
     key: {
@@ -5759,6 +5760,29 @@ def validate_spec_contracts(
                     resource_path_error(f"{path}.path", source_path, condition)
                 )
                 continue
+            ordinal = source.get('ordinal') if isinstance(source, dict) else None
+            if isinstance(ordinal, str) and dataset_id not in odm_inputs(spec):
+                if profile == 'csv':
+                    try:
+                        names = snapshot.csv_header()
+                    except (UnicodeError, csv.Error):
+                        names = []  # The CSV profile pass reports invalid bytes.
+                else:
+                    from yamaa.io.parquet import parquet_source_fields
+                    from yamaa.io.parquet import ParquetProfileFailure
+
+                    try:
+                        _, fields = parquet_source_fields(snapshot.content)
+                        names = [name for name, _ in fields]
+                    except ParquetProfileFailure:
+                        names = []  # Ingestion reports invalid Parquet bytes.
+                if ordinal in names:
+                    errors.append(validation_diagnostic(
+                        f"{path}.ordinal",
+                        'ordinal_field_collision',
+                        'generated ordinal names a stored field',
+                        context={'dataset': dataset_id, 'field': ordinal},
+                    ))
             if not isinstance(types, dict):
                 continue
             if profile == 'parquet':
@@ -5858,7 +5882,17 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
                         producer = None
                 if not isinstance(producer, dict):
                     raise ValueError('producer did not resolve to a mapping')
-                fields.update(specification_column_types(producer))
+                output = producer.get('output')
+                selected = (
+                    output.get('columns') if isinstance(output, dict) else None
+                )
+                if isinstance(selected, list):
+                    fields.update({
+                        name: value_type
+                        for name, value_type in
+                        specification_column_types(producer).items()
+                        if name in selected
+                    })
             except (OSError, ValueError, yaml.YAMLError):
                 pass
 
@@ -5904,6 +5938,9 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
                     and value_type in {'str', 'int', 'float', 'date', 'datetime'}
                 ):
                     fields[field] = value_type
+        ordinal = source.get('ordinal') if isinstance(source, dict) else None
+        if isinstance(ordinal, str):
+            fields.setdefault(ordinal, 'int')
         catalog[dataset_id] = fields
 
     return catalog
@@ -6056,7 +6093,7 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
     for dataset in sorted(odm_inputs(spec)):
         source = datasets[dataset]
         declared = (
-            next((key for key in ('types', 'schema') if key in source), None)
+            next((key for key in ('types', 'schema', 'ordinal') if key in source), None)
             if isinstance(source, dict)
             else None
         )
@@ -9546,7 +9583,7 @@ def validate_producing_specs(
     spec, spec_label, spec_path, env, spec_stack, project_root=None,
     snapshots=None, provenance=None,
 ):
-    """Validate producer workflow edges and referenced artifact headers."""
+    """Validate producer edges, stored headers, and absent-artifact ordinals."""
     errors = []
     datasets = spec.get('input')
     if not isinstance(datasets, dict):
@@ -9640,6 +9677,10 @@ def validate_producing_specs(
         if producer_errors or not isinstance(producer, dict):
             continue
 
+        output = producer.get('output')
+        output_columns = (
+            output.get('columns') if isinstance(output, dict) else None
+        )
         source_ref = source.get('path')
         if not isinstance(source_ref, str):
             continue
@@ -9651,6 +9692,20 @@ def validate_producing_specs(
             project_data_roots(project_root),
         )
         if condition is not None:
+            ordinal = source.get('ordinal')
+            if (
+                condition == 'resource_path_missing'
+                and isinstance(ordinal, str)
+                and isinstance(output_columns, list)
+                and ordinal in output_columns
+                and dataset_id not in odm_inputs(spec)
+            ):
+                errors.append(validation_diagnostic(
+                    f"{path}.ordinal",
+                    'ordinal_field_collision',
+                    'generated ordinal names a stored producer field',
+                    context={'dataset': dataset_id, 'field': ordinal},
+                ))
             continue
         if source_path.suffix.lower() != '.csv':
             continue
@@ -9673,10 +9728,6 @@ def validate_producing_specs(
             )
             continue
 
-        output = producer.get('output')
-        output_columns = (
-            output.get('columns') if isinstance(output, dict) else None
-        )
         if isinstance(output_columns, list) and header != output_columns:
             errors.append(
                 f"ERROR: {path}.schema.output.columns: producer output must "

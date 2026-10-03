@@ -1240,3 +1240,8 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1288](../specification/style.md#req-1288) | `specification/style.md` | Schema prose |
 | [REQ-1289](../specification/style.md#req-1289) | `specification/style.md` | Schema prose |
 | [REQ-1290](../specification/style.md#req-1290) | `specification/style.md` | Schema prose |
+| [REQ-1291](../storage/ingestion.md#req-1291) | `storage/ingestion.md` | Schema prose |
+| [REQ-1292](../storage/ingestion.md#req-1292) | `storage/ingestion.md` | Schema prose |
+| [REQ-1293](../storage/ingestion.md#req-1293) | `storage/ingestion.md` | Schema prose |
+| [REQ-1294](../storage/ingestion.md#req-1294) | `storage/ingestion.md` | Schema prose |
+| [REQ-1295](../storage/ingestion.md#req-1295) | `storage/ingestion.md` | Schema prose |

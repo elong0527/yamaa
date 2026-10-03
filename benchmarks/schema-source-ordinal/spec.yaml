@@ -1,0 +1,43 @@
+schema_version: "1.0"
+domain: RECORDS
+keys: [GROUP_ID, ROW_SEQUENCE]
+input:
+  SOURCE:
+    path: input/source.csv
+    ordinal: SourceOrdinal
+
+output:
+  path: records.csv
+  columns: [GROUP_ID, ROW_SEQUENCE, RECORD_LABEL, SOURCE_ORDINAL]
+  order_by: [GROUP_ID, ROW_SEQUENCE]
+
+columns:
+  - name: GROUP_ID
+    type: str
+    label: Group Identifier
+    derivation: SOURCE.GroupID
+
+  - name: ROW_SEQUENCE
+    type: int
+    label: Source Order Sequence
+    derivation:
+      row_number:
+        window:
+          group_by: [GROUP_ID]
+          order_by: [SOURCE.SourceOrdinal]
+
+  - name: RECORD_LABEL
+    type: str
+    label: Collected Record Label
+    derivation: SOURCE.RecordLabel
+
+  - name: SOURCE_ORDINAL
+    type: int
+    label: Original Source Record Position
+    derivation: SOURCE.SourceOrdinal
+
+rows:
+  - id: included
+    dataset: SOURCE
+    filter: "SOURCE.Include = 'Y'"
+    derivations: {}

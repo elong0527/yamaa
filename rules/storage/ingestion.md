@@ -27,6 +27,45 @@ sort. Record order is the stable sequence of one artifact. Replacing an
 artifact with the same records in another order changes the input and can
 alter an order-sensitive result.
 
+### Explicit source record ordinal
+
+<a id="req-1291"></a>
+
+**REQ-1291.** `dataset_class.ordinal` optionally names a generated `int`
+field of a CSV or Parquet input dataset. The name is an `identifier`. When
+the declaration is absent, ingestion adds no field. The generated field is
+appended after the stored fields, whose names, order, and types are unchanged.
+
+```yaml
+input:
+  SOURCE:
+    path: input/source.csv
+    ordinal: SourceOrdinal
+```
+
+<a id="req-1292"></a>
+
+**REQ-1292.** The ordinal is the one-based position of the data record in
+stored record order. The CSV header is excluded, and a quoted field containing
+newlines still belongs to one record. Ingestion assigns ordinals before any
+filter, join, grouping, or window reads the input dataset. Filtering retains
+the original ordinals rather than numbering the surviving records again.
+Each input dataset numbers its records independently; declarations reading
+the same stored file receive the same positions. Row templates retain the
+input record's ordinal, including when several templates read that record.
+
+<a id="req-1293"></a>
+
+**REQ-1293.** The generated ordinal is an ordinary input field for name
+binding, grouped and record-driven row templates, predicates, aggregations,
+and window `group_by` and `order_by`. Existing rules for selecting a field
+from several records apply. Ordering a `row_number` window by the ordinal
+produces dense sequence numbers within each partition; the sequence restarts
+for each partition while the input ordinals retain their stored positions.
+The ordinal is emitted only through an explicitly derived output column
+selected by `output.columns`. It is local to the consuming input declaration
+and is not part of a linked producer's stored output contract.
+
 ### A field's type belongs to the dataset
 
 <a id="req-0516"></a>
@@ -254,7 +293,7 @@ describe at all.
 
 | Field | Meaning |
 | --- | --- |
-| `dataset_source` | Path to the dataset, or a path with its producing specification or field types. |
+| `dataset_source` | Path to the dataset, or a path with its producing specification, field types, or generated ordinal. |
 
 <a id="req-1060"></a>
 
@@ -265,12 +304,14 @@ describe at all.
 | `dataset_class.path` | Source data path, relative to the specification that writes it (retried from the approved project root and data roots when nothing is stored there) or rooted at an approved data root, and confined by [Resource resolution](resources.md); [CSV profile](csv.md) selects the source profile from its extension. |
 | `dataset_class.types` | Type each named field carries; [Source ingestion](ingestion.md) types the rest. |
 | `dataset_class.schema` | Producing specification whose output contract supplies the source fields and types; [Source ingestion](ingestion.md) defines the workflow edge. |
+| `dataset_class.ordinal` | Name of the generated source record ordinal under REQ-1291. |
 
 ## Error conditions
 
 <a id="req-0532"></a>
 
-**REQ-0532.** A `types` entry naming a field the dataset does not have:
+**REQ-0532.** A `types` entry naming a field the stored dataset does not have,
+including the generated ordinal:
   fail.
 
 <a id="req-0533"></a>
@@ -309,6 +350,22 @@ describe at all.
 <a id="req-0852"></a>
 
 **REQ-0852.** `source_profile_unknown` is decided from the written path before
-any byte is read and reports under the `validation` phase. Every other
-condition is decided while the snapshot is read and reports under the
+any byte is read and reports under the `validation` phase. Source-profile
+reading conditions are decided while the snapshot is read and report under the
 `ingest` phase.
+
+<a id="req-1294"></a>
+
+**REQ-1294.** An `ordinal` name equal to a stored field name fails validation
+with `ordinal_field_collision`, reporting the input dataset, generated field
+name, and `input.<dataset>.ordinal` specification path. Ingestion never
+overwrites, renames, or hides a stored field to expose an ordinal. The check
+also applies to an empty input dataset and a producer-linked input dataset.
+
+<a id="req-1295"></a>
+
+**REQ-1295.** An input dataset used by an `odm` expression must not declare
+`ordinal`: its exposed fields are the fixed schema under
+[REQ-1266](../specification/binding.md#req-1266). The declaration fails
+validation with `odm_schema_field_type`, reporting the input dataset,
+`declared: ordinal`, and `input.<dataset>.ordinal` specification path.
