@@ -18,7 +18,9 @@ intermediates:
   # over the completed collected rows. A record with no study day belongs
   # to no window, so it never counts as coverage. The open-ended
   # POST-TREATMENT window never gets an expected record, so it has no
-  # coverage intermediate.
+  # coverage intermediate. One intermediate per window because an
+  # intermediate key cannot reference SELF's derived columns, so the
+  # window cannot be a key and is fixed in the filter instead.
   - id: SCREENING_COVER
     dataset: SELF
     key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
@@ -57,7 +59,10 @@ intermediates:
 
   # The completed record with the highest sequence number for the study,
   # subject, and parameter, so each expected record continues the
-  # numbering past the records already built.
+  # numbering past the records already built. Row templates evaluate in
+  # declaration order and each sees the rows earlier templates emitted,
+  # so PRIOR_MAX.VSSEQ + 1 across the successive expected-record
+  # templates yields successive sequence numbers, not the same one.
   - id: PRIOR_MAX
     dataset: SELF
     key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
