@@ -157,11 +157,21 @@ through the keyed-join contract documented below, not through dispatch.
 
 `compute` reads the closed R010 grammar: the operators `+ - * /` with unary
 sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
-`LN`, `MOD`, `GREATEST`, `LEAST`, `NULLIF`, and `COALESCE`. There is no host
+`LN`, `MOD`, `GREATEST`, `LEAST`, `NULLIF`, `COALESCE`, and
+`ROUND_HALF_AWAY_FROM_ZERO`. There is no host
 `eval`: a formula is tokenized, parsed, and evaluated in the association it
 was written in, and a division by zero, a negative `SQRT`, a non-positive
 `LN`, an invalid `POWER`, or an integer overflow fails the run rather than
 becoming missing.
+
+Integer literals keep exact i64 semantics even when written with thousands of
+leading zeros. An out-of-range literal reports `integer_overflow` (REQ-0434),
+with its canonical decimal digits as diagnostic text, independently of Python's
+integer-string digit limit. Evaluation still visits operands in written order:
+a literal fails only when reached, and its sign is a separate unary operation.
+Thus `-9223372036854775808` fails on the positive literal before negation, while
+`-9223372036854775807 - 1` successfully evaluates to the minimum i64. Parsing does
+not eagerly convert or range-check numeric literals.
 
 `aggregate` reads the closed R013 grammar over that same arithmetic, with
 exactly the reducers `SUM`, `COUNT`, `MIN`, `MAX`, `MEAN`, and `ONLY`, plus
