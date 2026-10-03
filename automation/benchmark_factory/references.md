@@ -302,6 +302,76 @@ task specs).
   cross-TA. Grounding: "construct ARM linking table to datasets to
   where-clauses" work items for ADaM to results traceability.
 
+## RConsortium Submissions Pilot 7 (synthetic data)
+
+https://github.com/RConsortium/submissions-pilot7-synthetic-data
+
+Fully synthetic end-to-end submission packages (no PHI): each study has
+an enforced ODM -> SDTM -> ADaM -> TLF layout with define.xml, yamaa YAML
+derivation specs, and official ADaM goldens verified cell-by-cell. The
+closest thing to a ready-made benchmark pack for the pipeline.
+
+- **ADADAS windowing + LOCF imputation (Alzheimer's)** -
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/submission-pilot3/spec/yamaa/adadas.yaml -
+  ADAS-Cog BDS from SDTM QS: analysis windowing
+  (AWTARGET/AWLO/AWHI/AWDIFF), 222 LOCF records at planned visits with no
+  collected record, ANL01FL record selection, baseline/CHG/PCHG. Inputs:
+  qs.parquet; mapping: aw_lookup.csv, plan.csv; golden: adadas.parquet
+  (official). TA: neurology. Grounding: "reproduce this BDS build" golden
+  task with a natural difficulty ladder (windowing -> LOCF -> baseline).
+
+- **ADTTE time-to-event with event/censor sourcing (cross-TA pattern)** -
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/submission-pilot3/spec/yamaa/adtte.yaml -
+  Event = first qualifying ADAE record (AOCC01FL='Y',
+  CQ01NAM='DERMATOLOGIC EVENTS', SAFFL='Y', ordered by ASTDT); censor =
+  disposition completion date with death override to RFENDTC; date
+  imputation; SRCDOM/SRCVAR/SRCSEQ traceability; CNSR/EVNTDESC. TA:
+  cross-TA. Grounding: the YAML documents a QC-observed rule explicitly
+  absent from the define Derivation text - a ready-made "incomplete
+  spec" condition for judge test vectors.
+
+- **Fully verified 5-dataset ADaM pipeline (Alzheimer's)** -
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/submission-pilot5/spec/yamaa/ -
+  ADSL, ADAE, ADADAS, ADTTE, ADLBC derived end-to-end and verified
+  cell-by-cell against official FDA-submission ADaM (2,291,147/2,291,147
+  cells at 1e-10 tolerance). Compare keys:
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/submission-pilot5/program/adam/adam-compare-keys.json -
+  TA: neurology. Grounding: the compare-keys JSON + 1e-10 policy is a
+  directly reusable judge/oracle pattern; the five verified specs give
+  benchmark-sized task families from small (ADSL) to large (ADLBC).
+
+- **Multi-instrument efficacy + Hy's law (neurology/safety)** -
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/cdiscpilot01/spec/yamaa/ -
+  Three QS instruments in parallel (ADAS-Cog, CIBIC+, NPI-X) plus the lab
+  safety chain (adlbc/adlbh/adlbhy, Hy's law); 8 yamaa specs, 10 official
+  ADaM. TA: neurology + safety. Grounding: "combine" work-item seed
+  (three QS benchmarks with near-identical structure); the define.xml
+  here has zero MethodDefs - good for "trace derivation without
+  MethodDef" variants.
+
+- **ODM -> SDTM mapping (oncology)** -
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/kn189/data/odm/kn189_odm.tar.gz -
+  KEYNOTE-189 (NSCLC, 616 subjects) and KEYNOTE-564 (adjuvant RCC, 994
+  subjects) synthetic ODM CRF exports with full CRF metadata (RECIST RS,
+  ECOG PS, PD-L1 biomarker, derived endpoints RE, subsequent therapy TT);
+  21 ItemGroupDefs with NCT-linked OIDs. TA: oncology. Grounding: "map
+  these ItemGroups to SDTM domains" tasks for the ODM end of the
+  pipeline. Caveat: ODM only; no staged SDTM/ADaM yet.
+
+- **Archive TA studies (CAR-T, RA, vasculitis, dermatology, PK)** -
+  https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/.archieve/cart-t/ -
+  R admiral-based reference programs (edc -> sdtm -> adam -> tlf) for five
+  more therapeutic areas. TA: oncology (CAR-T), rheumatology, vasculitis,
+  dermatology, PK. Grounding: new benchmark families (adce, adcm, adds,
+  adie - datasets yamaa has no benchmarks for); cart-t's OpenClinica ODM
+  export extends ODM -> SDTM mapping to cell therapy. Caveat: the archive
+  is retained for reference, less curated than the active studies.
+
+Pilot7-specific caveats: all data fully synthetic (realistic but not
+real); submission-pilot6 ADaM parquets are pending (only SDTM +
+define.xml + specs workbook staged); cdiscpilot01's define-adam.xml has
+zero MethodDefs.
+
 ## Caveats to encode in work items
 
 1. pharmaverseadam datasets are un-QC'd test data - verify each dataset
