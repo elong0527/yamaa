@@ -44,11 +44,13 @@ def test_diagnostics_reject_malformed_citations(requirement: str) -> None:
 
 
 def _value(result: object) -> object:
+    """Extract a successful runtime value while rejecting condition results."""
     assert isinstance(result, ValueResult)
     return result.value
 
 
 def _failed_conversion(result: object) -> ConditionResult:
+    """Assert the portable conversion phase, condition and handler contract."""
     assert isinstance(result, ConditionResult)
     assert result.condition.phase == "convert"
     assert result.condition.condition == "conversion_failed"
@@ -76,6 +78,7 @@ def test_integer_overflow_context_is_exact_and_serializable(sign, digits) -> Non
 
 @pytest.mark.parametrize("value", [None, math.inf, -math.inf, math.nan])
 def test_normalizes_all_missing_boundaries(value: object) -> None:
+    """Normalize host nulls and every non-finite float to the same missing value."""
     assert _value(normalize_runtime_value(value)) is MISSING
 
 

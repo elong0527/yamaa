@@ -385,6 +385,7 @@ def _convert_integer_text(text: str) -> EvaluationResult:
 
 
 def _float_text(value: float) -> str:
+    """Expand Python's shortest float representation into canonical positional text."""
     rendered = format(decimal.Decimal(repr(value)), "f")
     return rendered.removesuffix(".0")
 
@@ -394,6 +395,7 @@ def _failed_conversion(
     target: ColumnType,
     requirement: str,
 ) -> ConditionResult:
+    """Retain the failed source value and the eligible completed-result handler."""
     return _condition(
         "convert",
         "conversion_failed",

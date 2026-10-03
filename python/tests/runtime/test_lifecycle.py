@@ -53,6 +53,7 @@ def test_failed_conversion_is_replaced_and_counted(text) -> None:
 
 
 def test_normalized_scalar_aggregate_does_not_invent_an_expr_path() -> None:
+    """Keep aggregate failure provenance on its normalized declaration path."""
     declaration = HandledExpression(
         value=Expression(root={"aggregate": {"expr": "SUM(A)"}})
     )
