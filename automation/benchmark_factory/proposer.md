@@ -24,6 +24,10 @@ feedback until it is accepted or rejected.
 4. The existing benchmarks the task spec names as exemplars. Imitate
    their fixture sizes (small: a handful of subjects), their README
    shape, and their prompt terseness.
+5. `automation/benchmark_factory/references.md` -- the curated external
+   grounding sources. When the task spec's grounding material cites an
+   entry here, read that entry first and use exactly the derivation
+   logic it documents.
 
 ## Drafting steps
 

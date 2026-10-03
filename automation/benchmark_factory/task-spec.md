@@ -103,8 +103,11 @@ that CDISC practice alone does not settle._
 
 ### Grounding material
 
-_Curated, not scraped. List each source with one line on what the
-agent may take from it:_
+_Curated, not scraped. Start from
+`automation/benchmark_factory/references.md` and cite its entries by
+name when you rely on them; if you use a source it does not list, add
+that source to the file (same entry format) in the same PR. List each
+source with one line on what the agent may take from it:_
 
 - _Existing benchmarks to imitate (directory names)._
 - _Rules or schema docs that govern the pattern (paths under `yaml/`)._
