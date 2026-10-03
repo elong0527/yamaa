@@ -123,7 +123,10 @@ def _open_child(path: str, dir_fd: int, *, directory: bool, metadata: bool) -> i
         or any(character in path for character in "\\/:\0")
     ):
         raise OSError(errno.EINVAL, "not a single file component")
-    length = len(path.encode("utf-16-le"))
+    try:
+        length = len(path.encode("utf-16-le"))
+    except UnicodeEncodeError as error:
+        raise OSError(errno.EINVAL, "file component is not valid Unicode") from error
     if length > 65532:
         raise OSError(errno.ENAMETOOLONG, "file component is too long")
     buffer = ctypes.create_unicode_buffer(path)
@@ -168,7 +171,11 @@ def open_directory(path: str | Path, *, dir_fd: int | None = None) -> int:
     # spelling also permits roots beyond the legacy MAX_PATH limit.
     spelling = str(path)
     if not spelling.startswith("\\\\?\\"):
-        spelling = "\\\\?\\" + spelling
+        spelling = (
+            "\\\\?\\UNC\\" + spelling[2:]
+            if spelling.startswith("\\\\")
+            else "\\\\?\\" + spelling
+        )
     handle = _create_file(
         spelling,
         _GENERIC_READ,
