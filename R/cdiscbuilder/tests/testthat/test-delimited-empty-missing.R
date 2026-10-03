@@ -35,9 +35,13 @@ test_that("blank fields in the string-handler fixtures are missing", {
   handlers <- cdiscbuilder:::.read_delimited_source(handlers_input)
   comment <- cdiscbuilder:::.read_delimited_source(comment_input)
 
-  expect_true(all(is.na(handlers$AESPID[handlers$AESEQ == "2"])))
+  expect_equal(
+    handlers$USUBJID[is.na(handlers$AESPID)],
+    c("CATH-01-001", "CATH-01-002")
+  )
+  expect_equal(handlers$AESPID[handlers$USUBJID == "CATH-01-003" & handlers$AESEQ == "2"], "AE-1000")
   expect_equal(
     comment$USUBJID[is.na(comment$COMMENT)],
-    c("CTX-04", "CTX-05")
+    c("YAMAA-01-104", "YAMAA-01-105")
   )
 })
