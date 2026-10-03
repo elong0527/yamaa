@@ -25,11 +25,28 @@ REPOSITORY = Path(__file__).parents[3]
 
 
 def _diagnostic(error: SourceError) -> dict[str, object]:
+    """Require one ingestion diagnostic and expose its portable model fields."""
     assert len(error.diagnostics) == 1
     return error.diagnostics[0].model_dump(mode="python")
 
 
+def test_integer_csv_accepts_long_leading_zeros(tmp_path: Path) -> None:
+    """Ingestion preserves exact i64 values without inheriting the host digit limit."""
+    values = [0, 1, 9007199254740993, 2**63 - 1, -(2**63)]
+    text = "VALUE\n" + "\n".join(
+        ("-" if value < 0 else "+") + "0" * 5000 + str(abs(value)) for value in values
+    )
+    (tmp_path / "long.csv").write_text(text + "\n")
+    loaded = load_source_table(
+        "LONG",
+        DatasetSource(path="long.csv", types={"VALUE": "int"}),
+        ProjectResources(tmp_path),
+    )
+    assert loaded.table.frame["VALUE"].to_list() == values
+
+
 def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> None:
+    """Load declared CSV types while retaining field order and missing semantics."""
     (tmp_path / "dm.csv").write_bytes(
         b"ID,AGE,SCORE,DATE,MOMENT,EMPTY,TEXT\n"
         b'007,42,1.5,2025-01-02,2025-01-02T03:04,,""\n'

@@ -20,6 +20,7 @@ from yamaa.models import (
     runtime_type_name,
 )
 from yamaa.models.values import RuntimeCondition
+from yamaa.verification.log import _canonical_json
 
 
 @pytest.mark.parametrize("requirement", ["REQ-0005", "R011-35", "R001-12a"])
@@ -43,11 +44,13 @@ def test_diagnostics_reject_malformed_citations(requirement: str) -> None:
 
 
 def _value(result: object) -> object:
+    """Extract a successful runtime value while rejecting condition results."""
     assert isinstance(result, ValueResult)
     return result.value
 
 
 def _failed_conversion(result: object) -> ConditionResult:
+    """Assert the portable conversion phase, condition and handler contract."""
     assert isinstance(result, ConditionResult)
     assert result.condition.phase == "convert"
     assert result.condition.condition == "conversion_failed"
@@ -55,8 +58,27 @@ def _failed_conversion(result: object) -> ConditionResult:
     return result
 
 
+@pytest.mark.parametrize("sign", ["", "+", "-"])
+@pytest.mark.parametrize("digits", ["9" * 19, "1" + "0" * 19, "9" * 5000])
+def test_integer_overflow_context_is_exact_and_serializable(sign, digits) -> None:
+    """Keep short numeric diagnostics and render oversized integers as decimal text."""
+    import json
+
+    result = _failed_conversion(convert_value(sign + "0" * 5000 + digits, "int"))
+    canonical = ("-" if sign == "-" else "") + digits
+    expected = int(canonical) if len(digits) <= 19 else canonical
+    assert result.condition.requirement == "REQ-0021"
+    assert result.condition.context == {"from": "int", "to": "int", "value": expected}
+    assert json.loads(_canonical_json(result.condition.context))["value"] == expected
+    assert (
+        json.loads(result.model_dump_json())["condition"]["context"]["value"]
+        == expected
+    )
+
+
 @pytest.mark.parametrize("value", [None, math.inf, -math.inf, math.nan])
 def test_normalizes_all_missing_boundaries(value: object) -> None:
+    """Normalize host nulls and every non-finite float to the same missing value."""
     assert _value(normalize_runtime_value(value)) is MISSING
 
 
