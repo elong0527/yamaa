@@ -20,6 +20,7 @@ from yamaa.models import (
     runtime_type_name,
 )
 from yamaa.models.values import RuntimeCondition
+from yamaa.verification.log import _canonical_json
 
 
 @pytest.mark.parametrize("requirement", ["REQ-0005", "R011-35", "R001-12a"])
@@ -53,6 +54,24 @@ def _failed_conversion(result: object) -> ConditionResult:
     assert result.condition.condition == "conversion_failed"
     assert result.condition.applicable_handler == "unconvertible"
     return result
+
+
+@pytest.mark.parametrize("sign", ["", "+", "-"])
+@pytest.mark.parametrize("digits", ["9" * 19, "1" + "0" * 19, "9" * 5000])
+def test_integer_overflow_context_is_exact_and_serializable(sign, digits) -> None:
+    """Keep short numeric diagnostics and render oversized integers as decimal text."""
+    import json
+
+    result = _failed_conversion(convert_value(sign + "0" * 5000 + digits, "int"))
+    canonical = ("-" if sign == "-" else "") + digits
+    expected = int(canonical) if len(digits) <= 19 else canonical
+    assert result.condition.requirement == "REQ-0021"
+    assert result.condition.context == {"from": "int", "to": "int", "value": expected}
+    assert json.loads(_canonical_json(result.condition.context))["value"] == expected
+    assert (
+        json.loads(result.model_dump_json())["condition"]["context"]["value"]
+        == expected
+    )
 
 
 @pytest.mark.parametrize("value", [None, math.inf, -math.inf, math.nan])

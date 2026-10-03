@@ -29,6 +29,21 @@ def _diagnostic(error: SourceError) -> dict[str, object]:
     return error.diagnostics[0].model_dump(mode="python")
 
 
+def test_integer_csv_accepts_long_leading_zeros(tmp_path: Path) -> None:
+    """Ingestion preserves exact i64 values without inheriting the host digit limit."""
+    values = [0, 1, 9007199254740993, 2**63 - 1, -(2**63)]
+    text = "VALUE\n" + "\n".join(
+        ("-" if value < 0 else "+") + "0" * 5000 + str(abs(value)) for value in values
+    )
+    (tmp_path / "long.csv").write_text(text + "\n")
+    loaded = load_source_table(
+        "LONG",
+        DatasetSource(path="long.csv", types={"VALUE": "int"}),
+        ProjectResources(tmp_path),
+    )
+    assert loaded.table.frame["VALUE"].to_list() == values
+
+
 def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> None:
     (tmp_path / "dm.csv").write_bytes(
         b"ID,AGE,SCORE,DATE,MOMENT,EMPTY,TEXT\n"

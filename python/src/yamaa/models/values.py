@@ -360,15 +360,28 @@ def values_comparable(left: RuntimeValue, right: RuntimeValue) -> bool:
     return left_type == right_type and left_type in {"str", "date", "datetime"}
 
 
-def _parse_number(text: str) -> RuntimeValue:
-    if _NON_FINITE.fullmatch(text):
-        return MISSING
-    if _NUMBER.fullmatch(text) is None:
-        raise ValueError("invalid numeric text")
-    if "." not in text and "e" not in text.lower():
-        return int(text, 10)
-    value = float(text)
-    return value if math.isfinite(value) else MISSING
+def _convert_integer_text(text: str) -> EvaluationResult:
+    """Convert validated integer text without constructing an unbounded integer.
+
+    Strip insignificant zeros before parsing. More than 19 significant digits
+    cannot fit i64; preserve those digits as diagnostic text, independently of
+    Python's configurable integer parsing/serialization limit. Shorter overflow
+    diagnostics retain their existing numeric representation.
+    """
+    digits = text.lstrip("+-").lstrip("0") or "0"
+    canonical = "-" + digits if text.startswith("-") and digits != "0" else digits
+    if len(digits) > 19:
+        return _condition(
+            "convert",
+            "conversion_failed",
+            {"from": "int", "to": "int", "value": canonical},
+            "unconvertible",
+            "REQ-0021",
+        )
+    parsed = int(canonical, 10)
+    if INT64_MIN <= parsed <= INT64_MAX:
+        return ValueResult(value=parsed)
+    return _failed_conversion(parsed, "int", "REQ-0021")
 
 
 def _float_text(value: float) -> str:
@@ -430,11 +443,14 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         )
 
     if target == "int" and isinstance(source, str):
-        try:
-            parsed = _parse_number(source)
-        except ValueError:
+        if _NON_FINITE.fullmatch(source):
+            return ValueResult(value=MISSING)
+        if _NUMBER.fullmatch(source) is None:
             return _failed_conversion(source, target, "REQ-0013")
-        if parsed is MISSING:
+        if "." not in source and "e" not in source.lower():
+            return _convert_integer_text(source)
+        parsed = float(source)
+        if not math.isfinite(parsed):
             return ValueResult(value=MISSING)
         source = parsed
 

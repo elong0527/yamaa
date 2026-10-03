@@ -1,7 +1,10 @@
 """Replay independent scalar conversion truth through the Python reference."""
 
 import csv
+import json
 import struct
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -70,7 +73,37 @@ def test_reference_matches_conversion_vector(vector):
         assert condition.context["to"] == vector["target"]
         context = _encoded(condition.context["from"], condition.context["value"])
         actual = f"error:{condition.requirement}:{context}"
+        assert json.loads(condition.model_dump_json())["context"] == condition.context
     else:
         assert isinstance(result, ValueResult)
         actual = _encoded(runtime_type_name(result.value), result.value)
     assert actual == vector["expected"]
+
+
+@pytest.mark.parametrize("limit", [640, 4300, 0])
+def test_conversion_vectors_ignore_host_integer_digit_limit(limit):
+    """Replay exact outcomes and JSON diagnostics under isolated host digit policies."""
+    script = """
+import runpy
+import sys
+module = runpy.run_path(sys.argv[1])
+before = sys.get_int_max_str_digits()
+for vector in module['VECTORS']:
+    module['test_reference_matches_conversion_vector'](vector)
+assert sys.get_int_max_str_digits() == before == int(sys.argv[2])
+"""
+    subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            f"int_max_str_digits={limit}",
+            "-c",
+            script,
+            str(Path(__file__).resolve()),
+            str(limit),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )

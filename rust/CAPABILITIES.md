@@ -38,13 +38,18 @@ remain separate integration work. A decimal/exponent numeric spelling parses as
 binary64 before integral conversion; plain integer spelling does not lose i64
 precision by passing through a float.
 
-Known reference discrepancy: Python's configurable integer-string digit cap
-rejects very long otherwise-valid integer text (for example, 5,000 zeros followed
-by `1` under its default settings). Core accepts that spelling as integer one,
-and retains arbitrarily long out-of-range integers as diagnostic text under
-REQ-0021. No text-length cap exists in REQ-0015. The Python reference's cap and
-its resulting condition difference need resolution before claiming full backend
-parity; the 93 shared conversion vectors do not cover that discrepancy.
+Long integer text follows REQ-0015 without inheriting Python's configurable
+integer-string digit limit. Both runners replay 105 shared conversion vectors,
+including 5,000-digit inputs, leading zeros, signed i64 boundaries, exact large
+integers, malformed text and overflow. Python strips insignificant zeros before
+bounded integer construction. Diagnostics for more than 19 significant integer
+digits retain canonical decimal text with source type `int`; shorter overflow
+values keep their existing JSON numeric representation. This deliberate change
+to oversized diagnostic values avoids unbounded integer construction and keeps
+JSON/error-log serialization independent of the host's digit limit. Such values
+never become successful runtime integers. Rust already retains all out-of-range
+integer diagnostics as canonical text internally; its eventual host transport
+must preserve this distinction.
 
 The checked-in TSV contains explicit expected results, including raw binary64
 bits (not digests). Both test runners compare to those expectations; neither

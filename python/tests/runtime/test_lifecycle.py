@@ -16,7 +16,9 @@ from yamaa.runtime.lifecycle import (
 from yamaa.specification.models import Expression, HandledExpression
 
 
-def test_failed_conversion_is_replaced_and_counted() -> None:
+@pytest.mark.parametrize("text", ["not-an-int", "9" * 5000])
+def test_failed_conversion_is_replaced_and_counted(text) -> None:
+    """Malformed and arbitrarily long out-of-range text each invoke one handler."""
     declaration = HandledExpression(
         value=Expression(root={"source": "RAW.X"}),
         unconvertible=7,
@@ -35,7 +37,7 @@ def test_failed_conversion_is_replaced_and_counted() -> None:
         planned,
         "int",
         {},
-        lambda output: MappingResolver({"RAW.X": "not-an-int", **output}),
+        lambda output: MappingResolver({"RAW.X": text, **output}),
         ExpressionDispatcher(),
         counter,
     )
