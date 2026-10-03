@@ -1,0 +1,37 @@
+reviews:
+  profile: "chill"               # balanced; "assertive" reads as nitpicky
+  request_changes_workflow: false # advisory for now; flip to true once its signal is trusted
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false                # don't review draft PRs
+    base_branches:
+      - "main"
+  path_filters:
+    - "!**/uv.lock"              # generated lock diffs are noise
+  path_instructions:
+    - path: "python/**"
+      instructions: "Verify the change matches the PR description, tests are added for behavior changes, and no public API signatures break without intent."
+    - path: "R/**"
+      instructions: "Check R idioms and package conventions; verify roxygen docs and tests accompany behavior changes."
+    - path: "automation/benchmark_factory/**"
+      instructions: "Judge work against the factory docs: task-spec rules, proposer/judge protocols. Flag any change that would break Harbor checks (e.g. conventions.md prompt-tier line limits)."
+    - path: "benchmarks/**"
+      instructions: "Pre-existing golden values must remain byte-identical unless the work item explicitly changes them; flag silent regressions."
+    - path: "yaml/**"
+      instructions: "Benchmark YAMLs must follow conventions.md (prompt-tier limits, criterion pair structure). Flag malformed or over-limit criteria."
+    - path: "rules/**"
+      instructions: "Rules files must stay consistent with the benchmarks they govern."
+
+tone_instructions: "Direct and specific. Solo maintainer: flag real bugs and contract breaks, skip style nits."
+
+chat:
+  auto_reply: false
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    enabled: true                # adapts from maintainer feedback on its comments
