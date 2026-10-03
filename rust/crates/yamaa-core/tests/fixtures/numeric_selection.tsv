@@ -1,0 +1,52 @@
+id	expression	bindings	expected	trace	path
+greatest-int	GREATEST(A, B, C)	A=int:3;B=int:7;C=int:2	int:7	A,B,C	-
+least-int	LEAST(A, B, C)	A=int:3;B=int:-7;C=int:2	int:-7	A,B,C	-
+greatest-missing	GREATEST(A, B)	A=missing;B=missing	missing	A,B	-
+least-missing	LEAST(A, B)	A=missing;B=missing	missing	A,B	-
+greatest-skips-missing	GREATEST(A, B, C)	A=missing;B=int:5;C=missing	int:5	A,B,C	-
+least-skips-missing	LEAST(A, B, C)	A=missing;B=int:5;C=missing	int:5	A,B,C	-
+greatest-promotes-selected-int	GREATEST(A, B)	A=int:5;B=float:2.5	float:4014000000000000	A,B	-
+least-promotes-selected-int	LEAST(A, B)	A=int:2;B=float:2.5	float:4000000000000000	A,B	-
+greatest-exact-i64	GREATEST(A, B)	A=int:9007199254740992;B=int:9007199254740993	int:9007199254740993	A,B	-
+least-exact-i64	LEAST(A, B)	A=int:-9223372036854775808;B=int:9223372036854775807	int:-9223372036854775808	A,B	-
+greatest-mixed-large	GREATEST(A, B)	A=int:9007199254740993;B=float:9007199254740992.0	float:4340000000000000	A,B	-
+greatest-mixed-i64-max	GREATEST(A, B)	A=int:9223372036854775807;B=float:0.0	float:43e0000000000000	A,B	-
+least-mixed-i64-min	LEAST(A, B)	A=int:-9223372036854775808;B=float:0.0	float:c3e0000000000000	A,B	-
+greatest-first-negative-zero	GREATEST(A, B)	A=float:-0.0;B=float:0.0	float:8000000000000000	A,B	-
+least-first-positive-zero	LEAST(A, B)	A=float:0.0;B=float:-0.0	float:0000000000000000	A,B	-
+greatest-first-int-zero	GREATEST(A, B)	A=int:0;B=float:-0.0	float:0000000000000000	A,B	-
+least-first-negative-zero	LEAST(A, B)	A=float:-0.0;B=int:0	float:8000000000000000	A,B	-
+coalesce-single	COALESCE(A)	A=int:42	int:42	A	-
+coalesce-all-missing	COALESCE(A, B)	A=missing;B=missing	missing	A,B	-
+coalesce-skips-missing	COALESCE(A, B, C)	A=missing;B=int:42;C=missing	int:42	A,B,C	-
+coalesce-promotes-later-float	COALESCE(A, B)	A=int:42;B=float:2.5	float:4045000000000000	A,B	-
+coalesce-retains-first-float	COALESCE(A, B)	A=float:2.5;B=int:42	float:4004000000000000	A,B	-
+coalesce-promotion-large	COALESCE(A, B)	A=int:9007199254740993;B=float:1.0	float:4340000000000000	A,B	-
+coalesce-first-negative-zero	COALESCE(A, B)	A=float:-0.0;B=int:1	float:8000000000000000	A,B	-
+coalesce-first-int-zero	COALESCE(A, B)	A=int:0;B=float:-0.0	float:0000000000000000	A,B	-
+coalesce-evaluates-all	COALESCE(A, B, A)	A=int:3;B=int:7	int:3	A,B,A	-
+coalesce-nonfinite-is-missing	COALESCE(1e9999, A)	A=int:4	int:4	A	-
+coalesce-nonfinite-does-not-promote	COALESCE(A, 1e9999)	A=int:4	int:4	A	-
+nullif-equal-int	NULLIF(A, B)	A=int:2;B=int:2	missing	A,B	-
+nullif-unequal-int	NULLIF(A, B)	A=int:2;B=int:3	int:2	A,B	-
+nullif-missing-left	NULLIF(A, B)	A=missing;B=int:3	missing	A,B	-
+nullif-missing-right	NULLIF(A, B)	A=int:3;B=missing	int:3	A,B	-
+nullif-equal-mixed	NULLIF(A, B)	A=int:2;B=float:2.0	missing	A,B	-
+nullif-unequal-mixed	NULLIF(A, B)	A=int:2;B=float:2.5	float:4000000000000000	A,B	-
+nullif-unequal-float	NULLIF(A, B)	A=float:2.5;B=int:2	float:4004000000000000	A,B	-
+nullif-distinct-large-ints	NULLIF(A, B)	A=int:9007199254740993;B=int:9007199254740992	int:9007199254740993	A,B	-
+nullif-mixed-promoted-equality	NULLIF(A, B)	A=int:9007199254740993;B=float:9007199254740992.0	missing	A,B	-
+nullif-mixed-i64-max	NULLIF(A, B)	A=int:9223372036854775807;B=float:9223372036854775808.0	missing	A,B	-
+nullif-reverse-mixed-i64-max	NULLIF(A, B)	A=float:9223372036854775808.0;B=int:9223372036854775807	missing	A,B	-
+nullif-zero-signs-equal	NULLIF(A, B)	A=float:-0.0;B=float:0.0	missing	A,B	-
+nullif-unmatched-negative-zero	NULLIF(A, B)	A=float:-0.0;B=int:1	float:8000000000000000	A,B	-
+coalesce-later-absent	COALESCE(A, B)	A=int:1	error:unknown_field:REQ-0443:B	A,B	argument:1
+coalesce-later-bool	COALESCE(A, B)	A=int:1;B=bool:true	error:incompatible_input_type:REQ-0444:B:bool	A,B	argument:1
+coalesce-later-divide-zero	COALESCE(A, 1 / 0, B)	A=int:1;B=int:2	error:division_by_zero:REQ-0430	A	argument:1
+greatest-later-text	GREATEST(A, B, C)	A=missing;B=str:2;C=int:3	error:incompatible_input_type:REQ-0444:B:str	A,B	argument:1
+least-first-absent	LEAST(A, B)	B=int:2	error:unknown_field:REQ-0443:A	A	argument:0
+nullif-missing-still-resolves	NULLIF(A, B)	A=missing	error:unknown_field:REQ-0443:B	A,B	right
+nested-selection-error	A + COALESCE(M, B)	A=int:1;M=missing	error:unknown_field:REQ-0443:B	A,M,B	right,argument:1
+nested-selection-success	GREATEST(COALESCE(A, B), NULLIF(C, 0))	A=missing;B=int:4;C=int:5	int:5	A,B,C	-
+coalesce-literal-overflow	COALESCE(A, 9223372036854775808, B)	A=int:1;B=int:2	error:integer_overflow:REQ-0434:9223372036854775808	A	argument:1
+coalesce-promoted-dependent-arithmetic	COALESCE(A, B) - C	A=int:9007199254740993;B=float:1.0;C=int:9007199254740992	float:0000000000000000	A,B,C	-

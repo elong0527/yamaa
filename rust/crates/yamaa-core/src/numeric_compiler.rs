@@ -8,7 +8,7 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::evaluation::{EvaluationError, NumericNode, NumericPlan, NumericResolver, Operand};
-use crate::numeric::{BinaryOperator, Number, UnaryOperator};
+use crate::numeric::{BinaryOperator, Number, SelectionFunction, UnaryOperator};
 use crate::numeric_parser::{
     parse_numeric, NumericFunction, ParseError, ParseLimits, ParsedKind, ParsedNumeric, SourceSpan,
 };
@@ -58,8 +58,8 @@ pub struct CompiledEvaluationError<E> {
     pub evaluation: Box<EvaluationError<E>>,
 }
 
-/// Immutable executable plan for literals, identifiers, signs, ABS, MOD and
-/// arithmetic. Reusing a plan repeats resolution; no values or errors are cached.
+/// Immutable executable plan for arithmetic, ABS, MOD, NULLIF, COALESCE and
+/// numeric extrema. Reusing a plan repeats resolution; no values or errors are cached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledNumeric {
     plan: NumericPlan,
@@ -119,7 +119,15 @@ pub fn compile_numeric(
     for node in parsed.nodes() {
         match &node.kind {
             ParsedKind::Call { function, name, .. }
-                if !matches!(function, NumericFunction::Abs | NumericFunction::Mod) =>
+                if !matches!(
+                    function,
+                    NumericFunction::Abs
+                        | NumericFunction::Mod
+                        | NumericFunction::Greatest
+                        | NumericFunction::Least
+                        | NumericFunction::NullIf
+                        | NumericFunction::Coalesce
+                ) =>
             {
                 functions.push(UnsupportedFunction {
                     function: *function,
@@ -232,6 +240,43 @@ fn lower(
             left: child(parsed, arguments[0], Operand::Left, route, sources),
             right: child(parsed, arguments[1], Operand::Right, route, sources),
         },
+        ParsedKind::Call {
+            function: NumericFunction::NullIf,
+            arguments,
+            ..
+        } => NumericNode::NullIf {
+            left: child(parsed, arguments[0], Operand::Left, route, sources),
+            right: child(parsed, arguments[1], Operand::Right, route, sources),
+        },
+        ParsedKind::Call {
+            function,
+            arguments,
+            ..
+        } if matches!(
+            function,
+            NumericFunction::Greatest | NumericFunction::Least | NumericFunction::Coalesce
+        ) =>
+        {
+            let function = match function {
+                NumericFunction::Greatest => SelectionFunction::Greatest,
+                NumericFunction::Least => SelectionFunction::Least,
+                _ => SelectionFunction::Coalesce,
+            };
+            let arguments = arguments
+                .iter()
+                .enumerate()
+                .map(|(index, &id)| {
+                    route.push(Operand::Argument(index));
+                    let node = lower(parsed, id, route, sources);
+                    route.pop();
+                    node
+                })
+                .collect();
+            NumericNode::Selection {
+                function,
+                arguments,
+            }
+        }
         ParsedKind::Call { .. } | ParsedKind::Group { .. } => {
             unreachable!("preflighted calls and unwrapped groups")
         }

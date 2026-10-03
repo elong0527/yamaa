@@ -11,9 +11,10 @@ through the Python backend only, as declared by
 | Closed values: REQ-0002, 0006-0007, 0014 | Unit tests: distinct bool/column types, missing/absent selection, UTF-8 strings, full i64, finite binary64 wrapper | No dataset execution | No dataset execution | Host normalization, typed tables, source and function boundaries (#1585 steps 5-8) |
 | Comparison: REQ-0004-0005, 0324 | Unit tests: present text, numeric and temporal values; exact mixed comparisons at large i64 values | No dataset execution | No dataset execution | Predicate grammar, operation-specific diagnostics, missing ordering policies (steps 4, 7, 9) |
 | Basic arithmetic: REQ-0420-0421, 0424 (ABS/MOD only), 0427, 0430, 0434 | Shared hand-written vectors replayed by Rust primitives and Python evaluator; overflow, division, types, missingness, float bits | No dataset execution | No dataset execution | Remaining functions and rounding; parser and handler integration (steps 4, 7) |
-| Typed numeric evaluation: REQ-0426-0427, 0429, 0438, 0443-0444 | Typed literal/identifier/unary/binary nodes, fake resolver port, ordered evaluation, exact failure provenance; 22 shared evaluation/trace vectors plus 49 arithmetic cases through the plan | No dataset execution | No dataset execution | Remaining function execution, host diagnostic transport and lifecycle handlers (steps 4, 7) |
+| Typed numeric evaluation: REQ-0426-0427, 0429, 0438, 0443-0444 | Typed literal/identifier/unary/binary nodes, fake resolver port, ordered evaluation, exact failure provenance; 22 shared evaluation/trace vectors plus 49 arithmetic cases through the plan | No dataset execution | No dataset execution | Remaining math/rounding execution, host diagnostic transport and lifecycle handlers (steps 4, 7) |
 | Numeric syntax: REQ-0413-0415, 0439-0441 | Bounded arena parser; all 44 shared grammar cases, closed function/arity/reserved-word checks, diagnostic positions and deterministic Python comparisons | No dataset execution | No dataset execution | Full function execution and lifecycle diagnostics (steps 4, 7) |
 | Numeric compilation: REQ-0413-0415, 0426-0427, 0434, 0438-0444 | Immutable supported-subset plans, deferred exact literal failures, source spans, unsupported preflight and static resolution budgets; 22 literal cases plus arithmetic/trace fixtures through compilation | No dataset execution | No dataset execution | Remaining functions, completed-result conversion and handlers (steps 4, 7) |
+| Numeric selection: REQ-0415-0416, 0424-0427 | GREATEST, LEAST, NULLIF and COALESCE in primitives/typed evaluation/compilation; 51 shared value, promotion, missingness and eager-resolution cases | No dataset execution | No dataset execution | Remaining math/rounding functions, completed-result conversion and handlers (steps 4, 7) |
 | Temporal values: REQ-0539-0555, 0559-0561, 0567-0573 | Validated civil fields, strict parsing, canonical text, precision, equality and chronological order; 400-year calendar cycle | No dataset execution | No dataset execution | Imputation, temporal operations, function/artifact boundaries (steps 4, 5, 8, 9) |
 | Conversion: REQ-0009-0013, 0015-0018, 0020-0021, 0601 | Full scalar matrix, strict numeric text, exact range/integrality checks, canonical numeric/temporal text, structured failures; shared reference vectors and deterministic float-text differential check | No dataset execution | No dataset execution | Integration at the completed-result lifecycle boundary and actual handler application (steps 4, 7, 8) |
 | Regex and remaining scalar grammars | Not implemented | No dataset execution | No dataset execution | Replay existing grammar/regex vectors, including backreferences and lookarounds (step 4) |
@@ -56,8 +57,21 @@ alongside the parser's structural limits. Every identifier occurrence counts,
 including repeated names, even if an earlier failure would prevent reaching it.
 The budget applies independently to each evaluation and does not bound time spent
 inside a resolver. The caller-supplied `NumericPlan` API itself remains unbounded.
-Remaining functions, host diagnostic transport and lifecycle integration remain
-outstanding.
+Remaining math/rounding functions, host diagnostic transport and lifecycle
+integration remain outstanding.
+
+Selection functions eagerly evaluate every argument before applying missingness,
+selection and promotion. Variadic failures use zero-based argument routes and
+retain the exact inner failure span. Extrema compare present values exactly before
+promoting the selected result; NULLIF preserves the reference's comparison after
+binary64 promotion for mixed pairs. All-int comparisons remain exact.
+
+Python COALESCE previously returned the first present value without the REQ-0424
+promotion required when any present argument is float. This slice explicitly fixes
+that reference discrepancy alongside Rust support: the shared 51-case corpus pins
+result types, float bits, resolver traces and downstream arithmetic. Missing
+arguments do not force promotion. The correction may change large-integer results
+or completed-result conversion and is not described as behavior-neutral parity.
 
 Python numeric-expression integer literals now also avoid the host's integer
 string digit limit: insignificant zeros are stripped before bounded construction,

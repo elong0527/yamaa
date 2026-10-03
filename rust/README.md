@@ -57,7 +57,8 @@ unless a budget is exhausted. The arena avoids recursive destruction of rejected
 input. Parsing never resolves identifiers or invokes host code.
 
 `numeric_compiler::compile_numeric` now connects text to the supported evaluator
-subset: literals, identifiers, unary signs, arithmetic, ABS and MOD. It checks all
+subset: literals, identifiers, unary signs, arithmetic, ABS, MOD, GREATEST, LEAST,
+NULLIF and COALESCE. It checks all
 functions before producing a plan; other valid functions return explicit
 `Unsupported` entries with their written name spans, in source order. Compilation
 never invokes a resolver. It preserves association and defers oversized integer
@@ -75,8 +76,23 @@ Evaluation failures preserve the original text, specification path, operand rout
 opaque resolver payload and failed node's UTF-8 span. Groups do not overwrite an
 inner node's location. Existing arithmetic/trace fixtures now run through both
 typed trees and compilation; 22 shared literal cases compare exact results with
-Python. Remaining functions, lifecycle handlers and host diagnostic transport
-are the next gates.
+Python. Another 51 shared selection cases cover eager argument traces,
+missingness, promotion, signed zeros, i64/binary64 boundaries and nested failures.
+Remaining math/rounding functions, lifecycle handlers and host diagnostic
+transport are the next gates.
+
+Numeric selection evaluates every argument in written order before selecting a
+result, including COALESCE after its first present argument. A later failure still
+fails the expression. GREATEST/LEAST compare present values exactly, retain the
+first equal value, then promote the result. NULLIF compares integer pairs exactly
+and mixed pairs after binary64 promotion, matching the reference. The compiled
+resolver budget counts every argument occurrence, not just the selected one.
+
+This slice deliberately corrects Python COALESCE promotion under REQ-0424:
+`COALESCE(1, 2.0)` returns float `1.0`, rather than int `1`. Any present float
+argument promotes a selected integer, including its normal rounding above 2^53.
+Missing arguments do not influence promotion. This can change dependent arithmetic
+and completed-result conversion for large integers; the shared vectors pin it.
 
 ## Packaging decision
 

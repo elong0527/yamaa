@@ -487,7 +487,7 @@ def _power(left: object, right: object, expr: str) -> object:
 
 
 def _numbers_equal(left: object, right: object) -> bool:
-    """Compare two numbers without widening an int past binary64 precision."""
+    """Compare integer pairs exactly and mixed pairs after binary64 promotion."""
     if type(left) is int and type(right) is int:
         return left == right
     return float(left) == float(right)  # type: ignore[arg-type]
@@ -505,14 +505,18 @@ def _extreme(arguments: list[object], *, largest: bool) -> object:
 
 
 def _call(node: NumericAst, expr: str, resolver: Resolver) -> object:
+    """Evaluate every argument in written order before applying numeric semantics."""
     name = node["name"]
     arguments = [_evaluate(argument, expr, resolver) for argument in node["arguments"]]
 
     if name == "COALESCE":
-        for value in arguments:
-            if not _is_missing(value):
-                return value
-        return MISSING
+        present = [value for value in arguments if not _is_missing(value)]
+        if not present:
+            return MISSING
+        selected = present[0]
+        if _promote(present) == "float":
+            return _finite(float(selected))  # type: ignore[arg-type]
+        return selected
     if name in {"GREATEST", "LEAST"}:
         return _extreme(arguments, largest=name == "GREATEST")
     if name == "NULLIF":

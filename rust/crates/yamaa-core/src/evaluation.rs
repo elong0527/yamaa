@@ -6,18 +6,29 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::numeric::{self, ArithmeticErrorKind, BinaryOperator, Number, UnaryOperator};
+use crate::numeric::{
+    self, ArithmeticErrorKind, BinaryOperator, Number, SelectionFunction, UnaryOperator,
+};
 use crate::value::{Selection, ValueType};
 
 /// Numeric IR for normalized values, deferred literal failures and arithmetic.
 /// ABS and MOD use the existing unary/binary primitive variants. This is not a parser
-/// or a claim that the rest of the numeric function vocabulary is implemented.
+/// or a claim that the remaining math/rounding functions are implemented.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumericNode {
     Literal(Number),
     /// Deferred positive literal overflow, preserving exact canonical decimal digits.
     IntegerOverflowLiteral(String),
     Identifier(String),
+    /// Variadic numeric selection; the compiler owns closed-language arity checks.
+    Selection {
+        function: SelectionFunction,
+        arguments: Vec<NumericNode>,
+    },
+    NullIf {
+        left: Box<NumericNode>,
+        right: Box<NumericNode>,
+    },
     Unary {
         operator: UnaryOperator,
         operand: Box<NumericNode>,
@@ -44,6 +55,8 @@ pub enum Operand {
     Unary,
     Left,
     Right,
+    /// Zero-based argument index in a variadic selection function.
+    Argument(usize),
 }
 
 /// Provenance supplied by the compiler and the exact operand route that failed.
@@ -200,6 +213,21 @@ impl NumericPlan {
                     },
                 };
                 return Err(self.failure(EvaluationErrorKind::Numeric(condition), path));
+            }
+            NumericNode::Selection {
+                function,
+                arguments,
+            } => {
+                let mut values = Vec::with_capacity(arguments.len());
+                for (index, argument) in arguments.iter().enumerate() {
+                    values.push(self.child(argument, Operand::Argument(index), resolver, path)?);
+                }
+                return Ok(numeric::select(*function, &values));
+            }
+            NumericNode::NullIf { left, right } => {
+                let left = self.child(left, Operand::Left, resolver, path)?;
+                let right = self.child(right, Operand::Right, resolver, path)?;
+                return Ok(numeric::null_if(left, right));
             }
             NumericNode::Unary { operator, operand } => {
                 let value = self.child(operand, Operand::Unary, resolver, path)?;
