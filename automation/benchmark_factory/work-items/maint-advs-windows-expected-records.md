@@ -80,3 +80,16 @@ not satisfy a window (it belongs to no window, as before).
 - README documents the expected records; lifecycle badge reset to
   draft; Harbor prompt (full.md, conventions.md within 20 lines)
   updated and brief.md regenerated.
+
+## Revision (2026-10-03): re-stage input as SDTM VS
+
+Per the input-staging principle (benchmarks/agents.md): ADaM
+benchmarks derive from SDTM domains, not pre-ADaM `*_raw` inputs.
+`input/advs_raw.csv` became `input/vs.csv` with SDTM VS columns
+(VSTESTCD, VSDTC, VSDY, VSSTRESN). The spec now derives PARAMCD from
+VSTESTCD, ADT from VSDTC, ADY from VSDY, and AVAL from VSSTRESN, then
+windows on ADY exactly as before. VSDY arrives derived upstream, so
+no study-day derivation is smuggled in -- the benchmark still pins
+one pattern (windowing + expected records). Golden values
+byte-identical; README, Harbor prompt, brief, and the R/Python
+reference solutions updated to the new input.

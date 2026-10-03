@@ -8,12 +8,25 @@ from pathlib import Path
 
 import polars as pl
 
-raw = pl.read_csv("/app/input/advs_raw.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("VISITNUM").cast(pl.Float64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-    pl.col("ADY").cast(pl.Int64, strict=False),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
+# SDTM VS staged as the ADaM input; rename to the analysis names the
+# rest of the solution works with.
+raw = (
+    pl.read_csv("/app/input/vs.csv", infer_schema=False)
+    .rename(
+        {
+            "VSTESTCD": "PARAMCD",
+            "VSDTC": "ADT",
+            "VSDY": "ADY",
+            "VSSTRESN": "AVAL",
+        }
+    )
+    .with_columns(
+        pl.col("VSSEQ").cast(pl.Int64, strict=False),
+        pl.col("VISITNUM").cast(pl.Float64, strict=False),
+        pl.col("ADT").str.to_date(strict=False),
+        pl.col("ADY").cast(pl.Int64, strict=False),
+        pl.col("AVAL").cast(pl.Float64, strict=False),
+    )
 )
 
 

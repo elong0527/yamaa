@@ -8,12 +8,18 @@ its analysis window, adding the analysis visit (`AVISIT`), its
 numeric order (`AVISITN`), and `ANL01FL`; add an expected record
 for each planned visit with no measurement.
 
-**Input:** vital signs records carrying the collected visit
-(`VISIT`, `VISITNUM`), the analysis date (`ADT`), the relative
-study day (`ADY`), and the measured value (`AVAL`).
+**Input:** SDTM vital signs records (`VS`) carrying the test code
+(`VSTESTCD`), the collected visit (`VISIT`, `VISITNUM`), the
+collection date (`VSDTC`), the study day (`VSDY`), and the numeric
+result (`VSSTRESN`).
 
 **Variables:**
 
+- `ADT` is the analysis date, carried from the SDTM collection date
+  (`VSDTC`); `ADY` is the analysis relative day, carried from the
+  SDTM study day (`VSDY`); `AVAL` is the analysis value, carried from
+  the SDTM numeric result (`VSSTRESN`). `PARAMCD` mirrors the SDTM
+  test code (`VSTESTCD`).
 - `AVISIT` is the analysis visit whose window holds the record's
   study day: `SCREENING` before day 0, `BASELINE` on day 1 (study
   days skip from day -1 to day 1), `WEEK 2` on days 2 through 21,

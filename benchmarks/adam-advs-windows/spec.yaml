@@ -2,7 +2,10 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
-  ADVS_RAW: {path: input/advs_raw.csv, types: {ADT: date}}
+  # SDTM VS: the vital-signs domain as the ADaM programmer receives it.
+  # VSDTC is date-only here; VSDY arrives derived upstream, so this
+  # benchmark pins windowing, not study-day derivation.
+  VS: {path: input/vs.csv, types: {VSDTC: date}}
 
 output:
   path: advs.csv
@@ -18,8 +21,8 @@ intermediates:
   # coverage intermediate.
   - id: SCREENING_COVER
     dataset: SELF
-    key: {STUDYID: ADVS_RAW.STUDYID, USUBJID: ADVS_RAW.USUBJID,
-          PARAMCD: ADVS_RAW.PARAMCD}
+    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
+          PARAMCD: VS.VSTESTCD}
     filter: "SELF.AVISIT = 'SCREENING'"
     order_by: [SELF.VSSEQ]
     keep: last
@@ -27,8 +30,8 @@ intermediates:
 
   - id: BASELINE_COVER
     dataset: SELF
-    key: {STUDYID: ADVS_RAW.STUDYID, USUBJID: ADVS_RAW.USUBJID,
-          PARAMCD: ADVS_RAW.PARAMCD}
+    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
+          PARAMCD: VS.VSTESTCD}
     filter: "SELF.AVISIT = 'BASELINE'"
     order_by: [SELF.VSSEQ]
     keep: last
@@ -36,8 +39,8 @@ intermediates:
 
   - id: WEEK2_COVER
     dataset: SELF
-    key: {STUDYID: ADVS_RAW.STUDYID, USUBJID: ADVS_RAW.USUBJID,
-          PARAMCD: ADVS_RAW.PARAMCD}
+    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
+          PARAMCD: VS.VSTESTCD}
     filter: "SELF.AVISIT = 'WEEK 2'"
     order_by: [SELF.VSSEQ]
     keep: last
@@ -45,8 +48,8 @@ intermediates:
 
   - id: WEEK4_COVER
     dataset: SELF
-    key: {STUDYID: ADVS_RAW.STUDYID, USUBJID: ADVS_RAW.USUBJID,
-          PARAMCD: ADVS_RAW.PARAMCD}
+    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
+          PARAMCD: VS.VSTESTCD}
     filter: "SELF.AVISIT = 'WEEK 4'"
     order_by: [SELF.VSSEQ]
     keep: last
@@ -57,8 +60,8 @@ intermediates:
   # numbering past the records already built.
   - id: PRIOR_MAX
     dataset: SELF
-    key: {STUDYID: ADVS_RAW.STUDYID, USUBJID: ADVS_RAW.USUBJID,
-          PARAMCD: ADVS_RAW.PARAMCD}
+    key: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID,
+          PARAMCD: VS.VSTESTCD}
     order_by: [SELF.VSSEQ]
     keep: last
     no_match: null
@@ -67,47 +70,48 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADVS_RAW.STUDYID
+    derivation: VS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADVS_RAW.USUBJID
+    derivation: VS.USUBJID
 
+  # ADaM parameter codes for vital signs mirror the SDTM test codes.
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADVS_RAW.PARAMCD
+    derivation: VS.VSTESTCD
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation: ADVS_RAW.VSSEQ
+    derivation: VS.VSSEQ
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation: ADVS_RAW.VISIT
+    derivation: VS.VISIT
 
   - name: VISITNUM
     type: float
     label: Visit Number
-    derivation: ADVS_RAW.VISITNUM
+    derivation: VS.VISITNUM
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADVS_RAW.ADT
+    derivation: VS.VSDTC
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation: ADVS_RAW.ADY
+    derivation: VS.VSDY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADVS_RAW.AVAL
+    derivation: VS.VSSTRESN
 
   # Windows on study day, each including its lower break and excluding its
   # upper one: before 0 SCREENING, 0-1 BASELINE (there is no day 0), 2-21
@@ -174,7 +178,7 @@ rows:
   # Every collected record, unchanged. The internal coverage column is
   # meaningless here, so it stays missing.
   - id: collected
-    dataset: ADVS_RAW
+    dataset: VS
     derivations:
       WINDOW_COVERED: {literal: null}
 
@@ -184,13 +188,13 @@ rows:
   # visit name and number and the window, continues the sequence
   # numbering, and has no date, day, or value.
   - id: expected_screening
-    dataset: ADVS_RAW
-    group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.PARAMCD]
+    dataset: VS
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VSTESTCD]
     filter: "WINDOW_COVERED IS NULL"
     derivations:
-      STUDYID: ADVS_RAW.STUDYID
-      USUBJID: ADVS_RAW.USUBJID
-      PARAMCD: ADVS_RAW.PARAMCD
+      STUDYID: VS.STUDYID
+      USUBJID: VS.USUBJID
+      PARAMCD: VS.VSTESTCD
       VSSEQ:
         compute:
           expr: "PRIOR_MAX.VSSEQ + 1"
@@ -204,13 +208,13 @@ rows:
       WINDOW_COVERED: SCREENING_COVER.VSSEQ
 
   - id: expected_baseline
-    dataset: ADVS_RAW
-    group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.PARAMCD]
+    dataset: VS
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VSTESTCD]
     filter: "WINDOW_COVERED IS NULL"
     derivations:
-      STUDYID: ADVS_RAW.STUDYID
-      USUBJID: ADVS_RAW.USUBJID
-      PARAMCD: ADVS_RAW.PARAMCD
+      STUDYID: VS.STUDYID
+      USUBJID: VS.USUBJID
+      PARAMCD: VS.VSTESTCD
       VSSEQ:
         compute:
           expr: "PRIOR_MAX.VSSEQ + 1"
@@ -224,13 +228,13 @@ rows:
       WINDOW_COVERED: BASELINE_COVER.VSSEQ
 
   - id: expected_week2
-    dataset: ADVS_RAW
-    group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.PARAMCD]
+    dataset: VS
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VSTESTCD]
     filter: "WINDOW_COVERED IS NULL"
     derivations:
-      STUDYID: ADVS_RAW.STUDYID
-      USUBJID: ADVS_RAW.USUBJID
-      PARAMCD: ADVS_RAW.PARAMCD
+      STUDYID: VS.STUDYID
+      USUBJID: VS.USUBJID
+      PARAMCD: VS.VSTESTCD
       VSSEQ:
         compute:
           expr: "PRIOR_MAX.VSSEQ + 1"
@@ -244,13 +248,13 @@ rows:
       WINDOW_COVERED: WEEK2_COVER.VSSEQ
 
   - id: expected_week4
-    dataset: ADVS_RAW
-    group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.PARAMCD]
+    dataset: VS
+    group_by: [VS.STUDYID, VS.USUBJID, VS.VSTESTCD]
     filter: "WINDOW_COVERED IS NULL"
     derivations:
-      STUDYID: ADVS_RAW.STUDYID
-      USUBJID: ADVS_RAW.USUBJID
-      PARAMCD: ADVS_RAW.PARAMCD
+      STUDYID: VS.STUDYID
+      USUBJID: VS.USUBJID
+      PARAMCD: VS.VSTESTCD
       VSSEQ:
         compute:
           expr: "PRIOR_MAX.VSSEQ + 1"

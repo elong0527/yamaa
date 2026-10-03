@@ -7,13 +7,16 @@
 library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
+# SDTM VS staged as the ADaM input; rename to the analysis names the
+# rest of the solution works with.
 raw <- read_csv(
-  "/app/input/advs_raw.csv",
+  "/app/input/vs.csv",
   col_types = cols(
-    VSSEQ = col_integer(), VISITNUM = col_double(), ADT = col_date(),
-    ADY = col_integer(), AVAL = col_double(), .default = col_character()
+    VSSEQ = col_integer(), VISITNUM = col_double(), VSDTC = col_date(),
+    VSDY = col_integer(), VSSTRESN = col_double(), .default = col_character()
   )
-)
+) |>
+  rename(PARAMCD = VSTESTCD, ADT = VSDTC, ADY = VSDY, AVAL = VSSTRESN)
 
 # Windows follow the study day: screening before day 0, baseline on day
 # 1, weeks 2 and 4 on days 2-21 and 22-42, and post-treatment from day
