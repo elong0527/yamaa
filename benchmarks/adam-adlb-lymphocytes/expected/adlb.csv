@@ -6,11 +6,25 @@ LYM-001,LYMLE,0.75,Lymphocytes (fraction of 1),CYCLE 2 DAY 1,
 LYM-002,WBC,8,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
 LYM-002,LYMLE,1,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
 LYM-003,WBC,9,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
-LYM-004,LYMLE,0.4,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
 LYM-005,WBC,7,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
 LYM-005,LYMLE,0.25,Lymphocytes (fraction of 1),CYCLE 1 DAY 1,
 LYM-005,LYMPH,1.75,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,
-LYM-005,ALB,40,Albumin (g/dL),CYCLE 2 DAY 1,
+LYM-001,NEUTLE,0.25,Neutrophils (fraction of 1),CYCLE 1 DAY 1,
+LYM-001,MONOLE,0.125,Monocytes (fraction of 1),CYCLE 1 DAY 1,
+LYM-002,NEUTLE,0.75,Neutrophils (fraction of 1),CYCLE 1 DAY 1,
+LYM-003,NEUTLE,0.5,Neutrophils (fraction of 1),CYCLE 1 DAY 1,
+LYM-004,EOSLE,0.05,Eosinophils (fraction of 1),CYCLE 1 DAY 1,
+LYM-005,MONOLE,0.2,Monocytes (fraction of 1),CYCLE 1 DAY 1,
+LYM-005,MONO,1.4,Monocytes Abs (10^9/L),CYCLE 1 DAY 1,
+LYM-006,WBC,6,Leukocyte Count (10^9/L),CYCLE 1 DAY 1,
+LYM-006,EOSLE,0.25,Eosinophils (fraction of 1),CYCLE 1 DAY 1,
+LYM-006,BASOLE,0.125,Basophils (fraction of 1),CYCLE 1 DAY 1,
 LYM-001,LYMPH,6,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
 LYM-001,LYMPH,7.5,Lymphocytes Abs (10^9/L),CYCLE 2 DAY 1,CALCULATION
 LYM-002,LYMPH,8,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-001,NEUT,3,Neutrophils Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-002,NEUT,6,Neutrophils Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-003,NEUT,4.5,Neutrophils Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-001,MONO,1.5,Monocytes Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-006,EOS,1.5,Eosinophils Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION
+LYM-006,BASO,0.75,Basophils Abs (10^9/L),CYCLE 1 DAY 1,CALCULATION

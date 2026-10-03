@@ -1,0 +1,21 @@
+USUBJID,LBTESTCD,LBSTRESN,LBTEST,VISIT
+LYM-001,WBC,12,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+LYM-001,LYMLE,0.5,Lymphocytes (fraction of 1),CYCLE 1 DAY 1
+LYM-001,WBC,10,Leukocyte Count (10^9/L),CYCLE 2 DAY 1
+LYM-001,LYMLE,0.75,Lymphocytes (fraction of 1),CYCLE 2 DAY 1
+LYM-002,WBC,8,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+LYM-002,LYMLE,1.0,Lymphocytes (fraction of 1),CYCLE 1 DAY 1
+LYM-003,WBC,9,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+LYM-005,WBC,7,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+LYM-005,LYMLE,0.25,Lymphocytes (fraction of 1),CYCLE 1 DAY 1
+LYM-005,LYMPH,1.75,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1
+LYM-001,NEUTLE,0.25,Neutrophils (fraction of 1),CYCLE 1 DAY 1
+LYM-001,MONOLE,0.125,Monocytes (fraction of 1),CYCLE 1 DAY 1
+LYM-002,NEUTLE,0.75,Neutrophils (fraction of 1),CYCLE 1 DAY 1
+LYM-003,NEUTLE,0.5,Neutrophils (fraction of 1),CYCLE 1 DAY 1
+LYM-004,EOSLE,0.05,Eosinophils (fraction of 1),CYCLE 1 DAY 1
+LYM-005,MONOLE,0.2,Monocytes (fraction of 1),CYCLE 1 DAY 1
+LYM-005,MONO,1.4,Monocytes Abs (10^9/L),CYCLE 1 DAY 1
+LYM-006,WBC,6,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+LYM-006,EOSLE,0.25,Eosinophils (fraction of 1),CYCLE 1 DAY 1
+LYM-006,BASOLE,0.125,Basophils (fraction of 1),CYCLE 1 DAY 1

@@ -8,39 +8,53 @@ library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
 raw <- read_csv(
-  "/app/input/adlb.csv",
-  col_types = cols(AVAL = col_double(), .default = col_character())
-)
+  "/app/input/lb.csv",
+  col_types = cols(LBSTRESN = col_double(), .default = col_character())
+) |>
+  rename(PARAMCD = LBTESTCD, AVAL = LBSTRESN, PARAM = LBTEST)
 
 # Keep every collected record unchanged, with DTYPE empty.
 collected <- raw |>
   select(USUBJID, PARAMCD, AVAL, PARAM, VISIT) |>
   mutate(DTYPE = NA_character_)
 
-# One LYMPH record per subject and visit with both WBC and LYMLE and no
-# LYMPH yet: WBC times LYMLE.
-wbc <- raw |>
-  filter(PARAMCD %in% "WBC") |>
-  select(USUBJID, VISIT, WBCVAL = AVAL)
-lymle <- raw |>
-  filter(PARAMCD %in% "LYMLE") |>
-  select(USUBJID, VISIT, LYMLEVAL = AVAL)
-existing <- raw |>
-  filter(PARAMCD %in% "LYMPH") |>
-  distinct(USUBJID, VISIT) |>
-  mutate(HAS_LYMPH = TRUE)
+# Differential fraction code -> absolute code and parameter name.
+differentials <- list(
+  LYMLE = c("LYMPH", "Lymphocytes Abs (10^9/L)"),
+  NEUTLE = c("NEUT", "Neutrophils Abs (10^9/L)"),
+  MONOLE = c("MONO", "Monocytes Abs (10^9/L)"),
+  EOSLE = c("EOS", "Eosinophils Abs (10^9/L)"),
+  BASOLE = c("BASO", "Basophils Abs (10^9/L)")
+)
 
-calc <- wbc |>
-  inner_join(lymle, by = c("USUBJID", "VISIT")) |>
-  left_join(existing, by = c("USUBJID", "VISIT")) |>
-  filter(!is.na(WBCVAL), !is.na(LYMLEVAL), is.na(HAS_LYMPH)) |>
-  mutate(
-    PARAMCD = "LYMPH",
-    AVAL = WBCVAL * LYMLEVAL,
-    PARAM = "Lymphocytes Abs (10^9/L)",
-    DTYPE = "CALCULATION"
-  ) |>
-  select(USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE)
+wbc <- raw |>
+  filter(PARAMCD == "WBC") |>
+  select(USUBJID, VISIT, WBCVAL = AVAL)
+
+# One absolute record per subject and visit for each differential
+# fraction present with a WBC count and no absolute record yet.
+calc <- bind_rows(lapply(names(differentials), function(frac_code) {
+  abs_code <- differentials[[frac_code]][1]
+  abs_param <- differentials[[frac_code]][2]
+  frac <- raw |>
+    filter(PARAMCD == frac_code) |>
+    select(USUBJID, VISIT, FRACVAL = AVAL)
+  existing <- raw |>
+    filter(PARAMCD == abs_code) |>
+    distinct(USUBJID, VISIT) |>
+    mutate(HAS_ABS = TRUE)
+  wbc |>
+    inner_join(frac, by = c("USUBJID", "VISIT")) |>
+    left_join(existing, by = c("USUBJID", "VISIT")) |>
+    filter(!is.na(WBCVAL), !is.na(FRACVAL), is.na(HAS_ABS)) |>
+    mutate(
+      PARAMCD = abs_code,
+      AVAL = WBCVAL * FRACVAL,
+      PARAM = abs_param,
+      DTYPE = "CALCULATION"
+    ) |>
+    select(USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE)
+}))
 
 adlb <- bind_rows(collected, calc)
 

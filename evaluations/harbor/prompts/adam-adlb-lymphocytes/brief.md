@@ -1,6 +1,6 @@
-Following CDISC ADaM standards, use the provided ADLB_RAW dataset to
-create an ADLB dataset with one record per subject per visit per
-parameter.
+Following CDISC ADaM standards, use the provided LB dataset
+(SDTM laboratory records) to create an ADLB dataset with one
+record per subject per visit per parameter.
 
 The output dataset should contain the following columns in this order:
 USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE
