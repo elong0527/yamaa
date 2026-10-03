@@ -5,6 +5,7 @@
 extern crate alloc;
 
 pub mod conversion;
+pub mod evaluation;
 pub mod numeric;
 pub mod temporal;
 pub mod value;

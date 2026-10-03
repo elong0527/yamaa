@@ -34,6 +34,14 @@ different digits from Python on some exact decimal ties; the shared fixtures
 and `tools/check_float_text.py` protect the reference spelling. See the
 [formatter documentation](https://docs.rs/ryu/1.0.20/ryu/) for its algorithm/API.
 
+`evaluation::NumericPlan` evaluates the implemented numeric subset from a typed
+tree through a core-owned resolver. It preserves operand order, association,
+missing versus absent values, opaque resolution failures, and diagnostic
+provenance. Shared evaluation fixtures compare values and resolution traces with
+Python's real numeric parser/evaluator. The test-only postfix tree notation is
+not an implementation of the numeric grammar. Parsing, compiler resource
+budgets, the remaining functions, and lifecycle handlers are separate gates.
+
 ## Packaging decision
 
 The optional `yamaa-native` wheel uses Maturin; `python/` retains its existing

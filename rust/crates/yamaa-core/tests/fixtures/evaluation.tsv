@@ -1,0 +1,23 @@
+id	expression	postfix	bindings	expected	trace	path
+literal-only	42	int:42	-	int:42	-	-
+missing-literal	NULL	missing	-	missing	-	-
+missing-left-unknown-right	L + R	$L $R add	L=missing	error:unknown_field:REQ-0443:R	L,R	right
+missing-left-bool-right	L + R	$L $R add	L=missing;R=bool:true	error:incompatible_input_type:REQ-0444:R:bool	L,R	right
+missing-left-text-right	L + R	$L $R add	L=missing;R=str:2	error:incompatible_input_type:REQ-0444:R:str	L,R	right
+invalid-left-skips-right	L + R	$L $R add	L=str:1;R=int:2	error:incompatible_input_type:REQ-0444:L:str	L	left
+absent-left-skips-right	L + R	$L $R add	R=int:2	error:unknown_field:REQ-0443:L	L	left
+missing-propagates-after-resolution	L / R	$L $R divide	L=missing;R=int:0	missing	L,R	-
+right-missing	L + R	$L $R add	L=int:2;R=missing	missing	L,R	-
+nested-right-error	L + (A / B)	$L $A $B divide add	L=missing;A=int:1;B=int:0	error:division_by_zero:REQ-0430	L,A,B	right
+nested-left-error	(A / B) + R	$A $B divide $R add	A=int:1;B=int:0;R=missing	error:division_by_zero:REQ-0430	A,B	left
+nested-type-error	L * (A + B)	$L $A $B add multiply	L=missing;A=bool:false;B=int:1	error:incompatible_input_type:REQ-0444:A:bool	L,A	right,left
+repeated-identifier	A + A	$A $A add	A=int:3	int:6	A,A	-
+left-association	(A + B) + C	$A $B add $C add	A=float:0.1;B=float:0.2;C=float:0.3	float:3fe3333333333334	A,B,C	-
+right-association	A + (B + C)	$A $B $C add add	A=float:0.1;B=float:0.2;C=float:0.3	float:3fe3333333333333	A,B,C	-
+nonfinite-intermediate	(A * B) / C	$A $B multiply $C divide	A=float:1e308;B=int:2;C=int:0	missing	A,B,C	-
+nonfinite-still-resolves-right	(A * B) + R	$A $B multiply $R add	A=float:1e308;B=int:2	error:unknown_field:REQ-0443:R	A,B,R	right
+nested-overflow	(A + B) * R	$A $B add $R multiply	A=int:9223372036854775807;B=int:1;R=missing	error:integer_overflow:REQ-0434:9223372036854775808	A,B	left
+unary-nested-error	-(L + R)	$L $R add negate	L=missing	error:unknown_field:REQ-0443:R	L,R	unary,right
+unary-negative-zero	-A	$A negate	A=float:0.0	float:8000000000000000	A	-
+abs-min-overflow	ABS(A)	$A abs	A=int:-9223372036854775808	error:integer_overflow:REQ-0434:9223372036854775808	A	-
+modulo-operand-order	MOD(L, R)	$L $R modulo	L=missing	error:unknown_field:REQ-0443:R	L,R	right
