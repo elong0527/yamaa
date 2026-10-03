@@ -23,7 +23,7 @@ from yamaa.functions.calls import function_calls, validate_calls
 from yamaa.functions.environment import check_runner_language, load_environment
 from yamaa.functions.errors import FunctionActivationError, FunctionFailure
 from yamaa.functions.evaluator import function_dispatcher
-from yamaa.planning import ExecutionDiagnostic
+from yamaa.planning import ExecutionDiagnostic, ProducerWorkflow
 from yamaa.runtime import (
     ExecutionFailure,
     ExecutionHooks,
@@ -56,14 +56,41 @@ def activate_project_functions(
     Raises `FunctionActivationError` carrying the committed diagnostics for
     every R018 failure between resolving the root and the last vector.
     """
-    paths = _call_paths(specification)
+    return _activate_specifications(
+        (specification,), project_root, schema_root, resolver, cache
+    )
+
+
+def activate_workflow_functions(
+    workflow: ProducerWorkflow,
+    project_root: str | Path,
+    schema_root: str | Path,
+    *,
+    resolver: ArtifactResolver | None = None,
+    cache: ActivationCache | None = ACTIVATION_CACHE,
+) -> ActivatedEnvironment | None:
+    """Validate all node calls before importing code or reading study data."""
+    specifications = tuple(node.resolved.specification for node in workflow.nodes)
+    if not any(function_calls(specification) for specification in specifications):
+        return None
+    return _activate_specifications(
+        specifications, project_root, schema_root, resolver, cache
+    )
+
+
+def _activate_specifications(
+    specifications, project_root, schema_root, resolver, cache
+):
+    paths = tuple(
+        dict.fromkeys(path for spec in specifications for path in _call_paths(spec))
+    )
     try:
         environment = load_environment(Path(project_root), schema_root)
-        # REQ-0667 first: a runner that cannot run this project at all says so
-        # before holding the specification to contracts it will never reach.
         check_runner_language(environment.environment)
-        diagnostics: Sequence[ExecutionDiagnostic] = validate_calls(
-            specification, environment.environment
+        diagnostics: Sequence[ExecutionDiagnostic] = tuple(
+            diagnostic
+            for spec in specifications
+            for diagnostic in validate_calls(spec, environment.environment)
         )
         if diagnostics:
             raise FunctionActivationError(diagnostics)
@@ -107,4 +134,8 @@ def execute_with_project_functions(
     )
 
 
-__all__ = ["activate_project_functions", "execute_with_project_functions"]
+__all__ = [
+    "activate_project_functions",
+    "activate_workflow_functions",
+    "execute_with_project_functions",
+]

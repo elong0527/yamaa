@@ -11,28 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from yamaa.domain import DomainRun, yamaa_domain
-from yamaa.functions.calls import function_calls
+from yamaa.application import PreparedWorkflow
+from yamaa.domain import DomainRun, _run_domain
 from yamaa.functions.evaluator import function_dispatcher
-from yamaa.functions.execution import activate_project_functions
-from yamaa.specification import load_specification
-
-
-def _discover_schema_root(entry_path: Path) -> Path:
-    """Find the schema bundle the way the engine's front door does."""
-    candidates = [entry_path.parent, *entry_path.parent.parents, Path.cwd()]
-    package_path = Path(__file__).resolve()
-    candidates.extend(package_path.parents)
-    seen: set[Path] = set()
-    for candidate in candidates:
-        for root in (candidate, candidate / "yaml"):
-            resolved = root.resolve()
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            if (resolved / "schema.yaml").is_file():
-                return resolved
-    raise ValueError("cannot find the yamaa schema bundle; pass schema_root explicitly")
+from yamaa.functions.execution import activate_workflow_functions
 
 
 def run_with_project_functions(
@@ -48,26 +30,21 @@ def run_with_project_functions(
     specification can neither name it nor override what it says. Everything
     the project claims is settled before any source is read, and a failure
     at any of those stages raises carrying the diagnostics R018 names. A
-    specification that calls no project functions takes the ordinary engine
+    workflow that calls no project functions takes the ordinary engine
     path and ignores the root.
     """
-    entry = Path(entry_path)
-    if not entry.is_file():
-        raise FileNotFoundError(f"domain specification is not a file: {entry_path}")
-    entry = entry.resolve()
-    schema = (
-        Path(schema_root).resolve()
-        if schema_root is not None
-        else _discover_schema_root(entry)
-    )
-    specification = load_specification(entry, schema).specification
-    if not function_calls(specification):
-        return yamaa_domain(entry, schema_root=schema, **domain_kwargs)
-    activated = activate_project_functions(specification, project_root, schema)
-    return yamaa_domain(
-        entry,
-        schema_root=schema,
-        dispatcher=function_dispatcher(activated),
+
+    def activate(prepared: PreparedWorkflow):
+        activated = activate_workflow_functions(
+            prepared.workflow, project_root, prepared.schema_root
+        )
+        return None if activated is None else function_dispatcher(activated)
+
+    return _run_domain(
+        entry_path,
+        schema_root=schema_root,
+        dispatcher_factory=activate,
+        raise_specification_errors=True,
         **domain_kwargs,
     )
 

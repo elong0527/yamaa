@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
 
+from yamaa.application import PreparedWorkflow, discover_schema_root, prepare_workflow
 from yamaa.expressions import ExpressionDispatcher
 from yamaa.io import (
     ArtifactTarget,
     LoadedDataset,
-    ProjectResources,
-    approve_roots,
     build_artifact,
     publish_artifact,
 )
@@ -22,7 +21,6 @@ from yamaa.planning import (
     ExecutionDiagnostic,
     UnsupportedFeature,
     execute_workflow,
-    plan_workflow,
 )
 from yamaa.runtime import (
     ExecutionFailure,
@@ -35,7 +33,6 @@ from yamaa.specification import (
     SpecificationError,
     ValidationDiagnostic,
 )
-from yamaa.specification.schema import load_schema_bundle
 
 _ISSUE_COLUMNS = (
     "severity",
@@ -109,20 +106,7 @@ def _result_issues(result: ExecutionResult | None) -> pl.DataFrame:
     return _issues_frame(())
 
 
-def _discover_schema_root(entry_path: Path) -> Path:
-    candidates = [entry_path.parent, *entry_path.parent.parents, Path.cwd()]
-    package_path = Path(__file__).resolve()
-    candidates.extend(package_path.parents)
-    seen: set[Path] = set()
-    for candidate in candidates:
-        for root in (candidate, candidate / "yaml"):
-            resolved = root.resolve()
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            if (resolved / "schema.yaml").is_file():
-                return resolved
-    raise ValueError("cannot find the yamaa schema bundle; pass schema_root explicitly")
+_discover_schema_root = discover_schema_root
 
 
 class DomainRunError(RuntimeError):
@@ -179,8 +163,8 @@ class DomainRun:
 
     @property
     def verification_log(self) -> pl.DataFrame | None:
-        """Return the verification log sidecar frame, or ``None`` when absent."""
-        if not isinstance(self._result, ExecutionSuccess):
+        """Return evaluated checks, including a retained log after failure."""
+        if not isinstance(self._result, (ExecutionSuccess, ExecutionFailure)):
             return None
         if self._result.verification_log is None:
             return None
@@ -238,32 +222,54 @@ def yamaa_domain(
     metadata. No adjacent study document is discovered implicitly. Bound
     non-extensible lists are checked at each column's verification boundary.
     """
-    entry = Path(entry_path)
-    if not entry.is_file():
-        raise FileNotFoundError(f"domain specification is not a file: {entry}")
-    entry = entry.resolve()
-    selected_schema = (
-        Path(schema_root).resolve()
-        if schema_root is not None
-        else _discover_schema_root(entry)
-    )
-    approved = approve_roots(
-        entry,
+    return _run_domain(
+        entry_path,
+        schema_root=schema_root,
         project_root=project_root,
         data_roots=data_roots,
         read_project_configuration=read_project_configuration,
+        dispatcher=dispatcher,
+        study_document=study_document,
     )
 
-    resources = ProjectResources(
-        approved.project_root,
-        base_directory=entry.parent,
-        data_roots=approved.data_roots,
-    )
+
+def _run_domain(
+    entry_path: str | Path,
+    *,
+    schema_root: str | Path | None = None,
+    project_root: str | Path | None = None,
+    data_roots: Iterable[str | Path] | None = None,
+    read_project_configuration: bool = True,
+    dispatcher: ExpressionDispatcher | None = None,
+    study_document: str | Path | None = None,
+    dispatcher_factory: Callable[[PreparedWorkflow], ExpressionDispatcher | None]
+    | None = None,
+    raise_specification_errors: bool = False,
+) -> DomainRun:
+    """Run the shared lifecycle with an optional externally owned activation step."""
     try:
-        workflow = plan_workflow(entry, load_schema_bundle(selected_schema), resources)
+        prepared = prepare_workflow(
+            entry_path,
+            schema_root=schema_root,
+            project_root=project_root,
+            data_roots=data_roots,
+            read_project_configuration=read_project_configuration,
+        )
     except SpecificationError as error:
+        if raise_specification_errors:
+            raise
         issues = _issues_frame(_diagnostic_rows(error.diagnostics))
-        return DomainRun(entry, None, {}, None, issues)
+        return DomainRun(Path(entry_path).resolve(), None, {}, None, issues)
+    entry, selected_schema = prepared.entry, prepared.schema_root
+    resources, workflow = prepared.resources, prepared.workflow
+    if dispatcher_factory is not None:
+        activated_dispatcher = dispatcher_factory(prepared)
+        if activated_dispatcher is not None:
+            if dispatcher is not None:
+                raise TypeError(
+                    "a project-function run cannot also supply a dispatcher"
+                )
+            dispatcher = activated_dispatcher
 
     entry_node = next(
         node for node in workflow.nodes if node.entry_path == workflow.entry_path
