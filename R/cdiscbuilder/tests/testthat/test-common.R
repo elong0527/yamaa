@@ -68,6 +68,7 @@ test_that("join_visit works correctly", {
   expect_equal(res$VISIT, c("Visit 1", "Visit 2", NA))
   expect_equal(res$VISITNUM, c(1, 2, NA))
   expect_equal(res$.OFFSET, c(0, 7, NA))
+  expect_false(".code" %in% names(res))
 })
 
 test_that("add_seq works correctly", {
