@@ -608,7 +608,7 @@ between them, which is the portability R018 exists for. This runner refuses
 that example's own R project root under REQ-0667 rather than running it.
 
 See the [project function documentation](src/yamaa/functions/README.md) for
-the artifact resolver, the digest a directory hashes to, and what each stage
+the artifact resolver, reference-based runtime identity, and what each stage
 owns.
 
 Run this component's focused tests from the repository root:
@@ -680,7 +680,7 @@ and `--no-compare` writes the reports without judging them.
 
 A report carries what a cross-runtime comparison needs and nothing that
 belongs to one implementation: the artifact's column order, declared
-types, record count, R020 bytes and their digest; a failure's `phase`,
+types, record count and complete R020 bytes; a failure's `phase`,
 `condition`, `spec_paths`, `requirement`, and context; each unsupported
 operation and where it was declared; and the REQ-0361 count for every
 declared handler path, including the ones that never fired.
@@ -702,18 +702,21 @@ to produce; `compare_example` is the only half that reads `expected/`, and
 it reads a finished report rather than a live engine. Nothing is
 normalized on the way: column order, record order, a missing value, and a
 quoted empty string are compared as rendered, and an artifact's verdict is
-its complete bytes. An unsupported run and a crashed one each fail the
+its complete bytes for CSV or ordered logical data for Parquet. An unsupported run and a crashed one each fail the
 example they were given rather than passing quietly, because neither one
 reproduced what the example committed.
 
-`REPORT_VERSION` carries a `-draft` suffix. #101 owns the conformance
-runner's invocation, report, and comparison protocol and has not published
-the serialization, so this envelope states the observations #101's
-requirements enumerate and expects to be renamed rather than re-derived
-when that contract lands. Promoting an example in
-`benchmarks/execution-manifest.yaml` stays with #101, and parity stays
-with matching R evidence from #200; a passing report here is one runtime's
-evidence, not parity.
+`REPORT_VERSION` is `0.2.0-draft`. Reports identify host language separately
+from engine backend and include source/prepublication tables, per-node outcomes,
+evaluated verification records and study callback traces. Filenames use
+`<example>.<runtime>.<backend>.json`; older report versions must be regenerated.
+Use `compare_reports` or `--reference-reports` to compare independent runs in
+addition to committed goldens. See the [report protocol](src/yamaa/adapters/README.md)
+for exact scalar encodings, comparison rules and explicitly unsupported backends.
+
+The manifest declares execution coverage by runtime. The historical #101 and
+#200 are closed; a passing Python report establishes Python coverage only.
+R package/grammar checks do not establish current-schema R execution parity.
 
 Run this component's focused tests from the repository root:
 
