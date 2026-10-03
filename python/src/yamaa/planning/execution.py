@@ -2618,6 +2618,20 @@ def _qualification_suggestion(
     return None
 
 
+def _match_value_suggestion(
+    identifier: str, column_types: Mapping[str, ColumnType]
+) -> str | None:
+    """Suggest the bare current-row spelling for a `SELF`-qualified match
+    value (REQ-0117). `SELF` names donor rows and is never a current-row
+    scope, so `SELF.AVISIT` reads no match value; when the current row
+    carries `AVISIT`, the bare name is the value meant. Returns None for any
+    other identifier."""
+    qualifier, separator, bare = identifier.partition(".")
+    if qualifier == "SELF" and separator and bare in column_types:
+        return bare
+    return None
+
+
 def _unresolvable_reference_diagnostic(
     reference: _Reference,
     candidate_datasets: Collection[str],
@@ -2884,14 +2898,20 @@ def _plan_lookups(
                 for reference in info.references:
                     actual = _reference_type(reference.name, bindings, column_types)
                     if actual is None:
+                        context = {
+                            "intermediate": intermediate.id,
+                            "identifier": reference.name,
+                        }
+                        suggestion = _match_value_suggestion(
+                            reference.name, column_types
+                        )
+                        if suggestion is not None:
+                            context["suggestion"] = suggestion
                         diagnostics.append(
                             _diagnostic(
                                 "unknown_field",
                                 f"{path}.key.{field}",
-                                {
-                                    "intermediate": intermediate.id,
-                                    "identifier": reference.name,
-                                },
+                                context,
                                 requirement="REQ-0117",
                             )
                         )
@@ -2915,11 +2935,15 @@ def _plan_lookups(
                         failed = True
                 continue
             if _reference_type(variable, bindings, column_types) is None:
+                context = {"intermediate": intermediate.id, "identifier": variable}
+                suggestion = _match_value_suggestion(variable, column_types)
+                if suggestion is not None:
+                    context["suggestion"] = suggestion
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
                         f"{path}.key",
-                        {"intermediate": intermediate.id, "identifier": variable},
+                        context,
                         requirement="REQ-0117",
                     )
                 )
