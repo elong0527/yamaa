@@ -1,0 +1,51 @@
+name: "Question"
+description: "Something unclear in the rules or docs? Ask for a decision."
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when you need a maintainer decision about what the rules or
+        docs mean - not for general chat (that lives in Discussions).
+        Title it like "<area>: <the question>" - for example
+        "rules: is an odm column derivation row-local?".
+
+  - type: textarea
+    id: question
+    attributes:
+      label: "The question"
+      description: "One clear question. Explain it like I'm five."
+      placeholder: "Is an odm column derivation inside a row template row-local or dataset-level?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-rule
+    attributes:
+      label: "What the rule says today"
+      description: "Quote or link the rule, REQ ID, or docs that bear on this. If the engines or docs disagree, show both sides."
+      placeholder: "REQ-1260 says a column-level derivation is row-local unless it uses a lookup... but the old engine treats odm as dataset-level."
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why it matters"
+      description: "What decision does this unblock?"
+      placeholder: "The clean-room engine and the old engine disagree, so specs behave differently depending on which one runs them."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area"
+      description: "Which part of yamaa is this about?"
+      options:
+        - rules
+        - benchmark
+        - docs
+        - python
+        - schema
+        - other
+    validations:
+      required: true

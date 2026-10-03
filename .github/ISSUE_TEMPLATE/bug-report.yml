@@ -1,6 +1,5 @@
 name: "Bug report"
 description: "Something broken? Show us the smallest example that breaks."
-title: "[bug] "
 labels: ["bug"]
 body:
   - type: markdown
@@ -9,6 +8,8 @@ body:
         Thanks for reporting! A good bug report is like a recipe that always
         burns the cake: anyone who follows it gets the same failure.
         Keep it tiny - 10 lines beats 100.
+        Title it like "<area>: <what breaks>" - for example
+        "rules: ...", "benchmark: ...", or "python: ...".
 
   - type: textarea
     id: what
@@ -23,8 +24,9 @@ body:
     id: mre
     attributes:
       label: "Show it failing (smallest example that breaks)"
-      description: "Paste the smallest spec and input that reproduce the failure, plus the command you ran. Anyone should be able to copy-paste and see it fail. Wrap code in a code block (```)."
+      description: "Show the smallest example that proves the failure. That can be a spec snippet plus the command you ran, or the exact check that exposes an inconsistency (which rule says what, which file disagrees). Wrap code in a code block (```)."
       placeholder: |
+        Crash example:
         ```yaml
         schema_version: "1.0"
         domain: ADSL
@@ -32,8 +34,11 @@ body:
         ===
         derive USUBJID: "DUP"
         ```
-        Input: two rows with USUBJID "DUP".
-        Run: yamaa run spec.yaml --input data.csv
+        Input: two rows with USUBJID "DUP". Run: yamaa run spec.yaml --input data.csv
+
+        Inconsistency example:
+        rules/specification/structure.md names the condition `foo_bar`,
+        but yaml/conditions.yaml has no entry for it.
     validations:
       required: true
 
@@ -55,12 +60,27 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: reference
+  - type: dropdown
+    id: area
     attributes:
-      label: "Link to the relevant reference"
-      description: "The docs page, rule, or benchmark this relates to."
-      placeholder: "https://elong0527.github.io/yamaa/articles/rules/"
+      label: "Area"
+      description: "Which part of yamaa is this about?"
+      options:
+        - rules
+        - benchmark
+        - docs
+        - python
+        - schema
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Links and references"
+      description: "REQ IDs (like REQ-1260), rule files, benchmarks, or URLs - anything that pins down the relevant spec."
+      placeholder: "REQ-0890, rules/submission/metadata.md, benchmarks/adam-adsl-basic"
 
   - type: dropdown
     id: engine

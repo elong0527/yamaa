@@ -51,9 +51,31 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: reference
+  - type: textarea
+    id: alternatives
     attributes:
-      label: "Link to the relevant reference"
-      description: "The rule, docs page, or discussion this relates to."
-      placeholder: "https://elong0527.github.io/yamaa/articles/rules/"
+      label: "Alternatives considered"
+      description: "Other ways to solve this, and why they are worse. Optional."
+      placeholder: "Alternative: allow SELF references only in filter, not in key. Worse because every window still needs its own intermediate."
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area"
+      description: "Which part of yamaa is this about?"
+      options:
+        - rules
+        - benchmark
+        - docs
+        - python
+        - schema
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Links and references"
+      description: "REQ IDs (like REQ-1260), rule files, benchmarks, or URLs - anything that pins down the relevant spec."
+      placeholder: "REQ-1260, rules/specification/structure.md, benchmarks/adam-advs-windows"
