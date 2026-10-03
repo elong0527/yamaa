@@ -1,0 +1,2 @@
+useDynLib(yamaanative, .registration = TRUE)
+export(engine_info)

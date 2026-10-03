@@ -1,0 +1,21 @@
+[package]
+name = "yamaa-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "yamaa_native"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+yamaa-engine = { path = "../yamaa-engine" }
+yamaa-adapters = { path = "../yamaa-adapters" }
+pyo3 = { version = "=0.27.2", features = ["extension-module", "abi3-py312"] }
+
+[build-dependencies]
+pyo3-build-config = "=0.27.2"

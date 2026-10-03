@@ -1,0 +1,2 @@
+# Embedded resource bytes are part of the installation probe on every platform.
+crates/yamaa-adapters/resources/* text eol=lf

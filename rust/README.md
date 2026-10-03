@@ -1,0 +1,92 @@
+# Shared native engine bootstrap
+
+This is the installation slice of [#1585](https://github.com/elong0527/yamaa/issues/1585).
+It does not evaluate specifications. Both installed bindings call the same
+`yamaa-engine`/`yamaa-core` code and report `execution_supported = false`.
+The existing Python engine remains the default; the legacy R package is unchanged.
+
+## Boundaries
+
+| Crate | Responsibility | Allowed dependencies |
+| --- | --- | --- |
+| `yamaa-core` | Language contracts | None |
+| `yamaa-engine` | Application entry points | Core |
+| `yamaa-adapters` | Infrastructure, including embedded resources | Core, engine |
+| `yamaa-python` | Python binding | Engine, adapters, PyO3 |
+| `yamaa-r` | R binding | Engine, adapters, extendr |
+
+Core and engine use `no_std` and forbid unsafe code. The dependency guard checks
+all Cargo dependency kinds, including build, development, and target-specific
+edges. New dependencies require a deliberate update to its allowlist. There are
+no evaluation ports or fake application services yet: those belong with their
+first actual use cases.
+
+## Packaging decision
+
+The optional `yamaa-native` wheel uses Maturin; `python/` retains its existing
+Hatch build. Import the probe with `import yamaa_native`. Installing it does not
+change `yamaa` backend selection or conformance coverage.
+
+The optional R package is `yamaanative`, alongside `cdiscbuilder`. It has its own
+`DESCRIPTION`, registered native routine, help page, and source installation.
+Its source archive embeds the workspace via `tools/stage_r_package.py`, so there
+is one maintained copy of the Rust code. Build the staged package, not the
+incomplete source template in `R/yamaanative` directly. The installed package
+does not need the repository, Cargo, Python, or R's legacy package dependencies.
+
+The bootstrap resource is embedded in the binary and tested after installation
+outside the checkout. This tests packaging only, not discovery of study resources.
+
+Rust 1.90.0, PyO3 0.27.2, extendr 0.9.0, and Maturin 1.9.6 are pinned. Cargo's
+generated lockfile is ignored: the repository's current no-hashing rule permits
+only `python/uv.lock` as a packaging exception. Consequently, transitive Cargo
+dependencies are **not reproducibly locked** in this slice. Source distributions
+may contain Cargo-generated packaging checksums; these are never runtime,
+contract, or resource identities. A reviewed lockfile policy remains a step 3
+release gate. Do not claim reproducible release builds from this prototype.
+
+## Development and installation checks
+
+Install Rust with rustup and the host's C compiler. Enter `rust/` before invoking
+Cargo so `rust-toolchain.toml` selects the pinned toolchain. Build R bindings with
+R installed and on `PATH`.
+
+```sh
+cd rust
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test
+python tools/check_dependencies.py
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+From the repository root, with a new empty output directory:
+
+```sh
+uv tool run --from maturin==1.9.6 maturin build \
+  --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist \
+  --out /tmp/yamaa-dist
+python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaanative
+cd /tmp/yamaa-dist
+R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaanative
+R CMD INSTALL --library=/path/to/empty/R-library yamaanative_0.1.0.tar.gz
+```
+
+Use `cargo +1.90.0` or `RUSTUP_TOOLCHAIN=1.90.0` when launching a build from
+outside `rust/`. Test both a wheel install and a separate install from the Python
+source archive. `tests/installed_python.py` and the R package's
+`tests/installation.R` assert the installed capabilities and resource contents.
+
+CI builds Python 3.12/3.14 on Linux x86_64, macOS arm64, and Windows x86_64;
+the stable ABI wheel targets Python 3.12+. It builds R 4.6.1 on Linux x86_64 and
+macOS arm64. R Windows native installation and other architectures are not
+qualified by this slice. The existing Windows Python engine remains supported.
+
+Next gates: confirm the hosted installation matrix, settle transitive dependency
+locking, then implement closed core values and scalar semantics before adding
+Arrow tables or host callbacks. No performance or language-parity claim is made.
+
+Local `R CMD check --no-manual --no-build-vignettes` passes installation and
+tests, but reports one compiled-code warning for Rust's linked `_abort` symbol.
+The prototype is not CRAN-qualified. R process safety and panic/condition
+translation still require the explicit boundary tests in step 5 of #1585.
