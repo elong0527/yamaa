@@ -39,14 +39,15 @@ def _run(language: str):
 
 
 def _challenge(tmp_path: Path, language: str = "python", script: str | None = None):
+    """Run the submitted and reference scripts through the changed-input challenge."""
     app = _app(tmp_path)
     contract = build.contract_for(AGE_GROUP, language)
     reference = tmp_path / "reference" / contract["script"]
     reference.parent.mkdir()
     text = (build.SOLUTIONS / AGE_GROUP.name / contract["script"]).read_text()
-    reference.write_text(text.replace("/app/", f"{app}/"))
+    reference.write_text(text.replace("/app/", f"{app.as_posix()}/"))
     submitted = app / "output" / contract["script"]
-    submitted.write_text((script or text).replace("/app/", f"{app}/"))
+    submitted.write_text((script or text).replace("/app/", f"{app.as_posix()}/"))
     return grade.challenge_rerun(
         contract, AGE_GROUP / "expected", app / "output", reference, _run(language)
     )

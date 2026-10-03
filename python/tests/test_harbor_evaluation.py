@@ -1037,7 +1037,8 @@ def _held_out_case(
     }
 
     def at_app(text: str) -> str:
-        return text.replace("/app/", f"{app}/")
+        """Embed the temporary app path in a script without native backslashes."""
+        return text.replace("/app/", f"{app.as_posix()}/")
 
     (app / "output" / "result.py").write_text(at_app(texts[agent]))
     reference_path = None
@@ -1139,6 +1140,7 @@ def test_input_schemas_stay_out_of_the_agent_sandbox(tmp_path):
 
 
 def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
+    """The generated Python oracle reproduces both golden datasets byte for byte."""
     benchmark = ROOT / "benchmarks" / "sdtm-dm-race-ethnicity"
     task = build.build_task(
         benchmark, tmp_path / "tasks", build.IMAGE, "test", "python"
@@ -1149,7 +1151,9 @@ def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
     runnable = tmp_path / "result.py"
-    runnable.write_text(script.replace("/app/output/", f"{out}/"))
+    runnable.write_text(
+        script.replace("/app/output/", f"{out.as_posix()}/"), encoding="utf-8"
+    )
     subprocess.run([sys.executable, str(runnable)], check=True)
     for name in ("dm.csv", "suppdm.csv"):
         assert (out / name).read_bytes() == (benchmark / "expected" / name).read_bytes()
@@ -1172,12 +1176,15 @@ INTERPRETERS = {"r": ["Rscript"], "python": [sys.executable]}
 @pytest.mark.parametrize("language", LANGUAGES)
 @pytest.mark.parametrize("golden", ORACLE_GOLDENS)
 def test_the_oracle_writes_each_golden_byte_for_byte(tmp_path, language, golden):
+    """Each oracle preserves the golden's text or binary bytes in either track."""
     if language == "r" and shutil.which("Rscript") is None:
         pytest.skip("Rscript is not installed")
     path = ROOT / "benchmarks" / golden
     script = build.oracle_script(language, [path])
     runnable = tmp_path / SCRIPTS[language]
-    runnable.write_text(script.replace("/app/output/", f"{tmp_path}/"))
+    runnable.write_text(
+        script.replace("/app/output/", f"{tmp_path.as_posix()}/"), encoding="utf-8"
+    )
     subprocess.run([*INTERPRETERS[language], str(runnable)], check=True)
     assert (tmp_path / path.name).read_bytes() == path.read_bytes()
 
@@ -1223,6 +1230,7 @@ def test_every_reference_solution_belongs_to_a_benchmark_track():
 
 @pytest.mark.parametrize("reference", REFERENCES)
 def test_a_reference_solution_scores_one(tmp_path, reference):
+    """Every available reference solution earns full credit from the grader."""
     benchmark, script = reference.split("/")
     language = "r" if script == "result.R" else "python"
     text = (build.SOLUTIONS / reference).read_text()
@@ -1246,9 +1254,10 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
     output.mkdir()
     runnable = output / script
     runnable.write_text(
-        text.replace("/app/input", str(tmp_path / "input")).replace(
-            "/app/output", str(output)
-        )
+        text.replace("/app/input", (tmp_path / "input").as_posix()).replace(
+            "/app/output", output.as_posix()
+        ),
+        encoding="utf-8",
     )
     command = ["Rscript"] if language == "r" else [sys.executable]
     subprocess.run([*command, str(runnable)], check=True)

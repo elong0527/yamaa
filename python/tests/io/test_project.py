@@ -9,6 +9,7 @@ from pathlib import Path, PurePath
 import pytest
 from pydantic import ValidationError
 
+from yamaa.io import _descriptors
 from yamaa.io.project import (
     PROJECT_CONFIGURATION_NAME,
     ProjectConfigurationError,
@@ -277,6 +278,35 @@ def test_captures_one_immutable_snapshot_per_physical_file(tmp_path: Path) -> No
         first.content = b"changed"  # type: ignore[misc]
 
 
+def test_snapshot_keeps_binary_bytes_and_unicode_file_names(tmp_path: Path) -> None:
+    """Unicode names and binary control bytes survive capture and verification."""
+    name = "donn\u00e9es-\U0001f9ea.csv"
+    content = b"ID\r\n001\x1a\x00\r\n"
+    (tmp_path / name).write_bytes(content)
+    resources = ProjectResources(tmp_path)
+
+    snapshot = resources.capture(name)
+
+    assert snapshot.content == content
+    resources.verify(snapshot)
+
+
+def test_directory_descriptors_support_stat_dup_and_do_not_inherit(
+    tmp_path: Path,
+) -> None:
+    """Directory descriptors preserve identity when duplicated and cannot inherit."""
+    descriptor = _descriptors.open_directory(tmp_path.resolve())
+    duplicate = os.dup(descriptor)
+    try:
+        assert not os.get_inheritable(descriptor)
+        assert not os.get_inheritable(duplicate)
+        assert os.path.samestat(os.fstat(descriptor), tmp_path.stat())
+        assert os.path.samestat(os.fstat(duplicate), tmp_path.stat())
+    finally:
+        os.close(duplicate)
+        os.close(descriptor)
+
+
 def test_detects_changed_content_without_replacing_snapshot(tmp_path: Path) -> None:
     source = tmp_path / "dm.csv"
     source.write_bytes(b"ID\n001\n")
@@ -317,6 +347,7 @@ def test_intermediate_symlink_race_cannot_open_outside_project(
     monkeypatch: pytest.MonkeyPatch,
     operation: str,
 ) -> None:
+    """Replacing an opened parent with a symlink cannot redirect a child open."""
     project = tmp_path / "project"
     source_directory = project / "input"
     source_directory.mkdir(parents=True)
@@ -328,30 +359,29 @@ def test_intermediate_symlink_race_cannot_open_outside_project(
     resources = ProjectResources(project)
     snapshot = resources.capture("input/dm.csv") if operation == "verify" else None
 
-    original_open = os.open
+    original_open = _descriptors.open_file
     replacement = tmp_path / "original-input"
     outside_identity = (outside_source.stat().st_dev, outside_source.stat().st_ino)
     replaced = False
     opened_outside = False
 
     def replacing_open(
-        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
-        flags: int,
-        mode: int = 0o777,
+        path: str,
         *,
-        dir_fd: int | None = None,
+        dir_fd: int,
     ) -> int:
+        """Replace the directory and record whether the outside file is opened."""
         nonlocal opened_outside, replaced
         if not replaced and Path(path).name == "dm.csv":
             source_directory.rename(replacement)
             source_directory.symlink_to(outside, target_is_directory=True)
             replaced = True
-        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        descriptor = original_open(path, dir_fd=dir_fd)
         status = os.fstat(descriptor)
         opened_outside |= (status.st_dev, status.st_ino) == outside_identity
         return descriptor
 
-    monkeypatch.setattr(os, "open", replacing_open)
+    monkeypatch.setattr(_descriptors, "open_file", replacing_open)
 
     with pytest.raises(ResourceFailure) as raised:
         if snapshot is None:
@@ -381,7 +411,41 @@ def test_rejects_symlinks_at_final_and_intermediate_components(
         assert raised.value.condition == "resource_path_symlink"
 
 
+def test_final_symlink_race_cannot_open_its_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replacing a file with a symlink during its open never follows the target."""
+    source = tmp_path / "dm.csv"
+    source.write_bytes(b"ID\n001\n")
+    target = tmp_path / "outside.csv"
+    target.write_bytes(b"ID\n002\n")
+    resources = ProjectResources(tmp_path)
+    original_open = _descriptors.open_file
+    target_status = target.stat()
+    opened_target = False
+
+    def replacing_open(path: str, *, dir_fd: int) -> int:
+        """Swap in the symlink between the metadata check and file open."""
+        nonlocal opened_target
+        source.unlink()
+        source.symlink_to(target)
+        descriptor = original_open(path, dir_fd=dir_fd)
+        opened_target = os.path.samestat(os.fstat(descriptor), target_status)
+        return descriptor
+
+    monkeypatch.setattr(_descriptors, "open_file", replacing_open)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("dm.csv")
+
+    assert not opened_target
+    assert raised.value.phase == "ingest"
+    assert raised.value.condition == "resource_path_content_changed"
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires POSIX FIFOs")
 def test_rejects_non_regular_runtime_file_kinds() -> None:
+    """Directories, FIFOs, and sockets cannot be captured as regular resources."""
     # macOS limits AF_UNIX paths to 104 bytes, shorter than pytest's tmp_path.
     with tempfile.TemporaryDirectory(prefix="yamaa-", dir="/tmp") as temporary:
         root = Path(temporary)
@@ -449,6 +513,7 @@ def test_rejects_file_as_intermediate_component(tmp_path: Path) -> None:
 def test_layer_outside_narrower_project_never_reads_beside_itself(
     tmp_path: Path,
 ) -> None:
+    """A layer outside the approved project reads only from approved anchors."""
     project = tmp_path / "project"
     layer = tmp_path / "layer"
     project.mkdir()
@@ -462,7 +527,7 @@ def test_layer_outside_narrower_project_never_reads_beside_itself(
         resources.validate("dm.csv")
     assert raised.value.condition == "resource_path_missing"
 
-    (project / "dm.csv").write_text("ID\nproject\n")
+    (project / "dm.csv").write_bytes(b"ID\nproject\n")
     assert resources.capture("dm.csv").content == b"ID\nproject\n"
 
 
