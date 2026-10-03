@@ -8,9 +8,10 @@ library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
 raw <- read_csv(
-  "/app/input/adlb.csv",
-  col_types = cols(AVAL = col_double(), .default = col_character())
-)
+  "/app/input/lb.csv",
+  col_types = cols(LBSTRESN = col_double(), .default = col_character())
+) |>
+  rename(PARAMCD = LBTESTCD, AVAL = LBSTRESN, PARAM = LBTEST)
 
 # Keep every collected record unchanged, with DTYPE empty.
 collected <- raw |>

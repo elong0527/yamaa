@@ -8,8 +8,10 @@ from pathlib import Path
 
 import polars as pl
 
-raw = pl.read_csv("/app/input/adlb.csv", infer_schema=False).with_columns(
-    pl.col("AVAL").cast(pl.Float64, strict=False)
+raw = (
+    pl.read_csv("/app/input/lb.csv", infer_schema=False)
+    .with_columns(pl.col("LBSTRESN").cast(pl.Float64, strict=False))
+    .rename({"LBTESTCD": "PARAMCD", "LBSTRESN": "AVAL", "LBTEST": "PARAM"})
 )
 
 # Keep every collected record unchanged, with DTYPE empty.

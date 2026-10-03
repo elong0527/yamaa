@@ -8,12 +8,12 @@
 white blood cell count times the matching differential fraction,
 and flag them with the record-type flag (`DTYPE`).
 
-**Input:** collected laboratory records carrying the subject
-identifier (`USUBJID`), visit (`VISIT`), parameter code
-(`PARAMCD`), parameter name (`PARAM`), and collected result
-(`AVAL`): white blood cell counts (`WBC`), differential fractions
-(`LYMLE`, `NEUTLE`, `MONOLE`, `EOSLE`, `BASOLE`), and unrelated
-parameters.
+**Input:** SDTM laboratory records (`LB`) carrying the subject
+identifier (`USUBJID`), visit (`VISIT`), test code (`LBTESTCD`),
+test name (`LBTEST`), and numeric result (`LBSTRESN`): white blood
+cell counts (`WBC`), differential fractions (`LYMLE`, `NEUTLE`,
+`MONOLE`, `EOSLE`, `BASOLE`), a few lab-reported absolute
+differentials, and unrelated parameters.
 
 **Variables:**
 

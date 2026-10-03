@@ -2,7 +2,10 @@ schema_version: "1.0"
 domain: ADLB
 keys: [USUBJID, VISIT, PARAMCD]
 input:
-  ADLB_RAW: {path: input/adlb.csv, types: {AVAL: float}}
+  # SDTM LB: the laboratory domain as the ADaM programmer receives it.
+  # Absolute differentials (LYMPH, ...) are not LB tests; they appear
+  # here only when the lab reported them, which blocks derivation.
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
 
 output:
   path: adlb.csv
@@ -12,12 +15,12 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADLB_RAW.USUBJID
+    derivation: LB.USUBJID
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation: ADLB_RAW.VISIT
+    derivation: LB.VISIT
 
   - name: PARAMCD
     type: str
@@ -55,12 +58,12 @@ rows:
   # Every collected record, unchanged.
   - id: collected
     derivations:
-      PARAMCD: ADLB_RAW.PARAMCD
-      PARAM: ADLB_RAW.PARAM
+      PARAMCD: LB.LBTESTCD
+      PARAM: LB.LBTEST
       WBCVAL: {literal: null}
       FRACVAL: {literal: null}
       EXISTING_ABS_COUNT: {literal: null}
-      AVAL: ADLB_RAW.AVAL
+      AVAL: LB.LBSTRESN
       DTYPE: {literal: null}
 
   # One absolute record per subject, visit, and differential that has a WBC
@@ -70,7 +73,7 @@ rows:
   # independently: the fraction filter and the existing-record filter change
   # per template, the WBC gate does not.
   - id: derived_lymph
-    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    group_by: [LB.USUBJID, LB.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND FRACVAL IS NOT NULL
@@ -80,23 +83,23 @@ rows:
       PARAM: {literal: Lymphocytes Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'WBC'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'WBC'"
+          expr: "ONLY(LB.LBSTRESN)"
       FRACVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'LYMLE'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'LYMLE'"
+          expr: "ONLY(LB.LBSTRESN)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'LYMPH'"
-          expr: "COUNT(ADLB_RAW.*)"
+          filter: "LB.LBTESTCD = 'LYMPH'"
+          expr: "COUNT(LB.*)"
       AVAL:
         compute:
           expr: "WBCVAL * FRACVAL"
       DTYPE: {literal: CALCULATION}
 
   - id: derived_neut
-    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    group_by: [LB.USUBJID, LB.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND FRACVAL IS NOT NULL
@@ -106,23 +109,23 @@ rows:
       PARAM: {literal: Neutrophils Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'WBC'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'WBC'"
+          expr: "ONLY(LB.LBSTRESN)"
       FRACVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'NEUTLE'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'NEUTLE'"
+          expr: "ONLY(LB.LBSTRESN)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'NEUT'"
-          expr: "COUNT(ADLB_RAW.*)"
+          filter: "LB.LBTESTCD = 'NEUT'"
+          expr: "COUNT(LB.*)"
       AVAL:
         compute:
           expr: "WBCVAL * FRACVAL"
       DTYPE: {literal: CALCULATION}
 
   - id: derived_mono
-    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    group_by: [LB.USUBJID, LB.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND FRACVAL IS NOT NULL
@@ -132,23 +135,23 @@ rows:
       PARAM: {literal: Monocytes Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'WBC'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'WBC'"
+          expr: "ONLY(LB.LBSTRESN)"
       FRACVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'MONOLE'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'MONOLE'"
+          expr: "ONLY(LB.LBSTRESN)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'MONO'"
-          expr: "COUNT(ADLB_RAW.*)"
+          filter: "LB.LBTESTCD = 'MONO'"
+          expr: "COUNT(LB.*)"
       AVAL:
         compute:
           expr: "WBCVAL * FRACVAL"
       DTYPE: {literal: CALCULATION}
 
   - id: derived_eos
-    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    group_by: [LB.USUBJID, LB.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND FRACVAL IS NOT NULL
@@ -158,23 +161,23 @@ rows:
       PARAM: {literal: Eosinophils Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'WBC'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'WBC'"
+          expr: "ONLY(LB.LBSTRESN)"
       FRACVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'EOSLE'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'EOSLE'"
+          expr: "ONLY(LB.LBSTRESN)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'EOS'"
-          expr: "COUNT(ADLB_RAW.*)"
+          filter: "LB.LBTESTCD = 'EOS'"
+          expr: "COUNT(LB.*)"
       AVAL:
         compute:
           expr: "WBCVAL * FRACVAL"
       DTYPE: {literal: CALCULATION}
 
   - id: derived_baso
-    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    group_by: [LB.USUBJID, LB.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND FRACVAL IS NOT NULL
@@ -184,16 +187,16 @@ rows:
       PARAM: {literal: Basophils Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'WBC'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'WBC'"
+          expr: "ONLY(LB.LBSTRESN)"
       FRACVAL:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'BASOLE'"
-          expr: "ONLY(ADLB_RAW.AVAL)"
+          filter: "LB.LBTESTCD = 'BASOLE'"
+          expr: "ONLY(LB.LBSTRESN)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLB_RAW.PARAMCD = 'BASO'"
-          expr: "COUNT(ADLB_RAW.*)"
+          filter: "LB.LBTESTCD = 'BASO'"
+          expr: "COUNT(LB.*)"
       AVAL:
         compute:
           expr: "WBCVAL * FRACVAL"
@@ -203,5 +206,5 @@ verifications:
   - unique:
       columns: [USUBJID, VISIT, PARAMCD]
   - row_count:
-      min: 31
-      max: 31
+      min: 29
+      max: 29
