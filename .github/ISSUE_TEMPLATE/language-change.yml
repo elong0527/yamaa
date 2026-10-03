@@ -1,0 +1,81 @@
+name: "Language change"
+description: "Propose a change to the yamaa language. Show before vs. after."
+title: "[language] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A language change touches every spec ever written, so be concrete:
+        show exactly what changes, and where it matters today.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "In plain words, what should change?"
+      description: "Explain it like I'm five. No jargon needed."
+      placeholder: "Let a derivation read the closest visit date instead of only exact matches."
+    validations:
+      required: true
+
+  - type: textarea
+    id: before-after
+    attributes:
+      label: "Before -> after"
+      description: "Show the same spec snippet as it looks today, and as it would look with your change. Wrap each in a code block (```) and label them."
+      placeholder: |
+        Before (today):
+        ```yaml
+        derive VISITDY: lookup("VISIT", exact=true)
+        ```
+        After (proposed):
+        ```yaml
+        derive VISITDY: lookup("VISIT", closest=true)
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: "Where does this show up today?"
+      description: "Link to the benchmark or example that has this pattern now, if there is one."
+      placeholder: "benchmarks/adam-advs-windows - the windowing derivation works around this with an extra pre-processing step."
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why is this better?"
+      description: "Explain it like I'm five: who wins, and what gets simpler?"
+      placeholder: "Study teams drop the pre-processing step; specs get shorter and harder to get wrong."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives considered"
+      description: "Other ways to solve this, and why they are worse. Optional."
+      placeholder: "Alternative: allow SELF references only in filter, not in key. Worse because every window still needs its own intermediate."
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area"
+      description: "Which part of yamaa is this about?"
+      options:
+        - rules
+        - benchmark
+        - docs
+        - python
+        - schema
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Links and references"
+      description: "REQ IDs (like REQ-1260), rule files, benchmarks, or URLs - anything that pins down the relevant spec."
+      placeholder: "REQ-1260, rules/specification/structure.md, benchmarks/adam-advs-windows"

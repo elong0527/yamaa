@@ -1,0 +1,103 @@
+name: "Bug report"
+description: "Something broken? Show us the smallest example that breaks."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! A good bug report is like a recipe that always
+        burns the cake: anyone who follows it gets the same failure.
+        Keep it tiny - 10 lines beats 100.
+        Title it like "<area>: <what breaks>" - for example
+        "rules: ...", "benchmark: ...", or "python: ...".
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "In plain words, what's wrong?"
+      description: "Explain it like I'm five. No jargon needed."
+      placeholder: "When I derive ADSL with two subjects sharing one USUBJID, the engine crashes instead of telling me my input is bad."
+    validations:
+      required: true
+
+  - type: textarea
+    id: mre
+    attributes:
+      label: "Show it failing (smallest example that breaks)"
+      description: "Show the smallest example that proves the failure. That can be a spec snippet plus the command you ran, or the exact check that exposes an inconsistency (which rule says what, which file disagrees). Wrap code in a code block (```)."
+      placeholder: |
+        Crash example:
+        ```yaml
+        schema_version: "1.0"
+        domain: ADSL
+        keys: [STUDYID, USUBJID]
+        ===
+        derive USUBJID: "DUP"
+        ```
+        Input: two rows with USUBJID "DUP". Run: yamaa run spec.yaml --input data.csv
+
+        Inconsistency example:
+        rules/specification/structure.md names the condition `foo_bar`,
+        but yaml/conditions.yaml has no entry for it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What did you expect to happen?"
+      description: "One or two sentences."
+      placeholder: "I expected an error message saying USUBJID must be unique."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "What happened instead?"
+      description: "Paste the error message or the wrong output."
+      placeholder: "Traceback (most recent call last): ... ValueError: ..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area"
+      description: "Which part of yamaa is this about?"
+      options:
+        - rules
+        - benchmark
+        - docs
+        - python
+        - schema
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Links and references"
+      description: "REQ IDs (like REQ-1260), rule files, benchmarks, or URLs - anything that pins down the relevant spec."
+      placeholder: "REQ-0890, rules/submission/metadata.md, benchmarks/adam-adsl-basic"
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: "Which engine did you use?"
+      options:
+        - Python
+        - R
+        - Both
+        - Not sure
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: "yamaa version"
+      description: "Output of `pip show yamaa`, or the commit hash you used."
+      placeholder: "0.2.0"
