@@ -59,12 +59,12 @@ family:
 
 | Family | Module | Verbs |
 |---|---|---|
-| Core selection | `schema_expression_core.yaml` | `source`, `literal`, `first_available`, `case` |
+| Core selection | `schema_expression_core.yaml` | `source`, `literal`, `first_available`, `case`, `flag`, `greatest`, `least` |
 | Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
-| Strings | `schema_expression_str.yaml` | `str_extract`, `str_concat`, `str_template`, `str_case` |
+| Strings | `schema_expression_str.yaml` | `str_extract`, `str_concat`, `str_template`, `str_case`, `str_pad`, `str_contains` |
 | Arithmetic | `schema_expression_numeric.yaml` | `compute`, `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
-| Dates | `schema_expression_date.yaml` | `date_diff`, `study_day`, `date_impute`, `date_precision` |
+| Dates | `schema_expression_date.yaml` | `date_diff`, `study_day`, `date_impute`, `date_precision`, `datetime_impute`, `datetime_precision`, `to_date`, `to_epoch_day` |
 | Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `previous_non_missing`, `locf`, `baseline_flag` |
 | Collected data | `schema_expression_odm.yaml` | `odm` |
 | Extension | `schema_function.yaml` | `function` |
