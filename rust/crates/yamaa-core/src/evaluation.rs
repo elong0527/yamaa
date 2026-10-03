@@ -7,8 +7,8 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::numeric::{
-    self, ArithmeticErrorKind, BinaryOperator, IntegralFunction, Number, SelectionFunction,
-    UnaryOperator,
+    self, ArithmeticErrorKind, BinaryOperator, IntegralFunction, MathFunction, Number,
+    SelectionFunction, UnaryOperator,
 };
 use crate::value::{Selection, ValueType};
 
@@ -27,6 +27,14 @@ pub enum NumericNode {
         arguments: Vec<NumericNode>,
     },
     NullIf {
+        left: Box<NumericNode>,
+        right: Box<NumericNode>,
+    },
+    Math {
+        function: MathFunction,
+        operand: Box<NumericNode>,
+    },
+    Power {
         left: Box<NumericNode>,
         right: Box<NumericNode>,
     },
@@ -109,6 +117,8 @@ impl NumericCondition {
             | Self::LiteralOverflow { .. } => "integer_overflow",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "division_by_zero",
             Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "sqrt_of_negative",
+            Self::Arithmetic(ArithmeticErrorKind::LnOfNonpositive) => "ln_of_nonpositive",
+            Self::Arithmetic(ArithmeticErrorKind::InvalidPower { .. }) => "invalid_power",
         }
     }
 
@@ -121,6 +131,8 @@ impl NumericCondition {
             | Self::LiteralOverflow { .. } => "REQ-0434",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "REQ-0430",
             Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "REQ-0431",
+            Self::Arithmetic(ArithmeticErrorKind::LnOfNonpositive) => "REQ-0432",
+            Self::Arithmetic(ArithmeticErrorKind::InvalidPower { .. }) => "REQ-0433",
         }
     }
 }
@@ -238,6 +250,15 @@ impl NumericPlan {
                 let left = self.child(left, Operand::Left, resolver, path)?;
                 let right = self.child(right, Operand::Right, resolver, path)?;
                 return Ok(numeric::null_if(left, right));
+            }
+            NumericNode::Math { function, operand } => {
+                let value = self.child(operand, Operand::Unary, resolver, path)?;
+                numeric::math(*function, value, &self.expression)
+            }
+            NumericNode::Power { left, right } => {
+                let left = self.child(left, Operand::Left, resolver, path)?;
+                let right = self.child(right, Operand::Right, resolver, path)?;
+                numeric::power(left, right, &self.expression)
             }
             NumericNode::Sqrt { operand } => {
                 let value = self.child(operand, Operand::Unary, resolver, path)?;

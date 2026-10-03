@@ -356,7 +356,8 @@ fn repeated_resolution_and_plan_reuse_do_not_cache_values() {
 /// Replay function values, eager traces and argument-level failures through compilation.
 #[test]
 fn shared_function_vectors() {
-    for row in include_str!("fixtures/numeric_selection.tsv")
+    use yamaa_core::numeric_compiler::MathPolicy;
+    for (row, policy) in include_str!("fixtures/numeric_selection.tsv")
         .lines()
         .skip(1)
         .chain(
@@ -365,11 +366,24 @@ fn shared_function_vectors() {
                 .skip(1),
         )
         .chain(include_str!("fixtures/numeric_sqrt.tsv").lines().skip(1))
+        .map(|row| (row, MathPolicy::ReferenceSubset))
+        .chain(
+            include_str!("fixtures/numeric_math.tsv")
+                .lines()
+                .skip(1)
+                .map(|row| (row, MathPolicy::PortableLibmV1)),
+        )
     {
         let fields: Vec<_> = row.split('\t').collect();
         assert_eq!(fields.len(), 6);
         let mut resolver = RecordingResolver::new(fields[2]);
-        let plan = compile_numeric(fields[1], SPEC_PATH, CompileLimits::default()).unwrap();
+        let plan = yamaa_core::numeric_compiler::compile_numeric_with_policy(
+            fields[1],
+            SPEC_PATH,
+            CompileLimits::default(),
+            policy,
+        )
+        .unwrap();
         let mut route = Vec::new();
         let actual = match plan.evaluate(&mut resolver) {
             Ok(number) => encoded(number),

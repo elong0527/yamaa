@@ -8,10 +8,22 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::evaluation::{EvaluationError, NumericNode, NumericPlan, NumericResolver, Operand};
-use crate::numeric::{BinaryOperator, IntegralFunction, Number, SelectionFunction, UnaryOperator};
+use crate::numeric::{
+    BinaryOperator, IntegralFunction, MathFunction, Number, SelectionFunction, UnaryOperator,
+};
 use crate::numeric_parser::{
     parse_numeric, NumericFunction, ParseError, ParseLimits, ParsedKind, ParsedNumeric, SourceSpan,
 };
+
+/// Explicit numerical behavior; neither choice claims a complete dataset backend.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MathPolicy {
+    /// Preserve the current supported subset; EXP/LN/POWER remain unsupported.
+    ReferenceSubset,
+    /// Opt into pinned libm 0.2.16 with default features disabled. Historical
+    /// Python platform math may differ; this is a deliberate migration policy.
+    PortableLibmV1,
+}
 
 /// Parse budgets also bound compilation/evaluation work; every identifier
 /// occurrence consumes one resolution, including repeated names. The static
@@ -64,11 +76,17 @@ pub struct CompiledEvaluationError<E> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledNumeric {
     plan: NumericPlan,
+    math_policy: MathPolicy,
     sources: Vec<(Vec<Operand>, SourceSpan)>,
     resolutions: usize,
 }
 
 impl CompiledNumeric {
+    /// Numerical policy explicitly chosen before any identifier resolution.
+    pub fn math_policy(&self) -> MathPolicy {
+        self.math_policy
+    }
+
     /// Original source text, retained without normalization or reassociation.
     pub fn expression(&self) -> &str {
         &self.plan.expression
@@ -114,13 +132,25 @@ pub fn compile_numeric(
     spec_path: &str,
     limits: CompileLimits,
 ) -> Result<CompiledNumeric, CompileError> {
+    compile_numeric_with_policy(text, spec_path, limits, MathPolicy::ReferenceSubset)
+}
+
+/// Compile with a caller-selected numerical policy before any resolver effects.
+/// PortableLibmV1 enables EXP/LN/POWER but does not relax diagnostics, limits,
+/// association or exact comparison. Default callers keep the reference subset.
+pub fn compile_numeric_with_policy(
+    text: &str,
+    spec_path: &str,
+    limits: CompileLimits,
+    math_policy: MathPolicy,
+) -> Result<CompiledNumeric, CompileError> {
     let parsed = parse_numeric(text, limits.parse).map_err(CompileError::Parse)?;
     let mut functions = Vec::new();
     let mut resolutions = 0;
     for node in parsed.nodes() {
         match &node.kind {
             ParsedKind::Call { function, name, .. }
-                if !matches!(
+                if !(matches!(
                     function,
                     NumericFunction::Abs
                         | NumericFunction::Sqrt
@@ -132,7 +162,11 @@ pub fn compile_numeric(
                         | NumericFunction::Least
                         | NumericFunction::NullIf
                         | NumericFunction::Coalesce
-                ) =>
+                ) || (math_policy == MathPolicy::PortableLibmV1
+                    && matches!(
+                        function,
+                        NumericFunction::Exp | NumericFunction::Ln | NumericFunction::Power
+                    ))) =>
             {
                 functions.push(UnsupportedFunction {
                     function: *function,
@@ -156,6 +190,7 @@ pub fn compile_numeric(
     let mut sources = Vec::new();
     let root = lower(&parsed, parsed.root(), &mut Vec::new(), &mut sources);
     Ok(CompiledNumeric {
+        math_policy,
         plan: NumericPlan {
             spec_path: spec_path.into(),
             expression: text.into(),
@@ -248,6 +283,26 @@ fn lower(
                 _ => IntegralFunction::Trunc,
             },
             operand: child(parsed, arguments[0], Operand::Unary, route, sources),
+        },
+        ParsedKind::Call {
+            function: function @ (NumericFunction::Exp | NumericFunction::Ln),
+            arguments,
+            ..
+        } => NumericNode::Math {
+            function: if *function == NumericFunction::Exp {
+                MathFunction::Exp
+            } else {
+                MathFunction::Ln
+            },
+            operand: child(parsed, arguments[0], Operand::Unary, route, sources),
+        },
+        ParsedKind::Call {
+            function: NumericFunction::Power,
+            arguments,
+            ..
+        } => NumericNode::Power {
+            left: child(parsed, arguments[0], Operand::Left, route, sources),
+            right: child(parsed, arguments[1], Operand::Right, route, sources),
         },
         ParsedKind::Call {
             function: NumericFunction::Sqrt,

@@ -77,9 +77,17 @@ pub enum UnaryOperator {
 /// The wider integer is diagnostic data, never a successful runtime value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArithmeticErrorKind {
-    IntegerOverflow { value: i128 },
+    IntegerOverflow {
+        value: i128,
+    },
     DivisionByZero,
     SqrtOfNegative,
+    LnOfNonpositive,
+    /// Promoted finite arguments retained as exact bits for future diagnostic transport.
+    InvalidPower {
+        base_bits: u64,
+        exponent_bits: u64,
+    },
 }
 
 /// Portable condition data; a future evaluator adds source paths/handler traces.
@@ -101,6 +109,8 @@ impl ArithmeticError {
             ArithmeticErrorKind::IntegerOverflow { .. } => "integer_overflow",
             ArithmeticErrorKind::DivisionByZero => "division_by_zero",
             ArithmeticErrorKind::SqrtOfNegative => "sqrt_of_negative",
+            ArithmeticErrorKind::LnOfNonpositive => "ln_of_nonpositive",
+            ArithmeticErrorKind::InvalidPower { .. } => "invalid_power",
         }
     }
 
@@ -110,6 +120,8 @@ impl ArithmeticError {
             ArithmeticErrorKind::IntegerOverflow { .. } => "REQ-0434",
             ArithmeticErrorKind::DivisionByZero => "REQ-0430",
             ArithmeticErrorKind::SqrtOfNegative => "REQ-0431",
+            ArithmeticErrorKind::LnOfNonpositive => "REQ-0432",
+            ArithmeticErrorKind::InvalidPower { .. } => "REQ-0433",
         }
     }
 }
@@ -259,7 +271,7 @@ pub fn null_if(left: Number, right: Number) -> Number {
     }
 }
 
-/// Integral-valued functions that always return float (REQ-0424).
+/// Integral-valued functions that always return float (REQ-0423).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntegralFunction {
     Ceil,
@@ -295,7 +307,7 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
     Number::float(result)
 }
 
-/// Return the binary64 square root after numeric promotion (REQ-0424/0431).
+/// Return the binary64 square root after numeric promotion (REQ-0422/0431).
 /// Missing propagates; negative present input reports a domain condition. Negative
 /// zero is valid and retains its sign, matching the Python reference.
 pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
@@ -309,4 +321,52 @@ pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError>
         });
     }
     Ok(Number::float(libm::sqrt(value)))
+}
+
+/// Portable unary math from pinned libm; this is not platform-Python bit parity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MathFunction {
+    Exp,
+    Ln,
+}
+
+/// Apply the explicitly selected portable math policy (REQ-0422/0427/0432).
+/// Promote before math, propagate missing, and normalize overflow to missing.
+pub fn math(
+    function: MathFunction,
+    number: Number,
+    expression: &str,
+) -> Result<Number, ArithmeticError> {
+    let Some(value) = number.as_float() else {
+        return Ok(Number::Missing);
+    };
+    if function == MathFunction::Ln && value <= 0.0 {
+        return Err(ArithmeticError {
+            expression: expression.into(),
+            kind: ArithmeticErrorKind::LnOfNonpositive,
+        });
+    }
+    Ok(Number::float(match function {
+        MathFunction::Exp => libm::exp(value),
+        MathFunction::Ln => libm::log(value),
+    }))
+}
+
+/// Apply portable POWER after both operands evaluate; missing precedes domain checks.
+/// Domain tests use promoted binary64 arguments, as the reference does. Diagnostic
+/// bits preserve signed zero and full finite values without changing error equality.
+pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, ArithmeticError> {
+    let (Some(base), Some(exponent)) = (left.as_float(), right.as_float()) else {
+        return Ok(Number::Missing);
+    };
+    if (base == 0.0 && exponent < 0.0) || (base < 0.0 && libm::trunc(exponent) != exponent) {
+        return Err(ArithmeticError {
+            expression: expression.into(),
+            kind: ArithmeticErrorKind::InvalidPower {
+                base_bits: base.to_bits(),
+                exponent_bits: exponent.to_bits(),
+            },
+        });
+    }
+    Ok(Number::float(libm::pow(base, exponent)))
 }
