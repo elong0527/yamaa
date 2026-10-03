@@ -85,7 +85,11 @@ The proposed benchmark must satisfy, in order:
     oracle: they must produce the golden and score 1. Any
     maintenance change to the golden's columns updates them too.
 
-## Human direction (fill in per run)
+## Human direction (the work-item issue body, filled in per run)
+
+Open one GitHub issue per run: title `[work-item] <benchmark>:
+<change>`, label `work-item`, and the sections below as the body.
+The issue is the work item; nothing about it lives in the repo.
 
 ### Work item
 
