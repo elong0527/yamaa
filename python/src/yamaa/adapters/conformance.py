@@ -12,12 +12,9 @@ answer with the value it was supposed to produce. `compare_example` is the
 only half that reads `expected/`, and it reads a finished report rather
 than a live engine.
 
-`REPORT_VERSION` carries a `-draft` suffix because #101 has not published
-the serialization yet. The observations below are the ones #101's
-requirements enumerate -- column order, row order, missing values, runtime
-types, rendered values, `phase`, `condition`, `spec_paths`, declared
-context, and REQ-0361 handler counts -- so ratifying that contract renames
-this envelope rather than changing what the engine is asked for.
+Reports identify host language separately from engine backend. Version 0.2 adds
+source/prepublication tables, evaluated checks, workflow observations and actual
+study callback traces. Older report envelopes must be regenerated explicitly.
 """
 
 from __future__ import annotations
@@ -26,6 +23,7 @@ import argparse
 import datetime
 import itertools
 import json
+import platform
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -35,10 +33,15 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa import __version__
+from yamaa.adapters.observations import (
+    CallbackObservation,
+    RunObservations,
+    TableObservation,
+    VerificationObservation,
+)
 from yamaa.application import prepare_workflow
 from yamaa.functions import (
     FunctionActivationError,
-    function_dispatcher,
     select_project_root,
 )
 from yamaa.functions.execution import activate_workflow_functions
@@ -59,12 +62,11 @@ from yamaa.specification import SpecificationError, ValidationDiagnostic
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.models import Output
 
-# Bumped when the envelope changes shape. The `-draft` suffix states that
-# #101 has not ratified this serialization; a consumer that pins an exact
-# version therefore fails loudly instead of reading a renamed field.
-REPORT_VERSION = "0.1.0-draft"
+# The envelope changed incompatibly: old reports cannot imply empty new observations.
+REPORT_VERSION = "0.2.0-draft"
 
 RUNTIME: Literal["python"] = "python"
+BACKEND: Literal["python"] = "python"
 
 Outcome: TypeAlias = Literal["success", "failure", "unsupported", "error"]
 
@@ -128,18 +130,32 @@ class HandlerObservation(_FrozenModel):
     count: int = Field(ge=0)
 
 
+class NodeObservation(_FrozenModel):
+    specification: str
+    outcome: Literal["success", "failure", "unsupported"]
+    diagnostics: tuple[DiagnosticObservation, ...] = ()
+    unsupported: tuple[UnsupportedObservation, ...] = ()
+    handler_counts: tuple[HandlerObservation, ...] = ()
+
+
 class ExampleReport(_FrozenModel):
     """What one runtime observed running one example, and nothing more."""
 
-    report_version: str = REPORT_VERSION
-    runtime: Literal["python"] = RUNTIME
+    report_version: Literal["0.2.0-draft"] = REPORT_VERSION
+    runtime: Literal["python", "r"] = RUNTIME
+    backend: Literal["python", "rust"] = BACKEND
     runtime_version: str
+    engine_version: str
     example: str = Field(min_length=1)
     outcome: Outcome
     artifacts: tuple[ArtifactObservation, ...] = ()
     diagnostics: tuple[DiagnosticObservation, ...] = ()
     unsupported: tuple[UnsupportedObservation, ...] = ()
     handler_counts: tuple[HandlerObservation, ...] = ()
+    nodes: tuple[NodeObservation, ...]
+    tables: tuple[TableObservation, ...]
+    verifications: tuple[VerificationObservation, ...]
+    callbacks: tuple[CallbackObservation, ...]
     # Held for whoever reads a broken run. #101 keeps implementation error
     # text out of the portable comparison, so `compare_example` reads the
     # `error` outcome and never this string.
@@ -159,8 +175,9 @@ class ComparisonVerdict(_FrozenModel):
     """Whether one report satisfies the artifacts its example committed."""
 
     example: str = Field(min_length=1)
-    runtime: Literal["python"] = RUNTIME
-    kind: Literal["positive", "negative"]
+    runtime: Literal["python", "r"] = RUNTIME
+    backend: Literal["python", "rust"] = BACKEND
+    kind: Literal["positive", "negative", "parity"]
     passed: bool
     findings: tuple[ComparisonFinding, ...] = ()
 
@@ -263,11 +280,19 @@ def _isolated_destination(output_dir: Path, example: Path) -> Path:
 
 
 def _report(name: str, outcome: Outcome, **observations: object) -> ExampleReport:
+    complete = {
+        "nodes": (),
+        "tables": (),
+        "verifications": (),
+        "callbacks": (),
+        **observations,
+    }
     return ExampleReport(
-        runtime_version=__version__,
+        runtime_version=platform.python_version(),
+        engine_version=__version__,
         example=name,
         outcome=outcome,
-        **observations,
+        **complete,
     )
 
 
@@ -349,11 +374,42 @@ def _execute(
             diagnostics=tuple(_observe_diagnostic(item) for item in error.diagnostics),
         )
 
+    observer = RunObservations(entry)
     execution = execute_workflow(
         workflow,
         resources,
-        dispatcher=None if activated is None else function_dispatcher(activated),
+        dispatcher=None if activated is None else observer.dispatcher(activated),
+        hooks=observer.hooks(),
+        event=observer.event,
     )
+    observations = {
+        "nodes": tuple(
+            NodeObservation(
+                specification=observer.specification_name(path),
+                outcome=node_result.status,
+                diagnostics=tuple(
+                    _observe_diagnostic(item)
+                    for item in getattr(node_result, "diagnostics", ())
+                ),
+                unsupported=tuple(
+                    UnsupportedObservation(
+                        operation=item.operation, spec_path=item.spec_path
+                    )
+                    for item in getattr(node_result, "features", ())
+                ),
+                handler_counts=tuple(
+                    HandlerObservation(
+                        spec_path=item.spec_path, handler=item.handler, count=item.count
+                    )
+                    for item in node_result.handler_counts
+                ),
+            )
+            for path, node_result in execution.results.items()
+        ),
+        "tables": observer.tables(execution),
+        "verifications": tuple(observer.verifications),
+        "callbacks": tuple(observer.callbacks),
+    }
     result = execution.result
     handler_counts = tuple(
         HandlerObservation(
@@ -370,6 +426,15 @@ def _execute(
     output = entry_node.resolved.specification.output
 
     if isinstance(result, ExecutionFailure):
+        # A producer may fail before the entry runs; its declaration owns the log.
+        failed_path = next(
+            path for path, item in execution.results.items() if item is result
+        )
+        output = next(
+            node.resolved.specification.output
+            for node in workflow.nodes
+            if node.entry_path == failed_path
+        )
         # REQ-1181: a failed run publishes no primary artifact and no
         # warning log, and replaces the verification log alone when the
         # run declared one and reached execution.
@@ -388,6 +453,7 @@ def _execute(
             diagnostics=tuple(_observe_diagnostic(item) for item in result.diagnostics),
             artifacts=tuple(failed),
             handler_counts=handler_counts,
+            **observations,
         )
     if isinstance(result, ExecutionUnsupported):
         return _report(
@@ -401,6 +467,7 @@ def _execute(
                 for feature in result.features
             ),
             handler_counts=handler_counts,
+            **observations,
         )
 
     assert isinstance(result, ExecutionSuccess)
@@ -424,6 +491,7 @@ def _execute(
         "success",
         artifacts=tuple(published),
         handler_counts=handler_counts,
+        **observations,
     )
 
 
@@ -777,16 +845,107 @@ def compare_example(
         findings = findings + _handler_findings(report, expected_handler_counts)
     return ComparisonVerdict(
         example=report.example,
+        runtime=report.runtime,
+        backend=report.backend,
         kind=kind,
         passed=not findings,
         findings=findings,
     )
 
 
+def _portable_report(report: ExampleReport) -> dict[str, JsonValue]:
+    payload = report.model_dump(
+        mode="json",
+        exclude={
+            "report_version",
+            "runtime",
+            "runtime_version",
+            "backend",
+            "engine_version",
+            "error",
+        },
+    )
+    for artifact in payload["artifacts"]:
+        if artifact["profile"] == "parquet":
+            artifact.pop("byte_length")
+    # Host-language exception spelling is not part of a portable condition.
+    diagnostics = list(payload["diagnostics"])
+    diagnostics.extend(
+        item for node in payload["nodes"] for item in node["diagnostics"]
+    )
+    for diagnostic in diagnostics:
+        if diagnostic["condition"] == "function_call_failed":
+            for key in ("call", "host_error", "host_message"):
+                diagnostic["context"].pop(key, None)
+    return payload
+
+
+def compare_reports(
+    reference: ExampleReport, candidate: ExampleReport
+) -> ComparisonVerdict:
+    """Compare independent runs without changing goldens or invoking either engine.
+
+    Unsupported and infrastructure-error outcomes never establish parity. Float
+    observations are exact IEEE-754 encodings; no tolerance hides differences.
+    Version validation is repeated because model_copy can bypass model validation.
+    """
+    reference = ExampleReport.model_validate_json(reference.model_dump_json())
+    candidate = ExampleReport.model_validate_json(candidate.model_dump_json())
+    findings = []
+    for label, report in (("reference", reference), ("candidate", candidate)):
+        if report.outcome in ("unsupported", "error"):
+            findings.append(
+                _finding("outcome", label, "success or failure", report.outcome)
+            )
+
+    def compare(path, expected, actual):
+        if type(expected) is not type(actual):
+            findings.append(_finding(path, "different types", expected, actual))
+        elif isinstance(expected, dict):
+            for key in sorted(expected.keys() | actual.keys()):
+                if key not in expected or key not in actual:
+                    findings.append(
+                        _finding(
+                            path + "." + key,
+                            "missing field",
+                            expected.get(key),
+                            actual.get(key),
+                        )
+                    )
+                else:
+                    compare(path + "." + key, expected[key], actual[key])
+        elif isinstance(expected, list):
+            if len(expected) != len(actual):
+                findings.append(
+                    _finding(
+                        path + ".count", "different lengths", len(expected), len(actual)
+                    )
+                )
+            for index, (left, right) in enumerate(zip(expected, actual)):
+                compare(f"{path}[{index}]", left, right)
+        elif expected != actual:
+            findings.append(_finding(path, "different values", expected, actual))
+
+    compare("report", _portable_report(reference), _portable_report(candidate))
+    return ComparisonVerdict(
+        example=candidate.example,
+        runtime=candidate.runtime,
+        backend=candidate.backend,
+        kind="parity",
+        passed=not findings,
+        findings=tuple(findings),
+    )
+
+
+def read_report(path: str | Path) -> ExampleReport:
+    """Read this exact protocol version; never silently upgrade older observations."""
+    return ExampleReport.model_validate_json(Path(path).read_text(encoding="utf-8"))
+
+
 def write_report(report: ExampleReport, report_dir: Path) -> Path:
     """Write one report where a runner collects it, deterministically."""
     report_dir.mkdir(parents=True, exist_ok=True)
-    path = report_dir / f"{report.example}.{RUNTIME}.json"
+    path = report_dir / f"{report.example}.{report.runtime}.{report.backend}.json"
     payload = json.dumps(report.model_dump(mode="json"), indent=2)
     path.write_text(f"{payload}\n", encoding="utf-8")
     return path
@@ -830,6 +989,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--reference-reports",
+        type=Path,
+        help="also compare with exactly one same-example report per example in this directory",
+    )
+    parser.add_argument(
         "--no-compare",
         action="store_true",
         help="write reports without judging them against expected/",
@@ -846,6 +1010,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         else args.schema_root.resolve()
     )
     report_dir = args.run_dir / "reports"
+    if (
+        args.reference_reports is not None
+        and args.reference_reports.resolve() == report_dir.resolve()
+    ):
+        parser.error("reference reports must be separate from this run's reports")
     failed = False
 
     for name in args.examples:
@@ -859,6 +1028,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         verdict = None if args.no_compare else compare_example(report, example)
         if verdict is not None and not verdict.passed:
             failed = True
+        if args.reference_reports is not None:
+            references = sorted(args.reference_reports.glob(f"{name}.*.json"))
+            if len(references) != 1:
+                parser.error(
+                    f"expected exactly one reference report for {name}, found {len(references)}"
+                )
+            parity = compare_reports(read_report(references[0]), report)
+            if not parity.passed:
+                failed = True
+                print(f"{name}: backend comparison FAIL")
+                for finding in parity.findings:
+                    print(f"    {finding.kind}: {finding.detail}")
         if report.outcome == "error":
             failed = True
         print(f"{name}  {RUNTIME}  {report.outcome}  {_describe(verdict)}  {path}")

@@ -603,6 +603,11 @@ class TestUnsupportedAndMissingPrerequisites:
         """An engine that cannot run an example has not reproduced its error."""
         report = ExampleReport(
             runtime_version="0.0.0",
+            engine_version="0.0.0",
+            nodes=(),
+            tables=(),
+            verifications=(),
+            callbacks=(),
             example=NEGATIVE,
             outcome=outcome,
         )
@@ -661,8 +666,8 @@ class TestDocumentedCommand:
         assert code == 0
         reports = sorted((tmp_path / "run" / "reports").glob("*.json"))
         assert [path.name for path in reports] == [
-            f"{NEGATIVE}.python.json",
-            f"{POSITIVE}.python.json",
+            f"{NEGATIVE}.python.python.json",
+            f"{POSITIVE}.python.python.json",
         ]
         for path in reports:
             restored = ExampleReport.model_validate_json(
@@ -734,7 +739,9 @@ class TestDocumentedCommand:
         capsys.readouterr()
 
         assert code == 0
-        assert (tmp_path / "run" / "reports" / f"{NEGATIVE}.python.json").is_file()
+        assert (
+            tmp_path / "run" / "reports" / f"{NEGATIVE}.python.python.json"
+        ).is_file()
 
     def test_a_written_report_reads_back_as_the_report_it_was(
         self, tmp_path: Path
