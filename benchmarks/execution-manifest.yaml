@@ -6,6 +6,12 @@ version: "1.0"
 # benchmark today, through `yamaa.adapters.conformance`; the R engine is
 # #200 and joins `runtimes` benchmark by benchmark as it lands.
 examples:
+  schema-source-ordinal:
+    status: executable
+    runtimes: ['python']
+  negative-source-ordinal-collision:
+    status: executable
+    runtimes: ['python']
   adam-adae-death:
     status: executable
     runtimes: ['python']

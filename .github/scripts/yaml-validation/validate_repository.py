@@ -399,6 +399,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'group', 'group_count', 'pattern',
     },
     ('R023', 'source_profile_unknown'): {'path'},
+    ('R014', 'ordinal_field_collision'): {'dataset', 'field'},
 }
 VALIDATION_CONDITION_REGISTRY = {
     key: {
@@ -5759,6 +5760,29 @@ def validate_spec_contracts(
                     resource_path_error(f"{path}.path", source_path, condition)
                 )
                 continue
+            ordinal = source.get('ordinal') if isinstance(source, dict) else None
+            if isinstance(ordinal, str) and dataset_id not in odm_inputs(spec):
+                if profile == 'csv':
+                    try:
+                        names = snapshot.csv_header()
+                    except (UnicodeError, csv.Error):
+                        names = []  # The CSV profile pass reports invalid bytes.
+                else:
+                    from yamaa.io.parquet import parquet_source_fields
+                    from yamaa.io.parquet import ParquetProfileFailure
+
+                    try:
+                        _, fields = parquet_source_fields(snapshot.content)
+                        names = [name for name, _ in fields]
+                    except ParquetProfileFailure:
+                        names = []  # Ingestion reports invalid Parquet bytes.
+                if ordinal in names:
+                    errors.append(validation_diagnostic(
+                        f"{path}.ordinal",
+                        'ordinal_field_collision',
+                        'generated ordinal names a stored field',
+                        context={'dataset': dataset_id, 'field': ordinal},
+                    ))
             if not isinstance(types, dict):
                 continue
             if profile == 'parquet':
@@ -5904,6 +5928,9 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
                     and value_type in {'str', 'int', 'float', 'date', 'datetime'}
                 ):
                     fields[field] = value_type
+        ordinal = source.get('ordinal') if isinstance(source, dict) else None
+        if isinstance(ordinal, str):
+            fields.setdefault(ordinal, 'int')
         catalog[dataset_id] = fields
 
     return catalog
@@ -6056,7 +6083,7 @@ def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
     for dataset in sorted(odm_inputs(spec)):
         source = datasets[dataset]
         declared = (
-            next((key for key in ('types', 'schema') if key in source), None)
+            next((key for key in ('types', 'schema', 'ordinal') if key in source), None)
             if isinstance(source, dict)
             else None
         )

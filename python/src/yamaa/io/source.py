@@ -278,6 +278,32 @@ def _build_table(
     return frame_from_values(columns, rows)
 
 
+def _with_source_ordinal(
+    dataset: str, source: DatasetSource, table: TypedTable
+) -> TypedTable:
+    """Append the opt-in stored-record coordinate before execution (REQ-1291)."""
+    if source.ordinal is None:
+        return table
+    if source.ordinal in {column.name for column in table.columns}:
+        raise SourceError(
+            [
+                SourceDiagnostic(
+                    phase="validation",
+                    condition="ordinal_field_collision",
+                    spec_paths=(f"input.{dataset}.ordinal",),
+                    requirement="REQ-1294",
+                    context={"dataset": dataset, "field": source.ordinal},
+                )
+            ]
+        )
+    return TypedTable(
+        columns=(*table.columns, TypedColumn(name=source.ordinal, type="int")),
+        frame=table.frame.with_columns(
+            pl.int_range(1, pl.len() + 1, dtype=pl.Int64).alias(source.ordinal)
+        ),
+    )
+
+
 def _validate_parquet_contract(
     dataset: str,
     table: TypedTable,
@@ -452,15 +478,21 @@ def _odm_table(
 def _odm_declared_diagnostic(
     dataset: str, source: DatasetSource
 ) -> SourceDiagnostic | None:
-    """Reject the `types` or `schema` an ODM input declares (REQ-1268)."""
-    if source.types is None and source.schema_path is None:
+    """Reject declarations that change the fixed ODM input schema."""
+    if source.types is None and source.schema_path is None and source.ordinal is None:
         return None
-    declared = "types" if source.types is not None else "schema"
+    declared = (
+        "types"
+        if source.types is not None
+        else "schema"
+        if source.schema_path is not None
+        else "ordinal"
+    )
     return SourceDiagnostic(
         phase="validation",
         condition="odm_schema_field_type",
         spec_paths=(f"input.{dataset}.{declared}",),
-        requirement="REQ-1275",
+        requirement="REQ-1295" if declared == "ordinal" else "REQ-1275",
         context={"dataset": dataset, "declared": declared},
     )
 
@@ -660,6 +692,7 @@ def load_source_tables(
                 )
                 if source.empty_string == "missing":
                     table = _empty_strings_to_missing(table)
+            table = _with_source_ordinal(dataset, source, table)
         except ResourceFailure as failure:
             diagnostics.append(
                 _path_diagnostic(

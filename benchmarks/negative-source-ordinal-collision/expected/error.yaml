@@ -1,0 +1,8 @@
+phase: validation
+condition: ordinal_field_collision
+spec_paths:
+  - input.SOURCE.ordinal
+requirement: REQ-1294
+context:
+  dataset: SOURCE
+  field: SourceOrdinal

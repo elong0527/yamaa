@@ -8047,5 +8047,71 @@ class TestKeyColumnOrder(unittest.TestCase):
         self.assertIn('order-golden/expected/order-golden.csv: header', errors[0])
 
 
+class TestSourceOrdinal(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.spec_path = self.root / 'spec.yaml'
+        self.spec = yaml.safe_load((
+            TOOL_PATH.parents[3] / 'benchmarks/schema-source-ordinal/spec.yaml'
+        ).read_text())
+        self.spec['input']['SOURCE']['path'] = 'source.csv'
+        (self.root / 'source.csv').write_text('GroupID,RecordLabel,Include\n')
+
+    def findings(self):
+        return VALIDATOR.validate_spec_contracts(
+            self.spec, 'spec.yaml', self.spec_path
+        )
+
+    def test_catalog_exposes_an_opt_in_integer(self):
+        self.assertEqual(self.findings(), [])
+        catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
+        self.assertEqual(catalog['SOURCE']['SourceOrdinal'], 'int')
+        del self.spec['input']['SOURCE']['ordinal']
+        catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
+        self.assertNotIn('SourceOrdinal', catalog['SOURCE'])
+
+    def test_rejects_collision_with_a_header_only_source(self):
+        (self.root / 'source.csv').write_text(
+            'GroupID,RecordLabel,Include,SourceOrdinal\n'
+        )
+        [finding] = self.findings()
+        self.assertEqual(finding.condition, 'ordinal_field_collision')
+        self.assertEqual(finding.path, 'spec.yaml.input.SOURCE.ordinal')
+        self.assertEqual(finding.context, {
+            'dataset': 'SOURCE', 'field': 'SourceOrdinal',
+        })
+        catalog = VALIDATOR.dataset_type_catalog(self.spec, self.spec_path)
+        self.assertEqual(catalog['SOURCE']['SourceOrdinal'], 'str')
+
+    def test_rejects_a_type_for_the_generated_field(self):
+        self.spec['input']['SOURCE']['types'] = {'SourceOrdinal': 'int'}
+        [finding] = self.findings()
+        self.assertEqual(finding.condition, 'unknown_field')
+
+    def test_rejects_parquet_collision(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        pq.write_table(pa.table({'SourceOrdinal': pa.array([], pa.int64())}),
+                       self.root / 'source.parquet')
+        self.spec['input']['SOURCE']['path'] = 'source.parquet'
+        [finding] = self.findings()
+        self.assertEqual(finding.condition, 'ordinal_field_collision')
+
+    def test_rejects_an_ordinal_on_a_fixed_schema_odm_input(self):
+        self.spec['columns'][0]['derivation'] = {'odm': 'SOURCE.IT.DM.ID'}
+        findings = VALIDATOR.validate_spec_odm_reads(
+            self.spec, 'spec.yaml', self.spec_path
+        )
+        [finding] = [item for item in findings
+                     if item.condition == 'odm_schema_field_type']
+        self.assertEqual(finding.path, 'spec.yaml.input.SOURCE.ordinal')
+        self.assertEqual(finding.context, {
+            'dataset': 'SOURCE', 'declared': 'ordinal',
+        })
+
+
 if __name__ == '__main__':
     unittest.main()

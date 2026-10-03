@@ -1,0 +1,17 @@
+schema_version: "1.0"
+domain: RECORDS
+keys: [RECORD_LABEL]
+input:
+  SOURCE:
+    path: input/source.csv
+    ordinal: SourceOrdinal
+
+output:
+  path: records.csv
+  columns: [RECORD_LABEL]
+
+columns:
+  - name: RECORD_LABEL
+    type: str
+    label: Collected Record Label
+    derivation: SOURCE.RecordLabel

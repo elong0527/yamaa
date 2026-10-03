@@ -92,6 +92,7 @@ conditions:
   odm_schema_field_missing: {phases: [validation]}
   odm_schema_field_type: {phases: [validation]}
   odm_schema_value_missing: {phases: [ingest]}
+  ordinal_field_collision: {phases: [validation]}
   origin_contradicts_derivation: {phases: [validation]}
   origin_description_missing: {phases: [validation]}
   origin_document_missing: {phases: [validation]}

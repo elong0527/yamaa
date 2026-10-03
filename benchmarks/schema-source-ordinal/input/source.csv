@@ -1,0 +1,7 @@
+GroupID,RecordLabel,Include
+G2,ROW_B,Y
+G1,ROW_B,Y
+G1,SKIPPED,N
+G2,ROW_A,Y
+G1,ROW_A,Y
+G1,ROW_A,Y

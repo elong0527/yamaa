@@ -9,6 +9,8 @@ import pyarrow.parquet as pq
 import pytest
 
 from yamaa.io import (
+    ProducerContract,
+    ProducerField,
     ProducerSchemaUnresolved,
     SourceError,
     load_source_table,
@@ -834,4 +836,133 @@ def test_changed_content_is_reported_at_ingest_with_written_path(
         "spec_paths": ("input.DM.path",),
         "requirement": None,
         "context": {"dataset": "DM", "path": "dm.csv"},
+    }
+
+
+@pytest.mark.parametrize("profile", ["csv", "parquet"])
+@pytest.mark.parametrize("labels", [[], ["ROW_B", "ROW_A", "ROW_A"]])
+def test_source_ordinal_is_an_opt_in_int_field(
+    tmp_path: Path, profile: str, labels: list[str]
+) -> None:
+    path = tmp_path / f"source.{profile}"
+    if profile == "csv":
+        path.write_text("Label\n" + "".join(f"{label}\n" for label in labels))
+    else:
+        pq.write_table(pa.table({"Label": pa.array(labels, pa.string())}), path)
+    resources = ProjectResources(tmp_path)
+    loaded = load_source_tables(
+        {
+            "FIRST": DatasetSource(path=path.name, ordinal="Position"),
+            "SECOND": DatasetSource(path=path.name, ordinal="OtherPosition"),
+            "PLAIN": DatasetSource(path=path.name),
+        },
+        resources,
+    )
+    first = loaded["FIRST"].table
+    assert first.columns == (
+        TypedColumn(name="Label", type="str"),
+        TypedColumn(name="Position", type="int"),
+    )
+    assert first.frame.schema["Position"] == pl.Int64
+    assert first.frame.rows() == list(zip(labels, range(1, len(labels) + 1)))
+    assert loaded["SECOND"].table.frame.rows() == first.frame.rows()
+    assert loaded["PLAIN"].table.frame.columns == ["Label"]
+    assert resources.capture_reads == 1
+
+
+def test_csv_ordinal_counts_records_rather_than_physical_lines(tmp_path: Path) -> None:
+    (tmp_path / "source.csv").write_bytes(b'Label\r\n"one\ntwo"\r\nlast')
+    loaded = load_source_table(
+        "SOURCE",
+        DatasetSource(path="source.csv", ordinal="Position"),
+        ProjectResources(tmp_path),
+    )
+    assert loaded.table.frame.rows() == [("one\ntwo", 1), ("last", 2)]
+
+
+@pytest.mark.parametrize("profile", ["csv", "parquet"])
+@pytest.mark.parametrize("empty", [False, True])
+def test_source_ordinal_cannot_shadow_a_stored_field(
+    tmp_path: Path, profile: str, empty: bool
+) -> None:
+    path = tmp_path / f"source.{profile}"
+    if profile == "csv":
+        path.write_text("Position\n" + ("collected\n" if not empty else ""))
+    else:
+        pq.write_table(
+            pa.table(
+                {"Position": pa.array([] if empty else ["collected"], pa.string())}
+            ),
+            path,
+        )
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "SOURCE",
+            DatasetSource(path=path.name, ordinal="Position"),
+            ProjectResources(tmp_path),
+        )
+    assert _diagnostic(raised.value) == {
+        "phase": "validation",
+        "condition": "ordinal_field_collision",
+        "spec_paths": ("input.SOURCE.ordinal",),
+        "requirement": "REQ-1294",
+        "context": {"dataset": "SOURCE", "field": "Position"},
+    }
+
+
+def test_csv_types_cannot_redeclare_a_generated_ordinal(tmp_path: Path) -> None:
+    (tmp_path / "source.csv").write_text("Label\nROW_B\n")
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "SOURCE",
+            DatasetSource(
+                path="source.csv", types={"Position": "str"}, ordinal="Position"
+            ),
+            ProjectResources(tmp_path),
+        )
+    assert _diagnostic(raised.value)["condition"] == "unknown_field"
+
+
+@pytest.mark.parametrize("profile", ["csv", "parquet"])
+def test_ordinal_is_added_after_checking_the_producer_contract(
+    tmp_path: Path, profile: str
+) -> None:
+    path = tmp_path / f"source.{profile}"
+    if profile == "csv":
+        path.write_text("Value\n42\n")
+    else:
+        pq.write_table(pa.table({"Value": pa.array([42], pa.int64())}), path)
+    contract = ProducerContract(
+        fields=(ProducerField(name="Value", type="int", label="Collected Value"),)
+    )
+    loaded = load_source_table(
+        "SOURCE",
+        DatasetSource(path=path.name, schema="producer.yaml", ordinal="Position"),
+        ProjectResources(tmp_path),
+        producer_contract=contract,
+    )
+    assert loaded.table.frame.rows() == [(42, 1)]
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "SOURCE",
+            DatasetSource(path=path.name, schema="producer.yaml", ordinal="Value"),
+            ProjectResources(tmp_path),
+            producer_contract=contract,
+        )
+    assert _diagnostic(raised.value)["condition"] == "ordinal_field_collision"
+
+
+def test_fixed_schema_odm_input_rejects_ordinal_before_reading(tmp_path: Path) -> None:
+    with pytest.raises(SourceError) as raised:
+        load_source_tables(
+            {"ODM": DatasetSource(path="absent.csv", ordinal="Position")},
+            ProjectResources(tmp_path),
+            odm_datasets={"ODM"},
+        )
+    assert _diagnostic(raised.value) == {
+        "phase": "validation",
+        "condition": "odm_schema_field_type",
+        "spec_paths": ("input.ODM.ordinal",),
+        "requirement": "REQ-1295",
+        "context": {"dataset": "ODM", "declared": "ordinal"},
     }
