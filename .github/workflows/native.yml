@@ -43,6 +43,7 @@ jobs:
           cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
           cargo test
           cargo test -p yamaa-core --release
+          python tools/check_float_text.py
           python tools/check_dependencies.py
           python -m unittest discover -s tests -p 'test_*.py'
       - name: Build wheel and source archive

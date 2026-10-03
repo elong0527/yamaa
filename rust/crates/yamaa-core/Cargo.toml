@@ -5,3 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+
+[dependencies]
+# Pure no_std numeric formatting; no host, filesystem, or table dependencies.
+ryu = { version = "=1.0.20", default-features = false }

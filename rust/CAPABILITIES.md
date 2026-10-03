@@ -1,6 +1,6 @@
 # Rust migration capability coverage
 
-This matrix tracks the first scalar slice of [#1585](https://github.com/elong0527/yamaa/issues/1585).
+This matrix tracks the scalar slices of [#1585](https://github.com/elong0527/yamaa/issues/1585).
 Core tests are not dataset execution. Every native installation probe still
 reports `execution_supported = false`; all 315 benchmark cases remain executable
 through the Python backend only, as declared by
@@ -12,7 +12,7 @@ through the Python backend only, as declared by
 | Comparison: REQ-0004-0005, 0324 | Unit tests: present text, numeric and temporal values; exact mixed comparisons at large i64 values | No dataset execution | No dataset execution | Predicate grammar, operation-specific diagnostics, missing ordering policies (steps 4, 7, 9) |
 | Basic arithmetic: REQ-0420-0421, 0424 (ABS/MOD only), 0427, 0430, 0434 | Shared hand-written vectors replayed by Rust primitives and Python evaluator; overflow, division, types, missingness, float bits | No dataset execution | No dataset execution | Parser/typed IR, operand resolution, source paths, handlers; remaining functions and rounding (steps 4, 7) |
 | Temporal values: REQ-0539-0555, 0559-0561, 0567-0573 | Validated civil fields, strict parsing, canonical text, precision, equality and chronological order; 400-year calendar cycle | No dataset execution | No dataset execution | Imputation, temporal operations, function/artifact boundaries (steps 4, 5, 8, 9) |
-| Conversion: REQ-0009-0013, 0015-0018, 0020-0021 | Not implemented; temporal parsing/rendering is only a primitive | No dataset execution | No dataset execution | Complete conversion matrix and canonical numeric text (step 4) |
+| Conversion: REQ-0009-0013, 0015-0018, 0020-0021, 0601 | Full scalar matrix, strict numeric text, exact range/integrality checks, canonical numeric/temporal text, structured failures; shared reference vectors and deterministic float-text differential check | No dataset execution | No dataset execution | Integration at the completed-result lifecycle boundary and actual handler application (steps 4, 7, 8) |
 | Regex and remaining scalar grammars | Not implemented | No dataset execution | No dataset execution | Replay existing grammar/regex vectors, including backreferences and lookarounds (step 4) |
 | Application/workflow, tables, verification, publication, callbacks | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
 
@@ -29,6 +29,22 @@ trees. The future evaluator must preserve error and callback order before it
 invokes a primitive. `ArithmeticError` retains expression, condition, phase,
 requirement and exact overflow value; source paths, full diagnostic envelopes,
 handler observations and counts remain unimplemented.
+
+Conversion failures retain the parsed source type/value used by Python, the
+destination, phase, condition, eligible handler and owning requirement. An
+out-of-range integer is retained as canonical decimal diagnostic text, never a
+successful runtime value. Error transport/serialization and handler application
+remain separate integration work. A decimal/exponent numeric spelling parses as
+binary64 before integral conversion; plain integer spelling does not lose i64
+precision by passing through a float.
+
+Known reference discrepancy: Python's configurable integer-string digit cap
+rejects very long otherwise-valid integer text (for example, 5,000 zeros followed
+by `1` under its default settings). Core accepts that spelling as integer one,
+and retains arbitrarily long out-of-range integers as diagnostic text under
+REQ-0021. No text-length cap exists in REQ-0015. The Python reference's cap and
+its resulting condition difference need resolution before claiming full backend
+parity; the 93 shared conversion vectors do not cover that discrepancy.
 
 The checked-in TSV contains explicit expected results, including raw binary64
 bits (not digests). Both test runners compare to those expectations; neither

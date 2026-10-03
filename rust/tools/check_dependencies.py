@@ -6,7 +6,7 @@ from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 ALLOWED = {
-    "yamaa-core": set(),
+    "yamaa-core": {"ryu"},
     "yamaa-engine": {"yamaa-core"},
     "yamaa-adapters": {"yamaa-core", "yamaa-engine"},
     "yamaa-python": {"yamaa-engine", "yamaa-adapters", "pyo3", "pyo3-build-config"},

@@ -9,7 +9,7 @@ The existing Python engine remains the default; the legacy R package is unchange
 
 | Crate | Responsibility | Allowed dependencies |
 | --- | --- | --- |
-| `yamaa-core` | Language contracts | None |
+| `yamaa-core` | Language contracts | Pinned `ryu` for no_std numeric formatting |
 | `yamaa-engine` | Application entry points | Core |
 | `yamaa-adapters` | Infrastructure, including embedded resources | Core, engine |
 | `yamaa-python` | Python binding | Engine, adapters, PyO3 |
@@ -25,6 +25,14 @@ The first core slice implements closed runtime values, validated civil temporal
 values, present-value comparison, and basic arithmetic primitives. See
 [`CAPABILITIES.md`](CAPABILITIES.md) for requirement-level coverage and remaining
 gates. These primitives do not enable either host's dataset execution backend.
+
+Completed-result scalar conversion now implements the closed column-type matrix.
+Ryu 1.0.20 supplies shortest round-trip digits; core expands exponents to positional
+text without floating-point math. It is a numeric library with no runtime
+dependencies, not a host or table adapter. Rust's default float Display chooses
+different digits from Python on some exact decimal ties; the shared fixtures
+and `tools/check_float_text.py` protect the reference spelling. See the
+[formatter documentation](https://docs.rs/ryu/1.0.20/ryu/) for its algorithm/API.
 
 ## Packaging decision
 
@@ -62,6 +70,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test
 python tools/check_dependencies.py
+python tools/check_float_text.py
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
@@ -88,7 +97,7 @@ macOS arm64. R Windows native installation and other architectures are not
 qualified by this slice. The existing Windows Python engine remains supported.
 
 The initial hosted installation matrix passed. Next gates: settle transitive
-dependency locking, complete scalar conversion/grammar/diagnostics, then add
+dependency locking, complete typed evaluation/grammar/diagnostics, then add
 Arrow tables and host callbacks. No performance or language-parity claim is made.
 
 Local `R CMD check --no-manual --no-build-vignettes` passes installation and
