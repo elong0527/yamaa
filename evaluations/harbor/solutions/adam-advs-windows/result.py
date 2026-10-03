@@ -53,57 +53,44 @@ framed = raw.with_columns(
     .alias("AVISITN"),
 )
 
-# A planned visit with no collected record whose study day falls in its
-# window still appears as an expected record: the planned visit name and
-# number and the window, a continued sequence number, and no date, study
-# day, or value. The open-ended post-treatment window never gets one.
-planned = [
-    ("SCREENING", "SCREENING", 1, -1, -(10**9), -1),
-    ("BASELINE", "BASELINE", 2, 0, 1, 1),
-    ("WEEK 2", "WEEK 2", 3, 2, 2, 21),
-    ("WEEK 4", "WEEK 4", 4, 4, 22, 42),
-]
+# SV lists every planned visit of every subject, including those that did
+# not take place, and the unscheduled visits.
+sv = pl.read_csv("/app/input/sv.csv", infer_schema=False).with_columns(
+    pl.col("VISITNUM").cast(pl.Float64, strict=False)
+)
 
-expected_rows = []
-for (study, subject, param), group in framed.group_by(
-    ["STUDYID", "USUBJID", "PARAMCD"], maintain_order=True
-):
-    seq = group["VSSEQ"].max()
-    days = group["ADY"].drop_nulls()
-    for avisit, visit, visitnum, avisitn, lo, hi in planned:
-        if not ((days >= lo) & (days <= hi)).any():
-            seq += 1
-            expected_rows.append(
-                {
-                    "STUDYID": study,
-                    "USUBJID": subject,
-                    "PARAMCD": param,
-                    "VSSEQ": seq,
-                    "VISIT": visit,
-                    "VISITNUM": float(visitnum),
-                    "ADT": None,
-                    "ADY": None,
-                    "AVAL": None,
-                    "AVISIT": avisit,
-                    "AVISITN": avisitn,
-                }
-            )
+# Each planned SCREENING, BASELINE, WEEK 2, or WEEK 4 visit gets one SYSBP
+# expected record when no collected record's study day falls in the
+# analysis window of that name: the planned visit name and number and the
+# window, and no date, study day, or value. No other visit gets one.
+# Expected records continue the subject's sequence numbering after the
+# highest collected VSSEQ, in VISITNUM order.
+windows = {"SCREENING": -1, "BASELINE": 0, "WEEK 2": 2, "WEEK 4": 4}
+keys = ["STUDYID", "USUBJID", "PARAMCD"]
+covered = framed.select(*keys, "AVISIT").drop_nulls().unique()
+top = framed.group_by(keys).agg(pl.col("VSSEQ").max().alias("TOP"))
 
-expected = pl.DataFrame(
-    expected_rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "PARAMCD": pl.String,
-        "VSSEQ": pl.Int64,
-        "VISIT": pl.String,
-        "VISITNUM": pl.Float64,
-        "ADT": pl.Date,
-        "ADY": pl.Int64,
-        "AVAL": pl.Float64,
-        "AVISIT": pl.String,
-        "AVISITN": pl.Int64,
-    },
+expected = (
+    sv.filter(pl.col("VISIT").is_in(list(windows)))
+    .with_columns(
+        PARAMCD=pl.lit("SYSBP"),
+        AVISIT=pl.col("VISIT"),
+        AVISITN=pl.col("VISIT").replace_strict(windows, return_dtype=pl.Int64),
+    )
+    .join(covered, on=[*keys, "AVISIT"], how="anti")
+    .join(top, on=keys, how="left")
+    .sort([*keys, "VISITNUM"])
+    .with_columns(
+        VSSEQ=pl.col("TOP").fill_null(0)
+        + pl.int_range(1, pl.len() + 1, dtype=pl.Int64).over(keys),
+        ADT=pl.lit(None, dtype=pl.Date),
+        ADY=pl.lit(None, dtype=pl.Int64),
+        AVAL=pl.lit(None, dtype=pl.Float64),
+    )
+    .select(
+        *keys, "VSSEQ", "VISIT", "VISITNUM", "ADT", "ADY", "AVAL",
+        "AVISIT", "AVISITN",
+    )
 )
 framed = pl.concat([framed, expected], how="vertical")
 

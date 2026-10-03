@@ -40,46 +40,39 @@ framed <- raw |>
     )
   )
 
-# A planned visit with no collected record whose study day falls in its
-# window still appears as an expected record: the planned visit name and
-# number and the window, a continued sequence number, and no date, study
-# day, or value. The open-ended post-treatment window never gets one.
-planned <- data.frame(
-  AVISIT = c("SCREENING", "BASELINE", "WEEK 2", "WEEK 4"),
-  VISIT = c("SCREENING", "BASELINE", "WEEK 2", "WEEK 4"),
-  VISITNUM = c(1, 2, 3, 4),
-  AVISITN = c(-1L, 0L, 2L, 4L),
-  lo = c(-Inf, 1, 2, 22),
-  hi = c(-1, 1, 21, 42),
-  stringsAsFactors = FALSE
+# SV lists every planned visit of every subject, including those that did
+# not take place, and the unscheduled visits.
+sv <- read_csv(
+  "/app/input/sv.csv",
+  col_types = cols(VISITNUM = col_double(), .default = col_character())
 )
 
-expected <- merge(distinct(framed, STUDYID, USUBJID, PARAMCD), planned) |>
-  rowwise() |>
-  mutate(
-    covered = {
-      days <- framed$ADY[
-        framed$STUDYID == STUDYID &
-          framed$USUBJID == USUBJID &
-          framed$PARAMCD == PARAMCD &
-          !is.na(framed$ADY)
-      ]
-      any(days >= lo & days <= hi)
-    },
-    top_seq = max(
-      framed$VSSEQ[
-        framed$STUDYID == STUDYID &
-          framed$USUBJID == USUBJID &
-          framed$PARAMCD == PARAMCD
-      ]
-    )
-  ) |>
-  ungroup() |>
-  filter(!covered) |>
+# Each planned SCREENING, BASELINE, WEEK 2, or WEEK 4 visit gets one SYSBP
+# expected record when no collected record's study day falls in the
+# analysis window of that name: the planned visit name and number and the
+# window, and no date, study day, or value. No other visit gets one.
+# Expected records continue the subject's sequence numbering after the
+# highest collected VSSEQ, in VISITNUM order.
+windows <- c("SCREENING" = -1L, "BASELINE" = 0L, "WEEK 2" = 2L, "WEEK 4" = 4L)
+
+top <- framed |>
   group_by(STUDYID, USUBJID, PARAMCD) |>
-  arrange(match(AVISIT, planned$AVISIT), .by_group = TRUE) |>
+  summarise(top_seq = max(VSSEQ), .groups = "drop")
+
+expected <- sv |>
+  filter(VISIT %in% names(windows)) |>
   mutate(
-    VSSEQ = top_seq + row_number(),
+    PARAMCD = "SYSBP", AVISIT = VISIT, AVISITN = unname(windows[VISIT])
+  ) |>
+  anti_join(
+    filter(framed, !is.na(AVISIT)),
+    by = c("STUDYID", "USUBJID", "PARAMCD", "AVISIT")
+  ) |>
+  left_join(top, by = c("STUDYID", "USUBJID", "PARAMCD")) |>
+  group_by(STUDYID, USUBJID, PARAMCD) |>
+  arrange(VISITNUM, .by_group = TRUE) |>
+  mutate(
+    VSSEQ = coalesce(top_seq, 0L) + row_number(),
     ADT = as.Date(NA),
     ADY = NA_integer_,
     AVAL = NA_real_

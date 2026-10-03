@@ -6,12 +6,14 @@
 **Goal:** assign each systolic blood pressure (`SYSBP`) record to
 its analysis window, adding the analysis visit (`AVISIT`), its
 numeric order (`AVISITN`), and `ANL01FL`; add an expected record
-for each planned visit with no measurement.
+for each planned visit whose window holds no measurement.
 
 **Input:** SDTM vital signs records (`VS`) carrying the test code
 (`VSTESTCD`), the collected visit (`VISIT`, `VISITNUM`), the
 collection date (`VSDTC`), the study day (`VSDY`), and the numeric
-result (`VSSTRESN`).
+result (`VSSTRESN`); and SDTM subject visits (`SV`) listing every
+planned visit of every subject, including planned visits that did
+not take place, alongside the unscheduled visits.
 
 **Variables:**
 
@@ -43,9 +45,11 @@ to whichever window its day falls in, and a record on or past
 day 43 falls in the open-ended final window. Each window starts
 with its first day and ends before the next window's first day,
 so day 22 opens Week 4 and day 43 opens post-treatment. A planned
-visit with no measurement still appears as an expected record
-carrying the planned visit and window and a continued sequence
-number, but no date, day, or value, so summaries see a complete
-visit spine; the open-ended final window never gets one.
+screening, baseline, week 2, or week 4 visit whose window holds no
+measured study day still appears as an expected record carrying
+the planned visit and window and a sequence number continuing past
+the subject's measurements, but no date, day, or value, so
+summaries see a complete visit spine. Unscheduled visits and
+planned visits after week 4 never get one.
 
 **Standard:** ADaM | **Domain:** ADVS
