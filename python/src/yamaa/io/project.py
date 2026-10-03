@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from yamaa.io import _descriptors
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError
 
@@ -334,16 +335,7 @@ class ProjectResources:
         if not base.is_dir():
             raise ValueError("resource base must be a directory")
 
-        required_flags = ("O_DIRECTORY", "O_NOFOLLOW")
-        if (
-            os.open not in os.supports_dir_fd
-            or os.stat not in os.supports_dir_fd
-            or os.stat not in os.supports_follow_symlinks
-            or any(not hasattr(os, name) for name in required_flags)
-        ):
-            raise RuntimeError(
-                "component-safe project resource resolution is unavailable"
-            )
+        _descriptors.ensure_available()
 
         approved: list[_ApprovedRoot] = []
         approved_paths: list[Path] = []
@@ -432,7 +424,7 @@ class ProjectResources:
         descriptor = -1
         try:
             initial_status = resolved.stat(follow_symlinks=False)
-            descriptor = os.open(resolved, self._directory_flags())
+            descriptor = _descriptors.open_directory(resolved)
             opened_status = os.fstat(descriptor)
         except OSError as error:
             if descriptor >= 0:
@@ -460,23 +452,13 @@ class ProjectResources:
         )
 
     @staticmethod
-    def _directory_flags() -> int:
-        return (
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
-        )
-
-    @staticmethod
-    def _file_flags() -> int:
-        return (
-            os.O_RDONLY
-            | os.O_NOFOLLOW
-            | getattr(os, "O_CLOEXEC", 0)
-            | getattr(os, "O_NONBLOCK", 0)
-        )
-
-    @staticmethod
     def _entry_identity(status: os.stat_result) -> tuple[int, int, int]:
-        return (status.st_dev, status.st_ino, stat.S_IFMT(status.st_mode))
+        kind = (
+            stat.S_IFLNK
+            if _descriptors.is_link(status)
+            else stat.S_IFMT(status.st_mode)
+        )
+        return (status.st_dev, status.st_ino, kind)
 
     def _anchors(self, written_path: str, base: _Base | None = None) -> list[_Anchor]:
         """Order the anchors a written path resolves from (REQ-0780/REQ-0781).
@@ -625,35 +607,29 @@ class ProjectResources:
         directory: bool,
     ) -> tuple[int, os.stat_result]:
         try:
-            initial_status = os.stat(
-                component,
-                dir_fd=parent_descriptor,
-                follow_symlinks=False,
+            initial_status = _descriptors.stat_child(
+                component, dir_fd=parent_descriptor
             )
         except OSError as error:
             if error.errno in (errno.ENOENT, errno.ENOTDIR):
                 raise _NoEntry from error
             raise ResourceFailure("resource_path_missing", written_path) from error
 
-        if stat.S_ISLNK(initial_status.st_mode):
+        if _descriptors.is_link(initial_status):
             raise ResourceFailure("resource_path_symlink", written_path)
         expected_kind = stat.S_ISDIR if directory else stat.S_ISREG
         if not expected_kind(initial_status.st_mode):
             raise ResourceFailure("resource_path_not_regular_file", written_path)
 
         try:
-            flags = self._directory_flags() if directory else self._file_flags()
-            descriptor = os.open(
-                component,
-                flags,
-                dir_fd=parent_descriptor,
+            opener = (
+                _descriptors.open_directory if directory else _descriptors.open_file
             )
+            descriptor = opener(component, dir_fd=parent_descriptor)
         except OSError as error:
             try:
-                current_status = os.stat(
-                    component,
-                    dir_fd=parent_descriptor,
-                    follow_symlinks=False,
+                current_status = _descriptors.stat_child(
+                    component, dir_fd=parent_descriptor
                 )
             except OSError:
                 raise _PathChanged from error
@@ -748,11 +724,7 @@ class ProjectResources:
     ) -> None:
         for parent_descriptor, component, expected_identity in links:
             try:
-                status = os.stat(
-                    component,
-                    dir_fd=parent_descriptor,
-                    follow_symlinks=False,
-                )
+                status = _descriptors.stat_child(component, dir_fd=parent_descriptor)
             except OSError as error:
                 raise _PathChanged from error
             if self._entry_identity(status) != expected_identity:

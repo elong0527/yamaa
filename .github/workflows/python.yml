@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     # R021 and R023 fix path resolution and source reading, so the same bytes
@@ -20,9 +24,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.12", "3.14"]
     steps:
+      # The R020 byte fixtures and R021 link fixtures must survive checkout
+      # with their committed line endings and actual symbolic links.
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,14 +62,22 @@ jobs:
       - name: Test
         run: uv run --project python --no-sync pytest python/tests
 
-      # #101: every benchmark runs through one runner, on both platforms,
+      # #101: every benchmark runs through one runner, on every platform,
       # and the reports it writes are the per-example parity artifact.
       - name: Run the conformance suite
-        run: >-
-          uv run --project python --no-sync python -m yamaa.adapters.conformance
-          $(ls -d benchmarks/*/ | xargs -n1 basename)
-          --run-dir "${{ runner.temp }}/conformance"
-          --examples-root benchmarks
+        run: |
+          uv run --project python --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          from yamaa.adapters.conformance import main
+
+          examples = sorted(path.name for path in Path("benchmarks").iterdir() if path.is_dir())
+          raise SystemExit(main([
+              *examples,
+              "--run-dir", str(Path(os.environ["RUNNER_TEMP"]) / "conformance"),
+              "--examples-root", "benchmarks",
+          ]))
+          PY
 
       - name: Upload conformance reports
         if: always()
@@ -70,7 +90,7 @@ jobs:
       - name: Import installed package outside the checkout
         working-directory: ${{ runner.temp }}
         run: >-
-          ${{ github.workspace }}/python/.venv/bin/python -c
+          uv run --project "${{ github.workspace }}/python" --no-sync python -c
           "import yamaa; from yamaa.odm import write_odm_parquet;
           from yamaa.specification import load_specification;
           print(yamaa.__version__, write_odm_parquet.__name__,

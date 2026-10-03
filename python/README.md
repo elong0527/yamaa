@@ -2,7 +2,8 @@
 
 The Python package currently provides general CDISC ODM helpers. It uses
 Pydantic for public data contracts and Polars for tabular data operations.
-The package supports Python 3.12 and newer; CI exercises Python 3.12 and 3.14.
+The package supports Python 3.12 and newer; CI exercises Python 3.12 and 3.14
+on Linux, macOS, and Windows, including the committed conformance suite.
 
 ## Install and test
 

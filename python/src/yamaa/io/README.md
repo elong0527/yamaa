@@ -78,6 +78,13 @@ typed value to the text R011, R016, and R019 fix, and hands the fields over.
 values are stored in and read back from a host table, and `project.py` and
 `source.py` own resource capture and source dispatch.
 
+Resource capture retains approved directory descriptors and opens each child
+relative to its parent without following links. Linux and macOS use POSIX
+descriptor-relative APIs; Windows uses native directory handles and
+`NtCreateFile`. Windows junctions and other reparse points are rejected below
+an approved root, just like symbolic links. Both implementations check the
+opened file's identity and retain its bytes for verification before ingestion.
+
 ## Focused tests
 
 ```bash
