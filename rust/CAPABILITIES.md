@@ -54,6 +54,13 @@ resolution, and enforce evaluation/resolution budgets. The caller-supplied
 `NumericPlan` API itself remains unbounded. Diagnostic transport and lifecycle
 integration remain outstanding.
 
+Python numeric-expression integer literals now also avoid the host's integer
+string digit limit: insignificant zeros are stripped before bounded construction,
+and oversized positive literals report exact decimal text under REQ-0434. This is
+a separate path from completed-result conversion. Overflow stays at evaluation
+time in written order, before a literal's unary sign; the forthcoming Rust
+compiler must preserve that behavior. No literal is narrowed through binary64.
+
 Conversion failures retain the parsed source type/value used by Python, the
 destination, phase, condition, eligible handler and owning requirement. An
 out-of-range integer is retained as canonical decimal diagnostic text, never a

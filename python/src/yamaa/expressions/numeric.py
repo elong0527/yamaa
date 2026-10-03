@@ -377,22 +377,42 @@ def _fail(
     )
 
 
-def _checked_int(value: int, expr: str) -> int:
-    if INT64_MIN <= value <= INT64_MAX:
-        return value
-    raise _fail(
+def _integer_overflow(value: str, expr: str) -> _Failure:
+    """Build the exact decimal overflow diagnostic shared by literals and operators."""
+    return _fail(
         "integer_overflow",
         "REQ-0434",
         {
             "expr": expr,
-            "value": str(value),
+            "value": value,
             "minimum": INT64_MIN,
             "maximum": INT64_MAX,
         },
     )
 
 
+def _checked_int(value: int, expr: str) -> int:
+    """Validate an arithmetic result without changing its existing failure context."""
+    if INT64_MIN <= value <= INT64_MAX:
+        return value
+    raise _integer_overflow(str(value), expr)
+
+
+def _integer_literal(written: str, expr: str) -> int:
+    """Evaluate validated unsigned digits without constructing an unbounded integer.
+
+    Signs are separate AST nodes. Preserve positive-literal overflow before unary
+    negation, and keep canonical decimal diagnostic text independent of the host's
+    integer-string digit limit, including insignificant leading zeros.
+    """
+    digits = written.lstrip("0") or "0"
+    if len(digits) > 19:
+        raise _integer_overflow(digits, expr)
+    return _checked_int(int(digits, 10), expr)
+
+
 def _finite(value: float) -> float | object:
+    """Normalize each non-finite arithmetic result to the runtime missing value."""
     # REQ-0006 applies the Types and conversion contract's non-finite
     # normalization after every operator.
     return value if math.isfinite(value) else MISSING
@@ -597,11 +617,12 @@ def _identifier(node: NumericAst, expr: str, resolver: Resolver) -> object:
 
 
 def _evaluate(node: NumericAst, expr: str, resolver: Resolver) -> object:
+    """Evaluate the next written node, stopping before later operands on failure."""
     kind = node["kind"]
     if kind == "number":
         written = node["value"]
         if node["type"] == "int":
-            return _checked_int(int(written, 10), expr)
+            return _integer_literal(written, expr)
         return _finite(float(written))
     if kind == "null":
         return MISSING
