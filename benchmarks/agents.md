@@ -132,6 +132,18 @@ When the honest input would add a second pattern (deriving the study
 day before windowing on it), split the pipeline across benchmarks and
 let each pin its own pattern.
 
+## Fixture size
+
+Fixtures are minimal sufficient for a human to digest: aim for 20 or
+fewer rows per input file, with every row earning its place -- one
+edge case, one branch, one tie-break each. ODM inputs are judged by
+subjects represented rather than rows; two or three subjects carry
+the same spirit. A golden past about 40 rows usually means the
+fixture is too big, not the derivation too rich. More rows need a
+one-line justification in the work-item issue. Existing oversized
+fixtures shrink opportunistically, when their benchmark is touched
+for another reason.
+
 ## A benchmark that needs project code
 
 A `function` call names a logical contract and a project supplies the code,
