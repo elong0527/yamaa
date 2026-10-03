@@ -7,6 +7,7 @@ extern crate alloc;
 pub mod conversion;
 pub mod evaluation;
 pub mod numeric;
+pub mod numeric_compiler;
 pub mod numeric_parser;
 pub mod temporal;
 pub mod value;

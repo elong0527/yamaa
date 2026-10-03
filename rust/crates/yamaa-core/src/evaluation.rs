@@ -1,20 +1,22 @@
 //! Typed evaluation of the implemented numeric subset, independent of parsing.
 //!
 //! Nodes preserve written association. Resolution is left-to-right and stops at
-//! the first failure, but missing operands do not skip later operands. A future
-//! compiler owns lexical validation, source character spans and resource budgets.
+//! the first failure, but missing operands do not skip later operands. The numeric
+//! compiler supplies validated, bounded trees and maps failures to source spans.
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::numeric::{self, ArithmeticErrorKind, BinaryOperator, Number, UnaryOperator};
 use crate::value::{Selection, ValueType};
 
-/// Numeric IR for already-validated literals and the implemented arithmetic subset.
+/// Numeric IR for normalized values, deferred literal failures and arithmetic.
 /// ABS and MOD use the existing unary/binary primitive variants. This is not a parser
 /// or a claim that the rest of the numeric function vocabulary is implemented.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumericNode {
     Literal(Number),
+    /// Deferred positive literal overflow, preserving exact canonical decimal digits.
+    IntegerOverflowLiteral(String),
     Identifier(String),
     Unary {
         operator: UnaryOperator,
@@ -63,6 +65,9 @@ pub enum NumericCondition {
         actual: ValueType,
     },
     Arithmetic(ArithmeticErrorKind),
+    LiteralOverflow {
+        value: String,
+    },
 }
 
 impl NumericCondition {
@@ -70,7 +75,7 @@ impl NumericCondition {
     pub fn phase(&self) -> &'static str {
         match self {
             Self::UnknownField { .. } | Self::IncompatibleInput { .. } => "validation",
-            Self::Arithmetic(_) => "derivation",
+            Self::Arithmetic(_) | Self::LiteralOverflow { .. } => "derivation",
         }
     }
 
@@ -79,7 +84,8 @@ impl NumericCondition {
         match self {
             Self::UnknownField { .. } => "unknown_field",
             Self::IncompatibleInput { .. } => "incompatible_input_type",
-            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. }) => "integer_overflow",
+            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
+            | Self::LiteralOverflow { .. } => "integer_overflow",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "division_by_zero",
         }
     }
@@ -89,7 +95,8 @@ impl NumericCondition {
         match self {
             Self::UnknownField { .. } => "REQ-0443",
             Self::IncompatibleInput { .. } => "REQ-0444",
-            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. }) => "REQ-0434",
+            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
+            | Self::LiteralOverflow { .. } => "REQ-0434",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "REQ-0430",
         }
     }
@@ -162,6 +169,14 @@ impl NumericPlan {
     ) -> Result<Number, EvaluationError<R::Error>> {
         let arithmetic = match node {
             NumericNode::Literal(number) => return Ok(*number),
+            NumericNode::IntegerOverflowLiteral(value) => {
+                return Err(self.failure(
+                    EvaluationErrorKind::Numeric(NumericCondition::LiteralOverflow {
+                        value: value.clone(),
+                    }),
+                    path,
+                ));
+            }
             NumericNode::Identifier(identifier) => {
                 let selected = resolver.resolve(identifier).map_err(|error| {
                     self.failure(
