@@ -27,6 +27,7 @@ from test_harbor_hardening import AGE_GROUP, _app, _run
 
 
 def _age_submission(tmp_path, body):
+    """Grade a temporary Python age derivation against changed-input challenges."""
     app = _app(tmp_path)
     contract = build.contract_for(AGE_GROUP, "python")
     columns = contract["outputs"][0]["columns"]

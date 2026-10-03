@@ -325,6 +325,7 @@ class ProjectResources:
         base_directory: str | Path | None = None,
         data_roots: Iterable[str | Path] = (),
     ) -> None:
+        """Retain approved roots and initialize shared resource snapshots."""
         root = _existing_directory(project_root, "approved project root")
 
         base = Path(base_directory) if base_directory is not None else root
@@ -453,6 +454,7 @@ class ProjectResources:
 
     @staticmethod
     def _entry_identity(status: os.stat_result) -> tuple[int, int, int]:
+        """Identify a physical entry, treating every reparse point as a link."""
         kind = (
             stat.S_IFLNK
             if _descriptors.is_link(status)
@@ -606,6 +608,7 @@ class ProjectResources:
         *,
         directory: bool,
     ) -> tuple[int, os.stat_result]:
+        """Open a child of the expected type and detect replacement while opening."""
         try:
             initial_status = _descriptors.stat_child(
                 component, dir_fd=parent_descriptor
@@ -722,6 +725,7 @@ class ProjectResources:
         self,
         links: list[tuple[int, str, tuple[int, int, int]]],
     ) -> None:
+        """Confirm that each retained parent still names the opened child."""
         for parent_descriptor, component, expected_identity in links:
             try:
                 status = _descriptors.stat_child(component, dir_fd=parent_descriptor)

@@ -39,6 +39,7 @@ def _run(language: str):
 
 
 def _challenge(tmp_path: Path, language: str = "python", script: str | None = None):
+    """Run the submitted and reference scripts through the changed-input challenge."""
     app = _app(tmp_path)
     contract = build.contract_for(AGE_GROUP, language)
     reference = tmp_path / "reference" / contract["script"]

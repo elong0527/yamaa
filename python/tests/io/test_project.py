@@ -279,6 +279,7 @@ def test_captures_one_immutable_snapshot_per_physical_file(tmp_path: Path) -> No
 
 
 def test_snapshot_keeps_binary_bytes_and_unicode_file_names(tmp_path: Path) -> None:
+    """Unicode names and binary control bytes survive capture and verification."""
     name = "donn\u00e9es-\U0001f9ea.csv"
     content = b"ID\r\n001\x1a\x00\r\n"
     (tmp_path / name).write_bytes(content)
@@ -293,6 +294,7 @@ def test_snapshot_keeps_binary_bytes_and_unicode_file_names(tmp_path: Path) -> N
 def test_directory_descriptors_support_stat_dup_and_do_not_inherit(
     tmp_path: Path,
 ) -> None:
+    """Directory descriptors preserve identity when duplicated and cannot inherit."""
     descriptor = _descriptors.open_directory(tmp_path.resolve())
     duplicate = os.dup(descriptor)
     try:
@@ -345,6 +347,7 @@ def test_intermediate_symlink_race_cannot_open_outside_project(
     monkeypatch: pytest.MonkeyPatch,
     operation: str,
 ) -> None:
+    """Replacing an opened parent with a symlink cannot redirect a child open."""
     project = tmp_path / "project"
     source_directory = project / "input"
     source_directory.mkdir(parents=True)
@@ -367,6 +370,7 @@ def test_intermediate_symlink_race_cannot_open_outside_project(
         *,
         dir_fd: int,
     ) -> int:
+        """Replace the directory and record whether the outside file is opened."""
         nonlocal opened_outside, replaced
         if not replaced and Path(path).name == "dm.csv":
             source_directory.rename(replacement)
@@ -410,6 +414,7 @@ def test_rejects_symlinks_at_final_and_intermediate_components(
 def test_final_symlink_race_cannot_open_its_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Replacing a file with a symlink during its open never follows the target."""
     source = tmp_path / "dm.csv"
     source.write_bytes(b"ID\n001\n")
     target = tmp_path / "outside.csv"
@@ -420,6 +425,7 @@ def test_final_symlink_race_cannot_open_its_target(
     opened_target = False
 
     def replacing_open(path: str, *, dir_fd: int) -> int:
+        """Swap in the symlink between the metadata check and file open."""
         nonlocal opened_target
         source.unlink()
         source.symlink_to(target)
@@ -439,6 +445,7 @@ def test_final_symlink_race_cannot_open_its_target(
 
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires POSIX FIFOs")
 def test_rejects_non_regular_runtime_file_kinds() -> None:
+    """Directories, FIFOs, and sockets cannot be captured as regular resources."""
     # macOS limits AF_UNIX paths to 104 bytes, shorter than pytest's tmp_path.
     with tempfile.TemporaryDirectory(prefix="yamaa-", dir="/tmp") as temporary:
         root = Path(temporary)
@@ -506,6 +513,7 @@ def test_rejects_file_as_intermediate_component(tmp_path: Path) -> None:
 def test_layer_outside_narrower_project_never_reads_beside_itself(
     tmp_path: Path,
 ) -> None:
+    """A layer outside the approved project reads only from approved anchors."""
     project = tmp_path / "project"
     layer = tmp_path / "layer"
     project.mkdir()

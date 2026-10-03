@@ -34,6 +34,8 @@ _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
 
 class _UnicodeString(ctypes.Structure):
+    """A length-prefixed UTF-16 name passed to the Windows object manager."""
+
     _fields_ = [
         ("Length", wintypes.USHORT),
         ("MaximumLength", wintypes.USHORT),
@@ -42,6 +44,8 @@ class _UnicodeString(ctypes.Structure):
 
 
 class _ObjectAttributes(ctypes.Structure):
+    """The retained parent handle and child name for a native open."""
+
     _fields_ = [
         ("Length", wintypes.ULONG),
         ("RootDirectory", wintypes.HANDLE),
@@ -53,10 +57,14 @@ class _ObjectAttributes(ctypes.Structure):
 
 
 class _IoStatusValue(ctypes.Union):
+    """The native I/O status union with pointer-sized storage."""
+
     _fields_ = [("Status", wintypes.LONG), ("Pointer", wintypes.LPVOID)]
 
 
 class _IoStatusBlock(ctypes.Structure):
+    """The completion status and information returned by NtCreateFile."""
+
     _fields_ = [("Value", _IoStatusValue), ("Information", ctypes.c_size_t)]
 
 
@@ -106,9 +114,14 @@ def _descriptor(handle: int) -> int:
 
 
 def _open_child(path: str, dir_fd: int, *, directory: bool, metadata: bool) -> int:
+    """Open a child beneath its parent without following reparse points."""
     # RootDirectory must be the only anchor. Reject native separators and
-    # alternate data streams instead of letting a child name change that.
-    if not path or any(character in path for character in "\\/:\0"):
+    # traversal or alternate streams that would change that boundary.
+    if (
+        not path
+        or path in (".", "..")
+        or any(character in path for character in "\\/:\0")
+    ):
         raise OSError(errno.EINVAL, "not a single file component")
     length = len(path.encode("utf-16-le"))
     if length > 65532:
@@ -148,6 +161,7 @@ def _open_child(path: str, dir_fd: int, *, directory: bool, metadata: bool) -> i
 
 
 def open_directory(path: str | Path, *, dir_fd: int | None = None) -> int:
+    """Open an approved root or child directory without following reparses."""
     if dir_fd is not None:
         return _open_child(str(path), dir_fd, directory=True, metadata=False)
     # The caller has canonicalized and approved this root. The extended
@@ -170,10 +184,12 @@ def open_directory(path: str | Path, *, dir_fd: int | None = None) -> int:
 
 
 def open_file(path: str, *, dir_fd: int) -> int:
+    """Open a child file for binary reading without following reparse points."""
     return _open_child(path, dir_fd, directory=False, metadata=False)
 
 
 def stat_child(path: str, *, dir_fd: int) -> os.stat_result:
+    """Inspect a child entry through a metadata handle without following it."""
     descriptor = _open_child(path, dir_fd, directory=False, metadata=True)
     try:
         return os.fstat(descriptor)

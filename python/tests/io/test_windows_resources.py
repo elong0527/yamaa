@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import subprocess
 from pathlib import Path
@@ -14,6 +15,7 @@ pytestmark = pytest.mark.skipif(os.name != "nt", reason="requires Windows file A
 
 
 def _junction(link: Path, target: Path) -> None:
+    """Create a Windows directory junction without requiring symlink privileges."""
     subprocess.run(
         ["cmd", "/c", "mklink", "/J", str(link), str(target)],
         check=True,
@@ -22,6 +24,7 @@ def _junction(link: Path, target: Path) -> None:
 
 
 def test_junction_below_an_approved_root_is_rejected(tmp_path: Path) -> None:
+    """A junction below an approved root cannot expose its target's bytes."""
     project = tmp_path / "project"
     project.mkdir()
     outside = tmp_path / "outside"
@@ -38,6 +41,7 @@ def test_junction_below_an_approved_root_is_rejected(tmp_path: Path) -> None:
 
 
 def test_junction_can_itself_be_an_approved_root(tmp_path: Path) -> None:
+    """Approving the junction itself fixes the root at its resolved directory."""
     store = tmp_path / "store"
     store.mkdir()
     (store / "dm.csv").write_bytes(b"ID\n001\n")
@@ -49,6 +53,7 @@ def test_junction_can_itself_be_an_approved_root(tmp_path: Path) -> None:
 
 
 def test_junction_replacement_is_detected_before_ingestion(tmp_path: Path) -> None:
+    """A new junction cannot stand in for a previously captured source directory."""
     project = tmp_path / "project"
     source = project / "input"
     source.mkdir(parents=True)
@@ -69,6 +74,7 @@ def test_junction_replacement_is_detected_before_ingestion(tmp_path: Path) -> No
 
 
 def test_alternate_data_stream_is_not_a_child_file(tmp_path: Path) -> None:
+    """Native child opens reject alternate streams even on an existing file."""
     (tmp_path / "input").mkdir()
     (tmp_path / "input/dm.csv").write_bytes(b"ID\n001\n")
     (tmp_path / "input/dm.csv:hidden").write_bytes(b"not a dataset")
@@ -79,3 +85,32 @@ def test_alternate_data_stream_is_not_a_child_file(tmp_path: Path) -> None:
 
     assert raised.value.condition == "resource_path_missing"
     assert resources.capture_reads == 0
+
+
+@pytest.mark.parametrize("operation", ["open_directory", "open_file", "stat_child"])
+@pytest.mark.parametrize(
+    "component",
+    ["", ".", "..", "input/dm.csv", "input\\dm.csv", "dm.csv:hidden", "dm\0.csv"],
+)
+def test_invalid_child_names_are_rejected_before_native_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    component: str,
+) -> None:
+    """Every child helper refuses names that could change its parent boundary."""
+    from yamaa.io import _windows
+
+    def unexpected_open(*args: object) -> None:
+        """Fail if validation lets an invalid name reach NtCreateFile."""
+        pytest.fail("an invalid child name reached NtCreateFile")
+
+    descriptor = _windows.open_directory(tmp_path.resolve())
+    monkeypatch.setattr(_windows, "_nt_create_file", unexpected_open)
+    try:
+        with pytest.raises(OSError) as raised:
+            getattr(_windows, operation)(component, dir_fd=descriptor)
+
+        assert raised.value.errno == errno.EINVAL
+    finally:
+        os.close(descriptor)

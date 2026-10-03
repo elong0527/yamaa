@@ -13,6 +13,7 @@ if os.name == "nt":
 else:
 
     def open_directory(path: str | Path, *, dir_fd: int | None = None) -> int:
+        """Open a directory descriptor without following its final symbolic link."""
         return os.open(
             path,
             os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
@@ -20,6 +21,7 @@ else:
         )
 
     def open_file(path: str, *, dir_fd: int) -> int:
+        """Open a child file for reading without following its final symbolic link."""
         return os.open(
             path,
             os.O_RDONLY
@@ -30,10 +32,12 @@ else:
         )
 
     def stat_child(path: str, *, dir_fd: int) -> os.stat_result:
+        """Inspect the child entry itself without following symbolic links."""
         return os.stat(path, dir_fd=dir_fd, follow_symlinks=False)
 
 
 def ensure_available() -> None:
+    """Require APIs that safely resolve children from retained parent descriptors."""
     if os.name == "nt":
         return
     if (

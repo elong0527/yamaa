@@ -1037,6 +1037,7 @@ def _held_out_case(
     }
 
     def at_app(text: str) -> str:
+        """Embed the temporary app path in a script without native backslashes."""
         return text.replace("/app/", f"{app.as_posix()}/")
 
     (app / "output" / "result.py").write_text(at_app(texts[agent]))
@@ -1139,6 +1140,7 @@ def test_input_schemas_stay_out_of_the_agent_sandbox(tmp_path):
 
 
 def test_the_python_oracle_writes_the_golden_bytes(tmp_path):
+    """The generated Python oracle reproduces both golden datasets byte for byte."""
     benchmark = ROOT / "benchmarks" / "sdtm-dm-race-ethnicity"
     task = build.build_task(
         benchmark, tmp_path / "tasks", build.IMAGE, "test", "python"
@@ -1174,6 +1176,7 @@ INTERPRETERS = {"r": ["Rscript"], "python": [sys.executable]}
 @pytest.mark.parametrize("language", LANGUAGES)
 @pytest.mark.parametrize("golden", ORACLE_GOLDENS)
 def test_the_oracle_writes_each_golden_byte_for_byte(tmp_path, language, golden):
+    """Each oracle preserves the golden's text or binary bytes in either track."""
     if language == "r" and shutil.which("Rscript") is None:
         pytest.skip("Rscript is not installed")
     path = ROOT / "benchmarks" / golden
@@ -1227,6 +1230,7 @@ def test_every_reference_solution_belongs_to_a_benchmark_track():
 
 @pytest.mark.parametrize("reference", REFERENCES)
 def test_a_reference_solution_scores_one(tmp_path, reference):
+    """Every available reference solution earns full credit from the grader."""
     benchmark, script = reference.split("/")
     language = "r" if script == "result.R" else "python"
     text = (build.SOLUTIONS / reference).read_text()
