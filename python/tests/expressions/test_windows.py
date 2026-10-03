@@ -246,6 +246,33 @@ def test_a_partition_with_no_eligible_row_flags_nothing() -> None:
     assert _value(baseline_flag(partition(rows, 1), "ADT", "TRTSDT")) is MISSING
 
 
+def test_a_window_filter_excludes_rows_from_the_baseline_search() -> None:
+    rows = dated(
+        ("2025-01-02", "2025-01-10"),
+        ("2025-01-06", "2025-01-10"),
+    )
+    # The later row is excluded by the window's filter, so it can neither be
+    # flagged itself (REQ-0294) nor take the flag from the eligible latest.
+    assert (
+        _value(baseline_flag(partition(rows, 1, [True, False]), "ADT", "TRTSDT"))
+        is MISSING
+    )
+    assert (
+        _value(baseline_flag(partition(rows, 0, [True, False]), "ADT", "TRTSDT")) == "Y"
+    )
+
+
+def test_a_window_filter_excludes_ties_from_the_baseline_search() -> None:
+    rows = dated(
+        ("2025-01-06", "2025-01-10"),
+        ("2025-01-06", "2025-01-10"),
+    )
+    # The excluded twin is not a tie; the eligible row stands alone.
+    assert (
+        _value(baseline_flag(partition(rows, 0, [True, False]), "ADT", "TRTSDT")) == "Y"
+    )
+
+
 # --- dispatch ------------------------------------------------------------
 
 

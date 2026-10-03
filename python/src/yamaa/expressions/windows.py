@@ -176,8 +176,15 @@ def baseline_flag(
     reference_date: str,
 ) -> WindowResult:
     """Flag the one latest row whose date is at or before the reference."""
+    # REQ-0294: a row the window's filter excluded receives missing and takes
+    # no part in locating the baseline, like every other window operation.
+    if not partition.eligible[partition.current]:
+        return _missing()
     latest: int | None = None
-    for index, row in enumerate(partition.rows):
+    for index, keep in enumerate(partition.eligible):
+        if not keep:
+            continue
+        row = partition.rows[index]
         candidate = _read(row, date)
         reference = _read(row, reference_date)
         if candidate is MISSING or reference is MISSING:
@@ -201,12 +208,17 @@ def baseline_flag(
         return _missing()
     tied = [
         index
-        for index, row in enumerate(partition.rows)
-        if index != latest
-        and _read(row, date) is not MISSING
-        and _read(row, date) == _read(partition.rows[latest], date)
-        and _read(row, reference_date) is not MISSING
-        and compare_values(_read(row, date), _read(row, reference_date)) <= 0
+        for index, keep in enumerate(partition.eligible)
+        if keep
+        and index != latest
+        and _read(partition.rows[index], date) is not MISSING
+        and _read(partition.rows[index], date) == _read(partition.rows[latest], date)
+        and _read(partition.rows[index], reference_date) is not MISSING
+        and compare_values(
+            _read(partition.rows[index], date),
+            _read(partition.rows[index], reference_date),
+        )
+        <= 0
     ]
     if tied:
         # A tie for the latest eligible date leaves no unique baseline, and
