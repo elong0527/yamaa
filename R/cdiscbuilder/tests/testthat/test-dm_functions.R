@@ -90,3 +90,63 @@ test_that("calc_rfendtc works correctly", {
     c("2023-01-05", "")
   )
 })
+
+test_that("get_first_dose_date handles seconds-precision datetimes", {
+  built_domains <- list(
+    EX = data.frame(
+      USUBJID = c("S1", "S1", "S2"),
+      EXSTDTC = c(
+        "2023-01-05T08:00:00", "2023-01-01T08:00:00", "2023-01-10T08:00:00"
+      ),
+      EXDOSE = c("10", "10", "10"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  res <- get_first_dose_date(c("S1", "S2", "S3"), built_domains)
+  expect_equal(
+    res,
+    c("2023-01-01T08:00:00", "2023-01-10T08:00:00", NA_character_)
+  )
+})
+
+test_that("get_first_dose_date orders mixed-precision datetimes", {
+  built_domains <- list(
+    EX = data.frame(
+      USUBJID = c("S1", "S1"),
+      EXSTDTC = c("2023-01-05T08:00:30", "2023-01-05T08:00"),
+      EXDOSE = c("10", "10"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  res <- get_first_dose_date(c("S1"), built_domains)
+  expect_equal(res, c("2023-01-05T08:00"))
+})
+
+test_that("get_last_participation_date handles seconds-precision datetimes", {
+  built_domains <- list(
+    AE = data.frame(
+      USUBJID = c("S1", "S1"),
+      AEENDTC = c("2023-01-10T08:00:30", "2023-01-10T08:00:00"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  res <- get_last_participation_date(c("S1"), built_domains)
+  expect_equal(res, c("2023-01-10T08:00:30"))
+})
+
+test_that("get_earliest_informed_consent_date handles seconds-precision datetimes", { # nolint: line_length_linter
+  built_domains <- list(
+    DS = data.frame(
+      USUBJID = c("S1", "S1"),
+      DSDECOD = c("INFORMED CONSENT OBTAINED", "INFORMED CONSENT OBTAINED"),
+      DSSTDTC = c("2023-01-02T10:00:00", "2023-01-01T10:00:00"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  res <- get_earliest_informed_consent_date(c("S1"), built_domains)
+  expect_equal(res, c("2023-01-01T10:00:00"))
+})
