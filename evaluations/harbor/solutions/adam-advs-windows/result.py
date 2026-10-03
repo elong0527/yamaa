@@ -40,10 +40,65 @@ framed = raw.with_columns(
     .alias("AVISITN"),
 )
 
+# A planned visit with no collected record whose study day falls in its
+# window still appears as an expected record: the planned visit name and
+# number and the window, a continued sequence number, and no date, study
+# day, or value. The open-ended post-treatment window never gets one.
+planned = [
+    ("SCREENING", "SCREENING", 1, -1, -(10**9), -1),
+    ("BASELINE", "BASELINE", 2, 0, 1, 1),
+    ("WEEK 2", "WEEK 2", 3, 2, 2, 21),
+    ("WEEK 4", "WEEK 4", 4, 4, 22, 42),
+]
+
+expected_rows = []
+for (study, subject, param), group in framed.group_by(
+    ["STUDYID", "USUBJID", "PARAMCD"], maintain_order=True
+):
+    seq = group["VSSEQ"].max()
+    days = group["ADY"].drop_nulls()
+    for avisit, visit, visitnum, avisitn, lo, hi in planned:
+        if not ((days >= lo) & (days <= hi)).any():
+            seq += 1
+            expected_rows.append(
+                {
+                    "STUDYID": study,
+                    "USUBJID": subject,
+                    "PARAMCD": param,
+                    "VSSEQ": seq,
+                    "VISIT": visit,
+                    "VISITNUM": float(visitnum),
+                    "ADT": None,
+                    "ADY": None,
+                    "AVAL": None,
+                    "AVISIT": avisit,
+                    "AVISITN": avisitn,
+                }
+            )
+
+expected = pl.DataFrame(
+    expected_rows,
+    schema={
+        "STUDYID": pl.String,
+        "USUBJID": pl.String,
+        "PARAMCD": pl.String,
+        "VSSEQ": pl.Int64,
+        "VISIT": pl.String,
+        "VISITNUM": pl.Float64,
+        "ADT": pl.Date,
+        "ADY": pl.Int64,
+        "AVAL": pl.Float64,
+        "AVISIT": pl.String,
+        "AVISITN": pl.Int64,
+    },
+)
+framed = pl.concat([framed, expected], how="vertical")
+
 # The earliest record by study day in each study, subject, parameter,
-# and visit; the lower sequence number breaks a same-day tie.
+# and visit; the lower sequence number breaks a same-day tie. Expected
+# records have no study day and never take the flag.
 flagged = (
-    framed.filter(pl.col("AVISIT").is_not_null())
+    framed.filter(pl.col("AVISIT").is_not_null() & pl.col("ADY").is_not_null())
     .sort(["ADY", "VSSEQ"])
     .unique(["STUDYID", "USUBJID", "PARAMCD", "AVISIT"], keep="first", maintain_order=True)
     .select("STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ")

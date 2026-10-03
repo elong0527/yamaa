@@ -1,11 +1,12 @@
 # Assign Analysis Windows by Study Day
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-windows.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** assign each systolic blood pressure (`SYSBP`) record to
 its analysis window, adding the analysis visit (`AVISIT`), its
-numeric order (`AVISITN`), and `ANL01FL`.
+numeric order (`AVISITN`), and `ANL01FL`; add an expected record
+for each planned visit with no measurement.
 
 **Input:** vital signs records carrying the collected visit
 (`VISIT`, `VISITNUM`), the analysis date (`ADT`), the relative
@@ -27,13 +28,18 @@ study day (`ADY`), and the measured value (`AVAL`).
   subject, parameter, and analysis visit: the earliest by study
   day, with the lower sequence number breaking a tie on the same
   day. It is blank on every other record, including any record
-  with no study day.
+  with no study day; an expected record never takes the flag,
+  even when it is the only record in its window.
 
 **Note:** windows follow the study day rather than the collected
 visit name, so a record the site left unscheduled still belongs
 to whichever window its day falls in, and a record on or past
 day 43 falls in the open-ended final window. Each window starts
 with its first day and ends before the next window's first day,
-so day 22 opens Week 4 and day 43 opens post-treatment.
+so day 22 opens Week 4 and day 43 opens post-treatment. A planned
+visit with no measurement still appears as an expected record
+carrying the planned visit and window and a continued sequence
+number, but no date, day, or value, so summaries see a complete
+visit spine; the open-ended final window never gets one.
 
 **Standard:** ADaM | **Domain:** ADVS

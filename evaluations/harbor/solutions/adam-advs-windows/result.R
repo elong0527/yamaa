@@ -37,10 +37,63 @@ framed <- raw |>
     )
   )
 
+# A planned visit with no collected record whose study day falls in its
+# window still appears as an expected record: the planned visit name and
+# number and the window, a continued sequence number, and no date, study
+# day, or value. The open-ended post-treatment window never gets one.
+planned <- data.frame(
+  AVISIT = c("SCREENING", "BASELINE", "WEEK 2", "WEEK 4"),
+  VISIT = c("SCREENING", "BASELINE", "WEEK 2", "WEEK 4"),
+  VISITNUM = c(1, 2, 3, 4),
+  AVISITN = c(-1L, 0L, 2L, 4L),
+  lo = c(-Inf, 1, 2, 22),
+  hi = c(-1, 1, 21, 42),
+  stringsAsFactors = FALSE
+)
+
+expected <- merge(distinct(framed, STUDYID, USUBJID, PARAMCD), planned) |>
+  rowwise() |>
+  mutate(
+    covered = {
+      days <- framed$ADY[
+        framed$STUDYID == STUDYID &
+          framed$USUBJID == USUBJID &
+          framed$PARAMCD == PARAMCD &
+          !is.na(framed$ADY)
+      ]
+      any(days >= lo & days <= hi)
+    },
+    top_seq = max(
+      framed$VSSEQ[
+        framed$STUDYID == STUDYID &
+          framed$USUBJID == USUBJID &
+          framed$PARAMCD == PARAMCD
+      ]
+    )
+  ) |>
+  ungroup() |>
+  filter(!covered) |>
+  group_by(STUDYID, USUBJID, PARAMCD) |>
+  arrange(match(AVISIT, planned$AVISIT), .by_group = TRUE) |>
+  mutate(
+    VSSEQ = top_seq + row_number(),
+    ADT = as.Date(NA),
+    ADY = NA_integer_,
+    AVAL = NA_real_
+  ) |>
+  ungroup() |>
+  select(
+    STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL,
+    AVISIT, AVISITN
+  )
+
+framed <- bind_rows(framed, expected)
+
 # The earliest record by study day in each study, subject, parameter,
-# and visit; the lower sequence number breaks a same-day tie.
+# and visit; the lower sequence number breaks a same-day tie. Expected
+# records have no study day and never take the flag.
 flagged <- framed |>
-  filter(!is.na(AVISIT)) |>
+  filter(!is.na(AVISIT), !is.na(ADY)) |>
   arrange(ADY, VSSEQ) |>
   distinct(STUDYID, USUBJID, PARAMCD, AVISIT, .keep_all = TRUE) |>
   select(STUDYID, USUBJID, PARAMCD, AVISIT, VSSEQ) |>
