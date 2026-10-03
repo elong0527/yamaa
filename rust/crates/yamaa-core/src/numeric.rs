@@ -189,3 +189,69 @@ pub fn unary(
         })),
     }
 }
+
+/// Numeric functions selecting among already-evaluated arguments (REQ-0424).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectionFunction {
+    Greatest,
+    Least,
+    Coalesce,
+}
+
+/// Select a present value, then promote if any present argument is float.
+/// Extremes compare before promotion and retain the first equal value (including
+/// signed zero); COALESCE selects the first present value. Missing arguments do
+/// not influence promotion. Empty primitive input is missing; the grammar layer
+/// separately enforces each function's minimum arity.
+pub fn select(function: SelectionFunction, arguments: &[Number]) -> Number {
+    use core::cmp::Ordering;
+    let mut selected = Number::Missing;
+    let mut has_float = false;
+    for &argument in arguments {
+        if argument == Number::Missing {
+            continue;
+        }
+        has_float |= matches!(argument, Number::Float(_));
+        if selected == Number::Missing {
+            selected = argument;
+        } else if function != SelectionFunction::Coalesce {
+            let order = crate::value::compare_present(&argument.into(), &selected.into())
+                .expect("present numeric arguments are comparable");
+            if (function == SelectionFunction::Greatest && order == Ordering::Greater)
+                || (function == SelectionFunction::Least && order == Ordering::Less)
+            {
+                selected = argument;
+            }
+        }
+    }
+    match (selected, has_float) {
+        (Number::Int(value), true) => Number::float(value as f64),
+        _ => selected,
+    }
+}
+
+/// Return missing for equal arguments, comparing mixed types after promotion.
+/// Unlike extreme selection, the reference NULLIF compares a mixed pair as two
+/// binary64 values. A present unmatched left operand has the promoted pair type.
+pub fn null_if(left: Number, right: Number) -> Number {
+    match (left, right) {
+        (Number::Missing, _) => Number::Missing,
+        (_, Number::Missing) => left,
+        (Number::Int(a), Number::Int(b)) => {
+            if a == b {
+                Number::Missing
+            } else {
+                left
+            }
+        }
+        _ => {
+            let a = left.as_float().expect("present numeric left operand");
+            let b = right.as_float().expect("present numeric right operand");
+            if a == b {
+                Number::Missing
+            } else {
+                Number::float(a)
+            }
+        }
+    }
+}

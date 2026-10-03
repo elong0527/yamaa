@@ -19,6 +19,10 @@ FIXTURE = (
 )
 with FIXTURE.open(encoding="utf-8", newline="") as stream:
     VECTORS = list(csv.DictReader(stream, delimiter="\t"))
+with FIXTURE.with_name("numeric_selection.tsv").open(
+    encoding="utf-8", newline=""
+) as stream:
+    VECTORS.extend(csv.DictReader(stream, delimiter="\t"))
 
 
 def _value(token):

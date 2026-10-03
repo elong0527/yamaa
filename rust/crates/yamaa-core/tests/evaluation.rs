@@ -213,9 +213,10 @@ fn shared_evaluation_vectors() {
             let route: Vec<_> = route
                 .iter()
                 .map(|position| match position {
-                    Operand::Unary => "unary",
-                    Operand::Left => "left",
-                    Operand::Right => "right",
+                    Operand::Unary => "unary".into(),
+                    Operand::Left => "left".into(),
+                    Operand::Right => "right".into(),
+                    Operand::Argument(index) => format!("argument:{index}"),
                 })
                 .collect();
             assert_eq!(
@@ -350,4 +351,51 @@ fn repeated_resolution_and_plan_reuse_do_not_cache_values() {
     assert_eq!(plan.evaluate(&mut resolver), Ok(Number::Int(3)));
     assert_eq!(plan.evaluate(&mut resolver), Ok(Number::Int(7)));
     assert_eq!(resolver.0, 4);
+}
+
+/// Replay selection values, eager traces and argument-level failures through compilation.
+#[test]
+fn shared_selection_vectors() {
+    for row in include_str!("fixtures/numeric_selection.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields: Vec<_> = row.split('\t').collect();
+        assert_eq!(fields.len(), 6);
+        let mut resolver = RecordingResolver::new(fields[2]);
+        let plan = compile_numeric(fields[1], SPEC_PATH, CompileLimits::default()).unwrap();
+        let mut route = Vec::new();
+        let actual = match plan.evaluate(&mut resolver) {
+            Ok(number) => encoded(number),
+            Err(error) => {
+                assert!(fields[1]
+                    .get(error.source_span.start..error.source_span.end)
+                    .is_some());
+                let error = *error.evaluation;
+                assert_eq!(error.location.expression, fields[1]);
+                assert_eq!(error.location.spec_path, SPEC_PATH);
+                route = error.location.operands;
+                let EvaluationErrorKind::Numeric(condition) = error.kind;
+                encoded_condition(&condition)
+            }
+        };
+        assert_eq!(actual, fields[3], "{}", fields[0]);
+        assert_eq!(
+            resolver.trace.join(","),
+            fields[4].trim_matches('-'),
+            "{}",
+            fields[0]
+        );
+        let route = route
+            .iter()
+            .map(|operand| match operand {
+                Operand::Unary => "unary".into(),
+                Operand::Left => "left".into(),
+                Operand::Right => "right".into(),
+                Operand::Argument(index) => format!("argument:{index}"),
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        assert_eq!(route, fields[5].trim_matches('-'), "{}", fields[0]);
+    }
 }

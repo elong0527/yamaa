@@ -164,6 +164,14 @@ was written in, and a division by zero, a negative `SQRT`, a non-positive
 `LN`, an invalid `POWER`, or an integer overflow fails the run rather than
 becoming missing.
 
+Numeric selection functions evaluate all arguments in written order, including
+`COALESCE` after finding a present value. A later argument's failure remains fatal.
+`GREATEST`, `LEAST`, `NULLIF`, and `COALESCE` return a float when any present
+argument is float; missing arguments do not force promotion. In particular,
+`COALESCE(1, 2.0)` returns float `1.0`. This corrects the former behavior that kept
+an integer first argument unchanged, and can affect dependent calculations for
+integers above binary64's exact range.
+
 Integer literals keep exact i64 semantics even when written with thousands of
 leading zeros. An out-of-range literal reports `integer_overflow` (REQ-0434),
 with its canonical decimal digits as diagnostic text, independently of Python's

@@ -191,14 +191,7 @@ fn unsupported_features_are_preflighted_in_source_order() {
             Err(CompileError::Unsupported { .. })
         ));
     }
-    for name in [
-        "POWER",
-        "GREATEST",
-        "LEAST",
-        "NULLIF",
-        "COALESCE",
-        "ROUND_HALF_AWAY_FROM_ZERO",
-    ] {
+    for name in ["POWER", "ROUND_HALF_AWAY_FROM_ZERO"] {
         assert!(matches!(
             compile_numeric(&format!("{name}(A, B)"), "spec", CompileLimits::default()),
             Err(CompileError::Unsupported { .. })
@@ -270,17 +263,76 @@ fn opaque_non_clone_resolution_failure_keeps_span_and_payload() {
             Err(BoundaryError(Box::new(7)))
         }
     }
-    let text = "ABS((BROKEN)) + A";
-    let error = compile(text).evaluate(&mut FailedResolver).unwrap_err();
-    assert_eq!(
-        &text[error.source_span.start..error.source_span.end],
-        "BROKEN"
-    );
-    assert_eq!(
-        error.evaluation.kind,
-        EvaluationErrorKind::Resolution {
-            identifier: "BROKEN".into(),
-            error: BoundaryError(Box::new(7))
-        }
-    );
+    for text in ["ABS((BROKEN)) + A", "COALESCE(1, (BROKEN), A)"] {
+        let error = compile(text).evaluate(&mut FailedResolver).unwrap_err();
+        assert_eq!(
+            &text[error.source_span.start..error.source_span.end],
+            "BROKEN"
+        );
+        assert_eq!(
+            error.evaluation.kind,
+            EvaluationErrorKind::Resolution {
+                identifier: "BROKEN".into(),
+                error: BoundaryError(Box::new(7))
+            }
+        );
+    }
+}
+
+/// Variadic calls retain nested argument spans and count every resolver occurrence.
+#[test]
+fn selection_arguments_preserve_spans_and_resolution_budgets() {
+    for (text, route) in [
+        ("COALESCE(1, (UNKNOWN))", vec![Operand::Argument(1)]),
+        (
+            "GREATEST(1, ABS(UNKNOWN), A)",
+            vec![Operand::Argument(1), Operand::Unary],
+        ),
+        (
+            "NULLIF(NULL, COALESCE(M, UNKNOWN))",
+            vec![Operand::Right, Operand::Argument(1)],
+        ),
+    ] {
+        let error = compile(text)
+            .evaluate(&mut Resolver::default())
+            .unwrap_err();
+        assert_eq!(
+            &text[error.source_span.start..error.source_span.end],
+            "UNKNOWN"
+        );
+        assert_eq!(error.evaluation.location.operands, route);
+    }
+    for name in ["GREATEST", "LEAST", "COALESCE"] {
+        let text = format!("{name}({})", vec!["A"; 100].join(","));
+        assert_eq!(
+            compile_numeric(
+                &text,
+                "spec",
+                CompileLimits {
+                    resolutions: 99,
+                    ..CompileLimits::default()
+                }
+            ),
+            Err(CompileError::ResolutionLimit {
+                limit: 99,
+                required: 100
+            })
+        );
+        let plan = compile_numeric(
+            &text,
+            "spec",
+            CompileLimits {
+                resolutions: 100,
+                ..CompileLimits::default()
+            },
+        )
+        .unwrap();
+        let mut resolver = Resolver::default();
+        assert_eq!(plan.resolution_count(), 100);
+        assert_eq!(
+            plan.evaluate(&mut resolver).unwrap(),
+            Number::Int(if name == "GREATEST" { 100 } else { 1 })
+        );
+        assert_eq!(resolver.trace.len(), 100);
+    }
 }
