@@ -108,3 +108,27 @@ test_that("execute_closest rejects invalid filters", {
     )
   }
 })
+
+test_that("execute_closest handles minute-precision datetimes", {
+  target_df <- data.frame(
+    USUBJID = c("S1", "S1"),
+    TARGET_DATE = c("2023-01-05T12:00", "2023-01-10T12:00"),
+    stringsAsFactors = FALSE
+  )
+  source_data <- list(
+    VS = data.frame(
+      USUBJID = c("S1", "S1", "S1"),
+      VSDTC = c("2023-01-04T08:00", "2023-01-06T08:00", "2023-01-11T08:00"),
+      VSSTRESN = c("120", "125", "130"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  res <- cdiscbuilder:::.execute_closest(
+    "CLOSEST:VS.VSSTRESN:TARGET_DATE",
+    c("USUBJID"),
+    target_df,
+    source_data
+  )
+  expect_equal(res, c("125", "130"))
+})

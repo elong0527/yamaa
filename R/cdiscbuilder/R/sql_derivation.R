@@ -153,6 +153,12 @@ NULL
         if (is.na(t_date)) {
           t_date <- as.POSIXct(
             target_date,
+            format = "%Y-%m-%dT%H:%M", optional = TRUE
+          )
+        }
+        if (is.na(t_date)) {
+          t_date <- as.POSIXct(
+            target_date,
             format = "%Y-%m-%d", optional = TRUE
           )
         }
@@ -165,6 +171,12 @@ NULL
             subject_data[[date_col]],
             format = "%Y-%m-%d %H:%M:%S",
             optional = TRUE
+          )
+        }
+        if (all(is.na(d_dates))) {
+          d_dates <- as.POSIXct(
+            subject_data[[date_col]],
+            format = "%Y-%m-%dT%H:%M", optional = TRUE
           )
         }
         if (all(is.na(d_dates))) {

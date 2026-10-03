@@ -50,6 +50,15 @@
         DATETIME
       )
     ) |>
+    mutate(
+      DATETIME = if_else(
+        is.na(DATETIME), # nolint: object_usage_linter
+        suppressWarnings(
+          as.POSIXct(DATE, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+        ),
+        DATETIME
+      )
+    ) |>
     filter(!is.na(DATETIME))
   if (nrow(combined) == 0) {
     return(rep(NA_character_, length(usubjid_series)))
@@ -143,6 +152,7 @@ get_earliest_informed_consent_date <- function(usubjid_series, built_domains = N
     valid <- valid |>
       mutate(DATETIME = suppressWarnings(as.POSIXct(Value, format = "%Y-%m-%dT%H:%M", tz = "UTC"))) |> # nolint: object_usage_linter, line_length_linter
       mutate(DATETIME = if_else(is.na(DATETIME), suppressWarnings(as.POSIXct(Value, format = "%Y-%m-%d", tz = "UTC")), DATETIME)) |> # nolint: object_usage_linter, line_length_linter
+      mutate(DATETIME = if_else(is.na(DATETIME), suppressWarnings(as.POSIXct(Value, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")), DATETIME)) |> # nolint: object_usage_linter, line_length_linter
       filter(!is.na(DATETIME))
     if (nrow(valid) == 0) {
       return(rep(NA_character_, length(usubjid_series)))
@@ -180,6 +190,17 @@ get_earliest_informed_consent_date <- function(usubjid_series, built_domains = N
         is.na(DATETIME), # nolint: object_usage_linter
         suppressWarnings(
           as.POSIXct(.data[[date_col]], format = "%Y-%m-%d", tz = "UTC")
+        ),
+        DATETIME
+      )
+    ) |>
+    mutate(
+      DATETIME = if_else(
+        is.na(DATETIME), # nolint: object_usage_linter
+        suppressWarnings(
+          as.POSIXct(
+            .data[[date_col]], format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"
+          )
         ),
         DATETIME
       )
@@ -251,6 +272,15 @@ get_last_participation_date <- function(usubjid_series, built_domains = NULL, ..
       DATETIME = if_else(
         is.na(DATETIME), # nolint: object_usage_linter
         suppressWarnings(as.POSIXct(DATE, format = "%Y-%m-%d", tz = "UTC")),
+        DATETIME
+      )
+    ) |>
+    mutate(
+      DATETIME = if_else(
+        is.na(DATETIME), # nolint: object_usage_linter
+        suppressWarnings(
+          as.POSIXct(DATE, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+        ),
         DATETIME
       )
     ) |>
