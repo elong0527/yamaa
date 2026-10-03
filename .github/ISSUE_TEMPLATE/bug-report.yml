@@ -1,0 +1,83 @@
+name: "🐞 Bug report"
+description: "Something broken? Show us the smallest example that breaks."
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! A good bug report is like a recipe that always
+        burns the cake: anyone who follows it gets the same failure.
+        Keep it tiny — 10 lines beats 100.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "In plain words, what's wrong?"
+      description: "Explain it like I'm five. No jargon needed."
+      placeholder: "When I derive ADSL with two subjects sharing one USUBJID, the engine crashes instead of telling me my input is bad."
+    validations:
+      required: true
+
+  - type: textarea
+    id: mre
+    attributes:
+      label: "Show it failing (smallest example that breaks)"
+      description: "Paste the smallest spec and input that reproduce the failure, plus the command you ran. Anyone should be able to copy-paste and see it fail. Wrap code in a code block (```)."
+      placeholder: |
+        ```yaml
+        schema_version: "1.0"
+        domain: ADSL
+        keys: [STUDYID, USUBJID]
+        ===
+        derive USUBJID: "DUP"
+        ```
+        Input: two rows with USUBJID "DUP".
+        Run: yamaa run spec.yaml --input data.csv
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What did you expect to happen?"
+      description: "One or two sentences."
+      placeholder: "I expected an error message saying USUBJID must be unique."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "What happened instead?"
+      description: "Paste the error message or the wrong output."
+      placeholder: "Traceback (most recent call last): ... ValueError: ..."
+    validations:
+      required: true
+
+  - type: input
+    id: reference
+    attributes:
+      label: "Link to the relevant reference"
+      description: "The docs page, rule, or benchmark this relates to."
+      placeholder: "https://elong0527.github.io/yamaa/articles/rules/"
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: "Which engine did you use?"
+      options:
+        - Python
+        - R
+        - Both
+        - Not sure
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: "yamaa version"
+      description: "Output of `pip show yamaa`, or the commit hash you used."
+      placeholder: "0.2.0"
