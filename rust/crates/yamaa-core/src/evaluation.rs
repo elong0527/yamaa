@@ -7,7 +7,8 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::numeric::{
-    self, ArithmeticErrorKind, BinaryOperator, Number, SelectionFunction, UnaryOperator,
+    self, ArithmeticErrorKind, BinaryOperator, IntegralFunction, Number, SelectionFunction,
+    UnaryOperator,
 };
 use crate::value::{Selection, ValueType};
 
@@ -28,6 +29,10 @@ pub enum NumericNode {
     NullIf {
         left: Box<NumericNode>,
         right: Box<NumericNode>,
+    },
+    Integral {
+        function: IntegralFunction,
+        operand: Box<NumericNode>,
     },
     Unary {
         operator: UnaryOperator,
@@ -228,6 +233,10 @@ impl NumericPlan {
                 let left = self.child(left, Operand::Left, resolver, path)?;
                 let right = self.child(right, Operand::Right, resolver, path)?;
                 return Ok(numeric::null_if(left, right));
+            }
+            NumericNode::Integral { function, operand } => {
+                let value = self.child(operand, Operand::Unary, resolver, path)?;
+                return Ok(numeric::integral(*function, value));
             }
             NumericNode::Unary { operator, operand } => {
                 let value = self.child(operand, Operand::Unary, resolver, path)?;

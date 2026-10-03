@@ -353,12 +353,17 @@ fn repeated_resolution_and_plan_reuse_do_not_cache_values() {
     assert_eq!(resolver.0, 4);
 }
 
-/// Replay selection values, eager traces and argument-level failures through compilation.
+/// Replay function values, eager traces and argument-level failures through compilation.
 #[test]
-fn shared_selection_vectors() {
+fn shared_function_vectors() {
     for row in include_str!("fixtures/numeric_selection.tsv")
         .lines()
         .skip(1)
+        .chain(
+            include_str!("fixtures/numeric_integral.tsv")
+                .lines()
+                .skip(1),
+        )
     {
         let fields: Vec<_> = row.split('\t').collect();
         assert_eq!(fields.len(), 6);

@@ -1,0 +1,101 @@
+id	expression	bindings	expected	trace	path
+ceil-missing	CEIL(A)	A=missing	missing	A	-
+ceil-zero-int	CEIL(A)	A=int:0	float:0000000000000000	A	-
+ceil-integer	CEIL(A)	A=int:7	float:401c000000000000	A	-
+ceil-negative-int	CEIL(A)	A=int:-7	float:c01c000000000000	A	-
+ceil-i64-max	CEIL(A)	A=int:9223372036854775807	float:43e0000000000000	A	-
+ceil-i64-min	CEIL(A)	A=int:-9223372036854775808	float:c3e0000000000000	A	-
+ceil-inexact-integer	CEIL(A)	A=int:9007199254740993	float:4340000000000000	A	-
+ceil-positive-zero	CEIL(A)	A=float:0.0	float:0000000000000000	A	-
+ceil-negative-zero	CEIL(A)	A=float:-0.0	float:0000000000000000	A	-
+ceil-positive-fraction	CEIL(A)	A=float:1.75	float:4000000000000000	A	-
+ceil-negative-fraction	CEIL(A)	A=float:-1.75	float:bff0000000000000	A	-
+ceil-positive-small	CEIL(A)	A=float:0.25	float:3ff0000000000000	A	-
+ceil-negative-small	CEIL(A)	A=float:-0.25	float:0000000000000000	A	-
+ceil-positive-subnormal	CEIL(A)	A=float:5e-324	float:3ff0000000000000	A	-
+ceil-negative-subnormal	CEIL(A)	A=float:-5e-324	float:0000000000000000	A	-
+ceil-below-one	CEIL(A)	A=float:0.9999999999999999	float:3ff0000000000000	A	-
+ceil-above-one	CEIL(A)	A=float:1.0000000000000002	float:4000000000000000	A	-
+ceil-above-negative-one	CEIL(A)	A=float:-0.9999999999999999	float:0000000000000000	A	-
+ceil-below-negative-one	CEIL(A)	A=float:-1.0000000000000002	float:bff0000000000000	A	-
+ceil-last-positive-fraction	CEIL(A)	A=float:4503599627370495.5	float:4330000000000000	A	-
+ceil-last-negative-fraction	CEIL(A)	A=float:-4503599627370495.5	float:c32ffffffffffffe	A	-
+ceil-integral-threshold	CEIL(A)	A=float:4503599627370496.0	float:4330000000000000	A	-
+ceil-above-i64	CEIL(A)	A=float:1e100	float:54b249ad2594c37d	A	-
+ceil-finite-max	CEIL(A)	A=float:1.7976931348623157e308	float:7fefffffffffffff	A	-
+ceil-finite-min	CEIL(A)	A=float:-1.7976931348623157e308	float:ffefffffffffffff	A	-
+ceil-nonfinite	CEIL(1e9999)	-	missing	-	-
+ceil-absent	CEIL(A)	-	error:unknown_field:REQ-0443:A	A	unary
+ceil-bool	CEIL(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
+ceil-text	CEIL(A)	A=str:3	error:incompatible_input_type:REQ-0444:A:str	A	unary
+ceil-overflow	CEIL(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+ceil-divide-zero	CEIL(A / 0)	A=int:1	error:division_by_zero:REQ-0430	A	unary
+ceil-missing-still-resolves	CEIL(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
+floor-missing	FLOOR(A)	A=missing	missing	A	-
+floor-zero-int	FLOOR(A)	A=int:0	float:0000000000000000	A	-
+floor-integer	FLOOR(A)	A=int:7	float:401c000000000000	A	-
+floor-negative-int	FLOOR(A)	A=int:-7	float:c01c000000000000	A	-
+floor-i64-max	FLOOR(A)	A=int:9223372036854775807	float:43e0000000000000	A	-
+floor-i64-min	FLOOR(A)	A=int:-9223372036854775808	float:c3e0000000000000	A	-
+floor-inexact-integer	FLOOR(A)	A=int:9007199254740993	float:4340000000000000	A	-
+floor-positive-zero	FLOOR(A)	A=float:0.0	float:0000000000000000	A	-
+floor-negative-zero	FLOOR(A)	A=float:-0.0	float:0000000000000000	A	-
+floor-positive-fraction	FLOOR(A)	A=float:1.75	float:3ff0000000000000	A	-
+floor-negative-fraction	FLOOR(A)	A=float:-1.75	float:c000000000000000	A	-
+floor-positive-small	FLOOR(A)	A=float:0.25	float:0000000000000000	A	-
+floor-negative-small	FLOOR(A)	A=float:-0.25	float:bff0000000000000	A	-
+floor-positive-subnormal	FLOOR(A)	A=float:5e-324	float:0000000000000000	A	-
+floor-negative-subnormal	FLOOR(A)	A=float:-5e-324	float:bff0000000000000	A	-
+floor-below-one	FLOOR(A)	A=float:0.9999999999999999	float:0000000000000000	A	-
+floor-above-one	FLOOR(A)	A=float:1.0000000000000002	float:3ff0000000000000	A	-
+floor-above-negative-one	FLOOR(A)	A=float:-0.9999999999999999	float:bff0000000000000	A	-
+floor-below-negative-one	FLOOR(A)	A=float:-1.0000000000000002	float:c000000000000000	A	-
+floor-last-positive-fraction	FLOOR(A)	A=float:4503599627370495.5	float:432ffffffffffffe	A	-
+floor-last-negative-fraction	FLOOR(A)	A=float:-4503599627370495.5	float:c330000000000000	A	-
+floor-integral-threshold	FLOOR(A)	A=float:4503599627370496.0	float:4330000000000000	A	-
+floor-above-i64	FLOOR(A)	A=float:1e100	float:54b249ad2594c37d	A	-
+floor-finite-max	FLOOR(A)	A=float:1.7976931348623157e308	float:7fefffffffffffff	A	-
+floor-finite-min	FLOOR(A)	A=float:-1.7976931348623157e308	float:ffefffffffffffff	A	-
+floor-nonfinite	FLOOR(1e9999)	-	missing	-	-
+floor-absent	FLOOR(A)	-	error:unknown_field:REQ-0443:A	A	unary
+floor-bool	FLOOR(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
+floor-text	FLOOR(A)	A=str:3	error:incompatible_input_type:REQ-0444:A:str	A	unary
+floor-overflow	FLOOR(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+floor-divide-zero	FLOOR(A / 0)	A=int:1	error:division_by_zero:REQ-0430	A	unary
+floor-missing-still-resolves	FLOOR(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
+trunc-missing	TRUNC(A)	A=missing	missing	A	-
+trunc-zero-int	TRUNC(A)	A=int:0	float:0000000000000000	A	-
+trunc-integer	TRUNC(A)	A=int:7	float:401c000000000000	A	-
+trunc-negative-int	TRUNC(A)	A=int:-7	float:c01c000000000000	A	-
+trunc-i64-max	TRUNC(A)	A=int:9223372036854775807	float:43e0000000000000	A	-
+trunc-i64-min	TRUNC(A)	A=int:-9223372036854775808	float:c3e0000000000000	A	-
+trunc-inexact-integer	TRUNC(A)	A=int:9007199254740993	float:4340000000000000	A	-
+trunc-positive-zero	TRUNC(A)	A=float:0.0	float:0000000000000000	A	-
+trunc-negative-zero	TRUNC(A)	A=float:-0.0	float:0000000000000000	A	-
+trunc-positive-fraction	TRUNC(A)	A=float:1.75	float:3ff0000000000000	A	-
+trunc-negative-fraction	TRUNC(A)	A=float:-1.75	float:bff0000000000000	A	-
+trunc-positive-small	TRUNC(A)	A=float:0.25	float:0000000000000000	A	-
+trunc-negative-small	TRUNC(A)	A=float:-0.25	float:0000000000000000	A	-
+trunc-positive-subnormal	TRUNC(A)	A=float:5e-324	float:0000000000000000	A	-
+trunc-negative-subnormal	TRUNC(A)	A=float:-5e-324	float:0000000000000000	A	-
+trunc-below-one	TRUNC(A)	A=float:0.9999999999999999	float:0000000000000000	A	-
+trunc-above-one	TRUNC(A)	A=float:1.0000000000000002	float:3ff0000000000000	A	-
+trunc-above-negative-one	TRUNC(A)	A=float:-0.9999999999999999	float:0000000000000000	A	-
+trunc-below-negative-one	TRUNC(A)	A=float:-1.0000000000000002	float:bff0000000000000	A	-
+trunc-last-positive-fraction	TRUNC(A)	A=float:4503599627370495.5	float:432ffffffffffffe	A	-
+trunc-last-negative-fraction	TRUNC(A)	A=float:-4503599627370495.5	float:c32ffffffffffffe	A	-
+trunc-integral-threshold	TRUNC(A)	A=float:4503599627370496.0	float:4330000000000000	A	-
+trunc-above-i64	TRUNC(A)	A=float:1e100	float:54b249ad2594c37d	A	-
+trunc-finite-max	TRUNC(A)	A=float:1.7976931348623157e308	float:7fefffffffffffff	A	-
+trunc-finite-min	TRUNC(A)	A=float:-1.7976931348623157e308	float:ffefffffffffffff	A	-
+trunc-nonfinite	TRUNC(1e9999)	-	missing	-	-
+trunc-absent	TRUNC(A)	-	error:unknown_field:REQ-0443:A	A	unary
+trunc-bool	TRUNC(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
+trunc-text	TRUNC(A)	A=str:3	error:incompatible_input_type:REQ-0444:A:str	A	unary
+trunc-overflow	TRUNC(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+trunc-divide-zero	TRUNC(A / 0)	A=int:1	error:division_by_zero:REQ-0430	A	unary
+trunc-missing-still-resolves	TRUNC(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
+integral-nested	CEIL(FLOOR(TRUNC(A)))	A=float:-1.75	float:bff0000000000000	A	-
+integral-first-failure	CEIL(A / 0) + FLOOR(B)	A=int:1;B=int:2	error:division_by_zero:REQ-0430	A	left,unary
+integral-missing-later-failure	TRUNC(A) + FLOOR(B)	A=missing	error:unknown_field:REQ-0443:B	A,B	right,unary
+integral-promoted-dependent	TRUNC(A) - B	A=int:9007199254740993;B=int:9007199254740992	float:0000000000000000	A,B	-
