@@ -1,4 +1,4 @@
-name: "💡 Language change"
+name: "Language change"
 description: "Propose a change to the yamaa language. Show before vs. after."
 title: "[language] "
 labels: ["enhancement"]
@@ -21,7 +21,7 @@ body:
   - type: textarea
     id: before-after
     attributes:
-      label: "Before → after"
+      label: "Before -> after"
       description: "Show the same spec snippet as it looks today, and as it would look with your change. Wrap each in a code block (```) and label them."
       placeholder: |
         Before (today):
@@ -40,7 +40,7 @@ body:
     attributes:
       label: "Where does this show up today?"
       description: "Link to the benchmark or example that has this pattern now, if there is one."
-      placeholder: "benchmarks/adam-advs-windows — the windowing derivation works around this with an extra pre-processing step."
+      placeholder: "benchmarks/adam-advs-windows - the windowing derivation works around this with an extra pre-processing step."
 
   - type: textarea
     id: why

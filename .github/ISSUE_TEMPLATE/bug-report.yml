@@ -1,4 +1,4 @@
-name: "🐞 Bug report"
+name: "Bug report"
 description: "Something broken? Show us the smallest example that breaks."
 title: "[bug] "
 labels: ["bug"]
@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for reporting! A good bug report is like a recipe that always
         burns the cake: anyone who follows it gets the same failure.
-        Keep it tiny — 10 lines beats 100.
+        Keep it tiny - 10 lines beats 100.
 
   - type: textarea
     id: what

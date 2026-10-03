@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: "💬 Questions & discussion"
+  - name: "Questions & discussion"
     url: https://github.com/elong0527/yamaa/discussions
     about: "Not a bug or a language change? Ask in Discussions instead."
-  - name: "📊 Benchmark work item"
+  - name: "Benchmark work item"
     url: https://github.com/elong0527/yamaa/blob/main/automation/benchmark_factory/README.md
     about: "Proposing a new benchmark or a change to one? Open a work-item issue following the benchmark factory README."
-  - name: "📖 Documentation"
+  - name: "Documentation"
     url: https://elong0527.github.io/yamaa/
     about: "Your question may already be answered in the docs."
