@@ -19,6 +19,10 @@ of that backend. The current CLI always runs the Python backend. Unsupported or
 infrastructure-error reports never establish parity, even against identical
 reports. Add manifest coverage only after an actual runtime executes the fixture.
 
+Rust core primitives and their remaining requirement-level gates are tracked in
+[`rust/CAPABILITIES.md`](../../../../rust/CAPABILITIES.md). Those unit tests and
+native installation probes do not change this execution coverage table.
+
 ## Version 0.2.0-draft
 
 The envelope carries `runtime` (`python` or `r`), `runtime_version` (host language

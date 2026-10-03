@@ -21,6 +21,11 @@ edges. New dependencies require a deliberate update to its allowlist. There are
 no evaluation ports or fake application services yet: those belong with their
 first actual use cases.
 
+The first core slice implements closed runtime values, validated civil temporal
+values, present-value comparison, and basic arithmetic primitives. See
+[`CAPABILITIES.md`](CAPABILITIES.md) for requirement-level coverage and remaining
+gates. These primitives do not enable either host's dataset execution backend.
+
 ## Packaging decision
 
 The optional `yamaa-native` wheel uses Maturin; `python/` retains its existing
@@ -82,9 +87,9 @@ the stable ABI wheel targets Python 3.12+. It builds R 4.6.1 on Linux x86_64 and
 macOS arm64. R Windows native installation and other architectures are not
 qualified by this slice. The existing Windows Python engine remains supported.
 
-Next gates: confirm the hosted installation matrix, settle transitive dependency
-locking, then implement closed core values and scalar semantics before adding
-Arrow tables or host callbacks. No performance or language-parity claim is made.
+The initial hosted installation matrix passed. Next gates: settle transitive
+dependency locking, complete scalar conversion/grammar/diagnostics, then add
+Arrow tables and host callbacks. No performance or language-parity claim is made.
 
 Local `R CMD check --no-manual --no-build-vignettes` passes installation and
 tests, but reports one compiled-code warning for Rust's linked `_abort` symbol.
