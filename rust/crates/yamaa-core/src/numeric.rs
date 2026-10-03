@@ -79,6 +79,7 @@ pub enum UnaryOperator {
 pub enum ArithmeticErrorKind {
     IntegerOverflow { value: i128 },
     DivisionByZero,
+    SqrtOfNegative,
 }
 
 /// Portable condition data; a future evaluator adds source paths/handler traces.
@@ -99,6 +100,7 @@ impl ArithmeticError {
         match self.kind {
             ArithmeticErrorKind::IntegerOverflow { .. } => "integer_overflow",
             ArithmeticErrorKind::DivisionByZero => "division_by_zero",
+            ArithmeticErrorKind::SqrtOfNegative => "sqrt_of_negative",
         }
     }
 
@@ -107,6 +109,7 @@ impl ArithmeticError {
         match self.kind {
             ArithmeticErrorKind::IntegerOverflow { .. } => "REQ-0434",
             ArithmeticErrorKind::DivisionByZero => "REQ-0430",
+            ArithmeticErrorKind::SqrtOfNegative => "REQ-0431",
         }
     }
 }
@@ -290,4 +293,20 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
         _ => truncated,
     };
     Number::float(result)
+}
+
+/// Return the binary64 square root after numeric promotion (REQ-0424/0431).
+/// Missing propagates; negative present input reports a domain condition. Negative
+/// zero is valid and retains its sign, matching the Python reference.
+pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
+    let Some(value) = number.as_float() else {
+        return Ok(Number::Missing);
+    };
+    if value < 0.0 {
+        return Err(ArithmeticError {
+            expression: expression.into(),
+            kind: ArithmeticErrorKind::SqrtOfNegative,
+        });
+    }
+    Ok(Number::float(libm::sqrt(value)))
 }

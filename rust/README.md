@@ -9,7 +9,7 @@ The existing Python engine remains the default; the legacy R package is unchange
 
 | Crate | Responsibility | Allowed dependencies |
 | --- | --- | --- |
-| `yamaa-core` | Language contracts | Pinned `ryu` for no_std numeric formatting |
+| `yamaa-core` | Language contracts | Pinned `ryu` for formatting and `libm` for square root (both no_std) |
 | `yamaa-engine` | Application entry points | Core |
 | `yamaa-adapters` | Infrastructure, including embedded resources | Core, engine |
 | `yamaa-python` | Python binding | Engine, adapters, PyO3 |
@@ -33,6 +33,14 @@ dependencies, not a host or table adapter. Rust's default float Display chooses
 different digits from Python on some exact decimal ties; the shared fixtures
 and `tools/check_float_text.py` protect the reference spelling. See the
 [formatter documentation](https://docs.rs/ryu/1.0.20/ryu/) for its algorithm/API.
+
+SQRT uses [libm 0.2.16](https://docs.rs/libm/0.2.16/libm/fn.sqrt.html), pinned
+with default features disabled. This MIT-licensed pure-Rust no_std numeric library
+has no runtime dependencies; its Rust 1.63 minimum is below this workspace's 1.90.
+Disabling the default `arch` feature selects its generic square-root algorithm.
+The dependency allowlist deliberately includes libm for this primitive; it does
+not grant coverage to other math functions. No host math ABI is added. Cargo
+transitive locking remains a separate release gate under the repository policy.
 
 `evaluation::NumericPlan` evaluates the implemented numeric subset from a typed
 tree through a core-owned resolver. It preserves operand order, association,
@@ -58,7 +66,7 @@ input. Parsing never resolves identifiers or invokes host code.
 
 `numeric_compiler::compile_numeric` now connects text to the supported evaluator
 subset: literals, identifiers, unary signs, arithmetic, ABS, MOD, GREATEST, LEAST,
-NULLIF, COALESCE, CEIL, FLOOR and TRUNC. It checks all
+NULLIF, COALESCE, CEIL, FLOOR, TRUNC and SQRT. It checks all
 functions before producing a plan; other valid functions return explicit
 `Unsupported` entries with their written name spans, in source order. Compilation
 never invokes a resolver. It preserves association and defers oversized integer
@@ -91,6 +99,17 @@ plus exact standard-library comparisons across every finite exponent, both signs
 significand boundaries and 100,000 deterministic bit patterns. Remaining
 transcendental/rounding functions still require their own dependency and numerical
 policy decisions; these exact tests do not establish their parity.
+
+SQRT promotes present input to binary64 and always returns float. It preserves
+negative zero, propagates normalized missing values and reports `sqrt_of_negative`
+under REQ-0431 for negative present values. The domain failure belongs to the call's
+source span; failures inside its operand keep their own span and occur first.
+There are 32 independently specified shared result/failure cases. CI additionally
+runs `tools/check_sqrt.py` against Python math.sqrt on Linux/macOS/Windows: exact
+bits for 110,188 inputs spanning signed zero, all finite exponents, significand
+boundaries, i64 promotions and deterministic samples. This check writes no fixtures
+and allows no tolerance. It qualifies this sample and these targets, not untested
+math functions, arbitrary floating-point modes or full backend execution.
 
 Numeric selection evaluates every argument in written order before selecting a
 result, including COALESCE after its first present argument. A later failure still
