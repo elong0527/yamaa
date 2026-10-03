@@ -1,4 +1,4 @@
-//! Basic arithmetic over already evaluated, typed operands (REQ-0420–0434).
+//! Basic arithmetic over already evaluated, typed operands (REQ-0420-0434).
 //!
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.

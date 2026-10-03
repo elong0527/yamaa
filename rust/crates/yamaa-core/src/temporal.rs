@@ -1,4 +1,4 @@
-//! Complete Gregorian dates and zone-free civil datetimes (REQ-0539–0573).
+//! Complete Gregorian dates and zone-free civil datetimes (REQ-0539-0573).
 
 use core::{cmp::Ordering, fmt, str::FromStr};
 
