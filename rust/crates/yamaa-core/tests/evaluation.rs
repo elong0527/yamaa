@@ -5,6 +5,7 @@ use yamaa_core::evaluation::{
     EvaluationErrorKind, NumericCondition, NumericNode, NumericPlan, NumericResolver, Operand,
 };
 use yamaa_core::numeric::{ArithmeticErrorKind, BinaryOperator as B, Number, UnaryOperator as U};
+use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
 use yamaa_core::value::{Selection, Value, ValueType};
 
 const SPEC_PATH: &str = "columns.A.derivation.compute";
@@ -143,6 +144,10 @@ fn encoded_condition(condition: &NumericCondition) -> String {
             };
             result.push_str(&format!(":{identifier}:{actual}"));
         }
+        NumericCondition::LiteralOverflow { value } => {
+            assert_eq!(condition.phase(), "derivation");
+            result.push_str(&format!(":{value}"));
+        }
         NumericCondition::Arithmetic(kind) => {
             assert_eq!(condition.phase(), "derivation");
             if let ArithmeticErrorKind::IntegerOverflow { value } = kind {
@@ -153,68 +158,99 @@ fn encoded_condition(condition: &NumericCondition) -> String {
     result
 }
 
+/// Replay the same fixtures through either caller-supplied IR or actual source compilation.
+fn fixture_evaluate(
+    expression: &str,
+    postfix: &str,
+    compiled: bool,
+    resolver: &mut RecordingResolver,
+) -> Result<Number, Box<yamaa_core::evaluation::EvaluationError<Infallible>>> {
+    if compiled {
+        compile_numeric(expression, SPEC_PATH, CompileLimits::default())
+            .unwrap()
+            .evaluate(resolver)
+            .map_err(|failure| {
+                assert!(failure.source_span.start < failure.source_span.end);
+                assert!(expression
+                    .get(failure.source_span.start..failure.source_span.end)
+                    .is_some());
+                failure.evaluation
+            })
+    } else {
+        plan(expression, postfix)
+            .evaluate(resolver)
+            .map_err(Box::new)
+    }
+}
+
 /// Replay independent Python/Rust results, call traces and structural failure paths.
 #[test]
 fn shared_evaluation_vectors() {
-    for row in include_str!("fixtures/evaluation.tsv").lines().skip(1) {
-        let fields: Vec<_> = row.split('\t').collect();
-        assert_eq!(fields.len(), 7);
-        let mut resolver = RecordingResolver::new(fields[3]);
-        let mut route = Vec::new();
-        let actual = match plan(fields[1], fields[2]).evaluate(&mut resolver) {
-            Ok(number) => encoded(number),
-            Err(error) => {
-                assert_eq!(error.location.spec_path, SPEC_PATH);
-                assert_eq!(error.location.expression, fields[1]);
-                route = error.location.operands;
-                let EvaluationErrorKind::Numeric(condition) = error.kind;
-                encoded_condition(&condition)
-            }
-        };
-        assert_eq!(actual, fields[4], "{}", fields[0]);
-        assert_eq!(
-            resolver.trace.join(","),
-            fields[5].trim_matches('-'),
-            "{}",
-            fields[0]
-        );
-        let route: Vec<_> = route
-            .iter()
-            .map(|position| match position {
-                Operand::Unary => "unary",
-                Operand::Left => "left",
-                Operand::Right => "right",
-            })
-            .collect();
-        assert_eq!(
-            route.join(","),
-            fields[6].trim_matches('-'),
-            "{}",
-            fields[0]
-        );
+    for compiled in [false, true] {
+        for row in include_str!("fixtures/evaluation.tsv").lines().skip(1) {
+            let fields: Vec<_> = row.split('\t').collect();
+            assert_eq!(fields.len(), 7);
+            let mut resolver = RecordingResolver::new(fields[3]);
+            let mut route = Vec::new();
+            let actual = match fixture_evaluate(fields[1], fields[2], compiled, &mut resolver) {
+                Ok(number) => encoded(number),
+                Err(error) => {
+                    let error = *error;
+                    assert_eq!(error.location.spec_path, SPEC_PATH);
+                    assert_eq!(error.location.expression, fields[1]);
+                    route = error.location.operands;
+                    let EvaluationErrorKind::Numeric(condition) = error.kind;
+                    encoded_condition(&condition)
+                }
+            };
+            assert_eq!(actual, fields[4], "{}", fields[0]);
+            assert_eq!(
+                resolver.trace.join(","),
+                fields[5].trim_matches('-'),
+                "{}",
+                fields[0]
+            );
+            let route: Vec<_> = route
+                .iter()
+                .map(|position| match position {
+                    Operand::Unary => "unary",
+                    Operand::Left => "left",
+                    Operand::Right => "right",
+                })
+                .collect();
+            assert_eq!(
+                route.join(","),
+                fields[6].trim_matches('-'),
+                "{}",
+                fields[0]
+            );
+        }
     }
 }
 
 /// Exercise the evaluator against every existing independently specified primitive case.
 #[test]
 fn shared_arithmetic_vectors_through_typed_evaluation() {
-    for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
-        let fields: Vec<_> = row.split('\t').collect();
-        let mut resolver = RecordingResolver::new(&format!("L={};R={}", fields[3], fields[4]));
-        let unary = matches!(fields[2], "plus" | "negate" | "abs");
-        let postfix = format!("{} {}", if unary { "$L" } else { "$L $R" }, fields[2]);
-        let actual = match plan(fields[1], &postfix).evaluate(&mut resolver) {
-            Ok(number) => encoded(number),
-            Err(error) => {
-                assert_eq!(error.location.expression, fields[1]);
-                assert_eq!(error.location.spec_path, SPEC_PATH);
-                assert!(error.location.operands.is_empty());
-                let EvaluationErrorKind::Numeric(condition) = error.kind;
-                encoded_condition(&condition)
-            }
-        };
-        assert_eq!(actual, fields[5], "{}", fields[0]);
-        assert_eq!(resolver.trace.join(","), if unary { "L" } else { "L,R" });
+    for compiled in [false, true] {
+        for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
+            let fields: Vec<_> = row.split('\t').collect();
+            let mut resolver = RecordingResolver::new(&format!("L={};R={}", fields[3], fields[4]));
+            let unary = matches!(fields[2], "plus" | "negate" | "abs");
+            let postfix = format!("{} {}", if unary { "$L" } else { "$L $R" }, fields[2]);
+            let actual = match fixture_evaluate(fields[1], &postfix, compiled, &mut resolver) {
+                Ok(number) => encoded(number),
+                Err(error) => {
+                    let error = *error;
+                    assert_eq!(error.location.expression, fields[1]);
+                    assert_eq!(error.location.spec_path, SPEC_PATH);
+                    assert!(error.location.operands.is_empty());
+                    let EvaluationErrorKind::Numeric(condition) = error.kind;
+                    encoded_condition(&condition)
+                }
+            };
+            assert_eq!(actual, fields[5], "{}", fields[0]);
+            assert_eq!(resolver.trace.join(","), if unary { "L" } else { "L,R" });
+        }
     }
 }
 

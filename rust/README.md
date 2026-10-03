@@ -56,10 +56,27 @@ remain separate from grammar conditions. Lexing completes before syntax checking
 unless a budget is exhausted. The arena avoids recursive destruction of rejected
 input. Parsing never resolves identifiers or invokes host code.
 
-The parser is not wired into `NumericPlan` yet. Compiling its valid syntax into the
-supported evaluator subset, preflighting valid unimplemented functions before
-resolution, preserving source spans in evaluation failures, and bounding resolver
-calls remain the next gate. Remaining functions and lifecycle handlers follow.
+`numeric_compiler::compile_numeric` now connects text to the supported evaluator
+subset: literals, identifiers, unary signs, arithmetic, ABS and MOD. It checks all
+functions before producing a plan; other valid functions return explicit
+`Unsupported` entries with their written name spans, in source order. Compilation
+never invokes a resolver. It preserves association and defers oversized integer
+literal failures until evaluation reaches them, including before unary negation.
+
+Compiled plans are immutable and inherit the parser's byte/token/node/depth
+budgets. A separate static budget counts identifier occurrences (default 4,096),
+including repeated names, before any evaluation. It bounds calls per evaluation,
+not callback duration or cumulative work across plan reuse. Limits are policy
+outcomes rather than language conditions; unsupported functions take priority
+over the resolution budget after successful parsing. The public caller-supplied
+`NumericPlan` remains an internal, unbounded construction API.
+
+Evaluation failures preserve the original text, specification path, operand route,
+opaque resolver payload and failed node's UTF-8 span. Groups do not overwrite an
+inner node's location. Existing arithmetic/trace fixtures now run through both
+typed trees and compilation; 22 shared literal cases compare exact results with
+Python. Remaining functions, lifecycle handlers and host diagnostic transport
+are the next gates.
 
 ## Packaging decision
 
