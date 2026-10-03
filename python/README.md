@@ -116,29 +116,38 @@ returns an explicit `UnsupportedResult` until its owning runtime component is
 implemented, and an unregistered keyword fails schema validation before it
 reaches dispatch. `function` is the one operation a component registers
 rather than the table declaring: it appears once a runner activates a
-project environment, and not before.
+project environment, and not before. Record reads are not an expression
+operation: qualified sources and named intermediates reach right-side records
+through the keyed-join contract documented below, not through dispatch.
 
 | Operation | Rule | What it returns |
 |---|---|---|
 | `source` | R002, R008 | the named source or derived variable |
+| `odm` | R008 | one collected item read from the row's ODM scope |
 | `literal` | R007 | the declared scalar, unchanged |
 | `mapping` | R007, R019 | an inline dictionary lookup on a string source |
 | `compute` | R010 | one scalar numeric formula in the closed grammar |
+| `round_half_away_from_zero` | R010 | the source rounded half away from zero to the declared digits |
 | `first_available` | R007 | the first non-missing source, else `default` |
 | `greatest`, `least` | R007, R019 | the row-wise extreme of comparable sources |
 | `case` | R004, R007 | the first true branch, then `otherwise`, else missing |
+| `flag` | R004, R007 | the one-predicate shorthand for a `case` returning a flag value |
 | `cut` | R007 | the label of the break interval a numeric source lands in |
 | `str_extract` | R022 | one capture group of the leftmost match |
 | `str_concat` | R007 | its nested expression results, in order |
 | `str_template` | R012 | literal text with its placeholders interpolated |
 | `str_case` | R019 | the exact ASCII casing substitution |
-| `lookup` | R003, R007 | one right-side column reached by declared key pairs |
+| `str_pad` | R007 | the source left-padded to the declared width |
+| `str_contains` | R022 | whether a portable regex matches anywhere in the source |
 | `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
 | `date_diff` | R016 | whole calendar units between two dates |
 | `study_day` | R016 | the CDISC study day, counting from 1 with no day zero |
 | `date_impute` | R016 | a truncated date completed under a declared rule |
 | `date_precision` | R016 | `Y`, `M`, or `D` for how much of a date was collected |
+| `datetime_impute` | R016 | a truncated datetime completed under a declared rule |
+| `datetime_precision` | R016 | `D` or `S` for how much of a datetime was collected |
 | `to_date` | R016 | the calendar date of a datetime |
+| `to_epoch_day` | R016 | the integer count of days since 1970-01-01 |
 | `row_number`, `rank` | R007 | the position of a row in its ordered partition |
 | `row_value` | R007 | one source read from another row of that partition |
 | `locf` | R007 | the current source value, or the closest earlier non-missing source |
