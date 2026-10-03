@@ -35,23 +35,21 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa import __version__
+from yamaa.application import prepare_workflow
 from yamaa.functions import (
-    ActivatedEnvironment,
     FunctionActivationError,
-    activate_project_functions,
     function_dispatcher,
     select_project_root,
 )
+from yamaa.functions.execution import activate_workflow_functions
 from yamaa.io import (
     Artifact,
     ArtifactTarget,
-    ProjectResources,
-    approve_roots,
     publish_artifact,
     render_artifact,
 )
 from yamaa.io.parquet import parse_parquet
-from yamaa.planning import ExecutionDiagnostic, execute_workflow, plan_workflow
+from yamaa.planning import ExecutionDiagnostic, execute_workflow
 from yamaa.runtime import (
     ExecutionFailure,
     ExecutionSuccess,
@@ -60,7 +58,6 @@ from yamaa.runtime import (
 from yamaa.specification import SpecificationError, ValidationDiagnostic
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.models import Output
-from yamaa.specification.schema import load_schema_bundle
 
 # Bumped when the envelope changes shape. The `-draft` suffix states that
 # #101 has not ratified this serialization; a consumer that pins an exact
@@ -317,36 +314,15 @@ def entry_specification(example: Path) -> Path:
     return entries[0]
 
 
-def _activated_environment(
-    workflow: object,
-    environment_root: Path | None,
-    schema_root: Path,
-) -> ActivatedEnvironment | None:
-    """Activate the selected project root before any source is read."""
-    if environment_root is None:
-        return None
-    activated: ActivatedEnvironment | None = None
-    for node in workflow.nodes:
-        activated = activate_project_functions(
-            node.resolved.specification, environment_root, schema_root
-        )
-    return activated
-
-
 def _execute(
     name: str,
     entry: Path,
     schema_root: Path,
     destination: Path,
 ) -> ExampleReport:
-    approved = approve_roots(entry)
-    resources = ProjectResources(
-        approved.project_root,
-        base_directory=entry.parent,
-        data_roots=approved.data_roots,
-    )
     try:
-        workflow = plan_workflow(entry, load_schema_bundle(schema_root), resources)
+        prepared = prepare_workflow(entry, schema_root=schema_root)
+        workflow, resources = prepared.workflow, prepared.resources
     except SpecificationError as error:
         # Validation fails before any source is read, so there is no handler
         # activity to report alongside it.
@@ -360,8 +336,11 @@ def _execute(
     # the one the example offers for the language it speaks. An example
     # offering none stays portable and reports `function` as unimplemented.
     try:
-        activated = _activated_environment(
-            workflow, select_project_root(entry.parent), schema_root
+        environment_root = select_project_root(entry.parent)
+        activated = (
+            activate_workflow_functions(workflow, environment_root, schema_root)
+            if environment_root is not None
+            else None
         )
     except FunctionActivationError as error:
         return _report(

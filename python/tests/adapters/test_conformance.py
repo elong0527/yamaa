@@ -631,7 +631,7 @@ class TestUnsupportedAndMissingPrerequisites:
         def explode(*args: object, **kwargs: object) -> None:
             raise MemoryError("out of memory")
 
-        monkeypatch.setattr(conformance, "plan_workflow", explode)
+        monkeypatch.setattr(conformance, "prepare_workflow", explode)
         report = run(EXAMPLES / POSITIVE, tmp_path)
 
         assert report.outcome == "error"

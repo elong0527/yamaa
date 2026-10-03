@@ -164,3 +164,30 @@ def test_key_reading_non_key_output_fails_at_validation() -> None:
     assert issue["spec_paths"] == ["columns.AVISIT.derivation"]
     context = json.loads(issue["context"])
     assert context == {"column": "AVISIT", "dependency": "ADY"}
+
+
+def test_failure_exposes_verification_log_without_accepting_output(tmp_path):
+    import shutil
+
+    import yaml
+
+    root = Path(__file__).parents[2]
+    example = tmp_path / "example"
+    shutil.copytree(root / "benchmarks/schema-verification-log", example)
+    entry = example / "spec.yaml"
+    spec = yaml.safe_load(entry.read_text())
+    spec["columns"][1]["verifications"][1]["range"]["severity"] = "error"
+    entry.write_text(yaml.safe_dump(spec, sort_keys=False))
+
+    pilot = yamaa_domain(entry, schema_root=root / "yaml")
+
+    assert pilot.output is None
+    assert pilot.warning_log is None
+    assert "violated" in pilot.verification_log["OUTCOME"].to_list()
+    assert pilot.verification_log["SPEC_PATH"].to_list() == [
+        "columns.AGE.verifications[0].not_missing",
+        "columns.AGE.verifications[1].range",
+    ]
+    with pytest.raises(DomainRunError):
+        pilot.save(tmp_path / "rejected.csv")
+    assert not (tmp_path / "rejected.csv").exists()
