@@ -1,18 +1,27 @@
 # Assign Analysis Windows by Study Day
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-windows.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** assign each systolic blood pressure (`SYSBP`) record to
 its analysis window, adding the analysis visit (`AVISIT`), its
-numeric order (`AVISITN`), and `ANL01FL`.
+numeric order (`AVISITN`), and `ANL01FL`; add an expected record
+for each planned visit whose window holds no measurement.
 
-**Input:** vital signs records carrying the collected visit
-(`VISIT`, `VISITNUM`), the analysis date (`ADT`), the relative
-study day (`ADY`), and the measured value (`AVAL`).
+**Input:** SDTM vital signs records (`VS`) carrying the test code
+(`VSTESTCD`), the collected visit (`VISIT`, `VISITNUM`), the
+collection date (`VSDTC`), the study day (`VSDY`), and the numeric
+result (`VSSTRESN`); and SDTM subject visits (`SV`) listing every
+planned visit of every subject, including planned visits that did
+not take place, alongside the unscheduled visits.
 
 **Variables:**
 
+- `ADT` is the analysis date, carried from the SDTM collection date
+  (`VSDTC`); `ADY` is the analysis relative day, carried from the
+  SDTM study day (`VSDY`); `AVAL` is the analysis value, carried from
+  the SDTM numeric result (`VSSTRESN`). `PARAMCD` mirrors the SDTM
+  test code (`VSTESTCD`).
 - `AVISIT` is the analysis visit whose window holds the record's
   study day: `SCREENING` before day 0, `BASELINE` on day 1 (study
   days skip from day -1 to day 1), `WEEK 2` on days 2 through 21,
@@ -27,13 +36,20 @@ study day (`ADY`), and the measured value (`AVAL`).
   subject, parameter, and analysis visit: the earliest by study
   day, with the lower sequence number breaking a tie on the same
   day. It is blank on every other record, including any record
-  with no study day.
+  with no study day; an expected record never takes the flag,
+  even when it is the only record in its window.
 
 **Note:** windows follow the study day rather than the collected
 visit name, so a record the site left unscheduled still belongs
 to whichever window its day falls in, and a record on or past
 day 43 falls in the open-ended final window. Each window starts
 with its first day and ends before the next window's first day,
-so day 22 opens Week 4 and day 43 opens post-treatment.
+so day 22 opens Week 4 and day 43 opens post-treatment. A planned
+screening, baseline, week 2, or week 4 visit whose window holds no
+measured study day still appears as an expected record carrying
+the planned visit and window and a sequence number continuing past
+the subject's measurements, but no date, day, or value, so
+summaries see a complete visit spine. Unscheduled visits and
+planned visits after week 4 never get one.
 
 **Standard:** ADaM | **Domain:** ADVS

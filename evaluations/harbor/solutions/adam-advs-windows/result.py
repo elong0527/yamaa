@@ -8,12 +8,25 @@ from pathlib import Path
 
 import polars as pl
 
-raw = pl.read_csv("/app/input/advs_raw.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("VISITNUM").cast(pl.Float64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-    pl.col("ADY").cast(pl.Int64, strict=False),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
+# SDTM VS staged as the ADaM input; rename to the analysis names the
+# rest of the solution works with.
+raw = (
+    pl.read_csv("/app/input/vs.csv", infer_schema=False)
+    .rename(
+        {
+            "VSTESTCD": "PARAMCD",
+            "VSDTC": "ADT",
+            "VSDY": "ADY",
+            "VSSTRESN": "AVAL",
+        }
+    )
+    .with_columns(
+        pl.col("VSSEQ").cast(pl.Int64, strict=False),
+        pl.col("VISITNUM").cast(pl.Float64, strict=False),
+        pl.col("ADT").str.to_date(strict=False),
+        pl.col("ADY").cast(pl.Int64, strict=False),
+        pl.col("AVAL").cast(pl.Float64, strict=False),
+    )
 )
 
 
@@ -40,10 +53,52 @@ framed = raw.with_columns(
     .alias("AVISITN"),
 )
 
+# SV lists every planned visit of every subject, including those that did
+# not take place, and the unscheduled visits.
+sv = pl.read_csv("/app/input/sv.csv", infer_schema=False).with_columns(
+    pl.col("VISITNUM").cast(pl.Float64, strict=False)
+)
+
+# Each planned SCREENING, BASELINE, WEEK 2, or WEEK 4 visit gets one SYSBP
+# expected record when no collected record's study day falls in the
+# analysis window of that name: the planned visit name and number and the
+# window, and no date, study day, or value. No other visit gets one.
+# Expected records continue the subject's sequence numbering after the
+# highest collected VSSEQ, in VISITNUM order.
+windows = {"SCREENING": -1, "BASELINE": 0, "WEEK 2": 2, "WEEK 4": 4}
+keys = ["STUDYID", "USUBJID", "PARAMCD"]
+covered = framed.select(*keys, "AVISIT").drop_nulls().unique()
+top = framed.group_by(keys).agg(pl.col("VSSEQ").max().alias("TOP"))
+
+expected = (
+    sv.filter(pl.col("VISIT").is_in(list(windows)))
+    .with_columns(
+        PARAMCD=pl.lit("SYSBP"),
+        AVISIT=pl.col("VISIT"),
+        AVISITN=pl.col("VISIT").replace_strict(windows, return_dtype=pl.Int64),
+    )
+    .join(covered, on=[*keys, "AVISIT"], how="anti")
+    .join(top, on=keys, how="left")
+    .sort([*keys, "VISITNUM"])
+    .with_columns(
+        VSSEQ=pl.col("TOP").fill_null(0)
+        + pl.int_range(1, pl.len() + 1, dtype=pl.Int64).over(keys),
+        ADT=pl.lit(None, dtype=pl.Date),
+        ADY=pl.lit(None, dtype=pl.Int64),
+        AVAL=pl.lit(None, dtype=pl.Float64),
+    )
+    .select(
+        *keys, "VSSEQ", "VISIT", "VISITNUM", "ADT", "ADY", "AVAL",
+        "AVISIT", "AVISITN",
+    )
+)
+framed = pl.concat([framed, expected], how="vertical")
+
 # The earliest record by study day in each study, subject, parameter,
-# and visit; the lower sequence number breaks a same-day tie.
+# and visit; the lower sequence number breaks a same-day tie. Expected
+# records have no study day and never take the flag.
 flagged = (
-    framed.filter(pl.col("AVISIT").is_not_null())
+    framed.filter(pl.col("AVISIT").is_not_null() & pl.col("ADY").is_not_null())
     .sort(["ADY", "VSSEQ"])
     .unique(["STUDYID", "USUBJID", "PARAMCD", "AVISIT"], keep="first", maintain_order=True)
     .select("STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ")

@@ -7,13 +7,16 @@
 library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
+# SDTM VS staged as the ADaM input; rename to the analysis names the
+# rest of the solution works with.
 raw <- read_csv(
-  "/app/input/advs_raw.csv",
+  "/app/input/vs.csv",
   col_types = cols(
-    VSSEQ = col_integer(), VISITNUM = col_double(), ADT = col_date(),
-    ADY = col_integer(), AVAL = col_double(), .default = col_character()
+    VSSEQ = col_integer(), VISITNUM = col_double(), VSDTC = col_date(),
+    VSDY = col_integer(), VSSTRESN = col_double(), .default = col_character()
   )
-)
+) |>
+  rename(PARAMCD = VSTESTCD, ADT = VSDTC, ADY = VSDY, AVAL = VSSTRESN)
 
 # Windows follow the study day: screening before day 0, baseline on day
 # 1, weeks 2 and 4 on days 2-21 and 22-42, and post-treatment from day
@@ -37,10 +40,56 @@ framed <- raw |>
     )
   )
 
+# SV lists every planned visit of every subject, including those that did
+# not take place, and the unscheduled visits.
+sv <- read_csv(
+  "/app/input/sv.csv",
+  col_types = cols(VISITNUM = col_double(), .default = col_character())
+)
+
+# Each planned SCREENING, BASELINE, WEEK 2, or WEEK 4 visit gets one SYSBP
+# expected record when no collected record's study day falls in the
+# analysis window of that name: the planned visit name and number and the
+# window, and no date, study day, or value. No other visit gets one.
+# Expected records continue the subject's sequence numbering after the
+# highest collected VSSEQ, in VISITNUM order.
+windows <- c("SCREENING" = -1L, "BASELINE" = 0L, "WEEK 2" = 2L, "WEEK 4" = 4L)
+
+top <- framed |>
+  group_by(STUDYID, USUBJID, PARAMCD) |>
+  summarise(top_seq = max(VSSEQ), .groups = "drop")
+
+expected <- sv |>
+  filter(VISIT %in% names(windows)) |>
+  mutate(
+    PARAMCD = "SYSBP", AVISIT = VISIT, AVISITN = unname(windows[VISIT])
+  ) |>
+  anti_join(
+    filter(framed, !is.na(AVISIT)),
+    by = c("STUDYID", "USUBJID", "PARAMCD", "AVISIT")
+  ) |>
+  left_join(top, by = c("STUDYID", "USUBJID", "PARAMCD")) |>
+  group_by(STUDYID, USUBJID, PARAMCD) |>
+  arrange(VISITNUM, .by_group = TRUE) |>
+  mutate(
+    VSSEQ = coalesce(top_seq, 0L) + row_number(),
+    ADT = as.Date(NA),
+    ADY = NA_integer_,
+    AVAL = NA_real_
+  ) |>
+  ungroup() |>
+  select(
+    STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL,
+    AVISIT, AVISITN
+  )
+
+framed <- bind_rows(framed, expected)
+
 # The earliest record by study day in each study, subject, parameter,
-# and visit; the lower sequence number breaks a same-day tie.
+# and visit; the lower sequence number breaks a same-day tie. Expected
+# records have no study day and never take the flag.
 flagged <- framed |>
-  filter(!is.na(AVISIT)) |>
+  filter(!is.na(AVISIT), !is.na(ADY)) |>
   arrange(ADY, VSSEQ) |>
   distinct(STUDYID, USUBJID, PARAMCD, AVISIT, .keep_all = TRUE) |>
   select(STUDYID, USUBJID, PARAMCD, AVISIT, VSSEQ) |>

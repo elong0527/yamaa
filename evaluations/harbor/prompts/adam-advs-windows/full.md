@@ -1,5 +1,8 @@
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to
-create an ADVS dataset with one record per measurement.
+Following CDISC ADaM standards, use the provided SDTM VS and SV
+datasets to create an ADVS dataset with one record per measurement,
+plus one expected record for each planned visit whose window holds no
+measurement. Derive PARAMCD from VSTESTCD, ADT from VSDTC, ADY from
+VSDY, and AVAL from VSSTRESN; then window on ADY as specified below.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL,
@@ -20,6 +23,19 @@ ANL01FL is Y on the record that represents its study, subject,
 parameter, and analysis visit: the earliest by study day, with the
 lower sequence number breaking a tie on the same day. It has no value
 on every other record, including any record with no study day.
+
+A planned visit whose window holds no measurement still appears as an
+expected record, so summaries see a complete visit spine. SV lists
+each subject's planned visits, including those that did not take
+place, and the unscheduled visits. Each planned SCREENING, BASELINE,
+WEEK 2, or WEEK 4 visit gets one SYSBP expected record when no
+collected record's study day falls in the analysis window of that
+name; no other visit gets one. An expected record carries the planned
+visit name and number and the window's AVISIT and AVISITN, has no
+date, study day, or value, and never takes ANL01FL, even when it is
+the only record in its window. Expected records continue the
+subject's sequence numbering after the highest collected VSSEQ, in
+VISITNUM order.
 
 Windows follow the study day rather than the collected visit name, so
 a record left unscheduled still belongs to whichever window its day

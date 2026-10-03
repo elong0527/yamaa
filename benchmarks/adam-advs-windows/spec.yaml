@@ -2,60 +2,95 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
-  ADVS_RAW: {path: input/advs_raw.csv, types: {ADT: date}}
+  # SDTM VS: the vital-signs domain as the ADaM programmer receives it.
+  # VSDTC is date-only here; VSDY arrives derived upstream, so this
+  # benchmark pins windowing, not study-day derivation.
+  VS: {path: input/vs.csv, types: {VSDTC: date}}
+  # SDTM SV: every planned visit of every subject, including the visits
+  # that did not take place, plus the unscheduled visits.
+  SV: {path: input/sv.csv, types: {VISITNUM: float}}
 
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL,
             AVISIT, AVISITN, ANL01FL]
 
+intermediates:
+  # The collected record with the highest sequence number whose study day
+  # falls in the planned window the current row names. A record with no
+  # study day belongs to no window, so it never counts as coverage.
+  - id: WINDOW_COVER
+    dataset: SELF
+    key: [STUDYID, USUBJID, PARAMCD, AVISIT]
+    filter: "SELF.AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
+    order_by: [SELF.VSSEQ]
+    keep: last
+    no_match: null
+
+  # The collected record with the highest sequence number for the study,
+  # subject, and parameter; expected records continue the numbering past
+  # it, and a subject with no collected record numbers them from 1.
+  - id: PRIOR_MAX
+    dataset: SELF
+    key: [STUDYID, USUBJID, PARAMCD]
+    order_by: [SELF.VSSEQ]
+    keep: last
+    no_match: 0
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADVS_RAW.STUDYID
+    derivation: VS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADVS_RAW.USUBJID
+    derivation: VS.USUBJID
 
+  # ADaM parameter codes for vital signs mirror the SDTM test codes.
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADVS_RAW.PARAMCD
+    derivation: VS.VSTESTCD
+
+  # The position of an expected record among its study, subject, and
+  # parameter's expected records, in planned visit order; missing on
+  # collected records. Internal: it numbers the expected records and
+  # marks them for the checks below, and never reaches the artifact.
+  - name: EXPECTED_ORDER
+    type: int
+    label: Expected Record Order
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation: ADVS_RAW.VSSEQ
+    derivation: VS.VSSEQ
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation: ADVS_RAW.VISIT
+    derivation: VS.VISIT
 
   - name: VISITNUM
     type: float
     label: Visit Number
-    derivation: ADVS_RAW.VISITNUM
+    derivation: VS.VISITNUM
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADVS_RAW.ADT
+    derivation: VS.VSDTC
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation: ADVS_RAW.ADY
+    derivation: VS.VSDY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADVS_RAW.AVAL
-    verifications:
-      not_missing: {}
+    derivation: VS.VSSTRESN
 
   # Windows on study day, each including its lower break and excluding its
   # upper one: before 0 SCREENING, 0-1 BASELINE (there is no day 0), 2-21
@@ -101,20 +136,69 @@ columns:
           order_by: [ADY, VSSEQ]
           filter: "AVISIT IS NOT NULL"
 
+  # Expected records have no study day, so the flag additionally requires
+  # one: an expected record never takes ANL01FL, even when it is the only
+  # record in its window.
   - name: ANL01FL
     type: str
     label: Analysis Record Flag 01
     derivation:
-      flag: "AWRANK = 1"
+      flag: "AWRANK = 1 AND ADY IS NOT NULL"
+
+rows:
+  # Every collected record, unchanged.
+  - id: collected
+    dataset: VS
+    derivations:
+      EXPECTED_ORDER: {literal: null}
+
+  # One expected record for each planned visit whose window no collected
+  # record's study day covers. It carries the planned visit name and
+  # number and the window, continues the sequence numbering, and has no
+  # date, day, or value.
+  - id: expected
+    dataset: SV
+    filter: "AVISIT IS NOT NULL AND WINDOW_COVER.VSSEQ IS NULL"
+    derivations:
+      STUDYID: SV.STUDYID
+      USUBJID: SV.USUBJID
+      PARAMCD: {literal: SYSBP}
+      VISIT: SV.VISIT
+      VISITNUM: SV.VISITNUM
+      ADT: {literal: null}
+      ADY: {literal: null}
+      AVAL: {literal: null}
+      # The window each planned visit is expected in. Unscheduled visits
+      # and planned visits after week 4 get no expected record.
+      AVISIT:
+        mapping:
+          source: SV.VISIT
+          dict:
+            SCREENING: SCREENING
+            BASELINE: BASELINE
+            WEEK 2: WEEK 2
+            WEEK 4: WEEK 4
+          missing: null
+          unmapped: null
+      EXPECTED_ORDER:
+        row_number:
+          window:
+            group_by: [STUDYID, USUBJID, PARAMCD]
+            order_by: [SV.VISITNUM]
+      VSSEQ:
+        compute:
+          expr: "PRIOR_MAX.VSSEQ + EXPECTED_ORDER"
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
-  # Pins the 14-row fixture: 9 original rows plus the day-2, day-22, and
-  # day-43 boundary records and the same-day tie pair.
+  # Pins the 19-row fixture: the 14 original collected rows, the new
+  # subject's collected baseline record, and the four expected records
+  # (one uncovered screening window and one subject missing screening,
+  # week 2, and week 4).
   - row_count:
-      min: 14
-      max: 14
+      min: 19
+      max: 19
   - all_or_none:
       id: analysis-visit-completeness
       columns: [AVISIT, AVISITN]
@@ -125,4 +209,24 @@ verifications:
   - implies:
       id: baseline-window-is-study-day-one
       when: "AVISIT = 'BASELINE'"
-      then: "ADY = 1"
+      then: "ADY = 1 OR EXPECTED_ORDER IS NOT NULL"
+  # An expected record carries a planned window (never the open-ended
+  # post-treatment one), has no date, day, or value, and never takes the
+  # analysis flag.
+  - implies:
+      id: expected-record-has-planned-window
+      when: "EXPECTED_ORDER IS NOT NULL"
+      then: "AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
+  - implies:
+      id: expected-record-is-empty
+      when: "EXPECTED_ORDER IS NOT NULL"
+      then: "ADT IS NULL AND ADY IS NULL AND AVAL IS NULL"
+  - implies:
+      id: expected-record-never-flagged
+      when: "EXPECTED_ORDER IS NOT NULL"
+      then: "ANL01FL IS NULL"
+  # Every collected measurement has a value.
+  - implies:
+      id: collected-record-has-value
+      when: "EXPECTED_ORDER IS NULL"
+      then: "AVAL IS NOT NULL"
