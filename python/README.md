@@ -415,7 +415,7 @@ key is missing matches nothing, so a subject id reused under a second study
 never reads the first study's records, and a right-side record with no left
 row creates none.
 
-`yamaa.runtime.lookups` performs the R003 match once and names the record, so
+`yamaa.runtime.joins` performs the R003 match once and names the record, so
 the columns that read it are plainly reading one record:
 
 ```yaml
@@ -479,7 +479,6 @@ Run this component's focused tests from the repository root:
 ```bash
 uv run --project python --isolated --extra test pytest \
   python/tests/expressions/test_aggregate.py python/tests/runtime/test_joins.py \
-  python/tests/runtime/test_lookups.py \
   python/tests/runtime/test_relational_examples.py python/tests/planning
 ```
 
