@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin==1.9.6"]
+build-backend = "maturin"
+
+[project]
+name = "yamaa-native"
+version = "0.1.0"
+description = "Optional native installation prototype for yamaa"
+requires-python = ">=3.12"
+license = "MIT"
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "yamaa_native"

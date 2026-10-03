@@ -1,0 +1,11 @@
+Package: yamaanative
+Title: Native Installation Prototype for yamaa
+Version: 0.1.0
+Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
+Description: An optional installation probe for the shared yamaa Rust core.
+    Reports bootstrap capabilities without evaluating specifications.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.6.1)
+SystemRequirements: Cargo, rustc (>= 1.90.0), GNU make
+NeedsCompilation: yes
