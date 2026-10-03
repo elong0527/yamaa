@@ -102,7 +102,9 @@ scaffolding script.
 5. Score the candidate against `judges.md` (Stage 4), revise, and keep
    the best accepted revision as the checkpoint for the next round.
 6. Open the pull request. A human moves the lifecycle badge from
-   `draft` to `reviewed` to `finalized` (Stage 5).
+   `draft` to `reviewed` to `finalized` (Stage 5). PRs from
+   maintenance work items use the `[benchmark-maintain]` title
+   prefix.
 
 ## What the loop does not do
 

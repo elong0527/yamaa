@@ -121,7 +121,9 @@ each absorbed benchmark's edge cases. Lost coverage is a **fail**.
 
 **Prompt parity.** The Harbor prompt asks for exactly what the new
 golden holds -- same datasets, same columns, same rules. A prompt
-that still describes the pre-change benchmark is a **revise**.
+that still describes the pre-change benchmark is a **revise**. The
+reference solutions derive the new columns too (the oracle must
+score 1), and `conventions.md` stays within its 20-line limit.
 
 **Retire bar.** A retire verdict of accept needs all three: a clean
 `factory.sh retire-check`, a recorded reason (redundant, trivial,
