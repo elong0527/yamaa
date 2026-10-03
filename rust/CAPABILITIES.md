@@ -16,6 +16,7 @@ through the Python backend only, as declared by
 | Numeric compilation: REQ-0413-0415, 0426-0427, 0434, 0438-0444 | Immutable supported-subset plans, deferred exact literal failures, source spans, unsupported preflight and static resolution budgets; 22 literal cases plus arithmetic/trace fixtures through compilation | No dataset execution | No dataset execution | Remaining functions, completed-result conversion and handlers (steps 4, 7) |
 | Numeric selection: REQ-0415-0416, 0424-0427 | GREATEST, LEAST, NULLIF and COALESCE in primitives/typed evaluation/compilation; 51 shared value, promotion, missingness and eager-resolution cases | No dataset execution | No dataset execution | Remaining math/rounding functions, completed-result conversion and handlers (steps 4, 7) |
 | Integral-valued numeric functions: REQ-0415, 0424, 0426-0427 | CEIL, FLOOR and TRUNC in primitives/typed evaluation/compilation; 100 shared cases with exact float bits, full-range i64, subnormals, signed zero and failures; standard-library differential tests across every finite exponent | No dataset execution | No dataset execution | Remaining transcendental/rounding functions, completed-result conversion and handlers (steps 4, 7) |
+| Square root: REQ-0424, 0426-0427, 0431 | SQRT primitive, typed evaluation and compilation; 32 shared exact-value/domain/failure cases and 110,188 bit-exact Python comparisons in native CI; pinned no_std libm | No dataset execution | No dataset execution | EXP/LN/POWER and decimal rounding, completed-result conversion and handlers (steps 4, 7) |
 | Temporal values: REQ-0539-0555, 0559-0561, 0567-0573 | Validated civil fields, strict parsing, canonical text, precision, equality and chronological order; 400-year calendar cycle | No dataset execution | No dataset execution | Imputation, temporal operations, function/artifact boundaries (steps 4, 5, 8, 9) |
 | Conversion: REQ-0009-0013, 0015-0018, 0020-0021, 0601 | Full scalar matrix, strict numeric text, exact range/integrality checks, canonical numeric/temporal text, structured failures; shared reference vectors and deterministic float-text differential check | No dataset execution | No dataset execution | Integration at the completed-result lifecycle boundary and actual handler application (steps 4, 7, 8) |
 | Regex and remaining scalar grammars | Not implemented | No dataset execution | No dataset execution | Replay existing grammar/regex vectors, including backreferences and lookarounds (step 4) |
@@ -81,6 +82,14 @@ uses finite binary64 bits without a new dependency or bounded integer intermedia
 it preserves very large integral floats. The 100 shared vectors compare exact bits,
 resolution traces and failure routes; Rust additionally compares standard-library
 results at exponent/significand boundaries and deterministic finite bit patterns.
+
+SQRT uses pinned libm 0.2.16 with default features disabled and an explicit dependency
+allowlist entry. Negative finite input yields `sqrt_of_negative` (REQ-0431), while
+negative zero remains a valid signed result. Integer input promotes before square
+root; missing propagates. Source/operand order and static budgets use the existing
+compiler. Exact Python math.sqrt comparisons run on each native Python CI target;
+there is no blanket numerical tolerance. Other libm functions are not yet enabled
+or claimed compatible, and no host/dataset backend is exposed by this slice.
 
 Python numeric-expression integer literals now also avoid the host's integer
 string digit limit: insignificant zeros are stripped before bounded construction,

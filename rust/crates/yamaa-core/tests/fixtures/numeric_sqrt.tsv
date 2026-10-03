@@ -1,0 +1,33 @@
+id	expression	bindings	expected	trace	path
+sqrt-missing	SQRT(A)	A=missing	missing	A	-
+sqrt-zero-int	SQRT(A)	A=int:0	float:0000000000000000	A	-
+sqrt-negative-zero	SQRT(A)	A=float:-0.0	float:8000000000000000	A	-
+sqrt-positive-zero	SQRT(A)	A=float:0.0	float:0000000000000000	A	-
+sqrt-one	SQRT(A)	A=int:1	float:3ff0000000000000	A	-
+sqrt-four	SQRT(A)	A=int:4	float:4000000000000000	A	-
+sqrt-quarter	SQRT(A)	A=float:0.25	float:3fe0000000000000	A	-
+sqrt-two	SQRT(A)	A=int:2	float:3ff6a09e667f3bcd	A	-
+sqrt-three	SQRT(A)	A=float:3.0	float:3ffbb67ae8584caa	A	-
+sqrt-min-subnormal	SQRT(A)	A=float:5e-324	float:1e60000000000000	A	-
+sqrt-min-normal	SQRT(A)	A=float:2.2250738585072014e-308	float:2000000000000000	A	-
+sqrt-max-finite	SQRT(A)	A=float:1.7976931348623157e308	float:5fefffffffffffff	A	-
+sqrt-large-exact-square	SQRT(A)	A=int:4611686018427387904	float:41e0000000000000	A	-
+sqrt-negative-int	SQRT(A)	A=int:-1	error:sqrt_of_negative:REQ-0431	A	-
+sqrt-negative-fraction	SQRT(A)	A=float:-0.25	error:sqrt_of_negative:REQ-0431	A	-
+sqrt-negative-subnormal	SQRT(A)	A=float:-5e-324	error:sqrt_of_negative:REQ-0431	A	-
+sqrt-i64-min	SQRT(A)	A=int:-9223372036854775808	error:sqrt_of_negative:REQ-0431	A	-
+sqrt-negative-max	SQRT(A)	A=float:-1.7976931348623157e308	error:sqrt_of_negative:REQ-0431	A	-
+sqrt-bool	SQRT(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
+sqrt-text	SQRT(A)	A=str:4	error:incompatible_input_type:REQ-0444:A:str	A	unary
+sqrt-absent	SQRT(A)	-	error:unknown_field:REQ-0443:A	A	unary
+sqrt-nonfinite-literal	SQRT(1e9999)	-	missing	-	-
+sqrt-negative-nonfinite	SQRT(-1e9999)	-	missing	-	-
+sqrt-overflow-literal	SQRT(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+sqrt-operand-failure	SQRT(A / 0)	A=int:4	error:division_by_zero:REQ-0430	A	unary
+sqrt-missing-still-resolves	SQRT(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
+sqrt-domain-stops-later	SQRT(A) + B	A=int:-1;B=int:4	error:sqrt_of_negative:REQ-0431	A	left
+sqrt-missing-later-domain	A + SQRT(B)	A=missing;B=int:-1	error:sqrt_of_negative:REQ-0431	A,B	right
+sqrt-nested-domain	CEIL(SQRT(A))	A=int:-1	error:sqrt_of_negative:REQ-0431	A	unary
+sqrt-nested-result	SQRT(SQRT(A))	A=int:16	float:4000000000000000	A	-
+sqrt-selection-domain	COALESCE(1, SQRT(A), B)	A=int:-1;B=int:4	error:sqrt_of_negative:REQ-0431	A	argument:1
+sqrt-negative-zero-dependent	SQRT(A) * 2	A=float:-0.0	float:8000000000000000	A	-

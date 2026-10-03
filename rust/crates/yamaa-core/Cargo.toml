@@ -9,3 +9,5 @@ publish.workspace = true
 [dependencies]
 # Pure no_std numeric formatting; no host, filesystem, or table dependencies.
 ryu = { version = "=1.0.20", default-features = false }
+# Pure no_std math; disable architecture-specific default implementations.
+libm = { version = "=0.2.16", default-features = false }

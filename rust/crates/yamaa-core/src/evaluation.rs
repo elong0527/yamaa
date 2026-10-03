@@ -30,6 +30,9 @@ pub enum NumericNode {
         left: Box<NumericNode>,
         right: Box<NumericNode>,
     },
+    Sqrt {
+        operand: Box<NumericNode>,
+    },
     Integral {
         function: IntegralFunction,
         operand: Box<NumericNode>,
@@ -105,6 +108,7 @@ impl NumericCondition {
             Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
             | Self::LiteralOverflow { .. } => "integer_overflow",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "division_by_zero",
+            Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "sqrt_of_negative",
         }
     }
 
@@ -116,6 +120,7 @@ impl NumericCondition {
             Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
             | Self::LiteralOverflow { .. } => "REQ-0434",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "REQ-0430",
+            Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "REQ-0431",
         }
     }
 }
@@ -233,6 +238,10 @@ impl NumericPlan {
                 let left = self.child(left, Operand::Left, resolver, path)?;
                 let right = self.child(right, Operand::Right, resolver, path)?;
                 return Ok(numeric::null_if(left, right));
+            }
+            NumericNode::Sqrt { operand } => {
+                let value = self.child(operand, Operand::Unary, resolver, path)?;
+                numeric::sqrt(value, &self.expression)
             }
             NumericNode::Integral { function, operand } => {
                 let value = self.child(operand, Operand::Unary, resolver, path)?;

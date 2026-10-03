@@ -364,6 +364,7 @@ fn shared_function_vectors() {
                 .lines()
                 .skip(1),
         )
+        .chain(include_str!("fixtures/numeric_sqrt.tsv").lines().skip(1))
     {
         let fields: Vec<_> = row.split('\t').collect();
         assert_eq!(fields.len(), 6);

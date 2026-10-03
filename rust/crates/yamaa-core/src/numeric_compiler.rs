@@ -59,7 +59,7 @@ pub struct CompiledEvaluationError<E> {
 }
 
 /// Immutable executable plan for arithmetic, ABS, MOD, NULLIF, COALESCE and
-/// numeric extrema, CEIL, FLOOR and TRUNC. Reusing a plan repeats resolution;
+/// numeric extrema, CEIL, FLOOR, TRUNC and SQRT. Reusing a plan repeats resolution;
 /// no values or errors are cached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledNumeric {
@@ -123,6 +123,7 @@ pub fn compile_numeric(
                 if !matches!(
                     function,
                     NumericFunction::Abs
+                        | NumericFunction::Sqrt
                         | NumericFunction::Ceil
                         | NumericFunction::Floor
                         | NumericFunction::Trunc
@@ -246,6 +247,13 @@ fn lower(
                 NumericFunction::Floor => IntegralFunction::Floor,
                 _ => IntegralFunction::Trunc,
             },
+            operand: child(parsed, arguments[0], Operand::Unary, route, sources),
+        },
+        ParsedKind::Call {
+            function: NumericFunction::Sqrt,
+            arguments,
+            ..
+        } => NumericNode::Sqrt {
             operand: child(parsed, arguments[0], Operand::Unary, route, sources),
         },
         ParsedKind::Call {

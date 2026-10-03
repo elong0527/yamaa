@@ -113,6 +113,9 @@ fn source_spans_identify_the_failed_node() {
             vec![Operand::Unary],
         ),
         ("ABS((1 / 0))", "1 / 0", vec![Operand::Unary]),
+        ("SQRT((UNKNOWN))", "UNKNOWN", vec![Operand::Unary]),
+        ("SQRT((1 / 0))", "1 / 0", vec![Operand::Unary]),
+        ("(SQRT(-1))", "SQRT(-1)", vec![]),
         ("CEIL((UNKNOWN))", "UNKNOWN", vec![Operand::Unary]),
         ("FLOOR((1 / 0))", "1 / 0", vec![Operand::Unary]),
         (
@@ -138,7 +141,7 @@ fn source_spans_identify_the_failed_node() {
 /// Unknown grammar functions differ from allowed functions outside this executor.
 #[test]
 fn unsupported_features_are_preflighted_in_source_order() {
-    let text = "A + POWER(SQRT(B), 2) + LN(A) + POWER(2, 3)";
+    let text = "A + POWER(EXP(B), 2) + LN(A) + POWER(2, 3)";
     let error = compile_numeric(text, "spec", CompileLimits::default()).unwrap_err();
     let CompileError::Unsupported { functions } = error else {
         panic!("unsupported required");
@@ -147,7 +150,7 @@ fn unsupported_features_are_preflighted_in_source_order() {
         functions.iter().map(|f| f.function).collect::<Vec<_>>(),
         [
             NumericFunction::Power,
-            NumericFunction::Sqrt,
+            NumericFunction::Exp,
             NumericFunction::Ln,
             NumericFunction::Power
         ]
@@ -157,11 +160,11 @@ fn unsupported_features_are_preflighted_in_source_order() {
             .iter()
             .map(|f| &text[f.name.start..f.name.end])
             .collect::<Vec<_>>(),
-        ["POWER", "SQRT", "LN", "POWER"]
+        ["POWER", "EXP", "LN", "POWER"]
     );
     assert!(matches!(
         compile_numeric(
-            "SQRT(A)",
+            "EXP(A)",
             "spec",
             CompileLimits {
                 resolutions: 0,
@@ -192,7 +195,7 @@ fn unsupported_features_are_preflighted_in_source_order() {
             ..
         }))
     ));
-    for name in ["SQRT", "EXP", "LN"] {
+    for name in ["EXP", "LN"] {
         assert!(matches!(
             compile_numeric(&format!("{name}(A)"), "spec", CompileLimits::default()),
             Err(CompileError::Unsupported { .. })
@@ -276,6 +279,7 @@ fn opaque_non_clone_resolution_failure_keeps_span_and_payload() {
         "CEIL((BROKEN)) + A",
         "FLOOR((BROKEN)) + A",
         "TRUNC((BROKEN)) + A",
+        "SQRT((BROKEN)) + A",
     ] {
         let error = compile(text).evaluate(&mut FailedResolver).unwrap_err();
         assert_eq!(
@@ -350,10 +354,10 @@ fn selection_arguments_preserve_spans_and_resolution_budgets() {
     }
 }
 
-/// Integral calls count identifier occurrences and resolve anew on every execution.
+/// Unary function calls count identifier occurrences and resolve anew on every execution.
 #[test]
-fn integral_functions_obey_resolution_budgets_and_reuse() {
-    for name in ["CEIL", "FLOOR", "TRUNC"] {
+fn unary_functions_obey_resolution_budgets_and_reuse() {
+    for name in ["CEIL", "FLOOR", "TRUNC", "SQRT"] {
         let text = format!("{name}(A)");
         assert_eq!(
             compile_numeric(
@@ -373,7 +377,14 @@ fn integral_functions_obey_resolution_budgets_and_reuse() {
         assert_eq!(plan.resolution_count(), 1);
         let mut resolver = Resolver::default();
         assert_eq!(plan.evaluate(&mut resolver), Ok(Number::float(1.0)));
-        assert_eq!(plan.evaluate(&mut resolver), Ok(Number::float(2.0)));
+        assert_eq!(
+            plan.evaluate(&mut resolver),
+            Ok(Number::float(if name == "SQRT" {
+                2.0_f64.sqrt()
+            } else {
+                2.0
+            }))
+        );
         assert_eq!(resolver.trace, ["A", "A"]);
     }
 }
