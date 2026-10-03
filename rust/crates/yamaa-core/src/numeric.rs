@@ -255,3 +255,39 @@ pub fn null_if(left: Number, right: Number) -> Number {
         }
     }
 }
+
+/// Integral-valued functions that always return float (REQ-0424).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntegralFunction {
+    Ceil,
+    Floor,
+    Trunc,
+}
+
+/// Round a finite number to an integral binary64 value, propagating missing.
+/// Clear fractional significand bits directly so no host math library or bounded
+/// integer conversion is needed. Zero results are positive, matching the Python
+/// reference's integer intermediate, including for a negative-zero input.
+pub fn integral(function: IntegralFunction, number: Number) -> Number {
+    let Some(value) = number.as_float() else {
+        return Number::Missing;
+    };
+    let bits = value.to_bits();
+    let exponent = ((bits >> 52) & 0x7ff) as i32 - 1023;
+    if exponent >= 52 {
+        // All finite binary64 values this large are already integral.
+        return Number::float(value);
+    }
+    let truncated = if exponent < 0 {
+        0.0
+    } else {
+        let fractional_mask = (1_u64 << (52 - exponent)) - 1;
+        f64::from_bits(bits & !fractional_mask)
+    };
+    let result = match function {
+        IntegralFunction::Ceil if value > truncated => truncated + 1.0,
+        IntegralFunction::Floor if value < truncated => truncated - 1.0,
+        _ => truncated,
+    };
+    Number::float(result)
+}

@@ -24,6 +24,11 @@ with FIXTURE.with_name("numeric_selection.tsv").open(
 ) as stream:
     VECTORS.extend(csv.DictReader(stream, delimiter="\t"))
 
+with FIXTURE.with_name("numeric_integral.tsv").open(
+    encoding="utf-8", newline=""
+) as stream:
+    VECTORS.extend(csv.DictReader(stream, delimiter="\t"))
+
 
 def _value(token):
     """Decode only the explicit scalar types used by the independent fixture."""

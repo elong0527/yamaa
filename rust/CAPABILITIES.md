@@ -15,6 +15,7 @@ through the Python backend only, as declared by
 | Numeric syntax: REQ-0413-0415, 0439-0441 | Bounded arena parser; all 44 shared grammar cases, closed function/arity/reserved-word checks, diagnostic positions and deterministic Python comparisons | No dataset execution | No dataset execution | Full function execution and lifecycle diagnostics (steps 4, 7) |
 | Numeric compilation: REQ-0413-0415, 0426-0427, 0434, 0438-0444 | Immutable supported-subset plans, deferred exact literal failures, source spans, unsupported preflight and static resolution budgets; 22 literal cases plus arithmetic/trace fixtures through compilation | No dataset execution | No dataset execution | Remaining functions, completed-result conversion and handlers (steps 4, 7) |
 | Numeric selection: REQ-0415-0416, 0424-0427 | GREATEST, LEAST, NULLIF and COALESCE in primitives/typed evaluation/compilation; 51 shared value, promotion, missingness and eager-resolution cases | No dataset execution | No dataset execution | Remaining math/rounding functions, completed-result conversion and handlers (steps 4, 7) |
+| Integral-valued numeric functions: REQ-0415, 0424, 0426-0427 | CEIL, FLOOR and TRUNC in primitives/typed evaluation/compilation; 100 shared cases with exact float bits, full-range i64, subnormals, signed zero and failures; standard-library differential tests across every finite exponent | No dataset execution | No dataset execution | Remaining transcendental/rounding functions, completed-result conversion and handlers (steps 4, 7) |
 | Temporal values: REQ-0539-0555, 0559-0561, 0567-0573 | Validated civil fields, strict parsing, canonical text, precision, equality and chronological order; 400-year calendar cycle | No dataset execution | No dataset execution | Imputation, temporal operations, function/artifact boundaries (steps 4, 5, 8, 9) |
 | Conversion: REQ-0009-0013, 0015-0018, 0020-0021, 0601 | Full scalar matrix, strict numeric text, exact range/integrality checks, canonical numeric/temporal text, structured failures; shared reference vectors and deterministic float-text differential check | No dataset execution | No dataset execution | Integration at the completed-result lifecycle boundary and actual handler application (steps 4, 7, 8) |
 | Regex and remaining scalar grammars | Not implemented | No dataset execution | No dataset execution | Replay existing grammar/regex vectors, including backreferences and lookarounds (step 4) |
@@ -72,6 +73,14 @@ that reference discrepancy alongside Rust support: the shared 51-case corpus pin
 result types, float bits, resolver traces and downstream arithmetic. Missing
 arguments do not force promotion. The correction may change large-integer results
 or completed-result conversion and is not described as behavior-neutral parity.
+
+CEIL/FLOOR/TRUNC always produce float for present input and canonicalize zero
+results to positive zero, including negative-zero inputs and negative fractions
+rounded to zero. Missing propagates after operand evaluation. The implementation
+uses finite binary64 bits without a new dependency or bounded integer intermediate;
+it preserves very large integral floats. The 100 shared vectors compare exact bits,
+resolution traces and failure routes; Rust additionally compares standard-library
+results at exponent/significand boundaries and deterministic finite bit patterns.
 
 Python numeric-expression integer literals now also avoid the host's integer
 string digit limit: insignificant zeros are stripped before bounded construction,

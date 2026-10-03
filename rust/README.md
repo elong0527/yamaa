@@ -58,7 +58,7 @@ input. Parsing never resolves identifiers or invokes host code.
 
 `numeric_compiler::compile_numeric` now connects text to the supported evaluator
 subset: literals, identifiers, unary signs, arithmetic, ABS, MOD, GREATEST, LEAST,
-NULLIF and COALESCE. It checks all
+NULLIF, COALESCE, CEIL, FLOOR and TRUNC. It checks all
 functions before producing a plan; other valid functions return explicit
 `Unsupported` entries with their written name spans, in source order. Compilation
 never invokes a resolver. It preserves association and defers oversized integer
@@ -80,6 +80,17 @@ Python. Another 51 shared selection cases cover eager argument traces,
 missingness, promotion, signed zeros, i64/binary64 boundaries and nested failures.
 Remaining math/rounding functions, lifecycle handlers and host diagnostic
 transport are the next gates.
+
+CEIL, FLOOR and TRUNC propagate missing and always return float, even for integer
+inputs. Integral zero results are positive zero, matching the reference's integer
+intermediate. The primitive clears fractional binary64 bits and adjusts toward the
+requested direction; it does not narrow large floats through i64 or add a math
+library dependency. All finite values of magnitude at least 2^52 are already
+integral. There are 100 shared cases for types, boundary values and failure order,
+plus exact standard-library comparisons across every finite exponent, both signs,
+significand boundaries and 100,000 deterministic bit patterns. Remaining
+transcendental/rounding functions still require their own dependency and numerical
+policy decisions; these exact tests do not establish their parity.
 
 Numeric selection evaluates every argument in written order before selecting a
 result, including COALESCE after its first present argument. A later failure still

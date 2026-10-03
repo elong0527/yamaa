@@ -113,6 +113,13 @@ fn source_spans_identify_the_failed_node() {
             vec![Operand::Unary],
         ),
         ("ABS((1 / 0))", "1 / 0", vec![Operand::Unary]),
+        ("CEIL((UNKNOWN))", "UNKNOWN", vec![Operand::Unary]),
+        ("FLOOR((1 / 0))", "1 / 0", vec![Operand::Unary]),
+        (
+            "TRUNC((9223372036854775808))",
+            "9223372036854775808",
+            vec![Operand::Unary],
+        ),
         ("MOD(A, (UNKNOWN))", "UNKNOWN", vec![Operand::Right]),
         ("(MOD(A, 0))", "MOD(A, 0)", vec![]),
     ] {
@@ -172,7 +179,7 @@ fn unsupported_features_are_preflighted_in_source_order() {
     ));
     // Neither an early known arithmetic failure nor a later literal failure can
     // turn a valid unimplemented expression into an executable partial plan.
-    for text in ["1 / 0 + CEIL(A)", "9223372036854775808 + FLOOR(A)"] {
+    for text in ["1 / 0 + EXP(A)", "9223372036854775808 + LN(A)"] {
         assert!(matches!(
             compile_numeric(text, "spec", CompileLimits::default()),
             Err(CompileError::Unsupported { .. })
@@ -185,7 +192,7 @@ fn unsupported_features_are_preflighted_in_source_order() {
             ..
         }))
     ));
-    for name in ["CEIL", "FLOOR", "TRUNC", "SQRT", "EXP", "LN"] {
+    for name in ["SQRT", "EXP", "LN"] {
         assert!(matches!(
             compile_numeric(&format!("{name}(A)"), "spec", CompileLimits::default()),
             Err(CompileError::Unsupported { .. })
@@ -263,7 +270,13 @@ fn opaque_non_clone_resolution_failure_keeps_span_and_payload() {
             Err(BoundaryError(Box::new(7)))
         }
     }
-    for text in ["ABS((BROKEN)) + A", "COALESCE(1, (BROKEN), A)"] {
+    for text in [
+        "ABS((BROKEN)) + A",
+        "COALESCE(1, (BROKEN), A)",
+        "CEIL((BROKEN)) + A",
+        "FLOOR((BROKEN)) + A",
+        "TRUNC((BROKEN)) + A",
+    ] {
         let error = compile(text).evaluate(&mut FailedResolver).unwrap_err();
         assert_eq!(
             &text[error.source_span.start..error.source_span.end],
@@ -334,5 +347,33 @@ fn selection_arguments_preserve_spans_and_resolution_budgets() {
             Number::Int(if name == "GREATEST" { 100 } else { 1 })
         );
         assert_eq!(resolver.trace.len(), 100);
+    }
+}
+
+/// Integral calls count identifier occurrences and resolve anew on every execution.
+#[test]
+fn integral_functions_obey_resolution_budgets_and_reuse() {
+    for name in ["CEIL", "FLOOR", "TRUNC"] {
+        let text = format!("{name}(A)");
+        assert_eq!(
+            compile_numeric(
+                &text,
+                "spec",
+                CompileLimits {
+                    resolutions: 0,
+                    ..CompileLimits::default()
+                }
+            ),
+            Err(CompileError::ResolutionLimit {
+                limit: 0,
+                required: 1
+            })
+        );
+        let plan = compile(&text);
+        assert_eq!(plan.resolution_count(), 1);
+        let mut resolver = Resolver::default();
+        assert_eq!(plan.evaluate(&mut resolver), Ok(Number::float(1.0)));
+        assert_eq!(plan.evaluate(&mut resolver), Ok(Number::float(2.0)));
+        assert_eq!(resolver.trace, ["A", "A"]);
     }
 }

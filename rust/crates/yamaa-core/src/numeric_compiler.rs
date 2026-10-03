@@ -8,7 +8,7 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::evaluation::{EvaluationError, NumericNode, NumericPlan, NumericResolver, Operand};
-use crate::numeric::{BinaryOperator, Number, SelectionFunction, UnaryOperator};
+use crate::numeric::{BinaryOperator, IntegralFunction, Number, SelectionFunction, UnaryOperator};
 use crate::numeric_parser::{
     parse_numeric, NumericFunction, ParseError, ParseLimits, ParsedKind, ParsedNumeric, SourceSpan,
 };
@@ -59,7 +59,8 @@ pub struct CompiledEvaluationError<E> {
 }
 
 /// Immutable executable plan for arithmetic, ABS, MOD, NULLIF, COALESCE and
-/// numeric extrema. Reusing a plan repeats resolution; no values or errors are cached.
+/// numeric extrema, CEIL, FLOOR and TRUNC. Reusing a plan repeats resolution;
+/// no values or errors are cached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledNumeric {
     plan: NumericPlan,
@@ -122,6 +123,9 @@ pub fn compile_numeric(
                 if !matches!(
                     function,
                     NumericFunction::Abs
+                        | NumericFunction::Ceil
+                        | NumericFunction::Floor
+                        | NumericFunction::Trunc
                         | NumericFunction::Mod
                         | NumericFunction::Greatest
                         | NumericFunction::Least
@@ -229,6 +233,19 @@ fn lower(
             ..
         } => NumericNode::Unary {
             operator: UnaryOperator::Abs,
+            operand: child(parsed, arguments[0], Operand::Unary, route, sources),
+        },
+        ParsedKind::Call {
+            function:
+                function @ (NumericFunction::Ceil | NumericFunction::Floor | NumericFunction::Trunc),
+            arguments,
+            ..
+        } => NumericNode::Integral {
+            function: match function {
+                NumericFunction::Ceil => IntegralFunction::Ceil,
+                NumericFunction::Floor => IntegralFunction::Floor,
+                _ => IntegralFunction::Trunc,
+            },
             operand: child(parsed, arguments[0], Operand::Unary, route, sources),
         },
         ParsedKind::Call {
