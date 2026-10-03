@@ -106,7 +106,7 @@ with the derivation below and the admiral function as grounding.
    `derive_vars_crit_flag()` supports. Keep backward-compatible
    with the existing golden: existing values do not move. *Status:
    chosen as the factory's first maintenance pilot; see
-   work-items/shift-criteria-crit2.md.*
+   work-item issue #1609.*
 2. **`adam-adlb-lymphocytes`** -- verify against
    `derive_param_wbc_abs()` ("lab differentials converted to
    absolute values"); if it matches, generalize the benchmark to

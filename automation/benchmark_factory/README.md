@@ -83,15 +83,15 @@ scaffolding script.
 | `factory.sh` | Portable scaffolding and checks: `scaffold`, `validate`, `packet`, `retire-check`, `drift-check`. |
 | `gap-report.md` | Sourced proposals: new benchmarks to add, and existing ones to enhance, combine, or retire. |
 | `references.md` | Curated external grounding sources (PharmaSUG, pharmaverse, CDISC TAUGs, FDA/PHUSE, ODM-to-SDTM/define.xml/ARM): work items cite these when claiming real-world relevance. |
-| `work-items/` | Filled-in task specs, one per run: the factory's work log. |
 
 ## Running one cycle
 
-1. Write the work item (`work-items/<slug>.md` from `task-spec.md`).
+1. Open the work-item issue (title `[work-item] <benchmark>: <change>`,
+   label `work-item`, body from `task-spec.md`'s Human direction).
    For a creation, curate the example input data yourself: the paper
    shows this is the highest-leverage input. For maintenance, name
    the target benchmark(s) and the intended end state.
-2. Hand the work item and `proposer.md` to a research agent. It
+2. Hand the work-item issue and `proposer.md` to a research agent. It
    writes a new `benchmarks/<name>/` or edits existing ones,
    following `../benchmarks/agents.md`.
 3. `./factory.sh validate <name>` runs the mechanical admission
