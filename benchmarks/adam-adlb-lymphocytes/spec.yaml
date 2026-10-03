@@ -27,20 +27,21 @@ columns:
     type: str
     label: Parameter
 
-  # The visit's WBC count and LYMLE fraction, and how many LYMPH records it
-  # already has, gathered to decide whether to add a LYMPH record. Every row
+  # The visit's WBC count, the fraction of the differential this template
+  # adds, and how many records of the new absolute parameter it already
+  # has, gathered to decide whether to add an absolute record. Every row
   # template must set them, so collected rows set them empty; none is output.
   - name: WBCVAL
     type: float
     label: White Blood Cell Count
 
-  - name: LYMLEVAL
+  - name: FRACVAL
     type: float
-    label: Lymphocyte Fraction
+    label: Differential Fraction
 
   - name: EXISTING_ABS_COUNT
     type: int
-    label: Existing Absolute Lymphocyte Record Count
+    label: Existing Absolute Differential Record Count
 
   - name: AVAL
     type: float
@@ -57,19 +58,22 @@ rows:
       PARAMCD: ADLB_RAW.PARAMCD
       PARAM: ADLB_RAW.PARAM
       WBCVAL: {literal: null}
-      LYMLEVAL: {literal: null}
+      FRACVAL: {literal: null}
       EXISTING_ABS_COUNT: {literal: null}
       AVAL: ADLB_RAW.AVAL
       DTYPE: {literal: null}
 
-  # One LYMPH record per subject and visit that has a WBC and a LYMLE result
-  # and no LYMPH record yet. ONLY() stops the run if the visit has more than
-  # one of either; COUNT() of no LYMPH records is empty, not 0.
+  # One absolute record per subject, visit, and differential that has a WBC
+  # count and a fraction result and no absolute record yet. ONLY() stops the
+  # run if the visit has more than one of either contributing value; COUNT()
+  # of no absolute records is empty, not 0. Each differential is gated
+  # independently: the fraction filter and the existing-record filter change
+  # per template, the WBC gate does not.
   - id: derived_lymph
     group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
-      AND LYMLEVAL IS NOT NULL
+      AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
       PARAMCD: {literal: LYMPH}
@@ -78,7 +82,7 @@ rows:
         aggregate:
           filter: "ADLB_RAW.PARAMCD = 'WBC'"
           expr: "ONLY(ADLB_RAW.AVAL)"
-      LYMLEVAL:
+      FRACVAL:
         aggregate:
           filter: "ADLB_RAW.PARAMCD = 'LYMLE'"
           expr: "ONLY(ADLB_RAW.AVAL)"
@@ -88,12 +92,116 @@ rows:
           expr: "COUNT(ADLB_RAW.*)"
       AVAL:
         compute:
-          expr: "WBCVAL * LYMLEVAL"
+          expr: "WBCVAL * FRACVAL"
+      DTYPE: {literal: CALCULATION}
+
+  - id: derived_neut
+    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    filter: >-
+      WBCVAL IS NOT NULL
+      AND FRACVAL IS NOT NULL
+      AND EXISTING_ABS_COUNT IS NULL
+    derivations:
+      PARAMCD: {literal: NEUT}
+      PARAM: {literal: Neutrophils Abs (10^9/L)}
+      WBCVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'WBC'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      FRACVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'NEUTLE'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      EXISTING_ABS_COUNT:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'NEUT'"
+          expr: "COUNT(ADLB_RAW.*)"
+      AVAL:
+        compute:
+          expr: "WBCVAL * FRACVAL"
+      DTYPE: {literal: CALCULATION}
+
+  - id: derived_mono
+    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    filter: >-
+      WBCVAL IS NOT NULL
+      AND FRACVAL IS NOT NULL
+      AND EXISTING_ABS_COUNT IS NULL
+    derivations:
+      PARAMCD: {literal: MONO}
+      PARAM: {literal: Monocytes Abs (10^9/L)}
+      WBCVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'WBC'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      FRACVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'MONOLE'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      EXISTING_ABS_COUNT:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'MONO'"
+          expr: "COUNT(ADLB_RAW.*)"
+      AVAL:
+        compute:
+          expr: "WBCVAL * FRACVAL"
+      DTYPE: {literal: CALCULATION}
+
+  - id: derived_eos
+    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    filter: >-
+      WBCVAL IS NOT NULL
+      AND FRACVAL IS NOT NULL
+      AND EXISTING_ABS_COUNT IS NULL
+    derivations:
+      PARAMCD: {literal: EOS}
+      PARAM: {literal: Eosinophils Abs (10^9/L)}
+      WBCVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'WBC'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      FRACVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'EOSLE'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      EXISTING_ABS_COUNT:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'EOS'"
+          expr: "COUNT(ADLB_RAW.*)"
+      AVAL:
+        compute:
+          expr: "WBCVAL * FRACVAL"
+      DTYPE: {literal: CALCULATION}
+
+  - id: derived_baso
+    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
+    filter: >-
+      WBCVAL IS NOT NULL
+      AND FRACVAL IS NOT NULL
+      AND EXISTING_ABS_COUNT IS NULL
+    derivations:
+      PARAMCD: {literal: BASO}
+      PARAM: {literal: Basophils Abs (10^9/L)}
+      WBCVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'WBC'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      FRACVAL:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'BASOLE'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
+      EXISTING_ABS_COUNT:
+        aggregate:
+          filter: "ADLB_RAW.PARAMCD = 'BASO'"
+          expr: "COUNT(ADLB_RAW.*)"
+      AVAL:
+        compute:
+          expr: "WBCVAL * FRACVAL"
       DTYPE: {literal: CALCULATION}
 
 verifications:
   - unique:
       columns: [USUBJID, VISIT, PARAMCD]
   - row_count:
-      min: 15
-      max: 15
+      min: 31
+      max: 31

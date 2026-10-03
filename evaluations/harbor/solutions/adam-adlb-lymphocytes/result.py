@@ -17,40 +17,47 @@ collected = raw.select("USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT").with_colu
     DTYPE=pl.lit(None, dtype=pl.String)
 )
 
-# One LYMPH record per subject and visit with both WBC and LYMLE and no
-# LYMPH yet: WBC times LYMLE.
-wbc = (
-    raw.filter(pl.col("PARAMCD") == "WBC")
-    .select("USUBJID", "VISIT", WBCVAL="AVAL")
-)
-lymle = (
-    raw.filter(pl.col("PARAMCD") == "LYMLE")
-    .select("USUBJID", "VISIT", LYMLEVAL="AVAL")
-)
-existing = (
-    raw.filter(pl.col("PARAMCD") == "LYMPH")
-    .select("USUBJID", "VISIT")
-    .with_columns(pl.lit(True).alias("HAS_LYMPH"))
-)
+# Differential fraction code -> (absolute code, absolute parameter name).
+differentials = {
+    "LYMLE": ("LYMPH", "Lymphocytes Abs (10^9/L)"),
+    "NEUTLE": ("NEUT", "Neutrophils Abs (10^9/L)"),
+    "MONOLE": ("MONO", "Monocytes Abs (10^9/L)"),
+    "EOSLE": ("EOS", "Eosinophils Abs (10^9/L)"),
+    "BASOLE": ("BASO", "Basophils Abs (10^9/L)"),
+}
 
-calc = (
-    wbc.join(lymle, on=["USUBJID", "VISIT"], how="inner")
-    .join(existing, on=["USUBJID", "VISIT"], how="left")
-    .filter(
-        pl.col("WBCVAL").is_not_null()
-        & pl.col("LYMLEVAL").is_not_null()
-        & pl.col("HAS_LYMPH").is_null()
-    )
-    .with_columns(
-        PARAMCD=pl.lit("LYMPH"),
-        AVAL=pl.col("WBCVAL") * pl.col("LYMLEVAL"),
-        PARAM=pl.lit("Lymphocytes Abs (10^9/L)"),
-        DTYPE=pl.lit("CALCULATION"),
-    )
-    .select("USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT", "DTYPE")
-)
+wbc = raw.filter(pl.col("PARAMCD") == "WBC").select("USUBJID", "VISIT", WBCVAL="AVAL")
 
-adlb = pl.concat([collected, calc], how="diagonal")
+frames = []
+for frac_code, (abs_code, abs_param) in differentials.items():
+    frac = (
+        raw.filter(pl.col("PARAMCD") == frac_code)
+        .select("USUBJID", "VISIT", FRACVAL="AVAL")
+    )
+    existing = (
+        raw.filter(pl.col("PARAMCD") == abs_code)
+        .select("USUBJID", "VISIT")
+        .with_columns(pl.lit(True).alias("HAS_ABS"))
+    )
+    calc = (
+        wbc.join(frac, on=["USUBJID", "VISIT"], how="inner")
+        .join(existing, on=["USUBJID", "VISIT"], how="left")
+        .filter(
+            pl.col("WBCVAL").is_not_null()
+            & pl.col("FRACVAL").is_not_null()
+            & pl.col("HAS_ABS").is_null()
+        )
+        .with_columns(
+            PARAMCD=pl.lit(abs_code),
+            AVAL=pl.col("WBCVAL") * pl.col("FRACVAL"),
+            PARAM=pl.lit(abs_param),
+            DTYPE=pl.lit("CALCULATION"),
+        )
+        .select("USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT", "DTYPE")
+    )
+    frames.append(calc)
+
+adlb = pl.concat([collected, *frames], how="diagonal")
 
 Path("/app/output").mkdir(exist_ok=True)
 adlb.write_csv("/app/output/adlb.csv")
