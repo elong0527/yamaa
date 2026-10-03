@@ -357,3 +357,133 @@ def test_self_with_one_sided_between_filters_none_bound() -> None:
         spec, set(), {"QS": {"USUBJID", "QSSEQ", "AVAL"}}
     )
     assert None not in result
+
+
+# REQ-0117/REQ-0120: one SELF intermediate keyed by a match value each row
+# template derives for itself. A match that ignored AVISIT would count S2's
+# baseline record as week-2 coverage and build no week-2 row for S2.
+PARAMETERIZED_SELF_KEY = """
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, VSSEQ]
+input:
+  VS: input/vs.csv
+intermediates:
+  - id: COVER
+    dataset: SELF
+    key: {USUBJID: VS.USUBJID, AVISIT: AVISIT}
+    order_by: [SELF.VSSEQ]
+    keep: last
+    no_match: null
+columns:
+  - {name: USUBJID, type: str}
+  - {name: VSSEQ, type: int}
+  - {name: AVISIT, type: str}
+  - {name: COVERED, type: int}
+output:
+  path: advs.csv
+  columns: [USUBJID, VSSEQ, AVISIT]
+rows:
+  - id: collected
+    dataset: VS
+    derivations:
+      USUBJID: VS.USUBJID
+      VSSEQ: VS.VSSEQ
+      AVISIT: VS.AVISIT
+      COVERED: {literal: null}
+  - id: expected_baseline
+    dataset: VS
+    group_by: [VS.USUBJID]
+    filter: "COVERED IS NULL"
+    derivations:
+      USUBJID: VS.USUBJID
+      VSSEQ: {literal: 98}
+      AVISIT: {literal: BASELINE}
+      COVERED: COVER.VSSEQ
+  - id: expected_week2
+    dataset: VS
+    group_by: [VS.USUBJID]
+    filter: "COVERED IS NULL"
+    derivations:
+      USUBJID: VS.USUBJID
+      VSSEQ: {literal: 99}
+      AVISIT: {literal: WEEK 2}
+      COVERED: COVER.VSSEQ
+"""
+
+
+def window_sources():
+    columns = (
+        TypedColumn(name="USUBJID", type="str"),
+        TypedColumn(name="VSSEQ", type="int"),
+        TypedColumn(name="AVISIT", type="str"),
+    )
+    return {
+        "VS": frame_from_values(
+            columns,
+            [
+                ["S1", 1, "BASELINE"],
+                ["S1", 2, "WEEK 2"],
+                ["S2", 1, "BASELINE"],
+                ["S3", 1, "WEEK 2"],
+            ],
+        )
+    }
+
+
+def load_text(text: str, tmp_path: Path) -> Specification:
+    path = tmp_path / "spec.yaml"
+    path.write_text(text)
+    return load_specification(path, Path(__file__).parents[3] / "yaml").specification
+
+
+def test_each_template_supplies_its_own_match_value_to_a_shared_self_lookup(
+    tmp_path: Path,
+) -> None:
+    spec = load_text(PARAMETERIZED_SELF_KEY, tmp_path)
+
+    result = execute_specification(spec, window_sources())
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert result.artifact.frame.rows() == [
+        ("S1", 1, "BASELINE"),
+        ("S1", 2, "WEEK 2"),
+        ("S2", 1, "BASELINE"),
+        ("S3", 1, "WEEK 2"),
+        ("S3", 98, "BASELINE"),
+        ("S2", 99, "WEEK 2"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("match_value", "path"),
+    [
+        ("SELF.AVISIT", "intermediates[0].key"),
+        ("{source: SELF.AVISIT}", "intermediates[0].key.AVISIT"),
+    ],
+    ids=["variable", "expression"],
+)
+def test_a_self_qualified_match_value_suggests_the_current_row_name(
+    match_value: str, path: str, tmp_path: Path
+) -> None:
+    # REQ-0117: SELF names donor rows, never the current row, so it cannot
+    # qualify a match value; the bare name is the current row's value.
+    text = PARAMETERIZED_SELF_KEY.replace("AVISIT: AVISIT}", f"AVISIT: {match_value}}}")
+    assert text != PARAMETERIZED_SELF_KEY
+    spec = load_text(text, tmp_path)
+
+    result = execute_specification(spec, window_sources())
+
+    assert isinstance(result, ExecutionFailure)
+    [diagnostic] = [
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.requirement == "REQ-0117"
+    ]
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.spec_paths == (path,)
+    assert diagnostic.context == {
+        "intermediate": "COVER",
+        "identifier": "SELF.AVISIT",
+        "suggestion": "AVISIT",
+    }

@@ -142,7 +142,10 @@ Otherwise fail as `unknown_field`.
 
 **REQ-0117.** Every match value must read a known current-row value: a
 variable must name one, and every identifier an expression reads must be
-one. Otherwise fail as `unknown_field`.
+one. Otherwise fail as `unknown_field`. `SELF` names donor rows and is
+never a current-row scope, so a match value written `SELF.field` names no
+current-row value and fails the same way; when the current row carries
+`field`, the diagnostic suggests that bare name.
 
 <a id="req-0118"></a>
 
@@ -212,6 +215,33 @@ For `SELF`, `filter` and `order_by` may name its donor fields either bare or
 as `SELF.field`. Bare donor fields in `filter` are not correlated current-row
 references. All other lookup rules, including matching, missing values,
 ordering, and `columns`, apply to `SELF` as they do to input datasets.
+
+A `key` match value still reads the current row
+([REQ-0117](lookup.md#req-0117)): a bare name there is the current row's
+column, not a donor field. Row templates reading one `SELF` intermediate
+can each supply a match value from their own derivations. Below, an
+expected-record template derives its window and reads `COVER` to find a
+completed row already in that window; another template deriving
+`AVISIT: {literal: WEEK 4}` reads the same intermediate for its own window.
+
+```yaml
+intermediates:
+  - id: COVER
+    dataset: SELF
+    key: {USUBJID: VS.USUBJID, PARAMCD: VS.VSTESTCD, AVISIT: AVISIT}
+    order_by: [SELF.VSSEQ]
+    keep: last
+    no_match: null
+rows:
+  # ...after the template that builds the collected rows
+  - id: expected_week2
+    dataset: VS
+    group_by: [VS.USUBJID, VS.VSTESTCD]
+    filter: "COVERED IS NULL"
+    derivations:
+      AVISIT: {literal: WEEK 2}
+      COVERED: COVER.VSSEQ
+```
 
 For input datasets, `order_by` names qualified fields of that dataset only; `columns`
 lists bare field names. Every `filter` field is qualified. The lookup's
