@@ -105,7 +105,7 @@ join_visit <- function(df, lookup_df, code_col = "VISIT") {
   df |>
     dplyr::left_join(vt, by = setNames(".code", code_col)) |>
     dplyr::mutate(VISIT = .VISIT, VISITNUM = .VISITNUM, .OFFSET = .OFFSET) |> # nolint: object_usage_linter
-    dplyr::select(-.code, -.VISIT, -.VISITNUM)
+    dplyr::select(-.VISIT, -.VISITNUM)
 }
 #' Add a sequence variable within USUBJID
 #'

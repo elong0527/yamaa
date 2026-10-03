@@ -37,25 +37,25 @@
   if (nrow(combined) == 0) {
     return(rep(NA_character_, length(usubjid_series)))
   }
+  # Parse the most precise form first: a minute parser also accepts a
+  # seconds value but silently discards its seconds, changing dose ordering.
   combined <- combined |>
     mutate(
       DATETIME = suppressWarnings(
-        as.POSIXct(DATE, format = "%Y-%m-%dT%H:%M", tz = "UTC") # nolint: object_usage_linter
+        as.POSIXct(DATE, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
       )
     ) |>
     mutate(
       DATETIME = if_else(
-        is.na(DATETIME), # nolint: object_usage_linter
-        suppressWarnings(as.POSIXct(DATE, format = "%Y-%m-%d", tz = "UTC")),
+        is.na(DATETIME),
+        suppressWarnings(as.POSIXct(DATE, format = "%Y-%m-%dT%H:%M", tz = "UTC")),
         DATETIME
       )
     ) |>
     mutate(
       DATETIME = if_else(
-        is.na(DATETIME), # nolint: object_usage_linter
-        suppressWarnings(
-          as.POSIXct(DATE, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
-        ),
+        is.na(DATETIME),
+        suppressWarnings(as.POSIXct(DATE, format = "%Y-%m-%d", tz = "UTC")),
         DATETIME
       )
     ) |>

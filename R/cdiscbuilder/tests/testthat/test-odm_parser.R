@@ -134,13 +134,8 @@ test_that("parse_odm_to_long_df preserves multiple repeat levels for both namesp
     root_close <- if (use_prefix) "</odm:ODM>" else "</ODM>"
     p <- if (use_prefix) "odm:" else ""
     sprintf(
-      '<?xml version="1.0" encoding="UTF-8"?>\n%s %s>\n  <%sStudy OID="S1">\n    <%sMetaDataVersion OID="v1">\n      <%sItemDef OID="I1" Name="Item1"><%sQuestion><%sTranslatedText>Q1</%sTranslatedText></%sQuestion></%sItemDef>\n    </%sMetaDataVersion>\n  </%sStudy>\n  <%sClinicalData StudyOID="S1">\n    <%sSubjectData SubjectKey="SUBJ1">\n      <%sStudyEventData StudyEventOID="SE1" StudyEventRepeatKey="1">\n        <%sFormData FormOID="F1">\n          <%sItemGroupData ItemGroupOID="IG1" ItemGroupRepeatKey="1"><%sItemData ItemOID="I1" Value="100"/></%sItemGroupData>\n          <%sItemGroupData ItemGroupOID="IG1" ItemGroupRepeatKey="2"><%sItemData ItemOID="I1" Value="200"/></%sItemGroupData>\n        </%sFormData>\n      </%sStudyEventData>\n      <%sStudyEventData StudyEventOID="SE1" StudyEventRepeatKey="2">\n        <%sFormData FormOID="F1">\n          <%sItemGroupData ItemGroupOID="IG1" ItemGroupRepeatKey="1"><%sItemData ItemOID="I1" Value="300"/></%sItemGroupData>\n        </%sFormData>\n      </%sStudyEventData>\n    </%sSubjectData>\n  </%sClinicalData>\n%s',
-      root_open, ns_decl,
-      p, p, p, p, p, p, p, p,
-      p, p,
-      p, p, p, p, p, p, p, p, p, p,
-      p, p, p, p, p, p,
-      root_close
+      '<?xml version="1.0" encoding="UTF-8"?>\n%1$s %2$s>\n  <%3$sStudy OID="S1">\n    <%3$sMetaDataVersion OID="v1">\n      <%3$sItemDef OID="I1" Name="Item1"><%3$sQuestion><%3$sTranslatedText>Q1</%3$sTranslatedText></%3$sQuestion></%3$sItemDef>\n    </%3$sMetaDataVersion>\n  </%3$sStudy>\n  <%3$sClinicalData StudyOID="S1">\n    <%3$sSubjectData SubjectKey="SUBJ1">\n      <%3$sStudyEventData StudyEventOID="SE1" StudyEventRepeatKey="1">\n        <%3$sFormData FormOID="F1">\n          <%3$sItemGroupData ItemGroupOID="IG1" ItemGroupRepeatKey="1"><%3$sItemData ItemOID="I1" Value="100"/></%3$sItemGroupData>\n          <%3$sItemGroupData ItemGroupOID="IG1" ItemGroupRepeatKey="2"><%3$sItemData ItemOID="I1" Value="200"/></%3$sItemGroupData>\n        </%3$sFormData>\n      </%3$sStudyEventData>\n      <%3$sStudyEventData StudyEventOID="SE1" StudyEventRepeatKey="2">\n        <%3$sFormData FormOID="F1">\n          <%3$sItemGroupData ItemGroupOID="IG1" ItemGroupRepeatKey="1"><%3$sItemData ItemOID="I1" Value="300"/></%3$sItemGroupData>\n        </%3$sFormData>\n      </%3$sStudyEventData>\n    </%3$sSubjectData>\n  </%3$sClinicalData>\n%4$s',
+      root_open, ns_decl, p, root_close
     )
   }
 

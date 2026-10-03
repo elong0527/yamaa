@@ -1,0 +1,45 @@
+name: R package tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: true
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxml2-dev libsqlite3-dev
+          # yaml12 is a declared R dependency with a Rust source build.
+          rustup toolchain install 1.90.0 --profile minimal
+          rustup default 1.90.0
+      - name: Install R dependencies
+        run: |
+          Rscript -e 'd <- read.dcf("R/cdiscbuilder/DESCRIPTION"); deps <- paste(d[1, c("Imports", "Suggests")], collapse=","); packages <- trimws(gsub("\\s*\\([^)]*\\)", "", strsplit(deps, ",")[[1]])); install.packages(unique(c(packages, "pkgload")), Ncpus=2)'
+      - name: Run the complete R package suite
+        run: |
+          Rscript R/cdiscbuilder/inst/conformance/package_tests.R 2>&1 | tee "${RUNNER_TEMP}/r-package-tests.log"
+      - name: Preserve test results and dependency versions
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: r-package-tests
+          path: ${{ runner.temp }}/r-package-tests.log
+          if-no-files-found: warn
