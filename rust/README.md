@@ -85,3 +85,8 @@ qualified by this slice. The existing Windows Python engine remains supported.
 Next gates: confirm the hosted installation matrix, settle transitive dependency
 locking, then implement closed core values and scalar semantics before adding
 Arrow tables or host callbacks. No performance or language-parity claim is made.
+
+Local `R CMD check --no-manual --no-build-vignettes` passes installation and
+tests, but reports one compiled-code warning for Rust's linked `_abort` symbol.
+The prototype is not CRAN-qualified. R process safety and panic/condition
+translation still require the explicit boundary tests in step 5 of #1585.
