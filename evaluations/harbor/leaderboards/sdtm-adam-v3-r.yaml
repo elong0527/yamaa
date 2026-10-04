@@ -14,7 +14,7 @@ tasks:
   - adam-adae-occurrence-flags-r
   - adam-adae-onset-emergence-r
   - adam-adae-partial-dates-r
-  - adam-adae-post-covid-r
+  - adam-adae-post-index-r
   - adam-adae-prior-serious-event-r
   - adam-adae-protocol-review-r
   - adam-adae-query-flags-r

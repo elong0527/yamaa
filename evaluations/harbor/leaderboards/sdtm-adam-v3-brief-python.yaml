@@ -16,7 +16,7 @@ tasks:
   - adam-adae-occurrence-flags-brief-python
   - adam-adae-onset-emergence-brief-python
   - adam-adae-partial-dates-brief-python
-  - adam-adae-post-covid-brief-python
+  - adam-adae-post-index-brief-python
   - adam-adae-prior-serious-event-brief-python
   - adam-adae-protocol-review-brief-python
   - adam-adae-query-flags-brief-python

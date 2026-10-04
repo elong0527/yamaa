@@ -163,10 +163,12 @@ cases. Removed from the retire list; it stays.
    identifier": a string-parsing exercise rather than a CDISC
    derivation. Realistic (sites do encode site ID in USUBJID), so
    "deprioritize" is fairer than "retire".
-2. **`adam-adae-post-covid`** -- the COVID-specific framing is dated,
+2. ~~**`adam-adae-post-covid`** -- the COVID-specific framing is dated,
    but the underlying pattern (flag events after a reference event)
    is generic and worth keeping. Generalize/repurpose rather than
-   delete.
+   delete.~~ Resolved by work-item issue #1627: renamed to
+   `adam-adae-post-index` (`AFTIDXFL`, "After Index Event Flag");
+   fixture and golden values retained.
 
 ## E. Pipeline integration candidates
 

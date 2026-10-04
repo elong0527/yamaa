@@ -16,7 +16,7 @@ tasks:
   - adam-adae-occurrence-flags-conventions-python
   - adam-adae-onset-emergence-conventions-python
   - adam-adae-partial-dates-conventions-python
-  - adam-adae-post-covid-conventions-python
+  - adam-adae-post-index-conventions-python
   - adam-adae-prior-serious-event-conventions-python
   - adam-adae-protocol-review-conventions-python
   - adam-adae-query-flags-conventions-python
