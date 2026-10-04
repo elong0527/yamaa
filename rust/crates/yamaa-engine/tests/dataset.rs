@@ -5095,3 +5095,99 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
     ));
     assert!(failing.reads.borrow().is_empty());
 }
+
+/// Placement preserves filtering order without changing raw-key matching or duplicate priority.
+#[test]
+fn row_lookup_assignment_phase_controls_reads_for_discarded_candidates() {
+    use yamaa_engine::dataset::{RowLookup, RowMatchKey, SecondarySource};
+    for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+        let driver = table(
+            &[("ID", ColumnType::Int)],
+            vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+        );
+        let mut right = table(
+            &[("ID", ColumnType::Int), ("V", ColumnType::Int)],
+            vec![
+                vec![Value::Int(1), Value::Int(10)],
+                vec![Value::Int(1), Value::Int(10)],
+                vec![Value::Int(2), Value::Int(20)],
+            ],
+        );
+        // A donor access error must not mask ambiguity or reach a discarded row.
+        right.fail = Some((0, 1));
+        let lookup = assign(
+            1,
+            Expression::RowLookup(RowLookup {
+                source: 0,
+                column: 1,
+                keys: vec![RowMatchKey {
+                    source_column: 0,
+                    driver_column: 0,
+                }],
+            }),
+        );
+        for in_template in [true, false] {
+            let mut assignments = vec![assign(0, Expression::Source(0))];
+            let mut columns = vec![];
+            if in_template {
+                assignments.push(lookup.clone());
+            } else {
+                columns.push(lookup.clone());
+            }
+            let plan = DatasetPlan::new_with_sources(
+                driver.schema.clone(),
+                vec![SecondarySource {
+                    name: "OTHER".into(),
+                    schema: right.schema.clone(),
+                }],
+                schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+                vec![RowTemplate {
+                    mode: mode.clone(),
+                    assignments,
+                    filter: Some(filter(
+                        Node::Compare {
+                            operator: Comparison::Greater,
+                            left: Scalar::Identifier("id".into()),
+                            right: Scalar::Literal(Value::Int(1)),
+                        },
+                        vec![binding("id", Read::Column(0))],
+                    )),
+                }],
+                columns,
+                vec![0],
+                vec![],
+            )
+            .unwrap();
+            for _ in 0..2 {
+                right.reads.borrow_mut().clear();
+                let attempt = plan.execute_observed_sources(&driver, &[&right], limits());
+                if in_template {
+                    assert!(matches!(
+                        *attempt.result.unwrap_err(),
+                        ExecutionError::MultipleMatches { match_count: 2, .. }
+                    ));
+                    assert_eq!(*right.reads.borrow(), vec![(0, 0), (1, 0), (2, 0)]);
+                } else {
+                    assert_eq!(
+                        attempt.result.unwrap().dataset.rows(),
+                        &[vec![Value::Int(2), Value::Int(20)]]
+                    );
+                    // Only the retained candidate scans; its donor is read once.
+                    assert_eq!(*right.reads.borrow(), vec![(0, 0), (1, 0), (2, 0), (2, 1)]);
+                }
+            }
+            if !in_template {
+                // The later phase still rejects ambiguity in a retained candidate.
+                right.rows.push(vec![Value::Int(2), Value::Int(20)]);
+                right.fail = Some((2, 1));
+                right.reads.borrow_mut().clear();
+                let attempt = plan.execute_observed_sources(&driver, &[&right], limits());
+                assert!(matches!(
+                    *attempt.result.unwrap_err(),
+                    ExecutionError::MultipleMatches { match_count: 2, .. }
+                ));
+                assert_eq!(*right.reads.borrow(), vec![(0, 0), (1, 0), (2, 0), (3, 0)]);
+            }
+        }
+    }
+}

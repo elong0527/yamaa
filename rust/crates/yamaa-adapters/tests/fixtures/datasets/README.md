@@ -127,3 +127,8 @@ snapshots. Literal truth distinguishes raw `02` from `2`, record/group scope,
 empty output, missing keys, duplicate equal-valued records and lookup failure
 before a false row filter. Match-key evidence remains raw and separate from
 unavailable output identity. JSON/TSV expectations are authored constants.
+
+Two additional `row_lookup_*_after_false_filter` cases place the same ambiguous
+lookup in the later column phase, in record and grouped plans. Unlike the
+row-assignment case, both yield an independently specified empty successful
+snapshot. All 76 cases replay through Rust and the installed Python/R bridges.

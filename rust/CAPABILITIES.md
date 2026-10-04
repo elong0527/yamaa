@@ -254,6 +254,10 @@ keeps match keys separate from converted output identities. Six independent
 shared fixtures and installed record/group/input-order/failure variants accompany
 the complete unchanged 24-row ADVS BMI benchmark. Multiple row drivers, broader
 joins and the separate ADSL BMI function/POWER integration remain open.
+Direct typed plans can also place raw-driver lookups in the later column phase,
+where only retained candidates are read. Duplicate-before-filter ordering applies
+to template assignments. The normalized frontend admits only that template form;
+see [the phase contract](DATASET_TRANSPORT.md#row-template-secondary-sources).
 
 Dataset `unconvertible` composes the same completed-value recovery across every
 admitted assignment, including keys, row/group columns, windows and named reads.

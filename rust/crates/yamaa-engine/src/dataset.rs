@@ -47,7 +47,8 @@ pub enum Expression {
     Source(usize),
     /// Read one record from a secondary source on completed output match values.
     Lookup(Lookup),
-    /// Row-phase equality against raw driver fields, never unfinished outputs.
+    /// Equality against raw driver fields, never unfinished outputs.
+    /// Runs in its owning assignment's phase; see [`RowLookup`].
     RowLookup(RowLookup),
     /// Read a field from the run-local cached named record selection.
     Intermediate {
@@ -112,7 +113,14 @@ pub struct RowMatchKey {
     pub driver_column: usize,
 }
 
-/// Row-template secondary read on record fields or available grouping fields.
+/// Secondary read on raw record fields or available grouping fields.
+///
+/// A template assignment runs before that template's filter, so a duplicate
+/// match fails even if the filter would discard the candidate. A whole-column
+/// assignment runs after filtering and only reads retained candidates. Both
+/// phases use the candidate's original driver membership, not its output keys.
+/// Key-grain plans reject this expression in either phase. The normalized Python
+/// frontend currently admits this expression only in template assignments.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowLookup {
     pub source: usize,

@@ -434,7 +434,18 @@ The engine resolves driver match fields before scanning the secondary snapshot,
 charges each read/text observation, skips missing keys and counts all matching
 records before reading a donor. Zero records yield missing; duplicate records
 retain exact raw match-key evidence even if donor values agree. The existing
-completed-output lookup uses the same scan. Both run before assignment conversion;
-row filtering follows completed row derivations, so a false filter cannot hide an
-earlier duplicate-match error. Source errors remain opaque; budgets and diagnostic
-copy limits apply before reads and copies. No index or performance claim is made.
+completed-output lookup uses the same scan. Both run before assignment conversion.
+Source errors remain opaque; budgets and diagnostic copy limits apply before reads
+and copies. No index or performance claim is made.
+
+Assignment placement controls execution order in direct typed plans and
+`dataset/1` requests. A `row_lookup` in `templates[].assignments` executes before
+that template's filter: even a false filter cannot hide its duplicate-match or
+donor-read error. A `row_lookup` in `columns` executes after row filtering, only
+for retained candidates; discarded candidates cause no lookup reads or lookup
+errors. Retained candidates still use their original driver fields (grouping
+fields in group mode), and duplicate matches still fail before donor reads.
+The later result is unavailable to the earlier row filter. Key-grain plans reject
+both placements. The normalized Python specification frontend currently lowers
+secondary row reads only into template assignments; this typed-plan capability
+does not expand its admitted specification vocabulary.
