@@ -219,7 +219,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -464,4 +464,40 @@ fn window_filter_bindings_cannot_read_source_or_uncompleted_outputs() {
             Err(Error::InvalidPlan)
         ));
     }
+}
+
+/// Value-window wire requests preserve canonical signed offsets and complete donor admission.
+#[test]
+fn value_window_requests_reject_bad_offsets_and_unavailable_donors_before_ipc() {
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let request = &cases
+        .iter()
+        .find(|case| case["case"] == "window_values_neighbors_and_carry")
+        .unwrap()["request"];
+    for offset in ["+1", "01", "-0", "1.0", "9223372036854775808"] {
+        let mut invalid = request.clone();
+        invalid["columns"][2]["expression"]["window"]["kind"]["row_value"]["offset"] =
+            json!(offset);
+        assert!(matches!(
+            execute_dataset(&invalid.to_string(), b"bad ipc"),
+            Err(Error::InvalidRequest)
+        ));
+    }
+    for (column, offset) in [(2, "0"), (3, "-1"), (99, "1")] {
+        let mut invalid = request.clone();
+        invalid["columns"][2]["expression"]["window"]["kind"] =
+            json!({"row_value":{"column":column,"offset":offset}});
+        assert!(matches!(
+            execute_dataset(&invalid.to_string(), b"bad ipc"),
+            Err(Error::InvalidPlan)
+        ));
+    }
+    let mut invalid = request.clone();
+    invalid["columns"][2]["expression"] =
+        json!({"number":request["columns"][2]["expression"]["window"]});
+    assert!(matches!(
+        execute_dataset(&invalid.to_string(), b"bad ipc"),
+        Err(Error::InvalidPlan)
+    ));
 }

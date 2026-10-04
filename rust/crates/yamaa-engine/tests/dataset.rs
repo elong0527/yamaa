@@ -2528,7 +2528,7 @@ fn numbering_with_filter(
     predicate: Option<Filter>,
     output_kind: ColumnType,
 ) -> DatasetPlan {
-    use yamaa_engine::dataset::{Numbering, NumberingKind, OrderTerm};
+    use yamaa_engine::dataset::{OrderTerm, Window, WindowKind};
     let mut fields = source.schema.columns().to_vec();
     for name in ["SEQ", "RANK", "DENSE"] {
         fields.push(Column {
@@ -2553,16 +2553,16 @@ fn numbering_with_filter(
         ),
     ];
     for (index, kind) in [
-        NumberingKind::RowNumber,
-        NumberingKind::Competition,
-        NumberingKind::Dense,
+        WindowKind::RowNumber,
+        WindowKind::Competition,
+        WindowKind::Dense,
     ]
     .into_iter()
     .enumerate()
     {
         columns.push(assign(
             index + 3,
-            Expression::Number(Numbering {
+            Expression::Window(Window {
                 filter: predicate.clone(),
                 kind,
                 group_by: vec![1],
@@ -2700,11 +2700,11 @@ fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
 
 #[test]
 fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
-    use yamaa_engine::dataset::{Numbering, NumberingKind, OrderTerm};
+    use yamaa_engine::dataset::{OrderTerm, Window, WindowKind};
     let source = table(&[("ID", ColumnType::Int)], vec![]);
-    let window = Numbering {
+    let window = Window {
         filter: None,
-        kind: NumberingKind::RowNumber,
+        kind: WindowKind::RowNumber,
         group_by: vec![],
         order_by: vec![OrderTerm {
             column: 0,
@@ -2715,7 +2715,7 @@ fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
     let output = schema(&[("ID", ColumnType::Int), ("SEQ", ColumnType::Int)]);
     let build = |window, mode, row_window| {
         let mut row = vec![assign(0, Expression::Source(0))];
-        let mut columns = vec![assign(1, Expression::Number(window))];
+        let mut columns = vec![assign(1, Expression::Window(window))];
         if row_window {
             row.append(&mut columns);
         }
@@ -2989,4 +2989,305 @@ fn window_filter_limits_share_budget_and_fresh_execution_recovers() {
         plan.execute(&source, limits()).unwrap().dataset.rows()[1][3],
         Value::Int(2)
     );
+}
+
+/// Build a value-window plan with a separate completed donor column and stable ordinal order.
+fn value_window_plan(
+    source: &Table,
+    kind: yamaa_engine::dataset::WindowKind,
+    filter: Option<Filter>,
+) -> Result<DatasetPlan, PlanError> {
+    use yamaa_engine::dataset::{OrderTerm, Window};
+    let mut fields = source.schema.columns().to_vec();
+    fields.push(Column {
+        name: "RESULT".into(),
+        kind: fields[2].kind,
+    });
+    DatasetPlan::new(
+        source.schema.clone(),
+        TableSchema::new(fields).unwrap(),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![
+            assign(1, collect(1)),
+            assign(2, collect(2)),
+            assign(
+                3,
+                Expression::Window(Window {
+                    kind,
+                    group_by: vec![1],
+                    order_by: vec![OrderTerm {
+                        column: 0,
+                        descending: false,
+                        nulls_first: false,
+                    }],
+                    filter,
+                }),
+            ),
+        ],
+        vec![0],
+        vec![],
+    )
+}
+
+/// Offsets include missing donors; previous/LOCF cross gaps while retaining every output position.
+#[test]
+fn value_windows_distinguish_neighbor_reads_previous_present_and_current_present() {
+    use yamaa_engine::dataset::WindowKind;
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        [Some(7), None, None, Some(9), None]
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                vec![
+                    Value::Int(i as i64 + 1),
+                    Value::Missing,
+                    v.map_or(Value::Missing, Value::Int),
+                ]
+            })
+            .collect(),
+    );
+    for (kind, expected) in [
+        (
+            WindowKind::RowValue {
+                column: 2,
+                offset: -1,
+            },
+            vec![None, Some(7), None, None, Some(9)],
+        ),
+        (
+            WindowKind::RowValue {
+                column: 2,
+                offset: 1,
+            },
+            vec![None, None, Some(9), None, None],
+        ),
+        (
+            WindowKind::PreviousNonMissing { column: 2 },
+            vec![None, Some(7), Some(7), Some(7), Some(9)],
+        ),
+        (
+            WindowKind::Locf { column: 2 },
+            vec![Some(7), Some(7), Some(7), Some(9), Some(9)],
+        ),
+    ] {
+        let result = value_window_plan(&source, kind, None)
+            .unwrap()
+            .execute(&source, limits())
+            .unwrap();
+        assert_eq!(
+            result
+                .dataset
+                .rows()
+                .iter()
+                .map(|row| row[3].clone())
+                .collect::<Vec<_>>(),
+            expected
+                .into_iter()
+                .map(|v| v.map_or(Value::Missing, Value::Int))
+                .collect::<Vec<_>>()
+        );
+    }
+    assert_eq!(source.reads.borrow().len(), 60); // Value windows only read completed output cells.
+}
+
+/// Filtering removes donor positions from offsets, without dropping excluded output rows.
+#[test]
+fn value_window_offsets_use_only_eligible_positions_and_keep_excluded_results_missing() {
+    use yamaa_engine::dataset::WindowKind;
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        [Some(7), Some(8), None, Some(9)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                vec![
+                    Value::Int(i as i64 + 1),
+                    Value::Missing,
+                    v.map_or(Value::Missing, Value::Int),
+                ]
+            })
+            .collect(),
+    );
+    let predicate = check_predicate(
+        Node::Compare {
+            operator: Comparison::NotEqual,
+            left: Scalar::Identifier("ID".into()),
+            right: Scalar::Literal(Value::Int(2)),
+        },
+        vec![binding("ID", Read::Column(0))],
+        "columns.RESULT.derivation.row_value",
+    );
+    let result = value_window_plan(
+        &source,
+        WindowKind::RowValue {
+            column: 2,
+            offset: -1,
+        },
+        Some(predicate),
+    )
+    .unwrap()
+    .execute(&source, limits())
+    .unwrap();
+    assert_eq!(
+        result
+            .dataset
+            .rows()
+            .iter()
+            .map(|row| row[3].clone())
+            .collect::<Vec<_>>(),
+        vec![
+            Value::Missing,
+            Value::Missing,
+            Value::Int(7),
+            Value::Missing
+        ]
+    );
+}
+
+/// Signed offset extremes safely read missing, while zero and unavailable donors fail admission.
+#[test]
+fn value_windows_bound_offsets_and_admit_completed_donors_before_io() {
+    use yamaa_engine::dataset::WindowKind;
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        vec![vec![Value::Int(1), Value::Missing, Value::Int(7)]],
+    );
+    for kind in [
+        WindowKind::RowValue {
+            column: 2,
+            offset: 0,
+        },
+        WindowKind::Locf { column: 3 },
+        WindowKind::PreviousNonMissing { column: 99 },
+    ] {
+        assert_eq!(
+            value_window_plan(&source, kind, None),
+            Err(PlanError::InvalidWindow)
+        );
+    }
+    assert!(source.reads.borrow().is_empty());
+    for offset in [i64::MIN, i64::MAX] {
+        let plan =
+            value_window_plan(&source, WindowKind::RowValue { column: 2, offset }, None).unwrap();
+        assert_eq!(
+            plan.execute(&source, limits()).unwrap().dataset.rows()[0][3],
+            Value::Missing
+        );
+    }
+}
+
+/// A donor keeps temporal precision and text is charged before any result clone.
+#[test]
+fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
+    use yamaa_engine::dataset::WindowKind;
+    let date = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Date),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Missing, Value::Date(date)],
+            vec![Value::Int(2), Value::Missing, Value::Missing],
+        ],
+    );
+    let result = value_window_plan(&source, WindowKind::Locf { column: 2 }, None)
+        .unwrap()
+        .execute(&source, limits())
+        .unwrap();
+    let Value::Date(donor) = result.dataset.rows()[1][3] else {
+        panic!("retained date donor")
+    };
+    assert_eq!(donor.collected_precision(), DatePrecision::Year);
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Str),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Missing, Value::Str("🌱".into())],
+            vec![Value::Int(2), Value::Missing, Value::Missing],
+        ],
+    );
+    let plan = value_window_plan(&source, WindowKind::Locf { column: 2 }, None).unwrap();
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 4,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::ScalarTextBytes,
+            ..
+        }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows()[1][3],
+        Value::Str("🌱".into())
+    );
+}
+
+/// A long missing run is resolved within a linear-scan plus sorting work budget.
+#[test]
+fn previous_non_missing_crosses_long_gaps_without_rescanning_each_prefix() {
+    use yamaa_engine::dataset::WindowKind;
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        (0..5000)
+            .map(|i| {
+                vec![
+                    Value::Int(i),
+                    Value::Missing,
+                    if i == 0 {
+                        Value::Int(7)
+                    } else {
+                        Value::Missing
+                    },
+                ]
+            })
+            .collect(),
+    );
+    let budget = Limits {
+        source_rows: 5000,
+        output_rows: 5000,
+        output_cells: 20000,
+        key_cells: 20000,
+        work_cells: 300000,
+        ..limits()
+    };
+    let result = value_window_plan(&source, WindowKind::PreviousNonMissing { column: 2 }, None)
+        .unwrap()
+        .execute(&source, budget)
+        .unwrap();
+    assert_eq!(result.dataset.rows()[0][3], Value::Missing);
+    assert!(result.dataset.rows()[1..]
+        .iter()
+        .all(|row| row[3] == Value::Int(7)));
 }

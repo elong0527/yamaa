@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -113,18 +113,22 @@ struct Field {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Expression {
     Literal(ScalarValue),
-    Number(Numbering),
+    Number(Window),
+    Window(Window),
     Source(usize),
     Collect(CollectedSource),
     Column(usize),
     Reduce(Reduction),
 }
 #[derive(Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum NumberingKind {
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+enum WindowKind {
     RowNumber,
     Competition,
     Dense,
+    RowValue { column: usize, offset: String },
+    PreviousNonMissing { column: usize },
+    Locf { column: usize },
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -135,13 +139,49 @@ struct OrderTerm {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Numbering {
-    kind: NumberingKind,
+struct Window {
+    kind: WindowKind,
     group_by: Vec<usize>,
     order_by: Vec<OrderTerm>,
     #[serde(default)]
     filter: Option<Predicate>,
 }
+impl Window {
+    /// Lower one bounded window operation while retaining the legacy number request form.
+    fn prepare(self) -> Result<dataset::Window, Error> {
+        if self.group_by.len() > MAX_COLUMNS || self.order_by.len() > MAX_COLUMNS {
+            return Err(Error::RequestLimit);
+        }
+        let kind = match self.kind {
+            WindowKind::RowNumber => dataset::WindowKind::RowNumber,
+            WindowKind::Competition => dataset::WindowKind::Competition,
+            WindowKind::Dense => dataset::WindowKind::Dense,
+            WindowKind::RowValue { column, offset } => dataset::WindowKind::RowValue {
+                column,
+                offset: bound(Some(offset))?.ok_or(Error::InvalidRequest)?,
+            },
+            WindowKind::PreviousNonMissing { column } => {
+                dataset::WindowKind::PreviousNonMissing { column }
+            }
+            WindowKind::Locf { column } => dataset::WindowKind::Locf { column },
+        };
+        Ok(dataset::Window {
+            kind,
+            group_by: self.group_by,
+            order_by: self
+                .order_by
+                .into_iter()
+                .map(|term| dataset::OrderTerm {
+                    column: term.column,
+                    descending: term.descending,
+                    nulls_first: term.nulls_first,
+                })
+                .collect(),
+            filter: self.filter.map(Predicate::prepare).transpose()?,
+        })
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CollectedSource {
@@ -413,29 +453,23 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                 }
                 Expression::Column(column) => dataset::Expression::Column(column),
                 Expression::Number(window) => {
-                    if window.group_by.len() > MAX_COLUMNS || window.order_by.len() > MAX_COLUMNS {
-                        return Err(Error::RequestLimit);
+                    if !matches!(
+                        window.kind,
+                        WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense
+                    ) {
+                        return Err(Error::InvalidPlan);
                     }
-                    dataset::Expression::Number(dataset::Numbering {
-                        filter: window.filter.map(Predicate::prepare).transpose()?,
-                        kind: match window.kind {
-                            NumberingKind::RowNumber => dataset::NumberingKind::RowNumber,
-                            NumberingKind::Competition => dataset::NumberingKind::Competition,
-                            NumberingKind::Dense => dataset::NumberingKind::Dense,
-                        },
-                        group_by: window.group_by,
-                        order_by: window
-                            .order_by
-                            .into_iter()
-                            .map(|term| dataset::OrderTerm {
-                                column: term.column,
-                                descending: term.descending,
-                                nulls_first: term.nulls_first,
-                            })
-                            .collect(),
-                    })
+                    dataset::Expression::Window(window.prepare()?)
                 }
-
+                Expression::Window(window) => {
+                    if matches!(
+                        window.kind,
+                        WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense
+                    ) {
+                        return Err(Error::InvalidPlan);
+                    }
+                    dataset::Expression::Window(window.prepare()?)
+                }
                 Expression::Reduce(reduction) => {
                     path(&reduction.text)?;
                     dataset::Expression::Reduce {

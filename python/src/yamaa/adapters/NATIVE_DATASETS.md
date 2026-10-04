@@ -112,7 +112,14 @@ require `window_filter`; they use the admitted scalar predicate vocabulary and
 read completed outputs only. Native evaluation is eager and preserves every output
 row, returning missing for false/unknown eligibility. Runtime conditions name the
 owning window expression; empty output skips filter evaluation. Qualified source
-reads, row-template windows and other window operations are explicitly unsupported.
+reads and row-template windows remain explicitly unsupported.
+
+`row_value`, `previous_non_missing` and `locf` use the same completed-output
+window scope and require `window_values` before source access. Offsets are nonzero
+signed integers and count eligible positions; neighbors with missing values stay
+missing. Previous-non-missing and LOCF cross gaps, with LOCF retaining a present
+current value. Native donor indexing is linear after sorting and copies values
+only as their results are converted. Baseline flag remains unsupported.
 
 Root/source filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
@@ -143,9 +150,9 @@ fixed filtered ADLB CSV rows, assertion/implication truth and eager errors,
 empty-output declaration validation, inherited defaults, projection/order/decimals, resource failure and
 recovery. Source-independent tests prove unsupported features do not call providers.
 
-Installed tests also execute the unchanged filtered row-number and competition/
-dense rank declarations and eight input-derived columns of `schema-window-functions`, comparing to the
-projected committed expected CSV. The complete original specification is still
+Installed tests also execute all 16 source, numbering and value-window columns
+from `schema-window-functions` (only BLFL is excluded), comparing to the projected
+committed expected CSV. The complete original specification is still
 refused before provider effects. Tests cover global partitions, multiple order
 terms, both directions/null placements, result conversion and typed empty output.
 

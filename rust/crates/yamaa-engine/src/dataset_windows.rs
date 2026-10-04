@@ -1,12 +1,15 @@
-//! Filtered positional numbering over completed, typed output columns.
+//! Ordered window results over completed, typed output columns.
 use super::*;
 use core::cmp::Ordering;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NumberingKind {
+pub enum WindowKind {
     RowNumber,
     Competition,
     Dense,
+    RowValue { column: usize, offset: i64 },
+    PreviousNonMissing { column: usize },
+    Locf { column: usize },
 }
 
 /// Null placement is independent of direction; construction order breaks remaining ties.
@@ -19,13 +22,13 @@ pub struct OrderTerm {
 
 /// Window dependencies bind only completed output columns, never qualified source reads.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Numbering {
-    pub kind: NumberingKind,
+pub struct Window {
+    pub kind: WindowKind,
     pub group_by: Vec<usize>,
     pub order_by: Vec<OrderTerm>,
     pub filter: Option<BoundPredicate>,
 }
-impl Numbering {
+impl Window {
     /// Reject incomplete dependencies and empty ordering before any source access.
     pub(super) fn validate(&self, available: &[bool]) -> Result<(), PlanError> {
         if self.order_by.is_empty()
@@ -38,6 +41,18 @@ impl Numbering {
                 .iter()
                 .any(|term| !available.get(term.column).copied().unwrap_or(false))
         {
+            return Err(PlanError::InvalidWindow);
+        }
+        if let WindowKind::RowValue { offset: 0, .. } = self.kind {
+            return Err(PlanError::InvalidWindow);
+        }
+        let source = match self.kind {
+            WindowKind::RowValue { column, .. }
+            | WindowKind::PreviousNonMissing { column }
+            | WindowKind::Locf { column } => Some(column),
+            _ => None,
+        };
+        if source.is_some_and(|column| !available.get(column).copied().unwrap_or(false)) {
             return Err(PlanError::InvalidWindow);
         }
         if let Some(filter) = &self.filter {
@@ -115,7 +130,7 @@ fn compare(left: &Value, right: &Value, term: &OrderTerm) -> Ordering {
 
 /// Compare declared terms, charging each logical visit and the text compared before use.
 fn ordered<E>(
-    window: &Numbering,
+    window: &Window,
     left: &Candidate,
     right: &Candidate,
     budget: &mut Budget,
@@ -136,16 +151,24 @@ fn ordered<E>(
     Ok(Ordering::Equal)
 }
 
+/// Cache only tiny results or borrowed donor coordinates, never cloned source payloads.
+#[derive(Clone, Copy)]
+enum Answer {
+    Missing,
+    Number(i64),
+    Cell { row: usize, column: usize },
+}
+
 /// Run-local partition membership and results; no state survives plan reuse.
 pub(super) struct Run {
     groups: Vec<Option<Vec<usize>>>,
     group_for_row: Vec<usize>,
-    numbers: Vec<Option<i64>>,
+    answers: Vec<Answer>,
 }
 impl Run {
     /// Partition once without evaluating later partitions' filters or converting results.
     pub(super) fn new<E>(
-        window: &Numbering,
+        window: &Window,
         candidates: &[Candidate],
         plan: &DatasetPlan,
         limits: Limits,
@@ -181,15 +204,15 @@ impl Run {
                 group_for_row[row] = group;
             }
         }
-        let mut numbers = Vec::new();
-        numbers
+        let mut answers = Vec::new();
+        answers
             .try_reserve_exact(rows)
             .map_err(|_| Box::new(ExecutionError::Allocation))?;
-        numbers.resize(rows, None);
+        answers.resize(rows, Answer::Missing);
         Ok(Self {
             groups: groups.into_iter().map(Some).collect(),
             group_for_row,
-            numbers,
+            answers,
         })
     }
 
@@ -197,7 +220,7 @@ impl Run {
     pub(super) fn value<T: TableAccess + ?Sized>(
         &mut self,
         row: usize,
-        window: &Numbering,
+        window: &Window,
         candidates: &[Candidate],
         table: &T,
         budget: &mut Budget,
@@ -233,34 +256,74 @@ impl Run {
                 members = eligible;
             }
             budget.work(members.len(), 1)?;
-            let mut rank = 0;
-            for (position, &member) in members.iter().enumerate() {
-                let new_rank = position == 0
-                    || window.kind == NumberingKind::RowNumber
-                    || ordered(
-                        window,
-                        &candidates[members[position - 1]],
-                        &candidates[member],
-                        budget,
-                    )? != Ordering::Equal;
-                if new_rank {
-                    rank = if window.kind == NumberingKind::Dense {
-                        rank + 1
-                    } else {
-                        position as i64 + 1
-                    };
+            match window.kind {
+                WindowKind::RowValue { column, offset } => {
+                    for (position, &member) in members.iter().enumerate() {
+                        let target = usize::try_from(position as i128 + i128::from(offset)).ok();
+                        if let Some(&row) = target.and_then(|target| members.get(target)) {
+                            self.answers[member] = Answer::Cell { row, column };
+                        }
+                    }
                 }
-                self.numbers[member] = Some(rank);
+                WindowKind::PreviousNonMissing { column } | WindowKind::Locf { column } => {
+                    let mut previous = None;
+                    for &member in &members {
+                        let present = !matches!(candidates[member].values[column], Value::Missing);
+                        let donor = if present && matches!(window.kind, WindowKind::Locf { .. }) {
+                            Some(member)
+                        } else {
+                            previous
+                        };
+                        if let Some(row) = donor {
+                            self.answers[member] = Answer::Cell { row, column };
+                        }
+                        if present {
+                            previous = Some(member);
+                        }
+                    }
+                }
+                WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense => {
+                    let mut rank = 0;
+                    for (position, &member) in members.iter().enumerate() {
+                        let new_rank = position == 0
+                            || window.kind == WindowKind::RowNumber
+                            || ordered(
+                                window,
+                                &candidates[members[position - 1]],
+                                &candidates[member],
+                                budget,
+                            )? != Ordering::Equal;
+                        if new_rank {
+                            rank = if window.kind == WindowKind::Dense {
+                                rank + 1
+                            } else {
+                                position as i64 + 1
+                            };
+                        }
+                        self.answers[member] = Answer::Number(rank);
+                    }
+                }
             }
         }
-        Ok(self.numbers[row].map_or(Value::Missing, Value::Int))
+        Ok(match self.answers[row] {
+            Answer::Missing => Value::Missing,
+            Answer::Number(value) => Value::Int(value),
+            Answer::Cell { row, column } => {
+                budget.work(1, 1)?;
+                let value = &candidates[row].values[column];
+                if let Value::Str(text) = value {
+                    budget.scalar_text(text.len())?;
+                }
+                value.clone()
+            }
+        })
     }
 }
 
 /// Fallible merge sorting stops at the first limit without an inconsistent comparator.
 fn sort<E>(
     members: &mut [usize],
-    window: &Numbering,
+    window: &Window,
     candidates: &[Candidate],
     budget: &mut Budget,
 ) -> Result<(), Box<ExecutionError<E>>> {

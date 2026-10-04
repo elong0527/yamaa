@@ -15,7 +15,14 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from yamaa.adapters._native_dataset_plan import OPERATIONS, admit, lower
+from yamaa.adapters._native_dataset_plan import (
+    NUMBERING,
+    OPERATIONS,
+    WINDOW_VALUES,
+    WINDOWS,
+    admit,
+    lower,
+)
 from yamaa.adapters._native_dataset_report import condition, observations
 from yamaa.io import (
     ArtifactError,
@@ -241,7 +248,7 @@ def execute_with_source_provider(
         )
         for column in specification.columns
         if column.derivation is not None
-        and column.derivation.value.operation in {"row_number", "rank"}
+        and column.derivation.value.operation in NUMBERING
     )
     required.extend(
         (
@@ -253,11 +260,23 @@ def execute_with_source_provider(
         )
         for column in specification.columns
         if column.derivation is not None
-        and column.derivation.value.operation in {"row_number", "rank"}
+        and column.derivation.value.operation in WINDOWS
         and column.derivation.value.root[column.derivation.value.operation]
         .get("window", {})
         .get("filter")
         is not None
+    )
+    required.extend(
+        (
+            "window_values",
+            UnsupportedFeature(
+                operation="native_window_values",
+                spec_path=f"columns.{column.name}.derivation.{column.derivation.value.operation}",
+            ),
+        )
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation in WINDOW_VALUES
     )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
