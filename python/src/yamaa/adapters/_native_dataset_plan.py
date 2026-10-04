@@ -429,8 +429,8 @@ def lower(plan, source, secondary=None):
             expression = {"literal": literal(value)}
         elif op == "source":
             name = value if isinstance(value, str) else value["variable"]
-            qualifier, _, field = name.partition(".")
-            if qualifier in secondary:
+            qualifier, dot, field = name.partition(".")
+            if dot and qualifier in secondary:
                 join = next(
                     (
                         join

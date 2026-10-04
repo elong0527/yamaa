@@ -1131,6 +1131,32 @@ def multi_source_tables(kind="int"):
     }
 
 
+def test_completed_column_name_can_match_secondary_source(tmp_path):
+    """Only a written dot chooses the secondary namespace; bare names read output columns."""
+    import yaml
+
+    multi_source_specification(tmp_path, "OTHER")
+    path = tmp_path / "multi.yaml"
+    document = yaml.safe_load(path.read_text())
+    document["columns"].insert(
+        1,
+        {
+            "name": "OTHER",
+            "type": "int",
+            "label": "Output",
+            "derivation": {"literal": 11},
+        },
+    )
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    spec = load_specification(path, ROOT / "yaml").specification
+    admit(spec)
+    sources = multi_source_tables()
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    request, pending = lower(plan, sources["SRC"], {"OTHER": sources["OTHER"]})
+    assert pending is None
+    assert request["columns"][-1]["expression"] == {"column": 1}
+
+
 def test_secondary_source_lowering_uses_declared_base_and_inferred_keys(tmp_path):
     """Secondary coordinates and completed-output keys are explicit in the bound request."""
     spec = multi_source_specification(tmp_path)

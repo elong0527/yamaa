@@ -301,6 +301,42 @@ class InstalledSpecification(unittest.TestCase):
         self.assertEqual(failure.context["intermediate_key"], {"VISIT": "a", "ID": 2})
         self.assertEqual(failure.context["keys"], [{"VISIT": "a", "ID": 2}])
 
+    def test_output_name_can_match_secondary_dataset(self):
+        """A bare output name and a qualified source name retain distinct namespaces."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "LOOKUP",
+            "keys": ["ID"],
+            "base": "SRC",
+            "input": {"OTHER": "other.csv", "SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "OTHER", "V", "W"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {
+                    "name": "OTHER",
+                    "type": "int",
+                    "label": "Output",
+                    "derivation": {"literal": 11},
+                },
+                {"name": "V", "type": "int", "label": "Bare", "derivation": "OTHER"},
+                {
+                    "name": "W",
+                    "type": "int",
+                    "label": "Qualified",
+                    "derivation": "OTHER.V",
+                },
+            ],
+        }
+        sources = {
+            "SRC": frame_from_values((TypedColumn(name="ID", type="int"),), [[2]]),
+            "OTHER": frame_from_values(
+                (TypedColumn(name="ID", type="int"), TypedColumn(name="V", type="str")),
+                [[2, "7"]],
+            ),
+        }
+        actual = self.compare(self.load(document), sources)
+        self.assertEqual(actual.result.table.frame.rows(), [(2, 11, 11, 7)])
+
     def test_secondary_sources_match_completed_keys_without_host_joins(self):
         """Independent relations retain base order, absence and exact record conflicts."""
         base = {
