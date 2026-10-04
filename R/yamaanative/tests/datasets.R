@@ -38,4 +38,4 @@ stopifnot(is.raw(actual$table), identical(actual$outcome, truth$expected[1]),
 
 # Feature discovery is shared metadata and performs no source loading.
 stopifnot(identical(dataset_capabilities(),
-  '{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter"]}'))
+  '{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values"]}'))

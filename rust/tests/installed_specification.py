@@ -54,22 +54,12 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
-    def test_committed_window_numbering_subset(self):
+    def test_committed_window_value_subset(self):
         """Execute unchanged benchmark rank declarations against committed expected values."""
         case = ROOT / "specification-windows"
         document = yaml.safe_load((case / "spec.yaml").read_text())
         retained = {
-            "STUDYID",
-            "USUBJID",
-            "VISITN",
-            "VISIT",
-            "VSDTC",
-            "TRTSDT",
-            "VSSTRESN",
-            "VSEVAL",
-            "VSSEQ",
-            "SEVRANKC",
-            "SEVRANKD",
+            column["name"] for column in document["columns"] if column["name"] != "BLFL"
         }
         document["columns"] = [
             column for column in document["columns"] if column["name"] in retained
@@ -204,6 +194,74 @@ class InstalledSpecification(unittest.TestCase):
                     ):
                         self.compare(spec, {"SRC": source})
                         self.compare(spec, {"SRC": frame_from_values(columns, [])})
+
+    def test_window_value_types_offsets_filters_and_result_conversion(self):
+        """Read completed donors with exact types, eligible offsets and ordinary conversion."""
+        for kind, values in [
+            ("str", [None, "\U0001f331", None, "z", None]),
+            ("int", [None, 9007199254740993, None, 9223372036854775807, None]),
+            ("float", [None, -0.0, None, 2.5, None]),
+            ("date", [None, dt.date(2024, 1, 1), None, dt.date(2025, 1, 1), None]),
+        ]:
+            columns = tuple(
+                TypedColumn(name=name, type=column_kind)
+                for name, column_kind in [("ID", "int"), ("V", kind)]
+            )
+            source = frame_from_values(
+                columns, [[i + 1, value] for i, value in enumerate(values)]
+            )
+            for operation, offset in [
+                ("row_value", -1),
+                ("row_value", 1),
+                ("row_value", -9223372036854775808),
+                ("row_value", 9223372036854775807),
+                ("previous_non_missing", None),
+                ("locf", None),
+            ]:
+                for filtered in [False, True]:
+                    payload = {"source": "V", "window": {"order_by": ["ID"]}}
+                    if offset is not None:
+                        payload["offset"] = offset
+                    if filtered:
+                        payload["window"]["filter"] = "ID <> 2"
+                    document = {
+                        "schema_version": "1.0",
+                        "domain": "WIN",
+                        "keys": ["ID"],
+                        "input": {"SRC": "source.csv"},
+                        "output": {"path": "out.csv", "columns": ["ID", "V", "N"]},
+                        "columns": [
+                            {
+                                "name": "ID",
+                                "type": "int",
+                                "label": "Identity",
+                                "derivation": "SRC.ID",
+                            },
+                            {
+                                "name": "V",
+                                "type": kind,
+                                "label": "Value",
+                                "derivation": "SRC.V",
+                            },
+                            {
+                                "name": "N",
+                                "type": kind,
+                                "label": "Window",
+                                "derivation": {operation: payload},
+                            },
+                        ],
+                    }
+                    with self.subTest(
+                        kind=kind, operation=operation, offset=offset, filtered=filtered
+                    ):
+                        self.compare(self.load(document), {"SRC": source})
+                        document["columns"][-1]["type"] = (
+                            "int" if kind == "str" else "str"
+                        )
+                        self.compare(self.load(document), {"SRC": source})
+                        self.compare(
+                            self.load(document), {"SRC": frame_from_values(columns, [])}
+                        )
 
     def load(self, document):
         """Validate authored test variants through the real schema and normalization pipeline."""

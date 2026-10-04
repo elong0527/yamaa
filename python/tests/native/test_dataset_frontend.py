@@ -660,3 +660,87 @@ def test_old_native_package_refuses_window_filter_before_provider(
         "native_window_filter"
     }
     assert effects == []
+
+
+@pytest.mark.parametrize("operation", ["row_value", "previous_non_missing", "locf"])
+def test_value_windows_lower_completed_donor_and_scope(tmp_path, operation):
+    """Value windows retain explicit donor bindings, signed offsets and normalized named scope."""
+
+    def mutate(document):
+        """Replace one rank with a supported value read over the same completed data."""
+        payload = {"source": "VSSTRESN", "window": "RESULT_ORDER"}
+        if operation == "row_value":
+            payload["offset"] = -1
+        document["columns"][-2]["derivation"] = {operation: payload}
+
+    spec = numbering_specification(tmp_path, mutate)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS),
+        sources["VS"].table,
+    )
+    assert error is None
+    expected = {"column": 6}
+    if operation == "row_value":
+        expected["offset"] = "-1"
+    assert request["columns"][-2]["expression"]["window"] == {
+        "kind": {operation: expected},
+        "group_by": [1],
+        "order_by": [{"column": 6, "descending": True, "nulls_first": False}],
+    }
+
+
+def test_zero_window_offset_keeps_validation_condition_before_provider(tmp_path):
+    """Zero is a language validation failure, not a native request error or missing read."""
+
+    def mutate(document):
+        """Declare a syntactically valid but forbidden zero offset."""
+        document["columns"][-2]["derivation"] = {
+            "row_value": {"source": "VSSTRESN", "offset": 0, "window": "RESULT_ORDER"}
+        }
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "failure"
+    assert [(d.condition, d.requirement) for d in result.result.diagnostics] == [
+        ("zero_offset", "REQ-0328")
+    ]
+    assert effects == []
+
+
+def test_old_native_package_refuses_value_windows_before_provider(
+    tmp_path, monkeypatch
+):
+    """Numbering and filtering capabilities do not imply donor-value operations."""
+
+    def mutate(document):
+        """Select an admitted completed-output donor."""
+        document["columns"][-2]["derivation"] = {
+            "locf": {"source": "VSSTRESN", "window": "RESULT_ORDER"}
+        }
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": ["key_grain", "window_numbering", "window_filter"],
+                }
+            ),
+        ),
+    )
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "unsupported"
+    assert {feature.operation for feature in result.result.features} == {
+        "native_window_values"
+    }
+    assert effects == []

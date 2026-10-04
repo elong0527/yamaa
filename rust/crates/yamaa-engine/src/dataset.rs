@@ -1,13 +1,13 @@
-//! Closed typed dataset application plan for direct, literal and ordered reductions.
+//! Closed typed dataset plan for bounded row construction and column derivation.
 //!
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
 #[path = "dataset_keys.rs"]
 mod key_grain;
-#[path = "dataset_numbering.rs"]
-mod numbering;
-pub use numbering::{Numbering, NumberingKind, OrderTerm};
+#[path = "dataset_windows.rs"]
+mod windows;
+pub use windows::{OrderTerm, Window, WindowKind};
 
 use crate::{
     dataset_budget::Budget,
@@ -28,8 +28,8 @@ use yamaa_core::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Literal(Value),
-    /// Column-phase numbering over completed key-grain output rows.
-    Number(Numbering),
+    /// Column-phase windows over completed key-grain output rows.
+    Window(Window),
     Source(usize),
     /// Distinct present raw readings across a key combination, before conversion.
     Collect {
@@ -184,7 +184,7 @@ fn validate_assignment(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
-        Expression::Number(window) => {
+        Expression::Window(window) => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidWindow);
             }
@@ -267,7 +267,7 @@ impl DatasetPlan {
                     && (!keys.contains(&assignment.column)
                         || matches!(
                             assignment.expression,
-                            Expression::Collect { .. } | Expression::Number(_)
+                            Expression::Collect { .. } | Expression::Window(_)
                         ))
                 {
                     return Err(PlanError::InvalidKeyMode);
@@ -511,7 +511,7 @@ fn evaluate<T: TableAccess + ?Sized>(
     };
     budget.work(reads, 1)?;
     let value = match &assignment.expression {
-        Expression::Number(_) => unreachable!("window assignments execute by whole column"),
+        Expression::Window(_) => unreachable!("window assignments execute by whole column"),
         Expression::Literal(value) => {
             if let Value::Str(text) = value {
                 budget.scalar_text(text.len())?;
@@ -674,8 +674,8 @@ impl DatasetPlan {
             }
         }
         for assignment in &self.columns {
-            let mut numbers = if let Expression::Number(window) = &assignment.expression {
-                Some(numbering::Run::new(
+            let mut numbers = if let Expression::Window(window) = &assignment.expression {
+                Some(windows::Run::new(
                     window,
                     &candidates,
                     self,
@@ -686,7 +686,7 @@ impl DatasetPlan {
                 None
             };
             for row in 0..candidates.len() {
-                let number = if let (Some(run), Expression::Number(window)) =
+                let number = if let (Some(run), Expression::Window(window)) =
                     (&mut numbers, &assignment.expression)
                 {
                     Some(run.value(row, window, &candidates, table, &mut budget)?)

@@ -23,7 +23,10 @@ from yamaa.planning import (
     preflight_execution,
 )
 
-OPERATIONS = frozenset({"source", "literal", "aggregate", "row_number", "rank"})
+NUMBERING = frozenset({"row_number", "rank"})
+WINDOW_VALUES = frozenset({"row_value", "previous_non_missing", "locf"})
+WINDOWS = NUMBERING | WINDOW_VALUES
+OPERATIONS = frozenset({"source", "literal", "aggregate"}) | WINDOWS
 
 
 def admit(specification):
@@ -76,8 +79,22 @@ def admit(specification):
                 and isinstance(payload["variable"], str)
             ):
                 reject("source_selection", path)
-        elif operation in {"row_number", "rank"}:
+        elif operation in WINDOWS:
             window = payload.get("window", {}) if isinstance(payload, dict) else {}
+            if operation in WINDOW_VALUES and isinstance(payload, dict):
+                if "." in payload.get("source", ""):
+                    reject("window_source", f"{path}.source")
+                if operation == "row_value" and payload.get("offset") == 0:
+                    diagnostics.append(
+                        ExecutionDiagnostic(
+                            phase="validation",
+                            condition="zero_offset",
+                            spec_paths=(f"{path}.offset",),
+                            requirement="REQ-0328",
+                            context={"offset": 0},
+                        )
+                    )
+
             if specification.rows or not isinstance(window, dict):
                 reject("window_scope", path)
             else:
@@ -172,7 +189,7 @@ def admit(specification):
         if column.derivation is not None:
             if (
                 column.name in specification.keys
-                and column.derivation.value.operation in {"row_number", "rank"}
+                and column.derivation.value.operation in WINDOWS
             ):
                 reject("window_key", f"columns.{column.name}.derivation")
             expression(column.derivation, f"columns.{column.name}.derivation", False)
@@ -275,13 +292,23 @@ def lower(plan, source):
                 if collect and "." in name
                 else reference(name)
             )
-        elif op in {"row_number", "rank"}:
+        elif op in WINDOWS:
             window = value["window"]
-            expression = {
-                "number": {
-                    "kind": "row_number"
+            tag = "number" if op in NUMBERING else "window"
+            if op in NUMBERING:
+                kind = (
+                    "row_number"
                     if op == "row_number"
-                    else value.get("method", "competition"),
+                    else value.get("method", "competition")
+                )
+            else:
+                payload = {"column": outputs[value["source"]]}
+                if op == "row_value":
+                    payload["offset"] = str(value["offset"])
+                kind = {op: payload}
+            expression = {
+                tag: {
+                    "kind": kind,
                     "group_by": [outputs[name] for name in window.get("group_by", [])],
                     "order_by": [
                         {
@@ -299,7 +326,7 @@ def lower(plan, source):
             }
             if window.get("filter") is not None:
                 text = window["filter"]
-                expression["number"]["filter"] = _native_predicate_plan.lower(
+                expression[tag]["filter"] = _native_predicate_plan.lower(
                     parse_predicate(text),
                     text,
                     derived.operation_path,

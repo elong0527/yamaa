@@ -69,6 +69,23 @@ conversion failure. Runtime predicate provenance is the owning window operation.
 Empty output does not evaluate predicates against representative samples. All
 predicate work/text shares the run's cumulative budget, including excluded rows.
 
+Value reads use `{window: {kind, group_by, order_by, filter?}}` with the same
+completed-output scope, ordering and eligibility rules. The `window_values`
+capability admits three kinds: `{row_value: {column, offset}}`,
+`{previous_non_missing: {column}}`, and `{locf: {column}}`. `column` names a completed
+output donor column. `offset` is canonical signed-i64 decimal text and must be
+nonzero. Offsets count only eligible positions; a missing or out-of-range donor
+returns missing. Previous-non-missing skips any length of missing run and never
+uses the current row; LOCF keeps the current present value, otherwise the prior
+present donor. Excluded rows receive missing for every operation.
+
+Each reached partition builds donor indices once, with a linear scan for prior
+present values. Cached answers retain indices rather than cloned cells; the
+current row copies its donor only when its own result is requested, charging text
+before cloning and applying the ordinary conversion lifecycle. Full integer range,
+float sign and temporal precision are retained. The legacy `number` form continues
+to accept only numbering kinds; the `window` form accepts only donor-value kinds.
+
 Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
@@ -142,7 +159,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

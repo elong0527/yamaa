@@ -223,3 +223,10 @@ windows. Filtering preserves output rows and gives excluded rows missing values;
 only true rows contribute positions or ties. Rust evaluates each reached partition
 before converting its first result. Shared tests cover true/false/unknown eligibility,
 eager predicate conditions with operation provenance, and empty-output behavior.
+
+`window_values` adds completed-output donor reads through the `window` expression:
+`row_value` counts eligible offsets, `previous_non_missing` reads the nearest earlier
+present donor, and `locf` retains the current present value or carries the prior one.
+Donor indices are cached per partition, with text copied only for each requested
+result under the existing budgets. Shared raw fixtures exercise gaps, filtered
+donors, full-range signed offsets, exact large integers and typed empty outputs.

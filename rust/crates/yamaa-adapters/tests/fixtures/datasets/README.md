@@ -59,3 +59,10 @@ expected results retain excluded rows as missing, number only the two tied eligi
 wide integers, preserve an exact predicate type condition (including its empty
 operand route), and skip that ill-typed predicate on an empty dataset. The predicate
 plans and expected observations are authored constants; no evaluator produces them.
+
+Four `window_values_*` cases reuse the six-row exact-integer numbering input.
+Independent literal truth distinguishes previous/next neighbors from previous
+present values and LOCF, then excludes a donor via a predicate without dropping its
+output row. Empty input retains schema. Signed-i64 minimum/maximum offsets read
+missing without wrapping; the remaining donor results remain unchanged. Neither
+native execution nor the reference generates these expected values.

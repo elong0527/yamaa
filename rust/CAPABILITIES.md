@@ -216,7 +216,12 @@ projected committed expected CSV. The same test now includes the unchanged filte
 VSSEQ declaration (REQ-0294). Only true rows are numbered; false/unknown rows retain
 their output position with a missing value. A reached partition completes predicate
 evaluation before converting the current result; later partitions remain lazy.
-Row-value/LOCF/baseline operations and the full benchmark remain unsupported.
+Row-value reads, previous-non-missing and LOCF now share that scope (REQ-0061/0294/
+0328/0340). Donor indices are cached once per reached partition; only the requested
+result is copied and converted, retaining integer/temporal/float representations.
+The installed test now compares all 16 source, numbering and value-window columns
+from the unchanged benchmark, with only BLFL excluded. Baseline flag and the full
+benchmark remain unsupported.
 
 Output keys are checked before dataset verifications. The closed error-severity
 verification subset includes unique combinations, whole-artifact integer
