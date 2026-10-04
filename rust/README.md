@@ -348,3 +348,38 @@ The dependency allowlist explicitly admits this numerical helper. Transitive
 Cargo locking remains the existing release gate; this PR adds no lockfile or
 repository content digest. Host APIs, standalone specification dispatch, result
 conversion/handlers and complete dataset execution remain separate integration.
+
+## Ordered table access and numeric reductions
+
+Core `TableAccess` describes an immutable snapshot with an ordered closed schema,
+row count and borrowed normalized cells. Text stays borrowed from the snapshot;
+i64, finite binary64, missingness and temporal precision retain their exact
+representation. Invalid coordinates and opaque access errors are distinct from
+missing. Schema names are unique and nonempty; identifier binding remains a
+compiler responsibility. Empty tables retain every declared column and type.
+
+The first consumer is engine `reduce_column`, for a bare bound column and an
+already selected relation. It rejects duplicate or reordered row indices: a
+selection is a strictly increasing subsequence of the snapshot, preserving
+REQ-0471/0480. Upstream sorting would create a new relation. A caller-supplied row
+budget, column bounds and row selection are checked before allocation or reads.
+Allocation failure is a resource outcome. This budget bounds selection storage
+and read count; it cannot bound time spent inside an arbitrary table port.
+
+All argument cells are collected before folding, matching Python's aggregate
+argument evaluation. A later access failure therefore precedes an earlier
+potential overflow or type failure. SUM starts at the first non-missing value
+and applies scalar addition in record order; MEAN divides this result by the
+non-missing count. Types are checked as the fold reaches each present value,
+including after a float overflow has normalized the running total to missing.
+There is no group-wide float promotion or reassociation. Empty/all-missing groups
+remain missing. The shared fixture has 32 independently specified outcomes,
+including exact float bits, signed zero, integer overflow and failure precedence;
+both Rust and the real Python aggregate evaluator replay it.
+
+These are internal APIs, with fake-table application tests. Aggregate grammar,
+computed arguments, grouping/filter evaluation, Arrow storage, installed table
+interchange and specification execution are still outstanding. No dependencies,
+host API or backend defaults change. The next storage adapter must validate
+schema/value agreement at ingestion and preserve temporal collected precision;
+a native Arrow date/timestamp array alone cannot carry that per-value metadata.
