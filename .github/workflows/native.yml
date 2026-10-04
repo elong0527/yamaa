@@ -49,12 +49,23 @@ jobs:
           uv run --project ../python --locked python tools/check_numeric_grammar.py
           python tools/check_dependencies.py
           python -m unittest discover -s tests -p 'test_*.py'
+      - name: Assess decimal rounding independently
+        if: always()
+        working-directory: rust
+        run: uv run --project ../python --locked python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: math-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/math-assessment.json
+          if-no-files-found: error
+      - name: Preserve rounding assessment (not parity qualification)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rounding-assessment-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error
       - name: Build wheel and source archive
         run: maturin build --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist --out "${RUNNER_TEMP}/native-dist"
