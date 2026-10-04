@@ -47,7 +47,7 @@ receives separate source declarations so nested mutable model data cannot replac
 the plan during IO. There is one provider invocation and one native dataset invocation, with no fallback,
 reference evaluation, reference verification or callback execution.
 
-The admitted subset is one source, explicit record/group row templates, direct
+The admitted record/group subset uses one source and explicit row templates, direct
 source or completed-column reads, scalar literals, and bare grouped `SUM`/`MEAN`
 over one qualified numeric source column. Planner-resolved dependencies and
 inherited row-template defaults retain their original phase/path. Conversion remains
@@ -68,6 +68,20 @@ depend on earlier keys; non-key dependencies and unsupported expressions retain
 the existing planning/admission diagnostics. Key names remain associated with
 their values regardless of identity order. This path requires `key_grain` native
 capability before provider effects; it never calls the reference key constructor.
+
+With an explicit `base`, key-grain specifications may supply up to eight input
+sources. The base need not be listed first. A plain non-key read from another
+source uses the planner's inferred applicable output keys and the additive
+`multi_source` capability, checked before provider effects. Both sides of each
+match must have the same declared type in this slice; mixed numeric key types
+return Unsupported after source-schema binding. Missing keys never match.
+No matching secondary record yields missing; one yields its value, including a
+missing value. Multiple matching records fail with REQ-0127 and the complete
+match-key context and output identity, even when donor values are identical.
+All base keys complete before secondary reads; earlier column failures still win.
+Secondary filters/order policies, named intermediates and explicit row-template
+joins remain unsupported. The `schema-lookup` benchmark still needs named
+intermediate selection and therefore remains outside this frontend.
 
 A non-key column can use `source: {variable: SRC.V, filter: predicate}` to narrow
 its feeding records. `source_filter` is required before provider effects. The
@@ -160,7 +174,7 @@ Other comparable baseline types remain explicitly unsupported in this slice.
 
 Broader source selection, portable regex calls, additional expression operations, source handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
-multiple sources, intermediates, producer schemas,
+broader joins, intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.
 Unresolved inheritance remains unsupported; ordinary loader-resolved inheritance
 uses the resulting normalized declarations. Shared Rust YAML resolution/compilation

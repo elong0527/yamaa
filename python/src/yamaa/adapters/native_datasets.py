@@ -327,6 +327,13 @@ def execute_with_source_provider(
         and isinstance(column.derivation.value.root["source"], dict)
         and column.derivation.value.root["source"].get("order_by") is not None
     )
+    if len(specification.input) > 1:
+        required.append(
+            (
+                "multi_source",
+                UnsupportedFeature(operation="native_multi_source", spec_path="input"),
+            )
+        )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
@@ -340,6 +347,10 @@ def execute_with_source_provider(
             return NativeDatasetRun(
                 ExecutionUnsupported(features=refused, handler_counts=())
             )
+    if len(specification.input) > 1:
+        execute = getattr(yamaa_native, "execute_dataset_sources", None)
+        if not callable(execute):
+            raise TypeError("native execute_dataset_sources must be callable")
     try:
         sources = source_provider(
             {
@@ -370,16 +381,30 @@ def execute_with_source_provider(
         return NativeDatasetRun(
             ExecutionUnsupported(features=error.features, handler_counts=())
         )
-    source = sources[next(iter(specification.input))]
+    dataset = specification.base or next(iter(specification.input))
+    source = sources[dataset]
     source = source.table if isinstance(source, LoadedDataset) else source
+    secondary = {
+        name: table.table if isinstance(table, LoadedDataset) else table
+        for name, table in sources.items()
+        if name != dataset
+    }
     try:
-        lowered, declaration_error = lower(plan, source)
+        lowered, declaration_error = lower(plan, source, secondary)
     except UnsupportedPlanningError as error:
         return NativeDatasetRun(
             ExecutionUnsupported(features=error.features, handler_counts=())
         )
     request = json.dumps(lowered, ensure_ascii=True, separators=(",", ":"))
-    data, encoded = execute(request, _source_ipc(source))
+    data, encoded = (
+        execute(
+            request,
+            _source_ipc(source),
+            [_source_ipc(table) for table in secondary.values()],
+        )
+        if secondary
+        else execute(request, _source_ipc(source))
+    )
     envelope = json.loads(encoded)
     if envelope["protocol"] != "dataset/1":
         raise ValueError("unsupported native dataset response protocol")

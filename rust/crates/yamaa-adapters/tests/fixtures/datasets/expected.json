@@ -10360,5 +10360,601 @@
       ]
     },
     "snapshot": null
+  },
+  {
+    "case": "lookup_values",
+    "input": "lookup-left.arrow",
+    "secondary": [
+      "lookup-right.arrow"
+    ],
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        }
+      ],
+      "secondary": [
+        {
+          "name": "OTHER",
+          "schema": [
+            {
+              "name": "ID",
+              "kind": "int"
+            },
+            {
+              "name": "V",
+              "kind": "str"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "lookup": {
+              "source": 0,
+              "column": 1,
+              "keys": [
+                {
+                  "source_column": 0,
+                  "output_column": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "3",
+      "chunks": [
+        "3"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "int": "7"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "int": "9"
+          }
+        ],
+        [
+          {
+            "int": "3"
+          },
+          {
+            "missing": null
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "lookup_absent",
+    "input": "lookup-left.arrow",
+    "secondary": [
+      "lookup-right-empty.arrow"
+    ],
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        }
+      ],
+      "secondary": [
+        {
+          "name": "OTHER",
+          "schema": [
+            {
+              "name": "ID",
+              "kind": "int"
+            },
+            {
+              "name": "V",
+              "kind": "str"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "lookup": {
+              "source": 0,
+              "column": 1,
+              "keys": [
+                {
+                  "source_column": 0,
+                  "output_column": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "3",
+      "chunks": [
+        "3"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "3"
+          },
+          {
+            "missing": null
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "lookup_empty_base",
+    "input": "lookup-left-empty.arrow",
+    "secondary": [
+      "lookup-duplicate.arrow"
+    ],
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        }
+      ],
+      "secondary": [
+        {
+          "name": "OTHER",
+          "schema": [
+            {
+              "name": "ID",
+              "kind": "int"
+            },
+            {
+              "name": "V",
+              "kind": "str"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "lookup": {
+              "source": 0,
+              "column": 1,
+              "keys": [
+                {
+                  "source_column": 0,
+                  "output_column": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
+  },
+  {
+    "case": "lookup_duplicate_equal",
+    "input": "lookup-left.arrow",
+    "secondary": [
+      "lookup-duplicate.arrow"
+    ],
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        }
+      ],
+      "secondary": [
+        {
+          "name": "OTHER",
+          "schema": [
+            {
+              "name": "ID",
+              "kind": "int"
+            },
+            {
+              "name": "V",
+              "kind": "str"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "lookup": {
+              "source": 0,
+              "column": 1,
+              "keys": [
+                {
+                  "source_column": 0,
+                  "output_column": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "join",
+          "condition": "multiple_matches",
+          "requirement": "REQ-0127",
+          "spec_paths": [
+            "columns.V.derivation.source"
+          ],
+          "context": {
+            "dataset": {
+              "str": "OTHER"
+            },
+            "intermediate": {
+              "str": "intermediate(OTHER)"
+            },
+            "match_count": {
+              "int": "2"
+            }
+          }
+        },
+        "identity": {
+          "position": "0",
+          "keys": [
+            {
+              "int": "2"
+            }
+          ]
+        },
+        "matched_key": [
+          {
+            "name": "ID",
+            "value": {
+              "int": "2"
+            }
+          }
+        ]
+      }
+    },
+    "snapshot": null
+  },
+  {
+    "case": "lookup_conversion",
+    "input": "lookup-left.arrow",
+    "secondary": [
+      "lookup-bad.arrow"
+    ],
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        }
+      ],
+      "secondary": [
+        {
+          "name": "OTHER",
+          "schema": [
+            {
+              "name": "ID",
+              "kind": "int"
+            },
+            {
+              "name": "V",
+              "kind": "str"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "lookup": {
+              "source": 0,
+              "column": 1,
+              "keys": [
+                {
+                  "source_column": 0,
+                  "output_column": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "convert",
+          "condition": "conversion_failed",
+          "requirement": "REQ-0013",
+          "spec_paths": [
+            "columns.V"
+          ],
+          "context": {
+            "from": {
+              "str": "str"
+            },
+            "to": {
+              "str": "int"
+            },
+            "value": {
+              "str": "bad"
+            }
+          }
+        },
+        "identity": {
+          "position": "0",
+          "keys": [
+            {
+              "int": "2"
+            }
+          ]
+        }
+      }
+    },
+    "snapshot": null
   }
 ]

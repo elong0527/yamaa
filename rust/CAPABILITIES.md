@@ -230,6 +230,17 @@ reach both installed adapters, and reset on plan reuse. This bounded selection
 requires its own capability. Other source handlers and broader source scopes
 remain unsupported.
 
+Multi-source key-grain execution now accepts independently owned secondary
+snapshots and bound many-to-one reads on completed output keys. Same-type
+matching excludes missing keys, counts all records before donor access, and
+retains REQ-0127 match-key context and output identity. No match gives missing;
+identical duplicate values remain multiple matches. Shared fixtures cover values,
+absence, empty base, duplicates and conversion; installed comparisons prohibit
+host lookup dispatch. Total bytes/cells/rows and cumulative scan work are bounded.
+This initial scan is not a performance claim. Named intermediate caching,
+secondary filtering/selection and mixed numeric key matching remain open, so the
+unchanged multi-source lookup benchmark is not yet qualified.
+
 The key-grain column phase also supports row numbering and competition/
 dense rank over completed output columns (REQ-0293/0301/0303/0340). Partitioning,
 exact typed ordering, explicit null placement and stable construction-order tie
@@ -272,7 +283,7 @@ not YAML compilation, installed host dispatch, source discovery or release
 qualification. No capability flag or benchmark execution manifest changes.
 
 A future compiler must reject the entire run before execution if it requires
-unsupported syntax: other handlers, callbacks, broader source selection, regex, other windows, joins, multiple sources, other expression operations, column checks,
+unsupported syntax: other handlers, callbacks, broader source selection, regex, other windows, broader joins, other expression operations, column checks,
 warning checks, grouped/filtered/fractional row counts or file publication.
 The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
 Rust specification compiler and the remaining benchmark gates are still open.

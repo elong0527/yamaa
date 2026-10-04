@@ -73,6 +73,23 @@ fn table_snapshot(request: Raw) -> List {
 /// Validate raw JSON before constructing a string; run the shared typed dataset service.
 #[extendr]
 fn execute_dataset(request: Raw, source: Raw) -> List {
+    execute_dataset_sources(request, source, list!())
+}
+
+/// Keep secondary raw vectors rooted while the shared bridge copies their snapshots.
+#[extendr]
+fn execute_dataset_sources(request: Raw, source: Raw, secondary: List) -> List {
+    if secondary.len() >= yamaa_adapters::dataset_transport::MAX_SOURCES {
+        return list!(value = NULL, error = "too many secondary dataset sources");
+    }
+    let buffers: Option<Vec<Raw>> = secondary.iter().map(|(_, value)| value.as_raw()).collect();
+    let Some(buffers) = buffers else {
+        return list!(
+            value = NULL,
+            error = "secondary sources must be raw Arrow IPC vectors"
+        );
+    };
+    let slices: Vec<&[u8]> = buffers.iter().map(|bytes| bytes.as_slice()).collect();
     if request.len() > yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES {
         return list!(value = NULL, error = "dataset plan exceeds resource limit");
     }
@@ -80,7 +97,11 @@ fn execute_dataset(request: Raw, source: Raw) -> List {
         Ok(text) => text,
         Err(_) => return list!(value = NULL, error = "invalid UTF-8 JSON request"),
     };
-    match yamaa_adapters::dataset_transport::execute_dataset(text, source.as_slice()) {
+    match yamaa_adapters::dataset_transport::execute_dataset_sources(
+        text,
+        source.as_slice(),
+        &slices,
+    ) {
         Ok(result) => {
             let table = result
                 .table
@@ -121,5 +142,6 @@ extendr_module! {
     fn table_round_trip;
     fn table_snapshot;
     fn execute_dataset;
+    fn execute_dataset_sources;
     fn dataset_capabilities;
 }

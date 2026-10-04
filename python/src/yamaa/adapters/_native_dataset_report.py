@@ -50,6 +50,12 @@ def condition(observed, keys):
         context["keys"] = [
             {entry["name"]: scalar(entry["value"]) for entry in observed["partition"]}
         ]
+    if observed.get("matched_key") is not None:
+        pairs = observed["matched_key"]
+        context["key"] = [entry["name"] for entry in pairs]
+        context["intermediate_key"] = {
+            entry["name"]: scalar(entry["value"]) for entry in pairs
+        }
     return ExecutionDiagnostic(
         phase=diagnostic["phase"],
         condition=diagnostic["condition"],

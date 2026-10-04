@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, fmt, panic::catch_unwind};
 use yamaa_core::{
     reduction::{NumericReducer, ReductionError},
-    table::{Column, TableSchema},
+    table::{Column, TableAccess, TableSchema},
     value::ColumnType,
 };
 use yamaa_engine::{
@@ -22,9 +22,12 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source"]}"#
 }
 
+/// Bound host argument collections before copying any source buffers.
+pub const MAX_SOURCES: usize = 8;
+const MAX_SOURCE_CELLS: usize = 262_144;
 const MAX_COLUMNS: usize = 64;
 const MAX_TEMPLATES: usize = 16;
 const MAX_CHECKS: usize = 16;
@@ -117,6 +120,7 @@ enum Expression {
     Window(Window),
     Source(usize),
     Collect(CollectedSource),
+    Lookup(Lookup),
     Column(usize),
     Reduce(Reduction),
 }
@@ -236,6 +240,26 @@ struct CollectedSource {
     selection: Option<SourceSelection>,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Lookup {
+    source: usize,
+    column: usize,
+    keys: Vec<MatchKey>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MatchKey {
+    source_column: usize,
+    output_column: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SecondarySource {
+    name: String,
+    schema: Vec<Field>,
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 enum Reducer {
     Sum,
@@ -296,6 +320,8 @@ struct Verification {
 struct Request {
     protocol: String,
     source: Vec<Field>,
+    #[serde(default)]
+    secondary: Vec<SecondarySource>,
     output: Vec<Field>,
     templates: Vec<Template>,
     columns: Vec<Assignment>,
@@ -306,6 +332,7 @@ struct Request {
 /// The prepared bridge owns its admitted plan; no host objects or source buffers survive.
 pub struct PreparedDataset {
     plan: DatasetPlan,
+    secondary_count: usize,
 }
 
 /// A checked table is present only for success. JSON carries exact typed observations.
@@ -317,6 +344,15 @@ pub struct DatasetResponse {
 /// Validate plan bytes before any IPC decoding, then execute once with no fallback.
 pub fn execute_dataset(request: &str, source: &[u8]) -> Result<DatasetResponse, Error> {
     PreparedDataset::parse(request)?.execute(source)
+}
+
+/// Admit a complete multi-source request before decoding any source snapshot.
+pub fn execute_dataset_sources(
+    request: &str,
+    source: &[u8],
+    secondary: &[&[u8]],
+) -> Result<DatasetResponse, Error> {
+    PreparedDataset::parse(request)?.execute_sources(source, secondary)
 }
 
 impl PreparedDataset {
@@ -334,9 +370,27 @@ impl PreparedDataset {
             if request.templates.len() > MAX_TEMPLATES
                 || request.verifications.len() > MAX_CHECKS
                 || request.keys.len() > MAX_COLUMNS
+                || request.secondary.len() >= MAX_SOURCES
             {
                 return Err(Error::RequestLimit);
             }
+            let secondary_count = request.secondary.len();
+            let secondary = request
+                .secondary
+                .into_iter()
+                .map(|relation| {
+                    if relation.name.is_empty() {
+                        return Err(Error::InvalidRequest);
+                    }
+                    if relation.name.len() > MAX_NAME {
+                        return Err(Error::RequestLimit);
+                    }
+                    Ok(dataset::SecondarySource {
+                        name: relation.name,
+                        schema: schema(relation.schema)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
             let source = schema(request.source)?;
             let output = schema(request.output)?;
             let templates = request
@@ -392,8 +446,9 @@ impl PreparedDataset {
                     })
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
-            let plan = DatasetPlan::new(
+            let plan = DatasetPlan::new_with_sources(
                 source,
+                secondary,
                 output,
                 templates,
                 columns,
@@ -401,16 +456,59 @@ impl PreparedDataset {
                 verifications,
             )
             .map_err(|_| Error::InvalidPlan)?;
-            Ok(Self { plan })
+            Ok(Self {
+                plan,
+                secondary_count,
+            })
         })
         .map_err(|_| Error::Internal)?
     }
 
     /// Copy and validate a complete snapshot; every run gets fresh resource counters.
     pub fn execute(&self, source: &[u8]) -> Result<DatasetResponse, Error> {
+        self.execute_sources(source, &[])
+    }
+
+    /// Decode independently owned snapshots under one aggregate input policy.
+    pub fn execute_sources(
+        &self,
+        source: &[u8],
+        secondary: &[&[u8]],
+    ) -> Result<DatasetResponse, Error> {
+        if secondary.len() != self.secondary_count {
+            return Err(Error::InvalidRequest);
+        }
+        let bytes = secondary
+            .iter()
+            .try_fold(source.len(), |sum, bytes| sum.checked_add(bytes.len()));
+        if bytes.is_none_or(|size| size > crate::table_transport::MAX_INPUT_BYTES) {
+            return Err(Error::Table(TableTransportError::InputLimit));
+        }
         catch_unwind(|| {
             let source = decode_snapshot(source).map_err(Error::Table)?;
-            let attempt = self.plan.execute_observed(&source, LIMITS);
+            let secondary = secondary
+                .iter()
+                .map(|bytes| decode_snapshot(bytes).map_err(Error::Table))
+                .collect::<Result<Vec<_>, Error>>()?;
+            let total_cells = secondary.iter().chain(core::iter::once(&source)).try_fold(
+                0_usize,
+                |sum, table| {
+                    table
+                        .row_count()
+                        .checked_mul(table.schema().columns().len())
+                        .and_then(|cells| sum.checked_add(cells))
+                },
+            );
+            if total_cells.is_none_or(|cells| cells > MAX_SOURCE_CELLS) {
+                return Err(Error::Table(TableTransportError::ShapeLimit));
+            }
+            let references: Vec<&dyn TableAccess<Error = Infallible>> = secondary
+                .iter()
+                .map(|table| table as &dyn TableAccess<Error = Infallible>)
+                .collect();
+            let attempt = self
+                .plan
+                .execute_observed_sources(&source, &references, LIMITS);
             let (table, outcome) = match attempt.result {
                 Ok(result) => (
                     Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
@@ -510,6 +608,23 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                         selection: source.selection.map(SourceSelection::prepare).transpose()?,
                     }
                 }
+                Expression::Lookup(lookup) => {
+                    if lookup.keys.len() > MAX_COLUMNS {
+                        return Err(Error::RequestLimit);
+                    }
+                    dataset::Expression::Lookup(dataset::Lookup {
+                        source: lookup.source,
+                        column: lookup.column,
+                        keys: lookup
+                            .keys
+                            .into_iter()
+                            .map(|key| dataset::MatchKey {
+                                source_column: key.source_column,
+                                output_column: key.output_column,
+                            })
+                            .collect(),
+                    })
+                }
                 Expression::Column(column) => dataset::Expression::Column(column),
                 Expression::Number(window) => {
                     if !matches!(
@@ -579,6 +694,8 @@ enum Outcome {
         #[serde(skip_serializing_if = "Option::is_none")]
         partition: Option<Vec<PartitionValue>>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        matched_key: Option<Vec<PartitionValue>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         verifications: Option<Vec<Record>>,
     },
     Limit {
@@ -646,6 +763,7 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
                 match_count,
             )?,
             identity: None,
+            matched_key: None,
             partition: Some(
                 partition
                     .into_iter()
@@ -658,12 +776,34 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             verifications: None,
         },
 
+        ExecutionError::MultipleMatches {
+            path,
+            dataset,
+            match_count,
+            matched_key,
+            identity: keys,
+        } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::multiple_matches(path, dataset, match_count)?,
+            identity: keys.map(identity),
+            partition: None,
+            verifications: None,
+            matched_key: Some(
+                matched_key
+                    .into_iter()
+                    .map(|(name, value)| PartitionValue {
+                        name,
+                        value: ScalarValue::from_core(value),
+                    })
+                    .collect(),
+            ),
+        },
         ExecutionError::MultipleValues {
             path,
             identifier,
             value_count,
             identity: keys,
         } => Outcome::Condition {
+            matched_key: None,
             partition: None,
             diagnostic: crate::numeric_transport::multiple_values(path, identifier, value_count)?,
             identity: keys.map(identity),
@@ -718,12 +858,14 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             identity: keys,
             ..
         } => Outcome::Condition {
+            matched_key: None,
             partition: None,
             verifications: None,
             diagnostic: conversion(error, path),
             identity: keys.map(identity),
         },
         ExecutionError::Predicate { error, .. } => Outcome::Condition {
+            matched_key: None,
             partition: None,
             verifications: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
@@ -734,6 +876,7 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             error: TableReductionError::Reduction(ReductionError::Arithmetic { error, .. }),
             identity: keys,
         } => Outcome::Condition {
+            matched_key: None,
             partition: None,
             verifications: None,
             diagnostic: arithmetic(error, path),
@@ -743,6 +886,7 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             error,
             records: completed,
         } => Outcome::Condition {
+            matched_key: None,
             partition: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,

@@ -15,6 +15,16 @@ encoding policy and passes raw request bytes for checked UTF-8 decoding in Rust.
 Both adapters invoke the same service synchronously on the calling thread.
 There are no callbacks, retries, fallback or external writes in this protocol.
 
+For multiple inputs, both hosts expose `execute_dataset_sources(request, source,
+secondary)`. `secondary` is an ordered Python list of bytes or R list of raw
+vectors. The plan adds optional `secondary: [{name, schema}]`, with unique names
+and schemas in that same order. There are at most eight total sources. Aggregate
+IPC bytes are at most 8 MiB, total decoded cells at most 262,144, and combined
+source rows at most 65,536. Plan and buffer-count checks precede IPC decoding;
+all snapshots are copied before execution. A legacy single-source call rejects a
+plan requiring secondary snapshots. Existing single-source requests and outcome
+bytes retain their previous shape.
+
 ## Request
 
 See [the ADLB plan](crates/yamaa-adapters/tests/fixtures/datasets/adlb-plan.json)
@@ -107,8 +117,8 @@ may be omitted. Unique permits repeated references, matching the reference check
 Only error-severity, whole-artifact bounds are represented. The `source_selection`
 capability supports ordered selection within `collect`. Broader source selection,
 fractional bounds, grouped row counts, column checks, warnings, other handlers,
-other windows, joins, functions, and multiple sources remain outside the closed
-plan vocabulary.
+other windows, broader joins and functions remain outside the closed plan
+vocabulary.
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
 then: predicate}}`, using the predicate representation below. Bindings may read
@@ -181,6 +191,25 @@ in first-firing order, with no zero entry for an unused source choice. Prepared
 plan reuse starts fresh budgets and counts. Source-filter and selection policies
 compose within the same key-grain non-key reading.
 
+## Secondary-source scalar reads
+
+`multi_source` adds `{lookup: {source, column, keys}}` in key-grain non-key
+assignments. `source` is the zero-based secondary index; `keys` is a nonempty
+list of `{source_column, output_column}` pairs. Source key fields are unique,
+outputs must already be completed, and paired logical types must match. This
+initial lookup scans under cumulative work/text budgets; it is not a performance
+qualification or a host-side index. Missing current or secondary keys never
+match. The complete matching-record count precedes any donor value access.
+No record returns missing, one returns its stored value, and multiple records
+produce REQ-0127 regardless of value equality. This differs from base `collect`.
+
+A multiple-match condition carries `matched_key: [{name, value}]` beside its
+output `identity`. The diagnostic records source name, synthetic implicit
+intermediate name and exact match count. The Python adapter reconstructs `key`
+and `intermediate_key` context from the named typed values; output `keys` remains
+the complete output identity. Named intermediates, cross-type key comparison and
+secondary-source filtering/ordered choice are separate qualification steps.
+
 ## Row-template predicates
 
 An omitted or null `filter` preserves earlier dataset/1 behavior. A filter is
@@ -209,7 +238,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

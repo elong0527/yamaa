@@ -55,7 +55,45 @@ fn execute_dataset<'py>(
     request: &str,
     source: &[u8],
 ) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
-    yamaa_adapters::dataset_transport::execute_dataset(request, source)
+    dataset_result(
+        py,
+        yamaa_adapters::dataset_transport::execute_dataset(request, source),
+    )
+}
+
+/// Execute a bounded list of independent secondary snapshots without host joins.
+#[pyfunction]
+fn execute_dataset_sources<'py>(
+    py: Python<'py>,
+    request: &str,
+    source: &[u8],
+    secondary: &Bound<'py, pyo3::types::PyList>,
+) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
+    if secondary.len() >= yamaa_adapters::dataset_transport::MAX_SOURCES {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "too many secondary dataset sources",
+        ));
+    }
+    let buffers = secondary
+        .iter()
+        .map(|value| value.cast_into::<pyo3::types::PyBytes>())
+        .collect::<Result<Vec<_>, _>>()?;
+    let slices: Vec<&[u8]> = buffers.iter().map(|bytes| bytes.as_bytes()).collect();
+    dataset_result(
+        py,
+        yamaa_adapters::dataset_transport::execute_dataset_sources(request, source, &slices),
+    )
+}
+
+/// Return fresh result bytes and preserve the transport's error classification.
+fn dataset_result<'py>(
+    py: Python<'py>,
+    result: Result<
+        yamaa_adapters::dataset_transport::DatasetResponse,
+        yamaa_adapters::dataset_transport::DatasetTransportError,
+    >,
+) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
+    result
         .map(|result| {
             (
                 result
@@ -115,6 +153,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;
     module.add_function(wrap_pyfunction!(execute_dataset, module)?)?;
+    module.add_function(wrap_pyfunction!(execute_dataset_sources, module)?)?;
     module.add_function(wrap_pyfunction!(dataset_capabilities, module)?)?;
     Ok(())
 }
