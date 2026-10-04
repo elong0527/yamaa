@@ -1,0 +1,32 @@
+id	expression	bindings	target	handler	expected	path	trace	count	context	original
+integer	A	A=int:7	int	-	int:7	-	A	-	-	-
+integral_float	A	A=float:7.0	int	-	int:7	-	A	-	-	-
+integer_text	A	A=int:7	str	-	str:7	-	A	-	-	-
+fraction_text	A	A=float:1.25	str	-	str:1.25	-	A	-	-	-
+fraction_unhandled	A	A=float:1.25	int	-	error:convert:conversion_failed:REQ-0021	columns.A	A	-	float:3ff4000000000000	-
+integer_handler	A	A=float:1.25	int	int:9	int:9	-	A	1	-	-
+text_handler	A	A=float:1.25	int	str:7	int:7	-	A	1	-	-
+null_handler	A	A=float:1.25	int	missing	missing	-	A	1	-	-
+failed_text_handler	A	A=float:1.25	int	str:bad	error:convert:conversion_failed:REQ-0013	columns.A.derivation.unconvertible	A	1	str:bad	float:3ff4000000000000
+failed_float_handler	A	A=float:1.25	int	float:1.5	error:convert:conversion_failed:REQ-0021	columns.A.derivation.unconvertible	A	1	float:3ff8000000000000	float:3ff4000000000000
+large_handler_diagnostic	A	A=float:1.25	int	str:99999999999999999999	error:convert:conversion_failed:REQ-0021	columns.A.derivation.unconvertible	A	1	integer:99999999999999999999	float:3ff4000000000000
+unused_bad_handler	A	A=float:7.0	int	str:bad	int:7	-	A	0	-	-
+missing_does_not_handle	A	A=missing	int	str:bad	missing	-	A	0	-	-
+missing_temporal_target	NULL	-	date	str:bad	missing	-	-	0	-	-
+numeric_to_date_handler	A	A=int:7	date	str:2024-02-29	date:2024-02-29:day	-	A	1	-	-
+numeric_to_date_unhandled	A	A=int:7	date	-	error:convert:conversion_failed:REQ-0013	columns.A	A	-	int:7	-
+max_integer	9223372036854775807	-	int	int:0	int:9223372036854775807	-	-	0	-	-
+float_out_of_range	A	A=float:9223372036854775808.0	int	-	error:convert:conversion_failed:REQ-0021	columns.A	A	-	float:43e0000000000000	-
+max_integer_replacement	A	A=float:9223372036854775808.0	int	str:9223372036854775807	int:9223372036854775807	-	A	1	-	-
+division_is_not_convertible	A / 0	A=int:1	int	int:9	error:derivation:division_by_zero:REQ-0430	columns.A.derivation.value.compute	A	0	-	-
+overflow_is_not_convertible	9223372036854775807 + 1	-	int	int:9	error:derivation:integer_overflow:REQ-0434	columns.A.derivation.value.compute	-	0	integer:9223372036854775808	-
+missing_eager_unknown	NULL + UNKNOWN	-	int	int:9	error:validation:unknown_field:REQ-0443	columns.A.derivation.value.compute	UNKNOWN	0	identifier:UNKNOWN	-
+input_type_not_convertible	A	A=str:bad	int	int:9	error:validation:incompatible_input_type:REQ-0444	columns.A.derivation.value.compute	A	0	source:A:str	-
+round_digits_not_convertible	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=int:1;D=float:0.0	int	int:9	error:validation:incompatible_input_type:REQ-0418	columns.A.derivation.value.compute	A,D	0	digits:float	-
+round_then_convert	ROUND_HALF_AWAY_FROM_ZERO(A, 0)	A=float:0.49999998509883880615234375	int	int:9	int:1	-	A	0	-	-
+arithmetic_overflow_missing	A * 2	A=float:1.7976931348623157e308	int	int:9	missing	-	A	0	-	-
+negative_zero_to_float	A	A=float:-0.0	float	str:bad	float:8000000000000000	-	A	0	-	-
+integer_to_float_promotion	A	A=int:9007199254740993	float	-	float:4340000000000000	-	A	-	-	-
+datetime_handler	A	A=int:7	datetime	str:2024-02-29T12:30	datetime:2024-02-29T12:30:00:second	-	A	1	-	-
+invalid_temporal_handler	A	A=int:7	date	str:2024-02-30	error:convert:conversion_failed:REQ-0601	columns.A.derivation.unconvertible	A	1	str:2024-02-30	int:7
+invalid_boolean_handler	A	A=float:1.25	int	bool:true	error:convert:conversion_failed:REQ-0013	columns.A.derivation.unconvertible	A	1	bool:true	float:3ff4000000000000

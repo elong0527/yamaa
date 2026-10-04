@@ -21,9 +21,9 @@ precede its implementation are recorded in
 
 Core and engine use `no_std` and forbid unsafe code. The dependency guard checks
 all Cargo dependency kinds, including build, development, and target-specific
-edges. New dependencies require a deliberate update to its allowlist. There are
-no workflow application services yet. The numeric resolver port belongs to
-the typed scalar evaluator; workflow ports will arrive with their first use cases.
+edges. New dependencies require a deliberate update to its allowlist. There is
+a numeric completed-result application service. The numeric resolver port belongs
+to the typed scalar evaluator; table and publication ports remain future work.
 
 The first core slice implements closed runtime values, validated civil temporal
 values, present-value comparison, and basic arithmetic primitives. See
@@ -70,7 +70,7 @@ input. Parsing never resolves identifiers or invokes host code.
 
 `numeric_compiler::compile_numeric` now connects text to the supported evaluator
 subset: literals, identifiers, unary signs, arithmetic, ABS, MOD, GREATEST, LEAST,
-NULLIF, COALESCE, CEIL, FLOOR, TRUNC and SQRT. It checks all
+NULLIF, COALESCE, CEIL, FLOOR, TRUNC, SQRT and both decimal-rounding functions. It checks all
 functions before producing a plan; other valid functions return explicit
 `Unsupported` entries with their written name spans, in source order. Compilation
 never invokes a resolver. It preserves association and defers oversized integer
@@ -90,8 +90,8 @@ inner node's location. Existing arithmetic/trace fixtures now run through both
 typed trees and compilation; 22 shared literal cases compare exact results with
 Python. Another 51 shared selection cases cover eager argument traces,
 missingness, promotion, signed zeros, i64/binary64 boundaries and nested failures.
-Default-policy EXP/LN/POWER restrictions, lifecycle handlers and host diagnostic
-transport are the next gates.
+Default-policy EXP/LN/POWER restrictions, host diagnostic transport and full
+specification dispatch remain gates.
 
 CEIL, FLOOR and TRUNC propagate missing and always return float, even for integer
 inputs. Integral zero results are positive zero, matching the reference's integer
@@ -127,6 +127,37 @@ This slice deliberately corrects Python COALESCE promotion under REQ-0424:
 argument promotes a selected integer, including its normal rounding above 2^53.
 Missing arguments do not influence promotion. This can change dependent arithmetic
 and completed-result conversion for large integers; the shared vectors pin it.
+
+## Numeric completed-result lifecycle
+
+`yamaa-engine::numeric_lifecycle::NumericDerivation` binds an immutable compiled
+numeric expression to a destination column type and an optional literal
+`unconvertible` handler. It evaluates once, converts the completed result, and
+only on conversion failure converts the selected replacement once to the same
+type. An explicit null replacement produces Missing; an absent handler fails.
+Missing results do not fire a handler, unused replacements are not converted,
+and arithmetic, validation or opaque resolver failures bypass this handler.
+
+A failed replacement retains both conversion errors and both declaration paths.
+The run-local `HandlerCounter` records a firing before replacement conversion,
+including failed replacements, and preserves first declaration order. Callers
+register all plans before evaluation to retain zero counts for unvisited plans;
+re-registration is idempotent. Count overflow is an explicit resource failure,
+not a new language condition or silently saturated audit data. Reusing a plan
+repeats resolver effects; callers own publication of completed values and there
+is no callback rollback.
+
+The shared 31-case corpus is hand-written truth replayed through this service and
+Python's real lifecycle. It checks types, exact float bits, temporal precision,
+conversion paths/contexts, resolution order and handler counts. Additional Rust
+tests cover declaration order, repeated firings, opaque failures, count overflow
+and a dependent plan consuming a converted replacement. CI runs core and engine
+in debug and release profiles on all native Python targets.
+
+This service accepts already normalized declarations. It does not decode a
+specification, plan dependencies, execute tables, implement expression-local
+handlers, verify columns or publish output. Installed host probes still expose
+only installation capabilities. The full workflow and FFI gates remain open.
 
 ## Packaging decision
 
