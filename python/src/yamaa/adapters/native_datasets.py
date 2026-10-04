@@ -327,6 +327,15 @@ def execute_with_source_provider(
         and isinstance(column.derivation.value.root["source"], dict)
         and column.derivation.value.root["source"].get("order_by") is not None
     )
+    if specification.intermediates:
+        required.append(
+            (
+                "named_intermediate",
+                UnsupportedFeature(
+                    operation="native_named_intermediate", spec_path="intermediates"
+                ),
+            )
+        )
     if len(specification.input) > 1:
         required.append(
             (
