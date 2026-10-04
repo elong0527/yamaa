@@ -9,6 +9,9 @@ Decimal rounding characterization and the reference/rule discrepancies that
 precede its implementation are recorded in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).
 
+The bounded typed predicate evaluator, its independent truth/trace tests and
+remaining parser/dataset integration are described in [PREDICATES.md](PREDICATES.md).
+
 ## Boundaries
 
 | Crate | Responsibility | Allowed dependencies |
