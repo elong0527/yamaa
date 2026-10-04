@@ -383,3 +383,59 @@ interchange and specification execution are still outstanding. No dependencies,
 host API or backend defaults change. The next storage adapter must validate
 schema/value agreement at ingestion and preserve temporal collected precision;
 a native Arrow date/timestamp array alone cannot carry that per-value metadata.
+
+## Arrow snapshot storage
+
+`yamaa-adapters::arrow_table::ArrowTable` implements `TableAccess` using owned,
+immutable Arrow record batches. Construction checks caller-supplied column,
+batch, total-row and logical-cell limits before validating schema or scanning
+values. These are internal shape/work budgets, not a byte limit on buffers the
+caller already allocated, nor a guarantee of recoverable allocation failure
+inside Arrow. Installed IPC/request APIs must impose their own trusted limits.
+
+The ordered schema and every chunk, including empty chunks, are retained. Empty
+tables can have a schema without batches; zero-column batches retain their row
+counts. Row lookup uses cumulative chunk ends and never computes partial sums.
+The actual engine SUM/MEAN consumer is tested across chunk boundaries, including
+rounding-sensitive cancellation and integer overflow. There are no per-cell
+host calls or Arrow aggregate kernels.
+
+The internal physical representation is deliberately closed:
+
+| Logical column | Arrow representation |
+| --- | --- |
+| str | nullable Utf8 |
+| int | nullable Int64; missing is validity, never an integer sentinel |
+| float | nullable Float64; nonfinite inputs become actual nulls at construction |
+| date | nullable Struct(value: non-null Date32, precision: non-null UInt8) |
+| datetime | nullable Struct(value: non-null Timestamp(Second, no timezone), precision: non-null UInt8) |
+
+Date precision codes are year=0, month=1 and day=2; datetime codes are day=0 and
+second=1. The parent validity denotes missing and masks child payloads. Visible
+children must exist, use a valid precision code, and name a civil value within
+years 1..9999. The native value retains all imputed fields, independently of
+collected precision. Timezones and other timestamp units are rejected. A plain
+Arrow date/timestamp is not silently accepted as an internal precision-bearing
+column; a future artifact ingestion adapter must explicitly assign full precision
+at that boundary. Field order, names, nullability and metadata must match the
+canonical schema exactly. This representation is internal, not yet a public IPC
+protocol or Polars/R round-trip capability.
+
+Construction narrows every admitted array to concrete immutable Arrow types,
+retains their buffer ownership, and validates all visible temporal data before
+execution. Finite arrays share buffers; float columns containing nonfinite values
+are rebuilt with null validity. Read-only batch access returns normalized storage.
+Tests cover input-handle release, UTF-8/NUL/empty text, full i64, subnormals/signed
+zero, sliced arrays/structs, null parent/child masks, range/schema errors, zero
+shapes, and independent epoch anchors plus a complete 146,097-day Gregorian cycle.
+No zero-copy host FFI or untrusted-decoder safety is claimed.
+
+Pins arrow-array, arrow-schema and arrow-buffer 60.0.0 with default features
+disabled in adapters only (Apache-2.0 AND MIT, MSRV 1.88; toolchain 1.90).
+[The upstream release](https://arrow.apache.org/blog/2026/09/29/arrow-rs-60.0.0/)
+documents this MSRV. Split Arrow crates are rejected in core/engine by the
+dependency guard. The transitive graph includes arrow-data, chrono with its clock
+and platform support, ahash/hashbrown, half, num-complex, num-integer and num-traits;
+disabling Arrow defaults does not remove those dependencies. This adds no IPC,
+Parquet, compute-kernel or unsafe FFI API. Transitive Cargo locking remains an
+unresolved release gate; no lockfile or content digest is committed.
