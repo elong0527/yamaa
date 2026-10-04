@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from assess_math import FUNCTIONS, decode, normalized_bits
+from math_corpus import validate_corpus
 
 EXPECTED_HOSTS = {
     (system, machine, version)
@@ -75,6 +76,7 @@ def main():
             (host["system"], host["machine"], ".".join(host["python"].split(".")[:2]))
         )
         rows = observations(report)
+        validate_corpus(rows)
         for name in FUNCTIONS:
             if sum(key[1] == name for key in rows) != 10011:
                 raise AssertionError(f"incomplete {name} sample")

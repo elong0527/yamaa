@@ -74,3 +74,38 @@ class PortabilityTests(unittest.TestCase):
         report["candidate_results"][0]["result"] = "7ff0000000000000"
         with self.assertRaises(ValueError):
             portability.observations(report)
+
+
+class CorpusTests(unittest.TestCase):
+    """Bind a complete agreeing sample to independent identities and inputs."""
+
+    def test_rejects_common_case_replacement_with_unchanged_counts(self):
+        """All hosts omitting the same case must fail despite equal per-function counts."""
+        from math_corpus import expected_inputs, validate_corpus
+
+        rows = {key: (value, "missing") for key, value in expected_inputs().items()}
+        validate_corpus(rows)
+        row = rows.pop(("boundary-0", "EXP"))
+        rows["replacement", "EXP"] = row
+        with self.assertRaisesRegex(AssertionError, "case identities"):
+            validate_corpus(rows)
+
+    def test_rejects_common_input_bit_drift(self):
+        """Stable case IDs cannot hide a producer changing an input's zero sign."""
+        from math_corpus import expected_inputs, validate_corpus
+
+        expected = expected_inputs()
+        self.assertEqual(len(expected), 30033)
+        self.assertEqual(
+            expected["boundary-0", "EXP"], ("8000000000000000", "0000000000000000")
+        )
+        self.assertEqual(
+            expected["boundary-3", "LN"], ("0000000000000001", "0000000000000000")
+        )
+        rows = {key: (value, "missing") for key, value in expected.items()}
+        rows["boundary-0", "EXP"] = (
+            ("0000000000000000", "0000000000000000"),
+            "missing",
+        )
+        with self.assertRaisesRegex(AssertionError, "inputs differ"):
+            validate_corpus(rows)

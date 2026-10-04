@@ -65,7 +65,8 @@ There is no claim here that libm or platform math is universally correctly round
   legacy Python mismatch. The probe executes the actual opt-in compiled policy.
 - The native CI matrix runs semantic tests and produces reports on Linux x86_64,
   macOS arm64 and Windows AMD64 with Python 3.12/3.14. A separate job requires
-  exactly matching sample identities, input bits and result bits across all six
+  the independent numeric-math-v1 case identities and input bits, then exactly
+  matching result bits across all six
   reports. It rejects missingness and signed-zero differences without tolerance.
 - This finite sample establishes neither universal portability nor complete
   mathematical accuracy. Independent high-precision accuracy analysis, difficult
@@ -76,3 +77,25 @@ There is no claim here that libm or platform math is universally correctly round
 - Decimal rounding, completed-result conversion/handlers, Cargo locking and full
   dataset execution remain separate gates. Default callers stay on ReferenceSubset
   until the corresponding release decisions are made.
+
+
+## numeric-math-v1 input specification
+
+`tools/math_corpus.py` independently specifies the probe inputs. This version
+contains boundary-0 through boundary-10 and sample-0 through sample-9999 for each
+of EXP, LN and POWER. Missing, renamed or extra cases fail the portability check,
+even if every report has the same replacement and unchanged counts. Input-bit
+drift also fails before any output comparison; expected outputs are not generated.
+
+The boundary `(x, y)` pairs, in order, are `(-0, 1)`, `(0, 2)`, `(1, 0.5)`,
+`(-1, minimum subnormal)`, `(709, minimum normal)`, `(710, maximum finite)`,
+`(-744, next float below 1)`, `(-746, next float above 1)`, `(maximum finite, 1)`,
+`(-maximum finite, 1)`, and the bit pair `(c05098b14e6ba5d0, 4047354b5f3e6095)`.
+
+For generated cases, begin with unsigned 64-bit state 1585. In each iteration
+apply XOR with state shifted left 13, then right 7, then left 17, truncating
+left shifts to 64 bits. Compute `u = float(state >> 11) / 2^53`, then
+`x = u * 1400.0 - 700.0` and `y = u * 200.0 + 0.001` with the written binary64
+association. Each pair supplies EXP inputs `(x, +0)`, LN inputs `(y, +0)` and
+POWER inputs `(y, x / 100.0)`; unused unary second inputs remain explicit.
+Changing this corpus requires an explicit specification update and review.
