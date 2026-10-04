@@ -190,6 +190,8 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
             when = item.get("when")
             if not isinstance(when, str):
                 return _invalid_payload("case", "a branch predicate")
+            if "then" not in item:
+                return _invalid_payload("case", "a when/then item")
             try:
                 ast = parse_predicate_cached(when)
             except PredicateError as error:

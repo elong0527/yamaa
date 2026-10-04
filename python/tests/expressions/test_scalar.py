@@ -154,6 +154,19 @@ def test_case_with_only_an_otherwise_item_fails() -> None:
     assert result.condition.requirement == "REQ-0321"
 
 
+def test_case_branch_missing_then_fails() -> None:
+    # A when/then item without a `then` must fail even when its predicate
+    # evaluates FALSE, so it cannot be silently skipped while the otherwise
+    # item is evaluated.
+    result = _evaluate(
+        {"case": [{"when": "FALSE"}, {"otherwise": {"literal": "child"}}]}, {}
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+
+
 def test_an_unknown_branch_condition_does_not_select_it() -> None:
     # R004's three-valued logic: only TRUE selects, so a missing input falls
     # through to the next branch rather than taking this one.
