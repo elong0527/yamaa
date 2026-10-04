@@ -162,6 +162,7 @@ pub fn compile_numeric_with_policy(
                         | NumericFunction::Least
                         | NumericFunction::NullIf
                         | NumericFunction::Coalesce
+                        | NumericFunction::RoundHalfAwayFromZero
                 ) || (math_policy == MathPolicy::PortableLibmV1
                     && matches!(
                         function,
@@ -303,6 +304,14 @@ fn lower(
         } => NumericNode::Power {
             left: child(parsed, arguments[0], Operand::Left, route, sources),
             right: child(parsed, arguments[1], Operand::Right, route, sources),
+        },
+        ParsedKind::Call {
+            function: NumericFunction::RoundHalfAwayFromZero,
+            arguments,
+            ..
+        } => NumericNode::Round {
+            value: child(parsed, arguments[0], Operand::Left, route, sources),
+            digits: child(parsed, arguments[1], Operand::Right, route, sources),
         },
         ParsedKind::Call {
             function: NumericFunction::Sqrt,

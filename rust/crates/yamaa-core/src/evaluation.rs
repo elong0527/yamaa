@@ -14,7 +14,7 @@ use crate::value::{Selection, ValueType};
 
 /// Numeric IR for normalized values, deferred literal failures and arithmetic.
 /// ABS and MOD use the existing unary/binary primitive variants. This is not a parser
-/// or a claim that the remaining math/rounding functions are implemented.
+/// or a claim of dataset execution; the compiler controls math-policy admission.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumericNode {
     Literal(Number),
@@ -37,6 +37,10 @@ pub enum NumericNode {
     Power {
         left: Box<NumericNode>,
         right: Box<NumericNode>,
+    },
+    Round {
+        value: Box<NumericNode>,
+        digits: Box<NumericNode>,
     },
     Sqrt {
         operand: Box<NumericNode>,
@@ -103,7 +107,9 @@ impl NumericCondition {
     /// Distinguish invalid bindings from arithmetic failures during derivation.
     pub fn phase(&self) -> &'static str {
         match self {
-            Self::UnknownField { .. } | Self::IncompatibleInput { .. } => "validation",
+            Self::UnknownField { .. }
+            | Self::IncompatibleInput { .. }
+            | Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => "validation",
             Self::Arithmetic(_) | Self::LiteralOverflow { .. } => "derivation",
         }
     }
@@ -112,7 +118,10 @@ impl NumericCondition {
     pub fn condition(&self) -> &'static str {
         match self {
             Self::UnknownField { .. } => "unknown_field",
-            Self::IncompatibleInput { .. } => "incompatible_input_type",
+            Self::IncompatibleInput { .. }
+            | Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => {
+                "incompatible_input_type"
+            }
             Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
             | Self::LiteralOverflow { .. } => "integer_overflow",
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "division_by_zero",
@@ -132,6 +141,7 @@ impl NumericCondition {
             Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "REQ-0430",
             Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "REQ-0431",
             Self::Arithmetic(ArithmeticErrorKind::LnOfNonpositive) => "REQ-0432",
+            Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => "REQ-0418",
             Self::Arithmetic(ArithmeticErrorKind::InvalidPower { .. }) => "REQ-0433",
         }
     }
@@ -259,6 +269,11 @@ impl NumericPlan {
                 let left = self.child(left, Operand::Left, resolver, path)?;
                 let right = self.child(right, Operand::Right, resolver, path)?;
                 numeric::power(left, right, &self.expression)
+            }
+            NumericNode::Round { value, digits } => {
+                let value = self.child(value, Operand::Left, resolver, path)?;
+                let digits = self.child(digits, Operand::Right, resolver, path)?;
+                numeric::round_half_away_from_zero(value, digits, &self.expression)
             }
             NumericNode::Sqrt { operand } => {
                 let value = self.child(operand, Operand::Unary, resolver, path)?;

@@ -60,15 +60,13 @@ fn numerical_policy_is_explicit_and_preserves_limits() {
             .math_policy(),
         MathPolicy::ReferenceSubset
     );
-    assert!(matches!(
-        compile_numeric_with_policy(
-            "EXP(A) + ROUND_HALF_AWAY_FROM_ZERO(A, 2)",
-            "spec",
-            CompileLimits::default(),
-            MathPolicy::PortableLibmV1
-        ),
-        Err(CompileError::Unsupported { .. })
-    ));
+    assert!(compile_numeric_with_policy(
+        "EXP(A) + ROUND_HALF_AWAY_FROM_ZERO(A, 2)",
+        "spec",
+        CompileLimits::default(),
+        MathPolicy::PortableLibmV1,
+    )
+    .is_ok());
 }
 
 /// Domain failures belong to calls; operand failures retain their exact inner span.

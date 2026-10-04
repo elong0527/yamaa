@@ -148,6 +148,10 @@ fn encoded_condition(condition: &NumericCondition) -> String {
             assert_eq!(condition.phase(), "derivation");
             result.push_str(&format!(":{value}"));
         }
+        NumericCondition::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => {
+            assert_eq!(condition.phase(), "validation");
+            result.push_str(":float");
+        }
         NumericCondition::Arithmetic(kind) => {
             assert_eq!(condition.phase(), "derivation");
             if let ArithmeticErrorKind::IntegerOverflow { value } = kind {
@@ -367,6 +371,17 @@ fn shared_function_vectors() {
         )
         .chain(include_str!("fixtures/numeric_sqrt.tsv").lines().skip(1))
         .map(|row| (row, MathPolicy::ReferenceSubset))
+        .chain(
+            include_str!("fixtures/numeric_rounding.tsv")
+                .lines()
+                .skip(1)
+                .flat_map(|row| {
+                    [
+                        (row, MathPolicy::ReferenceSubset),
+                        (row, MathPolicy::PortableLibmV1),
+                    ]
+                }),
+        )
         .chain(
             include_str!("fixtures/numeric_math.tsv")
                 .lines()

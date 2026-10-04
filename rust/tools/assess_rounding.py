@@ -1,4 +1,4 @@
-"""Characterize REQ-0418 rounding before porting the reference implementation.
+"""Characterize the Python reference against the independent REQ-0418 rule.
 
 The oracle uses exact rational arithmetic on the promoted binary64 input and the
 specified decimal quantum. It does not call Python round, the reference helper,
@@ -157,7 +157,7 @@ def assess(samples, reference):
             "python": platform.python_version(),
         },
         "qualification": "blocked-by-mismatches" if mismatches else "not-qualified",
-        "rust_rounding_remains_unsupported": True,
+        "rust_rounding_remains_unsupported": False,
         "counts": {
             "samples": len(observations),
             "exact": len(observations) - len(mismatches),
@@ -179,9 +179,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Rounding: {report['counts']}; {report['qualification']}")
-    print(
-        "Rust rounding remains unsupported; this report is not approved migration truth"
-    )
+    print("This scalar report does not qualify host integration or dataset execution")
 
 
 if __name__ == "__main__":

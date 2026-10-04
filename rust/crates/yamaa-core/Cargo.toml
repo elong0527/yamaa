@@ -11,3 +11,5 @@ publish.workspace = true
 ryu = { version = "=1.0.20", default-features = false }
 # Pure no_std math; disable architecture-specific default implementations.
 libm = { version = "=0.2.16", default-features = false }
+# Bounded exact decimal rounding intermediates; no std, random or serde features.
+num-bigint = { version = "=0.5.1", default-features = false }
