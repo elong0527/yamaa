@@ -74,8 +74,10 @@ There is no claim here that libm or platform math is universally correctly round
 - Before host/dataset exposure, compare both bindings exactly, assess downstream
   predicates/conversion/rounding/CSV changes, decide migration behavior explicitly,
   and qualify all existing benchmark goldens without rewriting their expected truth.
-- Decimal rounding is shared by both policies; completed-result conversion/handlers,
-  Cargo locking and full
+- Decimal rounding is shared by both policies; numeric completed-result conversion
+  and handler accounting is now a qualified engine service (31 shared Python/Rust
+  cases, CI on all native targets). Normalized specification dispatch, host
+  diagnostics, remaining handlers, Cargo locking and full
   dataset execution remain separate gates. Default callers stay on ReferenceSubset
   until the corresponding release decisions are made.
 
