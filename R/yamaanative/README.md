@@ -142,3 +142,13 @@ requires the R Arrow package or Python. Inputs use the closed precision-bearing
 schema documented in rust/TABLE_TRANSPORT.md in the source repository. Stream
 input and output are capped at 8 MiB; snapshot output is capped at 16 MiB, with
 additional row/column/batch/cell limits. These APIs do not execute specifications.
+
+## Lossless host scalars
+
+`int64("9007199254740993")` preserves a full-range signed integer, and
+`utf8_scalar(as.raw(c(97, 0, 98)))` preserves NUL-containing text. Both are
+validated present scalars, distinct from missing. Integer arithmetic and scalar
+comparisons use shared Rust semantics; conversions to ordinary R types must be
+exact or fail. Use `utf8_bytes` for lossless text bytes. See
+[the scalar boundary contract](../../rust/R_SCALARS.md) and `?int64` for supported
+operations, explicit encoding rules and the remaining R callback gate.
