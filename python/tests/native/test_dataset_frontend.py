@@ -1393,3 +1393,115 @@ def test_unpaired_named_policy_keeps_preflight_diagnostic(tmp_path, field):
         ("intermediates[0]",),
     )
     assert effects == []
+
+
+def compute_specification(tmp_path, expression="X + X * 2", row=False):
+    """Declare numeric dependencies independently of native compilation or table values."""
+    import yaml
+
+    document = {
+        "schema_version": "1.0",
+        "domain": "NUM",
+        "keys": ["ID"],
+        "input": {"SRC": "source.csv"},
+        "output": {"path": "out.csv", "columns": ["ID", "X", "N"]},
+        "columns": [
+            {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+            {"name": "X", "type": "int", "label": "X", "derivation": "SRC.X"},
+            {
+                "name": "N",
+                "type": "float",
+                "label": "N",
+                "derivation": {"compute": {"expr": expression}},
+            },
+        ],
+    }
+    if row:
+        document["columns"][-1].pop("derivation")
+        document["rows"] = [
+            {
+                "id": "row",
+                "dataset": "SRC",
+                "derivations": {"N": {"compute": {"expr": expression}}},
+            }
+        ]
+    path = tmp_path / "compute.yaml"
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    return load_specification(path, ROOT / "yaml").specification
+
+
+@pytest.mark.parametrize(
+    "row,expr,expected",
+    [(False, "X + X * 2", {"column": 1}), (True, "SRC.X + SRC.X * 2", {"source": 1})],
+)
+def test_numeric_lowering_preserves_text_and_distinct_bound_names(
+    tmp_path, row, expr, expected
+):
+    """Repeated written occurrences share a binding without evaluating or reassociating syntax."""
+    from yamaa.io.polars import frame_from_values
+    from yamaa.models import TypedColumn
+
+    spec = compute_specification(tmp_path, expr, row)
+    admit(spec)
+    source = frame_from_values(
+        (TypedColumn(name="ID", type="int"), TypedColumn(name="X", type="int")),
+        [[1, 7]],
+    )
+    plan = plan_execution(spec, {"SRC": source}, supported_operations=OPERATIONS)
+    request, pending = lower(plan, source)
+    assert pending is None
+    items = request["templates"][0]["assignments"] if row else request["columns"]
+    item = next(item for item in items if item["column"] == 2)
+    assert item["expression"] == {
+        "compute": {
+            "text": expr,
+            "bindings": [{"name": "SRC.X" if row else "X", "read": expected}],
+        }
+    }
+
+
+@pytest.mark.parametrize("expr", ["EXP(X)", "LN(X)", "POWER(X, 2)"])
+def test_unqualified_math_policy_refuses_before_provider(tmp_path, expr):
+    """Dataset computation does not opt into the separate portable-math candidate."""
+    spec = compute_specification(tmp_path, expr)
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert effects == []
+
+
+def test_old_native_package_refuses_computation_before_provider(tmp_path, monkeypatch):
+    """A legacy dataset capability cannot silently reinterpret a numeric expression."""
+    spec = compute_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain"]}
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "native_numeric_compute"
+    }
+    assert effects == []
+
+
+def test_numeric_syntax_error_precedes_provider(tmp_path):
+    """Grammar conditions keep their authored expression path before source acquisition."""
+    spec = compute_specification(tmp_path, "X +")
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "failure"
+    error = actual.result.diagnostics[0]
+    assert (error.condition, error.requirement, error.spec_paths) == (
+        "invalid_numeric_expression",
+        "REQ-0439",
+        ("columns.N.derivation.compute.expr",),
+    )
+    assert effects == []

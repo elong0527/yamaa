@@ -298,6 +298,58 @@ fn named_intermediate_admission_precedes_invalid_snapshots() {
     ));
 }
 
+/// Compilation, name binding and dependency admission precede every source byte read.
+#[test]
+fn numeric_compute_admission_precedes_snapshot_decoding() {
+    let cases: Value =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let request = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["case"] == "compute_values")
+        .unwrap()["request"]
+        .clone();
+    for (text, bindings) in [
+        ("ID +", json!([{"name":"ID","read":{"column":0}}])),
+        ("POWER(ID, 2)", json!([{"name":"ID","read":{"column":0}}])),
+        ("ID + 1", json!([])),
+        (
+            "ID + 1",
+            json!([{"name":"ID","read":{"column":0}},{"name":"ID","read":{"column":0}}]),
+        ),
+        (
+            "ID + 1",
+            json!([{"name":"ID","read":{"column":0}},{"name":"OTHER","read":{"column":0}}]),
+        ),
+        ("ID + 1", json!([{"name":"ID","read":{"column":1}}])),
+        ("ID + 1", json!([{"name":"ID","read":{"source":0}}])),
+    ] {
+        let mut invalid = request.clone();
+        invalid["columns"][0]["expression"] = json!({"compute":{"text":text,"bindings":bindings}});
+        assert!(
+            matches!(
+                execute_dataset(&invalid.to_string(), b"bad IPC"),
+                Err(Error::InvalidPlan)
+            ),
+            "{text}"
+        );
+    }
+    let mut huge = request.clone();
+    huge["columns"][0]["expression"]["compute"]["text"] = json!("1".repeat(65537));
+    assert!(matches!(
+        execute_dataset(&huge.to_string(), b"bad IPC"),
+        Err(Error::RequestLimit)
+    ));
+    let mut many = request;
+    many["columns"][0]["expression"]["compute"]["bindings"] =
+        json!(vec![json!({"name":"ID","read":{"column":0}}); 4097]);
+    assert!(matches!(
+        execute_dataset(&many.to_string(), b"bad IPC"),
+        Err(Error::RequestLimit)
+    ));
+}
+
 /// Authored typed filter runs after row conversion and before later source assignments.
 fn filtered_request() -> Value {
     let mut req = request();

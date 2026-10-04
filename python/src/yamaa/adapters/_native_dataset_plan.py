@@ -173,8 +173,16 @@ def admit(specification):
                 return
             try:
                 ast = parse_numeric_cached(payload["expr"])
-            except NumericError:
-                # Shared preflight retains the original grammar diagnostic and path.
+            except NumericError as error:
+                diagnostic = ExecutionDiagnostic(
+                    phase="validation",
+                    condition=error.condition,
+                    spec_paths=(f"{path}.expr",),
+                    requirement=error.requirement,
+                    context={"expr": payload["expr"], **error.context},
+                )
+                if diagnostic not in diagnostics:
+                    diagnostics.append(diagnostic)
                 return
 
             def inspect(node):

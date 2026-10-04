@@ -179,7 +179,7 @@ or the empty global identity. Filters use the existing `window_filter` gate.
 Other comparable baseline types remain explicitly unsupported in this slice.
 
 Broader source selection, portable regex calls, additional expression operations, source handlers, column checks,
-warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
+warning checks, grouped/filtered/fractional row-count checks, wide literal values outside `compute`,
 broader joins/intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.
 Unresolved inheritance remains unsupported; ordinary loader-resolved inheritance
@@ -187,6 +187,22 @@ uses the resulting normalized declarations. Shared Rust YAML resolution/compilat
 will replace this temporary bridge at issue #1585 step 7.
 
 ## Limits and evidence
+
+`compute` expressions use the existing Rust numeric compiler and the additive
+`numeric_compute` capability. Completed output bindings and record-row source
+bindings are statically checked; each written occurrence evaluates in Rust with
+exact association, eager missing operands and deferred literal overflow. Numeric
+type errors have no output identity, while arithmetic and conversion failures
+retain complete keys when available. Existing source-handler observations survive
+later compute failures. Named-intermediate numeric reads and local handlers remain
+unsupported. EXP/LN/POWER remain outside the reference-compatible dataset policy.
+Malformed numeric grammar is reported at the authored `.compute.expr` path before
+source acquisition, while runtime conditions retain `.compute` provenance.
+
+Installed comparisons cover 162 expression/type combinations and 48 row-source,
+empty-input, literal/error-priority and conversion variants. Reference numeric
+evaluation is disabled during native execution. These checks qualify the supported
+subset; the BMI benchmarks still require additional language and policy work.
 
 The [dataset/1 native policies](../../../../rust/DATASET_TRANSPORT.md) still apply.
 Schema normalization, host source ingestion and IPC construction happen in Python

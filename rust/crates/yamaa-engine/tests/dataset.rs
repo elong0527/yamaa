@@ -119,6 +119,226 @@ fn record_plan(
     .unwrap()
 }
 
+/// Compile authored arithmetic with a closed static name-to-read map.
+fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
+    use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+    use yamaa_engine::{dataset::BoundNumeric, dataset_predicate::Binding};
+    Expression::Compute(
+        BoundNumeric::new(
+            compile_numeric(
+                text,
+                "columns.N.derivation.compute",
+                CompileLimits::default(),
+            )
+            .unwrap(),
+            bindings
+                .iter()
+                .map(|(name, read)| Binding {
+                    name: (*name).into(),
+                    read: *read,
+                })
+                .collect(),
+        )
+        .unwrap(),
+    )
+}
+
+/// Binding is complete before execution, while each written occurrence still reads once.
+#[test]
+fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
+    use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+    use yamaa_engine::{
+        dataset::BoundNumeric,
+        dataset_predicate::{Binding, BindingError},
+    };
+    let compiled = compile_numeric("X + X * 2", "compute", CompileLimits::default()).unwrap();
+    assert_eq!(compiled.identifiers().collect::<Vec<_>>(), vec!["X"]);
+    assert_eq!(compiled.resolution_count(), 2);
+    assert_eq!(compiled.node_count(), 5);
+    assert_eq!(
+        BoundNumeric::new(compiled.clone(), vec![]),
+        Err(BindingError::MissingName)
+    );
+    let binding = Binding {
+        name: "X".into(),
+        read: Read::Source(1),
+    };
+    assert_eq!(
+        BoundNumeric::new(compiled.clone(), vec![binding.clone(), binding.clone()]),
+        Err(BindingError::DuplicateName)
+    );
+    assert_eq!(
+        BoundNumeric::new(
+            compiled,
+            vec![
+                binding,
+                Binding {
+                    name: "Y".into(),
+                    read: Read::Source(1)
+                }
+            ]
+        ),
+        Err(BindingError::UnusedName)
+    );
+    let source = table(
+        &[("ID", ColumnType::Int), ("X", ColumnType::Int)],
+        vec![vec![Value::Int(1), Value::Int(7)]],
+    );
+    let plan = record_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int), ("N", ColumnType::Int)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, computed("X + X * 2", &[("X", Read::Source(1))])),
+        ],
+        vec![],
+    );
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[vec![Value::Int(1), Value::Int(21)]]
+    );
+    assert_eq!(*source.reads.borrow(), vec![(0, 0), (0, 1), (0, 1)]);
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 3,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit { .. }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        result.dataset.rows()
+    );
+}
+
+/// Numeric validation has no output identity; reached arithmetic and conversion do.
+#[test]
+fn dataset_numeric_failure_priority_preserves_ports_missingness_and_identity() {
+    use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition};
+    let mut source = table(
+        &[("ID", ColumnType::Int), ("X", ColumnType::Str)],
+        vec![vec![Value::Int(1), Value::Str("7".into())]],
+    );
+    let make = |source: &Table, text: &str, bindings: &[(&str, Read)]| {
+        record_plan(
+            source,
+            schema(&[("ID", ColumnType::Int), ("N", ColumnType::Int)]),
+            vec![
+                assign(0, Expression::Source(0)),
+                assign(1, computed(text, bindings)),
+            ],
+            vec![],
+        )
+    };
+    source.fail = Some((0, 1));
+    let plan = make(&source, "1 / 0 + X", &[("X", Read::Source(1))]);
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Numeric {
+            identity: Some(_),
+            ..
+        }
+    ));
+    assert_eq!(*source.reads.borrow(), vec![(0, 0)]);
+    let plan = make(&source, "NULL + X", &[("X", Read::Source(1))]);
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Cell {
+            error: CellError::Access("source failure"),
+            ..
+        }
+    ));
+    source.fail = None;
+    let plan = make(&source, "X + 1", &[("X", Read::Source(1))]);
+    assert!(
+        matches!(*plan.execute(&source,limits()).unwrap_err(),ExecutionError::Numeric { error,identity:None } if matches!(error.evaluation.kind,EvaluationErrorKind::Numeric(NumericCondition::IncompatibleInput { .. })))
+    );
+    let plan = make(&source, "9223372036854775808", &[]);
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Numeric {
+            identity: Some(_),
+            ..
+        }
+    ));
+    source.rows.clear();
+    assert!(plan
+        .execute(&source, limits())
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+}
+
+/// Computation consumes converted dependencies and cannot pick a key group's first donor.
+#[test]
+fn key_grain_numeric_dependencies_are_completed_values() {
+    let source = table(
+        &[("ID", ColumnType::Int)],
+        vec![vec![Value::Int(1)], vec![Value::Int(1)]],
+    );
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("X", ColumnType::Int),
+        ("N", ColumnType::Float),
+    ]);
+    let template = RowTemplate {
+        mode: RowMode::Keys,
+        assignments: vec![assign(0, Expression::Source(0))],
+        filter: None,
+    };
+    let assignments = vec![
+        assign(1, Expression::Literal(Value::Str("0007".into()))),
+        assign(2, computed("X / 2", &[("X", Read::Column(1))])),
+    ];
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        output.clone(),
+        vec![template.clone()],
+        assignments.clone(),
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        &[vec![Value::Int(1), Value::Int(7), Value::float(3.5)]]
+    );
+    for (read, error) in [
+        (Read::Column(2), PlanError::UnavailableColumn),
+        (Read::Source(0), PlanError::InvalidKeyMode),
+    ] {
+        let mut assignments = assignments.clone();
+        assignments[1].expression = computed("X / 2", &[("X", read)]);
+        assert_eq!(
+            DatasetPlan::new(
+                source.schema.clone(),
+                output.clone(),
+                vec![template.clone()],
+                assignments,
+                vec![0],
+                vec![]
+            ),
+            Err(error)
+        );
+    }
+    assert_eq!(
+        source
+            .reads
+            .borrow()
+            .iter()
+            .filter(|(_, column)| *column == 0)
+            .count(),
+        2
+    );
+}
+
 /// First occurrence determines group order; source order determines member order.
 #[test]
 fn grouping_uses_exact_logical_equality_without_sorting() {

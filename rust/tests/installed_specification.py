@@ -54,6 +54,136 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
+    def test_numeric_computation_matches_typed_reference_cases(self):
+        """Bind every numeric family to real completed cells, preserving exact observations."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "NUM",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "X", "Y", "N"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {"name": "X", "type": "int", "label": "X", "derivation": "SRC.X"},
+                {"name": "Y", "type": "int", "label": "Y", "derivation": "SRC.Y"},
+                {
+                    "name": "N",
+                    "type": "float",
+                    "label": "N",
+                    "derivation": {"compute": {"expr": "X + Y"}},
+                },
+            ],
+        }
+        expressions = [
+            "X + Y",
+            "X - Y",
+            "X * Y",
+            "X / Y",
+            "MOD(X, Y)",
+            "ABS(X)",
+            "COALESCE(X, Y, 1)",
+            "NULLIF(X, Y)",
+            "GREATEST(X, Y, 2)",
+            "LEAST(X, Y, 2)",
+            "CEIL(X)",
+            "FLOOR(X)",
+            "TRUNC(X)",
+            "SQRT(X)",
+            "ROUND_HALF_AWAY_FROM_ZERO(X, 2)",
+            "ROUND_HALF_AWAY_FROM_ZERO(X, Y)",
+            "(X + Y) * 2",
+            "X + Y * 2",
+        ]
+        cases = [
+            ("int", "int", 7, 2),
+            ("int", "int", -7, 3),
+            ("int", "int", 9007199254740993, 2),
+            ("int", "int", 9223372036854775807, 1),
+            ("int", "float", 9007199254740993, 9007199254740992.0),
+            ("float", "float", -0.0, 1.0),
+            ("float", "float", 1.005, 0.1),
+            ("float", "float", 1.7976931348623157e308, 2.0),
+            ("float", "float", -1.0, 0.0),
+        ]
+        for expression, (left, right, x, y) in itertools.product(expressions, cases):
+            with self.subTest(expression=expression, left=left, right=right, x=x, y=y):
+                doc = copy.deepcopy(document)
+                doc["columns"][1]["type"] = left
+                doc["columns"][2]["type"] = right
+                doc["columns"][3]["derivation"]["compute"]["expr"] = expression
+                columns = tuple(
+                    TypedColumn(name=name, type=kind)
+                    for name, kind in [("ID", "int"), ("X", left), ("Y", right)]
+                )
+                source = frame_from_values(
+                    columns, [[1, x, y], [2, None, y], [3, x, None]]
+                )
+                self.compare(self.load(doc), {"SRC": source})
+
+    def test_numeric_failures_empty_input_and_row_bindings(self):
+        """Deferred literals, row-source bindings and result conversion preserve failure order."""
+        base = {
+            "schema_version": "1.0",
+            "domain": "NUM",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "X", "N"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {"name": "X", "type": "int", "label": "X", "derivation": "SRC.X"},
+                {
+                    "name": "N",
+                    "type": "float",
+                    "label": "N",
+                    "derivation": {"compute": {"expr": "X / 2"}},
+                },
+            ],
+        }
+        cases = [
+            ("X / 0", "int", [[1, 7]]),
+            ("X / 0", "int", [[1, None]]),
+            ("X + 1", "str", [[1, "7"]]),
+            ("9223372036854775808 + X", "int", [[1, 7]]),
+            ("9223372036854775808 + X", "int", []),
+            ("X + 9223372036854775808", "int", [[1, None]]),
+            ("SQRT(-1)", "int", [[1, 7]]),
+            ("X / 2", "int", [[1, 7]]),
+        ]
+        for expression, kind, rows in cases:
+            for row_mode in [False, True]:
+                for target in ["float", "int", "str"]:
+                    with self.subTest(
+                        expression=expression,
+                        kind=kind,
+                        rows=rows,
+                        row_mode=row_mode,
+                        target=target,
+                    ):
+                        doc = copy.deepcopy(base)
+                        doc["columns"][1]["type"] = kind
+                        doc["columns"][2]["type"] = target
+                        text = (
+                            expression.replace("X", "SRC.X") if row_mode else expression
+                        )
+                        if row_mode:
+                            doc["columns"][2].pop("derivation")
+                            doc["rows"] = [
+                                {
+                                    "id": "row",
+                                    "dataset": "SRC",
+                                    "derivations": {"N": {"compute": {"expr": text}}},
+                                }
+                            ]
+                        else:
+                            doc["columns"][2]["derivation"]["compute"]["expr"] = text
+                        columns = (
+                            TypedColumn(name="ID", type="int"),
+                            TypedColumn(name="X", type=kind),
+                        )
+                        self.compare(
+                            self.load(doc), {"SRC": frame_from_values(columns, rows)}
+                        )
+
     def test_committed_complete_window_benchmark(self):
         """Execute the complete unchanged window specification against its committed CSV."""
         case = ROOT / "specification-windows"
@@ -115,6 +245,7 @@ class InstalledSpecification(unittest.TestCase):
             "unused",
             "earlier_failure",
             "later_failure",
+            "later_compute_failure",
             "same_values",
             "filter_failure",
             "empty_filter_failure",
@@ -154,14 +285,20 @@ class InstalledSpecification(unittest.TestCase):
                     doc["output"]["columns"] = ["USUBJID"]
                     doc["intermediates"] = doc["intermediates"][:1]
                     doc["intermediates"][0]["filter"] = "AE.AEDY > 0"
-                if scenario in {"earlier_failure", "later_failure"}:
+                if scenario in {
+                    "earlier_failure",
+                    "later_failure",
+                    "later_compute_failure",
+                }:
                     doc["columns"].insert(
                         1 if scenario == "earlier_failure" else len(doc["columns"]),
                         {
                             "name": "FAIL",
                             "type": "int",
                             "label": "Failure",
-                            "derivation": {"literal": "bad"},
+                            "derivation": {"compute": {"expr": "1 / 0"}}
+                            if scenario == "later_compute_failure"
+                            else {"literal": "bad"},
                         },
                     )
                 if scenario in {
@@ -929,6 +1066,10 @@ class InstalledSpecification(unittest.TestCase):
             patch(
                 "yamaa.runtime.lifecycle.ExpressionDispatcher.evaluate",
                 side_effect=AssertionError("reference evaluation"),
+            ),
+            patch(
+                "yamaa.expressions.numeric.evaluate_numeric",
+                side_effect=AssertionError("reference numeric evaluation"),
             ),
             patch(
                 "yamaa.runtime.executor.evaluate_predicate",
