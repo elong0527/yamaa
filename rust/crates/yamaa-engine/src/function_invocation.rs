@@ -200,6 +200,11 @@ impl InvocationPlan {
         &self.identity
     }
 
+    /// Inspect the immutable logical signature for static argument binding.
+    pub fn parameters(&self) -> &[Parameter] {
+        &self.parameters
+    }
+
     /// Check unknown names first, then parameters in declaration order, then call
     /// once. Non-accepting missing short-circuits before later argument checks,
     /// matching the reference runtime; static call preflight is a separate gate.

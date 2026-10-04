@@ -335,3 +335,10 @@ unconstructed keys remain unavailable. The bridge reports raw typed observations
 not complete public verification logs, warning handling or publication. An optional [Python normalization frontend](../python/src/yamaa/adapters/NATIVE_DATASETS.md)
 now executes the ADLB specification through this bridge. The shared Rust compiler,
 remaining named prototypes and all full-workflow/default-cutover gates remain open.
+
+The trusted Rust dataset API also composes prebound host-function calls with
+record/group assignments and completed key-grain outputs. This core-only port
+checks every callback signature before table access and reuses the scalar
+invocation lifecycle; it is not advertised by `dataset/1` or either host frontend.
+See [dataset function composition](DATASET_FUNCTIONS.md) for phase, error and
+resource contracts and the remaining adapter/activation qualification gates.
