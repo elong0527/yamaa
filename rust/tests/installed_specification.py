@@ -54,6 +54,159 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
+    def test_completed_conversion_handlers_across_row_modes(self):
+        """Compare zero, fired and failed replacements before dependent reads and filtering."""
+        base = {
+            "schema_version": "1.0",
+            "domain": "CONV",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "X", "COPY"]},
+            "columns": [
+                {
+                    "name": "ID",
+                    "type": "int",
+                    "label": "ID",
+                    "derivation": {"value": {"source": "SRC.ID"}, "unconvertible": 0},
+                },
+                {
+                    "name": "X",
+                    "type": "int",
+                    "label": "X",
+                    "derivation": {"value": {"source": "SRC.X"}, "unconvertible": 0},
+                },
+                {
+                    "name": "COPY",
+                    "type": "int",
+                    "label": "COPY",
+                    "derivation": {"value": {"source": "X"}, "unconvertible": 99},
+                },
+            ],
+        }
+        for mode, replacement, rows in itertools.product(
+            ["key", "column", "row", "filtered", "group"],
+            [None, 7, "bad", False, 1.5],
+            [[], [[1, "4"]], [[1, "bad"], [2, "4"]]],
+        ):
+            with self.subTest(mode=mode, replacement=replacement, rows=rows):
+                doc = copy.deepcopy(base)
+                doc["columns"][1]["derivation"]["unconvertible"] = replacement
+                if mode != "key":
+                    doc["rows"] = [{"id": "r", "dataset": "SRC", "derivations": {}}]
+                if mode in {"row", "filtered", "group"}:
+                    doc["rows"][0]["derivations"]["X"] = doc["columns"][1].pop(
+                        "derivation"
+                    )
+                if mode == "filtered":
+                    doc["rows"][0]["filter"] = "X > 5"
+                if mode == "group":
+                    doc["rows"][0]["group_by"] = ["SRC.ID", "SRC.X"]
+                source = frame_from_values(
+                    (
+                        TypedColumn(name="ID", type="int"),
+                        TypedColumn(name="X", type="str"),
+                    ),
+                    rows,
+                )
+                self.compare(self.load(doc), {"SRC": source})
+
+    def test_conversion_handlers_do_not_catch_expression_failure(self):
+        """Arithmetic fails directly while every later declaration retains its zero count."""
+        base = {
+            "schema_version": "1.0",
+            "domain": "CONV",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "X", "N", "LATER"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {
+                    "name": "X",
+                    "type": "int",
+                    "label": "X",
+                    "derivation": {"value": {"source": "SRC.X"}, "unconvertible": 7},
+                },
+                {
+                    "name": "N",
+                    "type": "int",
+                    "label": "N",
+                    "derivation": {
+                        "value": {"compute": {"expr": "X / 0"}},
+                        "unconvertible": 0,
+                    },
+                },
+                {
+                    "name": "LATER",
+                    "type": "int",
+                    "label": "LATER",
+                    "derivation": {"value": {"literal": "bad"}, "unconvertible": 99},
+                },
+            ],
+        }
+        for expr in ["X / 0", "SQRT(-1)", "9223372036854775808 + X", "X / 2"]:
+            with self.subTest(expr=expr):
+                doc = copy.deepcopy(base)
+                doc["columns"][2]["derivation"]["value"]["compute"]["expr"] = expr
+                actual = self.compare(
+                    self.load(doc),
+                    {
+                        "SRC": frame_from_values(
+                            (
+                                TypedColumn(name="ID", type="int"),
+                                TypedColumn(name="X", type="str"),
+                            ),
+                            [[1, "bad"]],
+                        )
+                    },
+                )
+                self.assertEqual(actual.result.handler_counts[0].count, 1)
+                if expr != "X / 2":
+                    self.assertEqual(
+                        [entry.count for entry in actual.result.handler_counts],
+                        [1, 0, 0],
+                    )
+
+    def test_key_conversion_handlers_precede_key_collection(self):
+        """Converted fallback keys determine grouping, with declaration order independent of execution."""
+        base = {
+            "schema_version": "1.0",
+            "domain": "CONV",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "X"]},
+            "columns": [
+                {
+                    "name": "X",
+                    "type": "int",
+                    "label": "X",
+                    "derivation": {"value": {"source": "SRC.X"}, "unconvertible": 4},
+                },
+                {
+                    "name": "ID",
+                    "type": "int",
+                    "label": "ID",
+                    "derivation": {"value": {"source": "SRC.ID"}, "unconvertible": 0},
+                },
+            ],
+        }
+        for replacement in [0, None, "bad"]:
+            for rows in [[["bad", "7"], ["0", "7"]], [["bad", "7"], ["0", "8"]]]:
+                with self.subTest(replacement=replacement, rows=rows):
+                    doc = copy.deepcopy(base)
+                    doc["columns"][1]["derivation"]["unconvertible"] = replacement
+                    self.compare(
+                        self.load(doc),
+                        {
+                            "SRC": frame_from_values(
+                                (
+                                    TypedColumn(name="ID", type="str"),
+                                    TypedColumn(name="X", type="str"),
+                                ),
+                                rows,
+                            )
+                        },
+                    )
+
     def test_numeric_computation_matches_typed_reference_cases(self):
         """Bind every numeric family to real completed cells, preserving exact observations."""
         document = {
@@ -184,6 +337,44 @@ class InstalledSpecification(unittest.TestCase):
                             self.load(doc), {"SRC": frame_from_values(columns, rows)}
                         )
 
+    def test_window_completed_conversion_handler(self):
+        """Whole-column windows use the same recovery before a later dependent read."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "WIN",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "V", "N", "COPY"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {"name": "V", "type": "str", "label": "V", "derivation": "SRC.V"},
+                {
+                    "name": "N",
+                    "type": "int",
+                    "label": "N",
+                    "derivation": {
+                        "value": {
+                            "locf": {"source": "V", "window": {"order_by": ["ID"]}}
+                        },
+                        "unconvertible": 0,
+                    },
+                },
+                {"name": "COPY", "type": "int", "label": "COPY", "derivation": "N"},
+            ],
+        }
+        columns = (
+            TypedColumn(name="ID", type="int"),
+            TypedColumn(name="V", type="str"),
+        )
+        for replacement in [0, None, "bad"]:
+            for rows in [[], [[1, "7"], [2, "bad"], [3, None]]]:
+                with self.subTest(replacement=replacement, rows=rows):
+                    doc = copy.deepcopy(document)
+                    doc["columns"][2]["derivation"]["unconvertible"] = replacement
+                    self.compare(
+                        self.load(doc), {"SRC": frame_from_values(columns, rows)}
+                    )
+
     def test_committed_complete_window_benchmark(self):
         """Execute the complete unchanged window specification against its committed CSV."""
         case = ROOT / "specification-windows"
@@ -242,6 +433,8 @@ class InstalledSpecification(unittest.TestCase):
             "no_absence_handler",
             "no_order",
             "literal_absence",
+            "recovered_absence",
+            "failed_absence_replacement",
             "unused",
             "earlier_failure",
             "later_failure",
@@ -278,8 +471,22 @@ class InstalledSpecification(unittest.TestCase):
                 if scenario == "no_order":
                     doc["intermediates"][0].pop("order_by")
                     doc["intermediates"][0].pop("keep")
-                if scenario == "literal_absence":
+                if scenario in {
+                    "literal_absence",
+                    "recovered_absence",
+                    "failed_absence_replacement",
+                }:
                     doc["intermediates"][0]["no_match"] = "bad"
+                if scenario in {"recovered_absence", "failed_absence_replacement"}:
+                    column = next(
+                        column for column in doc["columns"] if column["name"] == "DTHDY"
+                    )
+                    column["derivation"] = {
+                        "value": {"source": column["derivation"]},
+                        "unconvertible": 0
+                        if scenario == "recovered_absence"
+                        else "replacement",
+                    }
                 if scenario == "unused":
                     doc["columns"] = doc["columns"][:1]
                     doc["output"]["columns"] = ["USUBJID"]
@@ -1062,6 +1269,10 @@ class InstalledSpecification(unittest.TestCase):
             patch(
                 "yamaa.runtime.executor.execute_specification",
                 side_effect=AssertionError("reference execution"),
+            ),
+            patch(
+                "yamaa.runtime.lifecycle.convert_value",
+                side_effect=AssertionError("reference result conversion"),
             ),
             patch(
                 "yamaa.runtime.lifecycle.ExpressionDispatcher.evaluate",

@@ -4812,3 +4812,161 @@ fn secondary_lookup_validates_catalog_and_failure_order() {
         Err(PlanError::InvalidLookup)
     ));
 }
+
+/// Bind a replacement independently of assignment execution order.
+fn conversion_handler(column: usize, value: Value) -> yamaa_engine::dataset::ConversionHandler {
+    yamaa_engine::dataset::ConversionHandler {
+        assignment_path: format!("columns.C{column}.derivation"),
+        handler: yamaa_engine::numeric_lifecycle::LiteralHandler {
+            spec_path: format!("columns.C{column}.derivation.unconvertible"),
+            value,
+        },
+    }
+}
+
+/// Replacement finishes before dependents read it, with zero counts and fresh ledgers.
+#[test]
+fn completed_conversion_handlers_preserve_counts_values_and_failures() {
+    let source = table(
+        &[("ID", ColumnType::Int), ("X", ColumnType::Str)],
+        vec![
+            vec![Value::Int(1), Value::Str("bad".into())],
+            vec![Value::Int(2), Value::Str("4".into())],
+        ],
+    );
+    let plan = record_plan(
+        &source,
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("X", ColumnType::Int),
+            ("COPY", ColumnType::Int),
+        ]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Source(1)),
+            assign(2, Expression::Column(1)),
+        ],
+        vec![],
+    );
+    let declarations = vec![
+        conversion_handler(2, Value::Int(99)),
+        conversion_handler(1, Value::Int(7)),
+        conversion_handler(0, Value::Int(0)),
+    ];
+    let bound = plan
+        .clone()
+        .with_conversion_handlers(declarations.clone())
+        .unwrap();
+    for _ in 0..2 {
+        let attempt = bound.execute_observed(&source, limits());
+        assert_eq!(
+            attempt.result.unwrap().dataset.rows(),
+            vec![
+                vec![Value::Int(1), Value::Int(7), Value::Int(7)],
+                vec![Value::Int(2), Value::Int(4), Value::Int(4)]
+            ]
+        );
+        assert_eq!(
+            attempt
+                .handler_counts
+                .iter()
+                .map(|entry| entry.count)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 0]
+        );
+        assert_eq!(
+            attempt
+                .handler_counts
+                .iter()
+                .map(|entry| &entry.spec_path)
+                .collect::<Vec<_>>(),
+            declarations
+                .iter()
+                .map(|entry| &entry.handler.spec_path)
+                .collect::<Vec<_>>()
+        );
+    }
+    let empty = table(&[("ID", ColumnType::Int), ("X", ColumnType::Str)], vec![]);
+    let attempt = bound.execute_observed(&empty, limits());
+    assert!(attempt.result.unwrap().dataset.rows().is_empty());
+    assert!(attempt.handler_counts.iter().all(|entry| entry.count == 0));
+    let missing = plan
+        .clone()
+        .with_conversion_handlers(vec![conversion_handler(1, Value::Missing)])
+        .unwrap()
+        .execute_observed(&source, limits());
+    assert_eq!(
+        missing.result.unwrap().dataset.rows()[0],
+        vec![Value::Int(1), Value::Missing, Value::Missing]
+    );
+    let bad = plan
+        .clone()
+        .with_conversion_handlers(vec![conversion_handler(1, Value::Str("still bad".into()))])
+        .unwrap()
+        .execute_observed(&source, limits());
+    assert!(
+        matches!(*bad.result.unwrap_err(),ExecutionError::Conversion { path, identity:Some(_), .. } if path=="columns.C1.derivation.unconvertible")
+    );
+    assert_eq!(bad.handler_counts[0].count, 1);
+    let mut broken = source;
+    broken.fail = Some((0, 1));
+    let attempt = bound.execute_observed(&broken, limits());
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Cell { .. }
+    ));
+    assert!(attempt.handler_counts.iter().all(|entry| entry.count == 0));
+}
+
+/// Unused literals consume no scalar budget; invalid handler bindings read no cells.
+#[test]
+fn conversion_handler_admission_and_reached_resource_accounting() {
+    let source = table(&[("ID", ColumnType::Int)], vec![vec![Value::Int(1)]]);
+    let plan = record_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int)]),
+        vec![assign(0, Expression::Source(0))],
+        vec![],
+    );
+    for declarations in [
+        vec![conversion_handler(9, Value::Int(0))],
+        vec![conversion_handler(0, Value::Int(0)); 2],
+    ] {
+        assert_eq!(
+            plan.clone().with_conversion_handlers(declarations),
+            Err(PlanError::InvalidConversionHandler)
+        );
+    }
+    assert!(source.reads.borrow().is_empty());
+    let mut tiny = limits();
+    tiny.scalar_text_bytes = 0;
+    let bound = plan
+        .with_conversion_handlers(vec![conversion_handler(
+            0,
+            Value::Str("large unused replacement".into()),
+        )])
+        .unwrap();
+    assert!(bound.execute(&source, tiny).is_ok());
+    let bad = record_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int)]),
+        vec![assign(
+            0,
+            Expression::Literal(Value::Float(
+                yamaa_core::value::FiniteFloat::new(1.5).unwrap(),
+            )),
+        )],
+        vec![],
+    )
+    .with_conversion_handlers(vec![conversion_handler(0, Value::Str("0".into()))])
+    .unwrap()
+    .execute_observed(&source, tiny);
+    assert!(matches!(
+        *bad.result.unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::ScalarTextBytes,
+            ..
+        }
+    ));
+    assert_eq!(bad.handler_counts[0].count, 0);
+}

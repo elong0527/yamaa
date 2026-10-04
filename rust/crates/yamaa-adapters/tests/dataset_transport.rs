@@ -377,7 +377,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -811,5 +811,31 @@ fn secondary_source_requests_preserve_lookup_values_and_diagnostics() {
         Err(Error::Table(
             yamaa_adapters::table_transport::TableTransportError::InputLimit
         ))
+    ));
+}
+
+/// Handler references and declaration identities are validated before malformed IPC.
+#[test]
+fn conversion_handler_admission_precedes_snapshot_decoding() {
+    let mut base = request();
+    let handler = json!({"assignment_path":base["columns"][1]["path"],"path":"columns.x.derivation.unconvertible","value":{"int":"0"}});
+    for (field, value) in [("assignment_path", json!("absent")), ("path", json!(""))] {
+        let mut invalid = handler.clone();
+        invalid[field] = value;
+        base["unconvertible"] = json!([invalid]);
+        assert!(matches!(
+            execute_dataset(&base.to_string(), b"bad IPC"),
+            Err(Error::InvalidPlan) | Err(Error::InvalidRequest)
+        ));
+    }
+    base["unconvertible"] = json!([handler.clone(), handler.clone()]);
+    assert!(matches!(
+        execute_dataset(&base.to_string(), b"bad IPC"),
+        Err(Error::InvalidPlan)
+    ));
+    base["unconvertible"] = json!(vec![handler; 1089]);
+    assert!(matches!(
+        execute_dataset(&base.to_string(), b"bad IPC"),
+        Err(Error::RequestLimit)
     ));
 }

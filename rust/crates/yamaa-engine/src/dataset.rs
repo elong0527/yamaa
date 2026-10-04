@@ -3,10 +3,10 @@
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
-#[path = "dataset_intermediates.rs"]
-mod intermediates;
 #[path = "dataset_conversion.rs"]
 mod conversion;
+#[path = "dataset_intermediates.rs"]
+mod intermediates;
 pub use conversion::ConversionHandler;
 #[path = "dataset_keys.rs"]
 mod key_grain;
@@ -756,7 +756,15 @@ fn evaluate<T: TableAccess + ?Sized>(
     if let Expression::Intermediate { index, column } = assignment.expression {
         state.budget.work(1, 1)?;
         let value = intermediates::read(index, column, assignment, candidate, plan, row, state)?;
-        return finish(value, assignment, candidate, plan, row, state.budget, state.handlers);
+        return finish(
+            value,
+            assignment,
+            candidate,
+            plan,
+            row,
+            state.budget,
+            state.handlers,
+        );
     }
     let EvaluationState {
         budget,
@@ -859,7 +867,9 @@ fn finish<E>(
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let converted = match convert(&value, plan.output.columns()[assignment.column].kind) {
         Ok(value) => value,
-        Err(error) => conversion::recover(error, assignment, candidate, plan, row, budget, handlers)?,
+        Err(error) => {
+            conversion::recover(error, assignment, candidate, plan, row, budget, handlers)?
+        }
     };
     budget.value(&converted)?;
     Ok(converted)
@@ -867,7 +877,7 @@ fn finish<E>(
 
 impl DatasetPlan {
     /// Execute only the admitted scope, returning no accepted table on any failure.
-    /// Source access errors remain errors. No handlers, callbacks, joins,
+    /// Source access errors remain errors. No undeclared handlers, callbacks, joins,
     /// file publication or fallback are implicit.
     pub fn execute<T: TableAccess + ?Sized>(
         &self,
@@ -1027,7 +1037,15 @@ impl DatasetPlan {
                 };
                 let candidate = &mut candidates[row];
                 candidate.values[assignment.column] = if let Some(value) = number {
-                    finish(value, assignment, candidate, self, row, &mut budget, handlers)?
+                    finish(
+                        value,
+                        assignment,
+                        candidate,
+                        self,
+                        row,
+                        &mut budget,
+                        handlers,
+                    )?
                 } else {
                     evaluate(
                         table,

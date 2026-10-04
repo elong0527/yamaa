@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible"]}"#
 }
 
 /// Bound host argument collections before copying any source buffers.
@@ -364,6 +364,27 @@ struct Assignment {
     expression: Expression,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConversionHandler {
+    assignment_path: String,
+    path: String,
+    value: ScalarValue,
+}
+impl ConversionHandler {
+    /// Decode literal replacement and both authored paths before source access.
+    fn prepare(self) -> Result<dataset::ConversionHandler, Error> {
+        path(&self.assignment_path)?;
+        path(&self.path)?;
+        Ok(dataset::ConversionHandler {
+            assignment_path: self.assignment_path,
+            handler: yamaa_engine::numeric_lifecycle::LiteralHandler {
+                spec_path: self.path,
+                value: self.value.into_core().map_err(|_| Error::InvalidScalar)?,
+            },
+        })
+    }
+}
+#[derive(Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Mode {
     Records(()),
@@ -403,6 +424,8 @@ struct Verification {
 #[serde(deny_unknown_fields)]
 struct Request {
     protocol: String,
+    #[serde(default)]
+    unconvertible: Vec<ConversionHandler>,
     source: Vec<Field>,
     #[serde(default)]
     secondary: Vec<SecondarySource>,
@@ -453,7 +476,8 @@ impl PreparedDataset {
             if request.protocol != PROTOCOL {
                 return Err(Error::UnsupportedProtocol);
             }
-            if request.templates.len() > MAX_TEMPLATES
+            if request.unconvertible.len() > MAX_COLUMNS * (MAX_TEMPLATES + 1)
+                || request.templates.len() > MAX_TEMPLATES
                 || request.verifications.len() > MAX_CHECKS
                 || request.keys.len() > MAX_COLUMNS
                 || request.secondary.len() >= MAX_SOURCES
@@ -533,6 +557,11 @@ impl PreparedDataset {
                     })
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
+            let handlers = request
+                .unconvertible
+                .into_iter()
+                .map(ConversionHandler::prepare)
+                .collect::<Result<Vec<_>, Error>>()?;
             let plan = DatasetPlan::new_with_intermediates(
                 dataset::SourceSchemas {
                     primary: source,
@@ -549,6 +578,7 @@ impl PreparedDataset {
                 request.keys,
                 verifications,
             )
+            .and_then(|plan| plan.with_conversion_handlers(handlers))
             .map_err(|_| Error::InvalidPlan)?;
             Ok(Self {
                 plan,

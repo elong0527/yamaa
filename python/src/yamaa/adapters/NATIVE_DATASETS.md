@@ -111,6 +111,16 @@ Unpaired policies, output/cross-source order references, unknown order fields,
 key/record/group selection and other source handlers remain explicitly unsupported;
 this bridge does not invent eager diagnostics for those lazy reference cases.
 
+Derivation-level `unconvertible` literal handlers require the additive
+`unconvertible` capability before source acquisition. Rust converts each result,
+then counts and converts a single replacement only if that conversion fails.
+Explicit null is a declared missing replacement. A failed replacement stops at
+its authored handler path; expression errors bypass this handler. Every declared
+path starts at zero in resolved declaration order, including unused/empty runs,
+while inherited selection handlers append when reached. Recovered values are
+complete before keys, filters and dependent assignments read them. Wide integer
+replacements outside signed i64 remain unsupported before provider effects.
+
 A root `filter` in this mode additionally requires `root_filter` before source
 access. It reads qualified base-source fields only, retaining true rows and
 omitting false/unknown rows before any key conversion. Every predicate evaluation
@@ -194,7 +204,7 @@ bindings are statically checked; each written occurrence evaluates in Rust with
 exact association, eager missing operands and deferred literal overflow. Numeric
 type errors have no output identity, while arithmetic and conversion failures
 retain complete keys when available. Existing source-handler observations survive
-later compute failures. Named-intermediate numeric reads and local handlers remain
+later compute failures. Named-intermediate numeric reads and expression-local handlers remain
 unsupported. EXP/LN/POWER remain outside the reference-compatible dataset policy.
 Malformed numeric grammar is reported at the authored `.compute.expr` path before
 source acquisition, while runtime conditions retain `.compute` provenance.

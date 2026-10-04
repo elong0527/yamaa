@@ -129,9 +129,21 @@ pub enum NumericLifecycleError<E> {
 
 /// Shared completed-value recovery failures; expression errors never enter this stage.
 pub(crate) enum ConversionRecoveryError {
-    Conversion { spec_path: String, error: ConversionError },
-    HandlerConversion { spec_path: String, column_path: String, original: ConversionError, replacement: ConversionError },
-    Accounting { error: HandlerCountOverflow, column_path: String, original: ConversionError },
+    Conversion {
+        spec_path: String,
+        error: ConversionError,
+    },
+    HandlerConversion {
+        spec_path: String,
+        column_path: String,
+        original: ConversionError,
+        replacement: ConversionError,
+    },
+    Accounting {
+        error: HandlerCountOverflow,
+        column_path: String,
+        original: ConversionError,
+    },
 }
 
 /// Count and convert at most one literal replacement after initial conversion failed.
@@ -141,15 +153,27 @@ pub(crate) fn recover_conversion(
     original: ConversionError,
     handler: Option<&LiteralHandler>,
     counter: &mut HandlerCounter,
-) -> Result<Value, ConversionRecoveryError> {
+) -> Result<Value, Box<ConversionRecoveryError>> {
     let Some(handler) = handler else {
-        return Err(ConversionRecoveryError::Conversion { spec_path: column_path.into(), error: original });
+        return Err(Box::new(ConversionRecoveryError::Conversion {
+            spec_path: column_path.into(),
+            error: original,
+        }));
     };
     if let Err(error) = counter.record(&handler.spec_path, HandlerKind::Unconvertible) {
-        return Err(ConversionRecoveryError::Accounting { error, column_path: column_path.into(), original });
+        return Err(Box::new(ConversionRecoveryError::Accounting {
+            error,
+            column_path: column_path.into(),
+            original,
+        }));
     }
-    convert(&handler.value, target).map_err(|replacement| ConversionRecoveryError::HandlerConversion {
-        spec_path: handler.spec_path.clone(), column_path: column_path.into(), original, replacement,
+    convert(&handler.value, target).map_err(|replacement| {
+        Box::new(ConversionRecoveryError::HandlerConversion {
+            spec_path: handler.spec_path.clone(),
+            column_path: column_path.into(),
+            original,
+            replacement,
+        })
     })
 }
 
@@ -207,12 +231,40 @@ impl NumericDerivation {
             Ok(converted) => return Ok(converted),
             Err(error) => error,
         };
-        recover_conversion(self.target, &self.column_path, original, self.unconvertible.as_ref(), counter)
-            .map_err(|error| Box::new(match error {
-                ConversionRecoveryError::Conversion { spec_path, error } => NumericLifecycleError::Conversion { spec_path, error },
-                ConversionRecoveryError::HandlerConversion { spec_path, column_path, original, replacement } => NumericLifecycleError::HandlerConversion { spec_path, column_path, original, replacement },
-                ConversionRecoveryError::Accounting { error, column_path, original } => NumericLifecycleError::Accounting { error, column_path, original },
-            }))
+        recover_conversion(
+            self.target,
+            &self.column_path,
+            original,
+            self.unconvertible.as_ref(),
+            counter,
+        )
+        .map_err(|error| {
+            Box::new(match *error {
+                ConversionRecoveryError::Conversion { spec_path, error } => {
+                    NumericLifecycleError::Conversion { spec_path, error }
+                }
+                ConversionRecoveryError::HandlerConversion {
+                    spec_path,
+                    column_path,
+                    original,
+                    replacement,
+                } => NumericLifecycleError::HandlerConversion {
+                    spec_path,
+                    column_path,
+                    original,
+                    replacement,
+                },
+                ConversionRecoveryError::Accounting {
+                    error,
+                    column_path,
+                    original,
+                } => NumericLifecycleError::Accounting {
+                    error,
+                    column_path,
+                    original,
+                },
+            })
+        })
     }
 }
 

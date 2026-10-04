@@ -44,8 +44,7 @@ def test_adlb_lowering_matches_independent_bound_plan(specification):
         "root_regex",
         "predicate_regex",
         "predicate_wide_literal",
-        "handler",
-        "null_handler",
+        "wide_handler",
         "source_filter",
         "source_handler",
         "compute",
@@ -83,10 +82,8 @@ def test_unsupported_run_never_reads_sources(specification, feature):
         doc["rows"][0]["filter"] = "str_contains(LB.LBTESTCD, 'COMP')"
     elif feature == "predicate_wide_literal":
         doc["rows"][0]["filter"] = "AVAL > 9223372036854775808"
-    elif feature in {"handler", "null_handler"}:
-        doc["rows"][0]["derivations"]["AVAL"]["unconvertible"] = (
-            0 if feature == "handler" else None
-        )
+    elif feature == "wide_handler":
+        doc["rows"][0]["derivations"]["AVAL"]["unconvertible"] = 9223372036854775808
     elif feature in {"source_filter", "source_handler"}:
         payload = {"variable": "LB.LBSTRESN"}
         payload["filter" if feature == "source_filter" else "no_match"] = (
@@ -1504,6 +1501,62 @@ def test_numeric_syntax_error_precedes_provider(tmp_path):
         "REQ-0439",
         ("columns.N.derivation.compute.expr",),
     )
+    assert effects == []
+
+
+@pytest.mark.parametrize("replacement", [None, 0, "bad"])
+def test_handler_lowering_keeps_presence_and_authored_path(tmp_path, replacement):
+    """Explicit null remains a declared fallback and all entries retain planned order."""
+    from yamaa.io.polars import frame_from_values
+    from yamaa.models import TypedColumn
+
+    spec = compute_specification(tmp_path)
+    document = spec.model_dump(exclude_unset=True)
+    document["columns"][-1]["derivation"]["unconvertible"] = replacement
+    spec = type(spec).model_validate(document)
+    admit(spec)
+    source = frame_from_values(
+        (TypedColumn(name="ID", type="int"), TypedColumn(name="X", type="int")), []
+    )
+    plan = plan_execution(spec, {"SRC": source}, supported_operations=OPERATIONS)
+    request, _ = lower(plan, source)
+    assert request["unconvertible"] == [
+        {
+            "assignment_path": "columns.N.derivation.value.compute",
+            "path": "columns.N.derivation.unconvertible",
+            "value": {"missing": None}
+            if replacement is None
+            else {"int": "0"}
+            if replacement == 0
+            else {"str": "bad"},
+        }
+    ]
+
+
+def test_old_native_package_refuses_conversion_handlers_before_provider(
+    tmp_path, monkeypatch
+):
+    """A handler declaration cannot be dropped by a package without this capability."""
+    spec = compute_specification(tmp_path)
+    document = spec.model_dump(exclude_unset=True)
+    document["columns"][-1]["derivation"]["unconvertible"] = None
+    spec = type(spec).model_validate(document)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain", "numeric_compute"]}
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "native_unconvertible"
+    }
     assert effects == []
 
 
