@@ -1,0 +1,185 @@
+//! Synchronous R callback capability; all R access stays on the calling thread.
+use extendr_api::prelude::*;
+use yamaa_adapters::{
+    function_transport::{
+        CallbackError, FunctionTransportError as Error, PreparedInvocation, MAX_ERROR_BYTES,
+        MAX_REQUEST_BYTES,
+    },
+    scalar_bytes,
+};
+use yamaa_core::{table::ValueRef, value::Value};
+use yamaa_engine::function_invocation::{Argument, FunctionPort, HostError};
+
+/// Invoke an explicitly supplied R dispatcher after complete request admission.
+/// The package dispatcher owns the bound callback; labels are not artifact proof.
+#[extendr]
+fn invoke_function(request: Raw, dispatch: Function) -> List {
+    let run = || {
+        if request.len() > MAX_REQUEST_BYTES {
+            return Err(Error::RequestLimit);
+        }
+        let text = std::str::from_utf8(request.as_slice()).map_err(|_| Error::InvalidRequest)?;
+        let prepared = PreparedInvocation::parse(text)?;
+        if !prepared.host_names().all(host_name) {
+            return Err(Error::InvalidHostName);
+        }
+        prepared.invoke(&mut RPort { dispatch })
+    };
+    match run() {
+        Ok(value) => list!(value = value, error = NULL),
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
+/// Match the environment's ASCII R host-name policy, including reserved forms.
+fn host_name(name: &str) -> bool {
+    let b = name.as_bytes();
+    let start = match b.first() {
+        Some(c) if c.is_ascii_alphabetic() => true,
+        Some(b'.') => b.len() > 1 && !b[1].is_ascii_digit(),
+        _ => false,
+    };
+    start
+        && b.iter()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_'))
+        && name != "..."
+        && !(name.len() > 2
+            && name.starts_with("..")
+            && name[2..].bytes().all(|c| c.is_ascii_digit()))
+        && !matches!(
+            name,
+            "break"
+                | "else"
+                | "FALSE"
+                | "for"
+                | "function"
+                | "if"
+                | "Inf"
+                | "in"
+                | "NA"
+                | "NA_character_"
+                | "NA_complex_"
+                | "NA_integer_"
+                | "NA_real_"
+                | "NaN"
+                | "next"
+                | "NULL"
+                | "repeat"
+                | "TRUE"
+                | "while"
+        )
+}
+
+struct RPort {
+    dispatch: Function,
+}
+impl FunctionPort for RPort {
+    type Error = CallbackError;
+    /// Marshal owned byte scalars, call once through R_tryEval, and decode raw
+    /// result fields by position. Never inspect arbitrary R character pointers.
+    fn call(
+        &mut self,
+        arguments: &[Argument<'_>],
+    ) -> std::result::Result<Value, HostError<CallbackError>> {
+        let mut encoded = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let value = match argument.value {
+                ValueRef::Missing => Value::Missing,
+                ValueRef::Int(n) => Value::Int(n),
+                ValueRef::Float(n) => Value::Float(n),
+                ValueRef::Str(s) => Value::Str(s.into()),
+                ValueRef::Bool(b) => Value::Bool(b),
+                ValueRef::Date(d) => Value::Date(d),
+                ValueRef::DateTime(d) => Value::DateTime(d),
+            };
+            let value = scalar_bytes::encode(value).map_err(|_| internal())?;
+            encoded.push((
+                argument.name,
+                Robj::from(list!(
+                    tag = value.tag,
+                    payload = Raw::from_bytes(&value.payload)
+                )),
+            ));
+        }
+        let encoded = List::from_pairs(encoded);
+        let result = self
+            .dispatch
+            .call(pairlist!(encoded = encoded))
+            .map_err(|_| internal())?;
+        let result = result
+            .as_list()
+            .filter(|v| v.len() == 3)
+            .ok_or_else(internal)?;
+        let status = result
+            .elt(0)
+            .map_err(|_| internal())?
+            .as_integer()
+            .ok_or_else(internal)?;
+        let first = result.elt(1).map_err(|_| internal())?;
+        let second = result.elt(2).map_err(|_| internal())?;
+        match status {
+            0 => {
+                let tag = first.as_integer().ok_or_else(internal)?;
+                let payload = second.as_raw().ok_or_else(internal)?;
+                scalar_bytes::decode(tag, payload.as_slice()).map_err(|reason| {
+                    HostError::InvalidResult(CallbackError::Rejected {
+                        reason: reason.into(),
+                        returned: None,
+                    })
+                })
+            }
+            1 => {
+                let (class, class_cut) = detail(&first, "R condition")?;
+                let (message, message_cut) = detail(&second, "unavailable R condition message")?;
+                Err(HostError::Raised(CallbackError::Exception {
+                    class,
+                    message,
+                    truncated: class_cut || message_cut,
+                }))
+            }
+            2 => {
+                let (reason, _) = detail(&first, "a binding returned a value of no scalar type")?;
+                let (returned, _) = detail(&second, "unknown")?;
+                Err(HostError::InvalidResult(CallbackError::Rejected {
+                    reason,
+                    returned: Some(returned),
+                }))
+            }
+            3 => Err(HostError::Raised(CallbackError::Boundary(
+                Error::Interrupted,
+            ))),
+            4 => Err(HostError::Raised(CallbackError::Boundary(
+                Error::OutputLimit,
+            ))),
+            _ => Err(internal()),
+        }
+    }
+}
+
+/// Unexpected dispatcher failures are boundary errors, not repaired host results.
+fn internal() -> HostError<CallbackError> {
+    HostError::Raised(CallbackError::Boundary(Error::Internal))
+}
+
+/// Decode host detail bytes strictly and cap only at a Unicode scalar boundary.
+/// Invalid encodings retain a stable fallback; raw invalid text is never repaired.
+fn detail(
+    value: &Robj,
+    fallback: &str,
+) -> std::result::Result<(String, bool), HostError<CallbackError>> {
+    let bytes = value.as_raw().ok_or_else(internal)?;
+    let text = match std::str::from_utf8(bytes.as_slice()) {
+        Ok(text) => text,
+        Err(_) => return Ok((fallback.into(), false)),
+    };
+    let mut end = text.len().min(MAX_ERROR_BYTES);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    Ok((text[..end].into(), end < text.len()))
+}
+
+extendr_module! {
+    mod function_callback;
+    fn invoke_function;
+}

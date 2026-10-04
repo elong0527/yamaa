@@ -26,7 +26,7 @@ ALLOWED = {
         "pyo3",
         "pyo3-build-config",
     },
-    "yamaa-r": {"yamaa-engine", "yamaa-adapters", "extendr-api"},
+    "yamaa-r": {"yamaa-core", "yamaa-engine", "yamaa-adapters", "extendr-api"},
 }
 
 

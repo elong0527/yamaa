@@ -93,9 +93,66 @@ exception rendering, limits and temporal boundaries. Rust adapter tests exercise
 strict decoding, bounded output and fake-port panic containment. CI runs the same
 installed tests outside the checkout on Linux/macOS/Windows and Python 3.12/3.14.
 
-R callback integration remains next. R raw IPC already preserves all scalar
-values, but ordinary R integers/doubles cannot carry every i64 and R character
-strings cannot carry embedded NUL. Callback scalar admission needs an explicit
-lossless representation or explicit unsupported outcome; neither silent narrowing
-nor a false claim of full R callback parity is acceptable. The full environment,
-workflow, benchmark and release gates in #1585 remain open.
+## Installed R callbacks
+
+`yamaanative::invoke_function(request, callback)` accepts one explicit R function
+and the same function/1 request. It does not resolve callable names or execute
+source text. A package-owned dispatcher calls the function once with only the
+mapped arguments; extendr invokes that dispatcher through R_tryEval on the R
+thread. No R objects cross worker threads. Nested native calls are allowed.
+Native input, argument payloads, results and condition details cross as raw bytes;
+Rust never reads arbitrary R character pointers. R request encoding follows
+[R_SCALARS.md](R_SCALARS.md), including explicit Latin-1 and strict UTF-8 checks.
+
+| Logical value | R argument | Admitted R result |
+| --- | --- | --- |
+| missing | logical NA | primitive typed NA or nonfinite numeric scalar; nullable check still applies |
+| int | exact yamaa_int64 | same exact class or unclassed R integer |
+| str | exact yamaa_utf8 | same exact class or unclassed R character |
+| float | double | unclassed double |
+| bool | logical | recognized, then forbidden by shared result checks |
+| date | Date | exact Date class with one numeric/integer whole epoch day |
+| datetime | POSIXct/POSIXt, tzone UTC | same exact classes and one whole epoch second, explicit tzone UTC |
+
+Designated classes represent existing logical scalars, as clarified in REQ-0686;
+there is no generic wrapper admission. Every int/str argument has the same host
+class across the full range, including i64 extrema, NUL and empty text. Useful
+integer arithmetic and comparisons use the shared primitives. Extra attributes,
+subclasses, vectors, NULL and other classes are rejected. Date has only its class
+attribute; POSIXct has only its exact class vector and single UTC tzone attribute,
+in either order. Whole civil epochs within years 1..9999 fit binary64 exactly.
+No host timezone or decimal parser converts epochs. Collected temporal precision
+drops only during host argument encoding; returns have day/second precision.
+Temporal NA/nonfinite storage normalizes to missing after validating its class
+and scalar storage, before the logical nullable-result check.
+
+The shared request/result/output budgets also apply here. R host names follow
+the environment's ASCII identifier policy, excluding reserved words, `...` and
+`..` followed by digits. No callback effects occur before request admission.
+The native byte scalar codec caps returned text at 1 MiB; an oversized return
+reports an output resource failure after that single callback effect.
+
+A dispatcher catches ordinary R errors around the actual call, separately from
+result admission. Primary conditions become REQ-0701 with class/message UTF-8
+prefixes capped at 8,192 bytes each; truncated prefixes are marked. Secondary
+condition rendering/encoding failures use stable unavailable-detail fallbacks;
+invalid bytes are never repaired. A conditionMessage failure raised by base R
+before it signals the intended condition is itself the callback's primary error.
+Interrupt conditions are retained by the facade and re-signaled after Rust
+returns. Invalid result representations become REQ-0702, not call failures.
+Unexpected dispatcher structure errors and Rust unwinds become transport errors.
+All R errors are raised after the normal native return. No process-abort,
+allocator-exhaustion, callback timeout or host-allocation bound is promised.
+
+Source-installed tests outside the checkout replay all 42 shared invocation
+cases with actual R callbacks and exact traces. R's out-of-range forged integer
+carrier is a representation failure rather than Python's built-in bigint result;
+both produce REQ-0702. Additional tests exercise primitive return admission,
+NUL/Unicode/Latin-1, malformed encodings/classes, temporal extrema and precision,
+missing/nonfinite normalization, argument/result ownership after GC and mutation,
+caller process, nested calls, primary interrupts, secondary condition rendering,
+UTF-8 detail truncation, zero-effect request rejection, post-effect failures and
+subsequent-call recovery. Direct internal dispatcher tests also exercise malformed
+raw return admission. CI runs the source-installed tests on Linux and macOS.
+
+Full environment, workflow, benchmark and release gates in #1585 remain open.

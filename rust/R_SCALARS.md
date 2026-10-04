@@ -4,7 +4,8 @@ The optional yamaanative package provides designated scalar representations for
 existing logical int and str values. They close two host-storage gaps before R
 callbacks: R integer reserves its i32 minimum for NA and R double cannot represent
 every i64, while R character cannot contain embedded NUL. These classes do not
-add a logical type, reinterpret missing, or claim installed R callbacks yet.
+add a logical type or reinterpret missing. The installed R callback API now uses
+these designated representations; see [FUNCTION_TRANSPORT.md](FUNCTION_TRANSPORT.md).
 
 - `int64(x)` accepts one canonical decimal character value or a non-missing R
   integer and returns `yamaa_int64`. Its payload is one canonical decimal string.
@@ -64,6 +65,10 @@ Installed source-package tests cover i64 extrema, 2^53+1, the i32 NA collision,
 checked arithmetic, exact comparisons/conversions, NUL/Unicode/empty text,
 non-normalization, explicit R encodings, malformed UTF-8, forged classes, limits
 and ownership after garbage collection. Rust tests independently cover the byte
-codec and arithmetic facts. R callback integration will use designated scalar
-representations alongside REQ-0563 Date and UTC POSIXct; its result admission,
-condition translation, thread ownership and full workflow gates remain open.
+codec and arithmetic facts. Installed callbacks use designated scalar
+representations alongside REQ-0563 Date and UTC POSIXct. Temporal tags 5 and 6
+carry exact whole epoch days/seconds as eight little-endian binary64 bytes.
+All years 1..9999 fit exactly; invalid ranges, fractions and nonfinite raw epochs
+are rejected before conversion. Collected precision drops at host argument
+encoding, with day/second precision assigned on return. Environment activation
+and full workflow/release gates remain open.

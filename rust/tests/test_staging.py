@@ -48,6 +48,13 @@ class StagingTests(unittest.TestCase):
                     (destination / "inst/tables" / source.name).read_bytes(),
                     source.read_bytes(),
                 )
+            self.assertEqual(
+                (destination / "inst/function_invocation.tsv").read_bytes(),
+                (
+                    staging.WORKSPACE
+                    / "crates/yamaa-engine/tests/fixtures/function_invocation.tsv"
+                ).read_bytes(),
+            )
 
     def test_existing_destination_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
