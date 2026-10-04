@@ -143,6 +143,21 @@ benchmark, parametric variants.
    "carry a previous visit's change". Both pin previous-visit
    mechanics in ADLBC; check `schema-window-*` coverage, then merge
    if the difference is parametric.
+
+   > REVIEWED 2026-10-04 (benchmark-maintenance run) -- candidate
+   > REJECTED. The actual benchmark names are
+   > `adam-adlbc-row-window` and `adam-adlbc-window-chain` (the names
+   > above are stale). Contents verified against both specs: the
+   > difference is mechanical, not parametric. `window-chain` is the
+   > only benchmark in the suite whose `row_value` reads a derived
+   > column (PREV2 = the previous visit's CHG, read after CHG is
+   > complete for every row); neither `schema-window-functions` (all
+   > its `row_value` sources are input columns) nor
+   > `schema-window-intermediate-rank` (no `row_value` at all) covers
+   > this chained-lag pattern. `row-window` additionally pins
+   > multi-parameter isolation (ALB+BILI -> _ALB/_BILI with the window
+   > grouped by USUBJID+PARAMCD, so an _ALB row never reads a _BILI
+   > value). Merging would lose coverage; keep both benchmarks.
 4. **`adam-adae-severity-rank`** + **`adam-adae-worst-severity`** --
    "rank a subject's events by severity" vs "flag the worst-severity
    event per preferred term". Ranking subsumes worst-flagging;
