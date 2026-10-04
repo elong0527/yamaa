@@ -141,12 +141,41 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     row: usize,
     budget: &mut Budget,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let Expression::Collect { column, identifier } = &assignment.expression else {
+    let Expression::Collect {
+        column,
+        identifier,
+        filter,
+    } = &assignment.expression
+    else {
         unreachable!("only collected-source assignments use this service")
+    };
+    // Complete eligibility before reading values, including later predicate failures.
+    let mut retained = Vec::new();
+    let members = if let Some(filter) = filter {
+        retained
+            .try_reserve_exact(candidate.members.len())
+            .map_err(|_| Box::new(ExecutionError::Allocation))?;
+        budget.work(candidate.members.len(), 1)?;
+        for &source_row in &candidate.members {
+            let truth = filter
+                .evaluate(table, source_row, &[], budget.predicate())
+                .map_err(|error| match error.kind {
+                    yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                        Box::new(predicate_limit(limit))
+                    }
+                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                })?;
+            if truth == yamaa_core::predicate::Truth::True {
+                retained.push(source_row);
+            }
+        }
+        &retained
+    } else {
+        &candidate.members
     };
     let mut distinct = BTreeSet::new();
     let mut first = None;
-    for &source_row in &candidate.members {
+    for &source_row in members {
         let value = table.cell(source_row, *column).map_err(|error| {
             Box::new(ExecutionError::Cell {
                 path: assignment.path.clone(),

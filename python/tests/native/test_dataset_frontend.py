@@ -895,3 +895,103 @@ def test_root_filter_cannot_read_output_before_keys(tmp_path):
         "required_phase": "row_filter",
     }
     assert effects == []
+
+
+def source_filter_specification(tmp_path, predicate="VS.VSEVAL = 'Y'"):
+    """Filter one non-key source read in the standalone named benchmark."""
+
+    def mutate(document):
+        column = next(c for c in document["columns"] if c["name"] == "VSSTRESN")
+        column["derivation"] = {
+            "source": {"variable": "VS.VSSTRESN", "filter": predicate}
+        }
+
+    return numbering_specification(tmp_path, mutate)
+
+
+def test_source_filter_lowers_source_scope_and_runtime_owner(tmp_path):
+    """Reading eligibility uses source fields and the owning source operation path."""
+    spec = source_filter_specification(tmp_path)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS),
+        sources["VS"].table,
+    )
+    assert error is None
+    reading = next(c for c in request["columns"] if c["column"] == 6)["expression"][
+        "collect"
+    ]
+    assert reading["identifier"] == "VS.VSSTRESN"
+    assert reading["filter"]["path"] == "columns.VSSTRESN.derivation.source"
+    index = next(
+        i for i, c in enumerate(sources["VS"].table.columns) if c.name == "VSEVAL"
+    )
+    assert reading["filter"]["bindings"] == [
+        {"name": "VS.VSEVAL", "read": {"source": index}}
+    ]
+
+
+@pytest.mark.parametrize("predicate", ["VSEVAL = 'Y'", "OTHER.VSEVAL = 'Y'"])
+def test_source_filter_scope_errors_precede_provider(tmp_path, predicate):
+    """Source selection never reads output values or fields from another dataset."""
+    spec = source_filter_specification(tmp_path, predicate)
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "failure"
+    assert [(d.condition, d.requirement) for d in actual.result.diagnostics] == [
+        ("unknown_field", "REQ-0132")
+    ]
+    assert effects == []
+
+
+def test_old_native_package_refuses_source_filter_before_provider(
+    tmp_path, monkeypatch
+):
+    """Root/row filters do not imply eligibility inside collected source reads."""
+    spec = source_filter_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": [
+                        "key_grain",
+                        "window_numbering",
+                        "root_filter",
+                        "row_filter",
+                    ],
+                }
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {f.operation for f in actual.result.features} == {"native_source_filter"}
+    assert effects == []
+
+
+@pytest.mark.parametrize("predicate", ["TRUE", "("])
+def test_output_read_rejects_filter_before_parsing_predicate(tmp_path, predicate):
+    """A completed output value has no source records to filter, even with invalid syntax."""
+
+    def mutate(document):
+        """Replace a source read with an already completed output key."""
+        next(c for c in document["columns"] if c["name"] == "VSSTRESN")[
+            "derivation"
+        ] = {"source": {"variable": "VISITN", "filter": predicate}}
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "failure"
+    assert [(d.condition, d.requirement) for d in actual.result.diagnostics] == [
+        ("prohibited_construct", "REQ-0148")
+    ]
+    assert effects == []

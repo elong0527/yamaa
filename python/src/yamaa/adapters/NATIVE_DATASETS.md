@@ -69,6 +69,16 @@ the existing planning/admission diagnostics. Key names remain associated with
 their values regardless of identity order. This path requires `key_grain` native
 capability before provider effects; it never calls the reference key constructor.
 
+A non-key column can use `source: {variable: SRC.V, filter: predicate}` to narrow
+its feeding records. `source_filter` is required before provider effects. The
+predicate binds only qualified fields of the read's own source (REQ-0132), finishes
+for all feeders before reading donor values, and retains the output row even when
+none qualifies. False/unknown rows do not contribute values. Distinct-value counts,
+conversion and diagnostics follow the existing collected-read lifecycle; runtime
+predicate failures name the source operation and retain their primitive requirement.
+Filters on keys, explicit record/group templates, ordered source choices and
+source handlers remain outside this slice.
+
 A root `filter` in this mode additionally requires `root_filter` before source
 access. It reads qualified base-source fields only, retaining true rows and
 omitting false/unknown rows before any key conversion. Every predicate evaluation
@@ -136,7 +146,7 @@ REQ-0322 with its exact count and declared partition keys, including missing key
 or the empty global identity. Filters use the existing `window_filter` gate.
 Other comparable baseline types remain explicitly unsupported in this slice.
 
-Source-selection filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
+Ordered source selection, portable regex calls, additional expression operations, source handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
 multiple sources, intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.

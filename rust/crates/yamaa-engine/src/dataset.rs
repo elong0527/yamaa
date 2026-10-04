@@ -35,6 +35,7 @@ pub enum Expression {
     Collect {
         column: usize,
         identifier: String,
+        filter: Option<BoundPredicate>,
     },
     Column(usize),
     Reduce {
@@ -206,12 +207,21 @@ fn validate_assignment(
                 }
             }
         }
-        Expression::Collect { column, identifier } => {
+        Expression::Collect {
+            column,
+            identifier,
+            filter,
+        } => {
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
             }
             if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
                 return Err(PlanError::InvalidKeyMode);
+            }
+            if let Some(filter) = filter {
+                filter
+                    .validate(source.columns().len(), &[], false)
+                    .map_err(PlanError::Filter)?;
             }
         }
         Expression::Reduce { column, text, .. } => {

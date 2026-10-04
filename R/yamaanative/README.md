@@ -244,3 +244,11 @@ It evaluates all source rows before any key conversion, retains only true rows
 and keeps original row coordinates for subsequent collected reads. False/unknown
 rows cannot contribute conflicting values. Shared raw fixtures cover this scope,
 a predicate failure before a bad key, complete exclusion and empty-input behavior.
+
+`source_filter` adds a source-only predicate to a collected non-key reading.
+It narrows that output row's feeding records after key construction and root
+filtering. Every eligibility predicate finishes before donor values are read;
+only true records contribute distinct present values. No qualifying value returns
+missing without removing the output row. Shared fixtures retain exact conflicts,
+primitive condition provenance and empty-input behavior. Keys, record/group
+assignments, ordered choice and handlers are outside this filtered-read slice.
