@@ -155,7 +155,7 @@ def test_the_committed_bmi_formula_reproduces_its_committed_doubles() -> None:
         ("GREATEST(1, 2, 3)", 3),
         ("LEAST(1, 2, 3)", 1),
         ("GREATEST(1, 2.5)", 2.5),
-        # REQ-0424: int when every argument is int, otherwise float — even
+        # REQ-0424: int when every argument is int, otherwise float - even
         # when the selected value itself is an int.
         ("COALESCE(3, 4.5)", 3.0),
         ("COALESCE(3, 4)", 3),
