@@ -81,3 +81,10 @@ values seven/eight. A false predicate skips all conversion; an incompatible
 predicate fails at `filter` before any bad key, and empty input skips evaluation.
 Expected outcomes retain native requirement/operand-route fields; the Python
 public report separately preserves its reference wrapper's omitted requirement.
+
+Five `source_filter_*` cases use independent text/int PyArrow inputs and literal
+expected outcomes. Filtering retains output identities 2 then 1, selects 7 from
+repeated eligible readings and excludes conflicting 8. An empty selection leaves
+the output row missing; selecting every record reports exactly two distinct values.
+Predicate errors name the source operation, retain primitive requirements and
+carry no output identity; empty input skips evaluation. No evaluator authors truth.

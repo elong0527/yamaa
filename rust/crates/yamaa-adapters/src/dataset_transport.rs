@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -195,6 +195,8 @@ impl Window {
 struct CollectedSource {
     column: usize,
     identifier: String,
+    #[serde(default)]
+    filter: Option<Predicate>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -457,6 +459,7 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                     dataset::Expression::Collect {
                         column: source.column,
                         identifier: source.identifier,
+                        filter: source.filter.map(Predicate::prepare).transpose()?,
                     }
                 }
                 Expression::Column(column) => dataset::Expression::Column(column),

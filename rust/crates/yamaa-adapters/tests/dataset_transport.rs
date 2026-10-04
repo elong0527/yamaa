@@ -182,6 +182,10 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
             "root-filter-empty.arrow" => {
                 include_bytes!("fixtures/datasets/root-filter-empty.arrow")
             }
+            "source-filter.arrow" => include_bytes!("fixtures/datasets/source-filter.arrow"),
+            "source-filter-empty.arrow" => {
+                include_bytes!("fixtures/datasets/source-filter-empty.arrow")
+            }
             other => panic!("unknown fixture {other}"),
         };
         let response = execute_dataset(&case["request"].to_string(), input).unwrap();
@@ -226,7 +230,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -544,6 +548,28 @@ fn baseline_requests_validate_scope_before_source_access() {
                 Err(Error::InvalidPlan)
             ),
             "{scenario}"
+        );
+    }
+}
+
+/// Collected-source eligibility is source-only and cannot be bound to incomplete outputs.
+#[test]
+fn collected_filters_reject_output_and_unknown_source_bindings_before_ipc() {
+    let cases: Value =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let valid = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["case"] == "source_filter_retains_output_rows")
+        .unwrap()["request"]
+        .clone();
+    for read in [json!({"column":0}), json!({"source":99})] {
+        let mut invalid = valid.clone();
+        invalid["columns"][0]["expression"]["collect"]["filter"]["bindings"][0]["read"] = read;
+        assert_eq!(
+            execute_dataset(&invalid.to_string(), b"not IPC").err(),
+            Some(Error::InvalidPlan)
         );
     }
 }

@@ -2134,6 +2134,7 @@ fn collect(column: usize) -> Expression {
     Expression::Collect {
         column,
         identifier: format!("SRC.C{column}"),
+        filter: None,
     }
 }
 /// Converted identity collapses records in first appearance; source readings omit missing.
@@ -2542,6 +2543,7 @@ fn numbering_with_filter(
             Expression::Collect {
                 column: 1,
                 identifier: "SRC.G".into(),
+                filter: None,
             },
         ),
         assign(
@@ -2549,6 +2551,7 @@ fn numbering_with_filter(
             Expression::Collect {
                 column: 2,
                 identifier: "SRC.V".into(),
+                filter: None,
             },
         ),
     ];
@@ -3566,5 +3569,215 @@ fn root_filter_completes_before_key_failures_and_recovers() {
     assert!(matches!(
         root_filtered_plan(&source, positive(Read::Column(0))),
         Err(PlanError::Filter(BindingError::UnavailableColumn))
+    ));
+}
+
+/// Admit a source-only filter inside one collected non-key reading.
+fn selected_source_plan(source: &Table, predicate: Filter) -> Result<DatasetPlan, PlanError> {
+    DatasetPlan::new(
+        source.schema.clone(),
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Str)]),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![assign(
+            1,
+            Expression::Collect {
+                column: 1,
+                identifier: "SRC.V".into(),
+                filter: Some(predicate),
+            },
+        )],
+        vec![0],
+        vec![],
+    )
+}
+
+/// Source filters retain output keys, exclude conflicting values and finish before reads.
+#[test]
+fn selected_sources_narrow_feeders_without_dropping_rows() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Str),
+            ("V", ColumnType::Str),
+            ("KEEP", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Str("02".into()),
+                Value::Str("seven".into()),
+                Value::Int(1),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Str("eight".into()),
+                Value::Int(0),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Str("seven".into()),
+                Value::Int(1),
+            ],
+            vec![
+                Value::Str("1".into()),
+                Value::Str("nine".into()),
+                Value::Missing,
+            ],
+        ],
+    );
+    let result = selected_source_plan(&source, positive(Read::Source(2)))
+        .unwrap()
+        .execute(&source, limits())
+        .unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![Value::Int(2), Value::Str("seven".into())],
+            vec![Value::Int(1), Value::Missing]
+        ]
+    );
+    assert_eq!(
+        *source.reads.borrow(),
+        vec![
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (3, 0),
+            (0, 2),
+            (1, 2),
+            (2, 2),
+            (0, 1),
+            (2, 1),
+            (3, 2)
+        ]
+    );
+    let excluded = selected_source_plan(&source, filter(Node::Boolean(false), vec![]))
+        .unwrap()
+        .execute(&source, limits())
+        .unwrap();
+    assert_eq!(
+        excluded.dataset.rows(),
+        &[
+            vec![Value::Int(2), Value::Missing],
+            vec![Value::Int(1), Value::Missing]
+        ]
+    );
+    assert!(matches!(
+        *selected_source_plan(&source, filter(Node::Boolean(true), vec![]))
+            .unwrap()
+            .execute(&source, limits())
+            .unwrap_err(),
+        ExecutionError::MultipleValues { value_count: 2, .. }
+    ));
+    assert!(matches!(
+        selected_source_plan(&source, positive(Read::Column(0))),
+        Err(PlanError::Filter(BindingError::UnavailableColumn))
+    ));
+}
+
+/// All key conversions precede source predicates; empty inputs do not evaluate them.
+#[test]
+fn selected_source_filter_follows_keys_and_reuses_fresh_limits() {
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Str),
+            ("V", ColumnType::Str),
+            ("KEEP", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Str("2".into()),
+                Value::Str("seven".into()),
+                Value::Int(1),
+            ],
+            vec![
+                Value::Str("bad".into()),
+                Value::Str("seven".into()),
+                Value::Int(1),
+            ],
+        ],
+    );
+    let plan = selected_source_plan(&source, positive(Read::Source(2))).unwrap();
+    source.fail = Some((0, 2));
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Conversion { identity: None, .. }
+    ));
+    assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
+    source.fail = None;
+    source.rows[1][0] = Value::Str("2".into());
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 1,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit { .. }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits())
+            .unwrap()
+            .dataset
+            .rows()
+            .len(),
+        1
+    );
+    source.rows.clear();
+    assert!(plan
+        .execute(&source, limits())
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+}
+
+/// A later eligibility condition outranks an earlier donor access failure.
+#[test]
+fn selected_source_finishes_predicates_before_any_donor_access() {
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("P", ColumnType::Str),
+        ],
+        vec![
+            vec![
+                Value::Int(1),
+                Value::Str("unread".into()),
+                Value::Str("%".into()),
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("unread".into()),
+                Value::Str("!".into()),
+            ],
+        ],
+    );
+    source.fail = Some((0, 1));
+    let predicate = filter(
+        Node::Like {
+            value: Scalar::Literal(Value::Str("x".into())),
+            pattern: Scalar::Identifier("P".into()),
+            escape: Some('!'),
+            negated: false,
+        },
+        vec![binding("P", Read::Source(2))],
+    );
+    let plan = selected_source_plan(&source, predicate).unwrap();
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Predicate { source_row: 1, .. }
+    ));
+    assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0), (0, 2), (1, 2)]);
+    source.rows[1][2] = Value::Str("%".into());
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Cell { source_row: 0, .. }
     ));
 }

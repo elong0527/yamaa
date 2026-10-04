@@ -81,7 +81,7 @@ def admit(specification):
         if source.schema_path is not None:
             reject("source_schema", f"input.{name}.schema")
 
-    def expression(declaration, path, grouped):
+    def expression(declaration, path, grouped, allow_source_filter=False):
         """Admit syntax without evaluating literals or converting output values."""
         if "unconvertible" in declaration.model_fields_set:
             reject("unconvertible", f"{path}.unconvertible")
@@ -94,7 +94,50 @@ def admit(specification):
             elif not (payload is None or type(payload) in (str, bool, int, float)):
                 reject("literal_representation", path)
         elif operation == "source":
-            if not isinstance(payload, str) and not (
+            if (
+                isinstance(payload, dict)
+                and set(payload) == {"variable", "filter"}
+                and isinstance(payload["variable"], str)
+                and isinstance(payload["filter"], str)
+            ):
+                if not allow_source_filter:
+                    reject("source_filter_scope", path)
+                try:
+                    variable = payload["variable"]
+                    if "." not in variable:
+                        diagnostics.append(
+                            ExecutionDiagnostic(
+                                phase="validation",
+                                condition="prohibited_construct",
+                                spec_paths=(f"{path}.filter",),
+                                requirement="REQ-0148",
+                                context={"identifier": variable},
+                            )
+                        )
+                    else:
+                        ast = _native_predicate_plan.admit(
+                            payload["filter"], f"{path}.filter"
+                        )
+                        dataset = variable.split(".", 1)[0]
+                        for name in predicate_identifiers(ast):
+                            if "." not in name or name.split(".", 1)[0] != dataset:
+                                diagnostics.append(
+                                    ExecutionDiagnostic(
+                                        phase="validation",
+                                        condition="unknown_field",
+                                        spec_paths=(f"{path}.filter",),
+                                        requirement="REQ-0132",
+                                        context={
+                                            "identifier": name,
+                                            "dataset": dataset,
+                                        },
+                                    )
+                                )
+                except ExecutionPlanningError as error:
+                    diagnostics.extend(error.diagnostics)
+                except UnsupportedPlanningError as error:
+                    unsupported.extend(error.features)
+            elif not isinstance(payload, str) and not (
                 isinstance(payload, dict)
                 and set(payload) == {"variable"}
                 and isinstance(payload["variable"], str)
@@ -234,7 +277,13 @@ def admit(specification):
                 and column.derivation.value.operation in WINDOWS
             ):
                 reject("window_key", f"columns.{column.name}.derivation")
-            expression(column.derivation, f"columns.{column.name}.derivation", False)
+            expression(
+                column.derivation,
+                f"columns.{column.name}.derivation",
+                False,
+                allow_source_filter=not specification.rows
+                and column.name not in specification.keys,
+            )
     for index, declaration in enumerate(specification.verifications or ()):
         operation = declaration.operation
         payload = declaration.root[operation]
@@ -334,6 +383,15 @@ def lower(plan, source):
                 if collect and "." in name
                 else reference(name)
             )
+            if isinstance(value, dict) and value.get("filter") is not None:
+                text = value["filter"]
+                expression["collect"]["filter"] = _native_predicate_plan.lower(
+                    parse_predicate(text),
+                    text,
+                    derived.operation_path,
+                    reference,
+                    literal,
+                )
         elif op in WINDOWS:
             window = value.get("window", {})
             tag = "number" if op in NUMBERING else "window"

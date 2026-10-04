@@ -14,7 +14,7 @@ Python only; the explicit ADLB prototype below is not a qualified full backend.
 | Typed numeric evaluation: REQ-0426-0427, 0429, 0438, 0443-0444 | Typed literal/identifier/unary/binary nodes, fake resolver port, ordered evaluation, exact failure provenance; 22 shared evaluation/trace vectors plus 49 arithmetic cases through the plan | No dataset execution | No dataset execution | Host diagnostic transport and lifecycle handlers (steps 4, 7) |
 | Numeric syntax: REQ-0413-0415, 0439-0441 | Bounded arena parser; all 44 shared grammar cases, closed function/arity/reserved-word checks, diagnostic positions and deterministic Python comparisons | No dataset execution | No dataset execution | Full function execution and lifecycle diagnostics (steps 4, 7) |
 | Numeric compilation: REQ-0413-0415, 0426-0427, 0434, 0438-0444 | Immutable supported-subset plans, deferred exact literal failures, source spans, unsupported preflight and static resolution budgets; 22 literal cases plus arithmetic/trace fixtures through compilation | No dataset execution | No dataset execution | Default math policy, host dispatch and full lifecycle (steps 4, 7) |
-| Typed predicates: REQ-0159, 0166-0169, 0171-0177, 0189-0191 | Immutable bounded arena, three-valued truth, promoted mixed comparisons, null/IN/BETWEEN/Unicode LIKE and opaque resolver failures; 20 shared reference truth/trace cases and 7,225 independent LIKE comparisons | Root/row-template filters and assert/implies checks through normalized-spec frontend | Typed dataset/1 root/row filters and predicate checks | Shared syntax/regex, source-selection filters and full installed integration; see [PREDICATES.md](PREDICATES.md) |
+| Typed predicates: REQ-0159, 0166-0169, 0171-0177, 0189-0191 | Immutable bounded arena, three-valued truth, promoted mixed comparisons, null/IN/BETWEEN/Unicode LIKE and opaque resolver failures; 20 shared reference truth/trace cases and 7,225 independent LIKE comparisons | Root/row-template/source filters and assert/implies checks through normalized-spec frontend | Typed dataset/1 root/row/source filters and predicate checks | Shared syntax/regex, ordered source selection and full installed integration; see [PREDICATES.md](PREDICATES.md) |
 | Numeric selection: REQ-0415-0416, 0424-0427 | GREATEST, LEAST, NULLIF and COALESCE in primitives/typed evaluation/compilation; 51 shared value, promotion, missingness and eager-resolution cases | No dataset execution | No dataset execution | Host dispatch and full lifecycle (steps 4, 7) |
 | Integral-valued numeric functions: REQ-0415, 0423, 0426-0427 | CEIL, FLOOR and TRUNC in primitives/typed evaluation/compilation; 100 shared cases with exact float bits, full-range i64, subnormals, signed zero and failures; standard-library differential tests across every finite exponent | No dataset execution | No dataset execution | Host dispatch and full lifecycle (steps 4, 7) |
 | Square root: REQ-0422, 0426-0427, 0431 | SQRT primitive, typed evaluation and compilation; 32 shared exact-value/domain/failure cases and 110,188 bit-exact Python comparisons in native CI; pinned no_std libm | No dataset execution | No dataset execution | Default-policy EXP/LN/POWER and host dispatch (steps 4, 7) |
@@ -213,6 +213,15 @@ read excluded records. Installed comparisons cover eager predicate failures,
 conversion priority, false/unknown exclusion and empty input; shared raw cases
 replay through Rust/Python/R. Root filtering requires its own capability.
 
+Collected non-key source reads can narrow feeding records with a source-only
+predicate (REQ-0131/0132). All eligibility checks for a reading finish before donor
+access. Excluded records cannot introduce distinct values, and missing selections
+retain their output row. Source predicates execute after all key conversions;
+root and source filters therefore preserve different failure order. Shared fixtures
+and installed comparisons cover missing selections, conflicts, conversion, errors
+and root-filter intersection. Ordered choices, handlers and broader source scopes
+remain unsupported.
+
 The key-grain column phase also supports row numbering and competition/
 dense rank over completed output columns (REQ-0293/0301/0303/0340). Partitioning,
 exact typed ordering, explicit null placement and stable construction-order tie
@@ -255,7 +264,7 @@ not YAML compilation, installed host dispatch, source discovery or release
 qualification. No capability flag or benchmark execution manifest changes.
 
 A future compiler must reject the entire run before execution if it requires
-unsupported syntax: handlers, callbacks, source-selection filters, regex, other windows, joins, multiple sources, other expression operations, column checks,
+unsupported syntax: handlers, callbacks, ordered source selection, regex, other windows, joins, multiple sources, other expression operations, column checks,
 warning checks, grouped/filtered/fractional row counts or file publication.
 The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
 Rust specification compiler and the remaining benchmark gates are still open.

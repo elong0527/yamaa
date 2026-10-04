@@ -182,6 +182,70 @@ class InstalledSpecification(unittest.TestCase):
                             [(2, "seven"), (1, "eight")],
                         )
 
+    def test_source_filters_select_feeders_without_removing_output_rows(self):
+        """Source eligibility follows keys, precedes value collection and retains failure context."""
+        columns = tuple(
+            TypedColumn(name=n, type=t)
+            for n, t in [("ID", "str"), ("V", "str"), ("KEEP", "int")]
+        )
+        original = [["02", "7", 1], ["2", "8", 0], ["2", "7", 1], ["1", "9", None]]
+        for scenario in [
+            "ordinary",
+            "none",
+            "multiple",
+            "predicate",
+            "convert",
+            "key_first",
+            "root",
+        ]:
+            rows = copy.deepcopy(original)
+            predicate = {
+                "none": "FALSE",
+                "multiple": "TRUE",
+                "predicate": "SRC.KEEP > 'bad'",
+                "key_first": "SRC.KEEP > 'bad'",
+            }.get(scenario, "SRC.KEEP > 0")
+            if scenario == "convert":
+                rows[0][1] = rows[2][1] = "bad"
+            if scenario == "key_first":
+                rows[-1][0] = "bad"
+            document = {
+                "schema_version": "1.0",
+                "domain": "SRCFILTER",
+                "keys": ["ID"],
+                "base": "SRC",
+                "input": {"SRC": "source.csv"},
+                "output": {"path": "out.csv", "columns": ["ID", "V"]},
+                "columns": [
+                    {
+                        "name": "ID",
+                        "type": "int",
+                        "label": "ID",
+                        "derivation": "SRC.ID",
+                    },
+                    {
+                        "name": "V",
+                        "type": "int",
+                        "label": "V",
+                        "derivation": {
+                            "source": {"variable": "SRC.V", "filter": predicate}
+                        },
+                    },
+                ],
+            }
+            if scenario == "root":
+                document["filter"] = "SRC.V <> '7'"
+            for data in [rows, []]:
+                with self.subTest(scenario=scenario, empty=not data):
+                    actual = self.compare(
+                        self.load(document), {"SRC": frame_from_values(columns, data)}
+                    )
+                    if data and scenario in {"ordinary", "none", "root"}:
+                        self.assertEqual(
+                            actual.result.table.frame.rows(),
+                            [(2, 7 if scenario == "ordinary" else None), (1, None)],
+                        )
+
     def test_numbering_directions_ties_empty_and_conversion(self):
         """Compare authored numbering variants, preserving complete result and failure evidence."""
         case = ROOT / "specification-windows"

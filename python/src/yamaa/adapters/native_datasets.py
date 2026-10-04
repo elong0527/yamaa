@@ -297,6 +297,20 @@ def execute_with_source_provider(
         if column.derivation is not None
         and column.derivation.value.operation == "baseline_flag"
     )
+    required.extend(
+        (
+            "source_filter",
+            UnsupportedFeature(
+                operation="native_source_filter",
+                spec_path=f"columns.{column.name}.derivation.source.filter",
+            ),
+        )
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation == "source"
+        and isinstance(column.derivation.value.root["source"], dict)
+        and column.derivation.value.root["source"].get("filter") is not None
+    )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
