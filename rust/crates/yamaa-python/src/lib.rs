@@ -1,6 +1,7 @@
 //! Optional Python installation probe; this is not an execution backend.
 use pyo3::prelude::*;
 mod function_callback;
+mod temporal_result;
 use pyo3::types::PyDict;
 
 /// Round-trip a versioned scalar envelope through normalized core values.
@@ -71,6 +72,7 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 #[pymodule]
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
     module.add_function(wrap_pyfunction!(
         function_callback::invoke_function,

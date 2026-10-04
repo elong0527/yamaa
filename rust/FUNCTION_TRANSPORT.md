@@ -82,9 +82,8 @@ survive. Nonfinite floats normalize to missing before result validation. Numeric
 and temporal subclasses and arbitrary returned objects/collections are rejected;
 text subclasses follow the reference's str acceptance. Lone surrogates are not
 valid UTF-8. Collected temporal precision drops at argument encoding; a returned
-built-in date has day precision and datetime has second precision. The reference's
-DateValue/DateTimeValue wrapper-result extension is not yet exposed by this native
-API; facade compatibility remains a tracked integration gate.
+built-in date has day precision and datetime has second precision. The raw API rejects arbitrary Python model objects. The optional facade below
+bridges the reference's designated temporal model results without losing precision.
 
 Installed wheel and source tests replay all 42 independently authored invocation
 cases through real callbacks, and separately exercise retained arguments, owned
@@ -92,6 +91,42 @@ results, repeated failures, nested calls, caller-thread identity, cancellation,
 exception rendering, limits and temporal boundaries. Rust adapter tests exercise
 strict decoding, bounded output and fake-port panic containment. CI runs the same
 installed tests outside the checkout on Linux/macOS/Windows and Python 3.12/3.14.
+
+## Python temporal result facade
+
+`yamaa.adapters.native_functions.invoke_function(request, callback)` is an
+explicit optional facade over the same native API. It maps only the reference's
+known DateValue/DateTimeValue result models, including their subtypes, into a
+private immutable native temporal representation. All other returned objects go
+through the existing native admission unchanged; there is no duck typing or
+general wrapper-to-value conversion. The native extension does not import the
+reference Python package.
+
+The bridge retains all civil fields and collected precision. It never converts
+these models through builtin dates/datetimes, which would erase metadata. Exact
+integer field storage (excluding bool), tuple shape, calendar/time ranges and
+closed precision vocabulary are checked again in Rust. Even a forged Pydantic
+model constructed without validation cannot introduce an invalid core value.
+Malformed known representations become REQ-0702 at result admission, rather than
+being misreported as callback exceptions. Exceptions from the actual callback
+retain REQ-0701, and BaseException control signals still propagate. The callback
+runs once; extraction failure never causes a retry. The facade requires a native
+version with this private bridge and checks that capability before callback effects.
+
+The private native carrier exposes no constructor, mutators or subclassing; it
+owns either a validated core temporal or a fixed invalid-representation marker.
+It is not a generic object container. Argument encoding is unchanged: temporal
+arguments become builtins and drop collected precision at that boundary. Builtin
+results still acquire full day/second precision. Known temporal model results
+retain their supplied precision, matching the Python reference extension.
+
+Installed wheel/source tests compare independent temporal truth and the actual
+reference BoundFunction, explicitly checking precision because model equality
+ignores it. Cases cover all precision variants, years 1/9999, known subtypes,
+forged models, wrong declared result types, unknown objects, failing field access,
+primary callback errors, control signals, immutable ownership and post-failure
+recovery. The facade is packaged in a non-editable yamaa wheel for these tests.
+It does not select a backend, activate environments or authorize artifact code.
 
 ## Installed R callbacks
 

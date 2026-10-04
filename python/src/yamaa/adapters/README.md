@@ -75,3 +75,17 @@ The command checks both committed goldens and reference observations. A future
 adapter can call `read_report` and `compare_reports` directly. A reference report
 is differential evidence, not normative expected truth; disagreement must be
 resolved against rules and independent edge cases.
+
+## Optional native callback facade
+
+`native_functions.invoke_function(request, callback)` explicitly invokes the
+optional Rust function/1 API. Known DateValue/DateTimeValue results (including
+subtypes) retain collected precision through an immutable native temporal
+representation; ordinary builtin temporal results retain day/second precision.
+All other results follow native exact-type admission. Arbitrary wrappers are
+not inspected or coerced. Invalid known model fields are result failures, not
+callback exceptions, and callback effects are never replayed. The installed
+native extension must include the private temporal bridge; an incompatible
+extension fails before callback effects. No fallback or default-backend dispatch
+is introduced. See `rust/FUNCTION_TRANSPORT.md` for the protocol and remaining
+activation, workflow and release gates.

@@ -83,10 +83,12 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/tables" tables
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_tables.py" installed_tables.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_functions.py" installed_functions.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_temporal_results.py" installed_temporal_results.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv" function_invocation.tsv
           python installed_python.py
           python installed_tables.py
           python installed_functions.py
+          python installed_temporal_results.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -95,6 +97,7 @@ jobs:
           python installed_python.py
           python installed_tables.py
           python installed_functions.py
+          python installed_temporal_results.py
       - name: Preserve distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
