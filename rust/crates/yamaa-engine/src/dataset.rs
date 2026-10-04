@@ -3,8 +3,11 @@
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
+#[path = "dataset_conversion.rs"]
+mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
+pub use conversion::ConversionHandler;
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]
@@ -24,7 +27,7 @@ use crate::{
     table_grouping::{partition, GroupingError},
     table_reduction::{reduce_column, TableReductionError},
 };
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
 use core::convert::Infallible;
 use yamaa_core::{
     conversion::{convert, ConversionError},
@@ -196,6 +199,7 @@ pub enum PlanError {
     InvalidSourceOrder,
     InvalidLookup,
     InvalidIntermediate,
+    InvalidConversionHandler,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -209,6 +213,8 @@ pub struct DatasetPlan {
     columns: Vec<Assignment>,
     keys: Vec<usize>,
     verifications: Vec<Verification>,
+    conversion_handlers: Vec<ConversionHandler>,
+    conversion_sites: BTreeMap<String, usize>,
 }
 
 /// Validate nonempty, unique, bound column lists without reading table cells.
@@ -541,6 +547,8 @@ impl DatasetPlan {
             columns,
             keys,
             verifications,
+            conversion_handlers: Vec::new(),
+            conversion_sites: BTreeMap::new(),
         })
     }
 }
@@ -748,7 +756,15 @@ fn evaluate<T: TableAccess + ?Sized>(
     if let Expression::Intermediate { index, column } = assignment.expression {
         state.budget.work(1, 1)?;
         let value = intermediates::read(index, column, assignment, candidate, plan, row, state)?;
-        return finish(value, assignment, candidate, plan, row, state.budget);
+        return finish(
+            value,
+            assignment,
+            candidate,
+            plan,
+            row,
+            state.budget,
+            state.handlers,
+        );
     }
     let EvaluationState {
         budget,
@@ -836,7 +852,7 @@ fn evaluate<T: TableAccess + ?Sized>(
             }
         },
     };
-    finish(value, assignment, candidate, plan, row, budget)
+    finish(value, assignment, candidate, plan, row, budget, handlers)
 }
 
 /// Convert and account one completed result before publishing its column slot.
@@ -847,17 +863,12 @@ fn finish<E>(
     plan: &DatasetPlan,
     row: usize,
     budget: &mut Budget,
+    handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let converted = match convert(&value, plan.output.columns()[assignment.column].kind) {
         Ok(value) => value,
         Err(error) => {
-            let identity = failure_identity(candidate, &plan.keys, row, budget)?;
-            return Err(Box::new(ExecutionError::Conversion {
-                path: alloc::format!("columns.{}", plan.output.columns()[assignment.column].name),
-                output_row: row,
-                error,
-                identity,
-            }));
+            conversion::recover(error, assignment, candidate, plan, row, budget, handlers)?
         }
     };
     budget.value(&converted)?;
@@ -866,7 +877,7 @@ fn finish<E>(
 
 impl DatasetPlan {
     /// Execute only the admitted scope, returning no accepted table on any failure.
-    /// Source access errors remain errors. No handlers, callbacks, joins,
+    /// Source access errors remain errors. No undeclared handlers, callbacks, joins,
     /// file publication or fallback are implicit.
     pub fn execute<T: TableAccess + ?Sized>(
         &self,
@@ -893,6 +904,9 @@ impl DatasetPlan {
         limits: Limits,
     ) -> ExecutionAttempt<T::Error> {
         let mut handlers = HandlerCounter::default();
+        for declaration in &self.conversion_handlers {
+            handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
+        }
         let result = self.execute_inner(table, secondary, limits, &mut handlers);
         ExecutionAttempt {
             result,
@@ -1023,7 +1037,15 @@ impl DatasetPlan {
                 };
                 let candidate = &mut candidates[row];
                 candidate.values[assignment.column] = if let Some(value) = number {
-                    finish(value, assignment, candidate, self, row, &mut budget)?
+                    finish(
+                        value,
+                        assignment,
+                        candidate,
+                        self,
+                        row,
+                        &mut budget,
+                        handlers,
+                    )?
                 } else {
                     evaluate(
                         table,

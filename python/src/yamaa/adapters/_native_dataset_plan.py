@@ -160,7 +160,13 @@ def admit(specification):
     ):
         """Admit syntax without evaluating literals or converting output values."""
         if "unconvertible" in declaration.model_fields_set:
-            reject("unconvertible", f"{path}.unconvertible")
+            replacement = declaration.unconvertible
+            if type(replacement) is int and not INT64_MIN <= replacement <= INT64_MAX:
+                reject("wide_integer_literal", f"{path}.unconvertible")
+            elif not (
+                replacement is None or type(replacement) in (str, bool, int, float)
+            ):
+                reject("literal_representation", f"{path}.unconvertible")
         operation = declaration.value.operation
         payload = declaration.value.root[operation]
         path = f"{expression_path(path, declaration)}.{operation}"
@@ -771,9 +777,26 @@ def lower(plan, source, secondary=None):
             "expression": expression,
         }
 
+    # Plan declaration order precedes execution order: key assignments move into
+    # a template, while every authored handler (including unused ones) starts at zero.
+    declarations = [item for row in plan.rows for item in row.derivations]
+    declarations.extend(plan.columns)
+    handlers = {}
+    for item in declarations:
+        if "unconvertible" in item.declaration.model_fields_set:
+            path = f"{item.path}.unconvertible"
+            handlers.setdefault(
+                path,
+                {
+                    "assignment_path": item.operation_path,
+                    "path": path,
+                    "value": literal(item.declaration.unconvertible),
+                },
+            )
     verifications, declaration_error = checks(spec, outputs)
     return {
         "protocol": "dataset/1",
+        **({"unconvertible": list(handlers.values())} if handlers else {}),
         **({"intermediates": intermediates} if intermediates else {}),
         "source": [
             {"name": column.name, "kind": column.type} for column in source.columns

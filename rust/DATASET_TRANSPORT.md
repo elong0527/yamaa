@@ -52,6 +52,23 @@ remaining columns complete in the supplied order. Literal conversion occurs per
 constructed value, including on plans reused with empty versus populated sources.
 Paths and expression text provide provenance, not filesystem or artifact authority.
 
+The additive `unconvertible` capability admits an optional top-level list:
+`unconvertible: [{assignment_path, path, value: scalar}]`. Its order is declaration
+order, independent of execution order. `assignment_path` must name an admitted
+assignment; repeated assignments of a shared default must target the same output
+column. Assignment references and handler paths are unique within the list, which
+is limited to 1,088 declarations. Both paths retain authored provenance.
+
+All declared paths register at zero before source execution, including empty
+outputs and later unreached assignments. On initial conversion failure, one
+literal replacement is counted and converted to the same target type. Explicit
+missing is distinct from no declaration. Replacement failure is fatal at `path`
+with complete keys when available; it cannot recurse or catch expression errors.
+The scalar numeric lifecycle and dataset engine share this recovery function.
+Only reached replacement text consumes scalar budget; a resource refusal before
+replacement conversion leaves its count unchanged. Counts survive later resource,
+conversion, output and verification failures and start fresh on plan reuse.
+
 The additive `numeric_compute` capability admits `{compute: {text, bindings}}`.
 Each binding is `{name, read: {source: index}}` or `{name, read: {column: index}}`.
 Names must cover the compiled expression exactly, with no duplicates or unused
@@ -293,7 +310,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

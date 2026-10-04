@@ -114,3 +114,10 @@ typed plans/observations. Converted integer IDs feed exact binary64 division;
 zero division, incompatible completed text, deferred literal overflow, empty input
 and output conversion preserve the expected requirement, identity and numeric
 source geometry. The combined 61 shared cases replay through every installed host.
+
+Seven `conversion_handler_*` cases reuse existing lookup snapshots and authored
+computation/named-selection plans. Literal expectations distinguish two fired
+replacements from missing, one failed replacement at its own path, zero counts
+on unused/empty paths, arithmetic bypass, and predeclared conversion counts
+preceding inherited named-selection counts after a failure. Expected outcomes
+and rows are constants written from the contracts, never captured from an engine.

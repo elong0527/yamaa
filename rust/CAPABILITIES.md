@@ -248,6 +248,16 @@ the complete unchanged `schema-lookup` benchmark reaches its committed CSV.
 Derived/SELF/base intermediates, correlated filters, range matching and explicit
 row-template reads remain open, as do shared compilation and release qualification.
 
+Dataset `unconvertible` composes the same completed-value recovery across every
+admitted assignment, including keys, row/group columns, windows and named reads.
+Explicit declarations register at zero in planned order before execution; only
+failed result conversion counts and converts a literal replacement. Replacement
+failure retains its own path, while arithmetic/selection failures bypass handling.
+Seven independently authored shared cases and installed reference comparisons
+cover replacement values/missing/failure, empty runs, dependent reads, filters,
+key grouping, arithmetic bypass and inherited selection counts. Other handlers
+and broad language/release qualification remain open.
+
 Dataset `numeric_compute` composes the existing compiler with statically bound
 source/completed-output reads. Each written occurrence is resolved without
 reassociation; deferred literal overflow, eager missing operands, exact numeric
@@ -256,7 +266,7 @@ The shared six-case fixture adds typed values, requirements, identities and sour
 geometry; installed comparisons cover 162 arithmetic/type combinations and 48
 failure/row-source/conversion variants with Python numeric evaluation blocked.
 Cumulative semantic-node/read/text budgets apply after bounded pre-IPC compilation.
-EXP/LN/POWER, local handlers and named-intermediate numeric bindings remain open;
+EXP/LN/POWER, expression-local handlers and named-intermediate numeric bindings remain open;
 the separate portable-math candidate does not change this dataset policy.
 
 The key-grain column phase also supports row numbering and competition/

@@ -233,6 +233,25 @@ def execute_with_source_provider(
         for i, check in enumerate(specification.verifications or ())
         if check.operation in {"assert", "implies"}
     )
+    handler_sites = [
+        f"columns.{column.name}.derivation.unconvertible"
+        for column in specification.columns
+        if column.derivation is not None
+        and "unconvertible" in column.derivation.model_fields_set
+    ]
+    handler_sites.extend(
+        f"rows[{index}].derivations.{name}.unconvertible"
+        for index, row in enumerate(specification.rows or ())
+        for name, declaration in row.derivations.items()
+        if "unconvertible" in declaration.model_fields_set
+    )
+    required.extend(
+        (
+            "unconvertible",
+            UnsupportedFeature(operation="native_unconvertible", spec_path=path),
+        )
+        for path in handler_sites
+    )
     compute_sites = [
         f"columns.{column.name}.derivation.compute"
         for column in specification.columns
