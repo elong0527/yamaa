@@ -803,7 +803,7 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
     assert_eq!(result.dataset.rows()[0][1], Value::float(1.5));
 }
 
-/// Static checks must fail even when no candidate would evaluate a bad expression.
+/// Reduction input types and verification declarations are static checks, even on empty input.
 #[test]
 fn nonnumeric_reductions_and_invalid_verifications_are_rejected() {
     let source = schema(&[("id", ColumnType::Str)]);
@@ -1049,4 +1049,65 @@ fn repeated_unique_columns_keep_missing_combinations_and_paths_are_unique() {
         ),
         Err(PlanError::DuplicateVerificationPath)
     );
+}
+
+/// Conversion is a runtime lifecycle, not static literal/type compatibility.
+/// Eager rejection would change empty-template behavior and the diagnostic phase.
+#[test]
+fn literal_conversion_only_occurs_for_constructed_values() {
+    for literal in [Value::Str("TOTAL".into()), Value::Bool(true)] {
+        for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+            for row_phase in [true, false] {
+                let empty = table(&[("id", ColumnType::Str)], vec![]);
+                let output = schema(&[("id", ColumnType::Str), ("value", ColumnType::Float)]);
+                let value = assign(1, Expression::Literal(literal.clone()));
+                let plan = DatasetPlan::new(
+                    empty.schema.clone(),
+                    output,
+                    vec![RowTemplate {
+                        mode: mode.clone(),
+                        assignments: if row_phase {
+                            vec![value.clone()]
+                        } else {
+                            vec![]
+                        },
+                    }],
+                    if row_phase {
+                        vec![assign(0, Expression::Source(0))]
+                    } else {
+                        vec![assign(0, Expression::Source(0)), value]
+                    },
+                    vec![0],
+                    vec![],
+                )
+                .unwrap();
+                assert_eq!(
+                    plan.execute(&empty, limits()).unwrap().dataset.row_count(),
+                    0
+                );
+                let populated = table(
+                    &[("id", ColumnType::Str)],
+                    vec![vec![Value::Str("a".into())]],
+                );
+                let ExecutionError::Conversion {
+                    path,
+                    output_row,
+                    error,
+                } = *plan.execute(&populated, limits()).unwrap_err()
+                else {
+                    panic!("expected per-value conversion error")
+                };
+                assert_eq!(path, "columns.value");
+                assert_eq!(output_row, 0);
+                assert_eq!(
+                    error,
+                    yamaa_core::conversion::ConversionError {
+                        target: ColumnType::Float,
+                        value: yamaa_core::conversion::ConversionValue::Runtime(literal.clone()),
+                        reason: yamaa_core::conversion::ConversionReason::IncompatibleOrInvalidText,
+                    }
+                );
+            }
+        }
+    }
 }

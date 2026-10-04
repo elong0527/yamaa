@@ -130,6 +130,9 @@ fn validate_assignment(
         return Err(PlanError::DuplicateAssignment);
     }
     match &assignment.expression {
+        // REQ-0211/0213 convert one derived value at execution, including
+        // literals. Eager conversion would invent failures for empty templates
+        // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
         Expression::Column(column) => {
             if !available.get(*column).copied().unwrap_or(false) {

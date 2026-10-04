@@ -181,7 +181,11 @@ Record and group templates append in declaration order; groups retain first
 source occurrence and member order. Grouped scalar source references must name
 a grouping field, including in the later column phase. Every template completes
 the same row-phase columns; remaining derivations complete whole columns in
-resolved order. Each assignment converts before its dependents can read it.
+resolved order. Each assignment converts before its dependents can read it. Literal conversion
+also belongs to that per-value lifecycle: an empty record/group template has no
+value to convert, while a populated template reports a runtime conversion failure
+at `columns.<name>`. Paired Python reference and Rust regressions cover this timing;
+plan admission must not eagerly reject an otherwise valid literal expression.
 
 `table_grouping::partition` uses borrowed exact keys and a tree index, preserving
 missing equality, signed-zero equality, civil temporal equality and exact UTF-8.
