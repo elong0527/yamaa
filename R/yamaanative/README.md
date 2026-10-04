@@ -262,3 +262,12 @@ paths and `multiple_matches` names. Completed choices remain visible if later
 conversion, checks or resource limits fail; repeated execution starts fresh.
 Shared fixtures replay first/last choices, filtered uniqueness, empty inputs and
 a later conversion failure with its retained count. Other handlers are unsupported.
+
+`execute_dataset_sources(request, source, secondary)` additionally accepts a
+list of raw secondary IPC snapshots in the plan's `secondary` schema order.
+The `multi_source` capability permits bound key-grain non-key `lookup` reads.
+Missing keys never match; absence yields missing, while duplicate matching
+records fail with exact match count and named match-key evidence even when values
+agree. Combined input is bounded to eight sources, 8 MiB, 262,144 cells and
+65,536 rows. Other source selection and named intermediate policies remain
+unqualified. This raw API does not introduce an R specification frontend.

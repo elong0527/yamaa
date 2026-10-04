@@ -158,37 +158,59 @@ fn output_text_amplification_is_stopped_inside_execution() {
     );
 }
 
+/// Select only committed independent snapshots; fixture names never access arbitrary paths.
+fn fixture(name: &str) -> &'static [u8] {
+    match name {
+        "adlb.arrow" => include_bytes!("fixtures/datasets/adlb.arrow"),
+        "adlb-empty.arrow" => include_bytes!("fixtures/datasets/adlb-empty.arrow"),
+        "integer-sum.arrow" => include_bytes!("fixtures/datasets/integer-sum.arrow"),
+        "key-grain.arrow" => include_bytes!("fixtures/datasets/key-grain.arrow"),
+        "key-grain-empty.arrow" => include_bytes!("fixtures/datasets/key-grain-empty.arrow"),
+        "key-grain-missing.arrow" => {
+            include_bytes!("fixtures/datasets/key-grain-missing.arrow")
+        }
+        "numbering.arrow" => include_bytes!("fixtures/datasets/numbering.arrow"),
+        "numbering-empty.arrow" => include_bytes!("fixtures/datasets/numbering-empty.arrow"),
+        "baseline.arrow" => include_bytes!("fixtures/datasets/baseline.arrow"),
+        "baseline-tie.arrow" => include_bytes!("fixtures/datasets/baseline-tie.arrow"),
+        "baseline-empty.arrow" => include_bytes!("fixtures/datasets/baseline-empty.arrow"),
+        "root-filter.arrow" => include_bytes!("fixtures/datasets/root-filter.arrow"),
+        "root-filter-empty.arrow" => {
+            include_bytes!("fixtures/datasets/root-filter-empty.arrow")
+        }
+        "source-filter.arrow" => include_bytes!("fixtures/datasets/source-filter.arrow"),
+        "source-filter-empty.arrow" => {
+            include_bytes!("fixtures/datasets/source-filter-empty.arrow")
+        }
+        "lookup-left.arrow" => include_bytes!("fixtures/datasets/lookup-left.arrow"),
+        "lookup-left-empty.arrow" => include_bytes!("fixtures/datasets/lookup-left-empty.arrow"),
+        "lookup-right.arrow" => include_bytes!("fixtures/datasets/lookup-right.arrow"),
+        "lookup-right-empty.arrow" => include_bytes!("fixtures/datasets/lookup-right-empty.arrow"),
+        "lookup-duplicate.arrow" => include_bytes!("fixtures/datasets/lookup-duplicate.arrow"),
+        "lookup-bad.arrow" => include_bytes!("fixtures/datasets/lookup-bad.arrow"),
+        other => panic!("unknown fixture {other}"),
+    }
+}
+
 /// Shared installed-host truth comes from authored outcomes and committed benchmark CSV.
 #[test]
 fn shared_dataset_cases_match_independent_values_and_observations() {
     let cases: Value =
         serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
     for case in cases.as_array().unwrap() {
-        let input: &[u8] = match case["input"].as_str().unwrap() {
-            "adlb.arrow" => include_bytes!("fixtures/datasets/adlb.arrow"),
-            "adlb-empty.arrow" => include_bytes!("fixtures/datasets/adlb-empty.arrow"),
-            "integer-sum.arrow" => include_bytes!("fixtures/datasets/integer-sum.arrow"),
-            "key-grain.arrow" => include_bytes!("fixtures/datasets/key-grain.arrow"),
-            "key-grain-empty.arrow" => include_bytes!("fixtures/datasets/key-grain-empty.arrow"),
-            "key-grain-missing.arrow" => {
-                include_bytes!("fixtures/datasets/key-grain-missing.arrow")
-            }
-            "numbering.arrow" => include_bytes!("fixtures/datasets/numbering.arrow"),
-            "numbering-empty.arrow" => include_bytes!("fixtures/datasets/numbering-empty.arrow"),
-            "baseline.arrow" => include_bytes!("fixtures/datasets/baseline.arrow"),
-            "baseline-tie.arrow" => include_bytes!("fixtures/datasets/baseline-tie.arrow"),
-            "baseline-empty.arrow" => include_bytes!("fixtures/datasets/baseline-empty.arrow"),
-            "root-filter.arrow" => include_bytes!("fixtures/datasets/root-filter.arrow"),
-            "root-filter-empty.arrow" => {
-                include_bytes!("fixtures/datasets/root-filter-empty.arrow")
-            }
-            "source-filter.arrow" => include_bytes!("fixtures/datasets/source-filter.arrow"),
-            "source-filter-empty.arrow" => {
-                include_bytes!("fixtures/datasets/source-filter-empty.arrow")
-            }
-            other => panic!("unknown fixture {other}"),
-        };
-        let response = execute_dataset(&case["request"].to_string(), input).unwrap();
+        let input = fixture(case["input"].as_str().unwrap());
+        let secondary: Vec<&[u8]> = case["secondary"].as_array().map_or_else(Vec::new, |items| {
+            items
+                .iter()
+                .map(|item| fixture(item.as_str().unwrap()))
+                .collect()
+        });
+        let response = yamaa_adapters::dataset_transport::execute_dataset_sources(
+            &case["request"].to_string(),
+            input,
+            &secondary,
+        )
+        .unwrap();
         let actual: Value = serde_json::from_str(&response.outcome).unwrap();
         assert_eq!(actual, case["expected"], "{}", case["case"]);
         match response.table {
@@ -230,7 +252,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -611,4 +633,58 @@ fn source_selection_rejects_invalid_terms_before_ipc() {
             Some(expected)
         );
     }
+}
+
+/// Multi-source transport retains independently owned tables and separates record conflicts.
+#[test]
+fn secondary_source_requests_preserve_lookup_values_and_diagnostics() {
+    let request = json!({"protocol":"dataset/1","source":[{"name":"id","kind":"int"},{"name":"x","kind":"str"}],"secondary":[{"name":"OTHER","schema":[{"name":"id","kind":"int"},{"name":"x","kind":"str"}]}],"output":[{"name":"id","kind":"int"},{"name":"x","kind":"int"}],"templates":[{"mode":{"keys":null},"assignments":[{"column":0,"path":"columns.id.derivation.source","expression":{"source":0}}]}],"columns":[{"column":1,"path":"columns.x.derivation.source","expression":{"lookup":{"source":0,"column":1,"keys":[{"source_column":0,"output_column":0}]}}}],"keys":[0],"verifications":[]});
+    let base = source(vec![Some(2), Some(1), Some(3)], vec![None, None, None]);
+    let related = source(vec![Some(1), Some(2)], vec![Some("9"), Some("7")]);
+    let plan = PreparedDataset::parse(&request.to_string()).unwrap();
+    assert!(matches!(
+        plan.execute(b"invalid IPC"),
+        Err(Error::InvalidRequest)
+    ));
+    for _ in 0..2 {
+        let result = plan.execute_sources(&base, &[&related]).unwrap();
+        let snapshot: Value =
+            serde_json::from_str(&table_snapshot(&result.table.unwrap()).unwrap()).unwrap();
+        assert_eq!(
+            snapshot["rows"],
+            json!([[{"int":"2"},{"int":"7"}],[{"int":"1"},{"int":"9"}],[{"int":"3"},{"missing":null}]])
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&result.outcome).unwrap(),
+            json!({"protocol":"dataset/1","outcome":{"status":"success","verifications":[]}})
+        );
+    }
+    let duplicate = source(vec![Some(2), Some(2)], vec![Some("7"), Some("7")]);
+    let result = plan.execute_sources(&base, &[&duplicate]).unwrap();
+    assert!(result.table.is_none());
+    assert_eq!(
+        serde_json::from_str::<Value>(&result.outcome).unwrap(),
+        json!({"protocol":"dataset/1","outcome":{"status":"condition","diagnostic":{"phase":"join","condition":"multiple_matches","requirement":"REQ-0127","spec_paths":["columns.x.derivation.source"],"context":{"intermediate":{"str":"intermediate(OTHER)"},"dataset":{"str":"OTHER"},"match_count":{"int":"2"}}},"identity":{"position":"0","keys":[{"int":"2"}]},"matched_key":[{"name":"id","value":{"int":"2"}}]}})
+    );
+    let mut invalid = request.clone();
+    invalid["columns"][0]["expression"]["lookup"]["source"] = json!(1);
+    assert!(matches!(
+        yamaa_adapters::dataset_transport::execute_dataset_sources(
+            &invalid.to_string(),
+            b"bad",
+            &[b"bad"]
+        ),
+        Err(Error::InvalidPlan)
+    ));
+    assert!(matches!(
+        plan.execute_sources(b"bad", &[]),
+        Err(Error::InvalidRequest)
+    ));
+    let excess = vec![0; 4 * 1024 * 1024 + 1];
+    assert!(matches!(
+        plan.execute_sources(&excess, &[&excess]),
+        Err(Error::Table(
+            yamaa_adapters::table_transport::TableTransportError::InputLimit
+        ))
+    ));
 }

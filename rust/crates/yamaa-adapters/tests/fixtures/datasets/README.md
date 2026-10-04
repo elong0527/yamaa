@@ -94,3 +94,10 @@ Handwritten expectations cover first=8/last=7 for key 2, filtered uniqueness
 without a count, empty input, and later conversion failure retaining one
 `multiple_matches` firing. The conversion requirement is independently checked
 against the Python reference (REQ-0013); JSON and TSV carry the same truth.
+
+Multi-source lookup fixtures independently author separate left/right snapshots,
+including duplicate identical donor records, absent relations, empty base and
+failed conversion. JSON cases carry optional `secondary` filename lists; TSV adds
+a trailing `secondary` field using semicolon-separated names or `-` for none.
+Existing outcome/snapshot fields are unchanged. All hosts replay the same
+49 cases, including named typed match-key evidence separate from output keys.

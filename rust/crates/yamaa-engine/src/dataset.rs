@@ -5,6 +5,8 @@
 
 #[path = "dataset_keys.rs"]
 mod key_grain;
+#[path = "dataset_lookup.rs"]
+mod lookup;
 #[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{OrderTerm, Window, WindowKind};
@@ -25,13 +27,15 @@ use yamaa_core::{
     value::Value,
 };
 
-/// Already bound expressions; no implicit joins or lookup fallback are represented.
+/// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Literal(Value),
     /// Column-phase windows over completed key-grain output rows.
     Window(Window),
     Source(usize),
+    /// Read one record from a secondary source on completed output match values.
+    Lookup(Lookup),
     /// Distinct present raw readings across a key combination, before conversion.
     Collect {
         column: usize,
@@ -59,6 +63,28 @@ pub enum Keep {
 pub struct SourceSelection {
     pub order_by: Vec<OrderTerm>,
     pub keep: Keep,
+}
+
+/// One named secondary relation with a stable schema and source-list position.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SecondarySource {
+    pub name: String,
+    pub schema: TableSchema,
+}
+
+/// Equality pairs compare a secondary source field to a completed output value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchKey {
+    pub source_column: usize,
+    pub output_column: usize,
+}
+
+/// A many-to-one read; absence is missing and duplicate records remain an error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Lookup {
+    pub source: usize,
+    pub column: usize,
+    pub keys: Vec<MatchKey>,
 }
 
 /// One completed-value assignment, with original specification provenance.
@@ -155,12 +181,14 @@ pub enum PlanError {
     InvalidKeyMode,
     InvalidWindow,
     InvalidSourceOrder,
+    InvalidLookup,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DatasetPlan {
     source: TableSchema,
+    secondary: Vec<SecondarySource>,
     output: TableSchema,
     templates: Vec<RowTemplate>,
     columns: Vec<Assignment>,
@@ -186,6 +214,7 @@ fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
     source: &TableSchema,
+    secondary: &[SecondarySource],
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
@@ -203,6 +232,12 @@ fn validate_assignment(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
+        Expression::Lookup(lookup) => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidLookup);
+            }
+            lookup::validate(lookup, secondary, available, output)?;
+        }
         Expression::Window(window) => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidWindow);
@@ -286,6 +321,36 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
     ) -> Result<Self, PlanError> {
+        Self::new_with_sources(
+            source,
+            Vec::new(),
+            output,
+            templates,
+            columns,
+            keys,
+            verifications,
+        )
+    }
+
+    /// Admit additional source schemas before accepting any snapshots or lookup reads.
+    pub fn new_with_sources(
+        source: TableSchema,
+        secondary: Vec<SecondarySource>,
+        output: TableSchema,
+        templates: Vec<RowTemplate>,
+        columns: Vec<Assignment>,
+        keys: Vec<usize>,
+        verifications: Vec<Verification>,
+    ) -> Result<Self, PlanError> {
+        for (index, relation) in secondary.iter().enumerate() {
+            if relation.name.is_empty()
+                || secondary[..index]
+                    .iter()
+                    .any(|other| other.name == relation.name)
+            {
+                return Err(PlanError::InvalidLookup);
+            }
+        }
         if templates.is_empty() {
             return Err(PlanError::NoTemplates);
         }
@@ -306,12 +371,21 @@ impl DatasetPlan {
                     && (!keys.contains(&assignment.column)
                         || matches!(
                             assignment.expression,
-                            Expression::Collect { .. } | Expression::Window(_)
+                            Expression::Collect { .. }
+                                | Expression::Window(_)
+                                | Expression::Lookup(_)
                         ))
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
-                validate_assignment(assignment, &mut available, &source, &output, &template.mode)?;
+                validate_assignment(
+                    assignment,
+                    &mut available,
+                    &source,
+                    &secondary,
+                    &output,
+                    &template.mode,
+                )?;
             }
             if keyed && keys.iter().any(|&column| !available[column]) {
                 return Err(PlanError::InvalidKeyMode);
@@ -337,7 +411,14 @@ impl DatasetPlan {
                     // A key combination reads all its feeding records, never a chosen first row.
                     return Err(PlanError::InvalidKeyMode);
                 }
-                validate_assignment(assignment, &mut available, &source, &output, &template.mode)?;
+                validate_assignment(
+                    assignment,
+                    &mut available,
+                    &source,
+                    &secondary,
+                    &output,
+                    &template.mode,
+                )?;
             }
             if available.contains(&false) {
                 return Err(PlanError::IncompleteRow);
@@ -381,6 +462,7 @@ impl DatasetPlan {
         }
         Ok(Self {
             source,
+            secondary,
             output,
             templates,
             columns,
@@ -459,6 +541,19 @@ pub struct ExecutionAttempt<E> {
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
     HandlerAccounting(HandlerCountOverflow),
+    MultipleMatches {
+        path: String,
+        dataset: String,
+        match_count: usize,
+        matched_key: Vec<(String, Value)>,
+        identity: Option<RowIdentity>,
+    },
+    SecondaryCell {
+        path: String,
+        source: usize,
+        source_row: usize,
+        error: CellError<E>,
+    },
     BaselineAmbiguity {
         path: String,
         column: String,
@@ -548,7 +643,8 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 }
 
 /// Resources and semantic observations belong to the same attempted run.
-struct EvaluationState<'a> {
+struct EvaluationState<'a, E> {
+    secondary: &'a [&'a dyn TableAccess<Error = E>],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
 }
@@ -561,9 +657,13 @@ fn evaluate<T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     row: usize,
     limits: Limits,
-    state: &mut EvaluationState<'_>,
+    state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let EvaluationState { budget, handlers } = state;
+    let EvaluationState {
+        budget,
+        handlers,
+        secondary,
+    } = state;
     budget.work(1, 1)?;
     let reads = match &assignment.expression {
         Expression::Source(_) => 1,
@@ -600,6 +700,15 @@ fn evaluate<T: TableAccess + ?Sized>(
             }
             own(value)
         }
+        Expression::Lookup(lookup) => lookup::read(
+            secondary[lookup.source],
+            lookup,
+            assignment,
+            candidate,
+            plan,
+            row,
+            budget,
+        )?,
         Expression::Collect { .. } => {
             key_grain::collect(table, assignment, candidate, plan, row, budget, handlers)?
         }
@@ -677,8 +786,18 @@ impl DatasetPlan {
         table: &T,
         limits: Limits,
     ) -> ExecutionAttempt<T::Error> {
+        self.execute_observed_sources(table, &[], limits)
+    }
+
+    /// Execute immutable source snapshots in the same order as the admitted secondary schemas.
+    pub fn execute_observed_sources<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
         let mut handlers = HandlerCounter::default();
-        let result = self.execute_inner(table, limits, &mut handlers);
+        let result = self.execute_inner(table, secondary, limits, &mut handlers);
         ExecutionAttempt {
             result,
             handler_counts: handlers.snapshot().to_vec(),
@@ -689,13 +808,25 @@ impl DatasetPlan {
     fn execute_inner<T: TableAccess + ?Sized>(
         &self,
         table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
         limits: Limits,
         handlers: &mut HandlerCounter,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
-        if table.schema() != &self.source {
+        if table.schema() != &self.source
+            || secondary.len() != self.secondary.len()
+            || secondary
+                .iter()
+                .zip(&self.secondary)
+                .any(|(table, expected)| table.schema() != &expected.schema)
+        {
             return Err(Box::new(ExecutionError::SchemaMismatch));
         }
-        if table.row_count() > limits.source_rows {
+        let rows = secondary
+            .iter()
+            .try_fold(table.row_count(), |total, source| {
+                total.checked_add(source.row_count())
+            });
+        if rows.is_none_or(|rows| rows > limits.source_rows) {
             return Err(Box::new(ExecutionError::Capacity));
         }
         let mut budget = Budget::new(limits);
@@ -736,6 +867,7 @@ impl DatasetPlan {
                             candidates.len(),
                             limits,
                             &mut EvaluationState {
+                                secondary,
                                 budget: &mut budget,
                                 handlers,
                             },
@@ -803,6 +935,7 @@ impl DatasetPlan {
                         row,
                         limits,
                         &mut EvaluationState {
+                            secondary,
                             budget: &mut budget,
                             handlers,
                         },

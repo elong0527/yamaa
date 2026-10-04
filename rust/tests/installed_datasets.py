@@ -29,11 +29,24 @@ class InstalledDatasets(unittest.TestCase):
                     json.loads(tab["snapshot"]) if tab["snapshot"] else None,
                     case["snapshot"],
                 )
-                source = (ROOT / case["input"]).read_bytes()
-                table, outcome = yamaa_native.execute_dataset(
-                    json.dumps(case["request"]), source
+                names = (
+                    tab.get("secondary", "").split(";")
+                    if tab.get("secondary", "-") != "-"
+                    else []
                 )
-                del source
+                self.assertEqual(names, case.get("secondary", []))
+                secondary = [(ROOT / name).read_bytes() for name in names]
+                source = (ROOT / case["input"]).read_bytes()
+                table, outcome = (
+                    yamaa_native.execute_dataset_sources(
+                        json.dumps(case["request"]), source, secondary
+                    )
+                    if secondary
+                    else yamaa_native.execute_dataset(
+                        json.dumps(case["request"]), source
+                    )
+                )
+                del source, secondary
                 gc.collect()
                 self.assertEqual(json.loads(outcome), case["expected"])
                 if case["snapshot"] is None:
@@ -45,6 +58,33 @@ class InstalledDatasets(unittest.TestCase):
                     )
                     self.assertEqual(yamaa_native.table_round_trip(table), table)
         self.assertFalse(yamaa_native.engine_info()["execution_supported"])
+
+    def test_secondary_source_input_shape_and_recovery(self):
+        """Secondary buffers are bounded bytes lists and cannot be silently omitted."""
+        case = next(
+            case
+            for case in json.loads((ROOT / "expected.json").read_text())
+            if case["case"] == "lookup_values"
+        )
+        request = json.dumps(case["request"])
+        source = (ROOT / case["input"]).read_bytes()
+        secondary = [(ROOT / name).read_bytes() for name in case["secondary"]]
+        with self.assertRaises(ValueError):
+            yamaa_native.execute_dataset(request, source)
+        for invalid in [(), ["bytes"], [None]]:
+            with self.subTest(invalid=invalid), self.assertRaises(TypeError):
+                yamaa_native.execute_dataset_sources(request, source, invalid)
+        with self.assertRaisesRegex(ValueError, "too many"):
+            yamaa_native.execute_dataset_sources(request, source, [b""] * 8)
+        table, outcome = yamaa_native.execute_dataset_sources(
+            request, source, secondary
+        )
+        del source, secondary
+        gc.collect()
+        self.assertEqual(json.loads(outcome), case["expected"])
+        self.assertEqual(
+            json.loads(yamaa_native.table_snapshot(table)), case["snapshot"]
+        )
 
     def test_admission_precedes_ipc_and_recovers(self):
         """Invalid typed requests cannot decode bad IPC or poison subsequent execution."""

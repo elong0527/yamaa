@@ -246,6 +246,182 @@ class InstalledSpecification(unittest.TestCase):
                             [(2, 7 if scenario == "ordinary" else None), (1, None)],
                         )
 
+    def test_secondary_sources_preserve_composite_keys_and_catalog_indices(self):
+        """Two independent relations bind different field orders against declared key order."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "LOOKUP",
+            "keys": ["VISIT", "ID"],
+            "base": "SRC",
+            "input": {"B": "b.csv", "SRC": "source.csv", "A": "a.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "VISIT", "V", "W"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {
+                    "name": "VISIT",
+                    "type": "str",
+                    "label": "Visit",
+                    "derivation": "SRC.VISIT",
+                },
+                {"name": "V", "type": "int", "label": "V", "derivation": "A.VAL"},
+                {"name": "W", "type": "int", "label": "W", "derivation": "B.BVAL"},
+            ],
+        }
+
+        def table(fields, rows):
+            """Author each catalog relation independently of its source-list position."""
+            return frame_from_values(
+                tuple(TypedColumn(name=n, type=k) for n, k in fields), rows
+            )
+
+        sources = {
+            "B": table(
+                [("VISIT", "str"), ("BVAL", "str"), ("ID", "int")],
+                [["a", "70", 2], ["b", None, 2]],
+            ),
+            "SRC": table(
+                [("ID", "str"), ("VISIT", "str")], [["02", "b"], ["2", "a"], ["1", "a"]]
+            ),
+            "A": table(
+                [("ID", "int"), ("VAL", "str"), ("VISIT", "str")],
+                [[2, "7", "b"], [2, "8", "a"], [1, "9", "a"]],
+            ),
+        }
+        actual = self.compare(self.load(document), sources)
+        self.assertEqual(
+            actual.result.table.frame.rows(),
+            [(2, "b", 7, None), (2, "a", 8, 70), (1, "a", 9, None)],
+        )
+        sources["B"] = table(
+            [("VISIT", "str"), ("BVAL", "str"), ("ID", "int")],
+            [["a", "70", 2], ["b", None, 2], ["a", "70", 2]],
+        )
+        failure = self.compare(self.load(document), sources).result.diagnostics[0]
+        self.assertEqual(failure.context["key"], ["VISIT", "ID"])
+        self.assertEqual(failure.context["intermediate_key"], {"VISIT": "a", "ID": 2})
+        self.assertEqual(failure.context["keys"], [{"VISIT": "a", "ID": 2}])
+
+    def test_output_name_can_match_secondary_dataset(self):
+        """A bare output name and a qualified source name retain distinct namespaces."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "LOOKUP",
+            "keys": ["ID"],
+            "base": "SRC",
+            "input": {"OTHER": "other.csv", "SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "OTHER", "V", "W"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {
+                    "name": "OTHER",
+                    "type": "int",
+                    "label": "Output",
+                    "derivation": {"literal": 11},
+                },
+                {"name": "V", "type": "int", "label": "Bare", "derivation": "OTHER"},
+                {
+                    "name": "W",
+                    "type": "int",
+                    "label": "Qualified",
+                    "derivation": "OTHER.V",
+                },
+            ],
+        }
+        sources = {
+            "SRC": frame_from_values((TypedColumn(name="ID", type="int"),), [[2]]),
+            "OTHER": frame_from_values(
+                (TypedColumn(name="ID", type="int"), TypedColumn(name="V", type="str")),
+                [[2, "7"]],
+            ),
+        }
+        actual = self.compare(self.load(document), sources)
+        self.assertEqual(actual.result.table.frame.rows(), [(2, 11, 11, 7)])
+
+    def test_secondary_sources_match_completed_keys_without_host_joins(self):
+        """Independent relations retain base order, absence and exact record conflicts."""
+        base = {
+            "schema_version": "1.0",
+            "domain": "LOOKUP",
+            "keys": ["ID"],
+            "base": "SRC",
+            "input": {"OTHER": "other.csv", "SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "V"]},
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {"name": "V", "type": "int", "label": "V", "derivation": "OTHER.V"},
+            ],
+        }
+        left = (TypedColumn(name="ID", type="str"),)
+        right = (TypedColumn(name="ID", type="int"), TypedColumn(name="V", type="str"))
+        for scenario in [
+            "ordinary",
+            "duplicate_equal",
+            "duplicate_diff",
+            "missing_key",
+            "empty_base",
+            "empty_other",
+            "conversion",
+            "key_conversion",
+            "earlier",
+            "root",
+            "repeat",
+        ]:
+            document = copy.deepcopy(base)
+            rows = [["02"], ["1"], ["3"]]
+            related = [[2, "7"], [1, "9"]]
+            if scenario == "duplicate_equal":
+                related.append([2, "7"])
+            if scenario == "duplicate_diff":
+                related.append([2, "8"])
+            if scenario == "missing_key":
+                rows[1][0] = None
+                related.append([None, "8"])
+            if scenario == "empty_base":
+                rows = []
+                related.append([2, "8"])
+            if scenario == "empty_other":
+                related = []
+            if scenario == "conversion":
+                related[0][1] = "bad"
+            if scenario == "key_conversion":
+                rows[-1][0] = "bad"
+                related.append([2, "8"])
+            if scenario == "earlier":
+                document["columns"].insert(
+                    1,
+                    {
+                        "name": "EARLIER",
+                        "type": "int",
+                        "label": "Earlier",
+                        "derivation": {"literal": "bad"},
+                    },
+                )
+                related.append([2, "8"])
+            if scenario == "root":
+                document["filter"] = "SRC.ID <> '02'"
+                related.append([2, "8"])
+            if scenario == "repeat":
+                rows.append(["2"])
+            with self.subTest(scenario=scenario):
+                actual = self.compare(
+                    self.load(document),
+                    {
+                        "OTHER": frame_from_values(right, related),
+                        "SRC": frame_from_values(left, rows),
+                    },
+                )
+                if scenario in {"ordinary", "repeat"}:
+                    self.assertEqual(
+                        actual.result.table.frame.rows(), [(2, 7), (1, 9), (3, None)]
+                    )
+                if scenario == "duplicate_equal":
+                    self.assertEqual(
+                        actual.result.diagnostics[0].context["match_count"], 2
+                    )
+                    self.assertEqual(
+                        actual.result.diagnostics[0].requirement, "REQ-0127"
+                    )
+
     def test_ordered_sources_retain_choices_and_failure_counts(self):
         """Compare source choices and complete audit evidence without host selection."""
         columns = tuple(
@@ -577,6 +753,10 @@ class InstalledSpecification(unittest.TestCase):
             patch(
                 "yamaa.runtime.executor._key_grain_candidates",
                 side_effect=AssertionError("reference key candidates"),
+            ),
+            patch(
+                "yamaa.runtime.rows.RowResolver._implicit_read",
+                side_effect=AssertionError("reference secondary lookup"),
             ),
             patch(
                 "yamaa.odm.context.select_one",

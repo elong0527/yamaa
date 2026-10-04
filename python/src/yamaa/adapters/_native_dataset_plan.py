@@ -51,7 +51,9 @@ def admit(specification):
         if feature not in unsupported:
             unsupported.append(feature)
 
-    if len(specification.input) != 1:
+    if len(specification.input) != 1 and (
+        specification.rows or specification.base is None or len(specification.input) > 8
+    ):
         reject("multiple_sources", "input")
     for field in ("intermediates", "submission"):
         if getattr(specification, field) is not None:
@@ -60,6 +62,12 @@ def admit(specification):
         try:
             ast = _native_predicate_plan.admit(specification.filter, "filter")
             for name in predicate_identifiers(ast):
+                if (
+                    len(specification.input) > 1
+                    and "." in name
+                    and name.split(".", 1)[0] != specification.base
+                ):
+                    reject("secondary_root_filter", "filter")
                 if "." not in name:
                     diagnostics.append(
                         ExecutionDiagnostic(
@@ -94,6 +102,25 @@ def admit(specification):
             elif not (payload is None or type(payload) in (str, bool, int, float)):
                 reject("literal_representation", path)
         elif operation == "source":
+            variable = (
+                payload
+                if isinstance(payload, str)
+                else payload.get("variable")
+                if isinstance(payload, dict)
+                else None
+            )
+            qualifier = (
+                variable.split(".", 1)[0]
+                if isinstance(variable, str) and "." in variable
+                else None
+            )
+            if qualifier in specification.input and qualifier != (
+                specification.base or next(iter(specification.input))
+            ):
+                if not allow_source_filter:
+                    reject("secondary_source_scope", path)
+                if isinstance(payload, dict) and set(payload) != {"variable"}:
+                    reject("secondary_source_selection", path)
             if isinstance(payload, str):
                 return
             if (
@@ -370,10 +397,17 @@ def literal(value):
     return {"str": value}
 
 
-def lower(plan, source):
+def lower(plan, source, secondary=None):
     """Lower validated dependency order and bindings, never evaluate expressions."""
     spec = plan.specification
-    dataset = next(iter(spec.input))
+    dataset = spec.base or next(iter(spec.input))
+    secondary = secondary or {}
+    secondary_indices = {name: index for index, name in enumerate(secondary)}
+    secondary_fields = {
+        name: {column.name: index for index, column in enumerate(table.columns)}
+        for name, table in secondary.items()
+    }
+    output_types = {column.name: column.type for column in spec.columns}
     inputs = {column.name: index for index, column in enumerate(source.columns)}
     outputs = {column.name: index for index, column in enumerate(spec.columns)}
     keyed = not spec.rows
@@ -395,11 +429,62 @@ def lower(plan, source):
             expression = {"literal": literal(value)}
         elif op == "source":
             name = value if isinstance(value, str) else value["variable"]
-            expression = (
-                {"collect": {"column": reference(name)["source"], "identifier": name}}
-                if collect and "." in name
-                else reference(name)
-            )
+            qualifier, dot, field = name.partition(".")
+            if dot and qualifier in secondary:
+                join = next(
+                    (
+                        join
+                        for join in derived.implicit_joins
+                        if join.dataset == qualifier
+                    ),
+                    None,
+                )
+                fields = secondary_fields[qualifier]
+                table = secondary[qualifier]
+                if (
+                    not collect
+                    or join is None
+                    or not join.keys
+                    or join.match_variables is not None
+                    or any(
+                        key not in outputs
+                        or key not in fields
+                        or table.columns[fields[key]].type != output_types[key]
+                        for key in join.keys
+                    )
+                ):
+                    raise UnsupportedPlanningError(
+                        (
+                            UnsupportedFeature(
+                                operation="secondary_source_binding",
+                                spec_path=derived.operation_path,
+                            ),
+                        )
+                    )
+                expression = {
+                    "lookup": {
+                        "source": secondary_indices[qualifier],
+                        "column": fields[field],
+                        "keys": [
+                            {
+                                "source_column": fields[key],
+                                "output_column": outputs[key],
+                            }
+                            for key in join.keys
+                        ],
+                    }
+                }
+            else:
+                expression = (
+                    {
+                        "collect": {
+                            "column": reference(name)["source"],
+                            "identifier": name,
+                        }
+                    }
+                    if collect and "." in name
+                    else reference(name)
+                )
             if isinstance(value, dict) and value.get("filter") is not None:
                 text = value["filter"]
                 expression["collect"]["filter"] = _native_predicate_plan.lower(
@@ -502,6 +587,22 @@ def lower(plan, source):
         "source": [
             {"name": column.name, "kind": column.type} for column in source.columns
         ],
+        **(
+            {
+                "secondary": [
+                    {
+                        "name": name,
+                        "schema": [
+                            {"name": column.name, "kind": column.type}
+                            for column in table.columns
+                        ],
+                    }
+                    for name, table in secondary.items()
+                ]
+            }
+            if secondary
+            else {}
+        ),
         "output": [
             {"name": column.name, "kind": column.type} for column in spec.columns
         ],

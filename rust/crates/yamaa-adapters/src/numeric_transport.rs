@@ -329,6 +329,33 @@ pub(crate) fn multiple_values(
     }))
 }
 
+/// Preserve an implicit lookup's complete duplicate-record count and source identity.
+pub(crate) fn multiple_matches(
+    path: String,
+    dataset: String,
+    count: usize,
+) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
+    let count = i64::try_from(count)
+        .map_err(|_| crate::dataset_transport::DatasetTransportError::Internal)?;
+    let mut context = Context::new();
+    context.insert(
+        "intermediate".into(),
+        text(format!("intermediate({dataset})")),
+    );
+    context.insert("dataset".into(), text(dataset));
+    context.insert("match_count".into(), scalar(Value::Int(count)));
+    Ok(Box::new(Diagnostic {
+        phase: "join",
+        condition: "multiple_matches",
+        requirement: "REQ-0127",
+        spec_paths: vec![path],
+        context,
+        source_span: None,
+        operand_route: None,
+        position: None,
+    }))
+}
+
 /// Preserve baseline ambiguity and its canonical temporal date without choosing a tied row.
 pub(crate) fn baseline_ambiguity(
     path: String,

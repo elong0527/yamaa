@@ -1087,3 +1087,170 @@ def test_old_native_package_refuses_source_selection_before_provider(
         "native_source_selection"
     }
     assert effects == []
+
+
+def multi_source_specification(tmp_path, payload="OTHER.V"):
+    """Declare a base listed after its independent lookup relation."""
+    import yaml
+
+    document = {
+        "schema_version": "1.0",
+        "domain": "LOOKUP",
+        "keys": ["ID"],
+        "base": "SRC",
+        "input": {"OTHER": "other.csv", "SRC": "source.csv"},
+        "output": {"path": "out.csv", "columns": ["ID", "V"]},
+        "columns": [
+            {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+            {
+                "name": "V",
+                "type": "int",
+                "label": "V",
+                "derivation": payload
+                if isinstance(payload, str)
+                else {"source": payload},
+            },
+        ],
+    }
+    path = tmp_path / "multi.yaml"
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    return load_specification(path, ROOT / "yaml").specification
+
+
+def multi_source_tables(kind="int"):
+    """Build independently typed snapshots without involving CSV ingestion."""
+    from yamaa.io.polars import frame_from_values
+    from yamaa.models import TypedColumn
+
+    return {
+        "OTHER": frame_from_values(
+            (TypedColumn(name="ID", type=kind), TypedColumn(name="V", type="str")),
+            [[2.0 if kind == "float" else 2, "7"]],
+        ),
+        "SRC": frame_from_values((TypedColumn(name="ID", type="str"),), [["02"]]),
+    }
+
+
+def test_completed_column_name_can_match_secondary_source(tmp_path):
+    """Only a written dot chooses the secondary namespace; bare names read output columns."""
+    import yaml
+
+    multi_source_specification(tmp_path, "OTHER")
+    path = tmp_path / "multi.yaml"
+    document = yaml.safe_load(path.read_text())
+    document["columns"].insert(
+        1,
+        {
+            "name": "OTHER",
+            "type": "int",
+            "label": "Output",
+            "derivation": {"literal": 11},
+        },
+    )
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    spec = load_specification(path, ROOT / "yaml").specification
+    admit(spec)
+    sources = multi_source_tables()
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    request, pending = lower(plan, sources["SRC"], {"OTHER": sources["OTHER"]})
+    assert pending is None
+    assert request["columns"][-1]["expression"] == {"column": 1}
+
+
+def test_secondary_source_lowering_uses_declared_base_and_inferred_keys(tmp_path):
+    """Secondary coordinates and completed-output keys are explicit in the bound request."""
+    spec = multi_source_specification(tmp_path)
+    admit(spec)
+    sources = multi_source_tables()
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS),
+        sources["SRC"],
+        {"OTHER": sources["OTHER"]},
+    )
+    assert error is None
+    assert request["source"] == [{"name": "ID", "kind": "str"}]
+    assert request["secondary"] == [
+        {
+            "name": "OTHER",
+            "schema": [{"name": "ID", "kind": "int"}, {"name": "V", "kind": "str"}],
+        }
+    ]
+    assert request["columns"][0]["expression"] == {
+        "lookup": {
+            "source": 0,
+            "column": 1,
+            "keys": [{"source_column": 0, "output_column": 0}],
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"variable": "OTHER.V", "filter": "OTHER.ID > 0"},
+        {"variable": "OTHER.V", "order_by": ["OTHER.ID"], "keep": "last"},
+    ],
+)
+def test_secondary_selection_refuses_before_provider(tmp_path, payload):
+    """Relation selection has different cardinality rules and remains explicitly unqualified."""
+    spec = multi_source_specification(tmp_path, payload)
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert "secondary_source_selection" in {
+        feature.operation for feature in actual.result.features
+    }
+    assert effects == []
+
+
+def test_old_native_package_refuses_multi_source_before_provider(tmp_path, monkeypatch):
+    """Single-source capability never authorizes a multi-table input effect."""
+    spec = multi_source_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain"]}
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "native_multi_source"
+    }
+    assert effects == []
+
+
+def test_mixed_lookup_key_types_remain_unsupported_after_schema_binding(
+    tmp_path, monkeypatch
+):
+    """Unqualified numeric cross-type equality cannot silently become a failed match."""
+    spec = multi_source_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            execute_dataset_sources=lambda *_: effects.append("execute_multiple"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain", "multi_source"]}
+            ),
+        ),
+    )
+
+    def provider(_):
+        """Acquire exactly the declared tables before their key types can be checked."""
+        effects.append("provider")
+        return multi_source_tables("float")
+
+    actual = execute_with_source_provider(spec, provider)
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "secondary_source_binding"
+    }
+    assert effects == ["provider"]
