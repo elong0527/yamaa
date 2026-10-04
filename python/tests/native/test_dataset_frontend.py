@@ -347,3 +347,84 @@ def test_filter_scope_allows_promoted_column_defaults(specification, index):
     assert req["templates"][index]["filter"]["bindings"] == [
         {"name": "STUDYID", "read": {"column": 0}}
     ]
+
+
+@pytest.mark.parametrize(
+    "operation,payload",
+    [
+        ("assert", {"expr": "str_contains(PARAMCD, 'COMP')"}),
+        ("implies", {"when": "TRUE", "then": "AVAL = 9223372036854775808"}),
+    ],
+)
+def test_unsupported_predicate_checks_never_read_sources(
+    specification, operation, payload
+):
+    """Whole-run admission refuses unsupported predicate checks before provider effects."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["verifications"].append({operation: payload})
+    result = execute_with_source_provider(
+        Specification.model_validate(doc), lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert result.result.features[0].operation in {
+        "predicate_regex",
+        "predicate_wide_integer_literal",
+    }
+
+
+def test_predicate_check_capability_is_required_before_provider(
+    specification, monkeypatch
+):
+    """A row-filter-only native installation cannot start a predicate-check run."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["verifications"].append({"assert": {"expr": "TRUE"}})
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: pytest.fail("native execution"),
+            dataset_capabilities=lambda: (
+                '{"protocol":"dataset/1","features":["row_filter"]}'
+            ),
+        ),
+    )
+    result = execute_with_source_provider(
+        Specification.model_validate(doc), lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert [
+        (feature.operation, feature.spec_path) for feature in result.result.features
+    ] == [("native_predicate_checks", "verifications[2].assert")]
+
+
+@pytest.mark.parametrize(
+    "text,condition,context",
+    [
+        ("AVAL >", "invalid_predicate", None),
+        ("z = a", "unknown_field", {"identifier": "a"}),
+        (None, "invalid_declaration", {"reason": "a predicate must be text"}),
+    ],
+)
+def test_later_implication_declaration_retains_native_antecedent_validation(
+    specification, text, condition, context
+):
+    """Lowering defers then-side errors until Rust validates the when declaration."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["verifications"].append({"implies": {"when": "AVAL = 'bad'", "then": text}})
+    spec = Specification.model_validate(doc)
+    admit(spec)
+    sources = load_source_tables(spec.input, ProjectResources(CASE))
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    req, error = lower(plan, sources["LB"].table)
+    assert error.condition == condition
+    assert error.spec_paths == ("verifications[2].implies.then",)
+    if context is not None:
+        assert error.context == context
+    assert len(req["verifications"]) == 3
+    checkpoint = req["verifications"][2]
+    assert checkpoint["path"] == "verifications[2].implies"
+    assert set(checkpoint["check"]) == {"predicate_declaration"}
+    assert (
+        checkpoint["check"]["predicate_declaration"]["path"]
+        == "verifications[2].implies.when"
+    )

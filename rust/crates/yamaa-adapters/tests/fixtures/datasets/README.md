@@ -20,9 +20,17 @@ completed key. Their outcomes are written from the contracts. These are boundary
 for base-R installation tests without requiring a JSON or Arrow R package.
 The JSON and TSV forms must remain consistent. These files do not qualify the
 normalized-spec compiler bridge, complete report serialization or publication.
+Absent TSV snapshots may be an empty field (legacy cases) or JSON `null`.
 
 The row-filter case keeps original ADLB data-row ordinals
 `0,1,2,3,4,5,6,7,9,12,13` (zero-based, excluding the CSV header): record AVAL > 0
 and grouped AVAL > 0.5. The false-filter case has zero rows. Both reuse the
 unchanged committed values and schema, with no verification declarations and
 explicitly authored successful outcomes. Neither case recomputes expected sums.
+
+Predicate checks add three authored outcomes: `AVAL IS NOT NULL` fails at original
+data-row ordinals `8,10,11,16`; a false antecedent still evaluates a consequent
+whose dynamic LIKE pattern ends in the explicit escape; and empty output still
+detects an incompatible float/text comparison. The latter two retain the two
+completed check records preceding the invalid predicate. These are independent
+truth and error-order cases, not new benchmark claims.

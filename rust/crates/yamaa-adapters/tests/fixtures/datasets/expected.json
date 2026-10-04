@@ -3241,5 +3241,924 @@
       ],
       "rows": []
     }
+  },
+  {
+    "case": "assert_missing_values",
+    "input": "adlb.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "LBSEQ",
+          "kind": "str"
+        },
+        {
+          "name": "LBTESTCD",
+          "kind": "str"
+        },
+        {
+          "name": "LBTEST",
+          "kind": "str"
+        },
+        {
+          "name": "VISIT",
+          "kind": "str"
+        },
+        {
+          "name": "LBSTRESN",
+          "kind": "float"
+        }
+      ],
+      "output": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "AVISIT",
+          "kind": "str"
+        },
+        {
+          "name": "PARAMCD",
+          "kind": "str"
+        },
+        {
+          "name": "PARAM",
+          "kind": "str"
+        },
+        {
+          "name": "AVAL",
+          "kind": "float"
+        },
+        {
+          "name": "DTYPE",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "records": null
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[0].derivations.PARAMCD.source",
+              "expression": {
+                "source": 3
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[0].derivations.PARAM.source",
+              "expression": {
+                "source": 4
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[0].derivations.AVAL.source",
+              "expression": {
+                "source": 6
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[0].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "missing": null
+                }
+              }
+            }
+          ]
+        },
+        {
+          "mode": {
+            "groups": [
+              0,
+              1,
+              5
+            ]
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[1].derivations.PARAMCD.literal",
+              "expression": {
+                "literal": {
+                  "str": "TOTAL"
+                }
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[1].derivations.PARAM.literal",
+              "expression": {
+                "literal": {
+                  "str": "Total of Components"
+                }
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[1].derivations.AVAL.aggregate",
+              "expression": {
+                "reduce": {
+                  "column": 6,
+                  "reducer": "SUM",
+                  "text": "SUM(LB.LBSTRESN)"
+                }
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[1].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "str": "CALCULATION"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 0,
+          "path": "columns.STUDYID.derivation.source",
+          "expression": {
+            "source": 0
+          }
+        },
+        {
+          "column": 1,
+          "path": "columns.USUBJID.derivation.source",
+          "expression": {
+            "source": 1
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.AVISIT.derivation.source",
+          "expression": {
+            "source": 5
+          }
+        }
+      ],
+      "keys": [
+        0,
+        1,
+        3,
+        2
+      ],
+      "verifications": [
+        {
+          "path": "verifications[0].unique",
+          "check": {
+            "unique": [
+              0,
+              1,
+              3,
+              2
+            ]
+          }
+        },
+        {
+          "path": "verifications[1].row_count",
+          "check": {
+            "row_count": {
+              "min": "17",
+              "max": "17"
+            }
+          }
+        },
+        {
+          "path": "verifications[2].assert",
+          "check": {
+            "assert": {
+              "path": "verifications[2].assert.expr",
+              "text": "AVAL IS NOT NULL",
+              "nodes": [
+                {
+                  "is_null": {
+                    "value": {
+                      "identifier": "AVAL"
+                    },
+                    "negated": true
+                  }
+                }
+              ],
+              "root": 0,
+              "bindings": [
+                {
+                  "name": "AVAL",
+                  "read": {
+                    "column": 5
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "failure",
+        "phase": "verification",
+        "verifications": [
+          {
+            "spec_path": "verifications[0].unique",
+            "condition": "unique_failed",
+            "requirement": "REQ-0381",
+            "evaluated_count": "17",
+            "failed_count": "0",
+            "output_rows": "17",
+            "offending_rows": []
+          },
+          {
+            "spec_path": "verifications[1].row_count",
+            "condition": "row_count_failed",
+            "requirement": "REQ-0385",
+            "evaluated_count": "1",
+            "failed_count": "0",
+            "output_rows": "17",
+            "offending_rows": []
+          },
+          {
+            "spec_path": "verifications[2].assert",
+            "condition": "assert_failed",
+            "requirement": "REQ-0384",
+            "evaluated_count": "17",
+            "failed_count": "4",
+            "output_rows": "17",
+            "offending_rows": [
+              {
+                "position": "8",
+                "keys": [
+                  {
+                    "str": "YAMAA-01"
+                  },
+                  {
+                    "str": "YAMAA-01-104"
+                  },
+                  {
+                    "str": "COMP2"
+                  },
+                  {
+                    "str": "WEEK 1"
+                  }
+                ]
+              },
+              {
+                "position": "10",
+                "keys": [
+                  {
+                    "str": "YAMAA-01"
+                  },
+                  {
+                    "str": "YAMAA-01-105"
+                  },
+                  {
+                    "str": "COMP1"
+                  },
+                  {
+                    "str": "WEEK 1"
+                  }
+                ]
+              },
+              {
+                "position": "11",
+                "keys": [
+                  {
+                    "str": "YAMAA-01"
+                  },
+                  {
+                    "str": "YAMAA-01-105"
+                  },
+                  {
+                    "str": "COMP2"
+                  },
+                  {
+                    "str": "WEEK 1"
+                  }
+                ]
+              },
+              {
+                "position": "16",
+                "keys": [
+                  {
+                    "str": "YAMAA-01"
+                  },
+                  {
+                    "str": "YAMAA-01-105"
+                  },
+                  {
+                    "str": "TOTAL"
+                  },
+                  {
+                    "str": "WEEK 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "snapshot": null
+  },
+  {
+    "case": "implies_eager_dynamic_error",
+    "input": "adlb.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "LBSEQ",
+          "kind": "str"
+        },
+        {
+          "name": "LBTESTCD",
+          "kind": "str"
+        },
+        {
+          "name": "LBTEST",
+          "kind": "str"
+        },
+        {
+          "name": "VISIT",
+          "kind": "str"
+        },
+        {
+          "name": "LBSTRESN",
+          "kind": "float"
+        }
+      ],
+      "output": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "AVISIT",
+          "kind": "str"
+        },
+        {
+          "name": "PARAMCD",
+          "kind": "str"
+        },
+        {
+          "name": "PARAM",
+          "kind": "str"
+        },
+        {
+          "name": "AVAL",
+          "kind": "float"
+        },
+        {
+          "name": "DTYPE",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "records": null
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[0].derivations.PARAMCD.source",
+              "expression": {
+                "source": 3
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[0].derivations.PARAM.source",
+              "expression": {
+                "source": 4
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[0].derivations.AVAL.source",
+              "expression": {
+                "source": 6
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[0].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "missing": null
+                }
+              }
+            }
+          ]
+        },
+        {
+          "mode": {
+            "groups": [
+              0,
+              1,
+              5
+            ]
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[1].derivations.PARAMCD.literal",
+              "expression": {
+                "literal": {
+                  "str": "TOTAL"
+                }
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[1].derivations.PARAM.literal",
+              "expression": {
+                "literal": {
+                  "str": "Total of Components"
+                }
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[1].derivations.AVAL.aggregate",
+              "expression": {
+                "reduce": {
+                  "column": 6,
+                  "reducer": "SUM",
+                  "text": "SUM(LB.LBSTRESN)"
+                }
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[1].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "str": "CALCULATION"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 0,
+          "path": "columns.STUDYID.derivation.source",
+          "expression": {
+            "source": 0
+          }
+        },
+        {
+          "column": 1,
+          "path": "columns.USUBJID.derivation.source",
+          "expression": {
+            "source": 1
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.AVISIT.derivation.source",
+          "expression": {
+            "source": 5
+          }
+        }
+      ],
+      "keys": [
+        0,
+        1,
+        3,
+        2
+      ],
+      "verifications": [
+        {
+          "path": "verifications[0].unique",
+          "check": {
+            "unique": [
+              0,
+              1,
+              3,
+              2
+            ]
+          }
+        },
+        {
+          "path": "verifications[1].row_count",
+          "check": {
+            "row_count": {
+              "min": "17",
+              "max": "17"
+            }
+          }
+        },
+        {
+          "path": "verifications[2].implies",
+          "check": {
+            "implies": {
+              "when": {
+                "path": "verifications[2].implies.when",
+                "text": "FALSE",
+                "nodes": [
+                  {
+                    "boolean": false
+                  }
+                ],
+                "root": 0,
+                "bindings": []
+              },
+              "then": {
+                "path": "verifications[2].implies.then",
+                "text": "'x' LIKE PARAMCD ESCAPE '1'",
+                "nodes": [
+                  {
+                    "like": {
+                      "value": {
+                        "literal": {
+                          "str": "x"
+                        }
+                      },
+                      "pattern": {
+                        "identifier": "PARAMCD"
+                      },
+                      "escape": "1",
+                      "negated": false
+                    }
+                  }
+                ],
+                "root": 0,
+                "bindings": [
+                  {
+                    "name": "PARAMCD",
+                    "read": {
+                      "column": 3
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "requirement": "REQ-0191",
+          "spec_paths": [
+            "verifications[2].implies.then"
+          ],
+          "context": {
+            "reason": {
+              "str": "LIKE pattern has a dangling escape"
+            }
+          },
+          "operand_route": []
+        },
+        "identity": null,
+        "verifications": [
+          {
+            "spec_path": "verifications[0].unique",
+            "condition": "unique_failed",
+            "requirement": "REQ-0381",
+            "evaluated_count": "17",
+            "failed_count": "0",
+            "output_rows": "17",
+            "offending_rows": []
+          },
+          {
+            "spec_path": "verifications[1].row_count",
+            "condition": "row_count_failed",
+            "requirement": "REQ-0385",
+            "evaluated_count": "1",
+            "failed_count": "0",
+            "output_rows": "17",
+            "offending_rows": []
+          }
+        ]
+      }
+    },
+    "snapshot": null
+  },
+  {
+    "case": "assert_invalid_type_on_empty",
+    "input": "adlb-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "LBSEQ",
+          "kind": "str"
+        },
+        {
+          "name": "LBTESTCD",
+          "kind": "str"
+        },
+        {
+          "name": "LBTEST",
+          "kind": "str"
+        },
+        {
+          "name": "VISIT",
+          "kind": "str"
+        },
+        {
+          "name": "LBSTRESN",
+          "kind": "float"
+        }
+      ],
+      "output": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "AVISIT",
+          "kind": "str"
+        },
+        {
+          "name": "PARAMCD",
+          "kind": "str"
+        },
+        {
+          "name": "PARAM",
+          "kind": "str"
+        },
+        {
+          "name": "AVAL",
+          "kind": "float"
+        },
+        {
+          "name": "DTYPE",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "records": null
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[0].derivations.PARAMCD.source",
+              "expression": {
+                "source": 3
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[0].derivations.PARAM.source",
+              "expression": {
+                "source": 4
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[0].derivations.AVAL.source",
+              "expression": {
+                "source": 6
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[0].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "missing": null
+                }
+              }
+            }
+          ]
+        },
+        {
+          "mode": {
+            "groups": [
+              0,
+              1,
+              5
+            ]
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[1].derivations.PARAMCD.literal",
+              "expression": {
+                "literal": {
+                  "str": "TOTAL"
+                }
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[1].derivations.PARAM.literal",
+              "expression": {
+                "literal": {
+                  "str": "Total of Components"
+                }
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[1].derivations.AVAL.aggregate",
+              "expression": {
+                "reduce": {
+                  "column": 6,
+                  "reducer": "SUM",
+                  "text": "SUM(LB.LBSTRESN)"
+                }
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[1].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "str": "CALCULATION"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 0,
+          "path": "columns.STUDYID.derivation.source",
+          "expression": {
+            "source": 0
+          }
+        },
+        {
+          "column": 1,
+          "path": "columns.USUBJID.derivation.source",
+          "expression": {
+            "source": 1
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.AVISIT.derivation.source",
+          "expression": {
+            "source": 5
+          }
+        }
+      ],
+      "keys": [
+        0,
+        1,
+        3,
+        2
+      ],
+      "verifications": [
+        {
+          "path": "verifications[0].unique",
+          "check": {
+            "unique": [
+              0,
+              1,
+              3,
+              2
+            ]
+          }
+        },
+        {
+          "path": "verifications[1].row_count",
+          "check": {
+            "row_count": {
+              "min": "17",
+              "max": "17"
+            }
+          }
+        },
+        {
+          "path": "verifications[2].assert",
+          "check": {
+            "assert": {
+              "path": "verifications[2].assert.expr",
+              "text": "AVAL = 'bad'",
+              "nodes": [
+                {
+                  "compare": {
+                    "operator": "eq",
+                    "left": {
+                      "identifier": "AVAL"
+                    },
+                    "right": {
+                      "literal": {
+                        "str": "bad"
+                      }
+                    }
+                  }
+                }
+              ],
+              "root": 0,
+              "bindings": [
+                {
+                  "name": "AVAL",
+                  "read": {
+                    "column": 5
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "verifications[2].assert.expr"
+          ],
+          "context": {
+            "left_type": {
+              "str": "float"
+            },
+            "right_type": {
+              "str": "str"
+            }
+          },
+          "operand_route": []
+        },
+        "identity": null,
+        "verifications": [
+          {
+            "spec_path": "verifications[0].unique",
+            "condition": "unique_failed",
+            "requirement": "REQ-0381",
+            "evaluated_count": "0",
+            "failed_count": "0",
+            "output_rows": "0",
+            "offending_rows": []
+          },
+          {
+            "spec_path": "verifications[1].row_count",
+            "condition": "row_count_failed",
+            "requirement": "REQ-0385",
+            "evaluated_count": "1",
+            "failed_count": "1",
+            "output_rows": "0",
+            "offending_rows": []
+          }
+        ]
+      }
+    },
+    "snapshot": null
   }
 ]

@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -154,6 +154,9 @@ struct Template {
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Check {
+    Assert(Predicate),
+    PredicateDeclaration(Predicate),
+    Implies { when: Predicate, then: Predicate },
     Unique(Vec<usize>),
     RowCount(Bounds),
 }
@@ -244,6 +247,14 @@ impl PreparedDataset {
                 .map(|verification| {
                     path(&verification.path)?;
                     let check = match verification.check {
+                        Check::Assert(predicate) => dataset::Check::Assert(predicate.prepare()?),
+                        Check::PredicateDeclaration(predicate) => {
+                            dataset::Check::PredicateDeclaration(predicate.prepare()?)
+                        }
+                        Check::Implies { when, then } => dataset::Check::Implies {
+                            when: when.prepare()?,
+                            then: then.prepare()?,
+                        },
                         Check::Unique(columns) => {
                             if columns.len() > MAX_COLUMNS {
                                 return Err(Error::RequestLimit);
@@ -400,6 +411,8 @@ enum Outcome {
     Condition {
         diagnostic: Box<Diagnostic>,
         identity: Option<Identity>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        verifications: Option<Vec<Record>>,
     },
     Limit {
         resource: &'static str,
@@ -496,10 +509,12 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             identity: keys,
             ..
         } => Outcome::Condition {
+            verifications: None,
             diagnostic: conversion(error, path),
             identity: keys.map(identity),
         },
         ExecutionError::Predicate { error, .. } => Outcome::Condition {
+            verifications: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
         },
@@ -508,8 +523,17 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             error: TableReductionError::Reduction(ReductionError::Arithmetic { error, .. }),
             identity: keys,
         } => Outcome::Condition {
+            verifications: None,
             diagnostic: arithmetic(error, path),
             identity: keys.map(identity),
+        },
+        ExecutionError::VerificationPredicate {
+            error,
+            records: completed,
+        } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::predicate(error)?,
+            identity: None,
+            verifications: Some(records(completed)),
         },
         ExecutionError::SchemaMismatch => return Err(Error::InvalidRequest),
         // Admitted references and normalized owned Arrow values make other semantic

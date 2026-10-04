@@ -5,7 +5,7 @@
 
 use crate::{
     dataset_budget::Budget,
-    dataset_predicate::{BindingError, Filter},
+    dataset_predicate::{BindingError, BoundPredicate},
     table_grouping::{partition, GroupingError},
     table_reduction::{reduce_column, TableReductionError},
 };
@@ -50,17 +50,27 @@ pub enum RowMode {
 pub struct RowTemplate {
     pub mode: RowMode,
     pub assignments: Vec<Assignment>,
-    pub filter: Option<Filter>,
+    pub filter: Option<BoundPredicate>,
 }
 
 /// Error-severity dataset checks supported by this closed application slice.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Check {
+    Assert(BoundPredicate),
+    /// Compiler checkpoint before a later deferred declaration error; emits no record.
+    PredicateDeclaration(BoundPredicate),
+    Implies {
+        when: BoundPredicate,
+        then: BoundPredicate,
+    },
     Unique(Vec<usize>),
-    RowCount { min: Option<i64>, max: Option<i64> },
+    RowCount {
+        min: Option<i64>,
+        max: Option<i64>,
+    },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Verification {
     pub path: String,
     pub check: Check,
@@ -110,6 +120,7 @@ pub enum PlanError {
     InvalidBounds,
     DuplicateVerificationPath,
     Filter(BindingError),
+    Predicate(BindingError),
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -254,6 +265,16 @@ impl DatasetPlan {
                 return Err(PlanError::DuplicateVerificationPath);
             }
             match &verification.check {
+                Check::Assert(predicate) | Check::PredicateDeclaration(predicate) => predicate
+                    .validate(0, &vec![true; width], true)
+                    .map_err(PlanError::Predicate)?,
+                Check::Implies { when, then } => {
+                    for predicate in [when, then] {
+                        predicate
+                            .validate(0, &vec![true; width], true)
+                            .map_err(PlanError::Predicate)?;
+                    }
+                }
                 Check::Unique(columns) => {
                     // Unlike row.group_by, unique.columns permits repeated names.
                     if columns.is_empty() || columns.iter().any(|&column| column >= width) {
@@ -341,6 +362,10 @@ pub struct Execution {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    VerificationPredicate {
+        error: yamaa_core::predicate::EvaluationError<CellError<Infallible>>,
+        records: Vec<CheckRecord>,
+    },
     Predicate {
         source_row: usize,
         error: yamaa_core::predicate::EvaluationError<CellError<E>>,
@@ -396,7 +421,7 @@ pub(crate) fn own(value: ValueRef<'_>) -> Value {
 }
 
 /// Keep predicate resource policies separate from portable language conditions.
-fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> ExecutionError<E> {
+pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> ExecutionError<E> {
     use yamaa_core::predicate::Resource as P;
     let resource = match limit.resource {
         P::Work => Resource::PredicateWork,
@@ -628,6 +653,19 @@ impl DatasetPlan {
         let mut records = Vec::new();
         for verification in &self.verifications {
             let record = match &verification.check {
+                Check::Assert(_) | Check::Implies { .. } | Check::PredicateDeclaration(_) => {
+                    let Some(record) = crate::dataset_verification::predicate_check(
+                        verification,
+                        &dataset,
+                        &self.keys,
+                        &mut budget,
+                        &mut records,
+                    )?
+                    else {
+                        continue;
+                    };
+                    record
+                }
                 Check::Unique(columns) => {
                     // Repeated references do not change tuple equality. Keep first
                     // declaration order while using the strict grouping primitive.
@@ -709,7 +747,7 @@ impl DatasetPlan {
 }
 
 /// Retain original output keys without substituting projected or row-number identity.
-fn identities<E>(
+pub(crate) fn identities<E>(
     dataset: &Dataset,
     keys: &[usize],
     rows: impl IntoIterator<Item = usize>,

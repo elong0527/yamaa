@@ -10,7 +10,7 @@ for (i in seq_len(nrow(truth))) {
   rm(source)
   invisible(gc())
   stopifnot(identical(actual$outcome, truth$expected[i]))
-  if (nzchar(truth$snapshot[i])) {
+  if (nzchar(truth$snapshot[i]) && truth$snapshot[i] != "null") {
     stopifnot(is.raw(actual$table),
               identical(table_snapshot(actual$table), truth$snapshot[i]),
               identical(table_round_trip(actual$table), actual$table))
@@ -38,4 +38,4 @@ stopifnot(is.raw(actual$table), identical(actual$outcome, truth$expected[1]),
 
 # Feature discovery is shared metadata and performs no source loading.
 stopifnot(identical(dataset_capabilities(),
-  '{"protocol":"dataset/1","features":["row_filter"]}'))
+  '{"protocol":"dataset/1","features":["row_filter","predicate_checks"]}'))

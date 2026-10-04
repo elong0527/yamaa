@@ -1415,7 +1415,7 @@ fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
 }
 
 use yamaa_core::predicate::{self, Comparison, Node, Scalar};
-use yamaa_engine::dataset_predicate::{Binding, BindingError, Filter, Read};
+use yamaa_engine::dataset_predicate::{Binding, BindingError, BoundPredicate as Filter, Read};
 
 /// Admit a single authored predicate and its explicit scope bindings.
 fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
@@ -1755,4 +1755,354 @@ fn filter_limits_are_cumulative_and_recover_on_new_execution() {
             .rows()
             .is_empty());
     }
+}
+
+/// Supply a verification predicate with its actual owning declaration path.
+fn check_predicate(node: Node, bindings: Vec<Binding>, path: &str) -> Filter {
+    Filter::new(
+        predicate::Plan::new(
+            vec![node],
+            0,
+            path.into(),
+            "authored verification predicate".into(),
+            predicate::Limits::default(),
+        )
+        .unwrap(),
+        bindings,
+    )
+    .unwrap()
+}
+/// Assertions fail on false and unknown; implications fail only for true -> nontrue.
+#[test]
+fn predicate_checks_follow_truth_tables_and_keep_every_record() {
+    let source = table(
+        &[("id", ColumnType::Int)],
+        vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+    );
+    let truths = [
+        Node::Boolean(true),
+        Node::Boolean(false),
+        Node::Compare {
+            operator: Comparison::Equal,
+            left: Scalar::Literal(Value::Missing),
+            right: Scalar::Literal(Value::Int(1)),
+        },
+    ];
+    for (index, node) in truths.iter().enumerate() {
+        let plan = record_plan(
+            &source,
+            source.schema.clone(),
+            vec![assign(0, Expression::Source(0))],
+            vec![verification(Check::Assert(check_predicate(
+                node.clone(),
+                vec![],
+                "verifications[0].assert.expr",
+            )))],
+        );
+        let result = plan.execute(&source, limits());
+        if index == 0 {
+            let records = result.unwrap().verifications;
+            assert_eq!(records[0].evaluated_count, 2);
+            assert_eq!(records[0].failed_count, 0);
+        } else {
+            let ExecutionError::VerificationFailures(records) = *result.unwrap_err() else {
+                panic!("assert data failure")
+            };
+            assert_eq!(records[0].condition, "assert_failed");
+            assert_eq!(records[0].failed_count, 2);
+            assert_eq!(
+                records[0]
+                    .offending_rows
+                    .iter()
+                    .map(|row| row.position)
+                    .collect::<Vec<_>>(),
+                vec![0, 1]
+            );
+        }
+    }
+    for (a, when) in truths.iter().enumerate() {
+        for (b, then) in truths.iter().enumerate() {
+            let plan = record_plan(
+                &source,
+                source.schema.clone(),
+                vec![assign(0, Expression::Source(0))],
+                vec![
+                    verification(Check::Implies {
+                        when: check_predicate(
+                            when.clone(),
+                            vec![],
+                            "verifications[0].implies.when",
+                        ),
+                        then: check_predicate(
+                            then.clone(),
+                            vec![],
+                            "verifications[0].implies.then",
+                        ),
+                    }),
+                    verification(Check::RowCount {
+                        min: Some(2),
+                        max: Some(2),
+                    }),
+                ],
+            );
+            let result = plan.execute(&source, limits());
+            if a == 0 && b != 0 {
+                let ExecutionError::VerificationFailures(records) = *result.unwrap_err() else {
+                    panic!("implication data failure")
+                };
+                assert_eq!(records.len(), 2);
+                assert_eq!(records[0].condition, "implication_failed");
+                assert_eq!(records[0].requirement, "REQ-0383");
+                assert_eq!(records[0].failed_count, 2);
+                assert_eq!(records[1].failed_count, 0);
+            } else {
+                assert_eq!(result.unwrap().verifications[0].failed_count, 0);
+            }
+        }
+    }
+}
+/// Invalid declarations fail even for empty output, preserving earlier successful/failed checks.
+#[test]
+fn predicate_declaration_validation_is_sequential_on_empty_output() {
+    for count in [0, 1] {
+        let source = table(&[("id", ColumnType::Int)], vec![vec![Value::Int(1)]; count]);
+        let invalid = check_predicate(
+            Node::Compare {
+                operator: Comparison::Equal,
+                left: Scalar::Identifier("id".into()),
+                right: Scalar::Literal(Value::Str("bad".into())),
+            },
+            vec![binding("id", Read::Column(0))],
+            "verifications[1].implies.then",
+        );
+        let plan = record_plan(
+            &source,
+            source.schema.clone(),
+            vec![assign(0, Expression::Source(0))],
+            vec![
+                verification(Check::RowCount {
+                    min: Some(2),
+                    max: None,
+                }),
+                verification(Check::Implies {
+                    when: check_predicate(
+                        Node::Boolean(false),
+                        vec![],
+                        "verifications[1].implies.when",
+                    ),
+                    then: invalid,
+                }),
+                verification(Check::RowCount {
+                    min: Some(0),
+                    max: None,
+                }),
+            ],
+        );
+        let ExecutionError::VerificationPredicate { error, records } =
+            *plan.execute(&source, limits()).unwrap_err()
+        else {
+            panic!("predicate declaration failure")
+        };
+        assert_eq!(error.spec_path, "verifications[1].implies.then");
+        assert!(matches!(
+            error.kind,
+            predicate::ErrorKind::Condition(predicate::Condition::IncompatiblePair { .. })
+        ));
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].failed_count, 1);
+        assert_eq!(records[0].output_rows, count);
+    }
+}
+/// A false implication antecedent never masks a later dynamic pattern failure.
+#[test]
+fn implication_evaluates_dynamic_consequent_and_keeps_prefix() {
+    let source = table(
+        &[("id", ColumnType::Int), ("p", ColumnType::Str)],
+        vec![
+            vec![Value::Int(1), Value::Str("ok".into())],
+            vec![Value::Int(2), Value::Str("tail!".into())],
+        ],
+    );
+    let then = check_predicate(
+        Node::Like {
+            value: Scalar::Literal(Value::Str("text".into())),
+            pattern: Scalar::Identifier("p".into()),
+            escape: Some('!'),
+            negated: false,
+        },
+        vec![binding("p", Read::Column(1))],
+        "verifications[1].implies.then",
+    );
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Source(1)),
+        ],
+        vec![
+            verification(Check::RowCount {
+                min: Some(2),
+                max: Some(2),
+            }),
+            verification(Check::Implies {
+                when: check_predicate(
+                    Node::Boolean(false),
+                    vec![],
+                    "verifications[1].implies.when",
+                ),
+                then,
+            }),
+        ],
+    );
+    let ExecutionError::VerificationPredicate { error, records } =
+        *plan.execute(&source, limits()).unwrap_err()
+    else {
+        panic!("dynamic consequent failure")
+    };
+    assert_eq!(
+        error.kind,
+        predicate::ErrorKind::Condition(predicate::Condition::DanglingEscape)
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].failed_count, 0);
+    assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0), (0, 1), (1, 1)]);
+}
+/// Check predicates cannot escape completed-output scope and read source values.
+#[test]
+fn predicate_checks_admit_only_completed_output_bindings() {
+    let source = table(&[("id", ColumnType::Int)], vec![vec![Value::Int(1)]]);
+    for (read, error) in [
+        (Read::Source(0), BindingError::GroupedSource),
+        (Read::Column(1), BindingError::UnavailableColumn),
+    ] {
+        let plan = DatasetPlan::new(
+            source.schema.clone(),
+            source.schema.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![],
+                filter: None,
+            }],
+            vec![assign(0, Expression::Source(0))],
+            vec![0],
+            vec![verification(Check::Assert(positive(read)))],
+        );
+        assert_eq!(plan, Err(PlanError::Predicate(error)));
+    }
+    assert!(source.reads.borrow().is_empty());
+}
+
+/// A compiler checkpoint validates only a declaration, never data or a check record.
+#[test]
+fn predicate_declaration_checkpoint_does_not_evaluate_rows() {
+    let source = table(
+        &[("id", ColumnType::Int), ("p", ColumnType::Str)],
+        vec![vec![Value::Int(1), Value::Str("tail!".into())]],
+    );
+    let predicate = check_predicate(
+        Node::Like {
+            value: Scalar::Literal(Value::Str("text".into())),
+            pattern: Scalar::Identifier("p".into()),
+            escape: Some('!'),
+            negated: false,
+        },
+        vec![binding("p", Read::Column(1))],
+        "verifications[1].implies.when",
+    );
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Source(1)),
+        ],
+        vec![
+            verification(Check::RowCount {
+                min: Some(1),
+                max: Some(1),
+            }),
+            verification(Check::PredicateDeclaration(predicate)),
+        ],
+    );
+    let actual = plan.execute(&source, limits()).unwrap();
+    assert_eq!(actual.verifications.len(), 1);
+    assert_eq!(actual.dataset.rows(), source.rows);
+}
+
+/// Sample validation consumes the same cumulative budget, including on empty datasets.
+#[test]
+fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(&[("id", ColumnType::Str)], vec![]);
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![assign(0, Expression::Source(0))],
+        vec![
+            verification(Check::Assert(check_predicate(
+                Node::Boolean(true),
+                vec![],
+                "verifications[0].assert.expr",
+            ))),
+            verification(Check::Assert(check_predicate(
+                Node::Boolean(true),
+                vec![],
+                "verifications[1].assert.expr",
+            ))),
+        ],
+    );
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 1,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::PredicateWork,
+            limit: 1,
+            ..
+        }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().verifications.len(),
+        2
+    );
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![assign(0, Expression::Source(0))],
+        vec![verification(Check::Assert(check_predicate(
+            Node::IsNull {
+                value: Scalar::Identifier("id".into()),
+                negated: true,
+            },
+            vec![binding("id", Read::Column(0))],
+            "verifications[0].assert.expr",
+        )))],
+    );
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 5,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::PredicateTextBytes,
+            limit: 5,
+            ..
+        }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().verifications[0].evaluated_count,
+        0
+    );
 }

@@ -63,7 +63,8 @@ port returns ownership. A resolver may instead lend `ValueRef` through
 and each source-scalar/matching-cell visit before performing that work. Counters
 use checked addition. `evaluate` starts a fresh budget; `evaluate_with_budget`
 also consumes an application-owned cumulative `Budget`, including on failures.
-Dataset filters share that budget across all templates and candidates. Resource
+Dataset filters and checks share that budget across all templates, candidates,
+declaration representatives and output rows. Resource
 refusals remain separate from language conditions and unknown/false truth.
 
 These policies do not bound allocations made by the caller while constructing
@@ -87,10 +88,13 @@ literal representations before constructing the plan, including static ESCAPE
 errors and literal overflow/temporal diagnostics. The typed interface cannot
 represent a portable-regex call; valid `str_contains` must remain explicitly
 unsupported at future admission until regex contract 2.0.0 is implemented and
-qualified. The shared parser/compiler, dataset predicate checks, root/source filters,
+qualified. The shared parser/compiler, root/source filters,
 lookup/window/BMI integration and full Python/R specification execution remain open
-gates. Explicit row-template filters now compose this evaluator through the
+gates. Explicit row-template filters and assert/implies checks compose this evaluator through the
 [dataset/1 bridge](DATASET_TRANSPORT.md), with complete phase-aware binding before
 source IPC decoding. Installed Python and R replay the shared typed filter cases;
 the optional Python frontend uses the existing parser as a temporary syntax port
-and never calls the reference predicate evaluator on native data.
+and never calls the reference predicate evaluator on native data or declaration
+representatives. Check declarations validate nonmissing type representatives
+before actual rows, preserving eager evaluation and the completed check ledger
+when a later predicate raises a semantic condition.
