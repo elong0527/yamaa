@@ -1,7 +1,7 @@
 # Prepare Response Assessments for Best Overall Response
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-response-prep.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
 **Goal:** prepare each collected overall response assessment for best
 overall response (BOR) selection, adding `BORCAT`, `BORPRI`, and
@@ -9,7 +9,8 @@ overall response (BOR) selection, adding `BORCAT`, `BORPRI`, and
 
 **Input:** overall response assessments carrying the analysis date
 (`ADT`), the assessment day relative to randomization (`RANDDY`), and
-the collected overall response (`AVALC`).
+the collected overall response (`AVALC`), plus each subject's start
+date of new anti-cancer therapy, when one was started.
 
 **Variables:**
 
@@ -20,8 +21,10 @@ the collected overall response (`AVALC`).
   `PD`, or not evaluable as `NE`. Stable disease and
   neither-complete-nor-progressive disease count only on or after
   day 42 after randomization; earlier ones, or ones with no day,
-  fall back to not evaluable. Any other collected value, including a
-  missing one, supports no category, so `BORCAT` stays empty.
+  fall back to not evaluable. An assessment on or after the start of
+  new anti-cancer therapy supports no category. Any other collected
+  value, including a missing one, supports no category, so `BORCAT`
+  stays empty.
 - `BORPRI` orders the supported categories as complete response
   (`1`), partial response (`2`), stable disease (`3`),
   neither-complete-nor-progressive disease (`4`), progressive

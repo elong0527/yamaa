@@ -17,12 +17,25 @@ raw <- read_csv(
   )
 )
 
-# The response category each record can support; stable and
-# neither-complete-nor-progressive disease count only on or after day 42,
-# and earlier ones, or ones with no day, fall back to not evaluable.
+therapy <- read_csv(
+  "/app/input/adsl.csv",
+  col_types = cols(
+    NTXSTDT = col_date(),
+    .default = col_character()
+  )
+)
+
+raw <- raw |>
+  left_join(therapy, by = c("STUDYID", "USUBJID"))
+
+# The response category each record can support; an assessment on or after
+# the subject's new anti-cancer therapy start supports no category. Stable
+# and neither-complete-nor-progressive disease count only on or after day
+# 42, and earlier ones, or ones with no day, fall back to not evaluable.
 based <- raw |>
   mutate(
     BORCAT = case_when(
+      !is.na(NTXSTDT) & ADT >= NTXSTDT ~ NA_character_,
       AVALC %in% c("CR", "PR", "PD", "NE") ~ AVALC,
       AVALC %in% "SD" & !is.na(RANDDY) & RANDDY >= 42L ~ "SD",
       AVALC %in% "SD" ~ "NE",

@@ -3,6 +3,8 @@ domain: ADRS
 keys: [STUDYID, USUBJID, ASEQ]
 input:
   ADRS_RAW: {path: input/adrs_raw.csv, types: {ADT: date}}
+  ADSL: {path: input/adsl.csv, types: {NTXSTDT: date}}
+base: ADRS_RAW
 
 output:
   path: adrs.csv
@@ -39,14 +41,29 @@ columns:
     label: Analysis Value (C)
     derivation: ADRS_RAW.AVALC
 
-  # Stable disease and NON-CR/NON-PD count only from day 42 after
-  # randomization; earlier, or with no day, they fall back to NE, as does
-  # a collected NE. Any other value, or none, supports no category.
+  # The subject-level start date of new anti-cancer therapy, when one was
+  # started; empty for subjects with no new therapy. Carried as an
+  # intermediate only: it drives the BORCAT exclusion below and is not in
+  # the output.
+  - name: NTXSTDT
+    type: date
+    label: New Anti-Cancer Therapy Start Date
+    derivation: ADSL.NTXSTDT
+
+  # Assessments on or after the start of new anti-cancer therapy are
+  # excluded from best overall response consideration, so they support no
+  # category -- like any other unusable assessment. A subject with no
+  # therapy date has no excluded assessments. Otherwise: stable disease
+  # and NON-CR/NON-PD count only from day 42 after randomization; earlier,
+  # or with no day, they fall back to NE, as does a collected NE. Any
+  # other value, or none, supports no category.
   - name: BORCAT
     type: str
     label: Best Overall Response Category
     derivation:
       case:
+        - when: "NTXSTDT IS NOT NULL AND ADT >= NTXSTDT"
+          then: {literal: null}
         - when: "AVALC = 'CR'"
           then: {literal: CR}
         - when: "AVALC = 'PR'"
@@ -96,4 +113,4 @@ columns:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, ASEQ]
-  - row_count: {min: 19, max: 19}
+  - row_count: {min: 21, max: 21}

@@ -1,6 +1,6 @@
-Following CDISC ADaM standards, use the provided ADRS_RAW dataset to
-create an ADRS dataset with one record per collected overall response
-assessment.
+Following CDISC ADaM standards, use the provided ADRS_RAW and ADSL
+datasets to create an ADRS dataset with one record per collected
+overall response assessment.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ
