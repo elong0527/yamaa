@@ -1,7 +1,7 @@
 """Characterize candidate libm functions; a successful run never means parity.
 
 Exact mismatches are reported, not tolerated or promoted into expected fixtures.
-The source compiler keeps EXP/LN/POWER unsupported regardless of this report.
+The default compiler keeps EXP/LN/POWER unsupported; opt-in uses PortableLibmV1.
 Only finite EXP inputs, positive LN inputs and positive POWER bases are sampled;
 domain diagnostics, decimal rounding and completed-result formatting need separate
 qualification. Python math calls mirror the numeric reference's promoted inputs.
@@ -68,6 +68,7 @@ def assess(lines):
         for name in FUNCTIONS
     }
     mismatches = []
+    candidate_results = []
     seen = set()
     for line in lines:
         case, name, left_bits, right_bits, result_bits = line.strip().split("\t")
@@ -76,6 +77,14 @@ def assess(lines):
         seen.add((case, name))
         expected = reference(name, decode(left_bits), decode(right_bits))
         actual = normalized_bits(decode(result_bits))
+        candidate_results.append(
+            {
+                "case": case,
+                "function": name,
+                "inputs": [left_bits, right_bits],
+                "result": actual,
+            }
+        )
         category, ulps = difference(actual, expected)
         counts[name]["samples"] += 1
         if category is None:
@@ -98,7 +107,9 @@ def assess(lines):
             }
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "policy": "PortableLibmV1",
+        "candidate_results": candidate_results,
         "candidate": "libm 0.2.16, default features disabled",
         "reference": "Python platform math, nonfinite results normalized to missing",
         "host": {
@@ -107,7 +118,7 @@ def assess(lines):
             "python": platform.python_version(),
         },
         "qualification": "blocked-by-mismatches" if mismatches else "not-qualified",
-        "functions_remain_unsupported": list(FUNCTIONS),
+        "default_functions_remain_unsupported": list(FUNCTIONS),
         "counts": counts,
         "mismatches": mismatches,
     }
@@ -139,7 +150,9 @@ def main():
         print(f"{name}: {count}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Qualification: {report['qualification']}; EXP/LN/POWER remain unsupported")
+    print(
+        f"Qualification: {report['qualification']}; default EXP/LN/POWER remain unsupported"
+    )
     print(f"Assessment report: {args.output}")
 
 

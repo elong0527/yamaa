@@ -1,0 +1,39 @@
+id	expression	bindings	expected	trace	path
+exp-zero	EXP(A)	A=int:0	float:3ff0000000000000	A	-
+exp-negative-zero	EXP(A)	A=float:-0.0	float:3ff0000000000000	A	-
+exp-overflow	EXP(A)	A=int:710	missing	A	-
+exp-underflow	EXP(A)	A=int:-746	float:0000000000000000	A	-
+exp-missing	EXP(A)	A=missing	missing	A	-
+ln-one	LN(A)	A=int:1	float:0000000000000000	A	-
+ln-zero	LN(A)	A=int:0	error:ln_of_nonpositive:REQ-0432	A	-
+ln-negative-zero	LN(A)	A=float:-0.0	error:ln_of_nonpositive:REQ-0432	A	-
+ln-negative	LN(A)	A=int:-1	error:ln_of_nonpositive:REQ-0432	A	-
+ln-missing	LN(A)	A=missing	missing	A	-
+power-int	POWER(A, B)	A=int:2;B=int:3	float:4020000000000000	A,B	-
+power-negative-odd	POWER(A, B)	A=int:-2;B=int:3	float:c020000000000000	A,B	-
+power-negative-even	POWER(A, B)	A=int:-2;B=int:2	float:4010000000000000	A,B	-
+power-reciprocal	POWER(A, B)	A=int:2;B=int:-3	float:3fc0000000000000	A,B	-
+power-fractional	POWER(A, B)	A=int:4;B=float:0.5	float:4000000000000000	A,B	-
+power-zero-zero	POWER(A, B)	A=int:0;B=int:0	float:3ff0000000000000	A,B	-
+power-zero-negative	POWER(A, B)	A=int:0;B=int:-1	error:invalid_power:REQ-0433	A,B	-
+power-negative-fraction	POWER(A, B)	A=int:-2;B=float:0.5	error:invalid_power:REQ-0433	A,B	-
+power-negative-zero-odd	POWER(A, B)	A=float:-0.0;B=int:3	float:8000000000000000	A,B	-
+power-negative-zero-even	POWER(A, B)	A=float:-0.0;B=int:2	float:0000000000000000	A,B	-
+power-promoted-odd	POWER(A, B)	A=int:-1;B=int:9007199254740993	float:3ff0000000000000	A,B	-
+power-largest-int	POWER(A, B)	A=int:-1;B=int:9223372036854775807	float:3ff0000000000000	A,B	-
+power-missing-base	POWER(A, B)	A=missing;B=int:-1	missing	A,B	-
+power-missing-exponent	POWER(A, B)	A=int:0;B=missing	missing	A,B	-
+power-overflow	POWER(A, B)	A=int:2;B=int:1024	missing	A,B	-
+power-underflow	POWER(A, B)	A=int:-2;B=int:-1075	float:8000000000000000	A,B	-
+power-min-subnormal	POWER(A, B)	A=int:2;B=int:-1074	float:0000000000000001	A,B	-
+exp-unknown	EXP(A)	-	error:unknown_field:REQ-0443:A	A	unary
+ln-bool	LN(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
+ln-operand-error	LN(1 / 0)	-	error:division_by_zero:REQ-0430	-	unary
+power-eager	POWER(A, B)	A=missing	error:unknown_field:REQ-0443:B	A,B	right
+power-second-failure-first	POWER(-2, B)	B=str:0.5	error:incompatible_input_type:REQ-0444:B:str	B	right
+power-first-failure	POWER(A, B)	B=int:2	error:unknown_field:REQ-0443:A	A	left
+power-literal-overflow	POWER(9223372036854775808, A)	A=int:2	error:integer_overflow:REQ-0434:9223372036854775808	-	left
+math-nested-domain	EXP(LN(A))	A=int:0	error:ln_of_nonpositive:REQ-0432	A	unary
+math-normalization-before-next	LN(EXP(A))	A=int:710	missing	A	-
+math-normalization-in-selection	COALESCE(EXP(A), B)	A=int:710;B=int:2	int:2	A,B	-
+math-nonfinite-literal	POWER(1, 1e9999)	-	missing	-	-

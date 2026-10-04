@@ -20,7 +20,9 @@ class MathAssessmentTests(unittest.TestCase):
             ["exact\tLN\t3ff0000000000000\t0000000000000000\t0000000000000000"]
         )
         self.assertEqual(report["qualification"], "not-qualified")
-        self.assertEqual(report["functions_remain_unsupported"], ["EXP", "LN", "POWER"])
+        self.assertEqual(
+            report["default_functions_remain_unsupported"], ["EXP", "LN", "POWER"]
+        )
         self.assertEqual(report["counts"]["LN"]["exact"], 1)
 
     def test_one_ulp_is_retained_as_a_blocker(self):

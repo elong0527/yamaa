@@ -1,13 +1,45 @@
-//! Assess candidate libm operations without enabling them in the core evaluator.
+//! Assess the opt-in portable math policy without changing default compilation.
 //! Outputs are observations, never expected fixture values or backend qualification.
 
-/// Emit exact input/output bits before the assessment runner normalizes nonfinite results.
+use std::convert::Infallible;
+use yamaa_core::evaluation::NumericResolver;
+use yamaa_core::numeric::Number;
+use yamaa_core::numeric_compiler::{compile_numeric_with_policy, CompileLimits, MathPolicy};
+use yamaa_core::value::{Selection, Value};
+
+/// Supply normalized values through the same compiled evaluator used by callers.
+struct Inputs(f64, f64);
+impl NumericResolver for Inputs {
+    type Error = Infallible;
+    /// Resolve exactly the two probe operand names.
+    fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
+        Ok(Selection::Present(Value::float(match name {
+            "A" => self.0,
+            "B" => self.1,
+            _ => panic!("unknown probe operand"),
+        })))
+    }
+}
+
+/// Emit exact bits from the opt-in compiled policy, before assessment normalization.
 fn sample(id: &str, x: f64, y: f64) {
-    for (name, a, b, result) in [
-        ("EXP", x, 0.0, libm::exp(x)),
-        ("LN", y, 0.0, libm::log(y)),
-        ("POWER", y, x / 100.0, libm::pow(y, x / 100.0)),
+    for (name, a, b, source) in [
+        ("EXP", x, 0.0, "EXP(A)"),
+        ("LN", y, 0.0, "LN(A)"),
+        ("POWER", y, x / 100.0, "POWER(A, B)"),
     ] {
+        let plan = compile_numeric_with_policy(
+            source,
+            "assessment",
+            CompileLimits::default(),
+            MathPolicy::PortableLibmV1,
+        )
+        .unwrap();
+        let result = match plan.evaluate(&mut Inputs(a, b)).unwrap() {
+            Number::Float(value) => value.get(),
+            Number::Missing => f64::NAN,
+            Number::Int(_) => panic!("math policy must return float"),
+        };
         println!(
             "{id}\t{name}\t{:016x}\t{:016x}\t{:016x}",
             a.to_bits(),

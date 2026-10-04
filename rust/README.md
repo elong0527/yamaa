@@ -198,7 +198,7 @@ translation still require the explicit boundary tests in step 5 of #1585.
 
 ## Remaining math compatibility gate
 
-`EXP`, `LN` and `POWER` remain unsupported by `compile_numeric`. The candidate
+`EXP`, `LN` and `POWER` remain unsupported by default `compile_numeric`. The candidate
 libm functions do not reproduce Python platform math bit-for-bit on the assessed
 sample. `tools/assess_math.py --output /tmp/math-assessment.json` measures this
 without modifying expected fixtures or accepting a numerical tolerance. Run it
@@ -221,6 +221,7 @@ is `blocked-by-mismatches` when any difference exists, otherwise `not-qualified`
 a finite sample cannot establish complete parity. Domain/missingness, zero sign,
 finite bit differences and ULP distance must not be collapsed into an overall pass.
 The report is observational evidence and never regenerated expected truth.
+Schema 2 also retains every candidate observation for exact cross-platform checks.
 
 Before enabling these functions, select and document a common numerical policy:
 either reproduce the supported reference behavior, or make an explicit shared
@@ -229,3 +230,12 @@ outputs against independent truth. Do not enable libm behind a broad tolerance.
 Decimal expression rounding has its own reference algorithm and remains a
 separate implementation gate. Cargo locking and dataset execution remain later
 release gates.
+
+
+An explicit opt-in is now available through `compile_numeric_with_policy` and
+`MathPolicy::PortableLibmV1`. The plan retains that choice before resolution;
+default compilation remains ReferenceSubset. See [the numerical policy](MATH_POLICY.md)
+for its deliberate distinction from historical platform Python, domain contracts,
+exact cross-platform CI checks and remaining qualification gates. The assessment
+probe now evaluates the compiled policy, with no golden regeneration or relaxed
+SQRT checks. Backend availability and Python production behavior do not change.
