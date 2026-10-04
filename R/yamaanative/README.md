@@ -13,6 +13,15 @@ installation tests, and the deliberately limited capability of this package.
 ## Scalar transport probe
 
 `scalar_round_trip(request)` accepts and returns one owned UTF-8 JSON string.
+
+Both JSON APIs (`scalar_round_trip` and `evaluate_numeric`) require one nonmissing
+character scalar without attributes. Explicit Latin-1 is decoded to UTF-8;
+byte-marked text is rejected. Unmarked or UTF-8-marked text is checked without
+locale fallback, repair or normalization. The native entrypoints accept raw
+bytes and check the byte budget and UTF-8 before constructing a Rust string,
+including when called directly. Encoding marks and `enc2utf8` alone do not prove
+that R character bytes are valid UTF-8. Malformed bytes raise a stable error only
+after the native call returns; subsequent valid requests still work.
 It decodes to a real core value before encoding the result. It does not execute
 specifications, evaluate expressions, call project functions or expose tables.
 

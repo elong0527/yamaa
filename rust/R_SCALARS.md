@@ -48,6 +48,13 @@ strings are rejected. Other character bytes are validated as UTF-8 without
 machine-locale fallback, replacement, normalization or repair. Payloads have a
 fixed 1 MiB cap. Owned raw outputs survive garbage collection and caller mutation.
 
+The older R JSON APIs also use this explicit R encoding policy. Their native
+entrypoints take raw bytes, enforce the transport byte budget, then validate
+UTF-8 before making a Rust string. Neither R encoding marks nor `enc2utf8` alone
+establish that invariant. Installed tests cover malformed sequences through
+both the facade and direct native entrypoints, explicit Latin-1, byte-marked
+rejection, size-before-encoding precedence and successful calls after errors.
+
 Native helpers return normally before the facade raises an R error and catch
 Rust unwinds. They do not promise recovery from process aborts or allocator
 exhaustion. No input data becomes source code, a callable name, or a digest.
