@@ -104,9 +104,11 @@ Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
 may be omitted. Unique permits repeated references, matching the reference check.
-Only error-severity, whole-artifact bounds are represented. Ordered source selection, fractional bounds,
-grouped row counts, column checks, warnings, handlers, other windows, joins, functions,
-multiple sources remain outside the closed plan vocabulary.
+Only error-severity, whole-artifact bounds are represented. The `source_selection`
+capability supports ordered selection within `collect`. Broader source selection,
+fractional bounds, grouped row counts, column checks, warnings, other handlers,
+other windows, joins, functions, and multiple sources remain outside the closed
+plan vocabulary.
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
 then: predicate}}`, using the predicate representation below. Bindings may read
@@ -147,9 +149,8 @@ representation, and multiple values yield REQ-0075 with the exact count and
 complete output identity. For example, text `07` and `7` are two source values
 even when an integer destination would convert both to 7. Repeated values and
 missing readings do not create additional values. Collected reads are forbidden
-in key assignments and in ordinary record/group templates. Ordered source selection,
-selection handlers, multiple inputs and additional expression families remain
-unsupported.
+in key assignments and in ordinary record/group templates. Multiple inputs,
+other source handlers and additional expression families remain unsupported.
 
 The additive `source_filter` capability permits an optional bound `filter` inside
 `collect`. It reads source columns only and applies to the current combination's
@@ -159,8 +160,26 @@ to distinct-value collection; false/unknown records are excluded without removin
 the output row. No present eligible value returns missing, while multiple distinct
 present values retain REQ-0075 and complete output identity. Runtime predicate
 provenance names the owning source operation, not its `.filter` field. Source
-filters remain forbidden in key, record and grouped assignments in this slice;
-ordered choice and handlers are not represented.
+filters remain forbidden in key, record and grouped assignments in this slice.
+
+The additive `source_selection` capability adds optional `selection` within
+`collect`: `{order_by: [{column, descending, nulls_first}], keep: "first" | "last"}`.
+Order terms refer to source columns; the nonempty list has at most 64 terms.
+All filters and distinct-value reads finish before selection. Only present donors
+participate, and only multiple distinct raw values invoke ordering. The engine
+finds the stable first/last extremum, comparing exact typed values and independent
+null placement, with original source row position breaking ties. Equal source
+values preserve their first representation without ordering.
+
+An optional top-level `handler_counts` array follows `outcome` and is omitted when
+empty, preserving earlier envelope bytes. Entries contain `spec_path`, `handler`
+and canonical unsigned decimal `count` text. A completed ordered choice records
+`multiple_matches` at the source operation path plus `.multiple_matches`, before
+conversion. Counts remain on semantic, verification and resource-limit outcomes;
+boundary/serialization errors still return no accepted envelope. Counts appear
+in first-firing order, with no zero entry for an unused source choice. Prepared
+plan reuse starts fresh budgets and counts. Source-filter and selection policies
+compose within the same key-grain non-key reading.
 
 ## Row-template predicates
 
@@ -190,7 +209,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

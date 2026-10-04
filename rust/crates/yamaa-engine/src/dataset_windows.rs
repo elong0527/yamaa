@@ -114,17 +114,17 @@ impl TableAccess for Rows<'_> {
 }
 
 /// Compare values within one normalized column, retaining exact integer and temporal order.
-fn compare(left: &Value, right: &Value, term: &OrderTerm) -> Ordering {
+pub(super) fn compare(left: ValueRef<'_>, right: ValueRef<'_>, term: &OrderTerm) -> Ordering {
     match (left, right) {
-        (Value::Missing, Value::Missing) => Ordering::Equal,
-        (Value::Missing, _) => {
+        (ValueRef::Missing, ValueRef::Missing) => Ordering::Equal,
+        (ValueRef::Missing, _) => {
             if term.nulls_first {
                 Ordering::Less
             } else {
                 Ordering::Greater
             }
         }
-        (_, Value::Missing) => {
+        (_, ValueRef::Missing) => {
             if term.nulls_first {
                 Ordering::Greater
             } else {
@@ -133,15 +133,15 @@ fn compare(left: &Value, right: &Value, term: &OrderTerm) -> Ordering {
         }
         _ => {
             let order = match (left, right) {
-                (Value::Str(a), Value::Str(b)) => a.cmp(b),
-                (Value::Int(a), Value::Int(b)) => a.cmp(b),
-                (Value::Float(a), Value::Float(b)) => a
+                (ValueRef::Str(a), ValueRef::Str(b)) => a.cmp(b),
+                (ValueRef::Int(a), ValueRef::Int(b)) => a.cmp(&b),
+                (ValueRef::Float(a), ValueRef::Float(b)) => a
                     .get()
                     .partial_cmp(&b.get())
                     .expect("finite normalized values"),
-                (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
-                (Value::Date(a), Value::Date(b)) => a.cmp(b),
-                (Value::DateTime(a), Value::DateTime(b)) => a.cmp(b),
+                (ValueRef::Bool(a), ValueRef::Bool(b)) => a.cmp(&b),
+                (ValueRef::Date(a), ValueRef::Date(b)) => a.cmp(&b),
+                (ValueRef::DateTime(a), ValueRef::DateTime(b)) => a.cmp(&b),
                 _ => unreachable!("completed columns have one admitted logical type"),
             };
             if term.descending {
@@ -168,7 +168,7 @@ fn ordered<E>(
                 budget.scalar_text(text.len())?;
             }
         }
-        let order = compare(left, right, term);
+        let order = compare(ValueRef::from(left), ValueRef::from(right), term);
         if order != Ordering::Equal {
             return Ok(order);
         }

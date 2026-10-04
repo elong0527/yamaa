@@ -94,12 +94,35 @@ def admit(specification):
             elif not (payload is None or type(payload) in (str, bool, int, float)):
                 reject("literal_representation", path)
         elif operation == "source":
+            if isinstance(payload, str):
+                return
             if (
-                isinstance(payload, dict)
-                and set(payload) == {"variable", "filter"}
-                and isinstance(payload["variable"], str)
-                and isinstance(payload["filter"], str)
+                not isinstance(payload, dict)
+                or not isinstance(payload.get("variable"), str)
+                or set(payload) - {"variable", "filter", "order_by", "keep"}
             ):
+                reject("source_selection", path)
+                return
+            selected = "order_by" in payload or "keep" in payload
+            if selected:
+                terms = payload.get("order_by")
+                variable = payload["variable"]
+                dataset = variable.split(".", 1)[0]
+                if not allow_source_filter or "." not in variable:
+                    reject("source_selection_scope", path)
+                if not terms or payload.get("keep") not in {"first", "last"}:
+                    # Pair errors are evaluated lazily by the reference; this slice
+                    # refuses them without inventing an earlier language condition.
+                    reject("source_selection", path)
+                elif any(
+                    not isinstance(term, dict)
+                    or not isinstance(term.get("variable"), str)
+                    or "." not in term["variable"]
+                    or term["variable"].split(".", 1)[0] != dataset
+                    for term in terms
+                ):
+                    reject("source_order_binding", path)
+            if payload.get("filter") is not None:
                 if not allow_source_filter:
                     reject("source_filter_scope", path)
                 try:
@@ -137,12 +160,6 @@ def admit(specification):
                     diagnostics.extend(error.diagnostics)
                 except UnsupportedPlanningError as error:
                     unsupported.extend(error.features)
-            elif not isinstance(payload, str) and not (
-                isinstance(payload, dict)
-                and set(payload) == {"variable"}
-                and isinstance(payload["variable"], str)
-            ):
-                reject("source_selection", path)
         elif operation in WINDOWS:
             window = payload.get("window", {}) if isinstance(payload, dict) else {}
             if operation in WINDOW_VALUES and isinstance(payload, dict):
@@ -392,6 +409,30 @@ def lower(plan, source):
                     reference,
                     literal,
                 )
+            if isinstance(value, dict) and value.get("order_by") is not None:
+                terms = value["order_by"]
+                if any(
+                    term["variable"].split(".", 1)[1] not in inputs for term in terms
+                ):
+                    raise UnsupportedPlanningError(
+                        (
+                            UnsupportedFeature(
+                                operation="source_order_binding",
+                                spec_path=derived.operation_path,
+                            ),
+                        )
+                    )
+                expression["collect"]["selection"] = {
+                    "order_by": [
+                        {
+                            "column": reference(term["variable"])["source"],
+                            "descending": term.get("direction", "asc") == "desc",
+                            "nulls_first": term.get("nulls", "last") == "first",
+                        }
+                        for term in terms
+                    ],
+                    "keep": value["keep"],
+                }
         elif op in WINDOWS:
             window = value.get("window", {})
             tag = "number" if op in NUMBERING else "window"

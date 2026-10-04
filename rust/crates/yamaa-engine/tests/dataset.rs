@@ -2135,6 +2135,7 @@ fn collect(column: usize) -> Expression {
         column,
         identifier: format!("SRC.C{column}"),
         filter: None,
+        selection: None,
     }
 }
 /// Converted identity collapses records in first appearance; source readings omit missing.
@@ -2544,6 +2545,7 @@ fn numbering_with_filter(
                 column: 1,
                 identifier: "SRC.G".into(),
                 filter: None,
+                selection: None,
             },
         ),
         assign(
@@ -2552,6 +2554,7 @@ fn numbering_with_filter(
                 column: 2,
                 identifier: "SRC.V".into(),
                 filter: None,
+                selection: None,
             },
         ),
     ];
@@ -3588,6 +3591,7 @@ fn selected_source_plan(source: &Table, predicate: Filter) -> Result<DatasetPlan
                 column: 1,
                 identifier: "SRC.V".into(),
                 filter: Some(predicate),
+                selection: None,
             },
         )],
         vec![0],
@@ -3780,4 +3784,351 @@ fn selected_source_finishes_predicates_before_any_donor_access() {
         *plan.execute(&source, limits()).unwrap_err(),
         ExecutionError::Cell { source_row: 0, .. }
     ));
+}
+
+/// Bind one source choice without changing output identity or conversion ownership.
+fn ordered_source_plan(
+    source: &Table,
+    keep: yamaa_engine::dataset::Keep,
+    descending: bool,
+    nulls_first: bool,
+    later_failure: bool,
+) -> DatasetPlan {
+    use yamaa_engine::dataset::{OrderTerm, SourceSelection};
+    let mut columns = vec![assign(
+        1,
+        Expression::Collect {
+            column: 1,
+            identifier: "SRC.V".into(),
+            filter: None,
+            selection: Some(SourceSelection {
+                order_by: vec![OrderTerm {
+                    column: 2,
+                    descending,
+                    nulls_first,
+                }],
+                keep,
+            }),
+        },
+    )];
+    let mut fields = vec![("ID", ColumnType::Int), ("V", ColumnType::Int)];
+    if later_failure {
+        fields.push(("LATER", ColumnType::Int));
+        columns.push(assign(2, Expression::Literal(Value::Str("bad".into()))));
+    }
+    key_plan(
+        source,
+        schema(&fields),
+        vec![0],
+        vec![assign(0, Expression::Source(0))],
+        columns,
+    )
+}
+
+/// Missing order placement is independent of direction; ties use original source order.
+#[test]
+fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
+    use yamaa_engine::{dataset::Keep, numeric_lifecycle::HandlerKind};
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Int(1),
+                Value::Str("7".into()),
+                Value::Int(9_007_199_254_740_993),
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("8".into()),
+                Value::Int(9_007_199_254_740_992),
+            ],
+            vec![Value::Int(1), Value::Str("9".into()), Value::Missing],
+            vec![Value::Int(1), Value::Missing, Value::Missing],
+        ],
+    );
+    for (descending, nulls_first, first, last) in [
+        (false, false, 8, 9),
+        (true, false, 7, 9),
+        (false, true, 9, 7),
+        (true, true, 9, 8),
+    ] {
+        for (keep, expected) in [(Keep::First, first), (Keep::Last, last)] {
+            let attempt = ordered_source_plan(&source, keep, descending, nulls_first, false)
+                .execute_observed(&source, limits());
+            assert_eq!(
+                attempt.result.unwrap().dataset.rows(),
+                &[vec![Value::Int(1), Value::Int(expected)]]
+            );
+            assert_eq!(attempt.handler_counts.len(), 1);
+            assert_eq!(
+                attempt.handler_counts[0].spec_path,
+                "columns.C1.derivation.multiple_matches"
+            );
+            assert_eq!(
+                attempt.handler_counts[0].handler,
+                HandlerKind::MultipleMatches
+            );
+            assert_eq!(attempt.handler_counts[0].count, 1);
+        }
+    }
+    let mut repeated = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        source.rows.clone(),
+    );
+    repeated.rows.extend([
+        vec![Value::Int(2), Value::Str("10".into()), Value::Int(0)],
+        vec![Value::Int(2), Value::Str("11".into()), Value::Int(1)],
+    ]);
+    let attempt = ordered_source_plan(&repeated, Keep::Last, false, false, false)
+        .execute_observed(&repeated, limits());
+    assert_eq!(attempt.result.unwrap().dataset.rows().len(), 2);
+    assert_eq!(attempt.handler_counts.len(), 1);
+    assert_eq!(attempt.handler_counts[0].count, 2);
+    let tied = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("7".into()), Value::Int(0)],
+            vec![Value::Int(1), Value::Str("8".into()), Value::Int(0)],
+            vec![Value::Int(1), Value::Str("9".into()), Value::Int(0)],
+        ],
+    );
+    for (keep, expected) in [(Keep::First, 7), (Keep::Last, 9)] {
+        assert_eq!(
+            ordered_source_plan(&tied, keep, true, true, false)
+                .execute(&tied, limits())
+                .unwrap()
+                .dataset
+                .rows(),
+            &[vec![Value::Int(1), Value::Int(expected)]]
+        );
+    }
+}
+
+/// Equal or absent values bypass all order reads and do not register a zero count.
+#[test]
+fn source_order_is_lazy_for_one_distinct_reading_and_restarts_observations() {
+    use yamaa_engine::dataset::Keep;
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("7".into()), Value::Int(0)],
+            vec![Value::Int(1), Value::Str("7".into()), Value::Int(1)],
+        ],
+    );
+    let plan = ordered_source_plan(&source, Keep::Last, false, false, false);
+    source.fail = Some((0, 2));
+    let attempt = plan.execute_observed(&source, limits());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        &[vec![Value::Int(1), Value::Int(7)]]
+    );
+    assert!(attempt.handler_counts.is_empty());
+    assert!(!source.reads.borrow().iter().any(|(_, column)| *column == 2));
+    source.rows[1][1] = Value::Str("8".into());
+    let attempt = plan.execute_observed(&source, limits());
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Cell { source_row: 0, .. }
+    ));
+    assert!(attempt.handler_counts.is_empty());
+    source.fail = None;
+    assert_eq!(
+        plan.execute_observed(&source, limits()).handler_counts[0].count,
+        1
+    );
+    assert_eq!(
+        plan.execute_observed(&source, limits()).handler_counts[0].count,
+        1
+    );
+    for row in &mut source.rows {
+        row[1] = Value::Missing;
+    }
+    let attempt = plan.execute_observed(&source, limits());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        &[vec![Value::Int(1), Value::Missing]]
+    );
+    assert!(attempt.handler_counts.is_empty());
+    source.rows.clear();
+    let attempt = plan.execute_observed(&source, limits());
+    assert!(attempt.result.unwrap().dataset.rows().is_empty());
+    assert!(attempt.handler_counts.is_empty());
+}
+
+/// A completed choice remains observable after its conversion or later execution fails.
+#[test]
+fn source_order_counts_survive_conversion_and_resource_failures() {
+    use yamaa_engine::dataset::Keep;
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("7".into()), Value::Int(0)],
+            vec![Value::Int(1), Value::Str("bad".into()), Value::Int(1)],
+        ],
+    );
+    let attempt = ordered_source_plan(&source, Keep::Last, false, false, false)
+        .execute_observed(&source, limits());
+    assert!(
+        matches!(*attempt.result.unwrap_err(), ExecutionError::Conversion {path,identity:Some(_),..} if path=="columns.V")
+    );
+    assert_eq!(attempt.handler_counts[0].count, 1);
+    source.rows[1][1] = Value::Str("8".into());
+    let plan = ordered_source_plan(&source, Keep::Last, false, false, true);
+    let attempt = plan.execute_observed(&source, limits());
+    assert!(
+        matches!(*attempt.result.unwrap_err(), ExecutionError::Conversion {path,..} if path=="columns.LATER")
+    );
+    assert_eq!(attempt.handler_counts[0].count, 1);
+    let mut observed_later_limit = false;
+    for work_cells in 0..100 {
+        let attempt = plan.execute_observed(
+            &source,
+            Limits {
+                work_cells,
+                ..limits()
+            },
+        );
+        if matches!(attempt.result,Err(error) if matches!(*error,ExecutionError::Limit {..}))
+            && !attempt.handler_counts.is_empty()
+        {
+            assert_eq!(attempt.handler_counts[0].count, 1);
+            observed_later_limit = true;
+        }
+    }
+    assert!(observed_later_limit);
+}
+
+/// Ordering ignores representational precision and preserves equal donor representations.
+#[test]
+fn source_order_uses_exact_typed_comparison_and_lazy_representation() {
+    use yamaa_engine::dataset::{Keep, OrderTerm, SourceSelection};
+    for (kind, values) in [
+        (
+            ColumnType::Float,
+            vec![Value::float(-0.0), Value::float(0.0)],
+        ),
+        (
+            ColumnType::Date,
+            vec![
+                Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
+                Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+            ],
+        ),
+    ] {
+        let mut source = table(
+            &[("V", kind), ("ORDER", ColumnType::Int)],
+            values
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| vec![v, Value::Int(i as i64)])
+                .collect(),
+        );
+        source.fail = Some((0, 1));
+        let plan = key_plan(
+            &source,
+            schema(&[("ID", ColumnType::Int), ("V", kind)]),
+            vec![0],
+            vec![assign(0, Expression::Literal(Value::Int(1)))],
+            vec![assign(
+                1,
+                Expression::Collect {
+                    column: 0,
+                    identifier: "SRC.V".into(),
+                    filter: None,
+                    selection: Some(SourceSelection {
+                        order_by: vec![OrderTerm {
+                            column: 1,
+                            descending: false,
+                            nulls_first: false,
+                        }],
+                        keep: Keep::Last,
+                    }),
+                },
+            )],
+        );
+        let attempt = plan.execute_observed(&source, limits());
+        assert!(attempt.handler_counts.is_empty());
+        let result = attempt.result.unwrap();
+        match &result.dataset.rows()[0][1] {
+            Value::Float(v) => assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits()),
+            Value::Date(v) => assert_eq!(v.collected_precision(), DatePrecision::Year),
+            _ => panic!("wrong collected type"),
+        }
+    }
+    // A temporal tie advances to a second Unicode text term, then source position.
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Date),
+            ("TEXT", ColumnType::Str),
+        ],
+        vec![
+            vec![
+                Value::Int(1),
+                Value::Str("7".into()),
+                Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
+                Value::Str("é".into()),
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("8".into()),
+                Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+                Value::Str("Ω".into()),
+            ],
+        ],
+    );
+    let expression = Expression::Collect {
+        column: 1,
+        identifier: "SRC.V".into(),
+        filter: None,
+        selection: Some(SourceSelection {
+            order_by: vec![
+                OrderTerm {
+                    column: 2,
+                    descending: false,
+                    nulls_first: false,
+                },
+                OrderTerm {
+                    column: 3,
+                    descending: false,
+                    nulls_first: false,
+                },
+            ],
+            keep: Keep::Last,
+        }),
+    };
+    let plan = key_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+        vec![0],
+        vec![assign(0, Expression::Source(0))],
+        vec![assign(1, expression)],
+    );
+    let attempt = plan.execute_observed(&source, limits());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        &[vec![Value::Int(1), Value::Int(8)]]
+    );
+    assert_eq!(attempt.handler_counts[0].count, 1);
 }

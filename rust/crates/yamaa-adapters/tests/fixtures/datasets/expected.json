@@ -9748,5 +9748,617 @@
       }
     },
     "snapshot": null
+  },
+  {
+    "case": "source_order_first",
+    "input": "source-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V",
+              "selection": {
+                "order_by": [
+                  {
+                    "column": 2,
+                    "descending": false,
+                    "nulls_first": false
+                  }
+                ],
+                "keep": "first"
+              }
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      },
+      "handler_counts": [
+        {
+          "spec_path": "columns.V.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": "1"
+        }
+      ]
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "2",
+      "chunks": [
+        "2"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "int": "8"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "int": "9"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "source_order_last",
+    "input": "source-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V",
+              "selection": {
+                "order_by": [
+                  {
+                    "column": 2,
+                    "descending": false,
+                    "nulls_first": false
+                  }
+                ],
+                "keep": "last"
+              }
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      },
+      "handler_counts": [
+        {
+          "spec_path": "columns.V.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": "1"
+        }
+      ]
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "2",
+      "chunks": [
+        "2"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "int": "7"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "int": "9"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "source_order_filtered_unique",
+    "input": "source-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V",
+              "filter": {
+                "path": "columns.V.derivation.source",
+                "text": "SRC.KEEP > 0",
+                "nodes": [
+                  {
+                    "compare": {
+                      "operator": "gt",
+                      "left": {
+                        "identifier": "SRC.KEEP"
+                      },
+                      "right": {
+                        "literal": {
+                          "int": "0"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "root": 0,
+                "bindings": [
+                  {
+                    "name": "SRC.KEEP",
+                    "read": {
+                      "source": 2
+                    }
+                  }
+                ]
+              },
+              "selection": {
+                "order_by": [
+                  {
+                    "column": 2,
+                    "descending": false,
+                    "nulls_first": false
+                  }
+                ],
+                "keep": "last"
+              }
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "2",
+      "chunks": [
+        "2"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "int": "7"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "missing": null
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "source_order_empty",
+    "input": "source-filter-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V",
+              "selection": {
+                "order_by": [
+                  {
+                    "column": 2,
+                    "descending": false,
+                    "nulls_first": false
+                  }
+                ],
+                "keep": "last"
+              }
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "int"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
+  },
+  {
+    "case": "source_order_later_conversion",
+    "input": "source-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        },
+        {
+          "name": "LATER",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V",
+              "selection": {
+                "order_by": [
+                  {
+                    "column": 2,
+                    "descending": false,
+                    "nulls_first": false
+                  }
+                ],
+                "keep": "last"
+              }
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.LATER.derivation.literal",
+          "expression": {
+            "literal": {
+              "str": "bad"
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "convert",
+          "condition": "conversion_failed",
+          "requirement": "REQ-0013",
+          "spec_paths": [
+            "columns.LATER"
+          ],
+          "context": {
+            "from": {
+              "str": "str"
+            },
+            "to": {
+              "str": "int"
+            },
+            "value": {
+              "str": "bad"
+            }
+          }
+        },
+        "identity": {
+          "position": "0",
+          "keys": [
+            {
+              "int": "2"
+            }
+          ]
+        }
+      },
+      "handler_counts": [
+        {
+          "spec_path": "columns.V.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": "1"
+        }
+      ]
+    },
+    "snapshot": null
   }
 ]

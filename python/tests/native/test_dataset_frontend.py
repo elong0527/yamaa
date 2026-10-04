@@ -995,3 +995,95 @@ def test_output_read_rejects_filter_before_parsing_predicate(tmp_path, predicate
         ("prohibited_construct", "REQ-0148")
     ]
     assert effects == []
+
+
+def source_order_specification(tmp_path, mutate=None):
+    """Declare qualified source ordering on the benchmark's non-key reading."""
+
+    def change(document):
+        column = next(c for c in document["columns"] if c["name"] == "VSSTRESN")
+        payload = {
+            "variable": "VS.VSSTRESN",
+            "order_by": [
+                {"variable": "VS.VISITN", "direction": "desc", "nulls": "first"}
+            ],
+            "keep": "last",
+        }
+        if mutate is not None:
+            mutate(payload)
+        column["derivation"] = {"source": payload}
+
+    return numbering_specification(tmp_path, change)
+
+
+def test_source_order_lowers_qualified_source_coordinates(tmp_path):
+    """Source ordering coordinates belong to the input schema, independent of output order."""
+    spec = source_order_specification(
+        tmp_path, lambda payload: payload.update(filter="VS.VSEVAL = 'Y'")
+    )
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    source = sources["VS"].table
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS), source
+    )
+    assert error is None
+    reading = next(
+        a
+        for a in request["columns"]
+        if a["path"] == "columns.VSSTRESN.derivation.source"
+    )["expression"]["collect"]
+    visit = next(i for i, c in enumerate(source.columns) if c.name == "VISITN")
+    assert reading["selection"] == {
+        "order_by": [{"column": visit, "descending": True, "nulls_first": True}],
+        "keep": "last",
+    }
+    assert reading["filter"]["path"] == "columns.VSSTRESN.derivation.source"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda p: p.pop("keep"),
+        lambda p: p.pop("order_by"),
+        lambda p: p.update(order_by=["VISITN"]),
+        lambda p: p.update(order_by=["OTHER.VISITN"]),
+        lambda p: p.update(variable="VISITN"),
+    ],
+)
+def test_unqualified_source_selection_refuses_before_provider(tmp_path, mutate):
+    """Unqualified policies remain unsupported without moving lazy reference errors."""
+    spec = source_order_specification(tmp_path, mutate)
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert effects == []
+
+
+def test_old_native_package_refuses_source_selection_before_provider(
+    tmp_path, monkeypatch
+):
+    """Key grain and source filtering do not imply ordered donor choice support."""
+    spec = source_order_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": ["key_grain", "window_numbering", "source_filter"],
+                }
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "native_source_selection"
+    }
+    assert effects == []
