@@ -168,6 +168,7 @@ fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
     source: &TableSchema,
+    output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
     if assignment.path.is_empty() {
@@ -188,7 +189,7 @@ fn validate_assignment(
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidWindow);
             }
-            window.validate(available)?;
+            window.validate(available, output)?;
         }
         Expression::Column(column) => {
             if !available.get(*column).copied().unwrap_or(false) {
@@ -272,7 +273,7 @@ impl DatasetPlan {
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
-                validate_assignment(assignment, &mut available, &source, &template.mode)?;
+                validate_assignment(assignment, &mut available, &source, &output, &template.mode)?;
             }
             if keyed && keys.iter().any(|&column| !available[column]) {
                 return Err(PlanError::InvalidKeyMode);
@@ -298,7 +299,7 @@ impl DatasetPlan {
                     // A key combination reads all its feeding records, never a chosen first row.
                     return Err(PlanError::InvalidKeyMode);
                 }
-                validate_assignment(assignment, &mut available, &source, &template.mode)?;
+                validate_assignment(assignment, &mut available, &source, &output, &template.mode)?;
             }
             if available.contains(&false) {
                 return Err(PlanError::IncompleteRow);
@@ -412,6 +413,13 @@ pub struct Execution {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    BaselineAmbiguity {
+        path: String,
+        column: String,
+        date: Value,
+        match_count: usize,
+        partition: Vec<(String, Value)>,
+    },
     MultipleValues {
         path: String,
         identifier: String,
@@ -689,7 +697,17 @@ impl DatasetPlan {
                 let number = if let (Some(run), Expression::Window(window)) =
                     (&mut numbers, &assignment.expression)
                 {
-                    Some(run.value(row, window, &candidates, table, &mut budget)?)
+                    Some(run.value(
+                        row,
+                        window,
+                        &candidates,
+                        table,
+                        &mut budget,
+                        &windows::Context {
+                            assignment,
+                            plan: self,
+                        },
+                    )?)
                 } else {
                     None
                 };

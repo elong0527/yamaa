@@ -219,9 +219,15 @@ evaluation before converting the current result; later partitions remain lazy.
 Row-value reads, previous-non-missing and LOCF now share that scope (REQ-0061/0294/
 0328/0340). Donor indices are cached once per reached partition; only the requested
 result is copied and converted, retaining integer/temporal/float representations.
-The installed test now compares all 16 source, numbering and value-window columns
-from the unchanged benchmark, with only BLFL excluded. Baseline flag and the full
-benchmark remain unsupported.
+Temporal baseline selection now uses each eligible row's reference date, skips
+missing operands and selects the unique latest candidate (REQ-0322/0341).
+Date and datetime columns must match; other types remain unsupported. Ties retain
+exact counts, canonical date text and declared partition keys, distinct from output
+identity. The installed test executes the complete unchanged 17-column
+`schema-window-functions` benchmark against its committed CSV. Additional installed
+cases compare filtering, missingness, per-row references, three-way ambiguity,
+global partitions and conversion failures. This qualifies that named window case,
+not the remaining language, workflow or release gates.
 
 Output keys are checked before dataset verifications. The closed error-severity
 verification subset includes unique combinations, whole-artifact integer

@@ -230,3 +230,11 @@ present donor, and `locf` retains the current present value or carries the prior
 Donor indices are cached per partition, with text copied only for each requested
 result under the existing budgets. Shared raw fixtures exercise gaps, filtered
 donors, full-range signed offsets, exact large integers and typed empty outputs.
+
+`window_baseline` adds `baseline_flag` for completed date/date or datetime/datetime
+columns with no ordering. Rust compares each eligible row's date with its own
+reference, skips missing operands and marks the unique latest candidate with `Y`.
+Ties return REQ-0322 with exact count, canonical date text and a separate `partition`
+list of named typed grouping values. Shared fixtures cover per-row references,
+missing dates, a three-way tie, filtering and empty input. This remains the R
+bound-plan bridge; a normalized-specification frontend is still outstanding.

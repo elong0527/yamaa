@@ -329,6 +329,38 @@ pub(crate) fn multiple_values(
     }))
 }
 
+/// Preserve baseline ambiguity and its canonical temporal date without choosing a tied row.
+pub(crate) fn baseline_ambiguity(
+    path: String,
+    column: String,
+    date: Value,
+    count: usize,
+) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
+    use crate::dataset_transport::DatasetTransportError;
+    let count = i64::try_from(count).map_err(|_| DatasetTransportError::Internal)?;
+    let date = match date {
+        Value::Date(value) => value.to_string(),
+        Value::DateTime(value) => value.to_string(),
+        _ => return Err(DatasetTransportError::Internal),
+    };
+    let context = Context::from([
+        ("column".into(), text(column)),
+        ("operation".into(), text("baseline_flag")),
+        ("date".into(), text(date)),
+        ("match_count".into(), scalar(Value::Int(count))),
+    ]);
+    Ok(Box::new(Diagnostic {
+        phase: "derivation",
+        condition: "ambiguous_baseline",
+        requirement: "REQ-0322",
+        spec_paths: vec![path],
+        context,
+        source_span: None,
+        operand_route: None,
+        position: None,
+    }))
+}
+
 /// Transport conversion data, including canonical out-of-range integer diagnostics.
 pub(crate) fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
     let mut context = Context::new();

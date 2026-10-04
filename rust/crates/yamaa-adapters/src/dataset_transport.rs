@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -129,6 +129,7 @@ enum WindowKind {
     RowValue { column: usize, offset: String },
     PreviousNonMissing { column: usize },
     Locf { column: usize },
+    BaselineFlag { date: usize, reference_date: usize },
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -164,6 +165,13 @@ impl Window {
                 dataset::WindowKind::PreviousNonMissing { column }
             }
             WindowKind::Locf { column } => dataset::WindowKind::Locf { column },
+            WindowKind::BaselineFlag {
+                date,
+                reference_date,
+            } => dataset::WindowKind::BaselineFlag {
+                date,
+                reference_date,
+            },
         };
         Ok(dataset::Window {
             kind,
@@ -510,6 +518,8 @@ enum Outcome {
         diagnostic: Box<Diagnostic>,
         identity: Option<Identity>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        partition: Option<Vec<PartitionValue>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         verifications: Option<Vec<Record>>,
     },
     Limit {
@@ -517,6 +527,11 @@ enum Outcome {
         limit: Option<String>,
         required: Option<String>,
     },
+}
+#[derive(Serialize)]
+struct PartitionValue {
+    name: String,
+    value: ScalarValue,
 }
 #[derive(Serialize)]
 struct Identity {
@@ -558,12 +573,39 @@ fn records(records: Vec<CheckRecord>) -> Vec<Record> {
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
 fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
     Ok(match error {
+        ExecutionError::BaselineAmbiguity {
+            path,
+            column,
+            date,
+            match_count,
+            partition,
+        } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::baseline_ambiguity(
+                path,
+                column,
+                date,
+                match_count,
+            )?,
+            identity: None,
+            partition: Some(
+                partition
+                    .into_iter()
+                    .map(|(name, value)| PartitionValue {
+                        name,
+                        value: ScalarValue::from_core(value),
+                    })
+                    .collect(),
+            ),
+            verifications: None,
+        },
+
         ExecutionError::MultipleValues {
             path,
             identifier,
             value_count,
             identity: keys,
         } => Outcome::Condition {
+            partition: None,
             diagnostic: crate::numeric_transport::multiple_values(path, identifier, value_count)?,
             identity: keys.map(identity),
             verifications: None,
@@ -617,11 +659,13 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             identity: keys,
             ..
         } => Outcome::Condition {
+            partition: None,
             verifications: None,
             diagnostic: conversion(error, path),
             identity: keys.map(identity),
         },
         ExecutionError::Predicate { error, .. } => Outcome::Condition {
+            partition: None,
             verifications: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
@@ -631,6 +675,7 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             error: TableReductionError::Reduction(ReductionError::Arithmetic { error, .. }),
             identity: keys,
         } => Outcome::Condition {
+            partition: None,
             verifications: None,
             diagnostic: arithmetic(error, path),
             identity: keys.map(identity),
@@ -639,6 +684,7 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
             error,
             records: completed,
         } => Outcome::Condition {
+            partition: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
             verifications: Some(records(completed)),

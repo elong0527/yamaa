@@ -54,20 +54,10 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
-    def test_committed_window_value_subset(self):
-        """Execute unchanged benchmark rank declarations against committed expected values."""
+    def test_committed_complete_window_benchmark(self):
+        """Execute the complete unchanged window specification against its committed CSV."""
         case = ROOT / "specification-windows"
-        document = yaml.safe_load((case / "spec.yaml").read_text())
-        retained = {
-            column["name"] for column in document["columns"] if column["name"] != "BLFL"
-        }
-        document["columns"] = [
-            column for column in document["columns"] if column["name"] in retained
-        ]
-        document["output"]["columns"] = [
-            column["name"] for column in document["columns"]
-        ]
-        spec = self.load(document)
+        spec = load_specification(case / "spec.yaml", SCHEMA).specification
         sources = load_source_tables(spec.input, ProjectResources(case))
         actual = self.compare(spec, sources)
         self.assertIsInstance(actual.result, ExecutionSuccess)
@@ -75,17 +65,78 @@ class InstalledSpecification(unittest.TestCase):
             case / "expected/advs.csv",
             schema_overrides=actual.result.table.frame.schema,
         )
-        self.assertTrue(
-            actual.result.table.frame.equals(
-                expected.select(document["output"]["columns"]), null_equal=True
+        self.assertTrue(actual.result.table.frame.equals(expected, null_equal=True))
+
+    def test_baseline_temporal_candidates_filters_and_partition_conditions(self):
+        """Compare per-row references, missing values, exact ties and conversion failures."""
+        for kind, make in [("date", dt.date), ("datetime", dt.datetime)]:
+            columns = tuple(
+                TypedColumn(name=name, type=typ)
+                for name, typ in [("ID", "int"), ("G", "str"), ("D", kind), ("R", kind)]
             )
-        )
-        # The complete benchmark still contains intentionally unimplemented windows.
-        original = load_specification(case / "spec.yaml", SCHEMA).specification
-        unsupported = execute_with_source_provider(
-            original, lambda _: self.fail("unsupported source effect")
-        )
-        self.assertEqual(unsupported.result.status, "unsupported")
+            day = lambda n, make=make: make(2025, 1, n)
+            ordinary = [
+                [1, None, day(1), day(3)],
+                [2, None, day(3), day(2)],
+                [3, None, None, day(3)],
+                [4, "b", day(2), None],
+                [5, "b", day(2), day(2)],
+                [6, "b", day(3), day(3)],
+            ]
+            tied = copy.deepcopy(ordinary)
+            for row in tied[:3]:
+                row[2:4] = [day(1), day(3)]
+            for rows in [ordinary, tied, tied[:3], [], [[1, None, None, None]]]:
+                for groups in [["G"], []]:
+                    for predicate in [None, "ID > 2", "ID < 0"]:
+                        for target in ["str", "int"]:
+                            window = {"group_by": groups}
+                            if predicate is not None:
+                                window["filter"] = predicate
+                            document = {
+                                "schema_version": "1.0",
+                                "domain": "BL",
+                                "keys": ["ID"],
+                                "input": {"SRC": "source.csv"},
+                                "output": {
+                                    "path": "out.csv",
+                                    "columns": ["ID", "G", "D", "R", "BLFL"],
+                                },
+                                "columns": [
+                                    {
+                                        "name": c.name,
+                                        "type": c.type,
+                                        "label": c.name,
+                                        "derivation": f"SRC.{c.name}",
+                                    }
+                                    for c in columns
+                                ]
+                                + [
+                                    {
+                                        "name": "BLFL",
+                                        "type": target,
+                                        "label": "Baseline",
+                                        "derivation": {
+                                            "baseline_flag": {
+                                                "date": "D",
+                                                "reference_date": "R",
+                                                "window": window,
+                                            }
+                                        },
+                                    }
+                                ],
+                            }
+                            with self.subTest(
+                                kind=kind,
+                                rows=rows,
+                                groups=groups,
+                                predicate=predicate,
+                                target=target,
+                            ):
+                                self.compare(
+                                    self.load(document),
+                                    {"SRC": frame_from_values(columns, rows)},
+                                )
 
     def test_numbering_directions_ties_empty_and_conversion(self):
         """Compare authored numbering variants, preserving complete result and failure evidence."""

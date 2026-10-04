@@ -119,7 +119,15 @@ window scope and require `window_values` before source access. Offsets are nonze
 signed integers and count eligible positions; neighbors with missing values stay
 missing. Previous-non-missing and LOCF cross gaps, with LOCF retaining a present
 current value. Native donor indexing is linear after sorting and copies values
-only as their results are converted. Baseline flag remains unsupported.
+only as their results are converted.
+
+`baseline_flag` requires `window_baseline` and completed date/reference columns
+of the same temporal type (`date` or `datetime`). Ordering is forbidden. Each
+eligible candidate uses its own reference date; missing operands are skipped.
+The unique latest qualifying candidate receives `Y`. A tied latest date raises
+REQ-0322 with its exact count and declared partition keys, including missing keys
+or the empty global identity. Filters use the existing `window_filter` gate.
+Other comparable baseline types remain explicitly unsupported in this slice.
 
 Root/source filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
@@ -150,13 +158,13 @@ fixed filtered ADLB CSV rows, assertion/implication truth and eager errors,
 empty-output declaration validation, inherited defaults, projection/order/decimals, resource failure and
 recovery. Source-independent tests prove unsupported features do not call providers.
 
-Installed tests also execute all 16 source, numbering and value-window columns
-from `schema-window-functions` (only BLFL is excluded), comparing to the projected
-committed expected CSV. The complete original specification is still
-refused before provider effects. Tests cover global partitions, multiple order
-terms, both directions/null placements, result conversion and typed empty output.
+Installed tests execute the complete unchanged 17-column `schema-window-functions`
+specification against its committed expected CSV. Additional cases compare date
+and datetime baselines, per-row reference dates, missing operands, three-way ties,
+partition/global condition context, filtering, result conversion and empty output.
+Numbering and donor cases retain directions/null placement and exact representations.
 
-This qualifies the declared frontend slice only. The full named lookup/window/BMI
+This qualifies the declared frontend slice only. The named lookup/BMI
 prototypes, full compiler/workflow/activation/publication, R specification frontend,
 all benchmark cases, performance measurements and release/default-cutover gates
 remain open. No speedup or full language parity is claimed.

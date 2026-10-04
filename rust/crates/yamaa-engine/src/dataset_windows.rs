@@ -1,4 +1,4 @@
-//! Ordered window results over completed, typed output columns.
+//! Partitioned window results over completed, typed output columns.
 use super::*;
 use core::cmp::Ordering;
 
@@ -10,6 +10,7 @@ pub enum WindowKind {
     RowValue { column: usize, offset: i64 },
     PreviousNonMissing { column: usize },
     Locf { column: usize },
+    BaselineFlag { date: usize, reference_date: usize },
 }
 
 /// Null placement is independent of direction; construction order breaks remaining ties.
@@ -29,9 +30,14 @@ pub struct Window {
     pub filter: Option<BoundPredicate>,
 }
 impl Window {
-    /// Reject incomplete dependencies and empty ordering before any source access.
-    pub(super) fn validate(&self, available: &[bool]) -> Result<(), PlanError> {
-        if self.order_by.is_empty()
+    /// Reject incomplete dependencies and enforce operation-specific ordering before source access.
+    pub(super) fn validate(
+        &self,
+        available: &[bool],
+        output: &TableSchema,
+    ) -> Result<(), PlanError> {
+        let baseline = matches!(self.kind, WindowKind::BaselineFlag { .. });
+        if self.order_by.is_empty() != baseline
             || self.group_by.iter().enumerate().any(|(i, column)| {
                 !available.get(*column).copied().unwrap_or(false)
                     || self.group_by[..i].contains(column)
@@ -54,6 +60,25 @@ impl Window {
         };
         if source.is_some_and(|column| !available.get(column).copied().unwrap_or(false)) {
             return Err(PlanError::InvalidWindow);
+        }
+        if let WindowKind::BaselineFlag {
+            date,
+            reference_date,
+        } = self.kind
+        {
+            if !available.get(date).copied().unwrap_or(false)
+                || !available.get(reference_date).copied().unwrap_or(false)
+            {
+                return Err(PlanError::InvalidWindow);
+            }
+            let kind = output.columns()[date].kind;
+            if !matches!(
+                kind,
+                yamaa_core::value::ColumnType::Date | yamaa_core::value::ColumnType::DateTime
+            ) || output.columns()[reference_date].kind != kind
+            {
+                return Err(PlanError::InvalidWindow);
+            }
         }
         if let Some(filter) = &self.filter {
             filter
@@ -155,8 +180,23 @@ fn ordered<E>(
 #[derive(Clone, Copy)]
 enum Answer {
     Missing,
+    Flag,
+    AmbiguousBaseline {
+        row: usize,
+        date: usize,
+        count: usize,
+    },
     Number(i64),
-    Cell { row: usize, column: usize },
+    Cell {
+        row: usize,
+        column: usize,
+    },
+}
+
+/// Borrow only admitted provenance for a partition-scoped runtime condition.
+pub(super) struct Context<'a> {
+    pub assignment: &'a Assignment,
+    pub plan: &'a DatasetPlan,
 }
 
 /// Run-local partition membership and results; no state survives plan reuse.
@@ -224,9 +264,12 @@ impl Run {
         candidates: &[Candidate],
         table: &T,
         budget: &mut Budget,
+        context: &Context<'_>,
     ) -> Result<Value, Box<ExecutionError<T::Error>>> {
         if let Some(mut members) = self.groups[self.group_for_row[row]].take() {
-            sort(&mut members, window, candidates, budget)?;
+            if !window.order_by.is_empty() {
+                sort(&mut members, window, candidates, budget)?;
+            }
             if let Some(filter) = &window.filter {
                 // Evaluate every predicate in sorted partition order before numbering any row.
                 budget.work(members.len(), 1)?;
@@ -257,6 +300,45 @@ impl Run {
             }
             budget.work(members.len(), 1)?;
             match window.kind {
+                WindowKind::BaselineFlag {
+                    date,
+                    reference_date,
+                } => {
+                    budget.work(members.len(), 3)?;
+                    let mut latest: Option<usize> = None;
+                    let mut count = 0;
+                    for &member in &members {
+                        let (candidate, reference) = (
+                            &candidates[member].values[date],
+                            &candidates[member].values[reference_date],
+                        );
+                        if matches!(candidate, Value::Missing)
+                            || matches!(reference, Value::Missing)
+                            || temporal_order(candidate, reference) == Ordering::Greater
+                        {
+                            continue;
+                        }
+                        let order = latest.map_or(Ordering::Greater, |row| {
+                            temporal_order(candidate, &candidates[row].values[date])
+                        });
+                        if order == Ordering::Greater {
+                            latest = Some(member);
+                            count = 1;
+                        } else if order == Ordering::Equal {
+                            count += 1;
+                        }
+                    }
+                    if let Some(row) = latest {
+                        if count > 1 {
+                            for &member in &members {
+                                self.answers[member] =
+                                    Answer::AmbiguousBaseline { row, date, count };
+                            }
+                        } else {
+                            self.answers[row] = Answer::Flag;
+                        }
+                    }
+                }
                 WindowKind::RowValue { column, offset } => {
                     for (position, &member) in members.iter().enumerate() {
                         let target = usize::try_from(position as i128 + i128::from(offset)).ok();
@@ -307,6 +389,41 @@ impl Run {
         }
         Ok(match self.answers[row] {
             Answer::Missing => Value::Missing,
+            Answer::Flag => {
+                budget.scalar_text(1)?;
+                Value::Str("Y".into())
+            }
+            Answer::AmbiguousBaseline {
+                row: donor,
+                date,
+                count,
+            } => {
+                budget.identity(
+                    window
+                        .group_by
+                        .iter()
+                        .map(|&column| &candidates[row].values[column]),
+                )?;
+                return Err(Box::new(ExecutionError::BaselineAmbiguity {
+                    path: context.assignment.path.clone(),
+                    column: context.plan.output.columns()[context.assignment.column]
+                        .name
+                        .clone(),
+                    date: candidates[donor].values[date].clone(),
+                    match_count: count,
+                    partition: window
+                        .group_by
+                        .iter()
+                        .map(|&column| {
+                            (
+                                context.plan.output.columns()[column].name.clone(),
+                                candidates[row].values[column].clone(),
+                            )
+                        })
+                        .collect(),
+                }));
+            }
+
             Answer::Number(value) => Value::Int(value),
             Answer::Cell { row, column } => {
                 budget.work(1, 1)?;
@@ -365,4 +482,13 @@ fn sort<E>(
         width *= 2;
     }
     Ok(())
+}
+
+/// Baseline admission requires matching temporal types, whose complete fields determine order.
+fn temporal_order(left: &Value, right: &Value) -> Ordering {
+    match (left, right) {
+        (Value::Date(left), Value::Date(right)) => left.cmp(right),
+        (Value::DateTime(left), Value::DateTime(right)) => left.cmp(right),
+        _ => unreachable!("admitted matching temporal baseline columns"),
+    }
 }

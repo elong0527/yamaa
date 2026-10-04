@@ -25,7 +25,7 @@ from yamaa.planning import (
 
 NUMBERING = frozenset({"row_number", "rank"})
 WINDOW_VALUES = frozenset({"row_value", "previous_non_missing", "locf"})
-WINDOWS = NUMBERING | WINDOW_VALUES
+WINDOWS = NUMBERING | WINDOW_VALUES | {"baseline_flag"}
 OPERATIONS = frozenset({"source", "literal", "aggregate"}) | WINDOWS
 
 
@@ -95,6 +95,27 @@ def admit(specification):
                         )
                     )
 
+            if operation == "baseline_flag" and isinstance(payload, dict):
+                types = {column.name: column.type for column in specification.columns}
+                fields = [payload.get("date"), payload.get("reference_date")]
+                for field, name in zip(["date", "reference_date"], fields, strict=True):
+                    if isinstance(name, str) and "." in name:
+                        reject("window_source", f"{path}.{field}")
+                if all(name in types for name in fields) and not (
+                    types[fields[0]] in {"date", "datetime"}
+                    and types[fields[1]] == types[fields[0]]
+                ):
+                    reject("baseline_temporal_types", path)
+                if isinstance(window, dict) and window.get("order_by"):
+                    diagnostics.append(
+                        ExecutionDiagnostic(
+                            phase="validation",
+                            condition="window_order_by_forbidden",
+                            spec_paths=(f"{path}.window.order_by",),
+                            requirement="REQ-0341",
+                            context={"operation": "baseline_flag"},
+                        )
+                    )
             if specification.rows or not isinstance(window, dict):
                 reject("window_scope", path)
             else:
@@ -293,7 +314,7 @@ def lower(plan, source):
                 else reference(name)
             )
         elif op in WINDOWS:
-            window = value["window"]
+            window = value.get("window", {})
             tag = "number" if op in NUMBERING else "window"
             if op in NUMBERING:
                 kind = (
@@ -301,6 +322,13 @@ def lower(plan, source):
                     if op == "row_number"
                     else value.get("method", "competition")
                 )
+            elif op == "baseline_flag":
+                kind = {
+                    op: {
+                        "date": outputs[value["date"]],
+                        "reference_date": outputs[value["reference_date"]],
+                    }
+                }
             else:
                 payload = {"column": outputs[value["source"]]}
                 if op == "row_value":
@@ -320,7 +348,7 @@ def lower(plan, source):
                             "nulls_first": isinstance(term, dict)
                             and term.get("nulls", "last") == "first",
                         }
-                        for term in window["order_by"]
+                        for term in window.get("order_by", [])
                     ],
                 }
             }

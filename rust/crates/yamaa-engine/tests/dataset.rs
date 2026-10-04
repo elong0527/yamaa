@@ -3291,3 +3291,157 @@ fn previous_non_missing_crosses_long_gaps_without_rescanning_each_prefix() {
         .iter()
         .all(|row| row[3] == Value::Int(7)));
 }
+
+/// Admit temporal baseline selection over completed dates and partition keys.
+fn baseline_plan(source: &Table, groups: Vec<usize>, filter: Option<Filter>) -> DatasetPlan {
+    use yamaa_engine::dataset::{Window, WindowKind};
+    let mut fields = source.schema.columns().to_vec();
+    fields.push(Column {
+        name: "BLFL".into(),
+        kind: ColumnType::Str,
+    });
+    DatasetPlan::new(
+        source.schema.clone(),
+        TableSchema::new(fields).unwrap(),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![
+            assign(1, collect(1)),
+            assign(2, collect(2)),
+            assign(3, collect(3)),
+            assign(
+                4,
+                Expression::Window(Window {
+                    kind: WindowKind::BaselineFlag {
+                        date: 2,
+                        reference_date: 3,
+                    },
+                    group_by: groups,
+                    order_by: vec![],
+                    filter,
+                }),
+            ),
+        ],
+        vec![0],
+        vec![],
+    )
+    .unwrap()
+}
+
+/// Baseline compares each candidate to its own reference and skips either missing operand.
+#[test]
+fn baseline_uses_row_specific_reference_and_missing_candidates() {
+    let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("D", ColumnType::Date),
+            ("R", ColumnType::Date),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Missing, date(1), date(3)],
+            vec![Value::Int(2), Value::Missing, date(3), date(2)],
+            vec![Value::Int(3), Value::Missing, Value::Missing, date(3)],
+            vec![
+                Value::Int(4),
+                Value::Str("b".into()),
+                date(2),
+                Value::Missing,
+            ],
+            vec![Value::Int(5), Value::Str("b".into()), date(2), date(2)],
+            vec![Value::Int(6), Value::Str("b".into()), date(3), date(3)],
+        ],
+    );
+    let result = baseline_plan(&source, vec![1], None)
+        .execute(&source, limits())
+        .unwrap();
+    assert_eq!(
+        result
+            .dataset
+            .rows()
+            .iter()
+            .map(|r| r[4].clone())
+            .collect::<Vec<_>>(),
+        vec![
+            Value::Str("Y".into()),
+            Value::Missing,
+            Value::Missing,
+            Value::Missing,
+            Value::Missing,
+            Value::Str("Y".into())
+        ]
+    );
+    assert_eq!(source.reads.borrow().len(), 24);
+}
+
+/// Equal represented dates tie despite collected precision; diagnostics identify partitions.
+#[test]
+fn baseline_ties_count_all_matches_and_charge_partition_identity() {
+    let year = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
+    let day = Date::new(2025, 1, 1, DatePrecision::Day).unwrap();
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("D", ColumnType::Date),
+            ("R", ColumnType::Date),
+        ],
+        (1..=3)
+            .map(|id| {
+                vec![
+                    Value::Int(id),
+                    Value::Str("partition".into()),
+                    Value::Date(if id == 1 { year } else { day }),
+                    Value::Date(day),
+                ]
+            })
+            .collect(),
+    );
+    let plan = baseline_plan(&source, vec![1], None);
+    let failure = plan.execute(&source, limits()).unwrap_err();
+    match *failure {
+        ExecutionError::BaselineAmbiguity {
+            path,
+            column,
+            date: Value::Date(date),
+            match_count,
+            partition,
+        } => {
+            assert_eq!(path, "columns.C4.derivation");
+            assert_eq!(column, "BLFL");
+            assert_eq!(date.collected_precision(), DatePrecision::Year);
+            assert_eq!(match_count, 3);
+            assert_eq!(
+                partition,
+                vec![("G".into(), Value::Str("partition".into()))]
+            );
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    for constrained in [
+        Limits {
+            identity_cells: 0,
+            ..limits()
+        },
+        Limits {
+            identity_text_bytes: 8,
+            ..limits()
+        },
+    ] {
+        assert!(matches!(
+            *plan.execute(&source, constrained).unwrap_err(),
+            ExecutionError::Limit { .. }
+        ));
+    }
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::BaselineAmbiguity { match_count: 3, .. }
+    ));
+    assert!(
+        matches!(*baseline_plan(&source, vec![], None).execute(&source, Limits { identity_cells: 0, ..limits() }).unwrap_err(), ExecutionError::BaselineAmbiguity { partition, .. } if partition.is_empty())
+    );
+}

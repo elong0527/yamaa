@@ -175,6 +175,9 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
             }
             "numbering.arrow" => include_bytes!("fixtures/datasets/numbering.arrow"),
             "numbering-empty.arrow" => include_bytes!("fixtures/datasets/numbering-empty.arrow"),
+            "baseline.arrow" => include_bytes!("fixtures/datasets/baseline.arrow"),
+            "baseline-tie.arrow" => include_bytes!("fixtures/datasets/baseline-tie.arrow"),
+            "baseline-empty.arrow" => include_bytes!("fixtures/datasets/baseline-empty.arrow"),
             other => panic!("unknown fixture {other}"),
         };
         let response = execute_dataset(&case["request"].to_string(), input).unwrap();
@@ -219,7 +222,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -500,4 +503,44 @@ fn value_window_requests_reject_bad_offsets_and_unavailable_donors_before_ipc() 
         execute_dataset(&invalid.to_string(), b"bad ipc"),
         Err(Error::InvalidPlan)
     ));
+}
+
+/// Baseline dependencies, temporal types and forbidden ordering fail before IPC decoding.
+#[test]
+fn baseline_requests_validate_scope_before_source_access() {
+    let cases: Value =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let valid = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["case"] == "baseline_per_row_reference")
+        .unwrap()["request"]
+        .clone();
+    for scenario in 0..5 {
+        let mut invalid = valid.clone();
+        match scenario {
+            0 => {
+                invalid["columns"][3]["expression"]["window"]["order_by"] =
+                    json!([{"column":0,"descending":false,"nulls_first":false}])
+            }
+            1 => {
+                invalid["columns"][3]["expression"]["window"]["kind"]["baseline_flag"]["date"] =
+                    json!(4)
+            }
+            2 => {
+                invalid["columns"][3]["expression"]["window"]["kind"]["baseline_flag"]
+                    ["reference_date"] = json!(99)
+            }
+            3 => invalid["output"][2]["kind"] = json!("str"),
+            _ => invalid["output"][3]["kind"] = json!("datetime"),
+        }
+        assert!(
+            matches!(
+                execute_dataset(&invalid.to_string(), b"not IPC"),
+                Err(Error::InvalidPlan)
+            ),
+            "{scenario}"
+        );
+    }
 }
