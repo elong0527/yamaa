@@ -69,6 +69,7 @@ class InstalledTemporalResults(unittest.TestCase):
                 effects = []
 
                 def callback(_effects=effects, _value=value):
+                    """Record or raise the selected callback outcome without retrying."""
                     _effects.append(1)
                     return _value
 
@@ -129,6 +130,7 @@ class InstalledTemporalResults(unittest.TestCase):
             )
 
             def echo(host_x, _expected=expected):
+                """Verify the native argument representation before returning it."""
                 self.assertIs(type(host_x), type(_expected))
                 self.assertEqual(host_x, _expected)
                 return host_x
@@ -192,6 +194,7 @@ class InstalledTemporalResults(unittest.TestCase):
             effects = []
 
             def bad(_effects=effects, _value=value):
+                """Return one forged temporal model and record callback effects."""
                 _effects.append(1)
                 return _value
 
@@ -212,6 +215,7 @@ class InstalledTemporalResults(unittest.TestCase):
 
         class Unknown:
             def __getattr__(self, name):
+                """Fail if result admission probes an unknown object."""
                 raise AssertionError("unknown result attributes must not be read")
 
         outcome = invoke(request(), lambda: Unknown())
@@ -221,6 +225,7 @@ class InstalledTemporalResults(unittest.TestCase):
             effects = []
 
             def callback(_effects=effects, _error=error):
+                """Record or raise the selected callback outcome without retrying."""
                 _effects.append(1)
                 raise _error
 
@@ -254,6 +259,7 @@ class InstalledTemporalResults(unittest.TestCase):
 
             class BrokenDate(DateValue):
                 def __getattribute__(self, name, _error=error):
+                    """Raise the selected failure only while reading a temporal field."""
                     if name == "year":
                         raise _error
                     return super().__getattribute__(name)
@@ -262,6 +268,7 @@ class InstalledTemporalResults(unittest.TestCase):
             effects = []
 
             def callback(_value=value, _effects=effects):
+                """Record or raise the selected callback outcome without retrying."""
                 _effects.append(1)
                 return _value
 

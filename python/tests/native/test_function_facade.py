@@ -16,10 +16,12 @@ def native(monkeypatch):
     factories = []
 
     def factory(*args):
+        """Record the exact fields forwarded to native result admission."""
         factories.append(args)
         return args
 
     def invoke(request, callback):
+        """Expose facade execution without interpreting the native request."""
         calls.append(request)
         return callback()
 
@@ -71,6 +73,7 @@ def test_subclass_and_unknown_object(native):
 
     class Unknown:
         def __getattr__(self, name):
+            """Fail if result admission probes an unknown object."""
             raise AssertionError("must not inspect unknown returned objects")
 
     value = SubDate(year=2024, month=2, day=29, collected_precision="month")
@@ -86,6 +89,7 @@ def test_broken_known_model_is_invalid_result(native):
     effects = []
 
     def callback():
+        """Record or raise the selected callback outcome without retrying."""
         effects.append(1)
         return value
 
@@ -100,6 +104,7 @@ def test_callback_exceptions_are_not_swallowed(native, error):
     """The actual callback remains outside the result-adaptation error handler."""
 
     def callback():
+        """Record or raise the selected callback outcome without retrying."""
         raise error
 
     with pytest.raises(type(error)) as raised:
