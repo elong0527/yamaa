@@ -14,6 +14,7 @@ Python only; the explicit ADLB prototype below is not a qualified full backend.
 | Typed numeric evaluation: REQ-0426-0427, 0429, 0438, 0443-0444 | Typed literal/identifier/unary/binary nodes, fake resolver port, ordered evaluation, exact failure provenance; 22 shared evaluation/trace vectors plus 49 arithmetic cases through the plan | No dataset execution | No dataset execution | Host diagnostic transport and lifecycle handlers (steps 4, 7) |
 | Numeric syntax: REQ-0413-0415, 0439-0441 | Bounded arena parser; all 44 shared grammar cases, closed function/arity/reserved-word checks, diagnostic positions and deterministic Python comparisons | No dataset execution | No dataset execution | Full function execution and lifecycle diagnostics (steps 4, 7) |
 | Numeric compilation: REQ-0413-0415, 0426-0427, 0434, 0438-0444 | Immutable supported-subset plans, deferred exact literal failures, source spans, unsupported preflight and static resolution budgets; 22 literal cases plus arithmetic/trace fixtures through compilation | No dataset execution | No dataset execution | Default math policy, host dispatch and full lifecycle (steps 4, 7) |
+| Typed predicates: REQ-0159, 0166-0169, 0171-0177, 0189-0191 | Immutable bounded arena, three-valued truth, promoted mixed comparisons, null/IN/BETWEEN/Unicode LIKE and opaque resolver failures; 20 shared reference truth/trace cases and 7,225 independent LIKE comparisons | Reference fixture replay only | No predicate execution | Shared syntax/regex, binding, dataset filters/checks and installed integration; see [PREDICATES.md](PREDICATES.md) |
 | Numeric selection: REQ-0415-0416, 0424-0427 | GREATEST, LEAST, NULLIF and COALESCE in primitives/typed evaluation/compilation; 51 shared value, promotion, missingness and eager-resolution cases | No dataset execution | No dataset execution | Host dispatch and full lifecycle (steps 4, 7) |
 | Integral-valued numeric functions: REQ-0415, 0423, 0426-0427 | CEIL, FLOOR and TRUNC in primitives/typed evaluation/compilation; 100 shared cases with exact float bits, full-range i64, subnormals, signed zero and failures; standard-library differential tests across every finite exponent | No dataset execution | No dataset execution | Host dispatch and full lifecycle (steps 4, 7) |
 | Square root: REQ-0422, 0426-0427, 0431 | SQRT primitive, typed evaluation and compilation; 32 shared exact-value/domain/failure cases and 110,188 bit-exact Python comparisons in native CI; pinned no_std libm | No dataset execution | No dataset execution | Default-policy EXP/LN/POWER and host dispatch (steps 4, 7) |
@@ -42,7 +43,8 @@ Python only; the explicit ADLB prototype below is not a qualified full backend.
 an i64 through binary64 to decide ordering. Arithmetic promotion intentionally
 does widen an integer when an operand is float. Boolean values are not accepted
 by the ordered-value comparator, matching the existing Python implementation;
-predicate truth/equality is a separate, unimplemented interface. Missing placement
+predicate truth/equality uses the separate typed `predicate` interface and required
+mixed-number promotion. Missing placement
 is likewise owned by the consuming operation, not silently chosen by this API.
 
 Arithmetic primitives still take already-evaluated `Number` values. `NumericPlan`

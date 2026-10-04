@@ -42,8 +42,8 @@ pub enum ColumnType {
 }
 
 /// Missing is a value; an absent source/record is a separate selection outcome.
-/// Derived equality distinguishes int and float variants; language numeric
-/// comparisons must use `compare_present`.
+/// Derived equality distinguishes int and float variants. Ordered table consumers
+/// use `compare_present`; predicates use their own required mixed-number promotion.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Missing,

@@ -1,0 +1,21 @@
+# id	expression	postfix typed tree	bindings	outcome	resolution trace
+mixed-promotion	a = b	$a $b eq	a=i:9007199254740993;b=f:9007199254740992	TRUE	a,b
+integer-exact	a = b	$a $b eq	a=i:9007199254740993;b=i:9007199254740992	FALSE	a,b
+false-and-eager	FALSE AND a = 1	false $a i:1 eq and	-	unknown_field	a
+true-or-eager	TRUE OR a = 1	true $a i:1 eq or	-	unknown_field	a
+missing-reads-right	a = b	$a $b eq	a=missing	unknown_field	a,b
+in-match-reads-rest	a IN (b, c)	$a $b $c in:2	a=i:1;b=i:1	unknown_field	a,b,c
+in-match-type-failure	a IN (b, c)	$a $b $c in:2	a=i:1;b=i:1;c=s:31	incompatible_input_type	a,b,c
+between-repeated	a BETWEEN b AND c	$a $b $c between	a=i:2;b=i:1;c=i:3	TRUE	a,b,a,c
+between-binding-first	a BETWEEN b AND c	$a $b $c between	a=i:2;b=s:31	unknown_field	a,b,a,c
+missing-before-type	a = b	$a $b eq	a=missing;b=b:true	UNKNOWN	a,b
+like-missing-before-type	a LIKE b	$a $b like	a=missing;b=b:true	UNKNOWN	a,b
+like-newline	a LIKE 'x_y'	$a s:785f79 like	a=s:780a79	TRUE	a
+like-unicode-scalar	a LIKE '_'	$a s:5f like	a=s:f09f9880	TRUE	a
+like-no-default-escape	a LIKE 'x\_'	$a s:785c5f like	a=s:785c79	TRUE	a
+in-unknown-negated	a NOT IN (b, NULL)	$a $b missing in:2 not	a=i:1;b=i:2	UNKNOWN	a,b
+between-inclusive	a BETWEEN b AND c	$a $b $c between	a=i:3;b=i:1;c=i:3	TRUE	a,b,a,c
+not-between	a NOT BETWEEN b AND c	$a $b $c between not	a=i:4;b=i:1;c=i:3	TRUE	a,b,a,c
+like-escape	a LIKE '100!%' ESCAPE '!'	$a s:3130302125 like:21	a=s:31303025	TRUE	a
+like-dangling-dynamic	a LIKE b ESCAPE '!'	$a $b like:21	a=s:61;b=s:6121	invalid_predicate	a,b
+bool-incompatible	a = b	$a $b eq	a=b:false;b=b:false	incompatible_input_type	a,b
