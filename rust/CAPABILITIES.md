@@ -248,6 +248,17 @@ the complete unchanged `schema-lookup` benchmark reaches its committed CSV.
 Derived/SELF/base intermediates, correlated filters, range matching and explicit
 row-template reads remain open, as do shared compilation and release qualification.
 
+Dataset `numeric_compute` composes the existing compiler with statically bound
+source/completed-output reads. Each written occurrence is resolved without
+reassociation; deferred literal overflow, eager missing operands, exact numeric
+conditions and current-result conversion retain ordinary dataset failure order.
+The shared six-case fixture adds typed values, requirements, identities and source
+geometry; installed comparisons cover 162 arithmetic/type combinations and 48
+failure/row-source/conversion variants with Python numeric evaluation blocked.
+Cumulative semantic-node/read/text budgets apply after bounded pre-IPC compilation.
+EXP/LN/POWER, local handlers and named-intermediate numeric bindings remain open;
+the separate portable-math candidate does not change this dataset policy.
+
 The key-grain column phase also supports row numbering and competition/
 dense rank over completed output columns (REQ-0293/0301/0303/0340). Partitioning,
 exact typed ordering, explicit null placement and stable construction-order tie

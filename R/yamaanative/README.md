@@ -279,3 +279,12 @@ choices still record inherited `multiple_matches`/`no_match` at every reading's
 source path before conversion. Six independent shared cases replay cached reads,
 absence, duplicate identical records, empty output, false filters and retained
 counts on conversion failure. Broader intermediate policies remain unqualified.
+
+`numeric_compute` connects the same bounded numeric compiler to dataset source
+and completed-output bindings. Arithmetic and supported numeric functions retain
+exact association, eager operand reads, deferred overflow, source spans and
+operand routes. Result conversion follows evaluation; validation conditions have
+no output identity, while derivation conditions retain available complete keys.
+Six shared cases cover values, arithmetic/type/overflow/conversion failures and
+empty input. EXP/LN/POWER, local handlers and broader bindings remain outside this
+dataset slice; the separate numeric/1 candidate policy does not enable them here.

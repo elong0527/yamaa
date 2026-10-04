@@ -108,3 +108,9 @@ multiple/absence counts, unhandled absence, duplicate identical records, empty
 base, a false source filter and absence-literal conversion failure retaining
 earlier counts. The combined 55 cases replay in Rust and installed Python/R;
 neither native execution nor reference evaluation generates the shared truth.
+
+Six `compute_*` cases reuse the independent lookup-left snapshots and handwritten
+typed plans/observations. Converted integer IDs feed exact binary64 division;
+zero division, incompatible completed text, deferred literal overflow, empty input
+and output conversion preserve the expected requirement, identity and numeric
+source geometry. The combined 61 shared cases replay through every installed host.

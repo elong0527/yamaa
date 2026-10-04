@@ -8,8 +8,11 @@ import struct
 from yamaa.adapters import _native_predicate_plan
 from yamaa.expressions import (
     AggregateError,
+    NumericError,
     PredicateError,
+    numeric_identifiers,
     parse_aggregate_cached,
+    parse_numeric_cached,
     parse_predicate,
     predicate_identifiers,
 )
@@ -26,7 +29,22 @@ from yamaa.planning import (
 NUMBERING = frozenset({"row_number", "rank"})
 WINDOW_VALUES = frozenset({"row_value", "previous_non_missing", "locf"})
 WINDOWS = NUMBERING | WINDOW_VALUES | {"baseline_flag"}
-OPERATIONS = frozenset({"source", "literal", "aggregate"}) | WINDOWS
+OPERATIONS = frozenset({"source", "literal", "aggregate", "compute"}) | WINDOWS
+NUMERIC_FUNCTIONS = frozenset(
+    {
+        "ABS",
+        "MOD",
+        "GREATEST",
+        "LEAST",
+        "NULLIF",
+        "COALESCE",
+        "CEIL",
+        "FLOOR",
+        "TRUNC",
+        "SQRT",
+        "ROUND_HALF_AWAY_FROM_ZERO",
+    }
+)
 
 
 def admit(specification):
@@ -137,7 +155,9 @@ def admit(specification):
         if source.schema_path is not None:
             reject("source_schema", f"input.{name}.schema")
 
-    def expression(declaration, path, grouped, allow_source_filter=False):
+    def expression(
+        declaration, path, grouped, allow_source_filter=False, keyed_nonkey=False
+    ):
         """Admit syntax without evaluating literals or converting output values."""
         if "unconvertible" in declaration.model_fields_set:
             reject("unconvertible", f"{path}.unconvertible")
@@ -149,6 +169,48 @@ def admit(specification):
                 reject("wide_integer_literal", path)
             elif not (payload is None or type(payload) in (str, bool, int, float)):
                 reject("literal_representation", path)
+        elif operation == "compute":
+            if not isinstance(payload, dict) or set(payload) != {"expr"}:
+                reject("compute_policy", path)
+                return
+            try:
+                ast = parse_numeric_cached(payload["expr"])
+            except NumericError as error:
+                diagnostic = ExecutionDiagnostic(
+                    phase="validation",
+                    condition=error.condition,
+                    spec_paths=(f"{path}.expr",),
+                    requirement=error.requirement,
+                    context={"expr": payload["expr"], **error.context},
+                )
+                if diagnostic not in diagnostics:
+                    diagnostics.append(diagnostic)
+                return
+
+            def inspect(node):
+                """Refuse unqualified numeric functions without evaluating any operand."""
+                if isinstance(node, dict):
+                    if (
+                        node.get("kind") == "call"
+                        and node["name"] not in NUMERIC_FUNCTIONS
+                    ):
+                        reject(f"numeric_function_{node['name']}", path)
+                    for child in node.values():
+                        if isinstance(child, (dict, list)):
+                            inspect(child)
+                elif isinstance(node, list):
+                    for child in node:
+                        inspect(child)
+
+            inspect(ast)
+            for name in numeric_identifiers(ast):
+                if "." in name and (
+                    grouped
+                    or keyed_nonkey
+                    or name.split(".", 1)[0]
+                    != (specification.base or next(iter(specification.input)))
+                ):
+                    reject("compute_binding_scope", path)
         elif operation == "source":
             variable = (
                 payload
@@ -380,6 +442,8 @@ def admit(specification):
                 False,
                 allow_source_filter=not specification.rows
                 and column.name not in specification.keys,
+                keyed_nonkey=not specification.rows
+                and column.name not in specification.keys,
             )
     for index, declaration in enumerate(specification.verifications or ()):
         operation = declaration.operation
@@ -538,6 +602,18 @@ def lower(plan, source, secondary=None):
         value = derived.declaration.value.root[op]
         if op == "literal":
             expression = {"literal": literal(value)}
+        elif op == "compute":
+            expression = {
+                "compute": {
+                    "text": value["expr"],
+                    "bindings": [
+                        {"name": name, "read": reference(name)}
+                        for name in numeric_identifiers(
+                            parse_numeric_cached(value["expr"])
+                        )
+                    ],
+                }
+            }
         elif op == "source":
             name = value if isinstance(value, str) else value["variable"]
             qualifier, dot, field = name.partition(".")

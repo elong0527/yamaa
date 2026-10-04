@@ -52,6 +52,31 @@ remaining columns complete in the supplied order. Literal conversion occurs per
 constructed value, including on plans reused with empty versus populated sources.
 Paths and expression text provide provenance, not filesystem or artifact authority.
 
+The additive `numeric_compute` capability admits `{compute: {text, bindings}}`.
+Each binding is `{name, read: {source: index}}` or `{name, read: {column: index}}`.
+Names must cover the compiled expression exactly, with no duplicates or unused
+entries. Source reads are available in record scope and key construction; grouped
+computations read completed outputs only. Non-key key-grain computations cannot
+choose one feeding record and therefore also read completed outputs only.
+The normalized-spec frontend additionally preserves the language's qualified-name
+phase rules and refuses named-intermediate numeric bindings in this slice.
+
+The existing Rust compiler preserves written association and evaluates each
+identifier occurrence. Missing operands do not skip later operands, and literal
+overflow remains deferred until reached. Arithmetic, ABS/MOD, numeric selection,
+CEIL/FLOOR/TRUNC, SQRT and ROUND_HALF_AWAY_FROM_ZERO use the reference-compatible
+subset. EXP/LN/POWER remain unsupported; this wire shape has no math-policy escape.
+Compilation is bounded to 65,536 bytes, 8,192 tokens, 4,096 nodes/bindings/resolutions
+and depth 64 before IPC decoding. Semantic node visits, cell reads and scalar
+copies also consume cumulative runtime budgets.
+
+Numeric validation failures carry no output identity; reached derivation failures
+carry complete keys when available. Diagnostics reuse numeric/1 context and exact
+source span/operand route. Ordinary result conversion follows evaluation, and
+earlier source handler counts survive later arithmetic or conversion failures.
+Empty input skips arithmetic and result conversion. Grammar failures and valid
+unsupported functions are distinguished by the normalized-spec frontend before IO.
+
 Numbering is represented by `{number: {kind, group_by, order_by, filter?}}`.
 `kind` is `row_number`, `competition` or `dense`; `group_by` is an ordered list
 of distinct completed output-column indices (empty means one global partition).
@@ -268,7 +293,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

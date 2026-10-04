@@ -16,9 +16,23 @@ pub(crate) struct Predicate {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Binding {
+pub(crate) struct Binding {
     name: String,
     read: Read,
+}
+
+impl Binding {
+    /// Decode the shared closed dataset read coordinates after bounded name admission.
+    pub(crate) fn prepare(self) -> Result<engine::Binding, Error> {
+        name_limit(&self.name)?;
+        Ok(engine::Binding {
+            name: self.name,
+            read: match self.read {
+                Read::Source(index) => engine::Read::Source(index),
+                Read::Column(index) => engine::Read::Column(index),
+            },
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -206,16 +220,7 @@ impl Predicate {
         let bindings = self
             .bindings
             .into_iter()
-            .map(|binding| {
-                name_limit(&binding.name)?;
-                Ok(engine::Binding {
-                    name: binding.name,
-                    read: match binding.read {
-                        Read::Source(index) => engine::Read::Source(index),
-                        Read::Column(index) => engine::Read::Column(index),
-                    },
-                })
-            })
+            .map(Binding::prepare)
             .collect::<Result<_, Error>>()?;
         let nodes = self
             .nodes
