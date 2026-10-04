@@ -69,21 +69,28 @@ jobs:
           path: ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error
       - name: Build wheel and source archive
-        run: maturin build --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist --out "${RUNNER_TEMP}/native-dist"
+        run: |
+          maturin build --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist --out "${RUNNER_TEMP}/native-dist"
+          uv build --project python --wheel --out-dir "${RUNNER_TEMP}/reference-dist"
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
       - name: Install and test wheel outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python -m pip install --no-deps native-dist/*.whl
+          python -m pip install --no-deps -r table-requirements.txt reference-dist/*.whl native-dist/*.whl
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_python.py" installed_python.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv" scalar_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv" numeric_transport.tsv
+          cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/tables" tables
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_tables.py" installed_tables.py
           python installed_python.py
+          python installed_tables.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
           python -m pip uninstall -y yamaa-native
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz
           python installed_python.py
+          python installed_tables.py
       - name: Preserve distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

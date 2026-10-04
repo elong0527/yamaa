@@ -32,6 +32,8 @@ class DependencyTests(unittest.TestCase):
                     "arrow-array",
                     "arrow-schema",
                     "arrow-buffer",
+                    "arrow-ipc",
+                    "flatbuffers",
                     "pyo3",
                     "extendr-api",
                 ):

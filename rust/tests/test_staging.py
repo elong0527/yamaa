@@ -41,6 +41,14 @@ class StagingTests(unittest.TestCase):
                     ).read_bytes(),
                 )
 
+            for source in (
+                staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/tables"
+            ).iterdir():
+                self.assertEqual(
+                    (destination / "inst/tables" / source.name).read_bytes(),
+                    source.read_bytes(),
+                )
+
     def test_existing_destination_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)

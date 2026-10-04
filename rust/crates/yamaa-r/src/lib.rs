@@ -21,6 +21,24 @@ fn evaluate_numeric(request: &str) -> List {
     }
 }
 
+/// Copy IPC bytes on the R thread, returning normally before facade errors.
+#[extendr]
+fn table_round_trip(request: Raw) -> List {
+    match yamaa_adapters::table_transport::table_round_trip(request.as_slice()) {
+        Ok(value) => list!(value = Raw::from_bytes(&value), error = NULL),
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
+/// Inspect lossless table values as owned JSON without an R Arrow dependency.
+#[extendr]
+fn table_snapshot(request: Raw) -> List {
+    match yamaa_adapters::table_transport::table_snapshot(request.as_slice()) {
+        Ok(value) => list!(value = value, error = NULL),
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
 #[extendr]
 fn engine_info() -> List {
     let info = yamaa_engine::engine_info();
@@ -37,4 +55,6 @@ extendr_module! {
     fn engine_info;
     fn scalar_round_trip;
     fn evaluate_numeric;
+    fn table_round_trip;
+    fn table_snapshot;
 }

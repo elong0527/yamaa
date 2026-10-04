@@ -72,3 +72,27 @@ stopifnot(
 rm(numeric_vectors, request_numeric, limit_request)
 invisible(gc())
 stopifnot(grepl('"status":"value"', owned_numeric, fixed = TRUE))
+
+# Raw IPC keeps full i64 and temporal precision without an R Arrow dependency.
+table_truth <- read.delim(system.file("tables", "expected.tsv", package = "yamaanative"),
+                          sep = "\t", quote = "", comment.char = "",
+                          colClasses = "character", fileEncoding = "UTF-8")
+for (case in c("mixed", "empty", "schema_only", "zero_columns")) {
+  path <- system.file("tables", paste0(case, ".arrow"), package = "yamaanative")
+  request <- readBin(path, "raw", n = file.info(path)$size)
+  truth <- table_truth$expected[table_truth$id == case]
+  stopifnot(identical(table_snapshot(request), truth))
+  result <- table_round_trip(request)
+  rm(request)
+  for (i in seq_len(5)) {
+    stopifnot(is.raw(result), identical(table_snapshot(result), truth))
+    result <- table_round_trip(result)
+  }
+}
+for (invalid in list(NULL, "text", 1L, list())) {
+  stopifnot(inherits(try(table_round_trip(invalid), silent = TRUE), "try-error"))
+}
+for (invalid in list(raw(), charToRaw("ARROW1"), as.raw(rep(255L, 8L)))) {
+  stopifnot(inherits(try(table_snapshot(invalid), silent = TRUE), "try-error"))
+}
+stopifnot(inherits(try(table_round_trip(raw(8L * 1024L * 1024L + 1L)), silent = TRUE), "try-error"))

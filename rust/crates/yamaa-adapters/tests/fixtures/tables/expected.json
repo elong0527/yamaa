@@ -1,0 +1,12 @@
+{
+  "mixed": {"protocol":"table/1","columns":[["I","int"],["F","float"],["S","str"],["D","date"],["T","datetime"]],"row_count":"5","chunks":["0","2","0","3","0"],"rows":[
+    [{"int":"-9223372036854775808"},{"float":"8000000000000000"},{"str":""},{"date":{"text":"0001-01-01","precision":"year"}},{"datetime":{"text":"1969-12-31T23:59:59","precision":"second"}}],
+    [{"int":"9223372036854775807"},{"missing":null},{"str":"a\u0000\ud83e\udd80"},{"date":{"text":"1969-12-31","precision":"month"}},{"datetime":{"text":"0001-01-01T00:00:00","precision":"day"}}],
+    [{"int":"9007199254740993"},{"missing":null},{"missing":null},{"date":{"text":"9999-12-31","precision":"day"}},{"datetime":{"text":"9999-12-31T23:59:59","precision":"second"}}],
+    [{"missing":null},{"missing":null},{"str":"last"},{"missing":null},{"missing":null}],
+    [{"int":"0"},{"float":"0000000000000001"},{"str":"x"},{"date":{"text":"2025-01-01","precision":"year"}},{"datetime":{"text":"1970-01-01T00:00:00","precision":"day"}}]
+  ]},
+  "empty":{"protocol":"table/1","columns":[["I","int"],["F","float"],["S","str"],["D","date"],["T","datetime"]],"row_count":"0","chunks":["0"],"rows":[]},
+  "schema_only":{"protocol":"table/1","columns":[["I","int"],["F","float"],["S","str"],["D","date"],["T","datetime"]],"row_count":"0","chunks":[],"rows":[]},
+  "zero_columns":{"protocol":"table/1","columns":[],"row_count":"3","chunks":["3"],"rows":[[],[],[]]}
+}

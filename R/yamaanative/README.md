@@ -132,3 +132,13 @@ return structured outcomes. Unwind containment covers the shared adapter, not
 allocation failures, process aborts or arbitrary host callbacks. This API handles
 only normalized scalar requests. Whole-specification preflight, datasets, Arrow,
 callbacks, workflow publication, release locking and default cutover remain gates.
+
+## Lossless table interchange
+
+`table_round_trip(request)` accepts a raw Arrow IPC stream and returns sanitized,
+owned raw IPC. `table_snapshot(request)` returns exact typed values as table/1 JSON;
+i64 never passes through an ordinary R integer/double vector. Neither function
+requires the R Arrow package or Python. Inputs use the closed precision-bearing
+schema documented in rust/TABLE_TRANSPORT.md in the source repository. Stream
+input and output are capped at 8 MiB; snapshot output is capped at 16 MiB, with
+additional row/column/batch/cell limits. These APIs do not execute specifications.

@@ -11,3 +11,4 @@ pub fn installation_resource() -> &'static str {
 
 pub mod arrow_table;
 mod arrow_temporal;
+pub mod table_transport;
