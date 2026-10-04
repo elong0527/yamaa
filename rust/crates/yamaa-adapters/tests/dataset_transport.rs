@@ -225,6 +225,79 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
     }
 }
 
+/// All named references, dependencies and policy bounds are admitted before IPC decoding.
+#[test]
+fn named_intermediate_admission_precedes_invalid_snapshots() {
+    let cases: Value =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let request = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["case"] == "named_ordered_readings")
+        .unwrap()["request"]
+        .clone();
+    for (pointer, value, expected) in [
+        ("/intermediates/0/source", json!(2), Error::InvalidPlan),
+        (
+            "/intermediates/0/keys/0/output_column",
+            json!(1),
+            Error::InvalidPlan,
+        ),
+        (
+            "/intermediates/0/keys/0/source_column",
+            json!(99),
+            Error::InvalidPlan,
+        ),
+        (
+            "/intermediates/0/selection/order_by/0/column",
+            json!(99),
+            Error::InvalidPlan,
+        ),
+        ("/intermediates/0/keys", json!([]), Error::InvalidPlan),
+        (
+            "/intermediates/0/selection/keep",
+            json!("all"),
+            Error::InvalidRequest,
+        ),
+        ("/intermediates/0/path", json!(""), Error::InvalidRequest),
+        (
+            "/intermediates/0/no_match",
+            json!({"int":"9223372036854775808"}),
+            Error::InvalidScalar,
+        ),
+        (
+            "/columns/0/expression/intermediate/index",
+            json!(99),
+            Error::InvalidPlan,
+        ),
+        (
+            "/columns/1/expression/intermediate/column",
+            json!(99),
+            Error::InvalidPlan,
+        ),
+    ] {
+        let mut invalid = request.clone();
+        *invalid.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            matches!(yamaa_adapters::dataset_transport::execute_dataset_sources(&invalid.to_string(), b"bad", &[b"bad"]), Err(error) if error == expected),
+            "{pointer}"
+        );
+    }
+    let mut many = request.clone();
+    many["intermediates"] = json!(vec![request["intermediates"][0].clone(); 65]);
+    assert!(matches!(
+        PreparedDataset::parse(&many.to_string()),
+        Err(Error::RequestLimit)
+    ));
+    let mut repeated = request.clone();
+    repeated["intermediates"] = json!([request["intermediates"][0], request["intermediates"][0]]);
+    assert!(matches!(
+        PreparedDataset::parse(&repeated.to_string()),
+        Err(Error::InvalidPlan)
+    ));
+}
+
 /// Authored typed filter runs after row conversion and before later source assignments.
 fn filtered_request() -> Value {
     let mut req = request();
@@ -252,7 +325,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.

@@ -3,10 +3,13 @@
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
+#[path = "dataset_intermediates.rs"]
+mod intermediates;
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]
 mod lookup;
+pub use intermediates::{Intermediate, SourceSchemas};
 #[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{OrderTerm, Window, WindowKind};
@@ -36,6 +39,11 @@ pub enum Expression {
     Source(usize),
     /// Read one record from a secondary source on completed output match values.
     Lookup(Lookup),
+    /// Read a field from the run-local cached named record selection.
+    Intermediate {
+        index: usize,
+        column: usize,
+    },
     /// Distinct present raw readings across a key combination, before conversion.
     Collect {
         column: usize,
@@ -58,7 +66,7 @@ pub enum Keep {
     Last,
 }
 
-/// An ordered choice applies only when eligible present readings disagree.
+/// Stable record order; each caller determines when its cardinality requires a choice.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceSelection {
     pub order_by: Vec<OrderTerm>,
@@ -182,6 +190,7 @@ pub enum PlanError {
     InvalidWindow,
     InvalidSourceOrder,
     InvalidLookup,
+    InvalidIntermediate,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -189,6 +198,7 @@ pub enum PlanError {
 pub struct DatasetPlan {
     source: TableSchema,
     secondary: Vec<SecondarySource>,
+    intermediates: Vec<Intermediate>,
     output: TableSchema,
     templates: Vec<RowTemplate>,
     columns: Vec<Assignment>,
@@ -215,6 +225,7 @@ fn validate_assignment(
     available: &mut [bool],
     source: &TableSchema,
     secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
@@ -232,6 +243,24 @@ fn validate_assignment(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
+        Expression::Intermediate { index, column } => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidIntermediate);
+            }
+            let item = intermediates
+                .get(*index)
+                .ok_or(PlanError::InvalidIntermediate)?;
+            lookup::validate(
+                &Lookup {
+                    source: item.source,
+                    column: *column,
+                    keys: item.keys.clone(),
+                },
+                secondary,
+                available,
+                output,
+            )?;
+        }
         Expression::Lookup(lookup) => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidLookup);
@@ -342,6 +371,35 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
     ) -> Result<Self, PlanError> {
+        Self::new_with_intermediates(
+            SourceSchemas {
+                primary: source,
+                secondary,
+            },
+            Vec::new(),
+            output,
+            templates,
+            columns,
+            keys,
+            verifications,
+        )
+    }
+
+    /// Bind named selections and all read dependencies before accessing snapshots.
+    pub fn new_with_intermediates(
+        sources: SourceSchemas,
+        intermediates: Vec<Intermediate>,
+        output: TableSchema,
+        templates: Vec<RowTemplate>,
+        columns: Vec<Assignment>,
+        keys: Vec<usize>,
+        verifications: Vec<Verification>,
+    ) -> Result<Self, PlanError> {
+        let SourceSchemas {
+            primary: source,
+            secondary,
+        } = sources;
+        intermediates::validate(&intermediates, &secondary, &output)?;
         for (index, relation) in secondary.iter().enumerate() {
             if relation.name.is_empty()
                 || secondary[..index]
@@ -374,6 +432,7 @@ impl DatasetPlan {
                             Expression::Collect { .. }
                                 | Expression::Window(_)
                                 | Expression::Lookup(_)
+                                | Expression::Intermediate { .. }
                         ))
                 {
                     return Err(PlanError::InvalidKeyMode);
@@ -383,6 +442,7 @@ impl DatasetPlan {
                     &mut available,
                     &source,
                     &secondary,
+                    &intermediates,
                     &output,
                     &template.mode,
                 )?;
@@ -416,6 +476,7 @@ impl DatasetPlan {
                     &mut available,
                     &source,
                     &secondary,
+                    &intermediates,
                     &output,
                     &template.mode,
                 )?;
@@ -463,6 +524,7 @@ impl DatasetPlan {
         Ok(Self {
             source,
             secondary,
+            intermediates,
             output,
             templates,
             columns,
@@ -544,7 +606,15 @@ pub enum ExecutionError<E> {
     MultipleMatches {
         path: String,
         dataset: String,
+        intermediate: String,
         match_count: usize,
+        matched_key: Vec<(String, Value)>,
+        identity: Option<RowIdentity>,
+    },
+    UnmatchedKey {
+        path: String,
+        dataset: String,
+        intermediate: String,
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
     },
@@ -647,6 +717,7 @@ struct EvaluationState<'a, E> {
     secondary: &'a [&'a dyn TableAccess<Error = E>],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
+    intermediates: &'a mut intermediates::Run,
 }
 
 /// Evaluate one admitted assignment and finish conversion before publishing it.
@@ -659,10 +730,16 @@ fn evaluate<T: TableAccess + ?Sized>(
     limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    if let Expression::Intermediate { index, column } = assignment.expression {
+        state.budget.work(1, 1)?;
+        let value = intermediates::read(index, column, assignment, candidate, plan, row, state)?;
+        return finish(value, assignment, candidate, plan, row, state.budget);
+    }
     let EvaluationState {
         budget,
         handlers,
         secondary,
+        ..
     } = state;
     budget.work(1, 1)?;
     let reads = match &assignment.expression {
@@ -673,6 +750,7 @@ fn evaluate<T: TableAccess + ?Sized>(
     budget.work(reads, 1)?;
     let value = match &assignment.expression {
         Expression::Window(_) => unreachable!("window assignments execute by whole column"),
+        Expression::Intermediate { .. } => unreachable!("intermediates execute through run state"),
         Expression::Literal(value) => {
             if let Value::Str(text) = value {
                 budget.scalar_text(text.len())?;
@@ -830,6 +908,7 @@ impl DatasetPlan {
             return Err(Box::new(ExecutionError::Capacity));
         }
         let mut budget = Budget::new(limits);
+        let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
         if matches!(self.templates[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
@@ -870,6 +949,7 @@ impl DatasetPlan {
                                 secondary,
                                 budget: &mut budget,
                                 handlers,
+                                intermediates: &mut intermediate_run,
                             },
                         )?;
                         candidate.completed[assignment.column] = true;
@@ -938,6 +1018,7 @@ impl DatasetPlan {
                             secondary,
                             budget: &mut budget,
                             handlers,
+                            intermediates: &mut intermediate_run,
                         },
                     )?
                 };

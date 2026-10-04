@@ -4164,6 +4164,276 @@ fn secondary_lookup_plan(source: &Table, secondary: &Table) -> Result<DatasetPla
     )
 }
 
+/// Reuse one named record selection for two independently converted readings.
+fn named_plan(
+    source: &Table,
+    secondary: &Table,
+    item: yamaa_engine::dataset::Intermediate,
+) -> Result<DatasetPlan, PlanError> {
+    use yamaa_engine::dataset::{SecondarySource, SourceSchemas};
+    DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: source.schema.clone(),
+            secondary: vec![SecondarySource {
+                name: "OTHER".into(),
+                schema: secondary.schema.clone(),
+            }],
+        },
+        vec![item],
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Int),
+            ("W", ColumnType::Str),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![
+            assign(
+                1,
+                Expression::Intermediate {
+                    index: 0,
+                    column: 1,
+                },
+            ),
+            assign(
+                2,
+                Expression::Intermediate {
+                    index: 0,
+                    column: 1,
+                },
+            ),
+        ],
+        vec![0],
+        vec![],
+    )
+}
+
+/// A declaration independent of source payloads, including explicit missing absence handling.
+fn named_item() -> yamaa_engine::dataset::Intermediate {
+    use yamaa_engine::dataset::{Intermediate, Keep, MatchKey, OrderTerm, SourceSelection};
+    Intermediate {
+        identifier: "SELECTED".into(),
+        path: "intermediates[0]".into(),
+        source: 0,
+        keys: vec![MatchKey {
+            source_column: 0,
+            output_column: 0,
+        }],
+        filter: None,
+        selection: Some(SourceSelection {
+            order_by: vec![OrderTerm {
+                column: 2,
+                descending: false,
+                nulls_first: false,
+            }],
+            keep: Keep::Last,
+        }),
+        no_match: Some(Value::Missing),
+    }
+}
+
+/// The cached row stays stable, but each reader inherits its own handler accounting.
+#[test]
+fn named_intermediates_cache_records_and_repeat_reading_handlers() {
+    let source = table(
+        &[("ID", ColumnType::Int)],
+        vec![
+            vec![Value::Int(1)],
+            vec![Value::Int(2)],
+            vec![Value::Int(3)],
+        ],
+    );
+    let secondary = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Int(1),
+                Value::Str("7".into()),
+                Value::Int(9007199254740992),
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("8".into()),
+                Value::Int(9007199254740993),
+            ],
+            vec![Value::Int(2), Value::Missing, Value::Int(0)],
+        ],
+    );
+    let mut item = named_item();
+    item.filter = Some(positive(Read::Source(0)));
+    let plan = named_plan(&source, &secondary, item).unwrap();
+    for _ in 0..2 {
+        secondary.reads.borrow_mut().clear();
+        let attempt = plan.execute_observed_sources(&source, &[&secondary], limits());
+        assert_eq!(
+            attempt.result.unwrap().dataset.rows(),
+            &[
+                vec![Value::Int(1), Value::Int(8), Value::Str("8".into())],
+                vec![Value::Int(2), Value::Missing, Value::Missing],
+                vec![Value::Int(3), Value::Missing, Value::Missing],
+            ]
+        );
+        assert_eq!(
+            attempt
+                .handler_counts
+                .iter()
+                .map(|count| (count.spec_path.as_str(), count.handler.name(), count.count))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "columns.C1.derivation.multiple_matches",
+                    "multiple_matches",
+                    1
+                ),
+                ("columns.C1.derivation.no_match", "no_match", 1),
+                (
+                    "columns.C2.derivation.multiple_matches",
+                    "multiple_matches",
+                    1
+                ),
+                ("columns.C2.derivation.no_match", "no_match", 1),
+            ]
+        );
+        let reads = secondary.reads.borrow();
+        assert_eq!(reads.iter().filter(|(_, column)| *column == 0).count(), 12);
+        assert_eq!(reads.iter().filter(|(_, column)| *column == 2).count(), 2);
+        assert_eq!(reads.iter().filter(|(_, column)| *column == 1).count(), 4);
+    }
+}
+
+/// Duplicate identical payloads are records, and every failure retains its prior ledger.
+#[test]
+fn named_intermediates_preserve_join_and_conversion_failure_priority() {
+    let source = table(
+        &[("ID", ColumnType::Int)],
+        vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+    );
+    let mut secondary = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("7".into()), Value::Int(0)],
+            vec![Value::Int(1), Value::Str("7".into()), Value::Int(0)],
+        ],
+    );
+    let mut item = named_item();
+    item.selection = None;
+    let attempt = named_plan(&source, &secondary, item)
+        .unwrap()
+        .execute_observed_sources(&source, &[&secondary], limits());
+    assert!(
+        matches!(*attempt.result.unwrap_err(), ExecutionError::MultipleMatches { intermediate, path, match_count: 2, identity: Some(_), .. } if intermediate == "SELECTED" && path == "intermediates[0]")
+    );
+    assert!(attempt.handler_counts.is_empty());
+    assert!(secondary
+        .reads
+        .borrow()
+        .iter()
+        .all(|(_, column)| *column == 0));
+    let mut item = named_item();
+    item.no_match = None;
+    let attempt = named_plan(&source, &secondary, item)
+        .unwrap()
+        .execute_observed_sources(&source, &[&secondary], limits());
+    assert!(
+        matches!(*attempt.result.unwrap_err(), ExecutionError::UnmatchedKey { matched_key, identity: Some(_), .. } if matched_key == vec![("ID".into(),Value::Int(2))])
+    );
+    assert_eq!(attempt.handler_counts.len(), 1);
+    let mut item = named_item();
+    item.no_match = Some(Value::Str("bad".into()));
+    let attempt = named_plan(&source, &secondary, item)
+        .unwrap()
+        .execute_observed_sources(&source, &[&secondary], limits());
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Conversion { output_row: 1, .. }
+    ));
+    assert_eq!(attempt.handler_counts.len(), 2);
+    secondary.rows[1][1] = Value::Str("bad".into());
+    let attempt = named_plan(&source, &secondary, named_item())
+        .unwrap()
+        .execute_observed_sources(&source, &[&secondary], limits());
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Conversion { output_row: 0, .. }
+    ));
+    assert_eq!(attempt.handler_counts[0].count, 1);
+}
+
+/// Filtering is lazy globally, finishes before matching and never executes for empty output.
+#[test]
+fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
+    let mut source = table(&[("ID", ColumnType::Int)], vec![vec![Value::Int(99)]]);
+    let secondary = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Str),
+            ("ORDER", ColumnType::Int),
+        ],
+        vec![vec![Value::Int(1), Value::Str("bad".into()), Value::Int(0)]],
+    );
+    let mut item = named_item();
+    item.filter = Some(positive(Read::Source(1)));
+    let plan = named_plan(&source, &secondary, item).unwrap();
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(&source, &[&secondary], limits())
+            .result
+            .unwrap_err(),
+        ExecutionError::Predicate { .. }
+    ));
+    source.rows.clear();
+    secondary.reads.borrow_mut().clear();
+    let empty = plan.execute_observed_sources(&source, &[&secondary], limits());
+    assert!(empty.result.unwrap().dataset.rows().is_empty());
+    assert!(empty.handler_counts.is_empty());
+    assert!(secondary.reads.borrow().is_empty());
+    source.rows.push(vec![Value::Int(99)]);
+    let plan = named_plan(&source, &secondary, named_item()).unwrap();
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(
+                &source,
+                &[&secondary],
+                Limits {
+                    work_cells: 1,
+                    ..limits()
+                }
+            )
+            .result
+            .unwrap_err(),
+        ExecutionError::Limit { .. }
+    ));
+    assert_eq!(
+        plan.execute_observed_sources(&source, &[&secondary], limits())
+            .handler_counts
+            .len(),
+        2
+    );
+    let mut item = named_item();
+    item.keys[0].output_column = 1;
+    assert_eq!(
+        named_plan(&source, &secondary, item),
+        Err(PlanError::InvalidLookup)
+    );
+    let mut item = named_item();
+    item.filter = Some(positive(Read::Column(0)));
+    assert!(matches!(
+        named_plan(&source, &secondary, item),
+        Err(PlanError::Filter(_))
+    ));
+}
+
 /// Converted keys reach a secondary relation; no matching record answers missing.
 #[test]
 fn secondary_lookup_uses_completed_keys_and_preserves_missing_reads() {

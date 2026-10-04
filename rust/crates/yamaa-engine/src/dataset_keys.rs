@@ -80,6 +80,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                     budget,
                     handlers,
                     secondary: &[],
+                    intermediates: &mut intermediates::Run::default(),
                 },
             )?;
             probe.completed[assignment.column] = true;

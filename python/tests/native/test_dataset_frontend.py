@@ -1117,6 +1117,129 @@ def multi_source_specification(tmp_path, payload="OTHER.V"):
     return load_specification(path, ROOT / "yaml").specification
 
 
+def named_specification(tmp_path, mutate=None):
+    """Load the unchanged benchmark or a schema-valid unsupported selection variant."""
+    import yaml
+
+    case = ROOT / "benchmarks/schema-lookup"
+    document = yaml.safe_load((case / "spec.yaml").read_text())
+    if mutate is not None:
+        mutate(document)
+    path = tmp_path / "named.yaml"
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    return load_specification(path, ROOT / "yaml").specification
+
+
+def test_named_intermediate_lowering_preserves_match_and_reading_paths(tmp_path):
+    """Different source/output key names and inherited reads stay explicit in the IR."""
+    spec = named_specification(tmp_path)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-lookup")
+    )
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    request, pending = lower(
+        plan,
+        sources["DM"].table,
+        {name: sources[name].table for name in ["AE", "MEDDRA"]},
+    )
+    assert pending is None
+    first, second = request["intermediates"]
+    assert first["identifier"] == "DEATHEV"
+    assert first["path"] == "intermediates[0]"
+    assert first["filter"]["path"] == "intermediates[0].filter"
+    assert first["selection"]["keep"] == "last"
+    assert first["no_match"] == {"missing": None}
+    assert second["keys"] == [{"source_column": 0, "output_column": 2}]
+    assert [
+        assignment["expression"]["intermediate"]["index"]
+        for assignment in request["columns"]
+    ] == [0, 0, 1]
+    assert request["columns"][0]["path"] == "columns.DTHDY.derivation.source"
+
+
+def test_completed_column_name_can_match_named_intermediate(tmp_path):
+    """A bare name remains an output read even when a named selector has that identifier."""
+
+    def mutate(document):
+        """Keep qualified intermediate reads alongside a distinct bare output read."""
+        document["columns"].insert(
+            1,
+            {
+                "name": "DEATHEV",
+                "type": "int",
+                "label": "Output",
+                "derivation": {"literal": 17},
+            },
+        )
+        document["columns"].append(
+            {"name": "COPY", "type": "int", "label": "Copy", "derivation": "DEATHEV"}
+        )
+
+    spec = named_specification(tmp_path, mutate)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-lookup")
+    )
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    request, pending = lower(
+        plan,
+        sources["DM"].table,
+        {name: sources[name].table for name in ["AE", "MEDDRA"]},
+    )
+    assert pending is None
+    assert request["columns"][-1]["expression"] == {"column": 1}
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda doc: doc["intermediates"][0].update(dataset="DM"),
+        lambda doc: doc["intermediates"][0].update(filter="AE.AEDY > DTHDY"),
+        lambda doc: doc["intermediates"][0].update(order_by=["DM.USUBJID"]),
+        lambda doc: doc["intermediates"][0].update(key={"USUBJID": "DM.USUBJID"}),
+        lambda doc: doc["intermediates"][0].update(derivations={"X": {"literal": 1}}),
+        lambda doc: doc["columns"][1].update(
+            derivation={
+                "source": {"variable": "DEATHEV.AEDY", "filter": "DEATHEV.AEDY > 0"}
+            }
+        ),
+    ],
+)
+def test_unqualified_named_selection_refuses_before_provider(tmp_path, mutate):
+    """The native frontend refuses broader intermediate semantics before loading tables."""
+    spec = named_specification(tmp_path, mutate)
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert effects == []
+
+
+def test_old_native_package_refuses_named_intermediates_before_provider(
+    tmp_path, monkeypatch
+):
+    """Multi-source support alone does not authorize named selection execution."""
+    spec = named_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            execute_dataset_sources=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain", "multi_source"]}
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "native_named_intermediate"
+    }
+    assert effects == []
+
+
 def multi_source_tables(kind="int"):
     """Build independently typed snapshots without involving CSV ingestion."""
     from yamaa.io.polars import frame_from_values
@@ -1254,3 +1377,19 @@ def test_mixed_lookup_key_types_remain_unsupported_after_schema_binding(
         "secondary_source_binding"
     }
     assert effects == ["provider"]
+
+
+@pytest.mark.parametrize("field", ["keep", "order_by"])
+def test_unpaired_named_policy_keeps_preflight_diagnostic(tmp_path, field):
+    """Reference declaration errors take precedence over closed-slice refusal."""
+    spec = named_specification(tmp_path, lambda doc: doc["intermediates"][0].pop(field))
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "failure"
+    diagnostic = actual.result.diagnostics[0]
+    assert (diagnostic.condition, diagnostic.requirement, diagnostic.spec_paths) == (
+        "unpaired_fields",
+        "REQ-0119",
+        ("intermediates[0]",),
+    )
+    assert effects == []

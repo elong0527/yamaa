@@ -67,6 +67,198 @@ class InstalledSpecification(unittest.TestCase):
         )
         self.assertTrue(actual.result.table.frame.equals(expected, null_equal=True))
 
+    def test_committed_complete_lookup_benchmark(self):
+        """Use the unchanged lookup document and committed expected CSV through installed Rust."""
+        case = ROOT / "specification-lookup"
+        spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        sources = load_source_tables(spec.input, ProjectResources(case))
+        actual = self.compare(spec, sources)
+        self.assertIsInstance(actual.result, ExecutionSuccess)
+        expected = pl.read_csv(
+            case / "expected/adsl.csv",
+            schema_overrides=actual.result.table.frame.schema,
+        )
+        self.assertTrue(actual.result.table.frame.equals(expected, null_equal=True))
+        self.assertEqual(
+            [
+                (count.spec_path, count.handler, count.count)
+                for count in actual.result.handler_counts
+            ],
+            [
+                (
+                    "columns.DTHDY.derivation.source.multiple_matches",
+                    "multiple_matches",
+                    1,
+                ),
+                ("columns.DTHDY.derivation.source.no_match", "no_match", 2),
+                (
+                    "columns.DTHCAUS.derivation.source.multiple_matches",
+                    "multiple_matches",
+                    1,
+                ),
+                ("columns.DTHCAUS.derivation.source.no_match", "no_match", 2),
+                ("columns.DTHPTERM.derivation.source.no_match", "no_match", 2),
+            ],
+        )
+
+    def test_named_intermediate_cache_handlers_and_failure_priority(self):
+        """Compare lazy whole-source filtering, inherited counts and later conversion failures."""
+        case = ROOT / "specification-lookup"
+        document = yaml.safe_load((case / "spec.yaml").read_text())
+        scenarios = [
+            "empty",
+            "name_collision",
+            "missing_base",
+            "no_absence_handler",
+            "no_order",
+            "literal_absence",
+            "unused",
+            "earlier_failure",
+            "later_failure",
+            "same_values",
+            "filter_failure",
+            "empty_filter_failure",
+            "unmatched_filter_failure",
+        ]
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario):
+                doc = copy.deepcopy(document)
+                if scenario == "name_collision":
+                    doc["columns"].insert(
+                        1,
+                        {
+                            "name": "DEATHEV",
+                            "type": "int",
+                            "label": "Output",
+                            "derivation": {"literal": 17},
+                        },
+                    )
+                    doc["columns"].append(
+                        {
+                            "name": "COPY",
+                            "type": "int",
+                            "label": "Copy",
+                            "derivation": "DEATHEV",
+                        }
+                    )
+                    doc["output"]["columns"].extend(["DEATHEV", "COPY"])
+                if scenario == "no_absence_handler":
+                    doc["intermediates"][0].pop("no_match")
+                if scenario == "no_order":
+                    doc["intermediates"][0].pop("order_by")
+                    doc["intermediates"][0].pop("keep")
+                if scenario == "literal_absence":
+                    doc["intermediates"][0]["no_match"] = "bad"
+                if scenario == "unused":
+                    doc["columns"] = doc["columns"][:1]
+                    doc["output"]["columns"] = ["USUBJID"]
+                    doc["intermediates"] = doc["intermediates"][:1]
+                    doc["intermediates"][0]["filter"] = "AE.AEDY > 0"
+                if scenario in {"earlier_failure", "later_failure"}:
+                    doc["columns"].insert(
+                        1 if scenario == "earlier_failure" else len(doc["columns"]),
+                        {
+                            "name": "FAIL",
+                            "type": "int",
+                            "label": "Failure",
+                            "derivation": {"literal": "bad"},
+                        },
+                    )
+                if scenario in {
+                    "filter_failure",
+                    "empty_filter_failure",
+                    "unmatched_filter_failure",
+                }:
+                    doc["intermediates"][0]["filter"] = "AE.AEDY > 0"
+                spec = self.load(doc)
+                sources = load_source_tables(spec.input, ProjectResources(case))
+                if scenario in {"empty", "empty_filter_failure"}:
+                    sources["DM"] = frame_from_values(sources["DM"].table.columns, [])
+                if scenario == "missing_base":
+                    sources["DM"] = frame_from_values(
+                        sources["DM"].table.columns, [[None]]
+                    )
+                if scenario == "unmatched_filter_failure":
+                    sources["DM"] = frame_from_values(
+                        sources["DM"].table.columns, [["99"]]
+                    )
+                if scenario == "same_values":
+                    table = sources["AE"].table
+                    rows = table.frame.rows()
+                    rows[2] = rows[1]
+                    sources["AE"] = frame_from_values(table.columns, rows)
+                self.compare(spec, sources)
+
+    def test_named_record_order_and_absence_variants(self):
+        """Exact typed order, missing donors, ties and filters select a record before reading fields."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "NAMED",
+            "keys": ["ID"],
+            "base": "SRC",
+            "input": {"OTHER": "other.csv", "SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "V", "W"]},
+            "intermediates": [{"id": "SELECTED", "dataset": "OTHER", "no_match": None}],
+            "columns": [
+                {"name": "ID", "type": "int", "label": "ID", "derivation": "SRC.ID"},
+                {"name": "V", "type": "int", "label": "V", "derivation": "SELECTED.V"},
+                {"name": "W", "type": "str", "label": "W", "derivation": "SELECTED.W"},
+            ],
+        }
+        source = frame_from_values(
+            (TypedColumn(name="ID", type="int"),), [[1], [2], [3]]
+        )
+        columns = tuple(
+            TypedColumn(name=name, type=kind)
+            for name, kind in [
+                ("ID", "int"),
+                ("V", "str"),
+                ("W", "str"),
+                ("ORDER", "int"),
+            ]
+        )
+        rows = [
+            [1, "7", "a", 9007199254740992],
+            [1, None, "b", 9007199254740993],
+            [1, "bad", "c", None],
+            [2, "9", "d", 0],
+            [2, "9", "e", 0],
+            [None, "99", "never", 1],
+        ]
+        for keep, direction, nulls, predicate, fallback in itertools.product(
+            ["first", "last"],
+            ["asc", "desc"],
+            ["first", "last"],
+            [None, "OTHER.ORDER >= 0"],
+            [None, "3"],
+        ):
+            with self.subTest(
+                keep=keep,
+                direction=direction,
+                nulls=nulls,
+                predicate=predicate,
+                fallback=fallback,
+            ):
+                doc = copy.deepcopy(document)
+                item = doc["intermediates"][0]
+                item.update(
+                    keep=keep,
+                    order_by=[
+                        {
+                            "variable": "OTHER.ORDER",
+                            "direction": direction,
+                            "nulls": nulls,
+                        }
+                    ],
+                    no_match=fallback,
+                )
+                if predicate is not None:
+                    item["filter"] = predicate
+                self.compare(
+                    self.load(doc),
+                    {"SRC": source, "OTHER": frame_from_values(columns, rows)},
+                )
+
     def test_baseline_temporal_candidates_filters_and_partition_conditions(self):
         """Compare per-row references, missing values, exact ties and conversion failures."""
         for kind, make in [("date", dt.date), ("datetime", dt.datetime)]:
@@ -757,6 +949,14 @@ class InstalledSpecification(unittest.TestCase):
             patch(
                 "yamaa.runtime.rows.RowResolver._implicit_read",
                 side_effect=AssertionError("reference secondary lookup"),
+            ),
+            patch(
+                "yamaa.runtime.rows.RowResolver._lookup_read",
+                side_effect=AssertionError("reference named intermediate read"),
+            ),
+            patch(
+                "yamaa.runtime.intermediates.IntermediateSelector.select",
+                side_effect=AssertionError("reference named selection"),
             ),
             patch(
                 "yamaa.odm.context.select_one",

@@ -55,9 +55,57 @@ def admit(specification):
         specification.rows or specification.base is None or len(specification.input) > 8
     ):
         reject("multiple_sources", "input")
-    for field in ("intermediates", "submission"):
-        if getattr(specification, field) is not None:
-            reject(field, field)
+    if specification.submission is not None:
+        reject("submission", "submission")
+    named = {item.id for item in specification.intermediates or ()}
+    if len(named) > 64:
+        reject("intermediate_limit", "intermediates")
+    for index, item in enumerate(specification.intermediates or ()):
+        path = f"intermediates[{index}]"
+        if (
+            specification.rows
+            or item.dataset not in specification.input
+            or item.dataset == (specification.base or next(iter(specification.input)))
+        ):
+            reject("intermediate_scope", path)
+        if any(
+            getattr(item, field) is not None
+            for field in ("between", "derivations", "verifications")
+        ):
+            reject("intermediate_selection", path)
+        if item.key is not None and (
+            not isinstance(item.key, dict)
+            or any(
+                not isinstance(value, str) or "." in value
+                for value in item.key.values()
+            )
+        ):
+            reject("intermediate_key", f"{path}.key")
+        if bool(item.order_by) != (item.keep is not None):
+            reject("intermediate_order", path)
+        if any(
+            "." not in term.variable or term.variable.split(".", 1)[0] != item.dataset
+            for term in item.order_by or ()
+        ):
+            reject("intermediate_order_binding", f"{path}.order_by")
+        if not (
+            item.no_match is None or type(item.no_match) in (str, bool, int, float)
+        ) or (
+            type(item.no_match) is int and not INT64_MIN <= item.no_match <= INT64_MAX
+        ):
+            reject("intermediate_absence_literal", f"{path}.no_match")
+        if item.filter is not None:
+            try:
+                ast = _native_predicate_plan.admit(item.filter, f"{path}.filter")
+                if any(
+                    "." not in name or name.split(".", 1)[0] != item.dataset
+                    for name in predicate_identifiers(ast)
+                ):
+                    reject("intermediate_correlated_filter", f"{path}.filter")
+            except ExecutionPlanningError as error:
+                diagnostics.extend(error.diagnostics)
+            except UnsupportedPlanningError as error:
+                unsupported.extend(error.features)
     if specification.filter is not None:
         try:
             ast = _native_predicate_plan.admit(specification.filter, "filter")
@@ -114,6 +162,11 @@ def admit(specification):
                 if isinstance(variable, str) and "." in variable
                 else None
             )
+            if qualifier in named:
+                if not allow_source_filter:
+                    reject("intermediate_read_scope", path)
+                if isinstance(payload, dict) and set(payload) != {"variable"}:
+                    reject("intermediate_read_selection", path)
             if qualifier in specification.input and qualifier != (
                 specification.base or next(iter(specification.input))
             ):
@@ -371,7 +424,7 @@ def admit(specification):
         raise UnsupportedPlanningError(unsupported)
     # In this admitted subset, every column-level source/literal derivation is
     # row-local and is promoted when a filter reads it (REQ-1260). Windows,
-    # dataset aggregates and intermediates were refused above; do not infer
+    # dataset aggregates and intermediates in explicit rows were refused above; do not infer
     # their phase availability here or duplicate the general planner.
     defaults = {column.name for column in specification.columns if column.derivation}
     for row, path, ast in filters:
@@ -411,6 +464,64 @@ def lower(plan, source, secondary=None):
     inputs = {column.name: index for index, column in enumerate(source.columns)}
     outputs = {column.name: index for index, column in enumerate(spec.columns)}
     keyed = not spec.rows
+    intermediates = []
+    intermediate_indices = {}
+    for index, item in enumerate(plan.intermediates):
+        fields = secondary_fields.get(item.dataset, {})
+        table = secondary.get(item.dataset)
+        if (
+            table is None
+            or item.match_expressions
+            or not item.match_fields
+            or len(item.match_fields) != len(item.match_variables)
+            or any(
+                field not in fields
+                or variable not in outputs
+                or table.columns[fields[field]].type != output_types[variable]
+                for field, variable in zip(item.match_fields, item.match_variables)
+            )
+            or any(field not in fields for _, field in item.order_terms)
+        ):
+            raise UnsupportedPlanningError(
+                (
+                    UnsupportedFeature(
+                        operation="intermediate_binding", spec_path=item.path
+                    ),
+                )
+            )
+        bound = {
+            "identifier": item.identifier,
+            "path": item.path,
+            "source": secondary_indices[item.dataset],
+            "keys": [
+                {"source_column": fields[field], "output_column": outputs[variable]}
+                for field, variable in zip(item.match_fields, item.match_variables)
+            ],
+        }
+        if item.filter_predicate is not None:
+            bound["filter"] = _native_predicate_plan.lower(
+                item.filter_predicate,
+                spec.intermediates[index].filter,
+                f"{item.path}.filter",
+                lambda name, fields=fields: {"source": fields[name.split(".", 1)[1]]},
+                literal,
+            )
+        if item.order_terms:
+            bound["selection"] = {
+                "order_by": [
+                    {
+                        "column": fields[field],
+                        "descending": term.direction == "desc",
+                        "nulls_first": term.nulls == "first",
+                    }
+                    for term, field in item.order_terms
+                ],
+                "keep": item.keep,
+            }
+        if item.no_match_declared:
+            bound["no_match"] = literal(item.no_match)
+        intermediate_indices[item.identifier] = (index, fields)
+        intermediates.append(bound)
 
     def reference(name):
         """Only the admitted driver or completed output columns are readable."""
@@ -430,7 +541,10 @@ def lower(plan, source, secondary=None):
         elif op == "source":
             name = value if isinstance(value, str) else value["variable"]
             qualifier, dot, field = name.partition(".")
-            if dot and qualifier in secondary:
+            if dot and qualifier in intermediate_indices:
+                index, fields = intermediate_indices[qualifier]
+                expression = {"intermediate": {"index": index, "column": fields[field]}}
+            elif dot and qualifier in secondary:
                 join = next(
                     (
                         join
@@ -584,6 +698,7 @@ def lower(plan, source, secondary=None):
     verifications, declaration_error = checks(spec, outputs)
     return {
         "protocol": "dataset/1",
+        **({"intermediates": intermediates} if intermediates else {}),
         "source": [
             {"name": column.name, "kind": column.type} for column in source.columns
         ],

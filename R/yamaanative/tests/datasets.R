@@ -41,7 +41,7 @@ stopifnot(is.raw(actual$table), identical(actual$outcome, truth$expected[1]),
 
 # Feature discovery is shared metadata and performs no source loading.
 stopifnot(identical(dataset_capabilities(),
-  '{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source"]}'))
+  '{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate"]}'))
 
 # Secondary snapshots are an explicit bounded list; legacy calls cannot omit them.
 lookup <- which(truth$case == "lookup_values")

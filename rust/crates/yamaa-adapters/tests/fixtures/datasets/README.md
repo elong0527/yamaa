@@ -100,4 +100,11 @@ including duplicate identical donor records, absent relations, empty base and
 failed conversion. JSON cases carry optional `secondary` filename lists; TSV adds
 a trailing `secondary` field using semicolon-separated names or `-` for none.
 Existing outcome/snapshot fields are unchanged. All hosts replay the same
-49 cases, including named typed match-key evidence separate from output keys.
+cases, including named typed match-key evidence separate from output keys.
+
+Six `named_*` cases reuse independent lookup snapshots and handwritten expected
+observations. They cover two readings of one cached ordered record, per-reading
+multiple/absence counts, unhandled absence, duplicate identical records, empty
+base, a false source filter and absence-literal conversion failure retaining
+earlier counts. The combined 55 cases replay in Rust and installed Python/R;
+neither native execution nor reference evaluation generates the shared truth.

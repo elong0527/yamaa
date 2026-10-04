@@ -82,6 +82,7 @@ pub(super) fn read<E>(
         return Err(Box::new(ExecutionError::MultipleMatches {
             path: assignment.path.clone(),
             dataset: plan.secondary[lookup.source].name.clone(),
+            intermediate: alloc::format!("intermediate({})", plan.secondary[lookup.source].name),
             match_count: count,
             matched_key: lookup
                 .keys
