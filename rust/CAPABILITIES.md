@@ -1,7 +1,7 @@
 # Rust migration capability coverage
 
 This matrix tracks the implemented slices of [#1585](https://github.com/elong0527/yamaa/issues/1585).
-Core tests are not dataset execution. Every native installation probe still
+Unit and typed-plan tests are not installed specification execution. Every native installation probe still
 reports `execution_supported = false`; all 315 benchmark cases remain executable
 through the Python backend only, as declared by
 [`execution-manifest.yaml`](../benchmarks/execution-manifest.yaml).
@@ -33,6 +33,7 @@ through the Python backend only, as declared by
 | Lossless R primitive scalars: REQ-0014, 0006, 0022-0027 | Validated tag/byte codec, shared checked arithmetic and exact numeric comparisons | Existing full-range native callback scalars | Installed int64/UTF-8 carriers, no NA collision/NUL loss, exact conversions and encoding/ownership tests | Connected to R FunctionPort; full workflow/release qualification remains |
 | Installed R callbacks: REQ-0563-0564, 0570, 0676-0686, 0700-0704 | Shared function/1 invocation and checked temporal epoch codec | Installed callback facade preserves known temporal model precision | Real synchronous R callbacks; lossless scalars, explicit UTC, 42 shared cases plus ownership/reentrancy/interrupt/error/limit tests | Environment activation, specification/dataset execution and release gates |
 | Python temporal result compatibility: REQ-0563, 0570, 0686, 0702 | Closed owned native temporal result carrier with exact field/calendar/precision admission | Optional non-editable facade bridges known DateValue/DateTimeValue subtypes; installed wheel/source independent truth and reference comparison | Existing Date/UTC POSIXct callback mapping | Full environment/workflow integration and release qualification |
+| Typed single-source dataset application: REQ-0036-0039, 0047, 0059-0061, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates, direct/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count observations; committed ADLB source/expected replay plus failure/order tests | No installed dataset dispatch or specification compilation | No installed dataset dispatch or specification compilation | Versioned plan bridge, full verification/report contracts, handlers, remaining operators and workflow/release gates |
 | Full application/workflow, verification, publication | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
 
 `compare_present` mirrors the current Python value comparator: it does not round
@@ -170,3 +171,48 @@ requires both compiled Rust policies to match all 2,936 exact rational cases.
 This qualifies the scalar slice, not host FFI, specification dispatch or dataset
 execution. Numeric completed-result conversion and literal handler accounting now
 compose these scalar results in `yamaa-engine`; host dispatch remains pending.
+
+## Typed dataset application slice
+
+`yamaa_engine::dataset::DatasetPlan` admits a complete, already bound single-source
+plan before cell reads. Its closed expression vocabulary supports literal,
+direct source, earlier completed-column, and grouped ordered SUM/MEAN values.
+Record and group templates append in declaration order; groups retain first
+source occurrence and member order. Grouped scalar source references must name
+a grouping field, including in the later column phase. Every template completes
+the same row-phase columns; remaining derivations complete whole columns in
+resolved order. Each assignment converts before its dependents can read it. Literal conversion
+also belongs to that per-value lifecycle: an empty record/group template has no
+value to convert, while a populated template reports a runtime conversion failure
+at `columns.<name>`. Paired Python reference and Rust regressions cover this timing;
+plan admission must not eagerly reject an otherwise valid literal expression.
+
+`table_grouping::partition` uses borrowed exact keys and a tree index, preserving
+missing equality, signed-zero equality, civil temporal equality and exact UTF-8.
+It does not sort records, hash content or round integer keys through binary64.
+The snapshot port must provide correctly normalized cells of its declared types.
+Source/output row, output-cell and key-cell budgets are resource limits rather
+than language restrictions. These are not byte-level memory or allocator-failure
+guarantees: strings, tree nodes and verification observations allocate normally.
+
+Output keys are checked before dataset verifications. The closed error-severity
+verification subset includes unique combinations and whole-artifact integer
+row-count bounds. Failed output identity discards the table; failed dataset
+verification retains all evaluated records in declaration order, including
+successful checks. Observations retain actual artifact cardinality and complete
+output-key identities for later report formatting. This is not yet the public
+verification ledger/diagnostic schema, sampling policy or publication workflow.
+
+The Rust application test reads the committed `adam-adlb-ordered-sum` source and
+expected CSV, supplies an explicit typed plan, and checks all 17 projected rows,
+column types, missing values and check counts. The fixture's `0.6000000000000001`
+and `0.6` totals remain distinct. This proves dataset application composition,
+not YAML compilation, installed host dispatch, source discovery or release
+qualification. No capability flag or benchmark execution manifest changes.
+
+A future compiler must reject the entire run before execution if it requires
+unsupported syntax: handlers, callbacks, filters, windows, joins, key-grain row
+construction, multiple sources, other expression operations, column checks,
+warning checks, grouped/filtered/fractional row counts or file publication.
+The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
+Rust specification compiler and the remaining benchmark gates are still open.

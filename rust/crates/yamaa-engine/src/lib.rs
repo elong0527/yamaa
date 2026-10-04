@@ -4,8 +4,10 @@
 
 extern crate alloc;
 
+pub mod dataset;
 pub mod function_invocation;
 pub mod numeric_lifecycle;
+pub mod table_grouping;
 
 /// Bootstrap capability information, independent of Python and R representations.
 #[derive(Debug, PartialEq, Eq)]
