@@ -5191,3 +5191,653 @@ fn row_lookup_assignment_phase_controls_reads_for_discarded_candidates() {
         }
     }
 }
+
+mod dataset_functions {
+    use super::*;
+    use yamaa_core::value::ValueType;
+    use yamaa_engine::{
+        dataset::{BoundFunction, FunctionArgument, FunctionBindings, FunctionInput},
+        function_invocation::{
+            Argument, FailureKind, FunctionIdentity, HostError, InvocationPlan, Parameter, Presence,
+        },
+    };
+
+    /// Fixed activated identity and independently declared host-argument ordering.
+    fn signature(returns: ColumnType) -> InvocationPlan {
+        InvocationPlan::new(
+            FunctionIdentity {
+                name: "sum".into(),
+                contract_version: "1".into(),
+                implementation_version: "2".into(),
+                call: "project.sum".into(),
+            },
+            vec![
+                Parameter {
+                    name: "first".into(),
+                    host_name: "lhs".into(),
+                    kind: ValueType::Int,
+                    accepts_missing: false,
+                    presence: Presence::Required,
+                },
+                Parameter {
+                    name: "second".into(),
+                    host_name: "rhs".into(),
+                    kind: ValueType::Int,
+                    accepts_missing: false,
+                    presence: Presence::Required,
+                },
+                Parameter {
+                    name: "factor".into(),
+                    host_name: "scale".into(),
+                    kind: ValueType::Int,
+                    accepts_missing: false,
+                    presence: Presence::Optional(Value::Int(5)),
+                },
+            ],
+            returns,
+            false,
+        )
+        .unwrap()
+    }
+
+    struct Callbacks {
+        signature: InvocationPlan,
+        calls: Vec<Vec<(String, String)>>,
+        result: Result<Value, &'static str>,
+    }
+    impl FunctionBindings for Callbacks {
+        type Error = &'static str;
+        /// Slot lookup borrows metadata and never invokes the callable.
+        fn signature(&self, slot: usize) -> Option<&InvocationPlan> {
+            (slot == 0).then_some(&self.signature)
+        }
+        /// Capture the complete host call while preserving an opaque failure payload.
+        fn call(
+            &mut self,
+            slot: usize,
+            arguments: &[Argument<'_>],
+        ) -> Result<Value, HostError<Self::Error>> {
+            assert_eq!(slot, 0);
+            self.calls.push(
+                arguments
+                    .iter()
+                    .map(|a| (a.name.into(), format!("{:?}", a.value)))
+                    .collect(),
+            );
+            self.result.clone().map_err(HostError::Raised)
+        }
+    }
+    /// Construct an explicitly bound callback without activation or discovery effects.
+    fn callbacks() -> Callbacks {
+        Callbacks {
+            signature: signature(ColumnType::Int),
+            calls: vec![],
+            result: Ok(Value::Int(11)),
+        }
+    }
+    /// The authored order is deliberately the reverse of parameter declaration order.
+    fn arguments() -> Vec<FunctionArgument> {
+        vec![
+            FunctionArgument {
+                name: "second".into(),
+                input: FunctionInput::Read(Read::Source(2)),
+            },
+            FunctionArgument {
+                name: "first".into(),
+                input: FunctionInput::Read(Read::Source(1)),
+            },
+        ]
+    }
+    /// Bind a call at one of the two assignment phases without changing its signature.
+    fn plan(
+        source: &Table,
+        mode: RowMode,
+        row_call: bool,
+        predicate: Option<Filter>,
+        signature: InvocationPlan,
+        args: Vec<FunctionArgument>,
+    ) -> Result<DatasetPlan, PlanError> {
+        let call = assign(
+            1,
+            Expression::Function(BoundFunction::new(0, signature, args)?),
+        );
+        let mut row = vec![assign(0, Expression::Source(0))];
+        let mut columns = vec![];
+        if row_call {
+            row.push(call);
+        } else {
+            columns.push(call);
+        }
+        DatasetPlan::new(
+            source.schema.clone(),
+            schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+            vec![RowTemplate {
+                mode,
+                assignments: row,
+                filter: predicate,
+            }],
+            columns,
+            vec![0],
+            vec![],
+        )
+    }
+    /// Three independent integer source fields with deterministic row membership.
+    fn source(rows: Vec<Vec<Value>>) -> Table {
+        table(
+            &[
+                ("ID", ColumnType::Int),
+                ("A", ColumnType::Int),
+                ("B", ColumnType::Int),
+            ],
+            rows,
+        )
+    }
+
+    /// Authored reads precede declaration-order checks/defaults and each attempt is fresh.
+    #[test]
+    fn authored_reads_and_mapped_calls_preserve_distinct_orders() {
+        let source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(2), Value::Missing, Value::Int(30)],
+        ]);
+        let plan = plan(
+            &source,
+            RowMode::Records,
+            true,
+            None,
+            signature(ColumnType::Int),
+            arguments(),
+        )
+        .unwrap();
+        let mut callbacks = callbacks();
+        for count in 1..=2 {
+            source.reads.borrow_mut().clear();
+            let result = plan
+                .execute_observed_functions(&source, &[], &mut callbacks, limits())
+                .result
+                .unwrap();
+            assert_eq!(
+                result.dataset.rows(),
+                &[
+                    vec![Value::Int(1), Value::Int(11)],
+                    vec![Value::Int(2), Value::Missing]
+                ]
+            );
+            assert_eq!(
+                *source.reads.borrow(),
+                vec![(0, 0), (0, 2), (0, 1), (1, 0), (1, 2), (1, 1)]
+            );
+            assert_eq!(callbacks.calls.len(), count);
+            assert_eq!(
+                callbacks.calls[count - 1],
+                vec![
+                    ("lhs".into(), "Int(10)".into()),
+                    ("rhs".into(), "Int(20)".into()),
+                    ("scale".into(), "Int(5)".into())
+                ]
+            );
+        }
+    }
+
+    /// Missing arguments never hide a later authored resolution error or trigger a callback.
+    #[test]
+    fn missing_does_not_skip_remaining_argument_resolution() {
+        let mut source = source(vec![vec![Value::Int(1), Value::Missing, Value::Int(20)]]);
+        source.fail = Some((0, 2));
+        let mut args = arguments();
+        args.reverse();
+        let plan = plan(
+            &source,
+            RowMode::Records,
+            true,
+            None,
+            signature(ColumnType::Int),
+            args,
+        )
+        .unwrap();
+        let mut callbacks = callbacks();
+        let error = plan
+            .execute_observed_functions(&source, &[], &mut callbacks, limits())
+            .result
+            .unwrap_err();
+        assert!(matches!(
+            *error,
+            ExecutionError::Cell {
+                source_row: 0,
+                error: CellError::Access("source failure"),
+                ..
+            }
+        ));
+        assert_eq!(*source.reads.borrow(), vec![(0, 0), (0, 1), (0, 2)]);
+        assert!(callbacks.calls.is_empty());
+    }
+
+    /// Row callbacks precede filtering, whereas column callbacks run only on retained rows.
+    #[test]
+    fn callback_assignment_phase_and_empty_input_control_effects() {
+        let source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]]);
+        for row_call in [true, false] {
+            let plan = plan(
+                &source,
+                RowMode::Records,
+                row_call,
+                Some(filter(Node::Boolean(false), vec![])),
+                signature(ColumnType::Int),
+                arguments(),
+            )
+            .unwrap();
+            let mut callbacks = callbacks();
+            assert!(plan
+                .execute_observed_functions(&source, &[], &mut callbacks, limits())
+                .result
+                .unwrap()
+                .dataset
+                .rows()
+                .is_empty());
+            assert_eq!(callbacks.calls.len(), usize::from(row_call));
+            let empty = table(
+                &[
+                    ("ID", ColumnType::Int),
+                    ("A", ColumnType::Int),
+                    ("B", ColumnType::Int),
+                ],
+                vec![],
+            );
+            assert!(plan
+                .execute_observed_functions(&empty, &[], &mut callbacks, limits())
+                .result
+                .unwrap()
+                .dataset
+                .rows()
+                .is_empty());
+            assert_eq!(callbacks.calls.len(), usize::from(row_call));
+        }
+    }
+
+    /// Signature mismatches and legacy entrypoints refuse functions before any table access.
+    #[test]
+    fn all_function_bindings_are_required_before_table_access() {
+        struct Unreadable;
+        impl TableAccess for Unreadable {
+            type Error = &'static str;
+            fn schema(&self) -> &TableSchema {
+                panic!("schema read before binding admission")
+            }
+            fn row_count(&self) -> usize {
+                panic!("row count read before binding admission")
+            }
+            fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+                panic!("cell read before binding admission")
+            }
+        }
+        let source = source(vec![]);
+        let plan = plan(
+            &source,
+            RowMode::Records,
+            false,
+            None,
+            signature(ColumnType::Int),
+            arguments(),
+        )
+        .unwrap();
+        assert!(matches!(
+            *plan
+                .execute_observed(&Unreadable, limits())
+                .result
+                .unwrap_err(),
+            ExecutionError::FunctionBinding { slot: 0 }
+        ));
+        let mut callbacks = callbacks();
+        callbacks.signature = signature(ColumnType::Str);
+        assert!(matches!(
+            *plan
+                .execute_observed_functions(&Unreadable, &[], &mut callbacks, limits())
+                .result
+                .unwrap_err(),
+            ExecutionError::FunctionBinding { slot: 0 }
+        ));
+        assert!(callbacks.calls.is_empty());
+    }
+
+    /// Fatal callback and result failures retain provenance and bypass conversion handlers.
+    #[test]
+    fn invocation_failures_are_fatal_and_do_not_retry_or_recover() {
+        let source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(2), Value::Int(30), Value::Int(40)],
+        ]);
+        let plan = plan(
+            &source,
+            RowMode::Records,
+            false,
+            None,
+            signature(ColumnType::Int),
+            arguments(),
+        )
+        .unwrap()
+        .with_conversion_handlers(vec![conversion_handler(1, Value::Int(9))])
+        .unwrap();
+        for (result, expected) in [
+            (Err("callback payload"), "function_call_failed"),
+            (Ok(Value::Bool(true)), "invalid_function_result"),
+            (Ok(Value::Missing), "invalid_function_result"),
+        ] {
+            let mut callbacks = callbacks();
+            callbacks.result = result;
+            let attempt = plan.execute_observed_functions(&source, &[], &mut callbacks, limits());
+            match *attempt.result.unwrap_err() {
+                ExecutionError::Function {
+                    path,
+                    error,
+                    identity,
+                } => {
+                    assert_eq!(path, "columns.C1.derivation");
+                    assert_eq!(error.condition(), expected);
+                    assert_eq!(error.identity, callbacks.signature.identity().clone());
+                    assert_eq!(identity.unwrap().values, vec![Value::Int(1)]);
+                    if expected == "function_call_failed" {
+                        assert_eq!(error.kind, FailureKind::CallFailed("callback payload"));
+                    }
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+            assert_eq!(callbacks.calls.len(), 1);
+            assert_eq!(attempt.handler_counts[0].count, 0);
+        }
+        let mut callbacks = callbacks();
+        callbacks.signature = signature(ColumnType::Str);
+        callbacks.result = Ok(Value::Str("bad".into()));
+        let converted = super::dataset_functions::plan(
+            &source,
+            RowMode::Records,
+            false,
+            None,
+            signature(ColumnType::Str),
+            arguments(),
+        )
+        .unwrap()
+        .with_conversion_handlers(vec![conversion_handler(1, Value::Int(9))])
+        .unwrap();
+        let attempt = converted.execute_observed_functions(&source, &[], &mut callbacks, limits());
+        assert_eq!(
+            attempt.result.unwrap().dataset.rows(),
+            &[
+                vec![Value::Int(1), Value::Int(9)],
+                vec![Value::Int(2), Value::Int(9)]
+            ]
+        );
+        assert_eq!(attempt.handler_counts[0].count, 2);
+        assert_eq!(callbacks.calls.len(), 2);
+    }
+
+    /// Phase and name admission are independent of data cardinality and callback presence.
+    #[test]
+    fn function_bindings_validate_names_dependencies_and_source_scope() {
+        let source = source(vec![]);
+        assert_eq!(
+            BoundFunction::new(0, signature(ColumnType::Int), vec![]),
+            Err(PlanError::InvalidFunction)
+        );
+        let mut args = arguments();
+        args.push(args[0].clone());
+        assert_eq!(
+            BoundFunction::new(0, signature(ColumnType::Int), args),
+            Err(PlanError::InvalidFunction)
+        );
+        let mut args = arguments();
+        args[0].name = "unknown".into();
+        assert_eq!(
+            BoundFunction::new(0, signature(ColumnType::Int), args),
+            Err(PlanError::InvalidFunction)
+        );
+        assert_eq!(
+            plan(
+                &source,
+                RowMode::Groups(vec![0]),
+                true,
+                None,
+                signature(ColumnType::Int),
+                arguments()
+            ),
+            Err(PlanError::NonGroupSource)
+        );
+        assert_eq!(
+            plan(
+                &source,
+                RowMode::Keys,
+                true,
+                None,
+                signature(ColumnType::Int),
+                arguments()
+            ),
+            Err(PlanError::InvalidKeyMode)
+        );
+        assert_eq!(
+            plan(
+                &source,
+                RowMode::Keys,
+                false,
+                None,
+                signature(ColumnType::Int),
+                arguments()
+            ),
+            Err(PlanError::InvalidKeyMode)
+        );
+        let mut args = arguments();
+        args[0].input = FunctionInput::Read(Read::Column(1));
+        assert_eq!(
+            plan(
+                &source,
+                RowMode::Records,
+                true,
+                None,
+                signature(ColumnType::Int),
+                args
+            ),
+            Err(PlanError::UnavailableColumn)
+        );
+    }
+
+    /// Work exhaustion precedes argument reads and calls; text is charged before copying.
+    #[test]
+    fn function_limits_precede_callback_effects_and_reset_between_attempts() {
+        let source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]]);
+        let plan = plan(
+            &source,
+            RowMode::Records,
+            true,
+            None,
+            signature(ColumnType::Int),
+            arguments(),
+        )
+        .unwrap();
+        let mut callbacks = callbacks();
+        let mut tiny = limits();
+        tiny.work_cells = 3;
+        assert!(matches!(
+            *plan
+                .execute_observed_functions(&source, &[], &mut callbacks, tiny)
+                .result
+                .unwrap_err(),
+            ExecutionError::Limit { .. }
+        ));
+        assert_eq!(*source.reads.borrow(), vec![(0, 0)]);
+        assert!(callbacks.calls.is_empty());
+        assert!(plan
+            .execute_observed_functions(&source, &[], &mut callbacks, limits())
+            .result
+            .is_ok());
+        assert_eq!(callbacks.calls.len(), 1);
+        let mut args = arguments();
+        args[0].input = FunctionInput::Literal(Value::Str("large".into()));
+        let text_plan = super::dataset_functions::plan(
+            &source,
+            RowMode::Records,
+            true,
+            None,
+            signature(ColumnType::Int),
+            args,
+        )
+        .unwrap();
+        tiny = limits();
+        tiny.scalar_text_bytes = 0;
+        assert!(matches!(
+            *text_plan
+                .execute_observed_functions(&source, &[], &mut callbacks, tiny)
+                .result
+                .unwrap_err(),
+            ExecutionError::Limit {
+                resource: yamaa_engine::dataset::Resource::ScalarTextBytes,
+                ..
+            }
+        ));
+        assert_eq!(callbacks.calls.len(), 1);
+    }
+
+    /// Grouped calls run once per group; key-grain calls consume completed outputs only.
+    #[test]
+    fn group_and_key_grain_calls_use_logical_candidates() {
+        let source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(2), Value::Int(30), Value::Int(40)],
+        ]);
+        let grouped = plan(
+            &source,
+            RowMode::Groups(vec![0, 1, 2]),
+            true,
+            None,
+            signature(ColumnType::Int),
+            arguments(),
+        )
+        .unwrap();
+        let mut calls = callbacks();
+        assert_eq!(
+            grouped
+                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
+            &[
+                vec![Value::Int(1), Value::Int(11)],
+                vec![Value::Int(2), Value::Int(11)]
+            ]
+        );
+        assert_eq!(calls.calls.len(), 2);
+        let args = vec![
+            FunctionArgument {
+                name: "first".into(),
+                input: FunctionInput::Read(Read::Column(0)),
+            },
+            FunctionArgument {
+                name: "second".into(),
+                input: FunctionInput::Literal(Value::Int(3)),
+            },
+        ];
+        let keyed = plan(
+            &source,
+            RowMode::Keys,
+            false,
+            None,
+            signature(ColumnType::Int),
+            args,
+        )
+        .unwrap();
+        calls.calls.clear();
+        assert_eq!(
+            keyed
+                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
+            &[
+                vec![Value::Int(1), Value::Int(11)],
+                vec![Value::Int(2), Value::Int(11)]
+            ]
+        );
+        assert_eq!(calls.calls.len(), 2);
+        assert_eq!(calls.calls[0][0].1, "Int(1)");
+        assert_eq!(calls.calls[1][0].1, "Int(2)");
+    }
+
+    /// Whole-column traversal finishes conversion before dependent callbacks see a value.
+    #[test]
+    fn later_function_columns_observe_converted_values_in_column_order() {
+        let source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(2), Value::Int(30), Value::Int(40)],
+        ]);
+        let args = |first, second| {
+            vec![
+                FunctionArgument {
+                    name: "first".into(),
+                    input: FunctionInput::Read(Read::Column(first)),
+                },
+                FunctionArgument {
+                    name: "second".into(),
+                    input: FunctionInput::Read(Read::Column(second)),
+                },
+            ]
+        };
+        let plan = DatasetPlan::new(
+            source.schema.clone(),
+            schema(&[
+                ("ID", ColumnType::Int),
+                ("A", ColumnType::Int),
+                ("B", ColumnType::Int),
+            ]),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![assign(0, Expression::Source(0))],
+                filter: None,
+            }],
+            vec![
+                assign(
+                    1,
+                    Expression::Function(
+                        BoundFunction::new(0, signature(ColumnType::Str), args(0, 0)).unwrap(),
+                    ),
+                ),
+                assign(
+                    2,
+                    Expression::Function(
+                        BoundFunction::new(0, signature(ColumnType::Str), args(1, 0)).unwrap(),
+                    ),
+                ),
+            ],
+            vec![0],
+            vec![],
+        )
+        .unwrap();
+        let mut calls = callbacks();
+        calls.signature = signature(ColumnType::Str);
+        calls.result = Ok(Value::Str("17".into()));
+        assert_eq!(
+            plan.execute_observed_functions(&source, &[], &mut calls, limits())
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
+            &[
+                vec![Value::Int(1), Value::Int(17), Value::Int(17)],
+                vec![Value::Int(2), Value::Int(17), Value::Int(17)]
+            ]
+        );
+        let observed: Vec<_> = calls
+            .calls
+            .iter()
+            .map(|a| (a[0].1.as_str(), a[1].1.as_str()))
+            .collect();
+        assert_eq!(
+            observed,
+            vec![
+                ("Int(1)", "Int(1)"),
+                ("Int(2)", "Int(2)"),
+                ("Int(17)", "Int(1)"),
+                ("Int(17)", "Int(2)")
+            ]
+        );
+    }
+}

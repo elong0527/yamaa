@@ -8,6 +8,9 @@ mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use conversion::ConversionHandler;
+#[path = "dataset_functions.rs"]
+mod functions;
+pub use functions::{BoundFunction, FunctionArgument, FunctionBindings, FunctionInput};
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]
@@ -42,6 +45,8 @@ pub enum Expression {
     Literal(Value),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
     Compute(BoundNumeric),
+    /// Explicit prebound host invocation; never discovered or activated during execution.
+    Function(BoundFunction),
     /// Column-phase windows over completed key-grain output rows.
     Window(Window),
     Source(usize),
@@ -225,6 +230,7 @@ pub enum PlanError {
     InvalidLookup,
     InvalidIntermediate,
     InvalidConversionHandler,
+    InvalidFunction,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -280,6 +286,7 @@ fn validate_assignment(
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
         Expression::Compute(expression) => expression.validate(source, available, mode)?,
+        Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidIntermediate);
@@ -471,6 +478,7 @@ impl DatasetPlan {
                                 | Expression::Window(_)
                                 | Expression::Lookup(_)
                                 | Expression::RowLookup(_)
+                                | Expression::Function(_)
                                 | Expression::Intermediate { .. }
                         ))
                 {
@@ -512,6 +520,11 @@ impl DatasetPlan {
                 }
                 if keyed
                     && matches!(&assignment.expression, Expression::Compute(expression) if expression.reads_source())
+                {
+                    return Err(PlanError::InvalidKeyMode);
+                }
+                if keyed
+                    && matches!(&assignment.expression, Expression::Function(function) if function.reads_source())
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
@@ -648,6 +661,16 @@ pub struct ExecutionAttempt<E> {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    /// Callback registry does not match a declared signature; detected before table access.
+    FunctionBinding {
+        slot: usize,
+    },
+    /// Fatal invocation failure, before result conversion or its recovery handler.
+    Function {
+        path: String,
+        error: crate::function_invocation::InvocationFailure<E>,
+        identity: Option<RowIdentity>,
+    },
     Numeric {
         error: yamaa_core::numeric_compiler::CompiledEvaluationError<Infallible>,
         identity: Option<RowIdentity>,
@@ -764,6 +787,7 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 
 /// Resources and semantic observations belong to the same attempted run.
 struct EvaluationState<'a, E> {
+    functions: &'a mut dyn FunctionBindings<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
@@ -797,6 +821,7 @@ fn evaluate<T: TableAccess + ?Sized>(
         budget,
         handlers,
         secondary,
+        functions,
         ..
     } = state;
     budget.work(1, 1)?;
@@ -807,6 +832,18 @@ fn evaluate<T: TableAccess + ?Sized>(
     };
     budget.work(reads, 1)?;
     let value = match &assignment.expression {
+        Expression::Function(function) => functions::evaluate(
+            function,
+            table,
+            candidate,
+            functions::Context {
+                plan,
+                row,
+                assignment,
+            },
+            budget,
+            *functions,
+        )?,
         Expression::Window(_) => unreachable!("window assignments execute by whole column"),
         Expression::Intermediate { .. } => unreachable!("intermediates execute through run state"),
         Expression::Literal(value) => {
@@ -942,11 +979,29 @@ impl DatasetPlan {
         secondary: &[&dyn TableAccess<Error = T::Error>],
         limits: Limits,
     ) -> ExecutionAttempt<T::Error> {
+        self.execute_observed_functions(
+            table,
+            secondary,
+            &mut functions::UnavailableFunctions(core::marker::PhantomData),
+            limits,
+        )
+    }
+
+    /// Execute with explicitly activated, signature-matched callbacks on the caller's thread.
+    /// All referenced signatures must be present before any table method is called,
+    /// even for empty input or filtered-out rows. No callback is retried or rolled back.
+    pub fn execute_observed_functions<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
         let mut handlers = HandlerCounter::default();
         for declaration in &self.conversion_handlers {
             handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
         }
-        let result = self.execute_inner(table, secondary, limits, &mut handlers);
+        let result = self.execute_inner(table, secondary, functions, limits, &mut handlers);
         ExecutionAttempt {
             result,
             handler_counts: handlers.snapshot().to_vec(),
@@ -958,9 +1013,24 @@ impl DatasetPlan {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
         limits: Limits,
         handlers: &mut HandlerCounter,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        for assignment in self
+            .templates
+            .iter()
+            .flat_map(|template| &template.assignments)
+            .chain(&self.columns)
+        {
+            if let Expression::Function(function) = &assignment.expression {
+                if functions.signature(function.slot()) != Some(function.signature()) {
+                    return Err(Box::new(ExecutionError::FunctionBinding {
+                        slot: function.slot(),
+                    }));
+                }
+            }
+        }
         if table.schema() != &self.source
             || secondary.len() != self.secondary.len()
             || secondary
@@ -1017,6 +1087,7 @@ impl DatasetPlan {
                             candidates.len(),
                             limits,
                             &mut EvaluationState {
+                                functions,
                                 secondary,
                                 budget: &mut budget,
                                 handlers,
@@ -1094,6 +1165,7 @@ impl DatasetPlan {
                         row,
                         limits,
                         &mut EvaluationState {
+                            functions,
                             secondary,
                             budget: &mut budget,
                             handlers,

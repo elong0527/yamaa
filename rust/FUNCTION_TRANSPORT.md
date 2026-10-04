@@ -191,3 +191,7 @@ subsequent-call recovery. Direct internal dispatcher tests also exercise malform
 raw return admission. CI runs the source-installed tests on Linux and macOS.
 
 Full environment, workflow, benchmark and release gates in #1585 remain open.
+
+The trusted Rust dataset API now composes this shared invocation lifecycle with
+explicit callback ports; see [dataset function composition](DATASET_FUNCTIONS.md).
+This does not add dataset callbacks to either installed host transport.
