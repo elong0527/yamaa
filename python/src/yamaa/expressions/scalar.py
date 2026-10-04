@@ -168,13 +168,15 @@ def _extreme(operation: str, *, largest: bool) -> ExpressionHandler:
 def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
     def handler(payload: object, resolver: Resolver) -> EvaluationResult:
         # REQ-0339: a non-empty list of when/then items with an optional
-        # single trailing otherwise item.
+        # single trailing otherwise item. A case with no when/then item
+        # fails, even when the lone otherwise item is well-formed.
         if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
             return _invalid_payload("case", "a list of when/then items")
         if not payload:
             return _invalid_payload("case", "at least one when/then item")
         otherwise = None
         has_otherwise = False
+        has_branch = False
         for index, item in enumerate(payload):
             if not isinstance(item, Mapping):
                 return _invalid_payload("case", "a when/then or otherwise item")
@@ -184,6 +186,7 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                 has_otherwise = True
                 otherwise = item["otherwise"]
                 continue
+            has_branch = True
             when = item.get("when")
             if not isinstance(when, str):
                 return _invalid_payload("case", "a branch predicate")
@@ -218,6 +221,9 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                 f"[{index}].then",
             )
             return _selected(result, observations)
+
+        if not has_branch:
+            return _invalid_payload("case", "at least one when/then item")
 
         if has_otherwise:
             result, observations = evaluate_nested(

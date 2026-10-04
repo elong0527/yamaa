@@ -144,6 +144,16 @@ def test_case_without_a_matching_branch_or_otherwise_is_missing() -> None:
     assert _evaluate(expression, {"AGE": 5}) == ValueResult(value=MISSING)
 
 
+def test_case_with_only_an_otherwise_item_fails() -> None:
+    # REQ-0339: a case with no when/then item fails, even when the lone
+    # otherwise item carries a well-formed result.
+    result = _evaluate({"case": [{"otherwise": {"literal": "child"}}]}, {})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+
+
 def test_an_unknown_branch_condition_does_not_select_it() -> None:
     # R004's three-valued logic: only TRUE selects, so a missing input falls
     # through to the next branch rather than taking this one.
