@@ -59,108 +59,70 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 | Prompt tier | Python | R |
 | --- | --- | --- |
 | Full (every rule stated) | 98.5% (131/133) | 85.7% (114/133) |
-| Conventions (vocabulary only) | 39.8% (53/133) | 36.8% (49/133) |
+| Conventions (labels and value rules) | 39.8% (53/133) | 36.8% (49/133) |
 | Brief (columns only) | 18.0% (24/133) | 18.0% (24/133) |
 
 * Same 133 benchmarks, same agent — only the prompt changed.
-* Task pass rate collapses as prompts lose detail; Python outscores R at every tier.
+* Task pass rate collapses as prompts lose detail; Python outscores R on full and conventions tiers, and both tie at 18% on brief prompts.
 
-::: {.small}
+::: {style="font-size: 50%;"}
 Agent: opencode · Model: muse-spark-1.3 , Oct 2026
 :::
 
 ## Example: mean arterial pressure — the three prompts
 
-::: {.columns}
-::: {.column width="32%"}
-**Full** — passes ✅
+The MAP formula (2×diastolic + systolic)/3 and the "add only when both contributors exist" rule appear nowhere in the brief prompt.
+
+::: {style="font-size: 50%;"}
+::: {.panel-tabset}
+
+### Full — passes ✅
 
 ```text
-Following CDISC ADaM standards, use the
-provided ADVS_RAW dataset to create an
-ADVS dataset with one record per subject
-per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
 
-The output dataset should contain the
-following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL,
-VISIT, DTYPE
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Keep every collected record, and add one
-mean arterial pressure record for each
-subject and visit that has both a
-systolic and a diastolic blood pressure
-result. Mark it with PARAMCD "MAP" and
-PARAM "Mean Arterial Pressure (mmHg)".
+Keep every collected record, and add one mean arterial pressure record for each subject and visit that has both a systolic and a diastolic blood pressure result. Mark it with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
 
-AVAL keeps each collected result. On the
-added record it is the average that
-counts the diastolic pressure twice and
-the systolic pressure once, not rounded.
-No record is added when either
-contributor is absent from the visit or
-its result is missing.
+AVAL keeps each collected result. On the added record it is the average that counts the diastolic pressure twice and the systolic pressure once, not rounded. No record is added when either contributor is absent from the visit or its result is missing.
 
-DTYPE is CALCULATION on the added record
-and has no value on collected records.
+DTYPE is CALCULATION on the added record and has no value on collected records.
 
-Read the source datasets from /app/input
-and save the completed dataset as
-/app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
 ```
-:::
 
-::: {.column width="32%"}
-**Conventions** — passes ✅
+### Conventions — passes ✅
 
 ```text
-Following CDISC ADaM standards, use the
-provided ADVS_RAW dataset to create an
-ADVS dataset with one record per subject
-per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
 
-The output dataset should contain the
-following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL,
-VISIT, DTYPE
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Mark a mean arterial pressure record
-with PARAMCD "MAP" and PARAM
-"Mean Arterial Pressure (mmHg)".
+Mark a mean arterial pressure record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
 
-On a mean arterial pressure record AVAL
-is not rounded.
+On a mean arterial pressure record AVAL is not rounded.
 
 DTYPE is CALCULATION or has no value.
 
-Read the source datasets from /app/input
-and save the completed dataset as
-/app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
 ```
-:::
 
-::: {.column width="32%"}
-**Brief** — fails ❌
+### Brief — fails ❌
 
 ```text
-Following CDISC ADaM standards, use the
-provided ADVS_RAW dataset to create an
-ADVS dataset with one record per subject
-per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
 
-The output dataset should contain the
-following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL,
-VISIT, DTYPE
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Read the source datasets from /app/input
-and save the completed dataset as
-/app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
 ```
-:::
-:::
 
-* The MAP formula (2×diastolic + systolic)/3 and the "add only when both contributors exist" rule appear nowhere in the brief prompt.
+:::
+:::
 
 ## Goal
 
