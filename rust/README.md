@@ -439,3 +439,12 @@ and platform support, ahash/hashbrown, half, num-complex, num-integer and num-tr
 disabling Arrow defaults does not remove those dependencies. This adds no IPC,
 Parquet, compute-kernel or unsafe FFI API. Transitive Cargo locking remains an
 unresolved release gate; no lockfile or content digest is committed.
+
+## Installed table interchange
+
+Python bytes and R raw vectors now cross the shared bounded Arrow IPC adapter.
+Public exports sanitize masked payloads; exact inspection and installed Polars
+restoration retain values and temporal precision. See
+[TABLE_TRANSPORT.md](TABLE_TRANSPORT.md) for the closed schema, limits, error
+categories, qualification evidence and remaining gates. This does not enable
+specification execution or change backend defaults.

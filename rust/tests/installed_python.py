@@ -119,5 +119,34 @@ class NumericTransportTests(unittest.TestCase):
         self.assertEqual(json.loads(owned)["handler_counts"][0]["count"], "1")
 
 
+class TableTransportTests(unittest.TestCase):
+    """Exercise installed copied IPC and lossless inspection with independent truth."""
+
+    def test_shared_table_truth(self):
+        """Both input and sanitized output preserve values, types and chunk order."""
+        root = Path(__file__).with_name("tables")
+        expected = json.loads((root / "expected.json").read_text(encoding="utf-8"))
+        for name, truth in expected.items():
+            request = (root / f"{name}.arrow").read_bytes()
+            self.assertEqual(json.loads(yamaa_native.table_snapshot(request)), truth)
+            result = yamaa_native.table_round_trip(request)
+            del request
+            for _ in range(5):
+                self.assertEqual(json.loads(yamaa_native.table_snapshot(result)), truth)
+                result = yamaa_native.table_round_trip(result)
+
+    def test_rejections_and_recovery(self):
+        """Invalid types, framing and oversize requests never poison the next call."""
+        for invalid in (None, "text", 1, []):
+            with self.assertRaises(TypeError):
+                yamaa_native.table_round_trip(invalid)
+        for invalid in (b"", b"ARROW1", b"\xff" * 8):
+            with self.assertRaises(ValueError):
+                yamaa_native.table_snapshot(invalid)
+        with self.assertRaisesRegex(ValueError, "input exceeds byte limit"):
+            yamaa_native.table_round_trip(b"x" * (8 * 1024 * 1024 + 1))
+        self.test_shared_table_truth()
+
+
 if __name__ == "__main__":
     unittest.main()

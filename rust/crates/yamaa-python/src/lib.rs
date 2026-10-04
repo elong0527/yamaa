@@ -28,6 +28,32 @@ fn evaluate_numeric(request: &str) -> PyResult<String> {
     })
 }
 
+/// Copy a bounded Arrow IPC stream through validated, sanitized table storage.
+#[pyfunction]
+fn table_round_trip<'py>(
+    py: Python<'py>,
+    request: &[u8],
+) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+    yamaa_adapters::table_transport::table_round_trip(request)
+        .map(|bytes| pyo3::types::PyBytes::new(py, &bytes))
+        .map_err(table_error)
+}
+
+/// Inspect exact table values without narrowing integers into host number types.
+#[pyfunction]
+fn table_snapshot(request: &[u8]) -> PyResult<String> {
+    yamaa_adapters::table_transport::table_snapshot(request).map_err(table_error)
+}
+
+/// Keep internal failures separate from rejected input or resource policy.
+fn table_error(error: yamaa_adapters::table_transport::TableTransportError) -> PyErr {
+    if error == yamaa_adapters::table_transport::TableTransportError::Internal {
+        pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+    } else {
+        pyo3::exceptions::PyValueError::new_err(error.to_string())
+    }
+}
+
 #[pyfunction]
 fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     let info = yamaa_engine::engine_info();
@@ -47,5 +73,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
     module.add_function(wrap_pyfunction!(scalar_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
+    module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;
     Ok(())
 }

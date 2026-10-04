@@ -28,6 +28,10 @@ def stage(destination: Path):
             WORKSPACE / "crates/yamaa-adapters/tests/fixtures" / fixture,
             resources / fixture,
         )
+    shutil.copytree(
+        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/tables",
+        resources / "tables",
+    )
     print(destination)
 
 
