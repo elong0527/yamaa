@@ -560,7 +560,9 @@ def _key_space(
                         plan.specification.keys,
                     )
     for position, probe in enumerate(probes):
-        values = tuple(probe.values[planned.column] for planned in key_plans)
+        # Evaluation follows dependencies; the stored tuple follows identity order
+        # because row construction pairs these values with specification.keys.
+        values = tuple(probe.values[name] for name in key_names)
         if any(value is MISSING for value in values):
             token: _KeyToken = ("__missing_key__", position)
         else:
