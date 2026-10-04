@@ -795,3 +795,84 @@ fn shared_reference_truth_and_occurrence_traces() {
         assert_eq!(port.trace.join(","), fields[5], "{}", fields[0]);
     }
 }
+
+#[test]
+fn shared_budgets_accumulate_across_plans_and_owning_work() {
+    use yamaa_core::predicate::{Budget, Usage};
+    let p = plan(vec![comparison(C::Equal)], Limits::default());
+    let mut budget = Budget::new(Usage {
+        work: 100,
+        resolutions: 4,
+        text_bytes: 5,
+        like_work: 100,
+    });
+    budget.work(2).unwrap();
+    budget.text(1).unwrap();
+    let mut port = Port::with(&[("a", Value::Str("x".into())), ("b", Value::Str("x".into()))]);
+    for _ in 0..2 {
+        assert_eq!(
+            p.evaluate_with_budget(&mut port, &mut budget).unwrap(),
+            Truth::True
+        );
+    }
+    assert_eq!(
+        budget.used(),
+        Usage {
+            work: 8,
+            resolutions: 4,
+            text_bytes: 5,
+            like_work: 0
+        }
+    );
+    let failure = p.evaluate_with_budget(&mut port, &mut budget).unwrap_err();
+    assert!(matches!(failure.kind,ErrorKind::Limit(e) if e.resource==Resource::Resolutions));
+    assert_eq!(port.trace, ["a", "b", "a", "b"]);
+    assert_eq!(budget.used().work, 10);
+    // Ordinary evaluation still starts a new scope and does not consume this one.
+    assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
+    assert_eq!(budget.used().resolutions, 4);
+}
+
+struct BorrowingPort {
+    text: String,
+    calls: usize,
+}
+impl Resolver for BorrowingPort {
+    type Error = Infallible;
+    /// Any owning call would bypass the table boundary that this regression proves.
+    fn resolve(&mut self, _: &str) -> Result<Selection, Self::Error> {
+        panic!("owning fallback was called")
+    }
+    /// Lend storage so refusal precedes copying its oversized contents.
+    fn resolve_value(
+        &mut self,
+        _: &str,
+    ) -> Result<yamaa_core::predicate::Resolved<'_>, Self::Error> {
+        self.calls += 1;
+        Ok(yamaa_core::predicate::Resolved::Borrowed(
+            yamaa_core::table::ValueRef::Str(&self.text),
+        ))
+    }
+}
+
+#[test]
+fn borrowed_text_checks_shared_limit_before_copy_and_next_resolution() {
+    use yamaa_core::predicate::{Budget, Usage};
+    let p = plan(vec![comparison(C::Equal)], Limits::default());
+    let mut port = BorrowingPort {
+        text: "large".repeat(100),
+        calls: 0,
+    };
+    let mut budget = Budget::new(Usage {
+        work: 100,
+        resolutions: 100,
+        text_bytes: 499,
+        like_work: 100,
+    });
+    let error = p.evaluate_with_budget(&mut port, &mut budget).unwrap_err();
+    assert!(matches!(error.kind,ErrorKind::Limit(e) if e.resource==Resource::TextBytes));
+    assert_eq!(error.route, [Route::Left]);
+    assert_eq!(port.calls, 1);
+    assert_eq!(budget.used().text_bytes, 0);
+    assert_eq!(p.identifiers(), ["a", "b"]);
+}

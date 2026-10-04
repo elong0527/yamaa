@@ -94,6 +94,12 @@ fn execute_dataset(request: Raw, source: Raw) -> List {
     }
 }
 
+/// Discover shared typed dataset features without reading any source bytes.
+#[extendr]
+fn dataset_capabilities() -> &'static str {
+    yamaa_adapters::dataset_transport::capabilities()
+}
+
 #[extendr]
 fn engine_info() -> List {
     let info = yamaa_engine::engine_info();
@@ -115,4 +121,5 @@ extendr_module! {
     fn table_round_trip;
     fn table_snapshot;
     fn execute_dataset;
+    fn dataset_capabilities;
 }

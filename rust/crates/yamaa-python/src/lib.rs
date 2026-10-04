@@ -82,6 +82,12 @@ fn table_error(error: yamaa_adapters::table_transport::TableTransportError) -> P
     }
 }
 
+/// Report typed dataset features without reading sources or claiming backend readiness.
+#[pyfunction]
+fn dataset_capabilities() -> &'static str {
+    yamaa_adapters::dataset_transport::capabilities()
+}
+
 #[pyfunction]
 fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     let info = yamaa_engine::engine_info();
@@ -109,5 +115,6 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;
     module.add_function(wrap_pyfunction!(execute_dataset, module)?)?;
+    module.add_function(wrap_pyfunction!(dataset_capabilities, module)?)?;
     Ok(())
 }

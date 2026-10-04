@@ -184,3 +184,106 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
         }
     }
 }
+
+/// Authored typed filter runs after row conversion and before later source assignments.
+fn filtered_request() -> Value {
+    let mut req = request();
+    let assignment = req["columns"].as_array_mut().unwrap().remove(1);
+    req["templates"][0]["assignments"] = json!([assignment]);
+    req["templates"][0]["filter"] = json!({"path":"rows[0].filter","text":"x > 0",
+        "nodes":[{"compare":{"operator":"gt","left":{"identifier":"x"},"right":{"literal":{"int":"0"}}}}],
+        "root":0,"bindings":[{"name":"x","read":{"column":1}}]});
+    req["verifications"] = json!([]);
+    req
+}
+/// Missing and false candidates never reach output identity checks or retained IPC.
+#[test]
+fn typed_filters_keep_only_true_rows() {
+    let input = source(
+        vec![Some(8), Some(3), Some(7), Some(1)],
+        vec![Some("-1"), Some("2"), None, Some("4")],
+    );
+    let (bytes, result) = outcome(&filtered_request(), &input);
+    assert_eq!(result, json!({"status":"success","verifications":[]}));
+    let snapshot: Value = serde_json::from_str(&table_snapshot(&bytes.unwrap()).unwrap()).unwrap();
+    assert_eq!(
+        snapshot["rows"],
+        json!([[{"int":"3"},{"int":"2"}],[{"int":"1"},{"int":"4"}]])
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
+        json!({"protocol":"dataset/1","features":["row_filter"]})
+    );
+}
+/// Complete predicate and binding admission wins over invalid IPC decoding.
+#[test]
+fn invalid_filters_fail_before_source_decoding() {
+    let base = filtered_request();
+    let mut variants = Vec::new();
+    for (field, value, expected) in [
+        ("root", json!(99), Error::InvalidPlan),
+        ("path", json!(""), Error::InvalidPlan),
+        ("text", json!(""), Error::InvalidPlan),
+        ("bindings", json!([]), Error::InvalidPlan),
+        (
+            "bindings",
+            json!([{"name":"x","read":{"column":0}}]),
+            Error::InvalidPlan,
+        ),
+        (
+            "bindings",
+            json!([{"name":"x","read":{"source":99}}]),
+            Error::InvalidPlan,
+        ),
+        ("nodes", json!([{"not":0}]), Error::InvalidPlan),
+        ("nodes", json!([{"unknown":0}]), Error::InvalidRequest),
+        (
+            "nodes",
+            json!([{"compare":{"operator":"gt","left":{"identifier":"x"},"right":{"literal":{"int":"01"}}}}]),
+            Error::InvalidScalar,
+        ),
+        (
+            "nodes",
+            json!([{"like":{"value":{"identifier":"x"},"pattern":{"literal":{"str":"%"}},"escape":"ab","negated":false}}]),
+            Error::InvalidPlan,
+        ),
+    ] {
+        let mut req = base.clone();
+        req["templates"][0]["filter"][field] = value;
+        variants.push((req, expected));
+    }
+    for (req, expected) in variants {
+        assert_eq!(
+            execute_dataset(&req.to_string(), b"invalid IPC")
+                .err()
+                .unwrap(),
+            expected,
+            "{req}"
+        );
+    }
+}
+/// Eager boolean evaluation retains native conditions without an accepted table.
+#[test]
+fn filter_errors_withhold_ipc_even_when_false_is_known() {
+    let mut req = filtered_request();
+    req["templates"][0]["filter"]["nodes"] = json!([
+        {"boolean":false},
+        {"compare":{"operator":"eq","left":{"identifier":"x"},"right":{"literal":{"str":"bad"}}}},
+        {"and":[0,1]}]);
+    req["templates"][0]["filter"]["root"] = json!(2);
+    let (bytes, result) = outcome(&req, &source(vec![Some(1)], vec![Some("2")]));
+    assert!(bytes.is_none());
+    assert_eq!(result["status"], "condition");
+    assert_eq!(
+        result["diagnostic"]["spec_paths"],
+        json!(["rows[0].filter"])
+    );
+    assert_eq!(result["diagnostic"]["condition"], "incompatible_input_type");
+    assert!(result["identity"].is_null());
+    let (bytes, result) = outcome(&req, &source(vec![Some(1)], vec![Some("bad")]));
+    assert!(bytes.is_none());
+    assert_eq!(result["diagnostic"]["condition"], "conversion_failed");
+    let (bytes, result) = outcome(&req, &source(vec![], vec![]));
+    assert!(bytes.is_some());
+    assert_eq!(result["status"], "success");
+}

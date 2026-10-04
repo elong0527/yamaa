@@ -42,7 +42,8 @@ def test_adlb_lowering_matches_independent_bound_plan(specification):
     "feature",
     [
         "filter",
-        "row_filter",
+        "predicate_regex",
+        "predicate_wide_literal",
         "handler",
         "null_handler",
         "source_filter",
@@ -79,8 +80,10 @@ def test_unsupported_run_never_reads_sources(specification, feature):
         for column in doc["columns"]:
             if "derivation" not in column:
                 column["derivation"] = {"value": {"literal": None}}
-    elif feature == "row_filter":
-        doc["rows"][0]["filter"] = "LB.LBSTRESN > 0"
+    elif feature == "predicate_regex":
+        doc["rows"][0]["filter"] = "str_contains(LB.LBTESTCD, 'COMP')"
+    elif feature == "predicate_wide_literal":
+        doc["rows"][0]["filter"] = "AVAL > 9223372036854775808"
     elif feature in {"handler", "null_handler"}:
         doc["rows"][0]["derivations"]["AVAL"]["unconvertible"] = (
             0 if feature == "handler" else None
@@ -180,3 +183,127 @@ def test_source_storage_cannot_silently_coerce_logical_types(declared, values):
     )
     with pytest.raises(ValueError, match="incompatible source storage"):
         _source_ipc(table)
+
+
+def test_invalid_filter_grammar_fails_before_provider(specification):
+    """A malformed predicate is a validation failure, not unsupported execution."""
+    spec = specification.model_copy(deep=True)
+    spec.rows[0] = spec.rows[0].model_copy(update={"filter": "AVAL != 0"})
+    effects = []
+    result = execute_with_source_provider(spec, lambda _: effects.append("read"))
+    assert result.result.status == "failure"
+    assert result.result.diagnostics[0].condition == "invalid_predicate"
+    assert result.result.diagnostics[0].spec_paths == ("rows[0].filter",)
+    assert effects == []
+
+
+def test_filter_lowering_retains_scopes_and_association(specification):
+    """Bind source and candidate names explicitly in an independently authored tree."""
+    spec = specification.model_copy(deep=True)
+    spec.rows[0] = spec.rows[0].model_copy(
+        update={"filter": "AVAL > 0 AND LB.LBTESTCD LIKE 'COMP%'"}
+    )
+    admit(spec)
+    sources = load_source_tables(spec.input, ProjectResources(CASE))
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    lowered, error = lower(plan, sources["LB"].table)
+    assert error is None
+    predicate = lowered["templates"][0]["filter"]
+    assert predicate["root"] == 2
+    assert predicate["nodes"] == [
+        {
+            "compare": {
+                "operator": "gt",
+                "left": {"identifier": "AVAL"},
+                "right": {"literal": {"int": "0"}},
+            }
+        },
+        {
+            "like": {
+                "value": {"identifier": "LB.LBTESTCD"},
+                "pattern": {"literal": {"str": "COMP%"}},
+                "negated": False,
+                "escape": None,
+            }
+        },
+        {"and": [0, 1]},
+    ]
+    assert predicate["bindings"] == [
+        {"name": "AVAL", "read": {"column": 5}},
+        {
+            "name": "LB.LBTESTCD",
+            "read": {
+                "source": next(
+                    i
+                    for i, c in enumerate(sources["LB"].table.columns)
+                    if c.name == "LBTESTCD"
+                )
+            },
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        None,
+        {"protocol": "dataset/2", "features": ["row_filter"]},
+        {"protocol": "dataset/1", "features": []},
+    ],
+)
+def test_filter_capability_refusal_precedes_source_provider(
+    specification, monkeypatch, metadata
+):
+    """Older or incompatible native installations cannot start filter-run IO."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["rows"][0]["filter"] = "AVAL > 0"
+    native = SimpleNamespace(execute_dataset=lambda *_: pytest.fail("execution"))
+    if metadata is not None:
+        native.dataset_capabilities = lambda: json.dumps(metadata)
+    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    result = execute_with_source_provider(
+        Specification.model_validate(doc), lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert [
+        (feature.operation, feature.spec_path) for feature in result.result.features
+    ] == [("native_row_filter", "rows[0].filter")]
+
+
+def test_filter_capability_allows_source_provider(specification, monkeypatch):
+    """A compatible installation proceeds to the authorized provider exactly once."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["rows"][0]["filter"] = "AVAL > 0"
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: pytest.fail("execution"),
+            dataset_capabilities=lambda: (
+                '{"protocol":"dataset/1","features":["row_filter"]}'
+            ),
+        ),
+    )
+    effects = []
+
+    def provider(_):
+        effects.append("read")
+        raise RuntimeError("provider sentinel")
+
+    with pytest.raises(RuntimeError, match="provider sentinel"):
+        execute_with_source_provider(Specification.model_validate(doc), provider)
+    assert effects == ["read"]
+
+
+@pytest.mark.parametrize(
+    "expression", ["AVAL = '\ud800'", "PARAMCD LIKE '%' ESCAPE '\ud800'"]
+)
+def test_non_scalar_predicate_text_is_unsupported_before_io(specification, expression):
+    """Unrepresentable Unicode text never reaches a source or native byte boundary."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["rows"][0]["filter"] = expression
+    result = execute_with_source_provider(
+        Specification.model_validate(doc), lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert result.result.features[0].operation == "predicate_non_scalar_text"

@@ -108,6 +108,7 @@ fn record_plan(
         source.schema.clone(),
         output,
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Records,
             assignments: vec![],
         }],
@@ -323,10 +324,12 @@ fn plan_admission_checks_every_template_and_dependency() {
         )
     };
     let records = |assignments| RowTemplate {
+        filter: None,
         mode: RowMode::Records,
         assignments,
     };
     let grouped = |assignments| RowTemplate {
+        filter: None,
         mode: RowMode::Groups(vec![0]),
         assignments,
     };
@@ -621,6 +624,7 @@ fn adlb_ordered_sum_matches_committed_expected_artifact() {
         output,
         vec![
             RowTemplate {
+                filter: None,
                 mode: RowMode::Records,
                 assignments: vec![
                     assign(3, Expression::Source(3)),
@@ -630,6 +634,7 @@ fn adlb_ordered_sum_matches_committed_expected_artifact() {
                 ],
             },
             RowTemplate {
+                filter: None,
                 mode: RowMode::Groups(vec![0, 1, 5]),
                 assignments: vec![
                     assign(3, Expression::Literal(Value::Str("TOTAL".into()))),
@@ -719,6 +724,7 @@ fn grouped_reduction_preserves_error_order_and_paths() {
         source.schema.clone(),
         source.schema.clone(),
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Groups(vec![0]),
             assignments: vec![
                 assign(0, Expression::Source(0)),
@@ -782,6 +788,7 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
         source.schema.clone(),
         output,
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Groups(vec![0]),
             assignments: vec![
                 assign(0, Expression::Source(0)),
@@ -814,6 +821,7 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
 fn nonnumeric_reductions_and_invalid_verifications_are_rejected() {
     let source = schema(&[("id", ColumnType::Str)]);
     let grouped = vec![RowTemplate {
+        filter: None,
         mode: RowMode::Groups(vec![0]),
         assignments: vec![assign(
             0,
@@ -837,6 +845,7 @@ fn nonnumeric_reductions_and_invalid_verifications_are_rejected() {
     );
     let template = || {
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Records,
             assignments: vec![assign(0, Expression::Source(0))],
         }]
@@ -901,6 +910,7 @@ fn grouping_distinguishes_adjacent_large_integers_and_empty_snapshots() {
         empty.schema.clone(),
         empty.schema.clone(),
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Groups(vec![0]),
             assignments: vec![assign(0, Expression::Source(0))],
         }],
@@ -971,6 +981,7 @@ fn row_dependency_conversion_and_direct_access_failure_are_explicit() {
         source.schema.clone(),
         output,
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Records,
             assignments: vec![
                 assign(0, Expression::Source(0)),
@@ -1047,6 +1058,7 @@ fn repeated_unique_columns_keep_missing_combinations_and_paths_are_unique() {
             source.schema.clone(),
             source.schema.clone(),
             vec![RowTemplate {
+                filter: None,
                 mode: RowMode::Records,
                 assignments
             }],
@@ -1072,6 +1084,7 @@ fn literal_conversion_only_occurs_for_constructed_values() {
                     empty.schema.clone(),
                     output,
                     vec![RowTemplate {
+                        filter: None,
                         mode: mode.clone(),
                         assignments: if row_phase {
                             vec![value.clone()]
@@ -1303,6 +1316,7 @@ fn work_limits_fail_before_the_next_source_operation() {
         source.schema.clone(),
         source.schema.clone(),
         vec![RowTemplate {
+            filter: None,
             mode: RowMode::Groups(vec![0]),
             assignments: vec![
                 assign(0, Expression::Source(0)),
@@ -1398,4 +1412,347 @@ fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
             required: Some(1)
         }
     );
+}
+
+use yamaa_core::predicate::{self, Comparison, Node, Scalar};
+use yamaa_engine::dataset_predicate::{Binding, BindingError, Filter, Read};
+
+/// Admit a single authored predicate and its explicit scope bindings.
+fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
+    Filter::new(
+        predicate::Plan::new(
+            vec![node],
+            0,
+            "rows[0].filter".into(),
+            "authored predicate".into(),
+            predicate::Limits::default(),
+        )
+        .unwrap(),
+        bindings,
+    )
+    .unwrap()
+}
+/// Bind an occurrence without guessing whether it belongs to source or candidate scope.
+fn binding(name: &str, read: Read) -> Binding {
+    Binding {
+        name: name.into(),
+        read,
+    }
+}
+/// Keep rows whose completed value exceeds zero; missing values yield unknown.
+fn positive(read: Read) -> Filter {
+    filter(
+        Node::Compare {
+            operator: Comparison::Greater,
+            left: Scalar::Identifier("x".into()),
+            right: Scalar::Literal(Value::Int(0)),
+        },
+        vec![binding("x", read)],
+    )
+}
+/// Filters preserve source membership through the later whole-column phase.
+#[test]
+fn row_filters_keep_true_in_original_order_and_drop_unknown() {
+    let source = table(
+        &[("id", ColumnType::Int), ("x", ColumnType::Int)],
+        vec![
+            vec![Value::Int(8), Value::Int(-1)],
+            vec![Value::Int(3), Value::Int(2)],
+            vec![Value::Int(7), Value::Missing],
+            vec![Value::Int(1), Value::Int(4)],
+        ],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(1, Expression::Source(1))],
+            filter: Some(positive(Read::Column(1))),
+        }],
+        vec![assign(0, Expression::Source(0))],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        &[
+            vec![Value::Int(3), Value::Int(2)],
+            vec![Value::Int(1), Value::Int(4)]
+        ]
+    );
+    assert_eq!(
+        *source.reads.borrow(),
+        vec![(0, 1), (1, 1), (2, 1), (3, 1), (1, 0), (3, 0)]
+    );
+}
+/// Group filters see the finished reduction and preserve the surviving group's first member.
+#[test]
+fn grouped_filters_follow_complete_reductions() {
+    let source = table(
+        &[("id", ColumnType::Int), ("x", ColumnType::Int)],
+        vec![
+            vec![Value::Int(8), Value::Int(-3)],
+            vec![Value::Int(3), Value::Int(2)],
+            vec![Value::Int(8), Value::Int(1)],
+            vec![Value::Int(3), Value::Int(4)],
+        ],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Groups(vec![0]),
+            assignments: vec![assign(
+                1,
+                Expression::Reduce {
+                    column: 1,
+                    reducer: NumericReducer::Sum,
+                    text: "SUM(T.x)".into(),
+                },
+            )],
+            filter: Some(positive(Read::Column(1))),
+        }],
+        vec![assign(0, Expression::Source(0))],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        &[vec![Value::Int(3), Value::Int(6)]]
+    );
+}
+/// A false filter cannot hide earlier conversion failures; empty input invents no evaluations.
+#[test]
+fn filter_timing_preserves_conversion_and_empty_input_behavior() {
+    let source = table(&[("id", ColumnType::Int)], vec![vec![Value::Int(1)]]);
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Literal(Value::Bool(true)))],
+            filter: Some(filter(Node::Boolean(false), vec![])),
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Conversion { .. }
+    ));
+    let empty = table(&[("id", ColumnType::Int)], vec![]);
+    assert!(plan
+        .execute(&empty, limits())
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+}
+/// Whole-plan binding errors are caught before a source cell is accessed.
+#[test]
+fn filter_bindings_enforce_complete_names_and_phase_scope() {
+    for (bindings, expected) in [
+        (vec![], BindingError::MissingName),
+        (
+            vec![binding("x", Read::Source(0)), binding("x", Read::Source(0))],
+            BindingError::DuplicateName,
+        ),
+        (
+            vec![binding("y", Read::Source(0))],
+            BindingError::UnusedName,
+        ),
+    ] {
+        let predicate = predicate::Plan::new(
+            vec![Node::IsNull {
+                value: Scalar::Identifier("x".into()),
+                negated: false,
+            }],
+            0,
+            "rows[0].filter".into(),
+            "x IS NULL".into(),
+            predicate::Limits::default(),
+        )
+        .unwrap();
+        assert_eq!(Filter::new(predicate, bindings), Err(expected));
+    }
+    let source = table(&[("id", ColumnType::Int)], vec![vec![Value::Int(1)]]);
+    for (mode, read, expected) in [
+        (
+            RowMode::Records,
+            Read::Column(0),
+            BindingError::UnavailableColumn,
+        ),
+        (
+            RowMode::Records,
+            Read::Source(1),
+            BindingError::InvalidSource,
+        ),
+        (
+            RowMode::Groups(vec![0]),
+            Read::Source(0),
+            BindingError::GroupedSource,
+        ),
+    ] {
+        let result = DatasetPlan::new(
+            source.schema.clone(),
+            source.schema.clone(),
+            vec![RowTemplate {
+                mode,
+                assignments: vec![],
+                filter: Some(positive(read)),
+            }],
+            vec![assign(0, Expression::Source(0))],
+            vec![0],
+            vec![],
+        );
+        assert_eq!(result, Err(PlanError::Filter(expected)));
+    }
+    assert!(source.reads.borrow().is_empty());
+}
+/// Resolved source errors remain opaque and stop at the first written occurrence.
+#[test]
+fn filter_source_errors_keep_occurrence_and_provenance() {
+    let mut source = table(&[("id", ColumnType::Int)], vec![vec![Value::Int(1)]]);
+    source.fail = Some((0, 0));
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![],
+            filter: Some(positive(Read::Source(0))),
+        }],
+        vec![assign(0, Expression::Source(0))],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let ExecutionError::Predicate { source_row, error } =
+        *plan.execute(&source, limits()).unwrap_err()
+    else {
+        panic!("predicate port failure")
+    };
+    assert_eq!(source_row, 0);
+    assert_eq!(error.spec_path, "rows[0].filter");
+    assert!(matches!(
+        error.kind,
+        predicate::ErrorKind::Resolution {
+            error: CellError::Access("source failure"),
+            ..
+        }
+    ));
+    assert_eq!(*source.reads.borrow(), vec![(0, 0)]);
+}
+/// Discarding values refunds retained output bytes, never cumulative operand bytes.
+#[test]
+fn rejected_candidates_release_retained_text_but_not_work() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Int)],
+        vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        schema(&[("id", ColumnType::Int), ("x", ColumnType::Str)]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(1, Expression::Literal(Value::Str("abc".into())))],
+            filter: Some(filter(Node::Boolean(false), vec![])),
+        }],
+        vec![assign(0, Expression::Source(0))],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let policy = Limits {
+        output_text_bytes: 3,
+        scalar_text_bytes: 6,
+        ..limits()
+    };
+    for _ in 0..2 {
+        assert!(plan
+            .execute(&source, policy)
+            .unwrap()
+            .dataset
+            .rows()
+            .is_empty());
+    }
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 5,
+                    ..policy
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 5,
+            required: Some(6)
+        }
+    ));
+}
+/// Predicate operands and LIKE cells accumulate across rows and restart only for a new run.
+#[test]
+fn filter_limits_are_cumulative_and_recover_on_new_execution() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Str)],
+        vec![vec![Value::Str("abc".into())]; 2],
+    );
+    let predicate = filter(
+        Node::Like {
+            value: Scalar::Identifier("x".into()),
+            pattern: Scalar::Literal(Value::Str("z".into())),
+            escape: None,
+            negated: false,
+        },
+        vec![binding("x", Read::Source(0))],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![],
+            filter: Some(predicate),
+        }],
+        vec![assign(0, Expression::Source(0))],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    for (policy, resource) in [
+        (
+            Limits {
+                scalar_text_bytes: 7,
+                ..limits()
+            },
+            Resource::PredicateTextBytes,
+        ),
+        (
+            Limits {
+                work_cells: 10,
+                ..limits()
+            },
+            Resource::PredicateLikeWork,
+        ),
+    ] {
+        assert!(
+            matches!(*plan.execute(&source, policy).unwrap_err(), ExecutionError::Limit { resource: r, .. } if r == resource)
+        );
+        assert!(plan
+            .execute(&source, limits())
+            .unwrap()
+            .dataset
+            .rows()
+            .is_empty());
+    }
 }

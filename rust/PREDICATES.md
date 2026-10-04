@@ -1,7 +1,7 @@
 # Typed predicate evaluation
 
 `yamaa_core::predicate::Plan` evaluates an explicitly constructed, normalized
-predicate arena without host, table, parser or regex dependencies. It is an
+predicate arena without host, storage-framework, parser or regex dependencies. It is an
 internal building block for filters and checks, not a specification entrypoint.
 Python remains the default, and native installations still report
 `execution_supported=false`.
@@ -57,10 +57,13 @@ allow 4,096 nodes and resolutions, 16,384 expanded node/scalar visits, and
 1,048,576 bytes of admitted text.
 
 Each run separately limits cumulative scalar text processing and LIKE work.
-Literal text is charged before local cloning; resolver text is charged after the
-port returns ownership. LIKE charges pattern tokenization, initial matching cells
+Literal text is charged before local cloning; owning resolver text is charged after the
+port returns ownership. A resolver may instead lend `ValueRef` through
+`resolve_value`; the core charges borrowed text before making an operand copy. LIKE charges pattern tokenization, initial matching cells
 and each source-scalar/matching-cell visit before performing that work. Counters
-use checked addition and reset on every run, including after a failure. Resource
+use checked addition. `evaluate` starts a fresh budget; `evaluate_with_budget`
+also consumes an application-owned cumulative `Budget`, including on failures.
+Dataset filters share that budget across all templates and candidates. Resource
 refusals remain separate from language conditions and unknown/false truth.
 
 These policies do not bound allocations made by the caller while constructing
@@ -84,5 +87,10 @@ literal representations before constructing the plan, including static ESCAPE
 errors and literal overflow/temporal diagnostics. The typed interface cannot
 represent a portable-regex call; valid `str_contains` must remain explicitly
 unsupported at future admission until regex contract 2.0.0 is implemented and
-qualified. The shared parser/compiler, scope binding, dataset filters/checks,
-lookup/window/BMI integration and installed Python/R execution remain open gates.
+qualified. The shared parser/compiler, dataset predicate checks, root/source filters,
+lookup/window/BMI integration and full Python/R specification execution remain open
+gates. Explicit row-template filters now compose this evaluator through the
+[dataset/1 bridge](DATASET_TRANSPORT.md), with complete phase-aware binding before
+source IPC decoding. Installed Python and R replay the shared typed filter cases;
+the optional Python frontend uses the existing parser as a temporary syntax port
+and never calls the reference predicate evaluator on native data.

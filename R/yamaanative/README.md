@@ -198,3 +198,9 @@ not specification compilation or automatic backend selection. See
 [`rust/DATASET_TRANSPORT.md`](../../rust/DATASET_TRANSPORT.md) for the closed scope,
 resource policy, synchronous control behavior, data-bearing diagnostic identities
 and remaining integration gates. Python remains the default backend.
+
+`dataset_capabilities()` returns the shared typed protocol and additive feature
+names as JSON text before source loading. `row_filter` denotes explicit typed
+row-template predicates in [dataset/1](../../rust/DATASET_TRANSPORT.md), including
+Boolean logic, comparisons, null tests, IN, BETWEEN and Unicode LIKE. The R package
+still has no normalized-specification frontend and does not change backend defaults.

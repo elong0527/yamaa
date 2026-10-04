@@ -5,6 +5,7 @@
 
 use crate::{
     dataset_budget::Budget,
+    dataset_predicate::{BindingError, Filter},
     table_grouping::{partition, GroupingError},
     table_reduction::{reduce_column, TableReductionError},
 };
@@ -49,6 +50,7 @@ pub enum RowMode {
 pub struct RowTemplate {
     pub mode: RowMode,
     pub assignments: Vec<Assignment>,
+    pub filter: Option<Filter>,
 }
 
 /// Error-severity dataset checks supported by this closed application slice.
@@ -86,6 +88,10 @@ pub enum Resource {
     OutputTextBytes,
     IdentityCells,
     IdentityTextBytes,
+    PredicateWork,
+    PredicateResolutions,
+    PredicateTextBytes,
+    PredicateLikeWork,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +109,7 @@ pub enum PlanError {
     NonNumericReduction,
     InvalidBounds,
     DuplicateVerificationPath,
+    Filter(BindingError),
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -212,6 +219,15 @@ impl DatasetPlan {
             let mut available = vec![false; width];
             for assignment in &template.assignments {
                 validate_assignment(assignment, &mut available, &source, &template.mode)?;
+            }
+            if let Some(filter) = &template.filter {
+                filter
+                    .validate(
+                        source.columns().len(),
+                        &available,
+                        matches!(template.mode, RowMode::Groups(_)),
+                    )
+                    .map_err(PlanError::Filter)?;
             }
             if row_columns
                 .as_ref()
@@ -325,6 +341,10 @@ pub struct Execution {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    Predicate {
+        source_row: usize,
+        error: yamaa_core::predicate::EvaluationError<CellError<E>>,
+    },
     Limit {
         resource: Resource,
         limit: usize,
@@ -363,7 +383,7 @@ struct Candidate {
 }
 
 /// Copy the selected normalized value, retaining all temporal precision metadata.
-fn own(value: ValueRef<'_>) -> Value {
+pub(crate) fn own(value: ValueRef<'_>) -> Value {
     match value {
         ValueRef::Missing => Value::Missing,
         ValueRef::Str(value) => Value::Str(value.into()),
@@ -372,6 +392,23 @@ fn own(value: ValueRef<'_>) -> Value {
         ValueRef::Bool(value) => Value::Bool(value),
         ValueRef::Date(value) => Value::Date(value),
         ValueRef::DateTime(value) => Value::DateTime(value),
+    }
+}
+
+/// Keep predicate resource policies separate from portable language conditions.
+fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> ExecutionError<E> {
+    use yamaa_core::predicate::Resource as P;
+    let resource = match limit.resource {
+        P::Work => Resource::PredicateWork,
+        P::Resolutions => Resource::PredicateResolutions,
+        P::TextBytes => Resource::PredicateTextBytes,
+        P::LikeWork => Resource::PredicateLikeWork,
+        P::Nodes | P::Depth => unreachable!("predicate structure was admitted before execution"),
+    };
+    ExecutionError::Limit {
+        resource,
+        limit: limit.limit,
+        required: None,
     }
 }
 
@@ -515,6 +552,21 @@ impl DatasetPlan {
                         &mut budget,
                     )?;
                     candidate.completed[assignment.column] = true;
+                }
+                if let Some(filter) = &template.filter {
+                    let source_row = candidate.members[0];
+                    let truth = filter
+                        .evaluate(table, source_row, &candidate.values, budget.predicate())
+                        .map_err(|error| match error.kind {
+                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                Box::new(predicate_limit(limit))
+                            }
+                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                        })?;
+                    if truth != yamaa_core::predicate::Truth::True {
+                        budget.discard_candidate(&candidate.values);
+                        continue;
+                    }
                 }
                 candidates.push(candidate);
             }
