@@ -201,7 +201,8 @@ process aborts or allocation failure. The 52 independent shared transport cases
 run against Rust and installed Python wheel/source and R source packages. R uses
 its own registered native entry point without Python or a JSON-package dependency.
 Repeated calls test independent ownership and recovery after rejected requests.
-Arrow ownership and callbacks remain later gates.
+Arrow ownership and installed callbacks are now qualified (see below); host panic
+recovery, process aborts and allocation failure remain unqualified.
 
 The installed `evaluate_numeric` API now composes core compilation and the engine
 numeric lifecycle through a strict `numeric/1` adapter protocol. See the
@@ -378,8 +379,8 @@ including exact float bits, signed zero, integer overflow and failure precedence
 both Rust and the real Python aggregate evaluator replay it.
 
 These are internal APIs, with fake-table application tests. Aggregate grammar,
-computed arguments, grouping/filter evaluation, Arrow storage, installed table
-interchange and specification execution are still outstanding. No dependencies,
+computed arguments, grouping/filter evaluation and specification execution are
+still outstanding. No dependencies,
 host API or backend defaults change. The next storage adapter must validate
 schema/value agreement at ingestion and preserve temporal collected precision;
 a native Arrow date/timestamp array alone cannot carry that per-value metadata.
