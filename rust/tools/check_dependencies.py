@@ -19,7 +19,13 @@ ALLOWED = {
         "arrow-ipc",
         "flatbuffers",
     },
-    "yamaa-python": {"yamaa-engine", "yamaa-adapters", "pyo3", "pyo3-build-config"},
+    "yamaa-python": {
+        "yamaa-core",
+        "yamaa-engine",
+        "yamaa-adapters",
+        "pyo3",
+        "pyo3-build-config",
+    },
     "yamaa-r": {"yamaa-engine", "yamaa-adapters", "extendr-api"},
 }
 

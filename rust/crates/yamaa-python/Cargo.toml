@@ -13,6 +13,7 @@ test = false
 doctest = false
 
 [dependencies]
+yamaa-core = { path = "../yamaa-core" }
 yamaa-engine = { path = "../yamaa-engine" }
 yamaa-adapters = { path = "../yamaa-adapters" }
 pyo3 = { version = "=0.27.2", features = ["extension-module", "abi3-py312"] }

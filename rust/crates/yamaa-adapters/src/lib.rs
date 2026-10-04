@@ -1,6 +1,7 @@
 //! Infrastructure adapters. The bootstrap resource is embedded at build time.
 #![forbid(unsafe_code)]
 
+pub mod function_transport;
 pub mod numeric_transport;
 pub mod scalar_transport;
 
