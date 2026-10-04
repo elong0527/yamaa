@@ -2135,6 +2135,7 @@ fn collect(column: usize) -> Expression {
         column,
         identifier: format!("SRC.C{column}"),
         filter: None,
+        selection: None,
     }
 }
 /// Converted identity collapses records in first appearance; source readings omit missing.
@@ -2544,6 +2545,7 @@ fn numbering_with_filter(
                 column: 1,
                 identifier: "SRC.G".into(),
                 filter: None,
+                selection: None,
             },
         ),
         assign(
@@ -2552,6 +2554,7 @@ fn numbering_with_filter(
                 column: 2,
                 identifier: "SRC.V".into(),
                 filter: None,
+                selection: None,
             },
         ),
     ];
@@ -3588,6 +3591,7 @@ fn selected_source_plan(source: &Table, predicate: Filter) -> Result<DatasetPlan
                 column: 1,
                 identifier: "SRC.V".into(),
                 filter: Some(predicate),
+                selection: None,
             },
         )],
         vec![0],

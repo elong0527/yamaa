@@ -17,6 +17,7 @@ use yamaa_core::value::{ColumnType, Value};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandlerKind {
     Unconvertible,
+    MultipleMatches,
 }
 
 impl HandlerKind {
@@ -24,6 +25,7 @@ impl HandlerKind {
     pub fn name(self) -> &'static str {
         match self {
             Self::Unconvertible => "unconvertible",
+            Self::MultipleMatches => "multiple_matches",
         }
     }
 }
@@ -72,7 +74,7 @@ impl HandlerCounter {
     }
 
     /// Count one selected replacement before its conversion; do not retry or overflow.
-    fn record(
+    pub(crate) fn record(
         &mut self,
         spec_path: &str,
         handler: HandlerKind,

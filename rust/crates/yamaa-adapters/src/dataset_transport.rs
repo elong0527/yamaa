@@ -460,6 +460,7 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                         column: source.column,
                         identifier: source.identifier,
                         filter: source.filter.map(Predicate::prepare).transpose()?,
+                        selection: None,
                     }
                 }
                 Expression::Column(column) => dataset::Expression::Column(column),

@@ -12,6 +12,7 @@ pub use windows::{OrderTerm, Window, WindowKind};
 use crate::{
     dataset_budget::Budget,
     dataset_predicate::{BindingError, BoundPredicate},
+    numeric_lifecycle::{HandlerCount, HandlerCountOverflow, HandlerCounter, HandlerKind},
     table_grouping::{partition, GroupingError},
     table_reduction::{reduce_column, TableReductionError},
 };
@@ -36,6 +37,7 @@ pub enum Expression {
         column: usize,
         identifier: String,
         filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
     },
     Column(usize),
     Reduce {
@@ -43,6 +45,20 @@ pub enum Expression {
         reducer: NumericReducer,
         text: String,
     },
+}
+
+/// Choose the first or last record in declared stable source order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Keep {
+    First,
+    Last,
+}
+
+/// An ordered choice applies only when eligible present readings disagree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceSelection {
+    pub order_by: Vec<OrderTerm>,
+    pub keep: Keep,
 }
 
 /// One completed-value assignment, with original specification provenance.
@@ -138,6 +154,7 @@ pub enum PlanError {
     Predicate(BindingError),
     InvalidKeyMode,
     InvalidWindow,
+    InvalidSourceOrder,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -211,6 +228,7 @@ fn validate_assignment(
             column,
             identifier,
             filter,
+            selection,
         } => {
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
@@ -222,6 +240,16 @@ fn validate_assignment(
                 filter
                     .validate(source.columns().len(), &[], false)
                     .map_err(PlanError::Filter)?;
+            }
+            if let Some(selection) = selection {
+                if selection.order_by.is_empty()
+                    || selection
+                        .order_by
+                        .iter()
+                        .any(|term| term.column >= source.columns().len())
+                {
+                    return Err(PlanError::InvalidSourceOrder);
+                }
             }
         }
         Expression::Reduce { column, text, .. } => {
@@ -421,8 +449,16 @@ pub struct Execution {
     pub verifications: Vec<CheckRecord>,
 }
 
+/// An attempted run retains handler evidence even when no dataset can be accepted.
+#[derive(Debug, PartialEq)]
+pub struct ExecutionAttempt<E> {
+    pub result: Result<Execution, Box<ExecutionError<E>>>,
+    pub handler_counts: Vec<HandlerCount>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    HandlerAccounting(HandlerCountOverflow),
     BaselineAmbiguity {
         path: String,
         column: String,
@@ -511,6 +547,12 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
     }
 }
 
+/// Resources and semantic observations belong to the same attempted run.
+struct EvaluationState<'a> {
+    budget: &'a mut Budget,
+    handlers: &'a mut HandlerCounter,
+}
+
 /// Evaluate one admitted assignment and finish conversion before publishing it.
 fn evaluate<T: TableAccess + ?Sized>(
     table: &T,
@@ -519,8 +561,9 @@ fn evaluate<T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     row: usize,
     limits: Limits,
-    budget: &mut Budget,
+    state: &mut EvaluationState<'_>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let EvaluationState { budget, handlers } = state;
     budget.work(1, 1)?;
     let reads = match &assignment.expression {
         Expression::Source(_) => 1,
@@ -558,7 +601,7 @@ fn evaluate<T: TableAccess + ?Sized>(
             own(value)
         }
         Expression::Collect { .. } => {
-            key_grain::collect(table, assignment, candidate, plan, row, budget)?
+            key_grain::collect(table, assignment, candidate, plan, row, budget, handlers)?
         }
         Expression::Reduce {
             column,
@@ -625,6 +668,30 @@ impl DatasetPlan {
         table: &T,
         limits: Limits,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        self.execute_observed(table, limits).result
+    }
+
+    /// Retain ordered handler counts across successful values and every later failure.
+    pub fn execute_observed<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        let mut handlers = HandlerCounter::default();
+        let result = self.execute_inner(table, limits, &mut handlers);
+        ExecutionAttempt {
+            result,
+            handler_counts: handlers.snapshot().to_vec(),
+        }
+    }
+
+    /// Share one handler ledger and resource budget for this immutable plan attempt.
+    fn execute_inner<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+        handlers: &mut HandlerCounter,
+    ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         if table.schema() != &self.source {
             return Err(Box::new(ExecutionError::SchemaMismatch));
         }
@@ -634,7 +701,7 @@ impl DatasetPlan {
         let mut budget = Budget::new(limits);
         let mut candidates: Vec<Candidate> = Vec::new();
         if matches!(self.templates[0].mode, RowMode::Keys) {
-            candidates = key_grain::construct(self, table, limits, &mut budget)?;
+            candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
             for template in &self.templates {
                 let groups = match &template.mode {
@@ -668,7 +735,10 @@ impl DatasetPlan {
                             self,
                             candidates.len(),
                             limits,
-                            &mut budget,
+                            &mut EvaluationState {
+                                budget: &mut budget,
+                                handlers,
+                            },
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
@@ -725,7 +795,18 @@ impl DatasetPlan {
                 candidate.values[assignment.column] = if let Some(value) = number {
                     finish(value, assignment, candidate, self, row, &mut budget)?
                 } else {
-                    evaluate(table, assignment, candidate, self, row, limits, &mut budget)?
+                    evaluate(
+                        table,
+                        assignment,
+                        candidate,
+                        self,
+                        row,
+                        limits,
+                        &mut EvaluationState {
+                            budget: &mut budget,
+                            handlers,
+                        },
+                    )?
                 };
                 candidate.completed[assignment.column] = true;
             }

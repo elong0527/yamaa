@@ -9,6 +9,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     table: &T,
     limits: Limits,
     budget: &mut Budget,
+    handlers: &mut HandlerCounter,
 ) -> Result<Vec<Candidate>, Box<ExecutionError<T::Error>>> {
     let rows = table.row_count();
     if rows
@@ -68,8 +69,15 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
             completed: vec![false; plan.output.columns().len()],
         };
         for assignment in &plan.templates[0].assignments {
-            probe.values[assignment.column] =
-                evaluate(table, assignment, &probe, plan, row, limits, budget)?;
+            probe.values[assignment.column] = evaluate(
+                table,
+                assignment,
+                &probe,
+                plan,
+                row,
+                limits,
+                &mut EvaluationState { budget, handlers },
+            )?;
             probe.completed[assignment.column] = true;
         }
         key_table.rows.push(
@@ -140,11 +148,13 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     row: usize,
     budget: &mut Budget,
+    handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let Expression::Collect {
         column,
         identifier,
         filter,
+        selection,
     } = &assignment.expression
     else {
         unreachable!("only collected-source assignments use this service")
@@ -173,6 +183,12 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     } else {
         &candidate.members
     };
+    let mut carrying = Vec::new();
+    if selection.is_some() {
+        carrying
+            .try_reserve_exact(members.len())
+            .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    }
     let mut distinct = BTreeSet::new();
     let mut first = None;
     for &source_row in members {
@@ -191,8 +207,33 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
         }
         distinct.insert(Key::from(value));
         first.get_or_insert(value);
+        if selection.is_some() {
+            budget.work(1, 1)?;
+            carrying.push(source_row);
+        }
     }
     if distinct.len() > 1 {
+        if let Some(selection) = selection {
+            let chosen = select(table, assignment, &carrying, selection, budget)?;
+            handlers
+                .record(
+                    &alloc::format!("{}.multiple_matches", assignment.path),
+                    HandlerKind::MultipleMatches,
+                )
+                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+            let value = table.cell(chosen, *column).map_err(|error| {
+                Box::new(ExecutionError::Cell {
+                    path: assignment.path.clone(),
+                    source_row: chosen,
+                    error,
+                })
+            })?;
+            budget.work(1, 1)?;
+            if let ValueRef::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
+            return Ok(own(value));
+        }
         return Err(Box::new(ExecutionError::MultipleValues {
             path: assignment.path.clone(),
             identifier: identifier.clone(),
@@ -201,4 +242,48 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
         }));
     }
     Ok(first.map_or(Value::Missing, own))
+}
+
+/// Select a stable extremum without sorting or cloning donor payloads.
+fn select<T: TableAccess + ?Sized>(
+    table: &T,
+    assignment: &Assignment,
+    carrying: &[usize],
+    selection: &SourceSelection,
+    budget: &mut Budget,
+) -> Result<usize, Box<ExecutionError<T::Error>>> {
+    use core::cmp::Ordering;
+    let mut best = carrying[0];
+    for &row in &carrying[1..] {
+        let mut order = Ordering::Equal;
+        for term in &selection.order_by {
+            budget.work(1, 2)?;
+            let mut read = |source_row| -> Result<ValueRef<'_>, Box<ExecutionError<T::Error>>> {
+                let value = table.cell(source_row, term.column).map_err(|error| {
+                    Box::new(ExecutionError::Cell {
+                        path: assignment.path.clone(),
+                        source_row,
+                        error,
+                    })
+                })?;
+                if let ValueRef::Str(text) = value {
+                    budget.scalar_text(text.len())?;
+                }
+                Ok(value)
+            };
+            let left = read(row)?;
+            let right = read(best)?;
+            order = windows::compare(left, right, term);
+            if order != Ordering::Equal {
+                break;
+            }
+        }
+        order = order.then_with(|| row.cmp(&best));
+        if (selection.keep == Keep::First && order == Ordering::Less)
+            || (selection.keep == Keep::Last && order == Ordering::Greater)
+        {
+            best = row;
+        }
+    }
+    Ok(best)
 }
