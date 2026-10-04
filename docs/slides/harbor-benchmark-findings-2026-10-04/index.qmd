@@ -32,9 +32,10 @@ cell of the golden dataset.
 | **Conventions** | 39.8% (53/133) | 36.8% (49/133) |
 | **Brief** | 18.0% (24/133) | 18.0% (24/133) |
 
-**Takeaway:** Python beats R at every tier, and the gap widens as prompts
-get less explicit. Pass rate collapses from ~99% to 18% as prompts lose
-detail — prompt completeness dominates.
+**Takeaway:** Python leads R at the full and conventions tiers and ties R at
+brief, and the gap narrows from 12.8 percentage points to 3.0 to zero as
+prompts get less explicit. Pass rate collapses from ~99% to 18% as prompts
+lose detail — prompt completeness dominates.
 :::
 
 ## Example 1: shift criteria with boundary rules
