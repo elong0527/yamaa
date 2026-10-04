@@ -52,14 +52,22 @@ condition <- function(text, code, requirement) {
   contains(text, '"applicable_handler":null')
   for (entry in c('"function":"example"', '"contract_version":"1"', '"implementation_version":"2"')) contains(text, entry)
 }
+# Platform strftime implementations do not all pad %Y for years below 1000.
+# Observe civil fields explicitly so the independent trace spelling is portable.
+temporal_text <- function(x, datetime = FALSE) {
+  fields <- as.POSIXlt(x, tz = "UTC")
+  date <- sprintf("%04d-%02d-%02d", fields$year + 1900L, fields$mon + 1L, fields$mday)
+  if (!datetime) return(date)
+  paste0(date, sprintf("T%02d:%02d:%02d", fields$hour, fields$min, as.integer(fields$sec)))
+}
 observe <- function(x) {
   if (identical(x, NA)) return("missing")
   if (identical(class(x), "yamaa_int64")) return(paste0("int:", as.character(x)))
   if (identical(class(x), "yamaa_utf8")) return(paste0("str:", as.character(x)))
-  if (identical(class(x), "Date")) return(paste0("date:", format(x, "%Y-%m-%d")))
+  if (identical(class(x), "Date")) return(paste0("date:", temporal_text(x)))
   if (identical(class(x), c("POSIXct", "POSIXt"))) {
     stopifnot(identical(attr(x, "tzone"), "UTC"))
-    return(paste0("datetime:", format(x, "%Y-%m-%dT%H:%M:%S", tz = "UTC")))
+    return(paste0("datetime:", temporal_text(x, TRUE)))
   }
   if (is.double(x)) return(paste0("float:", bits(x)))
   if (is.logical(x)) return(paste0("bool:", tolower(as.character(x))))
@@ -105,7 +113,9 @@ for (i in seq_len(nrow(cases))) {
     host_value(token)
   }
   result <- invoke_function(request(parameters, arguments, case$returns, case$may_missing == "true"), callback)
-  stopifnot(identical(trace, case$trace), identical(calls, if (case$trace == "-") 0L else 1L))
+  if (!identical(trace, case$trace)) stop(sprintf(
+    "%s: callback trace %s differs from %s", case$id, jquote(trace), jquote(case$trace)))
+  stopifnot(identical(calls, if (case$trace == "-") 0L else 1L))
   expected <- case$expected
   if (!startsWith(expected, "error:")) {
     stopifnot(identical(result, value_outcome(wire(expected, float_bits = TRUE))))
