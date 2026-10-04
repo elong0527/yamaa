@@ -337,7 +337,7 @@ lifecycle could not complete. A failure involving several authored units names
 each one once, in specification order. Do not add a parent or an absent field
 merely because changing it would be another possible repair.
 
-When the [schema language](../yaml/rules/reference/schema-language.md) makes
+When the [schema language](../rules/reference/schema-language.md) makes
 a scalar and a one-field class interchangeable shorthand, the
 path names the operation: it is the narrowest authored unit shared by both
 spellings, and normalization must not invent a deeper location.
@@ -360,7 +360,7 @@ the same point say so the same way. Whole-run evaluation failures use:
 | `verification` | a declared assertion |
 
 A condition that an operation could have answered locally uses the stage in
-the [local-handlers contract](../yaml/rules/execution/handlers.md):
+the [local-handlers contract](../rules/execution/handlers.md):
 
 | Phase | Rejects |
 |---|---|
@@ -482,6 +482,6 @@ zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
 input-shape audit in `../yaml/README.md`, the owning operation contract's type
-behavior, and the [local-handlers contract](../yaml/rules/execution/handlers.md)
+behavior, and the [local-handlers contract](../rules/execution/handlers.md)
 if it declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.

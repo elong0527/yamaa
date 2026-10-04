@@ -113,9 +113,9 @@ Help publish an RConsortium blog to attract contributors to finalize benchmarks.
 | Component | Purpose | Links |
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
-| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
 | Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
-| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmark) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## yamaa: one principle
 
