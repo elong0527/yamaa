@@ -94,3 +94,47 @@ def test_missing_key_diagnostic_names_original_column():
         "missing_count": 1,
         "keys": [{"B": "present", "A": None}],
     }
+
+
+def test_valid_key_cannot_conceal_a_missing_key_record():
+    """User text and integers cannot impersonate the internal missing-row identity."""
+    result = run(
+        [("A", "int", {"source": "SRC.X"}), ("B", "str", {"source": "SRC.Y"})],
+        ["B", "A"],
+        {"X": [1, None], "Y": ["__missing_key__", "present"]},
+        {"X": "int", "Y": "str"},
+    )
+    assert isinstance(result, ExecutionFailure)
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.condition == "missing_key"
+    assert diagnostic.context == {
+        "column": "A",
+        "missing_count": 1,
+        "keys": [{"B": "present", "A": None}],
+    }
+
+
+@pytest.mark.parametrize("missing_position", [0, 1])
+def test_missing_key_token_does_not_combine_unrelated_feeding_records(missing_position):
+    """Both arrival orders keep present and missing rows' non-key readings separate."""
+    rows = [(missing_position, "__missing_key__", "valid")]
+    rows.insert(missing_position, (None, "present", "missing"))
+    result = run(
+        [
+            ("A", "int", {"source": "SRC.X"}),
+            ("B", "str", {"source": "SRC.Y"}),
+            ("VALUE", "str", {"source": "SRC.Z"}),
+        ],
+        ["B", "A"],
+        {name: [row[i] for row in rows] for i, name in enumerate(("X", "Y", "Z"))},
+        {"X": "int", "Y": "str", "Z": "str"},
+    )
+    assert isinstance(result, ExecutionFailure)
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.condition == "missing_key"
+    assert diagnostic.spec_paths == ("keys[1]",)
+    assert diagnostic.context == {
+        "column": "A",
+        "missing_count": 1,
+        "keys": [{"B": "present", "A": None}],
+    }

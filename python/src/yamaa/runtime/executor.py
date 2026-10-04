@@ -119,7 +119,7 @@ DatasetCheck: TypeAlias = Callable[
 ]
 OutputBuilder: TypeAlias = Callable[[TypedTable, object, Sequence[str]], Artifact]
 
-_KeyToken: TypeAlias = tuple[object, ...] | tuple[str, int]
+_KeyToken: TypeAlias = tuple[object, ...]
 
 
 class _FrozenModel(BaseModel):
@@ -559,12 +559,13 @@ def _key_space(
                         counter,
                         plan.specification.keys,
                     )
+    missing_key = object()  # Never equal to any normalized user key value.
     for position, probe in enumerate(probes):
         # Evaluation follows dependencies; the stored tuple follows identity order
         # because row construction pairs these values with specification.keys.
         values = tuple(probe.values[name] for name in key_names)
         if any(value is MISSING for value in values):
-            token: _KeyToken = ("__missing_key__", position)
+            token: _KeyToken = (missing_key, position)
         else:
             token = tuple(values)
         if token not in groups:
