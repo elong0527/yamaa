@@ -47,9 +47,12 @@ jobs:
           python tools/check_sqrt.py
           python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment.json"
           uv run --project ../python --locked python tools/check_numeric_grammar.py
-          uv run --project ../python --locked python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
           python tools/check_dependencies.py
           python -m unittest discover -s tests -p 'test_*.py'
+      - name: Assess decimal rounding independently
+        if: always()
+        working-directory: rust
+        run: uv run --project ../python --locked python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
