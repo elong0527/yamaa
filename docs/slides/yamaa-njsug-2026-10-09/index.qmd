@@ -54,6 +54,37 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
   * [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round ties to even.
   * [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than non-missing values.
 
+## Evidence: prompt completeness decides success
+
+::: {.columns}
+::: {.column width="48%"}
+<div class="big-number">98%</div>
+<div class="metric-label">task pass rate with explicit prompts</div>
+:::
+
+::: {.column width="48%"}
+<div class="big-number">18%</div>
+<div class="metric-label">task pass rate with minimal prompts</div>
+:::
+:::
+
+* Same 133 benchmarks, same agent — only the prompt changed.
+* Explicit prompts state every rule and boundary; minimal prompts list columns only.
+* Python outscores R at every tier; the gap widens as prompts get vaguer.
+
+## Example: age groups
+
+*Explicit prompt says:*
+
+> AGEGR1: "<18", "18-64", ">64", "Missing"; AGEGR1N: 1, 2, 3
+
+*Minimal prompt says:*
+
+> columns: STUDYID, USUBJID, AGE, AGEU, AGEGR1, AGEGR1N
+
+* Age-group cutoffs are a sponsor decision — no agent can infer them from CDISC knowledge.
+* Explicit: passes in Python and R. Minimal: fails in both.
+
 ## Goal
 
 - Reduce human review effort.
