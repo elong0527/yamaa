@@ -2,6 +2,19 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+/// Round-trip a versioned scalar envelope through normalized core values.
+#[pyfunction]
+fn scalar_round_trip(request: &str) -> PyResult<String> {
+    use yamaa_adapters::scalar_transport::TransportError;
+    yamaa_adapters::scalar_transport::scalar_round_trip(request).map_err(|error| {
+        if error == TransportError::Internal {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        } else {
+            pyo3::exceptions::PyValueError::new_err(error.to_string())
+        }
+    })
+}
+
 #[pyfunction]
 fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     let info = yamaa_engine::engine_info();
@@ -19,5 +32,6 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 #[pymodule]
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
+    module.add_function(wrap_pyfunction!(scalar_round_trip, module)?)?;
     Ok(())
 }

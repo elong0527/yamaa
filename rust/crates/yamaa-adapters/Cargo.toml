@@ -9,3 +9,5 @@ publish.workspace = true
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
 yamaa-engine = { path = "../yamaa-engine" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"

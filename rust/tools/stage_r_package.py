@@ -9,6 +9,7 @@ REPOSITORY = WORKSPACE.parent
 
 
 def stage(destination: Path):
+    """Copy shared sources and independent installed-test truth into a new archive tree."""
     # copytree rejects an existing destination, protecting previous builds.
     shutil.copytree(REPOSITORY / "R/yamaanative", destination)
     rust = destination / "src/rust"
@@ -19,6 +20,12 @@ def stage(destination: Path):
         WORKSPACE / "crates",
         rust / "crates",
         ignore=shutil.ignore_patterns("target", "__pycache__", "*.pyc", "Cargo.lock"),
+    )
+    resources = destination / "inst"
+    resources.mkdir(exist_ok=True)
+    shutil.copy2(
+        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv",
+        resources / "scalar_transport.tsv",
     )
     print(destination)
 

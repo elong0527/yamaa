@@ -1,0 +1,53 @@
+id	request	expected
+minimum_int	{"protocol":"scalar/1","value":{"int":"-9223372036854775808"}}	{"protocol":"scalar/1","value":{"int":"-9223372036854775808"}}
+maximum_int	{"protocol":"scalar/1","value":{"int":"9223372036854775807"}}	{"protocol":"scalar/1","value":{"int":"9223372036854775807"}}
+above_double_precision	{"protocol":"scalar/1","value":{"int":"9007199254740993"}}	{"protocol":"scalar/1","value":{"int":"9007199254740993"}}
+zero_int	{"protocol":"scalar/1","value":{"int":"0"}}	{"protocol":"scalar/1","value":{"int":"0"}}
+missing	{"protocol":"scalar/1","value":{"missing":null}}	{"protocol":"scalar/1","value":{"missing":null}}
+empty_text	{"protocol":"scalar/1","value":{"str":""}}	{"protocol":"scalar/1","value":{"str":""}}
+false	{"protocol":"scalar/1","value":{"bool":false}}	{"protocol":"scalar/1","value":{"bool":false}}
+true	{"protocol":"scalar/1","value":{"bool":true}}	{"protocol":"scalar/1","value":{"bool":true}}
+negative_zero	{"protocol":"scalar/1","value":{"float":"8000000000000000"}}	{"protocol":"scalar/1","value":{"float":"8000000000000000"}}
+positive_zero	{"protocol":"scalar/1","value":{"float":"0000000000000000"}}	{"protocol":"scalar/1","value":{"float":"0000000000000000"}}
+subnormal	{"protocol":"scalar/1","value":{"float":"0000000000000001"}}	{"protocol":"scalar/1","value":{"float":"0000000000000001"}}
+maximum_float	{"protocol":"scalar/1","value":{"float":"7fefffffffffffff"}}	{"protocol":"scalar/1","value":{"float":"7fefffffffffffff"}}
+date_year	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"year"}}}	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"year"}}}
+date_month	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"month"}}}	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"month"}}}
+date_day	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"day"}}}	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"day"}}}
+datetime_day	{"protocol":"scalar/1","value":{"datetime":{"text":"2024-02-29T23:59:59","precision":"day"}}}	{"protocol":"scalar/1","value":{"datetime":{"text":"2024-02-29T23:59:59","precision":"day"}}}
+datetime_second	{"protocol":"scalar/1","value":{"datetime":{"text":"2024-02-29T23:59:59","precision":"second"}}}	{"protocol":"scalar/1","value":{"datetime":{"text":"2024-02-29T23:59:59","precision":"second"}}}
+escaped_text	{"protocol":"scalar/1","value":{"str":"quote\"slash\\line\nnull\u0000"}}	{"protocol":"scalar/1","value":{"str":"quote\"slash\\line\nnull\u0000"}}
+unicode	{"protocol":"scalar/1","value":{"str":"\u00e9\u4e2d\ud83d\ude00"}}	{"protocol":"scalar/1","value":{"str":"é中😀"}}
+positive_inf	{"protocol":"scalar/1","value":{"float":"7ff0000000000000"}}	{"protocol":"scalar/1","value":{"missing":null}}
+negative_inf	{"protocol":"scalar/1","value":{"float":"fff0000000000000"}}	{"protocol":"scalar/1","value":{"missing":null}}
+quiet_nan	{"protocol":"scalar/1","value":{"float":"7ff8000000000001"}}	{"protocol":"scalar/1","value":{"missing":null}}
+signaling_nan	{"protocol":"scalar/1","value":{"float":"7ff0000000000001"}}	{"protocol":"scalar/1","value":{"missing":null}}
+negative_nan	{"protocol":"scalar/1","value":{"float":"fff8000000000001"}}	{"protocol":"scalar/1","value":{"missing":null}}
+int_high	{"protocol":"scalar/1","value":{"int":"9223372036854775808"}}	error:invalid scalar transport value
+int_low	{"protocol":"scalar/1","value":{"int":"-9223372036854775809"}}	error:invalid scalar transport value
+int_leading_zero	{"protocol":"scalar/1","value":{"int":"01"}}	error:invalid scalar transport value
+int_negative_zero	{"protocol":"scalar/1","value":{"int":"-0"}}	error:invalid scalar transport value
+int_plus	{"protocol":"scalar/1","value":{"int":"+1"}}	error:invalid scalar transport value
+float_decimal	{"protocol":"scalar/1","value":{"float":"1.5"}}	error:invalid scalar transport value
+float_uppercase	{"protocol":"scalar/1","value":{"float":"7FEFFFFFFFFFFFFF"}}	error:invalid scalar transport value
+invalid_date	{"protocol":"scalar/1","value":{"date":{"text":"2023-02-29","precision":"day"}}}	error:invalid scalar transport value
+partial_date	{"protocol":"scalar/1","value":{"date":{"text":"2024-02","precision":"month"}}}	error:invalid scalar transport value
+datetime_minute	{"protocol":"scalar/1","value":{"datetime":{"text":"2024-02-29T23:59","precision":"second"}}}	error:invalid scalar transport value
+datetime_zone	{"protocol":"scalar/1","value":{"datetime":{"text":"2024-02-29T23:59:59Z","precision":"second"}}}	error:invalid scalar transport value
+int_json_number	{"protocol":"scalar/1","value":{"int":9007199254740993}}	error:invalid scalar transport envelope
+bool_number	{"protocol":"scalar/1","value":{"bool":1}}	error:invalid scalar transport envelope
+missing_boolean	{"protocol":"scalar/1","value":{"missing":false}}	error:invalid scalar transport envelope
+bare_null	{"protocol":"scalar/1","value":null}	error:invalid scalar transport envelope
+unknown_type	{"protocol":"scalar/1","value":{"list":[]}}	error:invalid scalar transport envelope
+multiple_types	{"protocol":"scalar/1","value":{"int":"1","str":"1"}}	error:invalid scalar transport envelope
+duplicate_variant	{"protocol":"scalar/1","value":{"int":"1","int":"2"}}	error:invalid scalar transport envelope
+date_unknown_precision	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"second"}}}	error:invalid scalar transport envelope
+date_extra_field	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","precision":"day","extra":1}}}	error:invalid scalar transport envelope
+date_duplicate_field	{"protocol":"scalar/1","value":{"date":{"text":"2024-02-29","text":"2024-01-01","precision":"day"}}}	error:invalid scalar transport envelope
+lone_surrogate	{"protocol":"scalar/1","value":{"str":"\ud800"}}	error:invalid scalar transport envelope
+unknown_protocol	{"protocol":"scalar/2","value":{"int":"1"}}	error:unsupported scalar transport protocol
+duplicate_protocol	{"protocol":"scalar/1","protocol":"scalar/1","value":{"int":"1"}}	error:invalid scalar transport envelope
+duplicate_value	{"protocol":"scalar/1","value":{"int":"1"},"value":{"int":"2"}}	error:invalid scalar transport envelope
+extra_envelope	{"protocol":"scalar/1","value":{"int":"1"},"extra":true}	error:invalid scalar transport envelope
+trailing_json	{"protocol":"scalar/1","value":{"int":"1"}} null	error:invalid scalar transport envelope
+malformed_json	{	error:invalid scalar transport envelope
