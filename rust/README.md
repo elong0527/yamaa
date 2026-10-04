@@ -5,6 +5,10 @@ It does not evaluate specifications. Both installed bindings call the same
 `yamaa-engine`/`yamaa-core` code and report `execution_supported = false`.
 The existing Python engine remains the default; the legacy R package is unchanged.
 
+Decimal rounding characterization and the reference/rule discrepancies that
+precede its implementation are recorded in
+[ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).
+
 ## Boundaries
 
 | Crate | Responsibility | Allowed dependencies |

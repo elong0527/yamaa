@@ -148,3 +148,9 @@ native Python CI targets and separately retain historical Python mismatches.
 This is an opt-in implementation and sample-portability gate, not full accuracy,
 legacy parity, host FFI or dataset qualification. See [MATH_POLICY.md](MATH_POLICY.md)
 for migration implications and remaining release gates.
+
+Decimal rounding remains unsupported in both compiler policies. The independent
+rational assessment in [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md) identifies
+REQ-0418 near-tie and overflow discrepancies in the existing Python scalar helper.
+Its 2,936-case reports retain every observation; passing assessment CI does not
+qualify rounding or authorize a reference behavior change.
