@@ -160,4 +160,30 @@ validated present scalars, distinct from missing. Integer arithmetic and scalar
 comparisons use shared Rust semantics; conversions to ordinary R types must be
 exact or fail. Use `utf8_bytes` for lossless text bytes. See
 [the scalar boundary contract](../../rust/R_SCALARS.md) and `?int64` for supported
-operations, explicit encoding rules and the remaining R callback gate.
+operations and explicit encoding rules.
+
+## Explicit function callbacks
+
+`invoke_function(request, callback)` executes one already-bound R function using
+the shared engine's function/1 signature and argument protocol. Arguments arrive
+in declaration order under their mapped names: `yamaa_int64` for every int,
+`yamaa_utf8` for every str, native double/logical for float/bool, logical NA for
+missing, and Date/UTC POSIXct for temporal values. Use `as.character` for native
+NUL-free text, `utf8_bytes` for all text, and exact scalar operators for integers.
+
+Ordinary R integer and character scalar results are also admitted. Unknown
+classes, collections, attributes, invalid encodings, fractional epochs and
+non-UTC datetimes are rejected as invalid results; booleans cannot be declared
+results. Native NA/nonfinite values normalize to missing before nullable-result
+checks. Host temporal arguments lose collected precision at the specified
+boundary; returned Date/POSIXct values have day/second precision.
+
+The explicit function is called once on the R thread. Ordinary errors become
+fatal function_call_failed outcomes; return-admission errors instead become
+invalid_function_result. Interrupt conditions are raised after native return.
+Effects are never retried or rolled back, and nested calls are permitted. Input,
+result and condition-detail budgets follow
+[the shared protocol](../../rust/FUNCTION_TRANSPORT.md); they do not limit the
+callback's own allocations or execution. Caller labels do not verify artifact
+membership. Environment activation, specification execution and full release
+qualification remain open.

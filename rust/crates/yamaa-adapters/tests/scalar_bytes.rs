@@ -134,3 +134,70 @@ fn exact_float_conversion_uses_bits() {
     );
     assert!(exact_float(&Value::Missing).is_err());
 }
+
+/// Host epochs cover the entire civil range and drop precision at this boundary.
+#[test]
+fn temporal_host_epochs_have_exact_values() {
+    use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+    for (year, month, day, days) in [
+        (1, 1, 1, -719162.0_f64),
+        (1970, 1, 1, 0.0),
+        (2000, 2, 29, 11016.0),
+        (9999, 12, 31, 2932896.0),
+    ] {
+        let date = Date::new(year, month, day, DatePrecision::Year).unwrap();
+        let bytes = encode(Value::Date(date)).unwrap();
+        assert_eq!(bytes.tag, 5);
+        assert_eq!(bytes.payload, days.to_le_bytes());
+        let Value::Date(decoded) = decode(5, &bytes.payload).unwrap() else {
+            panic!("date")
+        };
+        assert_eq!(decoded.collected_precision(), DatePrecision::Day);
+        assert_eq!(
+            decode(5, &bytes.payload),
+            Ok(Value::Date(
+                Date::new(year, month, day, DatePrecision::Day).unwrap()
+            ))
+        );
+    }
+    for (year, month, day, hour, minute, second, epoch) in [
+        (1, 1, 1, 0, 0, 0, -62135596800.0_f64),
+        (1969, 12, 31, 23, 59, 59, -1.0),
+        (1970, 1, 1, 0, 0, 0, 0.0),
+        (9999, 12, 31, 23, 59, 59, 253402300799.0),
+    ] {
+        let date = Date::new(year, month, day, DatePrecision::Day).unwrap();
+        let value = DateTime::new(date, hour, minute, second, DateTimePrecision::Day).unwrap();
+        let bytes = encode(Value::DateTime(value)).unwrap();
+        assert_eq!(bytes.tag, 6);
+        assert_eq!(bytes.payload, epoch.to_le_bytes());
+        let Value::DateTime(decoded) = decode(6, &bytes.payload).unwrap() else {
+            panic!("datetime")
+        };
+        assert_eq!(decoded.collected_precision(), DateTimePrecision::Second);
+        assert_eq!(
+            decode(6, &bytes.payload),
+            Ok(Value::DateTime(
+                DateTime::new(date, hour, minute, second, DateTimePrecision::Second).unwrap()
+            ))
+        );
+    }
+}
+
+/// Fractional, nonfinite and out-of-calendar epochs never saturate into values.
+#[test]
+fn temporal_host_epochs_reject_invalid_values() {
+    for tag in [5, 6] {
+        for epoch in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.5, -0.5, 1e13] {
+            assert!(decode(tag, &epoch.to_le_bytes()).is_err());
+        }
+        assert!(decode(tag, &[0; 7]).is_err());
+        assert!(decode(tag, &[0; 9]).is_err());
+    }
+    for epoch in [-719163.0_f64, 2932897.0] {
+        assert!(decode(5, &epoch.to_le_bytes()).is_err());
+    }
+    for epoch in [-62135596801.0_f64, 253402300800.0] {
+        assert!(decode(6, &epoch.to_le_bytes()).is_err());
+    }
+}

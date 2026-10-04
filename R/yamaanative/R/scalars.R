@@ -61,6 +61,11 @@
     `2` = readBin(value$payload, "double", n = 1L, size = 8L, endian = "little"),
     `3` = structure(value$payload, class = "yamaa_utf8"),
     `4` = identical(value$payload, as.raw(1L)),
+    `5` = structure(readBin(value$payload, "double", n = 1L, size = 8L,
+                            endian = "little"), class = "Date"),
+    `6` = structure(readBin(value$payload, "double", n = 1L, size = 8L,
+                            endian = "little"), class = c("POSIXct", "POSIXt"),
+                     tzone = "UTC"),
     stop("invalid native scalar tag", call. = FALSE)
   )
 }

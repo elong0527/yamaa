@@ -453,14 +453,17 @@ The trusted internal [function invocation service](FUNCTION_INVOCATION.md) now
 validates exact signatures/defaults, preserves missing short-circuit and callback
 order, and checks results before conversion. A synchronous already-bound port
 keeps host errors opaque and results owned. Independent truth runs through Rust
-and the real Python reference; installed Python/R callback adapters and full
-environment activation remain pending.
+and the real Python reference; installed Python/R adapters now call this service.
+Full environment activation remains pending.
 
 The installed Python [function/1 callback API](FUNCTION_TRANSPORT.md) now admits
 bounded normalized requests and calls an explicit Python callable on the current
-interpreter thread. It preserves exact scalars and portable fatal outcomes; R
-callbacks, production environment binding and dataset execution remain pending.
+interpreter thread. It preserves exact scalars and portable fatal outcomes.
+The installed R API invokes an explicit function on the R thread through the
+same service; production environment binding and dataset execution remain pending.
 
 The R source package now exposes [lossless int/str scalars](R_SCALARS.md),
 with validated raw-byte native transport, checked shared arithmetic, exact host
-conversions and NUL-preserving text access. Installed R callbacks remain next.
+conversions and NUL-preserving text access. Installed callbacks use those scalars
+plus Date and explicitly UTC POSIXct, with bounded condition details, exact
+result admission, ownership, cancellation and reentrancy tests.

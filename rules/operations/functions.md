@@ -250,6 +250,18 @@ immediately after the host scalar is returned and before these result checks.
 The normalized missing result therefore still requires `may_return_missing:
 true`.
 
+A designated lossless host scalar is a representation of an existing logical
+type, not an arbitrary object wrapper. The R adapter uses `yamaa_int64` (one
+canonical signed-i64 decimal string) for `int` arguments and `yamaa_utf8` (one
+validated UTF-8 byte sequence, including NUL) for `str` arguments. It validates
+the exact class, storage, shape and payload; subclasses and extra attributes
+are not admitted. Results may use those same representations or an unclassed
+R integer/character scalar of the corresponding exact logical type. Double and
+logical scalars remain `float` and `bool`; there is no numeric or text coercion.
+R `date` and `datetime` use the Date and explicitly UTC POSIXct representations
+fixed by [Temporal values](../values/temporal.md#req-0563). This host mapping adds
+no logical type and does not change a function's contract fingerprint.
+
 ### Activation conformance
 
 <a id="req-0687"></a>

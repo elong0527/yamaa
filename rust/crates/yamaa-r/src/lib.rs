@@ -1,5 +1,6 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
+mod function_callback;
 mod scalars;
 
 /// Validate raw request bytes before any Rust string is constructed. R character
@@ -83,6 +84,7 @@ fn engine_info() -> List {
 extendr_module! {
     mod yamaanative;
     use scalars;
+    use function_callback;
     fn engine_info;
     fn scalar_round_trip;
     fn evaluate_numeric;

@@ -13,6 +13,7 @@ test = false
 doctest = false
 
 [dependencies]
+yamaa-core = { path = "../yamaa-core" }
 yamaa-engine = { path = "../yamaa-engine" }
 yamaa-adapters = { path = "../yamaa-adapters" }
 extendr-api = "=0.9.0"

@@ -155,6 +155,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/scalars.R" scalars.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript scalars.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/functions.R" functions.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript functions.R
       - name: Preserve source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
