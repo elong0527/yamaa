@@ -1,4 +1,4 @@
-# Reference solution for the yamaa benchmark adam-adae-post-covid (Python track).
+# Reference solution for the yamaa benchmark adam-adae-post-index (Python track).
 #
 # Written from the benchmark's full prompt and its inputs alone, as an agent
 # would write it. Harbor's oracle agent runs it to check that the prompt can
@@ -12,10 +12,10 @@ ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
     pl.col("AESEQ").cast(pl.Int64)
 )
 
-# Each subject's first COVID-19 event: the earliest start date, with the
+# Each subject's index event: the earliest start date, with the
 # higher sequence number ordered after on the same date. ISO dates sort
 # as text.
-first_covid = (
+first_index = (
     ae.filter(
         (pl.col("AEDECOD") == "COVID-19") & pl.col("AESTDTC").is_not_null()
     )
@@ -25,10 +25,10 @@ first_covid = (
 )
 
 adae = (
-    ae.join(first_covid, on="USUBJID", how="left", maintain_order="left")
+    ae.join(first_index, on="USUBJID", how="left", maintain_order="left")
     .with_columns(ASTDT=pl.col("AESTDTC"))
     .with_columns(
-        AFTCOVFL=pl.when(
+        AFTIDXFL=pl.when(
             pl.col("ASTDT").is_not_null()
             & pl.col("FIRST_DT").is_not_null()
             & (
@@ -40,7 +40,7 @@ adae = (
             )
         ).then(pl.lit("Y"))
     )
-    .select("STUDYID", "USUBJID", "AESEQ", "AEDECOD", "ASTDT", "AFTCOVFL")
+    .select("STUDYID", "USUBJID", "AESEQ", "AEDECOD", "ASTDT", "AFTIDXFL")
 )
 
 Path("/app/output").mkdir(exist_ok=True)

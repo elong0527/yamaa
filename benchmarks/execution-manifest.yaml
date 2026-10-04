@@ -27,7 +27,7 @@ examples:
   adam-adae-onset-emergence:
     status: executable
     runtimes: ['python']
-  adam-adae-post-covid:
+  adam-adae-post-index:
     status: executable
     runtimes: ['python']
   adam-adae-prior-serious-event:

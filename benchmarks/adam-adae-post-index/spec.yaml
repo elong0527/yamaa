@@ -8,11 +8,13 @@ input:
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTIDXFL]
 
 intermediates:
-  # Each subject's first COVID-19 event: earliest start, then lowest AESEQ.
-  - id: FIRSTCOV
+  # Each subject's index event: the first event carrying the designated
+  # index term (in this fixture, COVID-19) -- earliest start, then
+  # lowest AESEQ.
+  - id: FIRSTIDX
     dataset: AE
     key: [STUDYID, USUBJID]
     filter: "AE.AEDECOD = 'COVID-19'"
@@ -46,15 +48,15 @@ columns:
     label: Analysis Start Date
     derivation: AE.AESTDTC
 
-  # Strictly after the first COVID-19 event in (start date, AESEQ) order.
+  # Strictly after the subject's index event in (start date, AESEQ) order.
   # A missing start compares as unknown, so the flag stays empty.
-  - name: AFTCOVFL
+  - name: AFTIDXFL
     type: str
-    label: After First COVID-19 Flag
+    label: After Index Event Flag
     derivation:
       flag: >-
-            ASTDT > FIRSTCOV.AESTDTC OR
-            (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
+            ASTDT > FIRSTIDX.AESTDTC OR
+            (ASTDT = FIRSTIDX.AESTDTC AND AESEQ > FIRSTIDX.AESEQ)
 
 verifications:
   - unique:
