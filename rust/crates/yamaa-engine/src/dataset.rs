@@ -5,6 +5,9 @@
 
 #[path = "dataset_keys.rs"]
 mod key_grain;
+#[path = "dataset_numbering.rs"]
+mod numbering;
+pub use numbering::{Numbering, NumberingKind, OrderTerm};
 
 use crate::{
     dataset_budget::Budget,
@@ -25,6 +28,8 @@ use yamaa_core::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Literal(Value),
+    /// Column-phase numbering over completed key-grain output rows.
+    Number(Numbering),
     Source(usize),
     /// Distinct present raw readings across a key combination, before conversion.
     Collect {
@@ -131,6 +136,7 @@ pub enum PlanError {
     Filter(BindingError),
     Predicate(BindingError),
     InvalidKeyMode,
+    InvalidWindow,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -178,6 +184,12 @@ fn validate_assignment(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
+        Expression::Number(window) => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidWindow);
+            }
+            window.validate(available)?;
+        }
         Expression::Column(column) => {
             if !available.get(*column).copied().unwrap_or(false) {
                 return Err(PlanError::UnavailableColumn);
@@ -253,7 +265,10 @@ impl DatasetPlan {
             for assignment in &template.assignments {
                 if keyed
                     && (!keys.contains(&assignment.column)
-                        || matches!(assignment.expression, Expression::Collect { .. }))
+                        || matches!(
+                            assignment.expression,
+                            Expression::Collect { .. } | Expression::Number(_)
+                        ))
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
@@ -496,6 +511,7 @@ fn evaluate<T: TableAccess + ?Sized>(
     };
     budget.work(reads, 1)?;
     let value = match &assignment.expression {
+        Expression::Number(_) => unreachable!("window assignments execute by whole column"),
         Expression::Literal(value) => {
             if let Value::Str(text) = value {
                 budget.scalar_text(text.len())?;
@@ -554,6 +570,18 @@ fn evaluate<T: TableAccess + ?Sized>(
             }
         },
     };
+    finish(value, assignment, candidate, plan, row, budget)
+}
+
+/// Convert and account one completed result before publishing its column slot.
+fn finish<E>(
+    value: Value,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    budget: &mut Budget,
+) -> Result<Value, Box<ExecutionError<E>>> {
     let converted = match convert(&value, plan.output.columns()[assignment.column].kind) {
         Ok(value) => value,
         Err(error) => {
@@ -572,7 +600,7 @@ fn evaluate<T: TableAccess + ?Sized>(
 
 impl DatasetPlan {
     /// Execute only the admitted scope, returning no accepted table on any failure.
-    /// Source access errors remain errors. No handlers, callbacks, windows, joins,
+    /// Source access errors remain errors. No handlers, callbacks, joins,
     /// file publication or fallback are implicit.
     pub fn execute<T: TableAccess + ?Sized>(
         &self,
@@ -646,9 +674,30 @@ impl DatasetPlan {
             }
         }
         for assignment in &self.columns {
+            let numbers = if let Expression::Number(window) = &assignment.expression {
+                Some(numbering::execute(
+                    window,
+                    &candidates,
+                    self,
+                    limits,
+                    &mut budget,
+                )?)
+            } else {
+                None
+            };
             for (row, candidate) in candidates.iter_mut().enumerate() {
-                candidate.values[assignment.column] =
-                    evaluate(table, assignment, candidate, self, row, limits, &mut budget)?;
+                candidate.values[assignment.column] = if let Some(numbers) = &numbers {
+                    finish(
+                        Value::Int(numbers[row]),
+                        assignment,
+                        candidate,
+                        self,
+                        row,
+                        &mut budget,
+                    )?
+                } else {
+                    evaluate(table, assignment, candidate, self, row, limits, &mut budget)?
+                };
                 candidate.completed[assignment.column] = true;
             }
         }

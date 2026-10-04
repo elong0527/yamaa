@@ -206,6 +206,15 @@ remain separate. Direct source reads count all distinct present raw values befor
 conversion, preserving exact counts and identity on REQ-0075 conflicts. Named
 identity and dependency order remain separate; no source representative is chosen.
 
+The key-grain column phase also supports unfiltered row numbering and competition/
+dense rank over completed output columns (REQ-0293/0301/0303/0340). Partitioning,
+exact typed ordering, explicit null placement and stable construction-order tie
+breaks execute in Rust, with cumulative comparison/text/merge work limits. The
+installed Python tests execute the unchanged `SEVRANKC` and `SEVRANKD` declarations
+and their eight input-derived columns from `schema-window-functions` against the
+projected committed expected CSV. This is a declared subset: filtered numbering,
+row-value/LOCF/baseline operations and the full benchmark remain unsupported.
+
 Output keys are checked before dataset verifications. The closed error-severity
 verification subset includes unique combinations, whole-artifact integer
 row-count bounds and assert/implies predicates on completed output columns.
@@ -225,7 +234,7 @@ not YAML compilation, installed host dispatch, source discovery or release
 qualification. No capability flag or benchmark execution manifest changes.
 
 A future compiler must reject the entire run before execution if it requires
-unsupported syntax: handlers, callbacks, root/source filters, regex, windows, joins, multiple sources, other expression operations, column checks,
+unsupported syntax: handlers, callbacks, root/source filters, regex, other windows, joins, multiple sources, other expression operations, column checks,
 warning checks, grouped/filtered/fractional row counts or file publication.
 The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
 Rust specification compiler and the remaining benchmark gates are still open.

@@ -210,3 +210,10 @@ The `key_grain` feature additionally supports standalone key combinations with
 complete source memberships, first-occurrence order and exact raw-value conflict
 diagnostics. Missing identities remain separate until output validation. The package
 still has no normalized-specification frontend and does not change backend defaults.
+
+The additive `window_numbering` dataset feature accepts unfiltered row numbering
+and competition/dense rank in the key-grain column phase. Order terms bind completed
+output columns with explicit direction and null placement; no R callback or source
+read occurs per comparison. Shared fixtures cover wide integers, ties, missing
+partitions, stable output order and typed empty output. This remains a typed-plan
+bridge; it does not provide an R specification compiler or full window execution.

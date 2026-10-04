@@ -503,3 +503,101 @@ def test_old_native_package_refuses_key_grain_before_provider(tmp_path, monkeypa
         ("native_key_grain", "rows")
     ]
     assert effects == []
+
+
+def numbering_specification(tmp_path, mutate=None):
+    """Select only the unchanged rank columns and their source dependencies."""
+    import yaml
+
+    document = yaml.safe_load(
+        (ROOT / "benchmarks/schema-window-functions/spec.yaml").read_text()
+    )
+    document["columns"] = [
+        column
+        for column in document["columns"]
+        if column["name"]
+        in {
+            "STUDYID",
+            "USUBJID",
+            "VISITN",
+            "VISIT",
+            "VSDTC",
+            "TRTSDT",
+            "VSSTRESN",
+            "VSEVAL",
+            "SEVRANKC",
+            "SEVRANKD",
+        }
+    ]
+    document["output"]["columns"] = [column["name"] for column in document["columns"]]
+    if mutate is not None:
+        mutate(document)
+    path = tmp_path / "numbering.yaml"
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    return load_specification(path, ROOT / "yaml").specification
+
+
+def test_numbering_lowers_expanded_named_windows(tmp_path):
+    """Named windows bind to completed outputs with explicit direction and null defaults."""
+    spec = numbering_specification(tmp_path)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    lowered, error = lower(plan, sources["VS"].table)
+    assert error is None
+    assert [column["expression"] for column in lowered["columns"][-2:]] == [
+        {
+            "number": {
+                "kind": kind,
+                "group_by": [1],
+                "order_by": [{"column": 6, "descending": True, "nulls_first": False}],
+            }
+        }
+        for kind in ["competition", "dense"]
+    ]
+
+
+@pytest.mark.parametrize("feature", ["filter", "qualified", "rows", "key"])
+def test_numbering_unsupported_scope_precedes_provider(tmp_path, feature):
+    """Broader valid windows remain explicit unsupported declarations without source effects."""
+
+    def mutate(document):
+        """Change one scope feature in the real benchmark declaration."""
+        if feature == "filter":
+            document["windows"]["RESULT_ORDER"]["filter"] = "VSEVAL = 'Y'"
+        elif feature == "qualified":
+            document["windows"]["RESULT_ORDER"]["order_by"] = ["VS.VSSTRESN"]
+        elif feature == "key":
+            document["keys"].append("SEVRANKC")
+        else:
+            document["rows"] = [{"id": "driver", "dataset": "VS", "derivations": {}}]
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "unsupported"
+    assert effects == []
+
+
+def test_old_native_package_refuses_numbering_before_provider(tmp_path, monkeypatch):
+    """Key-grain support alone does not imply window execution capability."""
+    spec = numbering_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain"]}
+            ),
+        ),
+    )
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "unsupported"
+    assert {feature.operation for feature in result.result.features} == {
+        "native_window_numbering"
+    }
+    assert effects == []

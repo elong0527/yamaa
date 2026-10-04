@@ -2515,3 +2515,279 @@ fn key_grain_rejects_incomplete_or_wrong_phase_assignments() {
         );
     }
 }
+
+/// Admit three unfiltered numbering operations over the same completed output relation.
+fn numbering_plan(source: &Table, descending: bool, nulls_first: bool) -> DatasetPlan {
+    use yamaa_engine::dataset::{Numbering, NumberingKind, OrderTerm};
+    let mut fields = source.schema.columns().to_vec();
+    for name in ["SEQ", "RANK", "DENSE"] {
+        fields.push(Column {
+            name: name.into(),
+            kind: ColumnType::Int,
+        });
+    }
+    let mut columns = vec![
+        assign(
+            1,
+            Expression::Collect {
+                column: 1,
+                identifier: "SRC.G".into(),
+            },
+        ),
+        assign(
+            2,
+            Expression::Collect {
+                column: 2,
+                identifier: "SRC.V".into(),
+            },
+        ),
+    ];
+    for (index, kind) in [
+        NumberingKind::RowNumber,
+        NumberingKind::Competition,
+        NumberingKind::Dense,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        columns.push(assign(
+            index + 3,
+            Expression::Number(Numbering {
+                kind,
+                group_by: vec![1],
+                order_by: vec![OrderTerm {
+                    column: 2,
+                    descending,
+                    nulls_first,
+                }],
+            }),
+        ));
+    }
+    DatasetPlan::new(
+        source.schema.clone(),
+        TableSchema::new(fields).unwrap(),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        columns,
+        vec![0],
+        vec![],
+    )
+    .unwrap()
+}
+
+#[test]
+fn numbering_preserves_output_order_exact_integers_nulls_and_partition_ties() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Int(1),
+                Value::Str("a".into()),
+                Value::Int(9_007_199_254_740_992),
+            ],
+            vec![Value::Int(2), Value::Missing, Value::Missing],
+            vec![
+                Value::Int(3),
+                Value::Str("a".into()),
+                Value::Int(9_007_199_254_740_993),
+            ],
+            vec![Value::Int(4), Value::Str("a".into()), Value::Missing],
+            vec![Value::Int(5), Value::Missing, Value::Missing],
+            vec![
+                Value::Int(6),
+                Value::Str("a".into()),
+                Value::Int(9_007_199_254_740_993),
+            ],
+        ],
+    );
+    let result = numbering_plan(&source, true, false)
+        .execute(&source, limits())
+        .unwrap();
+    let expected = [
+        [3, 3, 2],
+        [1, 1, 1],
+        [1, 1, 1],
+        [4, 4, 3],
+        [2, 1, 1],
+        [2, 1, 1],
+    ];
+    for (row, numbers) in result.dataset.rows().iter().zip(expected) {
+        assert_eq!(&row[3..], numbers.map(Value::Int));
+    }
+    // Null placement never reverses with descending direction.
+    let first = numbering_plan(&source, true, true)
+        .execute(&source, limits())
+        .unwrap();
+    assert_eq!(&first.dataset.rows()[3][3..], &[const { Value::Int(1) }; 3]);
+    assert_eq!(source.reads.borrow().len(), 36); // No window revisits source data.
+}
+
+#[test]
+fn numbering_orders_floats_numerically_and_ties_signed_zero() {
+    use yamaa_core::value::FiniteFloat;
+    let float = |value| Value::Float(FiniteFloat::new(value).unwrap());
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Float),
+        ],
+        [float(-0.0), float(-3.0), float(0.0), float(2.0)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, value)| vec![Value::Int(i as i64), Value::Str("x".into()), value])
+            .collect(),
+    );
+    let result = numbering_plan(&source, false, false)
+        .execute(&source, limits())
+        .unwrap();
+    let expected = [[2, 2, 2], [1, 1, 1], [3, 2, 2], [4, 4, 3]];
+    for (row, numbers) in result.dataset.rows().iter().zip(expected) {
+        assert_eq!(&row[3..], numbers.map(Value::Int));
+    }
+}
+
+#[test]
+fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
+    let a = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
+    let b = Date::new(2024, 1, 1, DatePrecision::Day).unwrap();
+    let c = Date::new(2023, 1, 1, DatePrecision::Day).unwrap();
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Date),
+        ],
+        [a, b, c]
+            .into_iter()
+            .enumerate()
+            .map(|(i, value)| vec![Value::Int(i as i64), Value::Missing, Value::Date(value)])
+            .collect(),
+    );
+    let plan = numbering_plan(&source, false, false);
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(
+        &result.dataset.rows()[0][3..],
+        &[const { Value::Int(2) }; 3]
+    );
+    assert_eq!(
+        &result.dataset.rows()[1][3..],
+        &[Value::Int(3), Value::Int(2), Value::Int(2)]
+    );
+    source.rows.clear();
+    let empty = plan.execute(&source, limits()).unwrap();
+    assert_eq!(empty.dataset.row_count(), 0);
+    assert_eq!(empty.dataset.schema().columns().len(), 6);
+}
+
+#[test]
+fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
+    use yamaa_engine::dataset::{Numbering, NumberingKind, OrderTerm};
+    let source = table(&[("ID", ColumnType::Int)], vec![]);
+    let window = Numbering {
+        kind: NumberingKind::RowNumber,
+        group_by: vec![],
+        order_by: vec![OrderTerm {
+            column: 0,
+            descending: false,
+            nulls_first: false,
+        }],
+    };
+    let output = schema(&[("ID", ColumnType::Int), ("SEQ", ColumnType::Int)]);
+    let build = |window, mode, row_window| {
+        let mut row = vec![assign(0, Expression::Source(0))];
+        let mut columns = vec![assign(1, Expression::Number(window))];
+        if row_window {
+            row.append(&mut columns);
+        }
+        DatasetPlan::new(
+            source.schema.clone(),
+            output.clone(),
+            vec![RowTemplate {
+                mode,
+                assignments: row,
+                filter: None,
+            }],
+            columns,
+            vec![0],
+            vec![],
+        )
+    };
+    assert!(build(window.clone(), RowMode::Keys, false).is_ok());
+    assert_eq!(
+        build(window.clone(), RowMode::Records, false),
+        Err(PlanError::InvalidWindow)
+    );
+    assert_eq!(
+        build(window.clone(), RowMode::Keys, true),
+        Err(PlanError::InvalidKeyMode)
+    );
+    let mut invalid = window.clone();
+    invalid.order_by.clear();
+    assert_eq!(
+        build(invalid, RowMode::Keys, false),
+        Err(PlanError::InvalidWindow)
+    );
+    for column in [1, 2] {
+        let mut invalid = window.clone();
+        invalid.order_by[0].column = column;
+        assert_eq!(
+            build(invalid, RowMode::Keys, false),
+            Err(PlanError::InvalidWindow)
+        );
+    }
+    let mut invalid = window;
+    invalid.group_by = vec![0, 0];
+    assert_eq!(
+        build(invalid, RowMode::Keys, false),
+        Err(PlanError::InvalidWindow)
+    );
+    assert!(source.reads.borrow().is_empty());
+}
+
+#[test]
+fn numbering_accounts_comparison_work_text_and_recovers_with_fresh_budgets() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Str),
+        ],
+        ["z", "a", "a"]
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| vec![Value::Int(i as i64), Value::Missing, Value::Str(v.into())])
+            .collect(),
+    );
+    let plan = numbering_plan(&source, false, false);
+    let mut bounded = limits();
+    bounded.scalar_text_bytes = 3;
+    assert!(matches!(
+        *plan.execute(&source, bounded).unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::ScalarTextBytes,
+            ..
+        }
+    ));
+    bounded = limits();
+    bounded.work_cells = 20;
+    assert!(matches!(
+        *plan.execute(&source, bounded).unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::WorkCells,
+            ..
+        }
+    ));
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(
+        &result.dataset.rows()[0][3..],
+        &[Value::Int(3), Value::Int(3), Value::Int(2)]
+    );
+}

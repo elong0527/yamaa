@@ -231,6 +231,18 @@ def execute_with_source_provider(
                 UnsupportedFeature(operation="native_key_grain", spec_path="rows"),
             )
         )
+    required.extend(
+        (
+            "window_numbering",
+            UnsupportedFeature(
+                operation="native_window_numbering",
+                spec_path=f"columns.{column.name}.derivation",
+            ),
+        )
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation in {"row_number", "rank"}
+    )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
