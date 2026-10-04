@@ -42,7 +42,7 @@ jobs:
           cargo fmt --all --check
           cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
           cargo test
-          cargo test -p yamaa-core --release
+          cargo test -p yamaa-core -p yamaa-engine --release
           python tools/check_float_text.py
           python tools/check_sqrt.py
           python tools/check_rounding.py

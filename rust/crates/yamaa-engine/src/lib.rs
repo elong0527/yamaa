@@ -2,6 +2,10 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
+pub mod numeric_lifecycle;
+
 /// Bootstrap capability information, independent of Python and R representations.
 #[derive(Debug, PartialEq, Eq)]
 pub struct EngineInfo {
