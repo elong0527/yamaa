@@ -278,6 +278,18 @@ def execute_with_source_provider(
         if column.derivation is not None
         and column.derivation.value.operation in WINDOW_VALUES
     )
+    required.extend(
+        (
+            "window_baseline",
+            UnsupportedFeature(
+                operation="native_window_baseline",
+                spec_path=f"columns.{column.name}.derivation.baseline_flag",
+            ),
+        )
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation == "baseline_flag"
+    )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}

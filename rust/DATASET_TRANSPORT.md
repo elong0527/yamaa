@@ -84,7 +84,21 @@ present values. Cached answers retain indices rather than cloned cells; the
 current row copies its donor only when its own result is requested, charging text
 before cloning and applying the ordinary conversion lifecycle. Full integer range,
 float sign and temporal precision are retained. The legacy `number` form continues
-to accept only numbering kinds; the `window` form accepts only donor-value kinds.
+to accept only numbering kinds; the `window` form accepts donor-value and baseline kinds.
+
+The additive `window_baseline` capability admits
+`{window: {kind: {baseline_flag: {date, reference_date}}, group_by, order_by: [], filter?}}`.
+Both fields bind completed columns of the same temporal type (`date` or `datetime`).
+Ordering is forbidden. After optional eligibility filtering in construction order,
+a linear scan skips missing operands and compares each candidate date with that
+row's reference date. The unique greatest qualifying date receives string `Y`;
+other rows receive missing. Equal represented dates tie regardless of collected
+precision. Multiple latest candidates raise `ambiguous_baseline` / REQ-0322 in
+derivation phase, with exact count and canonical date text. Its condition outcome
+has `identity: null` and `partition: [{name, value}, ...]` carrying declared grouping
+keys (an empty list for global scope), separately from output identity. Partition
+identity is budgeted before cloning. The current row materializes this condition
+only if eligible; ordinary result conversion still applies to `Y`.
 
 Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
@@ -159,7 +173,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

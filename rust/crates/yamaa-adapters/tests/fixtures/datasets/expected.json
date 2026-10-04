@@ -7784,5 +7784,919 @@
         ]
       ]
     }
+  },
+  {
+    "case": "baseline_per_row_reference",
+    "input": "baseline.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        },
+        {
+          "name": "BLFL",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.D.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.D"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.R.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 3,
+              "identifier": "SRC.R"
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.BLFL.derivation.baseline_flag",
+          "expression": {
+            "window": {
+              "kind": {
+                "baseline_flag": {
+                  "date": 2,
+                  "reference_date": 3
+                }
+              },
+              "group_by": [
+                1
+              ],
+              "order_by": []
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "G",
+          "str"
+        ],
+        [
+          "D",
+          "date"
+        ],
+        [
+          "R",
+          "date"
+        ],
+        [
+          "BLFL",
+          "str"
+        ]
+      ],
+      "row_count": "6",
+      "chunks": [
+        "6"
+      ],
+      "rows": [
+        [
+          {
+            "int": "1"
+          },
+          {
+            "missing": null
+          },
+          {
+            "date": {
+              "text": "2025-01-01",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "str": "Y"
+          }
+        ],
+        [
+          {
+            "int": "2"
+          },
+          {
+            "missing": null
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "3"
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "4"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "5"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "6"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "str": "Y"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "baseline_ambiguous_partition",
+    "input": "baseline-tie.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        },
+        {
+          "name": "BLFL",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.D.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.D"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.R.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 3,
+              "identifier": "SRC.R"
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.BLFL.derivation.baseline_flag",
+          "expression": {
+            "window": {
+              "kind": {
+                "baseline_flag": {
+                  "date": 2,
+                  "reference_date": 3
+                }
+              },
+              "group_by": [
+                1
+              ],
+              "order_by": []
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "derivation",
+          "condition": "ambiguous_baseline",
+          "requirement": "REQ-0322",
+          "spec_paths": [
+            "columns.BLFL.derivation.baseline_flag"
+          ],
+          "context": {
+            "column": {
+              "str": "BLFL"
+            },
+            "date": {
+              "str": "2025-01-01"
+            },
+            "match_count": {
+              "int": "3"
+            },
+            "operation": {
+              "str": "baseline_flag"
+            }
+          }
+        },
+        "identity": null,
+        "partition": [
+          {
+            "name": "G",
+            "value": {
+              "missing": null
+            }
+          }
+        ]
+      }
+    },
+    "snapshot": null
+  },
+  {
+    "case": "baseline_filtered_tie",
+    "input": "baseline-tie.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        },
+        {
+          "name": "BLFL",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.D.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.D"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.R.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 3,
+              "identifier": "SRC.R"
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.BLFL.derivation.baseline_flag",
+          "expression": {
+            "window": {
+              "kind": {
+                "baseline_flag": {
+                  "date": 2,
+                  "reference_date": 3
+                }
+              },
+              "group_by": [
+                1
+              ],
+              "order_by": [],
+              "filter": {
+                "path": "columns.BLFL.derivation.baseline_flag",
+                "text": "ID > 2",
+                "nodes": [
+                  {
+                    "compare": {
+                      "operator": "gt",
+                      "left": {
+                        "identifier": "ID"
+                      },
+                      "right": {
+                        "literal": {
+                          "int": "2"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "root": 0,
+                "bindings": [
+                  {
+                    "name": "ID",
+                    "read": {
+                      "column": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "G",
+          "str"
+        ],
+        [
+          "D",
+          "date"
+        ],
+        [
+          "R",
+          "date"
+        ],
+        [
+          "BLFL",
+          "str"
+        ]
+      ],
+      "row_count": "6",
+      "chunks": [
+        "6"
+      ],
+      "rows": [
+        [
+          {
+            "int": "1"
+          },
+          {
+            "missing": null
+          },
+          {
+            "date": {
+              "text": "2025-01-01",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "2"
+          },
+          {
+            "missing": null
+          },
+          {
+            "date": {
+              "text": "2025-01-01",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "3"
+          },
+          {
+            "missing": null
+          },
+          {
+            "date": {
+              "text": "2025-01-01",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "str": "Y"
+          }
+        ],
+        [
+          {
+            "int": "4"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "5"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-02",
+              "precision": "day"
+            }
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "int": "6"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "date": {
+              "text": "2025-01-03",
+              "precision": "day"
+            }
+          },
+          {
+            "str": "Y"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "baseline_empty",
+    "input": "baseline-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "D",
+          "kind": "date"
+        },
+        {
+          "name": "R",
+          "kind": "date"
+        },
+        {
+          "name": "BLFL",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.D.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.D"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.R.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 3,
+              "identifier": "SRC.R"
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.BLFL.derivation.baseline_flag",
+          "expression": {
+            "window": {
+              "kind": {
+                "baseline_flag": {
+                  "date": 2,
+                  "reference_date": 3
+                }
+              },
+              "group_by": [
+                1
+              ],
+              "order_by": []
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "G",
+          "str"
+        ],
+        [
+          "D",
+          "date"
+        ],
+        [
+          "R",
+          "date"
+        ],
+        [
+          "BLFL",
+          "str"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
   }
 ]

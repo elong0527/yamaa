@@ -42,6 +42,14 @@ def condition(observed, keys):
     context = {name: scalar(value) for name, value in diagnostic["context"].items()}
     if observed["identity"] is not None:
         context["keys"] = [identity(observed["identity"], keys)]
+    if observed.get("partition") is not None:
+        if observed["identity"] is not None:
+            raise ValueError(
+                "native condition has competing row and partition identities"
+            )
+        context["keys"] = [
+            {entry["name"]: scalar(entry["value"]) for entry in observed["partition"]}
+        ]
     return ExecutionDiagnostic(
         phase=diagnostic["phase"],
         condition=diagnostic["condition"],

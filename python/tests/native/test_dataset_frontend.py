@@ -744,3 +744,81 @@ def test_old_native_package_refuses_value_windows_before_provider(
         "native_window_values"
     }
     assert effects == []
+
+
+@pytest.mark.parametrize("global_scope", [False, True])
+def test_baseline_lowers_temporal_completed_dependencies(tmp_path, global_scope):
+    """Baseline has no ordering and can use a named partition or the global output."""
+
+    def mutate(document):
+        payload = {"date": "VSDTC", "reference_date": "TRTSDT"}
+        if not global_scope:
+            payload["window"] = {"group_by": ["USUBJID"]}
+        document["columns"][-2]["derivation"] = {"baseline_flag": payload}
+
+    spec = numbering_specification(tmp_path, mutate)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS),
+        sources["VS"].table,
+    )
+    assert error is None
+    assert request["columns"][-2]["expression"]["window"] == {
+        "kind": {"baseline_flag": {"date": 4, "reference_date": 5}},
+        "group_by": [] if global_scope else [1],
+        "order_by": [],
+    }
+
+
+@pytest.mark.parametrize("scenario", ["types", "qualified", "ordered", "capability"])
+def test_baseline_admission_precedes_provider(tmp_path, monkeypatch, scenario):
+    """Unsupported temporal scope and ordering validation never consume source input."""
+
+    def mutate(document):
+        payload = {"date": "VSDTC", "reference_date": "TRTSDT"}
+        if scenario == "types":
+            payload.update(date="VISITN", reference_date="VISITN")
+        elif scenario == "qualified":
+            payload["date"] = "VS.VSDTC"
+        elif scenario == "ordered":
+            payload["window"] = {"order_by": ["VISITN"]}
+        document["columns"][-2]["derivation"] = {"baseline_flag": payload}
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": [
+                        "key_grain",
+                        "window_numbering",
+                        "window_filter",
+                        "window_values",
+                    ],
+                }
+            ),
+        ),
+    )
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    if scenario == "ordered":
+        assert result.result.status == "failure"
+        assert [(d.condition, d.requirement) for d in result.result.diagnostics] == [
+            ("window_order_by_forbidden", "REQ-0341")
+        ]
+    else:
+        assert result.result.status == "unsupported"
+        expected = {
+            "types": "baseline_temporal_types",
+            "qualified": "window_source",
+            "capability": "native_window_baseline",
+        }[scenario]
+        assert expected in {f.operation for f in result.result.features}
+    assert effects == []
