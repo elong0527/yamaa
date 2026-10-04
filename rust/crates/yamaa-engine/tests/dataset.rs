@@ -2106,3 +2106,412 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         0
     );
 }
+
+/// Bind no-template keys separately from later whole-column derivations.
+fn key_plan(
+    source: &Table,
+    output: TableSchema,
+    keys: Vec<usize>,
+    key_assignments: Vec<Assignment>,
+    columns: Vec<Assignment>,
+) -> DatasetPlan {
+    DatasetPlan::new(
+        source.schema.clone(),
+        output,
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: key_assignments,
+            filter: None,
+        }],
+        columns,
+        keys,
+        vec![],
+    )
+    .unwrap()
+}
+/// Read one distinct present raw source value across the complete feeding group.
+fn collect(column: usize) -> Expression {
+    Expression::Collect {
+        column,
+        identifier: format!("SRC.C{column}"),
+    }
+}
+/// Converted identity collapses records in first appearance; source readings omit missing.
+#[test]
+fn key_grain_preserves_order_membership_and_completed_conversion() {
+    let source = table(
+        &[("id", ColumnType::Str), ("value", ColumnType::Str)],
+        vec![
+            vec![Value::Str("02".into()), Value::Missing],
+            vec![Value::Str("01".into()), Value::Str("7".into())],
+            vec![Value::Str("2".into()), Value::Str("9".into())],
+            vec![Value::Str("2".into()), Value::Str("9".into())],
+        ],
+    );
+    let plan = key_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Int)]),
+        vec![0],
+        vec![assign(0, Expression::Source(0))],
+        vec![assign(1, collect(1))],
+    );
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![Value::Int(2), Value::Int(9)],
+            vec![Value::Int(1), Value::Int(7)]
+        ]
+    );
+    assert_eq!(
+        *source.reads.borrow(),
+        vec![
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (3, 0),
+            (0, 1),
+            (2, 1),
+            (3, 1),
+            (1, 1)
+        ]
+    );
+    let reordered = key_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int), ("OTHER", ColumnType::Int)]),
+        vec![1, 0],
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(Value::Int(99))),
+        ],
+        vec![],
+    );
+    assert_eq!(
+        reordered.execute(&source, limits()).unwrap().dataset.rows(),
+        &[
+            vec![Value::Int(2), Value::Int(99)],
+            vec![Value::Int(1), Value::Int(99)]
+        ]
+    );
+}
+/// Every raw distinct value is counted before target conversion; later port errors still win.
+#[test]
+fn key_grain_conflicts_count_all_raw_values_and_keep_identity() {
+    let mut source = table(
+        &[("id", ColumnType::Int), ("value", ColumnType::Str)],
+        vec![
+            vec![Value::Int(1), Value::Str("07".into())],
+            vec![Value::Int(1), Value::Str("7".into())],
+            vec![Value::Int(1), Value::Str("8".into())],
+            vec![Value::Int(1), Value::Missing],
+            vec![Value::Int(1), Value::Str("8".into())],
+        ],
+    );
+    let plan = key_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Int)]),
+        vec![0],
+        vec![assign(0, Expression::Source(0))],
+        vec![assign(1, collect(1))],
+    );
+    let error = plan.execute(&source, limits()).unwrap_err();
+    let ExecutionError::MultipleValues {
+        path,
+        identifier,
+        value_count,
+        identity,
+    } = *error
+    else {
+        panic!("{error:?}")
+    };
+    assert_eq!(
+        (path.as_str(), identifier.as_str(), value_count),
+        ("columns.C1.derivation", "SRC.C1", 3)
+    );
+    let identity = identity.unwrap();
+    assert_eq!(identity.position, 0);
+    assert_eq!(identity.values, vec![Value::Int(1)]);
+    source.fail = Some((4, 1));
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Cell {
+            source_row: 4,
+            error: CellError::Access("source failure"),
+            ..
+        }
+    ));
+}
+/// Key errors precede every non-key derivation, including on an earlier input record.
+#[test]
+fn key_grain_completes_all_key_probes_before_nonkeys() {
+    let source = table(
+        &[("id", ColumnType::Str), ("value", ColumnType::Str)],
+        vec![
+            vec![Value::Str("1".into()), Value::Str("bad value".into())],
+            vec![Value::Str("bad key".into()), Value::Str("7".into())],
+        ],
+    );
+    let plan = key_plan(
+        &source,
+        schema(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Int)]),
+        vec![0],
+        vec![assign(0, Expression::Source(0))],
+        vec![assign(1, collect(1))],
+    );
+    assert!(
+        matches!(*plan.execute(&source,limits()).unwrap_err(),ExecutionError::Conversion {path,identity:None,..} if path=="columns.ID")
+    );
+    assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
+}
+/// Missing records remain separate and cannot collide with sentinel-shaped user identities.
+#[test]
+fn key_grain_missing_records_reach_output_gate_without_collapsing() {
+    let source = table(
+        &[
+            ("id", ColumnType::Str),
+            ("tag", ColumnType::Str),
+            ("value", ColumnType::Str),
+        ],
+        vec![
+            vec![
+                Value::Str("1".into()),
+                Value::Str("__missing_key__".into()),
+                Value::Str("7".into()),
+            ],
+            vec![
+                Value::Missing,
+                Value::Str("present".into()),
+                Value::Str("8".into()),
+            ],
+            vec![
+                Value::Missing,
+                Value::Str("present".into()),
+                Value::Str("9".into()),
+            ],
+        ],
+    );
+    let plan = key_plan(
+        &source,
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("TAG", ColumnType::Str),
+            ("VALUE", ColumnType::Int),
+        ]),
+        vec![1, 0],
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Source(1)),
+        ],
+        vec![assign(2, collect(2))],
+    );
+    let error = plan.execute(&source, limits()).unwrap_err();
+    let ExecutionError::KeyFailures(records) = *error else {
+        panic!("{error:?}")
+    };
+    assert_eq!(records.len(), 2);
+    assert_eq!(
+        (
+            records[0].path.as_str(),
+            records[0].failed_count,
+            records[0].output_rows
+        ),
+        ("keys[1]", 2, 3)
+    );
+    assert_eq!(
+        records[0]
+            .offending_rows
+            .iter()
+            .map(|r| r.position)
+            .collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    assert_eq!(
+        records[0].offending_rows[0].values,
+        vec![Value::Str("present".into()), Value::Missing]
+    );
+    assert_eq!(
+        (records[1].condition, records[1].failed_count),
+        ("duplicate_key", 1)
+    );
+}
+/// Key storage is admitted before reads; collapsed output and released duplicate text have independent bounds.
+#[test]
+fn key_grain_budgets_cover_probes_and_release_duplicates() {
+    let source = table(
+        &[("id", ColumnType::Str), ("value", ColumnType::Str)],
+        vec![vec![Value::Str("same".into()), Value::Str("abcdefgh".into())]; 3],
+    );
+    let plan = key_plan(
+        &source,
+        schema(&[("ID", ColumnType::Str), ("VALUE", ColumnType::Str)]),
+        vec![0],
+        vec![assign(0, Expression::Source(0))],
+        vec![assign(1, collect(1))],
+    );
+    let bounded = Limits {
+        output_rows: 1,
+        output_cells: 2,
+        key_cells: 3,
+        output_text_bytes: 12,
+        ..limits()
+    };
+    assert_eq!(
+        plan.execute(&source, bounded).unwrap().dataset.rows().len(),
+        1
+    );
+    source.reads.borrow_mut().clear();
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    key_cells: 2,
+                    ..bounded
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Grouping(GroupingError::KeyCellLimit { limit: 2 })
+    ));
+    assert!(source.reads.borrow().is_empty());
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    output_text_bytes: 11,
+                    ..bounded
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::OutputTextBytes,
+            ..
+        }
+    ));
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    scalar_text_bytes: 35,
+                    ..bounded
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_engine::dataset::Resource::ScalarTextBytes,
+            ..
+        }
+    ));
+    assert!(plan.execute(&source, bounded).is_ok());
+    let empty = table(
+        &[("id", ColumnType::Str), ("value", ColumnType::Str)],
+        vec![],
+    );
+    assert!(plan
+        .execute(&empty, bounded)
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+}
+/// Collected values use exact typed equality and preserve the first present temporal precision/zero sign.
+#[test]
+fn collected_values_preserve_exact_identity_and_first_representation() {
+    for (kind, values, expected) in [
+        (
+            ColumnType::Int,
+            vec![Value::Int(9007199254740992), Value::Int(9007199254740993)],
+            None,
+        ),
+        (
+            ColumnType::Float,
+            vec![Value::float(-0.0), Value::float(0.0)],
+            Some(Value::float(-0.0)),
+        ),
+        (
+            ColumnType::Date,
+            vec![
+                Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
+                Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+            ],
+            Some(Value::Date(
+                Date::new(2024, 1, 1, DatePrecision::Year).unwrap(),
+            )),
+        ),
+        (
+            ColumnType::Str,
+            vec![Value::Missing, Value::Missing],
+            Some(Value::Missing),
+        ),
+    ] {
+        let source = table(
+            &[("value", kind)],
+            values.into_iter().map(|v| vec![v]).collect(),
+        );
+        let plan = key_plan(
+            &source,
+            schema(&[("ID", ColumnType::Int), ("VALUE", kind)]),
+            vec![0],
+            vec![assign(0, Expression::Literal(Value::Int(1)))],
+            vec![assign(1, collect(0))],
+        );
+        match expected {
+            None => assert!(matches!(
+                *plan.execute(&source, limits()).unwrap_err(),
+                ExecutionError::MultipleValues { value_count: 2, .. }
+            )),
+            Some(expected) => {
+                let result = plan.execute(&source, limits()).unwrap();
+                assert_eq!(result.dataset.rows()[0][1], expected);
+                if let Value::Float(v) = &result.dataset.rows()[0][1] {
+                    assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits());
+                }
+                if let Value::Date(v) = &result.dataset.rows()[0][1] {
+                    assert_eq!(v.collected_precision(), DatePrecision::Year);
+                }
+            }
+        }
+    }
+}
+/// Typed admission cannot expose first-record reads or incomplete keys in key-grain execution.
+#[test]
+fn key_grain_rejects_incomplete_or_wrong_phase_assignments() {
+    let source = schema(&[("id", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Int)]);
+    for (assignments, columns) in [
+        (
+            vec![],
+            vec![assign(0, Expression::Source(0)), assign(1, collect(0))],
+        ),
+        (vec![assign(0, collect(0))], vec![assign(1, collect(0))]),
+        (
+            vec![
+                assign(0, Expression::Source(0)),
+                assign(1, Expression::Literal(Value::Int(1))),
+            ],
+            vec![],
+        ),
+        (
+            vec![assign(0, Expression::Source(0))],
+            vec![assign(1, Expression::Source(0))],
+        ),
+    ] {
+        assert_eq!(
+            DatasetPlan::new(
+                source.clone(),
+                output.clone(),
+                vec![RowTemplate {
+                    mode: RowMode::Keys,
+                    assignments,
+                    filter: None
+                }],
+                columns,
+                vec![0],
+                vec![]
+            )
+            .unwrap_err(),
+            PlanError::InvalidKeyMode
+        );
+    }
+}

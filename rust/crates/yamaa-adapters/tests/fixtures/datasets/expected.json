@@ -4160,5 +4160,451 @@
       }
     },
     "snapshot": null
+  },
+  {
+    "case": "key_grain_converted_identity",
+    "input": "key-grain.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "str"
+        },
+        {
+          "name": "tag",
+          "kind": "str"
+        },
+        {
+          "name": "value",
+          "kind": "str"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "TAG",
+          "kind": "str"
+        },
+        {
+          "name": "VALUE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "columns.TAG.derivation.source",
+              "expression": {
+                "source": 1
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 2,
+          "path": "columns.VALUE.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.value"
+            }
+          }
+        }
+      ],
+      "keys": [
+        1,
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "TAG",
+          "str"
+        ],
+        [
+          "VALUE",
+          "int"
+        ]
+      ],
+      "row_count": "2",
+      "chunks": [
+        "2"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "str": "__missing_key__"
+          },
+          {
+            "int": "7"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "str": "b"
+          },
+          {
+            "int": "7"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "key_grain_empty",
+    "input": "key-grain-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "str"
+        },
+        {
+          "name": "tag",
+          "kind": "str"
+        },
+        {
+          "name": "value",
+          "kind": "str"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "TAG",
+          "kind": "str"
+        },
+        {
+          "name": "VALUE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "columns.TAG.derivation.source",
+              "expression": {
+                "source": 1
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 2,
+          "path": "columns.VALUE.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.value"
+            }
+          }
+        }
+      ],
+      "keys": [
+        1,
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "TAG",
+          "str"
+        ],
+        [
+          "VALUE",
+          "int"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
+  },
+  {
+    "case": "key_grain_raw_distinct_before_conversion",
+    "input": "key-grain.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "str"
+        },
+        {
+          "name": "tag",
+          "kind": "str"
+        },
+        {
+          "name": "value",
+          "kind": "str"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "TAG",
+          "kind": "str"
+        },
+        {
+          "name": "VALUE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "columns.TAG.derivation.source",
+              "expression": {
+                "source": 1
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 2,
+          "path": "columns.VALUE.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 0,
+              "identifier": "SRC.id"
+            }
+          }
+        }
+      ],
+      "keys": [
+        1,
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "derivation",
+          "condition": "multiple_values_per_key",
+          "requirement": "REQ-0075",
+          "spec_paths": [
+            "columns.VALUE.derivation.source"
+          ],
+          "context": {
+            "identifier": {
+              "str": "SRC.id"
+            },
+            "value_count": {
+              "int": "2"
+            }
+          }
+        },
+        "identity": {
+          "position": "0",
+          "keys": [
+            {
+              "str": "__missing_key__"
+            },
+            {
+              "int": "2"
+            }
+          ]
+        }
+      }
+    },
+    "snapshot": null
+  },
+  {
+    "case": "key_grain_missing_not_user_token",
+    "input": "key-grain-missing.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "str"
+        },
+        {
+          "name": "tag",
+          "kind": "str"
+        },
+        {
+          "name": "value",
+          "kind": "str"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "TAG",
+          "kind": "str"
+        },
+        {
+          "name": "VALUE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "columns.TAG.derivation.source",
+              "expression": {
+                "source": 1
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 2,
+          "path": "columns.VALUE.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.value"
+            }
+          }
+        }
+      ],
+      "keys": [
+        1,
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "failure",
+        "phase": "output",
+        "verifications": [
+          {
+            "spec_path": "keys[1]",
+            "condition": "missing_key",
+            "requirement": "REQ-0240",
+            "evaluated_count": "2",
+            "failed_count": "1",
+            "output_rows": "2",
+            "offending_rows": [
+              {
+                "position": "1",
+                "keys": [
+                  {
+                    "str": "present"
+                  },
+                  {
+                    "missing": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "snapshot": null
   }
 ]

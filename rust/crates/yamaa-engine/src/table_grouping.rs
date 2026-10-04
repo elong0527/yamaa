@@ -10,7 +10,7 @@ use yamaa_core::{
 /// Finite float bits suffice for equality after canonicalizing signed zero. Types
 /// remain distinct; normalized table columns have one declared logical type.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Key<'a> {
+pub(crate) enum Key<'a> {
     Missing,
     Str(&'a str),
     Int(i64),

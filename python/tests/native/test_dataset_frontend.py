@@ -57,7 +57,6 @@ def test_adlb_lowering_matches_independent_bound_plan(specification):
         "warning",
         "fraction",
         "grouped_count",
-        "no_rows",
         "multiple_sources",
         "source_schema",
         "wide_literal",
@@ -119,11 +118,6 @@ def test_unsupported_run_never_reads_sources(specification, feature):
         doc["verifications"][1]["row_count"]["min_fraction"] = 0.5
     elif feature == "grouped_count":
         doc["verifications"][1]["row_count"]["group_by"] = ["STUDYID"]
-    elif feature == "no_rows":
-        doc["rows"] = None
-        for column in doc["columns"]:
-            if "derivation" not in column:
-                column["derivation"] = {"value": {"literal": None}}
     elif feature == "multiple_sources":
         doc["input"]["OTHER"] = {"path": "other.csv"}
         for row in doc["rows"]:
@@ -428,3 +422,84 @@ def test_later_implication_declaration_retains_native_antecedent_validation(
         checkpoint["check"]["predicate_declaration"]["path"]
         == "verifications[2].implies.when"
     )
+
+
+def key_specification(tmp_path, rows=None):
+    """Normalize an independently authored key-only plan with reversed identity order."""
+    import yaml
+
+    document = {
+        "schema_version": "1.0",
+        "domain": "KEYS",
+        "keys": ["TAG", "ID"],
+        "input": {"SRC": "input.csv"},
+        "output": {"path": "out.csv", "columns": ["ID", "TAG", "VALUE"]},
+        "columns": [
+            {"name": "ID", "type": "int", "label": "Identity", "derivation": "SRC.id"},
+            {"name": "TAG", "type": "str", "label": "Tag", "derivation": "SRC.tag"},
+            {
+                "name": "VALUE",
+                "type": "int",
+                "label": "Value",
+                "derivation": "SRC.value",
+            },
+        ],
+    }
+    if rows is not None:
+        document["rows"] = rows
+    path = tmp_path / "spec.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+    return load_specification(path, ROOT / "yaml").specification
+
+
+@pytest.mark.parametrize("rows", [None, []])
+def test_key_grain_lowering_matches_independent_bound_plan(tmp_path, rows):
+    """Absent and empty templates both bind named keys before collected source values."""
+    import polars as pl
+    import pyarrow as pa
+
+    from yamaa.models import TypedColumn, TypedTable
+
+    spec = key_specification(tmp_path, rows)
+    fixtures = ROOT / "rust/crates/yamaa-adapters/tests/fixtures/datasets"
+    source = TypedTable(
+        columns=tuple(
+            TypedColumn(name=name, type="str") for name in ("id", "tag", "value")
+        ),
+        frame=pl.from_arrow(
+            pa.ipc.open_stream(fixtures / "key-grain.arrow").read_all()
+        ),
+    )
+    expected = next(
+        case["request"]
+        for case in json.loads((fixtures / "expected.json").read_text())
+        if case["case"] == "key_grain_converted_identity"
+    )
+    admit(spec)
+    plan = plan_execution(spec, {"SRC": source}, supported_operations=OPERATIONS)
+    assert lower(plan, source) == (expected, None)
+
+
+def test_old_native_package_refuses_key_grain_before_provider(tmp_path, monkeypatch):
+    """Earlier installed predicate support must not silently select driver records."""
+    spec = key_specification(tmp_path)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": ["row_filter", "predicate_checks"],
+                }
+            ),
+        ),
+    )
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "unsupported"
+    assert [(f.operation, f.spec_path) for f in result.result.features] == [
+        ("native_key_grain", "rows")
+    ]
+    assert effects == []

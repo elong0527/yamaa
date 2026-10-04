@@ -3,6 +3,9 @@
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
+#[path = "dataset_keys.rs"]
+mod key_grain;
+
 use crate::{
     dataset_budget::Budget,
     dataset_predicate::{BindingError, BoundPredicate},
@@ -23,6 +26,11 @@ use yamaa_core::{
 pub enum Expression {
     Literal(Value),
     Source(usize),
+    /// Distinct present raw readings across a key combination, before conversion.
+    Collect {
+        column: usize,
+        identifier: String,
+    },
     Column(usize),
     Reduce {
         column: usize,
@@ -43,6 +51,7 @@ pub struct Assignment {
 pub enum RowMode {
     Records,
     Groups(Vec<usize>),
+    Keys,
 }
 
 /// Assignments are supplied in resolved dependency order, not map iteration order.
@@ -121,6 +130,7 @@ pub enum PlanError {
     DuplicateVerificationPath,
     Filter(BindingError),
     Predicate(BindingError),
+    InvalidKeyMode,
 }
 
 /// Admitted immutable plan: all references and phase dependencies are checked once.
@@ -183,6 +193,14 @@ fn validate_assignment(
                 }
             }
         }
+        Expression::Collect { column, identifier } => {
+            if *column >= source.columns().len() {
+                return Err(PlanError::InvalidSource);
+            }
+            if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
+                return Err(PlanError::InvalidKeyMode);
+            }
+        }
         Expression::Reduce { column, text, .. } => {
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
@@ -193,7 +211,7 @@ fn validate_assignment(
             ) {
                 return Err(PlanError::NonNumericReduction);
             }
-            if matches!(mode, RowMode::Records) {
+            if !matches!(mode, RowMode::Groups(_)) {
                 return Err(PlanError::UngroupedReduction);
             }
             if text.is_empty() {
@@ -224,12 +242,25 @@ impl DatasetPlan {
         validate_columns(&keys, width)?;
         let mut row_columns = None;
         for template in &templates {
+            let keyed = matches!(template.mode, RowMode::Keys);
+            if keyed && (templates.len() != 1 || template.filter.is_some()) {
+                return Err(PlanError::InvalidKeyMode);
+            }
             if let RowMode::Groups(keys) = &template.mode {
                 validate_columns(keys, source.columns().len())?;
             }
             let mut available = vec![false; width];
             for assignment in &template.assignments {
+                if keyed
+                    && (!keys.contains(&assignment.column)
+                        || matches!(assignment.expression, Expression::Collect { .. }))
+                {
+                    return Err(PlanError::InvalidKeyMode);
+                }
                 validate_assignment(assignment, &mut available, &source, &template.mode)?;
+            }
+            if keyed && keys.iter().any(|&column| !available[column]) {
+                return Err(PlanError::InvalidKeyMode);
             }
             if let Some(filter) = &template.filter {
                 filter
@@ -248,6 +279,10 @@ impl DatasetPlan {
             }
             row_columns = Some(available.clone());
             for assignment in &columns {
+                if keyed && matches!(assignment.expression, Expression::Source(_)) {
+                    // A key combination reads all its feeding records, never a chosen first row.
+                    return Err(PlanError::InvalidKeyMode);
+                }
                 validate_assignment(assignment, &mut available, &source, &template.mode)?;
             }
             if available.contains(&false) {
@@ -362,6 +397,12 @@ pub struct Execution {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    MultipleValues {
+        path: String,
+        identifier: String,
+        value_count: usize,
+        identity: Option<RowIdentity>,
+    },
     VerificationPredicate {
         error: yamaa_core::predicate::EvaluationError<CellError<Infallible>>,
         records: Vec<CheckRecord>,
@@ -450,7 +491,7 @@ fn evaluate<T: TableAccess + ?Sized>(
     budget.work(1, 1)?;
     let reads = match &assignment.expression {
         Expression::Source(_) => 1,
-        Expression::Reduce { .. } => candidate.members.len(),
+        Expression::Reduce { .. } | Expression::Collect { .. } => candidate.members.len(),
         _ => 0,
     };
     budget.work(reads, 1)?;
@@ -481,6 +522,9 @@ fn evaluate<T: TableAccess + ?Sized>(
                 budget.scalar_text(text.len())?;
             }
             own(value)
+        }
+        Expression::Collect { .. } => {
+            key_grain::collect(table, assignment, candidate, plan, row, budget)?
         }
         Expression::Reduce {
             column,
@@ -528,8 +572,8 @@ fn evaluate<T: TableAccess + ?Sized>(
 
 impl DatasetPlan {
     /// Execute only the admitted scope, returning no accepted table on any failure.
-    /// Source access errors remain errors. No handlers, callbacks, filters, windows,
-    /// joins, key-grain construction, file publication or fallback are implicit.
+    /// Source access errors remain errors. No handlers, callbacks, windows, joins,
+    /// file publication or fallback are implicit.
     pub fn execute<T: TableAccess + ?Sized>(
         &self,
         table: &T,
@@ -543,57 +587,62 @@ impl DatasetPlan {
         }
         let mut budget = Budget::new(limits);
         let mut candidates: Vec<Candidate> = Vec::new();
-        for template in &self.templates {
-            let groups = match &template.mode {
-                RowMode::Records => {
-                    // Admit the known cardinality before materializing record memberships.
-                    self.check_capacity(candidates.len(), table.row_count(), limits)?;
-                    (0..table.row_count()).map(|row| vec![row]).collect()
-                }
-                RowMode::Groups(keys) => {
-                    budget.work(table.row_count(), keys.len())?;
-                    partition(table, keys, limits.source_rows, limits.key_cells)
-                        .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
-                }
-            };
-            self.check_capacity(candidates.len(), groups.len(), limits)?;
-            candidates
-                .try_reserve(groups.len())
-                .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for members in groups {
-                let mut candidate = Candidate {
-                    members,
-                    values: vec![Value::Missing; self.output.columns().len()],
-                    completed: vec![false; self.output.columns().len()],
-                };
-                for assignment in &template.assignments {
-                    candidate.values[assignment.column] = evaluate(
-                        table,
-                        assignment,
-                        &candidate,
-                        self,
-                        candidates.len(),
-                        limits,
-                        &mut budget,
-                    )?;
-                    candidate.completed[assignment.column] = true;
-                }
-                if let Some(filter) = &template.filter {
-                    let source_row = candidate.members[0];
-                    let truth = filter
-                        .evaluate(table, source_row, &candidate.values, budget.predicate())
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
-                    if truth != yamaa_core::predicate::Truth::True {
-                        budget.discard_candidate(&candidate.values);
-                        continue;
+        if matches!(self.templates[0].mode, RowMode::Keys) {
+            candidates = key_grain::construct(self, table, limits, &mut budget)?;
+        } else {
+            for template in &self.templates {
+                let groups = match &template.mode {
+                    RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
+                    RowMode::Records => {
+                        // Admit the known cardinality before materializing record memberships.
+                        self.check_capacity(candidates.len(), table.row_count(), limits)?;
+                        (0..table.row_count()).map(|row| vec![row]).collect()
                     }
+                    RowMode::Groups(keys) => {
+                        budget.work(table.row_count(), keys.len())?;
+                        partition(table, keys, limits.source_rows, limits.key_cells)
+                            .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
+                    }
+                };
+                self.check_capacity(candidates.len(), groups.len(), limits)?;
+                candidates
+                    .try_reserve(groups.len())
+                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
+                for members in groups {
+                    let mut candidate = Candidate {
+                        members,
+                        values: vec![Value::Missing; self.output.columns().len()],
+                        completed: vec![false; self.output.columns().len()],
+                    };
+                    for assignment in &template.assignments {
+                        candidate.values[assignment.column] = evaluate(
+                            table,
+                            assignment,
+                            &candidate,
+                            self,
+                            candidates.len(),
+                            limits,
+                            &mut budget,
+                        )?;
+                        candidate.completed[assignment.column] = true;
+                    }
+                    if let Some(filter) = &template.filter {
+                        let source_row = candidate.members[0];
+                        let truth = filter
+                            .evaluate(table, source_row, &candidate.values, budget.predicate())
+                            .map_err(|error| match error.kind {
+                                yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                    Box::new(predicate_limit(limit))
+                                }
+                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                            })?;
+                        if truth != yamaa_core::predicate::Truth::True {
+                            budget.discard_candidate(&candidate.values);
+                            continue;
+                        }
+                    }
+                    candidates.push(candidate);
                 }
-                candidates.push(candidate);
             }
         }
         for assignment in &self.columns {

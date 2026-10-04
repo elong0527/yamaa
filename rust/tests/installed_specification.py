@@ -100,6 +100,14 @@ class InstalledSpecification(unittest.TestCase):
                 side_effect=AssertionError("reference predicate evaluation"),
             ),
             patch(
+                "yamaa.runtime.executor._key_space",
+                side_effect=AssertionError("reference key construction"),
+            ),
+            patch(
+                "yamaa.runtime.executor._key_grain_candidates",
+                side_effect=AssertionError("reference key candidates"),
+            ),
+            patch(
                 "yamaa.verification.checks.evaluate_predicate",
                 side_effect=AssertionError("reference verification predicate"),
             ),
@@ -531,6 +539,112 @@ class InstalledSpecification(unittest.TestCase):
                     columns, [[index, value] for index, value in enumerate(values)]
                 )
                 self.compare(self.load(doc), {"T": table})
+
+    def key_document(self):
+        """Author a current-schema key-grain plan with identity order unlike column order."""
+        return {
+            "schema_version": "1.0",
+            "domain": "KEYS",
+            "keys": ["TAG", "ID"],
+            "input": {"SRC": "input.csv"},
+            "output": {
+                "path": "out.csv",
+                "columns": ["ID", "TAG", "VALUE"],
+                "verification_log": "checks.csv",
+            },
+            "columns": [
+                {
+                    "name": "ID",
+                    "type": "int",
+                    "label": "Identity",
+                    "derivation": "SRC.id",
+                },
+                {"name": "TAG", "type": "str", "label": "Tag", "derivation": "SRC.tag"},
+                {
+                    "name": "VALUE",
+                    "type": "int",
+                    "label": "Value",
+                    "derivation": "SRC.value",
+                },
+            ],
+            "verifications": [{"unique": {"columns": ["TAG", "ID"]}}],
+        }
+
+    def key_source(self, rows):
+        """Supply literal independent readings without asking either engine for truth."""
+        columns = tuple(
+            TypedColumn(name=name, type="str") for name in ("id", "tag", "value")
+        )
+        return {"SRC": frame_from_values(columns, rows)}
+
+    def test_key_grain_values_order_empty_and_dependent_keys(self):
+        """Converted identities and all feeding records compose through the installed engine."""
+        rows = [
+            ["02", "__missing_key__", None],
+            ["01", "b", "7"],
+            ["2", "__missing_key__", "9"],
+            ["2", "__missing_key__", "9"],
+        ]
+        for empty, dependent in itertools.product((False, True), repeat=2):
+            with self.subTest(empty=empty, dependent=dependent):
+                doc = self.key_document()
+                if dependent:
+                    doc["columns"][1]["derivation"] = "ID"
+                    doc["rows"] = []
+                actual = self.compare(
+                    self.load(doc), self.key_source([] if empty else rows)
+                )
+                expected = (
+                    []
+                    if empty
+                    else [
+                        (2, "2" if dependent else "__missing_key__", 9),
+                        (1, "1" if dependent else "b", 7),
+                    ]
+                )
+                self.assertEqual(actual.result.table.frame.rows(), expected)
+        actual = self.compare(
+            self.load(self.key_document()),
+            self.key_source([["1", "a", None], ["1", "a", None]]),
+        )
+        self.assertEqual(actual.result.table.frame.rows(), [(1, "a", None)])
+
+    def test_key_grain_conflicts_and_missing_tokens_preserve_diagnostics(self):
+        """Raw conflict counts, missing identities and prior conversion ordering match exactly."""
+        cases = [
+            ([["1", "a", "07"], ["1", "a", "7"]], "multiple_values_per_key"),
+            (
+                [["1", "a", "7"], ["1", "a", "8"], ["1", "a", "9"], ["1", "a", "8"]],
+                "multiple_values_per_key",
+            ),
+            ([["1", "__missing_key__", "7"], [None, "present", "8"]], "missing_key"),
+            ([[None, "present", "8"], ["0", "__missing_key__", "7"]], "missing_key"),
+            ([[None, "present", "8"], [None, "present", "9"]], "missing_key"),
+            ([["1", "a", "bad value"], ["bad key", "b", "7"]], "conversion_failed"),
+        ]
+        for rows, condition in cases:
+            with self.subTest(rows=rows):
+                actual = self.compare(
+                    self.load(self.key_document()), self.key_source(rows)
+                )
+                self.assertEqual(actual.result.diagnostics[0].condition, condition)
+
+    def test_key_grain_keeps_literal_and_verification_phase_boundaries(self):
+        """Empty keys skip per-value conversion but still validate dataset predicates."""
+        for empty in (False, True):
+            for invalid_key in (False, True):
+                with self.subTest(empty=empty, invalid_key=invalid_key):
+                    doc = self.key_document()
+                    if invalid_key:
+                        doc["columns"][0]["derivation"] = {"literal": True}
+                    else:
+                        doc["verifications"].append(
+                            {"assert": {"expr": "VALUE = 'bad'"}}
+                        )
+                    self.compare(
+                        self.load(doc),
+                        self.key_source([] if empty else [["1", "a", "7"]]),
+                    )
 
 
 if __name__ == "__main__":

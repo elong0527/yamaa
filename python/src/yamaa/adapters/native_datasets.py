@@ -224,6 +224,13 @@ def execute_with_source_provider(
         for i, check in enumerate(specification.verifications or ())
         if check.operation in {"assert", "implies"}
     )
+    if not specification.rows:
+        required.append(
+            (
+                "key_grain",
+                UnsupportedFeature(operation="native_key_grain", spec_path="rows"),
+            )
+        )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
