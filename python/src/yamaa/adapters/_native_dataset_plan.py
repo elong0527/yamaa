@@ -80,14 +80,22 @@ def admit(specification):
             window = payload.get("window", {}) if isinstance(payload, dict) else {}
             if specification.rows or not isinstance(window, dict):
                 reject("window_scope", path)
-            elif window.get("filter") is not None:
-                reject("window_filter", f"{path}.window.filter")
             else:
                 names = list(window.get("group_by", []))
                 names.extend(
                     term if isinstance(term, str) else term["variable"]
                     for term in window.get("order_by", [])
                 )
+                if window.get("filter") is not None:
+                    try:
+                        ast = _native_predicate_plan.admit(
+                            window["filter"], f"{path}.window.filter"
+                        )
+                        names.extend(predicate_identifiers(ast))
+                    except ExecutionPlanningError as error:
+                        diagnostics.extend(error.diagnostics)
+                    except UnsupportedPlanningError as error:
+                        unsupported.extend(error.features)
                 if any("." in name for name in names):
                     reject("window_source", f"{path}.window")
                 groups = window.get("group_by", [])
@@ -289,6 +297,15 @@ def lower(plan, source):
                     ],
                 }
             }
+            if window.get("filter") is not None:
+                text = window["filter"]
+                expression["number"]["filter"] = _native_predicate_plan.lower(
+                    parse_predicate(text),
+                    text,
+                    derived.operation_path,
+                    reference,
+                    literal,
+                )
         else:
             ast = parse_aggregate_cached(value["expr"])
             expression = {

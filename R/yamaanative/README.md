@@ -217,3 +217,9 @@ output columns with explicit direction and null placement; no R callback or sour
 read occurs per comparison. Shared fixtures cover wide integers, ties, missing
 partitions, stable output order and typed empty output. This remains a typed-plan
 bridge; it does not provide an R specification compiler or full window execution.
+
+`window_filter` adds optional scalar eligibility predicates to these numbering
+windows. Filtering preserves output rows and gives excluded rows missing values;
+only true rows contribute positions or ties. Rust evaluates each reached partition
+before converting its first result. Shared tests cover true/false/unknown eligibility,
+eager predicate conditions with operation provenance, and empty-output behavior.

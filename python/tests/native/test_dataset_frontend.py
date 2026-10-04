@@ -559,14 +559,14 @@ def test_numbering_lowers_expanded_named_windows(tmp_path):
     ]
 
 
-@pytest.mark.parametrize("feature", ["filter", "qualified", "rows", "key"])
+@pytest.mark.parametrize("feature", ["regex", "qualified", "rows", "key"])
 def test_numbering_unsupported_scope_precedes_provider(tmp_path, feature):
     """Broader valid windows remain explicit unsupported declarations without source effects."""
 
     def mutate(document):
         """Change one scope feature in the real benchmark declaration."""
-        if feature == "filter":
-            document["windows"]["RESULT_ORDER"]["filter"] = "VSEVAL = 'Y'"
+        if feature == "regex":
+            document["windows"]["RESULT_ORDER"]["filter"] = "str_contains(VSEVAL, 'Y')"
         elif feature == "qualified":
             document["windows"]["RESULT_ORDER"]["order_by"] = ["VS.VSSTRESN"]
         elif feature == "key":
@@ -578,6 +578,13 @@ def test_numbering_unsupported_scope_precedes_provider(tmp_path, feature):
     effects = []
     result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
     assert result.result.status == "unsupported"
+    expected = {
+        "regex": "predicate_regex",
+        "qualified": "window_source",
+        "rows": "window_scope",
+        "key": "window_key",
+    }[feature]
+    assert expected in {f.operation for f in result.result.features}
     assert effects == []
 
 
@@ -599,5 +606,57 @@ def test_old_native_package_refuses_numbering_before_provider(tmp_path, monkeypa
     assert result.result.status == "unsupported"
     assert {feature.operation for feature in result.result.features} == {
         "native_window_numbering"
+    }
+    assert effects == []
+
+
+def test_window_filter_lowering_keeps_runtime_owner_and_completed_bindings(tmp_path):
+    """Runtime predicate failures belong to the window operation, not its filter field."""
+
+    def mutate(document):
+        """Attach a valid scalar predicate to the normalized named window."""
+        document["windows"]["RESULT_ORDER"]["filter"] = "VSEVAL = 'Y'"
+
+    spec = numbering_specification(tmp_path, mutate)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS),
+        sources["VS"].table,
+    )
+    assert error is None
+    for column in request["columns"][-2:]:
+        predicate = column["expression"]["number"]["filter"]
+        assert predicate["path"] == column["path"]
+        assert predicate["bindings"] == [{"name": "VSEVAL", "read": {"column": 7}}]
+
+
+def test_old_native_package_refuses_window_filter_before_provider(
+    tmp_path, monkeypatch
+):
+    """Unfiltered numbering support never silently ignores an eligibility filter."""
+
+    def mutate(document):
+        """Attach eligibility while preserving the admitted numbering scope."""
+        document["windows"]["RESULT_ORDER"]["filter"] = "VSEVAL = 'Y'"
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain", "window_numbering"]}
+            ),
+        ),
+    )
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "unsupported"
+    assert {feature.operation for feature in result.result.features} == {
+        "native_window_filter"
     }
     assert effects == []

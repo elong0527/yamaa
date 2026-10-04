@@ -42,13 +42,13 @@ remaining columns complete in the supplied order. Literal conversion occurs per
 constructed value, including on plans reused with empty versus populated sources.
 Paths and expression text provide provenance, not filesystem or artifact authority.
 
-Unfiltered numbering is represented by `{number: {kind, group_by, order_by}}`.
+Numbering is represented by `{number: {kind, group_by, order_by, filter?}}`.
 `kind` is `row_number`, `competition` or `dense`; `group_by` is an ordered list
 of distinct completed output-column indices (empty means one global partition).
 `order_by` is nonempty, with `{column, descending, nulls_first}` terms. Both booleans
 are required. This expression is admitted only in key-grain column assignments;
-source-qualified reads, row-phase windows and window filters are not represented.
-Each window partitions completed output rows, sorts once per partition and assigns
+source-qualified reads and row-phase windows are not represented.
+Each window partitions completed output rows, sorts once per reached partition and assigns
 its results back to their original positions. Null placement is independent of
 direction. Integers retain full precision, finite floats sort numerically, temporal
 precision does not affect ties, and construction order breaks remaining ties for
@@ -57,6 +57,17 @@ dense rank counts distinct tuples. Empty outputs retain schema without conversio
 Fallible merge sorting charges each term comparison, text operands and each merge
 pass against shared counters, stopping on the first resource failure. Numbering
 results then pass through the ordinary completed-value conversion lifecycle.
+
+The optional `filter` uses the bound predicate format below and requires the
+additive `window_filter` capability. Only completed output bindings are admitted.
+A partition evaluates every predicate in sorted order before producing its first
+number; only true rows are numbered. False/unknown rows remain in the output and
+receive missing. Ranks compare only eligible neighbors and number eligible positions.
+Each partition is evaluated when its first output row is reached, before converting
+that row's result; a later partition's predicate cannot overtake an earlier result's
+conversion failure. Runtime predicate provenance is the owning window operation.
+Empty output does not evaluate predicates against representative samples. All
+predicate work/text shares the run's cumulative budget, including excluded rows.
 
 Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
@@ -131,7 +142,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

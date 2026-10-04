@@ -206,14 +206,17 @@ remain separate. Direct source reads count all distinct present raw values befor
 conversion, preserving exact counts and identity on REQ-0075 conflicts. Named
 identity and dependency order remain separate; no source representative is chosen.
 
-The key-grain column phase also supports unfiltered row numbering and competition/
+The key-grain column phase also supports row numbering and competition/
 dense rank over completed output columns (REQ-0293/0301/0303/0340). Partitioning,
 exact typed ordering, explicit null placement and stable construction-order tie
 breaks execute in Rust, with cumulative comparison/text/merge work limits. The
 installed Python tests execute the unchanged `SEVRANKC` and `SEVRANKD` declarations
 and their eight input-derived columns from `schema-window-functions` against the
-projected committed expected CSV. This is a declared subset: filtered numbering,
-row-value/LOCF/baseline operations and the full benchmark remain unsupported.
+projected committed expected CSV. The same test now includes the unchanged filtered
+VSSEQ declaration (REQ-0294). Only true rows are numbered; false/unknown rows retain
+their output position with a missing value. A reached partition completes predicate
+evaluation before converting the current result; later partitions remain lazy.
+Row-value/LOCF/baseline operations and the full benchmark remain unsupported.
 
 Output keys are checked before dataset verifications. The closed error-severity
 verification subset includes unique combinations, whole-artifact integer
