@@ -2,24 +2,53 @@
 use extendr_api::prelude::*;
 mod scalars;
 
+/// Validate raw request bytes before any Rust string is constructed. R character
+/// encoding marks are not proof that the held bytes satisfy UTF-8 invariants.
+fn json_request(
+    request: Raw,
+    limit_error: String,
+    run: impl FnOnce(&str) -> std::result::Result<String, String>,
+) -> List {
+    // Both installed JSON transports share this byte limit. Enforce it before
+    // scanning UTF-8, and preserve each transport's existing limit diagnostic.
+    if request.len() > yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES {
+        return list!(value = NULL, error = limit_error);
+    }
+    match std::str::from_utf8(request.as_slice()) {
+        Ok(text) => match run(text) {
+            Ok(value) => list!(value = value, error = NULL),
+            Err(error) => list!(value = NULL, error = error),
+        },
+        Err(_) => list!(value = NULL, error = "invalid UTF-8 JSON request"),
+    }
+}
+
 /// Round-trip owned JSON text on the calling R thread without narrowing integers.
 #[extendr]
-fn scalar_round_trip(request: &str) -> List {
+fn scalar_round_trip(request: Raw) -> List {
     // Return normally before the R facade raises a condition. extendr's default
     // Result conversion uses panic for Err, which is unnecessary for input errors.
-    match yamaa_adapters::scalar_transport::scalar_round_trip(request) {
-        Ok(value) => list!(value = value, error = NULL),
-        Err(error) => list!(value = NULL, error = error.to_string()),
-    }
+    json_request(
+        request,
+        yamaa_adapters::scalar_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::scalar_transport::scalar_round_trip(text)
+                .map_err(|error| error.to_string())
+        },
+    )
 }
 
 /// Return numeric outcome JSON normally before the R facade raises transport errors.
 #[extendr]
-fn evaluate_numeric(request: &str) -> List {
-    match yamaa_adapters::numeric_transport::evaluate_numeric(request) {
-        Ok(value) => list!(value = value, error = NULL),
-        Err(error) => list!(value = NULL, error = error.to_string()),
-    }
+fn evaluate_numeric(request: Raw) -> List {
+    json_request(
+        request,
+        yamaa_adapters::numeric_transport::NumericTransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::numeric_transport::evaluate_numeric(text)
+                .map_err(|error| error.to_string())
+        },
+    )
 }
 
 /// Copy IPC bytes on the R thread, returning normally before facade errors.

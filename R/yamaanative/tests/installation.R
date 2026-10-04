@@ -96,3 +96,52 @@ for (invalid in list(raw(), charToRaw("ARROW1"), as.raw(rep(255L, 8L)))) {
   stopifnot(inherits(try(table_snapshot(invalid), silent = TRUE), "try-error"))
 }
 stopifnot(inherits(try(table_round_trip(raw(8L * 1024L * 1024L + 1L)), silent = TRUE), "try-error"))
+
+# An R UTF-8 encoding mark is not evidence that the held bytes are valid.
+# Exercise both facade and direct raw native entrypoints after installation.
+json_apis <- list(
+  list(call = scalar_round_trip, symbol = "wrap__scalar_round_trip",
+       prefix = '{"protocol":"scalar/1","value":{"str":"', suffix = '"}}',
+       limit = "scalar transport request exceeds byte limit"),
+  list(call = evaluate_numeric, symbol = "wrap__evaluate_numeric",
+       prefix = '{"protocol":"numeric/1","expression":"1","column_path":"',
+       suffix = '","target":"int","bindings":[]}',
+       limit = "numeric transport request exceeds resource limit")
+)
+bad_utf8 <- list(c(255L), c(192L, 128L), c(237L, 160L, 128L),
+                 c(244L, 144L, 128L, 128L), c(226L, 130L))
+for (api in json_apis) {
+  symbol <- get(api$symbol, envir = asNamespace("yamaanative"))
+  valid <- paste0(api$prefix, "caf\u00e9", api$suffix)
+  expected <- api$call(valid)
+  latin1 <- rawToChar(c(charToRaw(api$prefix), charToRaw("caf"),
+                        as.raw(233L), charToRaw(api$suffix)))
+  Encoding(latin1) <- "latin1"
+  stopifnot(identical(api$call(latin1), expected))
+  stopifnot(identical(.Call(symbol, charToRaw(enc2utf8(valid)))$value, expected))
+  for (invalid in bad_utf8) {
+    bytes <- c(charToRaw(api$prefix), as.raw(invalid), charToRaw(api$suffix))
+    direct <- .Call(symbol, bytes)
+    stopifnot(is.null(direct$value), identical(direct$error, "invalid UTF-8 JSON request"))
+    for (encoding in c("unknown", "UTF-8")) {
+      text <- rawToChar(bytes)
+      Encoding(text) <- encoding
+      failure <- tryCatch(api$call(text), error = identity)
+      stopifnot(inherits(failure, "error"),
+                identical(conditionMessage(failure), "invalid UTF-8 JSON request"))
+    }
+  }
+  marked <- valid
+  Encoding(marked) <- "bytes"
+  failure <- tryCatch(api$call(marked), error = identity)
+  stopifnot(inherits(failure, "error"), identical(conditionMessage(failure),
+            "byte-marked R text has no declared Unicode encoding"))
+  for (invalid in list(structure(valid, class = "unknown"), setNames(valid, "x"))) {
+    stopifnot(inherits(tryCatch(api$call(invalid), error = identity), "error"))
+  }
+  # Check size before scanning invalid bytes, without exposing them in errors.
+  over_limit <- as.raw(rep(255L, 1048577L))
+  stopifnot(identical(.Call(symbol, over_limit)$error, api$limit))
+  invisible(gc())
+  stopifnot(identical(api$call(valid), expected))
+}
