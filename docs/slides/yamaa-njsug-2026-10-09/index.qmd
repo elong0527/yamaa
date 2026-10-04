@@ -65,6 +65,10 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 * Same 133 benchmarks, same agent — only the prompt changed.
 * Task pass rate collapses as prompts lose detail; Python outscores R at every tier.
 
+::: {.small}
+Harness: [Harbor](https://hub.harborframework.com) · Agent: opencode · Model: muse-spark-1.3 · 133 trials per tier, Oct 2026
+:::
+
 ## Example: age groups — the three prompts
 
 ::: {.columns}
