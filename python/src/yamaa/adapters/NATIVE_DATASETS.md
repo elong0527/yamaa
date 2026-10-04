@@ -76,8 +76,20 @@ for all feeders before reading donor values, and retains the output row even whe
 none qualifies. False/unknown rows do not contribute values. Distinct-value counts,
 conversion and diagnostics follow the existing collected-read lifecycle; runtime
 predicate failures name the source operation and retain their primitive requirement.
-Filters on keys, explicit record/group templates, ordered source choices and
-source handlers remain outside this slice.
+Filters on keys and explicit record/group templates remain outside this slice.
+
+The same non-key source read may declare paired `order_by` and `keep` fields,
+requiring `source_selection` before provider effects. Qualified fields from its
+own source order the eligible, present donors; defaults are ascending and nulls
+last, with original source position breaking ties. Only multiple distinct raw
+values trigger a choice and increment `.source.multiple_matches`. Equal values
+preserve their first representation without reading order fields or registering
+a zero count. Counts survive conversion, later-column and verification failures,
+and are retained on `NativeDatasetLimitError` if a later resource limit stops the
+run. Each call starts a fresh ledger. Source filters compose with this policy.
+Unpaired policies, output/cross-source order references, unknown order fields,
+key/record/group selection and other source handlers remain explicitly unsupported;
+this bridge does not invent eager diagnostics for those lazy reference cases.
 
 A root `filter` in this mode additionally requires `root_filter` before source
 access. It reads qualified base-source fields only, retaining true rows and
@@ -146,7 +158,7 @@ REQ-0322 with its exact count and declared partition keys, including missing key
 or the empty global identity. Filters use the existing `window_filter` gate.
 Other comparable baseline types remain explicitly unsupported in this slice.
 
-Ordered source selection, portable regex calls, additional expression operations, source handlers, column checks,
+Broader source selection, portable regex calls, additional expression operations, source handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
 multiple sources, intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.

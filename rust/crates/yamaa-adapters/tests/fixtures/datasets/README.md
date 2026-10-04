@@ -88,3 +88,9 @@ repeated eligible readings and excludes conflicting 8. An empty selection leaves
 the output row missing; selecting every record reports exactly two distinct values.
 Predicate errors name the source operation, retain primitive requirements and
 carry no output identity; empty input skips evaluation. No evaluator authors truth.
+
+Source-order cases reuse the independently authored source-filter Arrow input.
+Handwritten expectations cover first=8/last=7 for key 2, filtered uniqueness
+without a count, empty input, and later conversion failure retaining one
+`multiple_matches` firing. The conversion requirement is independently checked
+against the Python reference (REQ-0013); JSON and TSV carry the same truth.

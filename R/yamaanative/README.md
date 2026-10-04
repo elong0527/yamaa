@@ -251,4 +251,14 @@ filtering. Every eligibility predicate finishes before donor values are read;
 only true records contribute distinct present values. No qualifying value returns
 missing without removing the output row. Shared fixtures retain exact conflicts,
 primitive condition provenance and empty-input behavior. Keys, record/group
-assignments, ordered choice and handlers are outside this filtered-read slice.
+assignments remain outside this filtered-read slice.
+
+`source_selection` permits optional `collect.selection` with source-indexed
+`order_by` terms and `keep: "first" | "last"`. Only multiple distinct present
+values invoke the ordered choice, after source filtering. Equal values retain
+their first representation and emit no count. The raw envelope includes optional
+`handler_counts` after `outcome`, with exact decimal-text counts, source handler
+paths and `multiple_matches` names. Completed choices remain visible if later
+conversion, checks or resource limits fail; repeated execution starts fresh.
+Shared fixtures replay first/last choices, filtered uniqueness, empty inputs and
+a later conversion failure with its retained count. Other handlers are unsupported.

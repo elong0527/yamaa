@@ -230,7 +230,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -570,6 +570,45 @@ fn collected_filters_reject_output_and_unknown_source_bindings_before_ipc() {
         assert_eq!(
             execute_dataset(&invalid.to_string(), b"not IPC").err(),
             Some(Error::InvalidPlan)
+        );
+    }
+}
+
+/// Ordered choices validate all terms before decoding a source, including unused policies.
+#[test]
+fn source_selection_rejects_invalid_terms_before_ipc() {
+    let fixtures: Value =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let request = &fixtures
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["case"] == "source_order_last")
+        .unwrap()["request"];
+    for (selection, expected) in [
+        (json!({"order_by":[],"keep":"first"}), Error::InvalidPlan),
+        (
+            json!({"order_by":[{"column":99,"descending":false,"nulls_first":false}],"keep":"last"}),
+            Error::InvalidPlan,
+        ),
+        (
+            json!({"order_by":[{"column":2,"descending":false,"nulls_first":false}],"keep":"middle"}),
+            Error::InvalidRequest,
+        ),
+        (
+            json!({"order_by":[{"column":2,"descending":false,"nulls_first":false}],"keep":"first","unexpected":true}),
+            Error::InvalidRequest,
+        ),
+        (
+            json!({"order_by":vec![json!({"column":2,"descending":false,"nulls_first":false});65],"keep":"last"}),
+            Error::RequestLimit,
+        ),
+    ] {
+        let mut invalid = request.clone();
+        invalid["columns"][0]["expression"]["collect"]["selection"] = selection;
+        assert_eq!(
+            execute_dataset(&invalid.to_string(), b"invalid IPC").err(),
+            Some(expected)
         );
     }
 }

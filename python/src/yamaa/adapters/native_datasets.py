@@ -45,6 +45,7 @@ from yamaa.runtime import (
     ExecutionResult,
     ExecutionSuccess,
     ExecutionUnsupported,
+    HandlerCount,
     SourceProvider,
 )
 from yamaa.specification.models import Specification
@@ -66,8 +67,9 @@ class NativeDatasetRun:
 class NativeDatasetLimitError(RuntimeError):
     """A native resource policy stopped the run; no accepted output is available."""
 
-    def __init__(self, outcome):
+    def __init__(self, outcome, handler_counts=()):
         """Retain exact resource counters without claiming a language condition."""
+        self.handler_counts = handler_counts
         self.resource = outcome["resource"]
         self.limit = outcome["limit"]
         self.required = outcome["required"]
@@ -311,6 +313,20 @@ def execute_with_source_provider(
         and isinstance(column.derivation.value.root["source"], dict)
         and column.derivation.value.root["source"].get("filter") is not None
     )
+    required.extend(
+        (
+            "source_selection",
+            UnsupportedFeature(
+                operation="native_source_selection",
+                spec_path=f"columns.{column.name}.derivation.source",
+            ),
+        )
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation == "source"
+        and isinstance(column.derivation.value.root["source"], dict)
+        and column.derivation.value.root["source"].get("order_by") is not None
+    )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
@@ -356,18 +372,31 @@ def execute_with_source_provider(
         )
     source = sources[next(iter(specification.input))]
     source = source.table if isinstance(source, LoadedDataset) else source
-    lowered, declaration_error = lower(plan, source)
+    try:
+        lowered, declaration_error = lower(plan, source)
+    except UnsupportedPlanningError as error:
+        return NativeDatasetRun(
+            ExecutionUnsupported(features=error.features, handler_counts=())
+        )
     request = json.dumps(lowered, ensure_ascii=True, separators=(",", ":"))
     data, encoded = execute(request, _source_ipc(source))
     envelope = json.loads(encoded)
     if envelope["protocol"] != "dataset/1":
         raise ValueError("unsupported native dataset response protocol")
+    handler_counts = tuple(
+        HandlerCount(
+            spec_path=entry["spec_path"],
+            handler=entry["handler"],
+            count=int(entry["count"]),
+        )
+        for entry in envelope.get("handler_counts", ())
+    )
     outcome = envelope["outcome"]
     status = outcome["status"]
     if (data is not None) != (status == "success"):
         raise ValueError("native dataset response has inconsistent output ownership")
     if status == "limit":
-        raise NativeDatasetLimitError(outcome)
+        raise NativeDatasetLimitError(outcome, handler_counts)
     records = ()
     if status == "condition":
         if "verifications" in outcome:
@@ -393,7 +422,7 @@ def execute_with_source_provider(
         return NativeDatasetRun(
             ExecutionFailure(
                 diagnostics=diagnostics,
-                handler_counts=(),
+                handler_counts=handler_counts,
                 verification_log=verification_log,
             ),
             records,
@@ -404,7 +433,10 @@ def execute_with_source_provider(
     except ArtifactError as error:
         return NativeDatasetRun(
             _failure(error.diagnostics).result.model_copy(
-                update={"verification_log": verification_log}
+                update={
+                    "verification_log": verification_log,
+                    "handler_counts": handler_counts,
+                }
             ),
             records,
         )
@@ -412,7 +444,7 @@ def execute_with_source_provider(
         ExecutionSuccess(
             table=table,
             artifact=artifact,
-            handler_counts=(),
+            handler_counts=handler_counts,
             verification_log=verification_log,
             warning_log=build_warning_log((), specification.output),
         ),

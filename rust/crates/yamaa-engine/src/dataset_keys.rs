@@ -215,12 +215,7 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     if distinct.len() > 1 {
         if let Some(selection) = selection {
             let chosen = select(table, assignment, &carrying, selection, budget)?;
-            handlers
-                .record(
-                    &alloc::format!("{}.multiple_matches", assignment.path),
-                    HandlerKind::MultipleMatches,
-                )
-                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+            budget.work(1, 1)?;
             let value = table.cell(chosen, *column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: assignment.path.clone(),
@@ -228,10 +223,15 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
                     error,
                 })
             })?;
-            budget.work(1, 1)?;
             if let ValueRef::Str(text) = value {
                 budget.scalar_text(text.len())?;
             }
+            handlers
+                .record(
+                    &alloc::format!("{}.multiple_matches", assignment.path),
+                    HandlerKind::MultipleMatches,
+                )
+                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
             return Ok(own(value));
         }
         return Err(Box::new(ExecutionError::MultipleValues {

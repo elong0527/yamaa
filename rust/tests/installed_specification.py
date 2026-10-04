@@ -246,6 +246,105 @@ class InstalledSpecification(unittest.TestCase):
                             [(2, 7 if scenario == "ordinary" else None), (1, None)],
                         )
 
+    def test_ordered_sources_retain_choices_and_failure_counts(self):
+        """Compare source choices and complete audit evidence without host selection."""
+        columns = tuple(
+            TypedColumn(name=n, type=t)
+            for n, t in [("ID", "str"), ("V", "str"), ("KEEP", "int")]
+        )
+        original = [["02", "7", 1], ["2", "8", 0], ["2", "7", 1], ["1", "9", None]]
+        for scenario, keep, direction, nulls in itertools.product(
+            [
+                "ordinary",
+                "same",
+                "filter",
+                "root",
+                "convert",
+                "later",
+                "missing",
+                "null_order",
+                "two",
+                "check",
+            ],
+            ["first", "last"],
+            ["asc", "desc"],
+            ["first", "last"],
+        ):
+            rows = copy.deepcopy(original)
+            payload = {
+                "variable": "SRC.V",
+                "order_by": [
+                    {"variable": "SRC.KEEP", "direction": direction, "nulls": nulls}
+                ],
+                "keep": keep,
+            }
+            document = {
+                "schema_version": "1.0",
+                "domain": "ORDER",
+                "keys": ["ID"],
+                "base": "SRC",
+                "input": {"SRC": "source.csv"},
+                "output": {"path": "out.csv", "columns": ["ID", "V"]},
+                "columns": [
+                    {
+                        "name": "ID",
+                        "type": "int",
+                        "label": "ID",
+                        "derivation": "SRC.ID",
+                    },
+                    {
+                        "name": "V",
+                        "type": "int",
+                        "label": "V",
+                        "derivation": {"source": payload},
+                    },
+                ],
+            }
+            if scenario == "same":
+                rows[1][1] = "7"
+            if scenario == "filter":
+                payload["filter"] = "SRC.KEEP > 0"
+            if scenario == "root":
+                document["filter"] = "SRC.KEEP > 0"
+            if scenario == "convert":
+                rows[0][1] = rows[2][1] = "bad"
+            if scenario == "missing":
+                rows[0][1] = rows[2][1] = None
+            if scenario == "null_order":
+                rows[1][2] = None
+            if scenario in {"later", "two"}:
+                document["columns"].append(
+                    {
+                        "name": "LATER",
+                        "type": "int",
+                        "label": "Later",
+                        "derivation": {"literal": "bad"}
+                        if scenario == "later"
+                        else {"source": copy.deepcopy(payload)},
+                    }
+                )
+                document["output"]["columns"].append("LATER")
+            if scenario == "check":
+                document["verifications"] = [{"row_count": {"min": 3}}]
+            for data in [rows, []]:
+                with self.subTest(
+                    scenario=scenario,
+                    keep=keep,
+                    direction=direction,
+                    nulls=nulls,
+                    empty=not data,
+                ):
+                    actual = self.compare(
+                        self.load(document), {"SRC": frame_from_values(columns, data)}
+                    )
+                    if not data or scenario in {"same", "filter", "root", "missing"}:
+                        self.assertEqual(actual.result.handler_counts, ())
+                    else:
+                        self.assertEqual(
+                            [entry.count for entry in actual.result.handler_counts],
+                            [1, 1] if scenario == "two" else [1],
+                        )
+
     def test_numbering_directions_ties_empty_and_conversion(self):
         """Compare authored numbering variants, preserving complete result and failure evidence."""
         case = ROOT / "specification-windows"
@@ -478,6 +577,10 @@ class InstalledSpecification(unittest.TestCase):
             patch(
                 "yamaa.runtime.executor._key_grain_candidates",
                 side_effect=AssertionError("reference key candidates"),
+            ),
+            patch(
+                "yamaa.odm.context.select_one",
+                side_effect=AssertionError("reference source ordering"),
             ),
             patch(
                 "yamaa.verification.checks.evaluate_predicate",

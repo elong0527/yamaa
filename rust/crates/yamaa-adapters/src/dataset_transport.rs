@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -192,11 +192,48 @@ impl Window {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct SourceSelection {
+    order_by: Vec<OrderTerm>,
+    keep: Keep,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Keep {
+    First,
+    Last,
+}
+impl SourceSelection {
+    /// Bound source order terms before the engine validates their coordinates.
+    fn prepare(self) -> Result<dataset::SourceSelection, Error> {
+        if self.order_by.len() > MAX_COLUMNS {
+            return Err(Error::RequestLimit);
+        }
+        Ok(dataset::SourceSelection {
+            order_by: self
+                .order_by
+                .into_iter()
+                .map(|term| dataset::OrderTerm {
+                    column: term.column,
+                    descending: term.descending,
+                    nulls_first: term.nulls_first,
+                })
+                .collect(),
+            keep: match self.keep {
+                Keep::First => dataset::Keep::First,
+                Keep::Last => dataset::Keep::Last,
+            },
+        })
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CollectedSource {
     column: usize,
     identifier: String,
     #[serde(default)]
     filter: Option<Predicate>,
+    #[serde(default)]
+    selection: Option<SourceSelection>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -373,7 +410,8 @@ impl PreparedDataset {
     pub fn execute(&self, source: &[u8]) -> Result<DatasetResponse, Error> {
         catch_unwind(|| {
             let source = decode_snapshot(source).map_err(Error::Table)?;
-            let (table, outcome) = match self.plan.execute(&source, LIMITS) {
+            let attempt = self.plan.execute_observed(&source, LIMITS);
+            let (table, outcome) = match attempt.result {
                 Ok(result) => (
                     Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
                     Outcome::Success {
@@ -386,6 +424,15 @@ impl PreparedDataset {
                 &Envelope {
                     protocol: PROTOCOL,
                     outcome,
+                    handler_counts: attempt
+                        .handler_counts
+                        .into_iter()
+                        .map(|entry| HandlerCount {
+                            spec_path: entry.spec_path,
+                            handler: entry.handler.name(),
+                            count: entry.count.to_string(),
+                        })
+                        .collect(),
                 },
                 MAX_OUTPUT_BYTES,
             )
@@ -460,7 +507,7 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                         column: source.column,
                         identifier: source.identifier,
                         filter: source.filter.map(Predicate::prepare).transpose()?,
-                        selection: None,
+                        selection: source.selection.map(SourceSelection::prepare).transpose()?,
                     }
                 }
                 Expression::Column(column) => dataset::Expression::Column(column),
@@ -507,6 +554,14 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
 struct Envelope {
     protocol: &'static str,
     outcome: Outcome,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    handler_counts: Vec<HandlerCount>,
+}
+#[derive(Serialize)]
+struct HandlerCount {
+    spec_path: String,
+    handler: &'static str,
+    count: String,
 }
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
