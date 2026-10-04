@@ -1,5 +1,6 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
+mod scalars;
 
 /// Round-trip owned JSON text on the calling R thread without narrowing integers.
 #[extendr]
@@ -52,6 +53,7 @@ fn engine_info() -> List {
 
 extendr_module! {
     mod yamaanative;
+    use scalars;
     fn engine_info;
     fn scalar_round_trip;
     fn evaluate_numeric;

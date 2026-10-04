@@ -460,3 +460,7 @@ The installed Python [function/1 callback API](FUNCTION_TRANSPORT.md) now admits
 bounded normalized requests and calls an explicit Python callable on the current
 interpreter thread. It preserves exact scalars and portable fatal outcomes; R
 callbacks, production environment binding and dataset execution remain pending.
+
+The R source package now exposes [lossless int/str scalars](R_SCALARS.md),
+with validated raw-byte native transport, checked shared arithmetic, exact host
+conversions and NUL-preserving text access. Installed R callbacks remain next.
