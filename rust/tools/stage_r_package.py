@@ -32,6 +32,10 @@ def stage(destination: Path):
         WORKSPACE / "crates/yamaa-adapters/tests/fixtures/tables",
         resources / "tables",
     )
+    shutil.copytree(
+        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/datasets",
+        resources / "datasets",
+    )
     shutil.copy2(
         WORKSPACE / "crates/yamaa-engine/tests/fixtures/function_invocation.tsv",
         resources / "function_invocation.tsv",

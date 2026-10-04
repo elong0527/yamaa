@@ -139,6 +139,53 @@ fn decode(input: &[u8]) -> Result<ArrowTable, Error> {
     Ok(table)
 }
 
+/// Retain the same byte/shape/UTF-8/alias checks for dataset execution inputs.
+pub(crate) fn decode_snapshot(input: &[u8]) -> Result<ArrowTable, Error> {
+    boundary(input, || decode(input))
+}
+
+/// Export only a checked owned dataset; this is not a generic untrusted table API.
+/// The caller's execution policy has already bounded retained cell/text payloads.
+pub(crate) fn encode_dataset(table: &yamaa_engine::dataset::Dataset) -> Result<Vec<u8>, Error> {
+    if table.row_count() > LIMITS.max_rows
+        || table.schema().columns().len() > LIMITS.max_columns
+        || table
+            .row_count()
+            .checked_mul(table.schema().columns().len())
+            .is_none_or(|cells| cells > LIMITS.max_cells)
+    {
+        return Err(Error::ShapeLimit);
+    }
+    let batch = sanitized_batch(table, 0, table.row_count()).map_err(|_| Error::Internal)?;
+    let mut output = LimitedWriter::new(MAX_INPUT_BYTES);
+    let result = (|| {
+        let mut writer = StreamWriter::try_new(&mut output, &physical_schema(table.schema()))?;
+        writer.write(&batch)?;
+        writer.finish()
+    })();
+    if result.is_err() {
+        return Err(if output.exceeded {
+            Error::OutputLimit
+        } else {
+            Error::Internal
+        });
+    }
+    Ok(output.bytes)
+}
+
+/// Serialize directly through a byte cap without constructing a JSON value tree.
+pub(crate) fn bounded_json(value: &impl Serialize, maximum: usize) -> Result<String, Error> {
+    let mut output = LimitedWriter::new(maximum);
+    if serde_json::to_writer(&mut output, value).is_err() {
+        return Err(if output.exceeded {
+            Error::OutputLimit
+        } else {
+            Error::Internal
+        });
+    }
+    String::from_utf8(output.bytes).map_err(|_| Error::Internal)
+}
+
 /// Take bytes only after checked remaining-length validation; no declared-size allocation.
 fn take<'a>(input: &mut &'a [u8], length: usize) -> Result<&'a [u8], Error> {
     let value = input.get(..length).ok_or(Error::InvalidStream)?;
@@ -344,8 +391,8 @@ fn preflight(mut input: &[u8]) -> Result<TableSchema, Error> {
 
 /// Rebuild visible values into fresh arrays, removing all masked physical payloads
 /// and out-of-slice buffers before the public IPC writer sees them.
-fn sanitized_batch(
-    table: &ArrowTable,
+fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
+    table: &T,
     start: usize,
     rows: usize,
 ) -> Result<RecordBatch, arrow_schema::ArrowError> {

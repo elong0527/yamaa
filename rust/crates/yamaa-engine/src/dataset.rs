@@ -4,6 +4,7 @@
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
 use crate::{
+    dataset_budget::Budget,
     table_grouping::{partition, GroupingError},
     table_reduction::{reduce_column, TableReductionError},
 };
@@ -70,6 +71,21 @@ pub struct Limits {
     pub output_rows: usize,
     pub output_cells: usize,
     pub key_cells: usize,
+    pub work_cells: usize,
+    pub scalar_text_bytes: usize,
+    pub output_text_bytes: usize,
+    pub identity_cells: usize,
+    pub identity_text_bytes: usize,
+}
+
+/// Cumulative resource failures are distinct from normative language conditions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resource {
+    WorkCells,
+    ScalarTextBytes,
+    OutputTextBytes,
+    IdentityCells,
+    IdentityTextBytes,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -309,6 +325,11 @@ pub struct Execution {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    Limit {
+        resource: Resource,
+        limit: usize,
+        required: Option<usize>,
+    },
     SchemaMismatch,
     Capacity,
     Allocation,
@@ -321,11 +342,13 @@ pub enum ExecutionError<E> {
     Reduction {
         path: String,
         error: TableReductionError<E>,
+        identity: Option<RowIdentity>,
     },
     Conversion {
         path: String,
         output_row: usize,
         error: ConversionError,
+        identity: Option<RowIdentity>,
     },
     KeyFailures(Vec<CheckRecord>),
     VerificationFailures(Vec<CheckRecord>),
@@ -336,6 +359,7 @@ pub enum ExecutionError<E> {
 struct Candidate {
     members: Vec<usize>,
     values: Vec<Value>,
+    completed: Vec<bool>,
 }
 
 /// Copy the selected normalized value, retaining all temporal precision metadata.
@@ -356,51 +380,88 @@ fn evaluate<T: TableAccess + ?Sized>(
     table: &T,
     assignment: &Assignment,
     candidate: &Candidate,
-    output: &TableSchema,
+    plan: &DatasetPlan,
     row: usize,
     limits: Limits,
+    budget: &mut Budget,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    budget.work(1, 1)?;
+    let reads = match &assignment.expression {
+        Expression::Source(_) => 1,
+        Expression::Reduce { .. } => candidate.members.len(),
+        _ => 0,
+    };
+    budget.work(reads, 1)?;
     let value = match &assignment.expression {
-        Expression::Literal(value) => value.clone(),
-        Expression::Column(column) => candidate.values[*column].clone(),
+        Expression::Literal(value) => {
+            if let Value::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
+            value.clone()
+        }
+        Expression::Column(column) => {
+            let value = &candidate.values[*column];
+            if let Value::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
+            value.clone()
+        }
         Expression::Source(column) => {
             let source_row = candidate.members[0];
-            own(table.cell(source_row, *column).map_err(|error| {
+            let value = table.cell(source_row, *column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: assignment.path.clone(),
                     source_row,
                     error,
                 })
-            })?)
+            })?;
+            if let ValueRef::Str(text) = value {
+                budget.scalar_text(text.len())?;
+            }
+            own(value)
         }
         Expression::Reduce {
             column,
             reducer,
             text,
-        } => Value::from(
-            reduce_column(
-                table,
-                *column,
-                &candidate.members,
-                limits.source_rows,
-                *reducer,
-                text,
-            )
-            .map_err(|error| {
-                Box::new(ExecutionError::Reduction {
+        } => match reduce_column(
+            table,
+            *column,
+            &candidate.members,
+            limits.source_rows,
+            *reducer,
+            text,
+        ) {
+            Ok(value) => Value::from(value),
+            Err(error) => {
+                let identity = if matches!(&error, TableReductionError::Reduction(yamaa_core::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
+                {
+                    failure_identity(candidate, &plan.keys, row, budget)?
+                } else {
+                    None
+                };
+                return Err(Box::new(ExecutionError::Reduction {
                     path: assignment.path.clone(),
                     error,
-                })
-            })?,
-        ),
+                    identity,
+                }));
+            }
+        },
     };
-    convert(&value, output.columns()[assignment.column].kind).map_err(|error| {
-        Box::new(ExecutionError::Conversion {
-            path: alloc::format!("columns.{}", output.columns()[assignment.column].name),
-            output_row: row,
-            error,
-        })
-    })
+    let converted = match convert(&value, plan.output.columns()[assignment.column].kind) {
+        Ok(value) => value,
+        Err(error) => {
+            let identity = failure_identity(candidate, &plan.keys, row, budget)?;
+            return Err(Box::new(ExecutionError::Conversion {
+                path: alloc::format!("columns.{}", plan.output.columns()[assignment.column].name),
+                output_row: row,
+                error,
+                identity,
+            }));
+        }
+    };
+    budget.value(&converted)?;
+    Ok(converted)
 }
 
 impl DatasetPlan {
@@ -418,6 +479,7 @@ impl DatasetPlan {
         if table.row_count() > limits.source_rows {
             return Err(Box::new(ExecutionError::Capacity));
         }
+        let mut budget = Budget::new(limits);
         let mut candidates: Vec<Candidate> = Vec::new();
         for template in &self.templates {
             let groups = match &template.mode {
@@ -427,6 +489,7 @@ impl DatasetPlan {
                     (0..table.row_count()).map(|row| vec![row]).collect()
                 }
                 RowMode::Groups(keys) => {
+                    budget.work(table.row_count(), keys.len())?;
                     partition(table, keys, limits.source_rows, limits.key_cells)
                         .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
                 }
@@ -439,16 +502,19 @@ impl DatasetPlan {
                 let mut candidate = Candidate {
                     members,
                     values: vec![Value::Missing; self.output.columns().len()],
+                    completed: vec![false; self.output.columns().len()],
                 };
                 for assignment in &template.assignments {
                     candidate.values[assignment.column] = evaluate(
                         table,
                         assignment,
                         &candidate,
-                        &self.output,
+                        self,
                         candidates.len(),
                         limits,
+                        &mut budget,
                     )?;
+                    candidate.completed[assignment.column] = true;
                 }
                 candidates.push(candidate);
             }
@@ -456,7 +522,8 @@ impl DatasetPlan {
         for assignment in &self.columns {
             for (row, candidate) in candidates.iter_mut().enumerate() {
                 candidate.values[assignment.column] =
-                    evaluate(table, assignment, candidate, &self.output, row, limits)?;
+                    evaluate(table, assignment, candidate, self, row, limits, &mut budget)?;
+                candidate.completed[assignment.column] = true;
             }
         }
         let dataset = Dataset {
@@ -464,6 +531,7 @@ impl DatasetPlan {
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
         let mut failures = Vec::new();
+        budget.work(dataset.rows.len(), self.keys.len())?;
         for (position, &column) in self.keys.iter().enumerate() {
             let missing: Vec<_> = dataset
                 .rows
@@ -479,10 +547,11 @@ impl DatasetPlan {
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
-                    offending_rows: identities(&dataset, &self.keys, missing),
+                    offending_rows: identities(&dataset, &self.keys, missing, &mut budget)?,
                 });
             }
         }
+        budget.work(dataset.rows.len(), self.keys.len())?;
         let groups = partition(&dataset, &self.keys, limits.output_rows, limits.key_cells)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
         let duplicates: Vec<_> = groups
@@ -498,7 +567,7 @@ impl DatasetPlan {
                 evaluated_count: groups.len(),
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
-                offending_rows: identities(&dataset, &self.keys, duplicates),
+                offending_rows: identities(&dataset, &self.keys, duplicates, &mut budget)?,
             });
         }
         if !failures.is_empty() {
@@ -516,6 +585,7 @@ impl DatasetPlan {
                             distinct.push(column);
                         }
                     }
+                    budget.work(dataset.rows.len(), distinct.len())?;
                     let groups =
                         partition(&dataset, &distinct, limits.output_rows, limits.key_cells)
                             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
@@ -534,10 +604,12 @@ impl DatasetPlan {
                             repeated
                                 .into_iter()
                                 .flat_map(|members| members.iter().copied()),
-                        ),
+                            &mut budget,
+                        )?,
                     }
                 }
                 Check::RowCount { min, max } => {
+                    budget.work(1, 1)?;
                     let count = dataset.rows.len() as i128;
                     let failed = min.is_some_and(|min| count < i128::from(min))
                         || max.is_some_and(|max| count > i128::from(max));
@@ -585,18 +657,44 @@ impl DatasetPlan {
 }
 
 /// Retain original output keys without substituting projected or row-number identity.
-fn identities(
+fn identities<E>(
     dataset: &Dataset,
     keys: &[usize],
     rows: impl IntoIterator<Item = usize>,
-) -> Vec<RowIdentity> {
-    rows.into_iter()
-        .map(|position| RowIdentity {
+    budget: &mut Budget,
+) -> Result<Vec<RowIdentity>, Box<ExecutionError<E>>> {
+    let mut identities = Vec::new();
+    for position in rows {
+        budget.work(1, keys.len())?;
+        budget.identity(keys.iter().map(|&column| &dataset.rows[position][column]))?;
+        identities.push(RowIdentity {
             position,
             values: keys
                 .iter()
                 .map(|&column| dataset.rows[position][column].clone())
                 .collect(),
-        })
-        .collect()
+        });
+    }
+    Ok(identities)
+}
+
+/// A partial key is unavailable, whereas a completed missing key is a known value.
+fn failure_identity<E>(
+    candidate: &Candidate,
+    keys: &[usize],
+    position: usize,
+    budget: &mut Budget,
+) -> Result<Option<RowIdentity>, Box<ExecutionError<E>>> {
+    if keys.iter().any(|&key| !candidate.completed[key]) {
+        return Ok(None);
+    }
+    budget.work(1, keys.len())?;
+    budget.identity(keys.iter().map(|&column| &candidate.values[column]))?;
+    Ok(Some(RowIdentity {
+        position,
+        values: keys
+            .iter()
+            .map(|&column| candidate.values[column].clone())
+            .collect(),
+    }))
 }

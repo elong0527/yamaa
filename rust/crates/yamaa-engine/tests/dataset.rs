@@ -80,6 +80,11 @@ fn limits() -> Limits {
         output_rows: 200,
         output_cells: 2000,
         key_cells: 2000,
+        work_cells: 10000,
+        scalar_text_bytes: 10000,
+        output_text_bytes: 10000,
+        identity_cells: 10000,
+        identity_text_bytes: 10000,
     }
 }
 /// Attach deterministic declaration provenance to one check.
@@ -734,7 +739,8 @@ fn grouped_reduction_preserves_error_order_and_paths() {
     )
     .unwrap();
     source.fail = Some((2, 1));
-    let ExecutionError::Reduction { path, error } = *plan.execute(&source, limits()).unwrap_err()
+    let ExecutionError::Reduction { path, error, .. } =
+        *plan.execute(&source, limits()).unwrap_err()
     else {
         panic!("expected reduction port error")
     };
@@ -911,6 +917,7 @@ fn grouping_distinguishes_adjacent_large_integers_and_empty_snapshots() {
                 output_rows: 0,
                 output_cells: 0,
                 key_cells: 0,
+                ..limits()
             },
         )
         .unwrap();
@@ -1093,12 +1100,14 @@ fn literal_conversion_only_occurs_for_constructed_values() {
                     path,
                     output_row,
                     error,
+                    identity,
                 } = *plan.execute(&populated, limits()).unwrap_err()
                 else {
                     panic!("expected per-value conversion error")
                 };
                 assert_eq!(path, "columns.value");
                 assert_eq!(output_row, 0);
+                assert_eq!(identity.is_some(), !row_phase);
                 assert_eq!(
                     error,
                     yamaa_core::conversion::ConversionError {
@@ -1110,4 +1119,283 @@ fn literal_conversion_only_occurs_for_constructed_values() {
             }
         }
     }
+}
+
+/// Repeated text-to-number conversion consumes work even when output stores no strings.
+#[test]
+fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Int)],
+        vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+    );
+    let plan = record_plan(
+        &source,
+        schema(&[("id", ColumnType::Int), ("number", ColumnType::Int)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(Value::Str("0007".into()))),
+        ],
+        vec![],
+    );
+    let policy = Limits {
+        scalar_text_bytes: 7,
+        output_text_bytes: 0,
+        ..limits()
+    };
+    assert_eq!(
+        *plan.execute(&source, policy).unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::ScalarTextBytes,
+            limit: 7,
+            required: Some(8)
+        }
+    );
+    let actual = plan
+        .execute(
+            &source,
+            Limits {
+                scalar_text_bytes: 8,
+                ..policy
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        actual.dataset.rows(),
+        &[
+            vec![Value::Int(1), Value::Int(7)],
+            vec![Value::Int(2), Value::Int(7)]
+        ]
+    );
+}
+
+/// UTF-8 bytes, including copies into dependent columns, are counted before retention.
+#[test]
+fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Int)],
+        vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+    );
+    let plan = record_plan(
+        &source,
+        schema(&[
+            ("id", ColumnType::Int),
+            ("a", ColumnType::Str),
+            ("b", ColumnType::Str),
+        ]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(Value::Str("\u{e9}".into()))),
+            assign(2, Expression::Column(1)),
+        ],
+        vec![],
+    );
+    let policy = Limits {
+        output_text_bytes: 7,
+        ..limits()
+    };
+    for _ in 0..2 {
+        assert_eq!(
+            *plan.execute(&source, policy).unwrap_err(),
+            ExecutionError::Limit {
+                resource: Resource::OutputTextBytes,
+                limit: 7,
+                required: Some(8)
+            }
+        );
+    }
+    assert_eq!(
+        plan.execute(
+            &source,
+            Limits {
+                output_text_bytes: 8,
+                ..policy
+            }
+        )
+        .unwrap()
+        .dataset
+        .row_count(),
+        2
+    );
+}
+
+/// Repeated failed checks cannot multiply retained identities past the caller's budget.
+#[test]
+fn verification_identity_budgets_accumulate_across_checks() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Str), ("x", ColumnType::Int)],
+        vec![
+            vec![Value::Str("a".into()), Value::Int(1)],
+            vec![Value::Str("b".into()), Value::Int(1)],
+        ],
+    );
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Source(1)),
+        ],
+        vec![
+            verification(Check::Unique(vec![1])),
+            verification(Check::Unique(vec![1])),
+        ],
+    );
+    for (policy, resource) in [
+        (
+            Limits {
+                identity_cells: 3,
+                ..limits()
+            },
+            Resource::IdentityCells,
+        ),
+        (
+            Limits {
+                identity_text_bytes: 3,
+                ..limits()
+            },
+            Resource::IdentityTextBytes,
+        ),
+    ] {
+        assert_eq!(
+            *plan.execute(&source, policy).unwrap_err(),
+            ExecutionError::Limit {
+                resource,
+                limit: 3,
+                required: Some(4)
+            }
+        );
+    }
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &source,
+            Limits {
+                identity_cells: 4,
+                identity_text_bytes: 4,
+                ..limits()
+            },
+        )
+        .unwrap_err()
+    else {
+        panic!("expected complete failed checks")
+    };
+    assert_eq!(records.len(), 2);
+    assert!(records
+        .iter()
+        .all(|record| record.offending_rows.len() == 2));
+}
+
+/// Work admission precedes grouped reads and the aggregate's eager argument collection.
+#[test]
+fn work_limits_fail_before_the_next_source_operation() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[("id", ColumnType::Int), ("x", ColumnType::Int)],
+        vec![
+            vec![Value::Int(1), Value::Int(1)],
+            vec![Value::Int(1), Value::Int(2)],
+            vec![Value::Int(1), Value::Int(3)],
+        ],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Groups(vec![0]),
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(
+                    1,
+                    Expression::Reduce {
+                        column: 1,
+                        reducer: NumericReducer::Sum,
+                        text: "SUM(T.x)".into(),
+                    },
+                ),
+            ],
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 2,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            limit: 2,
+            required: Some(3)
+        }
+    );
+    assert!(source.reads.borrow().is_empty());
+    assert_eq!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 8,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            limit: 8,
+            required: Some(9)
+        }
+    );
+    assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0), (2, 0), (0, 0)]);
+}
+
+/// Completed missing keys are reportable; unconstructed key slots are not.
+#[test]
+fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
+    use yamaa_engine::dataset::{Resource, RowIdentity};
+    let source = table(&[("id", ColumnType::Str)], vec![vec![Value::Missing]]);
+    let plan = record_plan(
+        &source,
+        schema(&[("id", ColumnType::Str), ("x", ColumnType::Float)]),
+        vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(Value::Bool(true))),
+        ],
+        vec![],
+    );
+    let ExecutionError::Conversion { identity, .. } = *plan.execute(&source, limits()).unwrap_err()
+    else {
+        panic!("expected conversion condition")
+    };
+    assert_eq!(
+        identity,
+        Some(RowIdentity {
+            position: 0,
+            values: vec![Value::Missing]
+        })
+    );
+    assert_eq!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    identity_cells: 0,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::IdentityCells,
+            limit: 0,
+            required: Some(1)
+        }
+    );
 }
