@@ -16,6 +16,7 @@ spec.loader.exec_module(staging)
 
 class StagingTests(unittest.TestCase):
     def test_shared_sources_are_self_contained(self):
+        """The staged archive owns sources and fixture bytes without checkout links."""
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "yamaanative"
             with contextlib.redirect_stdout(io.StringIO()):
@@ -30,6 +31,13 @@ class StagingTests(unittest.TestCase):
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
             self.assertFalse((embedded / "target").exists())
             self.assertFalse((embedded / "Cargo.lock").exists())
+            self.assertEqual(
+                (destination / "inst/scalar_transport.tsv").read_bytes(),
+                (
+                    staging.WORKSPACE
+                    / "crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv"
+                ).read_bytes(),
+            )
 
     def test_existing_destination_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:

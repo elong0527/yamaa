@@ -70,8 +70,8 @@ input. Parsing never resolves identifiers or invokes host code.
 
 `numeric_compiler::compile_numeric` now connects text to the supported evaluator
 subset: literals, identifiers, unary signs, arithmetic, ABS, MOD, GREATEST, LEAST,
-NULLIF, COALESCE, CEIL, FLOOR, TRUNC, SQRT and both decimal-rounding functions. It checks all
-functions before producing a plan; other valid functions return explicit
+NULLIF, COALESCE, CEIL, FLOOR, TRUNC, SQRT and ROUND_HALF_AWAY_FROM_ZERO.
+It checks all functions before producing a plan; other valid functions return explicit
 `Unsupported` entries with their written name spans, in source order. Compilation
 never invokes a resolver. It preserves association and defers oversized integer
 literal failures until evaluation reaches them, including before unary negation.
@@ -174,6 +174,34 @@ does not need the repository, Cargo, Python, or R's legacy package dependencies.
 
 The bootstrap resource is embedded in the binary and tested after installation
 outside the checkout. This tests packaging only, not discovery of study resources.
+
+Both installed hosts additionally expose `scalar_round_trip` for the versioned
+`scalar/1` envelope documented in [the R package README](../R/yamaanative/README.md#scalar-transport-probe).
+The adapter decodes a strict JSON envelope into an actual core value and encodes
+owned text, preserving full i64, exact finite binary64 bits, Unicode/escaped NUL,
+missing versus empty text, booleans and temporal collected precision. Nonfinite
+floats normalize to missing. This is a scalar boundary probe, not a new backend,
+callback API, diagnostic format or table interface. Python raises ValueError for
+invalid requests; R raises a condition only after the Rust call returns normally.
+
+Transport uses pinned [serde 1.0.228](https://docs.rs/serde/1.0.228/serde/) and
+[serde_json 1.0.145](https://docs.rs/serde_json/1.0.145/serde_json/) in adapters only.
+Both are MIT/Apache-2.0 with MSRVs 1.56/1.61 below the workspace's 1.90. Derive is
+explicitly enabled for serde; JSON uses standard features and its recursion guard.
+The dependency allowlist admits these serialization libraries only in adapters.
+Core and engine remain no_std without serialization dependencies. The transitive
+locking release gate also covers these new adapter dependencies.
+
+Requests are capped at 1 MiB before parsing; decoded scalar data and output are
+bounded by that input (output escaping can expand text). Unknown/duplicate fields,
+wrong scalar types, noncanonical numeric encodings and unknown versions fail
+explicitly without echoing input. Unwind panics inside the adapter are contained
+as internal failures; the unit test does not qualify host callback panic recovery,
+process aborts or allocation failure. The 52 independent shared transport cases
+run against Rust and installed Python wheel/source and R source packages. R uses
+its own registered native entry point without Python or a JSON-package dependency.
+Repeated calls test independent ownership and recovery after rejected requests.
+Arrow ownership, callbacks and structured diagnostic transport remain later gates.
 
 Rust 1.90.0, PyO3 0.27.2, extendr 0.9.0, and Maturin 1.9.6 are pinned. Cargo's
 generated lockfile is ignored: the repository's current no-hashing rule permits

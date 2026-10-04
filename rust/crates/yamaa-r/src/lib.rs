@@ -1,6 +1,17 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
 
+/// Round-trip owned JSON text on the calling R thread without narrowing integers.
+#[extendr]
+fn scalar_round_trip(request: &str) -> List {
+    // Return normally before the R facade raises a condition. extendr's default
+    // Result conversion uses panic for Err, which is unnecessary for input errors.
+    match yamaa_adapters::scalar_transport::scalar_round_trip(request) {
+        Ok(value) => list!(value = value, error = NULL),
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
 #[extendr]
 fn engine_info() -> List {
     let info = yamaa_engine::engine_info();
@@ -15,4 +26,5 @@ fn engine_info() -> List {
 extendr_module! {
     mod yamaanative;
     fn engine_info;
+    fn scalar_round_trip;
 }
