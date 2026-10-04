@@ -13,7 +13,7 @@ precede its implementation are recorded in
 
 | Crate | Responsibility | Allowed dependencies |
 | --- | --- | --- |
-| `yamaa-core` | Language contracts | Pinned `ryu` for formatting and `libm` for square root (both no_std) |
+| `yamaa-core` | Language contracts | Pinned `ryu` for formatting, `libm` for math and `num-bigint` for exact decimal rounding (all no_std) |
 | `yamaa-engine` | Application entry points | Core |
 | `yamaa-adapters` | Infrastructure, including embedded resources | Core, engine |
 | `yamaa-python` | Python binding | Engine, adapters, PyO3 |
@@ -90,7 +90,7 @@ inner node's location. Existing arithmetic/trace fixtures now run through both
 typed trees and compilation; 22 shared literal cases compare exact results with
 Python. Another 51 shared selection cases cover eager argument traces,
 missingness, promotion, signed zeros, i64/binary64 boundaries and nested failures.
-Remaining math/rounding functions, lifecycle handlers and host diagnostic
+Default-policy EXP/LN/POWER restrictions, lifecycle handlers and host diagnostic
 transport are the next gates.
 
 CEIL, FLOOR and TRUNC propagate missing and always return float, even for integer
@@ -101,7 +101,7 @@ library dependency. All finite values of magnitude at least 2^52 are already
 integral. There are 100 shared cases for types, boundary values and failure order,
 plus exact standard-library comparisons across every finite exponent, both signs,
 significand boundaries and 100,000 deterministic bit patterns. Remaining
-transcendental/rounding functions still require their own dependency and numerical
+transcendental functions still require their own dependency and numerical
 policy decisions; these exact tests do not establish their parity.
 
 SQRT promotes present input to binary64 and always returns float. It preserves
@@ -231,7 +231,8 @@ Before enabling these functions, select and document a common numerical policy:
 either reproduce the supported reference behavior, or make an explicit shared
 semantics change and qualify both hosts, dependent calculations, rounding and CSV
 outputs against independent truth. Do not enable libm behind a broad tolerance.
-Decimal expression rounding has its own reference algorithm and remains a
+Decimal expression rounding now follows the exact rule described in
+[ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md); broader qualification remains a
 separate implementation gate. Cargo locking and dataset execution remain later
 release gates.
 
@@ -243,3 +244,28 @@ for its deliberate distinction from historical platform Python, domain contracts
 exact cross-platform CI checks and remaining qualification gates. The assessment
 probe now evaluates the compiled policy, with no golden regeneration or relaxed
 SQRT checks. Backend availability and Python production behavior do not change.
+
+
+## Exact decimal rounding
+
+ROUND_HALF_AWAY_FROM_ZERO is implemented in primitives, typed evaluation and
+bounded compilation under both math policies. It preserves the corrected
+REQ-0418 inclusive near-tie interval, float result type, positive zero, missing
+propagation, eager operand errors and integer-digits validation. The 34 shared
+vectors run in Rust/Python; CI checks 5,872 compiled results (2,936 inputs under
+each policy) against the independent rational oracle on every native platform.
+
+Exact intermediates use [num-bigint 0.5.1](https://docs.rs/num-bigint/0.5.1/num_bigint/),
+pinned with default features disabled (MIT OR Apache-2.0, MSRV 1.60). Its numeric
+runtime dependencies are num-integer and num-traits; autocfg is build-only.
+No std, random, serialization, host or table features are enabled. Digit counts
+outside [-309, 340] return before decimal powers are constructed. Within that
+range, intermediates are at most 2,155 bits and the selected decimal integer at
+most 649 digits. Runtime integer values remain i64; big integers are private
+rounding intermediates. Final decimal-to-binary64 conversion uses Rust's float
+parser once, followed by nonfinite and positive-zero normalization.
+
+The dependency allowlist explicitly admits this numerical helper. Transitive
+Cargo locking remains the existing release gate; this PR adds no lockfile or
+repository content digest. Host APIs, standalone specification dispatch, result
+conversion/handlers and complete dataset execution remain separate integration.

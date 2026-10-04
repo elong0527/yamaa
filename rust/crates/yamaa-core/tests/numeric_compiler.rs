@@ -201,12 +201,10 @@ fn unsupported_features_are_preflighted_in_source_order() {
             Err(CompileError::Unsupported { .. })
         ));
     }
-    for name in ["POWER", "ROUND_HALF_AWAY_FROM_ZERO"] {
-        assert!(matches!(
-            compile_numeric(&format!("{name}(A, B)"), "spec", CompileLimits::default()),
-            Err(CompileError::Unsupported { .. })
-        ));
-    }
+    assert!(matches!(
+        compile_numeric("POWER(A, B)", "spec", CompileLimits::default()),
+        Err(CompileError::Unsupported { .. })
+    ));
 }
 
 /// Static budgets count occurrences, protect deep execution/drop and reset per run.

@@ -89,7 +89,7 @@ class RoundingAssessmentTests(unittest.TestCase):
         self.assertEqual(
             report["mismatches"][0]["reference"], "exception:OverflowError"
         )
-        self.assertTrue(report["rust_rounding_remains_unsupported"])
+        self.assertFalse(report["rust_rounding_remains_unsupported"])
         exact = rounding.assess([("exact", 1.25, 1)], lambda value, digits: 1.3)
         self.assertEqual(exact["qualification"], "not-qualified")
 

@@ -83,6 +83,8 @@ pub enum ArithmeticErrorKind {
     DivisionByZero,
     SqrtOfNegative,
     LnOfNonpositive,
+    /// A present digits argument is float, even when its value is integral.
+    InvalidRoundingDigits,
     /// Promoted finite arguments retained as exact bits for future diagnostic transport.
     InvalidPower {
         base_bits: u64,
@@ -98,9 +100,13 @@ pub struct ArithmeticError {
 }
 
 impl ArithmeticError {
-    /// Return the derivation phase owned by arithmetic evaluation failures.
+    /// Distinguish integer-digits validation from numeric derivation failures.
     pub fn phase(&self) -> &'static str {
-        "derivation"
+        if matches!(self.kind, ArithmeticErrorKind::InvalidRoundingDigits) {
+            "validation"
+        } else {
+            "derivation"
+        }
     }
 
     /// Return the portable condition vocabulary entry for this arithmetic failure.
@@ -110,6 +116,7 @@ impl ArithmeticError {
             ArithmeticErrorKind::DivisionByZero => "division_by_zero",
             ArithmeticErrorKind::SqrtOfNegative => "sqrt_of_negative",
             ArithmeticErrorKind::LnOfNonpositive => "ln_of_nonpositive",
+            ArithmeticErrorKind::InvalidRoundingDigits => "incompatible_input_type",
             ArithmeticErrorKind::InvalidPower { .. } => "invalid_power",
         }
     }
@@ -121,6 +128,7 @@ impl ArithmeticError {
             ArithmeticErrorKind::DivisionByZero => "REQ-0430",
             ArithmeticErrorKind::SqrtOfNegative => "REQ-0431",
             ArithmeticErrorKind::LnOfNonpositive => "REQ-0432",
+            ArithmeticErrorKind::InvalidRoundingDigits => "REQ-0418",
             ArithmeticErrorKind::InvalidPower { .. } => "REQ-0433",
         }
     }
@@ -369,4 +377,29 @@ pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, Ar
         });
     }
     Ok(Number::float(libm::pow(base, exponent)))
+}
+
+/// Round to decimal places under REQ-0418, returning float or normalized missing.
+/// Both operands are already evaluated. Missing precedes digits validation;
+/// a float digits argument is invalid even when numerically integral.
+pub fn round_half_away_from_zero(
+    value: Number,
+    digits: Number,
+    expression: &str,
+) -> Result<Number, ArithmeticError> {
+    if matches!(value, Number::Missing) || matches!(digits, Number::Missing) {
+        return Ok(Number::Missing);
+    }
+    let Number::Int(digits) = digits else {
+        return Err(ArithmeticError {
+            expression: expression.to_string(),
+            kind: ArithmeticErrorKind::InvalidRoundingDigits,
+        });
+    };
+    let value = value
+        .as_float()
+        .expect("missing handled before digits validation");
+    Ok(Number::float(crate::decimal_rounding::round_finite(
+        value, digits,
+    )))
 }

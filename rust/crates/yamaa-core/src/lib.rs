@@ -5,6 +5,7 @@
 extern crate alloc;
 
 pub mod conversion;
+mod decimal_rounding;
 pub mod evaluation;
 pub mod numeric;
 pub mod numeric_compiler;

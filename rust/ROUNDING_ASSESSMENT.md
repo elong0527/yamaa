@@ -1,7 +1,7 @@
 # Decimal rounding characterization
 
-Status: the Python reference now follows the exact near-tie rule; Rust still
-rejects ROUND_HALF_AWAY_FROM_ZERO under both math policies. The initial assessment
+Status: Python and the Rust scalar compiler now follow the exact near-tie rule.
+Rust enables ROUND_HALF_AWAY_FROM_ZERO under both math policies. The initial assessment
 in #1623 did not change production behavior. Its evidence is retained below;
 the subsequent reference correction is described at the end of this document.
 Normative rules and existing benchmark expectations are unchanged.
@@ -95,5 +95,18 @@ results, diagnostics and eager resolver traces for the future shared runner.
 Python replays the compute vectors and applicable standalone values. Additional
 tests require exact agreement on all 2,936 rational-oracle cases and exercise
 dependent conversion, missing overflow, handler counts and exact CSV output
-through normal dataset execution. Rust does not yet replay these vectors or
-implement rounding. Matching this finite sample alone remains `not-qualified`.
+through normal dataset execution. Rust now replays the same vectors under both compiler policies. The scalar
+assessment remains `not-qualified` for overall engine readiness.
+
+
+## Rust implementation and exact gate
+
+Rust uses bounded no_std integer intermediates, then one decimal-to-binary64
+conversion, as detailed in [README.md](README.md#exact-decimal-rounding).
+`tools/check_rounding.py` sends the independently specified corpus to the real
+compiled evaluator and compares all 5,872 results (both math policies) exactly
+with the rational oracle. It validates case identities, policies and input bits
+before results, including positive zero and normalized missingness. Missing,
+extra or reordered outputs fail. Native CI runs this gate on all six OS/Python
+combinations, alongside the historical Python assessment reports. Probe results
+never rewrite the oracle or shared fixture expectations.

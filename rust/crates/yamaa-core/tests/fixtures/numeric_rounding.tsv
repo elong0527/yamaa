@@ -27,9 +27,9 @@ missing_value	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=int:0	missing	A,D	-
 missing_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=missing	missing	A,D	-
 missing_before_type	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=float:1.0	missing	A,D	-
 float_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=float:1.0	error:incompatible_input_type:REQ-0418:float	A,D	-
-non_numeric_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=str:bad	error:incompatible_input_type:REQ-0444:D:str	A,D	R
-missing_eager_error	ROUND_HALF_AWAY_FROM_ZERO(NULL, 1 / 0)	-	error:division_by_zero:REQ-0430	-	R
-first_failure	ROUND_HALF_AWAY_FROM_ZERO(A / 0, B)	A=int:1;B=int:0	error:division_by_zero:REQ-0430	A	L
-unknown_digits	ROUND_HALF_AWAY_FROM_ZERO(NULL, D)	-	error:unknown_field:REQ-0443:D	D	R
-nested_failure	1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=float:1.0	error:incompatible_input_type:REQ-0418:float	A,D	R
-literal_overflow	ROUND_HALF_AWAY_FROM_ZERO(9223372036854775808, D)	D=int:0	error:integer_overflow:REQ-0434:9223372036854775808	-	L
+non_numeric_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=str:bad	error:incompatible_input_type:REQ-0444:D:str	A,D	right
+missing_eager_error	ROUND_HALF_AWAY_FROM_ZERO(NULL, 1 / 0)	-	error:division_by_zero:REQ-0430	-	right
+first_failure	ROUND_HALF_AWAY_FROM_ZERO(A / 0, B)	A=int:1;B=int:0	error:division_by_zero:REQ-0430	A	left
+unknown_digits	ROUND_HALF_AWAY_FROM_ZERO(NULL, D)	-	error:unknown_field:REQ-0443:D	D	right
+nested_failure	1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=float:1.0	error:incompatible_input_type:REQ-0418:float	A,D	right
+literal_overflow	ROUND_HALF_AWAY_FROM_ZERO(9223372036854775808, D)	D=int:0	error:integer_overflow:REQ-0434:9223372036854775808	-	left
