@@ -142,6 +142,11 @@ def test_the_committed_bmi_formula_reproduces_its_committed_doubles() -> None:
         ("TRUNC(-2.9)", -2.0),
         ("SQRT(9)", 3.0),
         ("POWER(2, 10)", 1024.0),
+        # REQ-0433 fails only a zero base with a negative exponent: a
+        # negative exponent or a zero base alone must still compute.
+        ("POWER(2, -1)", 0.5),
+        ("POWER(0, 2)", 0.0),
+        ("POWER(0, 0)", 1.0),
         ("EXP(0)", 1.0),
         ("LN(1)", 0.0),
         ("MOD(7, 3)", 1),
@@ -150,8 +155,12 @@ def test_the_committed_bmi_formula_reproduces_its_committed_doubles() -> None:
         ("GREATEST(1, 2, 3)", 3),
         ("LEAST(1, 2, 3)", 1),
         ("GREATEST(1, 2.5)", 2.5),
-        ("NULLIF(1, 2)", 1),
+        # REQ-0424: int when every argument is int, otherwise float — even
+        # when the selected value itself is an int.
+        ("COALESCE(3, 4.5)", 3.0),
         ("COALESCE(3, 4)", 3),
+        ("NULLIF(3, 4.5)", 3.0),
+        ("NULLIF(1, 2)", 1),
     ],
 )
 def test_every_permitted_function_returns_its_declared_type(
