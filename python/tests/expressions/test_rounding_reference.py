@@ -64,3 +64,18 @@ def test_reference_matches_independent_rational_boundary_assessment():
     assert report["mismatches"] == []
     # Matching this sample alone must not claim engine-wide qualification.
     assert report["qualification"] == "not-qualified"
+
+
+@pytest.mark.parametrize("digits", [341, 400, 10**6])
+def test_large_digits_return_positive_zero_for_negative_zero(digits: int) -> None:
+    # REQ-0418: a value that rounds to zero returns positive zero, never
+    # negative zero - including past the 340-digit guard, which must not
+    # hand the untouched -0.0 back.
+    result = evaluate_expression(
+        {"round_half_away_from_zero": {"source": "A", "digits": digits}},
+        MappingResolver({"A": -0.0}),
+    )
+
+    assert isinstance(result, ValueResult)
+    assert type(result.value) is float
+    assert struct.pack(">d", result.value).hex() == "0000000000000000"
