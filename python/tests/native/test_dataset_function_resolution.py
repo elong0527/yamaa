@@ -33,7 +33,8 @@ def test_reference_resolves_authored_arguments_before_signature_checks(scenario)
         ],
         returns="int",
         binding=FunctionBinding(
-            call="project.sum", args={"first": "lhs", "second": "rhs", "factor": "scale"}
+            call="project.sum",
+            args={"first": "lhs", "second": "rhs", "factor": "scale"},
         ),
         conformance="unused.yaml",
     )
