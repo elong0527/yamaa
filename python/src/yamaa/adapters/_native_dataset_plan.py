@@ -53,9 +53,30 @@ def admit(specification):
 
     if len(specification.input) != 1:
         reject("multiple_sources", "input")
-    for field in ("intermediates", "filter", "submission"):
+    for field in ("intermediates", "submission"):
         if getattr(specification, field) is not None:
             reject(field, field)
+    if specification.filter is not None:
+        try:
+            ast = _native_predicate_plan.admit(specification.filter, "filter")
+            for name in predicate_identifiers(ast):
+                if "." not in name:
+                    diagnostics.append(
+                        ExecutionDiagnostic(
+                            phase="validation",
+                            condition="phase_boundary",
+                            spec_paths=("filter",),
+                            context={
+                                "identifier": name,
+                                "available_phase": "column_derivation",
+                                "required_phase": "row_filter",
+                            },
+                        )
+                    )
+        except ExecutionPlanningError as error:
+            diagnostics.extend(error.diagnostics)
+        except UnsupportedPlanningError as error:
+            unsupported.extend(error.features)
     for name, source in specification.input.items():
         if source.schema_path is not None:
             reject("source_schema", f"input.{name}.schema")
@@ -393,6 +414,19 @@ def lower(plan, source):
                     for item in plan.columns
                     if item.column in spec.keys
                 ],
+                **(
+                    {
+                        "filter": _native_predicate_plan.lower(
+                            plan.rows[0].filter_predicate,
+                            spec.filter,
+                            "filter",
+                            reference,
+                            literal,
+                        )
+                    }
+                    if spec.filter is not None
+                    else {}
+                ),
             }
         ]
         if keyed

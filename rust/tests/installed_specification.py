@@ -138,6 +138,50 @@ class InstalledSpecification(unittest.TestCase):
                                     {"SRC": frame_from_values(columns, rows)},
                                 )
 
+    def test_root_filter_precedes_all_keys_and_limits_feeding_records(self):
+        """Root predicates finish first, discard unknown rows and retain exact group members."""
+        columns = tuple(
+            TypedColumn(name=n, type=t)
+            for n, t in [("ID", "str"), ("V", "str"), ("KEEP", "int"), ("P", "str")]
+        )
+        rows = [
+            ["bad", "bad", 0, "%"],
+            ["02", "seven", 1, "!"],
+            ["2", "conflict", None, "%"],
+            ["1", "eight", 1, "%"],
+            ["2", "seven", 1, "%"],
+        ]
+        for predicate in [
+            "TRUE",
+            "FALSE",
+            "SRC.KEEP > 0",
+            "SRC.V LIKE SRC.P ESCAPE '!'",
+            "FALSE AND SRC.KEEP > 'bad'",
+        ]:
+            document = {
+                "schema_version": "1.0",
+                "domain": "ROOT",
+                "keys": ["ID"],
+                "input": {"SRC": "source.csv"},
+                "base": "SRC",
+                "filter": predicate,
+                "output": {"path": "out.csv", "columns": ["ID", "V"]},
+                "columns": [
+                    {"name": n, "type": t, "label": n, "derivation": f"SRC.{n}"}
+                    for n, t in [("ID", "int"), ("V", "str")]
+                ],
+            }
+            for data in [rows, []]:
+                with self.subTest(predicate=predicate, empty=not data):
+                    actual = self.compare(
+                        self.load(document), {"SRC": frame_from_values(columns, data)}
+                    )
+                    if predicate == "SRC.KEEP > 0" and data:
+                        self.assertEqual(
+                            actual.result.table.frame.rows(),
+                            [(2, "seven"), (1, "eight")],
+                        )
+
     def test_numbering_directions_ties_empty_and_conversion(self):
         """Compare authored numbering variants, preserving complete result and failure evidence."""
         case = ROOT / "specification-windows"

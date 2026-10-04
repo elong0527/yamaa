@@ -73,3 +73,11 @@ operands are skipped, and a three-way tie reports exact count and a missing part
 key. Filtering removes two tied candidates without dropping their output rows.
 Empty input retains the date schema. Expected diagnostics use the dataset condition
 envelope with a separate partition observation; no native execution generates truth.
+
+Four `root_filter_*` cases use independently authored text/int PyArrow input.
+A rejected bad key and unknown-eligibility conflicting value must never feed key
+construction. Constant expected rows retain converted identities 2 then 1 with
+values seven/eight. A false predicate skips all conversion; an incompatible
+predicate fails at `filter` before any bad key, and empty input skips evaluation.
+Expected outcomes retain native requirement/operand-route fields; the Python
+public report separately preserves its reference wrapper's omitted requirement.

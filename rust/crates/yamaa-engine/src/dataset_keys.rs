@@ -21,6 +21,32 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
             },
         )));
     }
+    // Finish the entire source filter before any key conversion can fail.
+    let mut retained = Vec::new();
+    retained
+        .try_reserve_exact(rows)
+        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    budget.work(rows, 1)?;
+    for row in 0..rows {
+        if let Some(filter) = &plan.templates[0].filter {
+            let truth = filter
+                .evaluate(table, row, &[], budget.predicate())
+                .map_err(|error| match error.kind {
+                    yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                        Box::new(predicate_limit(limit))
+                    }
+                    _ => Box::new(ExecutionError::Predicate {
+                        source_row: row,
+                        error,
+                    }),
+                })?;
+            if truth != yamaa_core::predicate::Truth::True {
+                continue;
+            }
+        }
+        retained.push(row);
+    }
+    let rows = retained.len();
     let mut key_table = Dataset {
         schema: TableSchema::new(
             plan.keys
@@ -35,7 +61,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         .rows
         .try_reserve_exact(rows)
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
-    for row in 0..rows {
+    for &row in &retained {
         let mut probe = Candidate {
             members: vec![row],
             values: vec![Value::Missing; plan.output.columns().len()],
@@ -93,7 +119,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
             key_table.rows[duplicate].clear();
         }
         let mut candidate = Candidate {
-            members,
+            members: members.into_iter().map(|member| retained[member]).collect(),
             values: vec![Value::Missing; plan.output.columns().len()],
             completed: vec![false; plan.output.columns().len()],
         };

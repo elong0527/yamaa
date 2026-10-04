@@ -8698,5 +8698,469 @@
       ],
       "rows": []
     }
+  },
+  {
+    "case": "root_filter_feeding_memberships",
+    "input": "root-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ],
+          "filter": {
+            "path": "filter",
+            "text": "SRC.KEEP > 0",
+            "nodes": [
+              {
+                "compare": {
+                  "operator": "gt",
+                  "left": {
+                    "identifier": "SRC.KEEP"
+                  },
+                  "right": {
+                    "literal": {
+                      "int": "0"
+                    }
+                  }
+                }
+              }
+            ],
+            "root": 0,
+            "bindings": [
+              {
+                "name": "SRC.KEEP",
+                "read": {
+                  "source": 2
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V"
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "str"
+        ]
+      ],
+      "row_count": "2",
+      "chunks": [
+        "2"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "str": "seven"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "str": "eight"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "root_filter_excludes_bad_keys",
+    "input": "root-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ],
+          "filter": {
+            "path": "filter",
+            "text": "FALSE",
+            "nodes": [
+              {
+                "boolean": false
+              }
+            ],
+            "root": 0,
+            "bindings": []
+          }
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V"
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "str"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
+  },
+  {
+    "case": "root_filter_condition_before_keys",
+    "input": "root-filter.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ],
+          "filter": {
+            "path": "filter",
+            "text": "SRC.KEEP > 'bad'",
+            "nodes": [
+              {
+                "compare": {
+                  "operator": "gt",
+                  "left": {
+                    "identifier": "SRC.KEEP"
+                  },
+                  "right": {
+                    "literal": {
+                      "str": "bad"
+                    }
+                  }
+                }
+              }
+            ],
+            "root": 0,
+            "bindings": [
+              {
+                "name": "SRC.KEEP",
+                "read": {
+                  "source": 2
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V"
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "condition",
+        "diagnostic": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "requirement": "REQ-0190",
+          "spec_paths": [
+            "filter"
+          ],
+          "context": {
+            "left_type": {
+              "str": "int"
+            },
+            "right_type": {
+              "str": "str"
+            }
+          },
+          "operand_route": []
+        },
+        "identity": null
+      }
+    },
+    "snapshot": null
+  },
+  {
+    "case": "root_filter_empty_skips_predicate",
+    "input": "root-filter-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        },
+        {
+          "name": "KEEP",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "V",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ],
+          "filter": {
+            "path": "filter",
+            "text": "SRC.KEEP > 'bad'",
+            "nodes": [
+              {
+                "compare": {
+                  "operator": "gt",
+                  "left": {
+                    "identifier": "SRC.KEEP"
+                  },
+                  "right": {
+                    "literal": {
+                      "str": "bad"
+                    }
+                  }
+                }
+              }
+            ],
+            "root": 0,
+            "bindings": [
+              {
+                "name": "SRC.KEEP",
+                "read": {
+                  "source": 2
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.V"
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "V",
+          "str"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
   }
 ]

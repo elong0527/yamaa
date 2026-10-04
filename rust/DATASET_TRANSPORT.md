@@ -104,7 +104,7 @@ Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
 may be omitted. Unique permits repeated references, matching the reference check.
-Only error-severity, whole-artifact bounds are represented. Root/source filters, fractions,
+Only error-severity, whole-artifact bounds are represented. Source-selection filters, fractional bounds,
 grouped row counts, column checks, warnings, handlers, other windows, joins, functions,
 multiple sources remain outside the closed plan vocabulary.
 
@@ -127,8 +127,14 @@ not an additional public verification operation.
 
 A sole `{keys: null}` template represents absent/empty public `rows` (REQ-0042).
 Its assignments complete exactly the declared output keys, in dependency order,
-using direct source reads, earlier keys or literals. It has no filter. Every
-input record completes all key conversions before any non-key derivation runs.
+using direct source reads, earlier keys or literals. An optional `filter` is a
+root predicate over source fields only; no output column is available yet.
+The additive `root_filter` capability distinguishes this from row-template filters.
+All source predicates finish in input order before any key conversion, preserving
+a later predicate failure ahead of an earlier bad key. Only true source rows
+feed key construction; false/unknown rows cannot contribute keys or collected
+values. Retained memberships continue to point to the original source rows.
+Every retained record completes all key conversions before non-key derivation.
 Converted key combinations collapse in first-appearance order; each record with
 a missing key remains separate for the later output gate. Names stay associated
 with their values even when identity order differs from column/dependency order.
@@ -141,7 +147,7 @@ representation, and multiple values yield REQ-0075 with the exact count and
 complete output identity. For example, text `07` and `7` are two source values
 even when an integer destination would convert both to 7. Repeated values and
 missing readings do not create additional values. Collected reads are forbidden
-in key assignments and in ordinary record/group templates. Root/source filters,
+in key assignments and in ordinary record/group templates. Source-selection filters,
 selection handlers, multiple inputs and additional expression families remain
 unsupported.
 
@@ -173,7 +179,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
@@ -247,7 +253,9 @@ per-evaluation limits from PREDICATES.md. Refusals identify `predicate_work`,
 `predicate_resolutions`, `predicate_text_bytes` or `predicate_like_work`; required
 counts are unavailable (`null`). Discarded candidates release retained output
 text but never refund consumed work or operand text. Output row/cell capacity
-bounds candidates before each template's filter, not only final surviving rows.
+bounds candidates before record/group template filters, not only final surviving
+rows. Root filtering runs before any key-grain candidate exists; source cardinality
+and key-width preflight limits still apply to the complete input.
 Group comparisons still depend on key lengths and tree depth;
 these policies are not CPU deadlines, allocator-byte guarantees or an OOM sandbox.
 Input-byte and plan-complexity limits also bound work not counted as logical cells.

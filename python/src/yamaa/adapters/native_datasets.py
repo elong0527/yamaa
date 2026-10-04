@@ -231,6 +231,13 @@ def execute_with_source_provider(
         for i, check in enumerate(specification.verifications or ())
         if check.operation in {"assert", "implies"}
     )
+    if specification.filter is not None:
+        required.append(
+            (
+                "root_filter",
+                UnsupportedFeature(operation="native_root_filter", spec_path="filter"),
+            )
+        )
     if not specification.rows:
         required.append(
             (

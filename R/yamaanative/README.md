@@ -238,3 +238,9 @@ Ties return REQ-0322 with exact count, canonical date text and a separate `parti
 list of named typed grouping values. Shared fixtures cover per-row references,
 missing dates, a three-way tie, filtering and empty input. This remains the R
 bound-plan bridge; a normalized-specification frontend is still outstanding.
+
+`root_filter` admits a source-only predicate on the sole key-grain template.
+It evaluates all source rows before any key conversion, retains only true rows
+and keeps original row coordinates for subsequent collected reads. False/unknown
+rows cannot contribute conflicting values. Shared raw fixtures cover this scope,
+a predicate failure before a bad key, complete exclusion and empty-input behavior.
