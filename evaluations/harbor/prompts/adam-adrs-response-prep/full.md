@@ -1,6 +1,6 @@
-Following CDISC ADaM standards, use the provided ADRS_RAW dataset to
-create an ADRS dataset with one record per collected overall response
-assessment.
+Following CDISC ADaM standards, use the provided ADRS_RAW and ADSL
+datasets to create an ADRS dataset with one record per collected
+overall response assessment.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ
@@ -8,7 +8,10 @@ STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ
 BORCAT is the response category the record can support: complete
 response as CR, partial response as PR, stable disease as SD, neither
 complete response nor progressive disease as NON-CR/NON-PD,
-progressive disease as PD, or not evaluable as NE. Stable disease and
+progressive disease as PD, or not evaluable as NE. An assessment on or
+after the subject's start of new anti-cancer therapy (NTXSTDT from the
+ADSL dataset) supports no category; a subject with no therapy date has
+no excluded assessments. Stable disease and
 neither-complete-nor-progressive disease count only on or after day 42
 after randomization; earlier ones, or ones with no day, fall back to
 not evaluable. Any other collected value, including a missing one,

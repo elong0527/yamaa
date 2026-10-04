@@ -14,11 +14,21 @@ raw = pl.read_csv("/app/input/adrs_raw.csv", infer_schema=False).with_columns(
     pl.col("RANDDY").cast(pl.Int64),
 )
 
-# The response category each record can support; stable and
-# neither-complete-nor-progressive disease count only on or after day 42,
-# and earlier ones, or ones with no day, fall back to not evaluable.
+therapy = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
+    pl.col("NTXSTDT").str.to_date(),
+)
+
+raw = raw.join(therapy, on=["STUDYID", "USUBJID"], how="left")
+
+# The response category each record can support; an assessment on or after
+# the subject's new anti-cancer therapy start supports no category, and so
+# do the usual suspects. Stable and neither-complete-nor-progressive
+# disease count only on or after day 42, and earlier ones, or ones with no
+# day, fall back to not evaluable.
 based = raw.with_columns(
-    BORCAT=pl.when(pl.col("AVALC").is_in(["CR", "PR", "PD", "NE"]))
+    BORCAT=pl.when(pl.col("NTXSTDT").is_not_null() & (pl.col("ADT") >= pl.col("NTXSTDT")))
+    .then(pl.lit(None, dtype=pl.String))
+    .when(pl.col("AVALC").is_in(["CR", "PR", "PD", "NE"]))
     .then(pl.col("AVALC"))
     .when((pl.col("AVALC") == "SD") & (pl.col("RANDDY") >= 42))
     .then(pl.lit("SD"))
