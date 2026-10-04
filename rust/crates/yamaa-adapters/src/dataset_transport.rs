@@ -121,6 +121,7 @@ enum Expression {
     Source(usize),
     Collect(CollectedSource),
     Lookup(Lookup),
+    Intermediate(IntermediateRead),
     Column(usize),
     Reduce(Reduction),
 }
@@ -248,6 +249,56 @@ struct Lookup {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct IntermediateRead {
+    index: usize,
+    column: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Intermediate {
+    identifier: String,
+    path: String,
+    source: usize,
+    keys: Vec<MatchKey>,
+    #[serde(default)]
+    filter: Option<Predicate>,
+    #[serde(default)]
+    selection: Option<SourceSelection>,
+    #[serde(default)]
+    no_match: Option<ScalarValue>,
+}
+
+impl Intermediate {
+    /// Admit bounded declaration payloads before accepting source IPC.
+    fn prepare(self) -> Result<dataset::Intermediate, Error> {
+        path(&self.path)?;
+        path(&self.identifier)?;
+        if self.keys.len() > MAX_COLUMNS {
+            return Err(Error::RequestLimit);
+        }
+        Ok(dataset::Intermediate {
+            identifier: self.identifier,
+            path: self.path,
+            source: self.source,
+            keys: self
+                .keys
+                .into_iter()
+                .map(|key| dataset::MatchKey {
+                    source_column: key.source_column,
+                    output_column: key.output_column,
+                })
+                .collect(),
+            filter: self.filter.map(Predicate::prepare).transpose()?,
+            selection: self.selection.map(SourceSelection::prepare).transpose()?,
+            no_match: self
+                .no_match
+                .map(|value| value.into_core().map_err(|_| Error::InvalidScalar))
+                .transpose()?,
+        })
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct MatchKey {
     source_column: usize,
     output_column: usize,
@@ -322,6 +373,8 @@ struct Request {
     source: Vec<Field>,
     #[serde(default)]
     secondary: Vec<SecondarySource>,
+    #[serde(default)]
+    intermediates: Vec<Intermediate>,
     output: Vec<Field>,
     templates: Vec<Template>,
     columns: Vec<Assignment>,
@@ -371,6 +424,7 @@ impl PreparedDataset {
                 || request.verifications.len() > MAX_CHECKS
                 || request.keys.len() > MAX_COLUMNS
                 || request.secondary.len() >= MAX_SOURCES
+                || request.intermediates.len() > MAX_COLUMNS
             {
                 return Err(Error::RequestLimit);
             }
@@ -446,9 +500,16 @@ impl PreparedDataset {
                     })
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
-            let plan = DatasetPlan::new_with_sources(
-                source,
-                secondary,
+            let plan = DatasetPlan::new_with_intermediates(
+                dataset::SourceSchemas {
+                    primary: source,
+                    secondary,
+                },
+                request
+                    .intermediates
+                    .into_iter()
+                    .map(Intermediate::prepare)
+                    .collect::<Result<Vec<_>, Error>>()?,
                 output,
                 templates,
                 columns,
@@ -599,6 +660,10 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                     value.into_core().map_err(|_| Error::InvalidScalar)?,
                 ),
                 Expression::Source(column) => dataset::Expression::Source(column),
+                Expression::Intermediate(read) => dataset::Expression::Intermediate {
+                    index: read.index,
+                    column: read.column,
+                },
                 Expression::Collect(source) => {
                     path(&source.identifier)?;
                     dataset::Expression::Collect {
@@ -779,11 +844,43 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
         ExecutionError::MultipleMatches {
             path,
             dataset,
+            intermediate,
             match_count,
             matched_key,
             identity: keys,
         } => Outcome::Condition {
-            diagnostic: crate::numeric_transport::multiple_matches(path, dataset, match_count)?,
+            diagnostic: crate::numeric_transport::join_condition(
+                path,
+                dataset,
+                intermediate,
+                Some(match_count),
+            )?,
+            identity: keys.map(identity),
+            partition: None,
+            verifications: None,
+            matched_key: Some(
+                matched_key
+                    .into_iter()
+                    .map(|(name, value)| PartitionValue {
+                        name,
+                        value: ScalarValue::from_core(value),
+                    })
+                    .collect(),
+            ),
+        },
+        ExecutionError::UnmatchedKey {
+            path,
+            dataset,
+            intermediate,
+            matched_key,
+            identity: keys,
+        } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::join_condition(
+                path,
+                dataset,
+                intermediate,
+                None,
+            )?,
             identity: keys.map(identity),
             partition: None,
             verifications: None,

@@ -18,6 +18,7 @@ use yamaa_core::value::{ColumnType, Value};
 pub enum HandlerKind {
     Unconvertible,
     MultipleMatches,
+    NoMatch,
 }
 
 impl HandlerKind {
@@ -26,6 +27,7 @@ impl HandlerKind {
         match self {
             Self::Unconvertible => "unconvertible",
             Self::MultipleMatches => "multiple_matches",
+            Self::NoMatch => "no_match",
         }
     }
 }

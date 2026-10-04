@@ -330,24 +330,34 @@ pub(crate) fn multiple_values(
 }
 
 /// Preserve an implicit lookup's complete duplicate-record count and source identity.
-pub(crate) fn multiple_matches(
+pub(crate) fn join_condition(
     path: String,
     dataset: String,
-    count: usize,
+    intermediate: String,
+    count: Option<usize>,
 ) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
-    let count = i64::try_from(count)
+    let count = count
+        .map(i64::try_from)
+        .transpose()
         .map_err(|_| crate::dataset_transport::DatasetTransportError::Internal)?;
     let mut context = Context::new();
-    context.insert(
-        "intermediate".into(),
-        text(format!("intermediate({dataset})")),
-    );
+    context.insert("intermediate".into(), text(intermediate));
     context.insert("dataset".into(), text(dataset));
-    context.insert("match_count".into(), scalar(Value::Int(count)));
+    if let Some(count) = count {
+        context.insert("match_count".into(), scalar(Value::Int(count)));
+    }
     Ok(Box::new(Diagnostic {
         phase: "join",
-        condition: "multiple_matches",
-        requirement: "REQ-0127",
+        condition: if count.is_some() {
+            "multiple_matches"
+        } else {
+            "unmatched_key"
+        },
+        requirement: if count.is_some() {
+            "REQ-0127"
+        } else {
+            "REQ-0124"
+        },
         spec_paths: vec![path],
         context,
         source_span: None,
