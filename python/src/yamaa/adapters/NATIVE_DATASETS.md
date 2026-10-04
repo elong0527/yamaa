@@ -35,7 +35,12 @@ this interface's input contract.
 The frontend rejects unimplemented syntax across the whole normalized specification
 before requesting sources. It checks aggregate grammar rather than mistaking
 malformed syntax for a valid unimplemented expression. The native entrypoint must
-exist before the provider runs. Binding against actual source schemas follows
+exist before the provider runs. Row-filter requests also require the native
+`dataset_capabilities()` advertisement before provider effects. Missing or
+incompatible filter capability returns `ExecutionUnsupported`. Source-independent
+filter scope/phase errors are also checked before IO, including grouped source
+references and unavailable row columns; valid row-local defaults remain available
+under REQ-1260. Binding against actual source schemas follows
 source ingestion; Rust admits the complete bound request before IPC decoding.
 The admitted specification is copied before provider effects, and the provider
 receives separate source declarations so nested mutable model data cannot replace
@@ -53,6 +58,17 @@ values enter ordinary host table storage; ingested temporal values have the
 reference's full day/second precision. Source ordinals are assigned by the existing
 host ingestion port, then read as ordinary exact int64 values by Rust.
 
+Explicit row-template filters support Boolean logic, comparisons, null tests,
+IN, BETWEEN and Unicode LIKE, including negation and explicit ESCAPE. The existing
+Python parser validates grammar and lowers the bound AST; Rust evaluates every
+operand. Record filters can read source fields and completed row columns; grouped
+filters can read only completed row columns. Filtering follows row derivations
+and conversion, and precedes later whole-column derivations. Only true survives.
+The public row-filter diagnostic projection preserves the reference wrapper's
+omitted requirement; raw native diagnostics retain their requirement and operand
+route. Out-of-i64 predicate literals and non-scalar Unicode text are explicitly
+unsupported before source IO. Valid regex calls remain unsupported.
+
 Rust owns output-key checks and error-severity `unique`/whole-artifact integer
 `row_count` checks. Check IDs are retained as report metadata. A later invalid
 verification declaration stops the checks at that position, preserving earlier
@@ -68,7 +84,7 @@ CSV/Parquet and report bytes. Output ordering and decimals therefore remain expl
 host IO policies. Warning checks are not admitted, but a requested empty warning log
 retains its existing header-only behavior. Metadata labels do not activate code.
 
-Filters, additional expression operations, source selection/handlers, column checks,
+Root/source filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
 multiple sources, intermediates, producer schemas, no-row/key-grain construction,
 submission semantics, callbacks and environment/workflow execution are unsupported.
@@ -92,7 +108,8 @@ They separately compare real reference observations, failure diagnostics, comple
 private keys and report bytes. During native execution, reference evaluator and
 check functions are replaced with failing sentinels. Tests also cover validation
 precedence/partial logs, temporal extrema/nulls, empty templates, known missing keys,
-source ordinals, inherited defaults, projection/order/decimals, resource failure and
+source ordinals, all admitted predicate AST families, eager filter failures,
+fixed filtered ADLB CSV rows, inherited defaults, projection/order/decimals, resource failure and
 recovery. Source-independent tests prove unsupported features do not call providers.
 
 This qualifies the declared frontend slice only. The named lookup/window/BMI

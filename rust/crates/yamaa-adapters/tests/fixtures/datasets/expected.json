@@ -2449,5 +2449,797 @@
       }
     },
     "snapshot": null
+  },
+  {
+    "case": "row_filters",
+    "input": "adlb.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "LBSEQ",
+          "kind": "str"
+        },
+        {
+          "name": "LBTESTCD",
+          "kind": "str"
+        },
+        {
+          "name": "LBTEST",
+          "kind": "str"
+        },
+        {
+          "name": "VISIT",
+          "kind": "str"
+        },
+        {
+          "name": "LBSTRESN",
+          "kind": "float"
+        }
+      ],
+      "output": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "AVISIT",
+          "kind": "str"
+        },
+        {
+          "name": "PARAMCD",
+          "kind": "str"
+        },
+        {
+          "name": "PARAM",
+          "kind": "str"
+        },
+        {
+          "name": "AVAL",
+          "kind": "float"
+        },
+        {
+          "name": "DTYPE",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "records": null
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[0].derivations.PARAMCD.source",
+              "expression": {
+                "source": 3
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[0].derivations.PARAM.source",
+              "expression": {
+                "source": 4
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[0].derivations.AVAL.source",
+              "expression": {
+                "source": 6
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[0].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "missing": null
+                }
+              }
+            }
+          ],
+          "filter": {
+            "path": "rows[0].filter",
+            "text": "AVAL > 0",
+            "nodes": [
+              {
+                "compare": {
+                  "operator": "gt",
+                  "left": {
+                    "identifier": "AVAL"
+                  },
+                  "right": {
+                    "literal": {
+                      "int": "0"
+                    }
+                  }
+                }
+              }
+            ],
+            "root": 0,
+            "bindings": [
+              {
+                "name": "AVAL",
+                "read": {
+                  "column": 5
+                }
+              }
+            ]
+          }
+        },
+        {
+          "mode": {
+            "groups": [
+              0,
+              1,
+              5
+            ]
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[1].derivations.PARAMCD.literal",
+              "expression": {
+                "literal": {
+                  "str": "TOTAL"
+                }
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[1].derivations.PARAM.literal",
+              "expression": {
+                "literal": {
+                  "str": "Total of Components"
+                }
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[1].derivations.AVAL.aggregate",
+              "expression": {
+                "reduce": {
+                  "column": 6,
+                  "reducer": "SUM",
+                  "text": "SUM(LB.LBSTRESN)"
+                }
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[1].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "str": "CALCULATION"
+                }
+              }
+            }
+          ],
+          "filter": {
+            "path": "rows[1].filter",
+            "text": "AVAL > 0.5",
+            "nodes": [
+              {
+                "compare": {
+                  "operator": "gt",
+                  "left": {
+                    "identifier": "AVAL"
+                  },
+                  "right": {
+                    "literal": {
+                      "float": "3fe0000000000000"
+                    }
+                  }
+                }
+              }
+            ],
+            "root": 0,
+            "bindings": [
+              {
+                "name": "AVAL",
+                "read": {
+                  "column": 5
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "columns": [
+        {
+          "column": 0,
+          "path": "columns.STUDYID.derivation.source",
+          "expression": {
+            "source": 0
+          }
+        },
+        {
+          "column": 1,
+          "path": "columns.USUBJID.derivation.source",
+          "expression": {
+            "source": 1
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.AVISIT.derivation.source",
+          "expression": {
+            "source": 5
+          }
+        }
+      ],
+      "keys": [
+        0,
+        1,
+        3,
+        2
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "STUDYID",
+          "str"
+        ],
+        [
+          "USUBJID",
+          "str"
+        ],
+        [
+          "AVISIT",
+          "str"
+        ],
+        [
+          "PARAMCD",
+          "str"
+        ],
+        [
+          "PARAM",
+          "str"
+        ],
+        [
+          "AVAL",
+          "float"
+        ],
+        [
+          "DTYPE",
+          "str"
+        ]
+      ],
+      "row_count": "11",
+      "chunks": [
+        "11"
+      ],
+      "rows": [
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-101"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP1"
+          },
+          {
+            "str": "Component 1"
+          },
+          {
+            "float": "3fb999999999999a"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-101"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP2"
+          },
+          {
+            "str": "Component 2"
+          },
+          {
+            "float": "3fc999999999999a"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-101"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP3"
+          },
+          {
+            "str": "Component 3"
+          },
+          {
+            "float": "3fd3333333333333"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-102"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP3"
+          },
+          {
+            "str": "Component 3"
+          },
+          {
+            "float": "3fd3333333333333"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-102"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP2"
+          },
+          {
+            "str": "Component 2"
+          },
+          {
+            "float": "3fc999999999999a"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-102"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP1"
+          },
+          {
+            "str": "Component 1"
+          },
+          {
+            "float": "3fb999999999999a"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-103"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP1"
+          },
+          {
+            "str": "Component 1"
+          },
+          {
+            "float": "3fb999999999999a"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-104"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP1"
+          },
+          {
+            "str": "Component 1"
+          },
+          {
+            "float": "3fb999999999999a"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-104"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "COMP3"
+          },
+          {
+            "str": "Component 3"
+          },
+          {
+            "float": "3fd3333333333333"
+          },
+          {
+            "missing": null
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-101"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "TOTAL"
+          },
+          {
+            "str": "Total of Components"
+          },
+          {
+            "float": "3fe3333333333334"
+          },
+          {
+            "str": "CALCULATION"
+          }
+        ],
+        [
+          {
+            "str": "YAMAA-01"
+          },
+          {
+            "str": "YAMAA-01-102"
+          },
+          {
+            "str": "WEEK 1"
+          },
+          {
+            "str": "TOTAL"
+          },
+          {
+            "str": "Total of Components"
+          },
+          {
+            "float": "3fe3333333333333"
+          },
+          {
+            "str": "CALCULATION"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "false_filters",
+    "input": "adlb.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "LBSEQ",
+          "kind": "str"
+        },
+        {
+          "name": "LBTESTCD",
+          "kind": "str"
+        },
+        {
+          "name": "LBTEST",
+          "kind": "str"
+        },
+        {
+          "name": "VISIT",
+          "kind": "str"
+        },
+        {
+          "name": "LBSTRESN",
+          "kind": "float"
+        }
+      ],
+      "output": [
+        {
+          "name": "STUDYID",
+          "kind": "str"
+        },
+        {
+          "name": "USUBJID",
+          "kind": "str"
+        },
+        {
+          "name": "AVISIT",
+          "kind": "str"
+        },
+        {
+          "name": "PARAMCD",
+          "kind": "str"
+        },
+        {
+          "name": "PARAM",
+          "kind": "str"
+        },
+        {
+          "name": "AVAL",
+          "kind": "float"
+        },
+        {
+          "name": "DTYPE",
+          "kind": "str"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "records": null
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[0].derivations.PARAMCD.source",
+              "expression": {
+                "source": 3
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[0].derivations.PARAM.source",
+              "expression": {
+                "source": 4
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[0].derivations.AVAL.source",
+              "expression": {
+                "source": 6
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[0].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "missing": null
+                }
+              }
+            }
+          ],
+          "filter": {
+            "path": "rows[0].filter",
+            "text": "FALSE",
+            "nodes": [
+              {
+                "boolean": false
+              }
+            ],
+            "root": 0,
+            "bindings": []
+          }
+        },
+        {
+          "mode": {
+            "groups": [
+              0,
+              1,
+              5
+            ]
+          },
+          "assignments": [
+            {
+              "column": 3,
+              "path": "rows[1].derivations.PARAMCD.literal",
+              "expression": {
+                "literal": {
+                  "str": "TOTAL"
+                }
+              }
+            },
+            {
+              "column": 4,
+              "path": "rows[1].derivations.PARAM.literal",
+              "expression": {
+                "literal": {
+                  "str": "Total of Components"
+                }
+              }
+            },
+            {
+              "column": 5,
+              "path": "rows[1].derivations.AVAL.aggregate",
+              "expression": {
+                "reduce": {
+                  "column": 6,
+                  "reducer": "SUM",
+                  "text": "SUM(LB.LBSTRESN)"
+                }
+              }
+            },
+            {
+              "column": 6,
+              "path": "rows[1].derivations.DTYPE.literal",
+              "expression": {
+                "literal": {
+                  "str": "CALCULATION"
+                }
+              }
+            }
+          ],
+          "filter": {
+            "path": "rows[1].filter",
+            "text": "FALSE",
+            "nodes": [
+              {
+                "boolean": false
+              }
+            ],
+            "root": 0,
+            "bindings": []
+          }
+        }
+      ],
+      "columns": [
+        {
+          "column": 0,
+          "path": "columns.STUDYID.derivation.source",
+          "expression": {
+            "source": 0
+          }
+        },
+        {
+          "column": 1,
+          "path": "columns.USUBJID.derivation.source",
+          "expression": {
+            "source": 1
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.AVISIT.derivation.source",
+          "expression": {
+            "source": 5
+          }
+        }
+      ],
+      "keys": [
+        0,
+        1,
+        3,
+        2
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "STUDYID",
+          "str"
+        ],
+        [
+          "USUBJID",
+          "str"
+        ],
+        [
+          "AVISIT",
+          "str"
+        ],
+        [
+          "PARAMCD",
+          "str"
+        ],
+        [
+          "PARAM",
+          "str"
+        ],
+        [
+          "AVAL",
+          "float"
+        ],
+        [
+          "DTYPE",
+          "str"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
   }
 ]

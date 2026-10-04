@@ -24,7 +24,7 @@ All objects reject unknown fields. The required top-level fields are:
 - `protocol`: exactly `dataset/1`.
 - `source` and `output`: ordered arrays of `{name, kind}`; kinds are `str`, `int`,
   `float`, `date`, `datetime`. Names are unique and nonempty.
-- `templates`: ordered `{mode, assignments}` entries. Mode is `{records: null}` or
+- `templates`: ordered `{mode, assignments, filter?}` entries. Mode is `{records: null}` or
   `{groups: [source_column_indices]}` with nonempty, distinct grouping fields.
 - `columns`: assignments for the later whole-column phase, in resolved order.
 - `keys`: nonempty, distinct output column indices.
@@ -45,9 +45,42 @@ Checks are `{unique: [output_column_indices]}` or
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
 may be omitted. Unique permits repeated references, matching the reference check.
-Only error-severity, whole-artifact bounds are represented. Filters, fractions,
+Only error-severity, whole-artifact bounds are represented. Root/source filters, fractions,
 grouped row counts, column checks, warnings, handlers, windows, joins, functions,
 multiple sources and key-grain construction are outside the closed plan vocabulary.
+
+## Row-template predicates
+
+An omitted or null `filter` preserves earlier dataset/1 behavior. A filter is
+`{path, text, nodes, root, bindings}`. `nodes` is a flat postorder arena; `root`
+is its index. Bindings are unique `{name, read}` entries, with `read` either
+`{source: index}` or `{column: index}`. Every identifier must be bound exactly once;
+unused bindings are rejected. Column bindings must be completed in the row phase.
+Grouped filters allow only completed output columns, including when a source field
+is a grouping key. Every candidate completes row assignments and conversions before
+filtering; only true survives, in original order, into the whole-column phase.
+Missing/unknown and false both discard a candidate. Empty input evaluates no filters.
+
+Scalar occurrences are `{literal: scalar}` or `{identifier: name}`. Node forms are:
+
+- `{boolean: bool}`, `{not: child}`, `{and: [left, right]}`, `{or: [left, right]}`;
+- `{compare: {operator, left, right}}`, with `eq`, `ne`, `lt`, `le`, `gt`, `ge`;
+- `{is_null: {value, negated}}` and `{in: {value, items, negated}}`;
+- `{between: {value, lower, upper, negated}}`;
+- `{like: {value, pattern, escape, negated}}`, with null/omitted escape or one
+  Unicode scalar. An empty IN list is invalid.
+
+[Predicate semantics](PREDICATES.md) define eager occurrence order, promoted mixed
+numeric comparison and Unicode LIKE. Text is diagnostic provenance; this bridge
+does not parse it or invent syntax positions. Predicate conditions withhold output
+and retain their original path, requirement and structural operand route, without
+inventing output-key identity at the filter site.
+
+Both host packages expose `dataset_capabilities()` as JSON text with
+`protocol: "dataset/1"` and `features: ["row_filter"]`. This additive capability is
+separate from the unchanged full-backend readiness flag. The Python specification
+frontend requires it for filters before calling the source provider. Older typed
+requests remain compatible when they omit filters.
 
 ## Outcomes and ownership
 
@@ -97,6 +130,9 @@ full workflow cancellation and asynchronous execution remain qualification gates
 | Output cells / cells per partition key scan | 262,144 each |
 | Cumulative logical work cells | 4,194,304 |
 | Cumulative scalar input text processed | 16 MiB |
+| Predicate nodes / bindings / IN items | 4,096 each |
+| Predicate expression text / depth | 65,536 UTF-8 bytes / 64 |
+| Cumulative predicate resolutions / LIKE work | 4,194,304 each |
 | Retained output text | 1 MiB |
 | Retained identity cells / identity text | 65,536 / 1 MiB |
 
@@ -105,7 +141,15 @@ key checks, row-count checks and identity copies before the relevant operation.
 Scalar text accounting precedes cloning/conversion, so repeated large strings
 cannot evade policy by converting to small numbers. Identity budgets apply before
 copying keys and accumulate across checks and runtime failure context. Counters
-reset per execution. Group comparisons still depend on key lengths and tree depth;
+reset per execution. Predicate node/scalar work shares the ordinary work counter,
+and predicate text shares cumulative scalar text accounting. Resolutions and LIKE
+work have separate cumulative counters; each predicate also retains its smaller
+per-evaluation limits from PREDICATES.md. Refusals identify `predicate_work`,
+`predicate_resolutions`, `predicate_text_bytes` or `predicate_like_work`; required
+counts are unavailable (`null`). Discarded candidates release retained output
+text but never refund consumed work or operand text. Output row/cell capacity
+bounds candidates before each template's filter, not only final surviving rows.
+Group comparisons still depend on key lengths and tree depth;
 these policies are not CPU deadlines, allocator-byte guarantees or an OOM sandbox.
 Input-byte and plan-complexity limits also bound work not counted as logical cells.
 
@@ -113,7 +157,8 @@ Input-byte and plan-complexity limits also bound work not counted as logical cel
 
 Shared fixtures encode committed ADLB source/expected values independently of the
 Rust engine and include duplicate keys, failed row count, conversion timing,
-empty input, temporal literals and integer overflow. Rust, installed Python and
+empty input, temporal literals, integer overflow, and explicit true/false/unknown
+row filters. Filter truth selects fixed row ordinals from the committed ADLB values. Rust, installed Python and
 installed R replay the same observations; R needs neither Arrow nor a JSON package.
 Installed tests check output-buffer independence, rejection before decoding,
 post-error recovery and the unchanged backend capability flag.

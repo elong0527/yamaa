@@ -203,6 +203,20 @@ def execute_with_source_provider(
     execute = yamaa_native.execute_dataset
     if not callable(execute):
         raise TypeError("native execute_dataset must be callable")
+    filters = tuple(
+        UnsupportedFeature(operation="native_row_filter", spec_path=f"rows[{i}].filter")
+        for i, row in enumerate(specification.rows or ())
+        if row.filter is not None
+    )
+    if filters:
+        discover = getattr(yamaa_native, "dataset_capabilities", None)
+        capabilities = json.loads(discover()) if callable(discover) else {}
+        if capabilities.get(
+            "protocol"
+        ) != "dataset/1" or "row_filter" not in capabilities.get("features", []):
+            return NativeDatasetRun(
+                ExecutionUnsupported(features=filters, handler_counts=())
+            )
     try:
         sources = source_provider(
             {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import struct
 
+from yamaa.adapters import _native_predicate_plan
 from yamaa.expressions import AggregateError, parse_aggregate_cached
 from yamaa.models import INT64_MAX, INT64_MIN
 from yamaa.planning import (
@@ -27,6 +28,7 @@ def admit(specification):
     """
     diagnostics = []
     unsupported = []
+    filters = []
     try:
         preflight_execution(specification, supported_operations=OPERATIONS)
     except ExecutionPlanningError as error:
@@ -115,9 +117,18 @@ def admit(specification):
             reject(operation, path)
 
     for index, row in enumerate(specification.rows or ()):
-        for field in ("filter", "submission"):
-            if getattr(row, field) is not None:
-                reject(field, f"rows[{index}].{field}")
+        if row.submission is not None:
+            reject("submission", f"rows[{index}].submission")
+        if row.filter is not None:
+            try:
+                path = f"rows[{index}].filter"
+                filters.append(
+                    (row, path, _native_predicate_plan.admit(row.filter, path))
+                )
+            except ExecutionPlanningError as error:
+                diagnostics.extend(error.diagnostics)
+            except UnsupportedPlanningError as error:
+                unsupported.extend(error.features)
         for name, declaration in row.derivations.items():
             expression(
                 declaration,
@@ -158,6 +169,19 @@ def admit(specification):
         raise ExecutionPlanningError(diagnostics)
     if unsupported:
         raise UnsupportedPlanningError(unsupported)
+    # In this admitted subset, every column-level source/literal derivation is
+    # row-local and is promoted when a filter reads it (REQ-1260). Windows,
+    # dataset aggregates and intermediates were refused above; do not infer
+    # their phase availability here or duplicate the general planner.
+    defaults = {column.name for column in specification.columns if column.derivation}
+    for row, path, ast in filters:
+        diagnostics.extend(
+            _native_predicate_plan.row_scope(
+                ast, row, path, defaults | row.derivations.keys()
+            )
+        )
+    if diagnostics:
+        raise ExecutionPlanningError(diagnostics)
 
 
 def literal(value):
@@ -229,6 +253,19 @@ def lower(plan, source):
                 if row.grouped
                 else {"records": None},
                 "assignments": [assignment(item) for item in row.derivations],
+                **(
+                    {
+                        "filter": _native_predicate_plan.lower(
+                            row.filter_predicate,
+                            row.declaration.filter,
+                            row.filter_path,
+                            reference,
+                            literal,
+                        )
+                    }
+                    if row.filter_predicate is not None
+                    else {}
+                ),
             }
             for row in plan.rows
         ],

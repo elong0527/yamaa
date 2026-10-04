@@ -96,6 +96,10 @@ class InstalledSpecification(unittest.TestCase):
                 side_effect=AssertionError("reference evaluation"),
             ),
             patch(
+                "yamaa.runtime.executor.evaluate_predicate",
+                side_effect=AssertionError("reference predicate evaluation"),
+            ),
+            patch(
                 "yamaa.verification.checks.check_dataset",
                 side_effect=AssertionError("reference checks"),
             ),
@@ -156,6 +160,64 @@ class InstalledSpecification(unittest.TestCase):
             [record.evaluated_count for record in actual.verifications], [17, 1]
         )
         self.assertFalse(yamaa_native.engine_info()["execution_supported"])
+
+    def test_row_filters_match_committed_subset_and_reference(self):
+        """Record and grouped filters preserve completed values and original order."""
+        doc = copy.deepcopy(self.document)
+        doc["rows"][0]["filter"] = "AVAL > 0 AND LB.LBTESTCD LIKE 'COMP%'"
+        doc["rows"][1]["filter"] = "AVAL > 0.5"
+        doc.pop("verifications")
+        actual = self.compare(self.load(doc), self.sources)
+        # Independently select the literal row ordinals from the committed CSV.
+        expected = (CASE / "expected/adlb.csv").read_bytes().splitlines(keepends=True)
+        self.assertEqual(
+            render_artifact(actual.result.artifact),
+            b"".join(
+                expected[index] for index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 14]
+            ),
+        )
+
+    def test_filter_operator_paths_and_failures(self):
+        """Every admitted AST family executes natively, including eager failure paths."""
+        for expression in (
+            "TRUE",
+            "FALSE",
+            "NOT (AVAL IS NULL)",
+            "AVAL IS NULL",
+            "AVAL IS NOT NULL",
+            "AVAL IN (0, 1, NULL)",
+            "AVAL NOT IN (0, 1)",
+            "AVAL BETWEEN 0 AND 10",
+            "AVAL NOT BETWEEN 0 AND 10",
+            "LB.LBTESTCD LIKE 'COMP_'",
+            "LB.LBTESTCD NOT LIKE '%Z%'",
+            "LB.LBTESTCD LIKE 'COMP!_%' ESCAPE '!'",
+            "AVAL <= 0 OR AVAL >= 1",
+            "DATE '2024-01-01' = DATE '2024-01-01'",
+            "DATETIME '2024-01-01T00:00' = DATETIME '2024-01-01T00:00:00'",
+            "AVAL < 1e999",
+            "9007199254740993 = 9007199254740992.0",
+            "NOT (AVAL <> 1)",
+            "FALSE AND AVAL = 'bad'",
+            "TRUE OR AVAL = 'bad'",
+            "AVAL LIKE '%'",
+            "AVAL IN (1, 'bad')",
+            "AVAL BETWEEN 0 AND 'bad'",
+        ):
+            with self.subTest(expression=expression):
+                doc = copy.deepcopy(self.document)
+                doc["rows"][0]["filter"] = expression
+                doc.pop("verifications")
+                self.compare(self.load(doc), self.sources)
+
+    def test_false_filter_does_not_hide_row_conversion(self):
+        """Conversion is completed before filtering even for an always-false predicate."""
+        doc = copy.deepcopy(self.document)
+        doc["rows"][0]["filter"] = "FALSE"
+        doc["rows"][0]["derivations"]["AVAL"] = {"literal": True}
+        self.assertEqual(
+            self.compare(self.load(doc), self.sources).result.status, "failure"
+        )
 
     def test_failures_and_complete_logs(self):
         """Failed checks retain all records, sampled diagnostics and complete private keys."""

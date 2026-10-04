@@ -20,3 +20,9 @@ completed key. Their outcomes are written from the contracts. These are boundary
 for base-R installation tests without requiring a JSON or Arrow R package.
 The JSON and TSV forms must remain consistent. These files do not qualify the
 normalized-spec compiler bridge, complete report serialization or publication.
+
+The row-filter case keeps original ADLB data-row ordinals
+`0,1,2,3,4,5,6,7,9,12,13` (zero-based, excluding the CSV header): record AVAL > 0
+and grouped AVAL > 0.5. The false-filter case has zero rows. Both reuse the
+unchanged committed values and schema, with no verification declarations and
+explicitly authored successful outcomes. Neither case recomputes expected sums.

@@ -7,6 +7,7 @@
 use alloc::{string::String, vec, vec::Vec};
 use core::cmp::Ordering;
 
+use crate::table::ValueRef;
 use crate::value::{compare_present, Selection, Value, ValueType};
 
 /// Predicate truth is distinct from the runtime bool value and missing scalar.
@@ -164,6 +165,120 @@ pub trait Resolver {
     type Error;
     /// Resolve this occurrence once, preserving absence versus present missing.
     fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error>;
+
+    /// Optionally lend a normalized cell so text is charged before copying it.
+    /// Existing owning ports retain their original one-call behavior by default.
+    fn resolve_value(&mut self, identifier: &str) -> Result<Resolved<'_>, Self::Error> {
+        self.resolve(identifier).map(|selection| match selection {
+            Selection::Absent => Resolved::Absent,
+            Selection::Present(value) => Resolved::Owned(value),
+        })
+    }
+}
+
+/// A borrow survives only until the evaluator has checked and copied this operand.
+pub enum Resolved<'a> {
+    Absent,
+    Owned(Value),
+    Borrowed(ValueRef<'a>),
+}
+
+/// Runtime counters or quotas; structural arena limits remain plan-local.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Usage {
+    pub work: usize,
+    pub resolutions: usize,
+    pub text_bytes: usize,
+    pub like_work: usize,
+}
+
+impl From<Limits> for Usage {
+    /// Select only limits that apply to actual evaluation occurrences.
+    fn from(limits: Limits) -> Self {
+        Self {
+            work: limits.work,
+            resolutions: limits.resolutions,
+            text_bytes: limits.text_bytes,
+            like_work: limits.like_work,
+        }
+    }
+}
+
+/// An application-owned cumulative budget shared across predicates and rows.
+/// Failed charges retain the already consumed prefix; no evaluation resets it.
+#[derive(Debug)]
+pub struct Budget {
+    limits: Usage,
+    used: Usage,
+}
+
+impl Budget {
+    /// Start an explicit accounting scope; callers own its lifetime.
+    pub fn new(limits: Usage) -> Self {
+        Self {
+            limits,
+            used: Usage::default(),
+        }
+    }
+
+    /// Observe consumed work even after a language, resolver or resource failure.
+    pub fn used(&self) -> Usage {
+        self.used
+    }
+
+    /// Share ordinary application visits with predicate node/scalar visits.
+    pub fn work(&mut self, amount: usize) -> Result<(), LimitError> {
+        charge(
+            &mut self.used.work,
+            amount,
+            self.limits.work,
+            Resource::Work,
+        )
+    }
+
+    /// Share application scalar copying with predicate text processing.
+    pub fn text(&mut self, amount: usize) -> Result<(), LimitError> {
+        charge(
+            &mut self.used.text_bytes,
+            amount,
+            self.limits.text_bytes,
+            Resource::TextBytes,
+        )
+    }
+
+    /// Charge one evaluation resource without accepting structural-limit variants.
+    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), LimitError> {
+        match resource {
+            Resource::Work => self.work(amount),
+            Resource::TextBytes => self.text(amount),
+            Resource::Resolutions => charge(
+                &mut self.used.resolutions,
+                amount,
+                self.limits.resolutions,
+                resource,
+            ),
+            Resource::LikeWork => charge(
+                &mut self.used.like_work,
+                amount,
+                self.limits.like_work,
+                resource,
+            ),
+            Resource::Nodes | Resource::Depth => unreachable!("structural admission is separate"),
+        }
+    }
+}
+
+struct RunBudget<'a> {
+    local: Budget,
+    shared: &'a mut Budget,
+}
+
+impl RunBudget<'_> {
+    /// Enforce both the plan's per-evaluation policy and the application's total.
+    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), LimitError> {
+        self.local.consume(resource, amount)?;
+        self.shared.consume(resource, amount)
+    }
 }
 
 /// Structural occurrence, including the second BETWEEN subject read.
@@ -262,6 +377,11 @@ fn charge(
 }
 
 impl Plan {
+    /// Return the original owning site without exposing mutable plan state.
+    pub fn spec_path(&self) -> &str {
+        &self.spec_path
+    }
+
     /// Admit a caller-authored typed arena without data access or constant folding.
     /// This does not parse syntax or replace the eventual shared specification compiler.
     pub fn new(
@@ -381,7 +501,68 @@ impl Plan {
         &self,
         resolver: &mut R,
     ) -> Result<Truth, EvaluationError<R::Error>> {
-        self.node(self.root, resolver, &mut Vec::new(), &mut Budget::default())
+        self.evaluate_with_budget(resolver, &mut Budget::new(self.limits.into()))
+    }
+
+    /// Evaluate against cumulative application quotas while retaining plan-local limits.
+    /// Borrowed resolver text is charged before cloning; a failure retains consumed work.
+    pub fn evaluate_with_budget<R: Resolver>(
+        &self,
+        resolver: &mut R,
+        shared: &mut Budget,
+    ) -> Result<Truth, EvaluationError<R::Error>> {
+        self.node(
+            self.root,
+            resolver,
+            &mut Vec::new(),
+            &mut RunBudget {
+                local: Budget::new(self.limits.into()),
+                shared,
+            },
+        )
+    }
+
+    /// Enumerate all admitted identifier occurrences for whole-plan scope binding.
+    /// Arena order is structural, not execution order; BETWEEN's subject appears twice.
+    pub fn identifiers<'a>(&'a self) -> Vec<&'a str> {
+        let mut result = Vec::new();
+        let mut add = |scalar: &'a Scalar| {
+            if let Scalar::Identifier(name) = scalar {
+                result.push(name.as_str());
+            }
+        };
+        for node in &self.nodes {
+            match node {
+                Node::Boolean(_) | Node::Not(_) | Node::And(..) | Node::Or(..) => {}
+                Node::Compare { left, right, .. } => {
+                    add(left);
+                    add(right);
+                }
+                Node::IsNull { value, .. } => add(value),
+                Node::In { value, items, .. } => {
+                    add(value);
+                    for item in items {
+                        add(item);
+                    }
+                }
+                Node::Between {
+                    value,
+                    lower,
+                    upper,
+                    ..
+                } => {
+                    add(value);
+                    add(lower);
+                    add(value);
+                    add(upper);
+                }
+                Node::Like { value, pattern, .. } => {
+                    add(value);
+                    add(pattern);
+                }
+            }
+        }
+        result
     }
 
     /// Copy only portable provenance while moving an opaque resolver error unchanged.
@@ -401,7 +582,7 @@ impl Plan {
         position: Route,
         resolver: &mut R,
         route: &mut Vec<Route>,
-        budget: &mut Budget,
+        budget: &mut RunBudget<'_>,
     ) -> Result<Truth, EvaluationError<R::Error>> {
         route.push(position);
         let result = self.node(index, resolver, route, budget);
@@ -416,25 +597,20 @@ impl Plan {
         position: Route,
         resolver: &mut R,
         route: &[Route],
-        budget: &mut Budget,
+        budget: &mut RunBudget<'_>,
     ) -> Result<Value, EvaluationError<R::Error>> {
         let mut location = route.to_vec();
         location.push(position);
-        let value = match scalar {
-            Scalar::Literal(value) => {
-                if let Value::Str(text) = value {
-                    charge(
-                        &mut budget.text,
-                        text.len(),
-                        self.limits.text_bytes,
-                        Resource::TextBytes,
-                    )
-                    .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
-                }
-                return Ok(value.clone());
-            }
+        budget
+            .consume(Resource::Work, 1)
+            .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
+        let resolved = match scalar {
+            Scalar::Literal(value) => Resolved::Borrowed(ValueRef::from(value)),
             Scalar::Identifier(identifier) => {
-                match resolver.resolve(identifier).map_err(|error| {
+                budget
+                    .consume(Resource::Resolutions, 1)
+                    .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
+                let value = resolver.resolve_value(identifier).map_err(|error| {
                     self.error(
                         ErrorKind::Resolution {
                             identifier: identifier.clone(),
@@ -442,29 +618,39 @@ impl Plan {
                         },
                         &location,
                     )
-                })? {
-                    Selection::Absent => {
-                        return Err(self.error(
-                            ErrorKind::Condition(Condition::UnknownField {
-                                identifier: identifier.clone(),
-                            }),
-                            &location,
-                        ))
-                    }
-                    Selection::Present(value) => value,
+                })?;
+                if matches!(value, Resolved::Absent) {
+                    return Err(self.error(
+                        ErrorKind::Condition(Condition::UnknownField {
+                            identifier: identifier.clone(),
+                        }),
+                        &location,
+                    ));
                 }
+                value
             }
         };
-        if let Value::Str(text) = &value {
-            charge(
-                &mut budget.text,
-                text.len(),
-                self.limits.text_bytes,
-                Resource::TextBytes,
-            )
+        let bytes = match &resolved {
+            Resolved::Owned(Value::Str(text)) => text.len(),
+            Resolved::Borrowed(ValueRef::Str(text)) => text.len(),
+            _ => 0,
+        };
+        budget
+            .consume(Resource::TextBytes, bytes)
             .map_err(|e| self.error(ErrorKind::Limit(e), &location))?;
-        }
-        Ok(value)
+        Ok(match resolved {
+            Resolved::Owned(value) => value,
+            Resolved::Borrowed(value) => match value {
+                ValueRef::Missing => Value::Missing,
+                ValueRef::Str(value) => Value::Str(value.into()),
+                ValueRef::Int(value) => Value::Int(value),
+                ValueRef::Float(value) => Value::Float(value),
+                ValueRef::Bool(value) => Value::Bool(value),
+                ValueRef::Date(value) => Value::Date(value),
+                ValueRef::DateTime(value) => Value::DateTime(value),
+            },
+            Resolved::Absent => unreachable!("absence handled at identifier"),
+        })
     }
 
     /// Keep eager written order; errors stop execution but truth values do not.
@@ -473,8 +659,11 @@ impl Plan {
         index: usize,
         resolver: &mut R,
         route: &mut Vec<Route>,
-        budget: &mut Budget,
+        budget: &mut RunBudget<'_>,
     ) -> Result<Truth, EvaluationError<R::Error>> {
+        budget
+            .consume(Resource::Work, 1)
+            .map_err(|e| self.error(ErrorKind::Limit(e), route))?;
         let result = match &self.nodes[index] {
             Node::Boolean(value) => return Ok(Truth::from_bool(*value)),
             Node::Not(child) => {
@@ -549,14 +738,7 @@ impl Plan {
                 {
                     Truth::Unknown
                 } else if let (Value::Str(value), Value::Str(pattern)) = (&value, &pattern) {
-                    like(
-                        value,
-                        pattern,
-                        *escape,
-                        &mut budget.like_work,
-                        self.limits.like_work,
-                    )
-                    .map_err(|e| self.error(e, route))?
+                    like(value, pattern, *escape, budget).map_err(|e| self.error(e, route))?
                 } else {
                     let actual = if !matches!(value, Value::Str(_)) {
                         value.value_type()
@@ -575,12 +757,6 @@ impl Plan {
         };
         result.map_err(|e| self.error(ErrorKind::Condition(e), route))
     }
-}
-
-#[derive(Default)]
-struct Budget {
-    text: usize,
-    like_work: usize,
 }
 
 /// REQ-0167 widens mixed numbers, unlike the exact comparator used by grouping.
@@ -623,13 +799,14 @@ fn like<E>(
     value: &str,
     pattern: &str,
     escape: Option<char>,
-    used: &mut usize,
-    limit: usize,
+    budget: &mut RunBudget<'_>,
 ) -> Result<Truth, ErrorKind<E>> {
     let mut tokens = Vec::new();
     let mut escaped = false;
     for character in pattern.chars() {
-        charge(used, 1, limit, Resource::LikeWork).map_err(ErrorKind::Limit)?;
+        budget
+            .consume(Resource::LikeWork, 1)
+            .map_err(ErrorKind::Limit)?;
         if escaped {
             tokens.push(Pattern::Literal(character));
             escaped = false;
@@ -647,7 +824,9 @@ fn like<E>(
         return Err(ErrorKind::Condition(Condition::DanglingEscape));
     }
     // Charge row initialization as well as every source scalar and DP cell.
-    charge(used, tokens.len() + 1, limit, Resource::LikeWork).map_err(ErrorKind::Limit)?;
+    budget
+        .consume(Resource::LikeWork, tokens.len() + 1)
+        .map_err(ErrorKind::Limit)?;
     let mut previous = vec![false; tokens.len() + 1];
     let mut next = vec![false; tokens.len() + 1];
     previous[0] = true;
@@ -655,7 +834,9 @@ fn like<E>(
         previous[index + 1] = matches!(token, Pattern::Any) && previous[index];
     }
     for character in value.chars() {
-        charge(used, tokens.len() + 1, limit, Resource::LikeWork).map_err(ErrorKind::Limit)?;
+        budget
+            .consume(Resource::LikeWork, tokens.len() + 1)
+            .map_err(ErrorKind::Limit)?;
         next[0] = false;
         for (index, token) in tokens.iter().enumerate() {
             next[index + 1] = match token {

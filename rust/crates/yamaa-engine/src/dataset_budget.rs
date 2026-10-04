@@ -1,7 +1,7 @@
 //! Run-local cumulative accounting for installed dataset boundary policies.
 use crate::dataset::{ExecutionError, Limits, Resource};
 use alloc::boxed::Box;
-use yamaa_core::value::Value;
+use yamaa_core::{predicate, value::Value};
 
 /// These counters bound retained data and logical work, not allocator overhead or CPU time.
 pub(crate) struct Budget {
@@ -9,8 +9,7 @@ pub(crate) struct Budget {
     output_text: usize,
     identity_cells: usize,
     identity_text: usize,
-    work: usize,
-    scalar_text: usize,
+    runtime: predicate::Budget,
 }
 impl Budget {
     /// Start a fresh accounting scope; reuse of a plan never reuses counters.
@@ -20,8 +19,12 @@ impl Budget {
             output_text: 0,
             identity_cells: 0,
             identity_text: 0,
-            work: 0,
-            scalar_text: 0,
+            runtime: predicate::Budget::new(predicate::Usage {
+                work: limits.work_cells,
+                resolutions: limits.work_cells,
+                text_bytes: limits.scalar_text_bytes,
+                like_work: limits.work_cells,
+            }),
         }
     }
 
@@ -31,22 +34,41 @@ impl Budget {
         rows: usize,
         columns: usize,
     ) -> Result<(), Box<ExecutionError<E>>> {
-        charge(
-            &mut self.work,
-            rows.checked_mul(columns),
-            self.limits.work_cells,
-            Resource::WorkCells,
-        )
+        let amount = rows.checked_mul(columns);
+        let required = amount.and_then(|amount| self.runtime.used().work.checked_add(amount));
+        if let Some(amount) = amount {
+            if self.runtime.work(amount).is_ok() {
+                return Ok(());
+            }
+        }
+        Err(Box::new(ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            limit: self.limits.work_cells,
+            required,
+        }))
     }
 
     /// Bound repeated string cloning/parsing even when conversion yields tiny values.
     pub(crate) fn scalar_text<E>(&mut self, bytes: usize) -> Result<(), Box<ExecutionError<E>>> {
-        charge(
-            &mut self.scalar_text,
-            Some(bytes),
-            self.limits.scalar_text_bytes,
-            Resource::ScalarTextBytes,
-        )
+        let required = self.runtime.used().text_bytes.checked_add(bytes);
+        self.runtime.text(bytes).map_err(|_| {
+            Box::new(ExecutionError::Limit {
+                resource: Resource::ScalarTextBytes,
+                limit: self.limits.scalar_text_bytes,
+                required,
+            })
+        })
+    }
+
+    /// Predicates share cumulative work/text with ordinary dataset evaluation.
+    pub(crate) fn predicate(&mut self) -> &mut predicate::Budget {
+        &mut self.runtime
+    }
+
+    /// A filtered candidate releases retained text, but never refunds evaluated work.
+    pub(crate) fn discard_candidate(&mut self, values: &[Value]) {
+        let bytes: usize = values.iter().map(text_bytes).sum();
+        self.output_text -= bytes;
     }
 
     /// Each admitted assignment fills a new slot, so retained text grows monotonically.

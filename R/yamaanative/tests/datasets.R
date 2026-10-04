@@ -35,3 +35,7 @@ stopifnot(inherits(error, "error"), identical(conditionMessage(error), "invalid 
 actual <- execute_dataset(request, source)
 stopifnot(is.raw(actual$table), identical(actual$outcome, truth$expected[1]),
           identical(engine_info()$execution_supported, FALSE))
+
+# Feature discovery is shared metadata and performs no source loading.
+stopifnot(identical(dataset_capabilities(),
+  '{"protocol":"dataset/1","features":["row_filter"]}'))

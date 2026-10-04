@@ -252,6 +252,49 @@ fn type_name(value: ValueType) -> &'static str {
         ValueType::DateTime => "datetime",
     }
 }
+
+/// Retain native predicate provenance; host reports may project site-specific fields.
+pub(crate) fn predicate(
+    error: yamaa_core::predicate::EvaluationError<yamaa_core::table::CellError<Infallible>>,
+) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
+    use yamaa_core::predicate::{Condition, ErrorKind};
+    let ErrorKind::Condition(condition) = error.kind else {
+        return Err(crate::dataset_transport::DatasetTransportError::Internal);
+    };
+    let mut context = Context::new();
+    match &condition {
+        Condition::UnknownField { identifier } => {
+            context.insert("identifier".into(), text(identifier));
+        }
+        Condition::IncompatiblePair { left, right } => {
+            context.insert("left_type".into(), text(type_name(*left)));
+            context.insert("right_type".into(), text(type_name(*right)));
+        }
+        Condition::ExpectedText { actual } => {
+            context.insert("expected".into(), text("str"));
+            context.insert("actual".into(), text(type_name(*actual)));
+        }
+        Condition::DanglingEscape => {
+            context.insert("reason".into(), text("LIKE pattern has a dangling escape"));
+        }
+    }
+    Ok(Box::new(Diagnostic {
+        phase: condition.phase(),
+        condition: condition.condition(),
+        requirement: condition.requirement(),
+        spec_paths: vec![error.spec_path],
+        context,
+        source_span: None,
+        operand_route: Some(
+            error
+                .route
+                .into_iter()
+                .map(|route| format!("{route:?}"))
+                .collect(),
+        ),
+        position: None,
+    }))
+}
 /// Stable column vocabulary names, without inventing a boolean destination.
 fn target_name(value: ColumnType) -> &'static str {
     match value {

@@ -2,6 +2,7 @@
 //! This protocol is not a specification compiler, file runner or default backend.
 use crate::{
     numeric_transport::{arithmetic, conversion, Diagnostic},
+    predicate_transport::Predicate,
     scalar_transport::{ScalarValue, MAX_REQUEST_BYTES},
     table_transport::{bounded_json, decode_snapshot, encode_dataset, TableTransportError},
 };
@@ -19,6 +20,11 @@ use yamaa_engine::{
 };
 
 const PROTOCOL: &str = "dataset/1";
+/// Discover additive typed-plan features before callers acquire source data.
+pub fn capabilities() -> &'static str {
+    r#"{"protocol":"dataset/1","features":["row_filter"]}"#
+}
+
 const MAX_COLUMNS: usize = 64;
 const MAX_TEMPLATES: usize = 16;
 const MAX_CHECKS: usize = 16;
@@ -142,6 +148,8 @@ enum Mode {
 struct Template {
     mode: Mode,
     assignments: Vec<Assignment>,
+    #[serde(default)]
+    filter: Option<Predicate>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -223,6 +231,7 @@ impl PreparedDataset {
                         }
                     };
                     Ok(dataset::RowTemplate {
+                        filter: template.filter.map(Predicate::prepare).transpose()?,
                         mode,
                         assignments: assignments(template.assignments)?,
                     })
@@ -445,6 +454,10 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
         } => Outcome::Limit {
             resource: match resource {
                 Resource::WorkCells => "work_cells",
+                Resource::PredicateWork => "predicate_work",
+                Resource::PredicateResolutions => "predicate_resolutions",
+                Resource::PredicateTextBytes => "predicate_text_bytes",
+                Resource::PredicateLikeWork => "predicate_like_work",
                 Resource::ScalarTextBytes => "scalar_text_bytes",
                 Resource::OutputTextBytes => "output_text_bytes",
                 Resource::IdentityCells => "identity_cells",
@@ -485,6 +498,10 @@ fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
         } => Outcome::Condition {
             diagnostic: conversion(error, path),
             identity: keys.map(identity),
+        },
+        ExecutionError::Predicate { error, .. } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::predicate(error)?,
+            identity: None,
         },
         ExecutionError::Reduction {
             path,
