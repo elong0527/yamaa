@@ -102,13 +102,17 @@ CSV/Parquet and report bytes. Output ordering and decimals therefore remain expl
 host IO policies. Warning checks are not admitted, but a requested empty warning log
 retains its existing header-only behavior. Metadata labels do not activate code.
 
-Unfiltered `row_number` and `rank` (`competition` or `dense`) are admitted in the
+`row_number` and `rank` (`competition` or `dense`) are admitted in the
 key-grain column phase. Loader-expanded named windows and inline windows bind
 only already completed output columns. Nonempty ordering supports ascending/
 descending terms and explicit missing-first/missing-last placement; an empty
 grouping list means one global partition. The native `window_numbering` capability
-is required before the provider is called. Window filters, qualified source reads,
-row-template windows and other window operations are explicitly unsupported.
+is required before the provider is called. Optional window filters additionally
+require `window_filter`; they use the admitted scalar predicate vocabulary and
+read completed outputs only. Native evaluation is eager and preserves every output
+row, returning missing for false/unknown eligibility. Runtime conditions name the
+owning window expression; empty output skips filter evaluation. Qualified source
+reads, row-template windows and other window operations are explicitly unsupported.
 
 Root/source filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
@@ -139,8 +143,8 @@ fixed filtered ADLB CSV rows, assertion/implication truth and eager errors,
 empty-output declaration validation, inherited defaults, projection/order/decimals, resource failure and
 recovery. Source-independent tests prove unsupported features do not call providers.
 
-Installed tests also execute the unchanged competition/dense rank declarations
-and eight input-derived columns of `schema-window-functions`, comparing to the
+Installed tests also execute the unchanged filtered row-number and competition/
+dense rank declarations and eight input-derived columns of `schema-window-functions`, comparing to the
 projected committed expected CSV. The complete original specification is still
 refused before provider effects. Tests cover global partitions, multiple order
 terms, both directions/null placements, result conversion and typed empty output.

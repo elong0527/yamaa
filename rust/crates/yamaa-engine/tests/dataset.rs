@@ -2518,12 +2518,22 @@ fn key_grain_rejects_incomplete_or_wrong_phase_assignments() {
 
 /// Admit three unfiltered numbering operations over the same completed output relation.
 fn numbering_plan(source: &Table, descending: bool, nulls_first: bool) -> DatasetPlan {
+    numbering_with_filter(source, descending, nulls_first, None, ColumnType::Int)
+}
+/// Admit optional output-column eligibility and ordinary completed-result conversion.
+fn numbering_with_filter(
+    source: &Table,
+    descending: bool,
+    nulls_first: bool,
+    predicate: Option<Filter>,
+    output_kind: ColumnType,
+) -> DatasetPlan {
     use yamaa_engine::dataset::{Numbering, NumberingKind, OrderTerm};
     let mut fields = source.schema.columns().to_vec();
     for name in ["SEQ", "RANK", "DENSE"] {
         fields.push(Column {
             name: name.into(),
-            kind: ColumnType::Int,
+            kind: output_kind,
         });
     }
     let mut columns = vec![
@@ -2553,6 +2563,7 @@ fn numbering_plan(source: &Table, descending: bool, nulls_first: bool) -> Datase
         columns.push(assign(
             index + 3,
             Expression::Number(Numbering {
+                filter: predicate.clone(),
                 kind,
                 group_by: vec![1],
                 order_by: vec![OrderTerm {
@@ -2692,6 +2703,7 @@ fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
     use yamaa_engine::dataset::{Numbering, NumberingKind, OrderTerm};
     let source = table(&[("ID", ColumnType::Int)], vec![]);
     let window = Numbering {
+        filter: None,
         kind: NumberingKind::RowNumber,
         group_by: vec![],
         order_by: vec![OrderTerm {
@@ -2789,5 +2801,192 @@ fn numbering_accounts_comparison_work_text_and_recovers_with_fresh_budgets() {
     assert_eq!(
         &result.dataset.rows()[0][3..],
         &[Value::Int(3), Value::Int(3), Value::Int(2)]
+    );
+}
+
+/// Excluded rows remain present, while all three numbering operations count only eligible rows.
+#[test]
+fn window_filters_preserve_rows_and_number_only_true_in_sorted_partitions() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        [Some(2), None, Some(-1), Some(2), Some(1)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                vec![
+                    Value::Int(i as i64),
+                    Value::Str("g".into()),
+                    v.map_or(Value::Missing, Value::Int),
+                ]
+            })
+            .collect(),
+    );
+    let result = numbering_with_filter(
+        &source,
+        true,
+        false,
+        Some(positive(Read::Column(2))),
+        ColumnType::Int,
+    )
+    .execute(&source, limits())
+    .unwrap();
+    let expected = [
+        Some([1, 1, 1]),
+        None,
+        None,
+        Some([2, 1, 1]),
+        Some([3, 3, 2]),
+    ];
+    for (row, numbers) in result.dataset.rows().iter().zip(expected) {
+        let expected = numbers.map_or(vec![Value::Missing; 3], |numbers| {
+            numbers.map(Value::Int).to_vec()
+        });
+        assert_eq!(&row[3..], &expected);
+    }
+    assert_eq!(source.reads.borrow().len(), 15);
+}
+
+/// Construct an eager predicate true on missing values but ill-typed on present integers.
+fn missing_or_bad_window_predicate(and_false: bool) -> Filter {
+    let nodes = vec![
+        if and_false {
+            Node::Boolean(false)
+        } else {
+            Node::IsNull {
+                value: Scalar::Identifier("V".into()),
+                negated: false,
+            }
+        },
+        Node::Compare {
+            operator: Comparison::Greater,
+            left: Scalar::Identifier("V".into()),
+            right: Scalar::Literal(Value::Str("x".into())),
+        },
+        if and_false {
+            Node::And(0, 1)
+        } else {
+            Node::Or(0, 1)
+        },
+    ];
+    Filter::new(
+        predicate::Plan::new(
+            nodes,
+            2,
+            "columns.SEQ.derivation.row_number".into(),
+            "V IS NULL OR V > 'x'".into(),
+            predicate::Limits::default(),
+        )
+        .unwrap(),
+        vec![binding("V", Read::Column(2))],
+    )
+    .unwrap()
+}
+
+/// A partition completes eligibility before its first conversion, but later partitions remain lazy.
+#[test]
+fn window_filter_conditions_follow_partition_then_current_conversion_order() {
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("a".into()), Value::Missing],
+            vec![Value::Int(2), Value::Str("b".into()), Value::Int(1)],
+        ],
+    );
+    let plan = numbering_with_filter(
+        &source,
+        false,
+        true,
+        Some(missing_or_bad_window_predicate(false)),
+        ColumnType::Date,
+    );
+    // The first partition returns 1; conversion fails before a later group's invalid comparison.
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Conversion { output_row: 0, .. }
+    ));
+    source.rows[1][1] = Value::Str("a".into());
+    // In the same partition, the later filter failure precedes conversion of the first number.
+    let ExecutionError::Predicate { error, .. } = *plan.execute(&source, limits()).unwrap_err()
+    else {
+        panic!("partition predicate must precede current conversion")
+    };
+    assert_eq!(error.spec_path, "columns.SEQ.derivation.row_number");
+    source.rows.clear();
+    assert!(plan
+        .execute(&source, limits())
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+}
+
+/// Eager filter evaluation cannot hide a bad operand behind a false left side.
+#[test]
+fn window_filter_boolean_operands_remain_eager() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        vec![vec![Value::Int(1), Value::Missing, Value::Int(1)]],
+    );
+    let plan = numbering_with_filter(
+        &source,
+        false,
+        false,
+        Some(missing_or_bad_window_predicate(true)),
+        ColumnType::Int,
+    );
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Predicate { .. }
+    ));
+}
+
+/// Predicate and window accounting share one run-local budget, including excluded rows.
+#[test]
+fn window_filter_limits_share_budget_and_fresh_execution_recovers() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Missing, Value::Int(1)],
+            vec![Value::Int(2), Value::Missing, Value::Int(2)],
+        ],
+    );
+    let plan = numbering_with_filter(
+        &source,
+        false,
+        false,
+        Some(positive(Read::Column(2))),
+        ColumnType::Int,
+    );
+    assert!(matches!(
+        *plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 30,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::Limit { .. }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows()[1][3],
+        Value::Int(2)
     );
 }

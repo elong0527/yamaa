@@ -219,7 +219,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -410,7 +410,7 @@ fn numbering_admission_precedes_ipc_and_repeated_execution_is_fresh() {
         .iter()
         .find(|case| case["case"] == "numbering_exact_descending")
         .unwrap()["request"];
-    for field in ["filter", "source", "unexpected"] {
+    for field in ["source", "unexpected"] {
         let mut invalid = request.clone();
         invalid["columns"][2]["expression"]["number"][field] = json!(null);
         assert!(matches!(
@@ -440,5 +440,28 @@ fn numbering_admission_precedes_ipc_and_repeated_execution_is_fresh() {
             serde_json::from_str::<Value>(&result.outcome).unwrap()["outcome"]["status"],
             "success"
         );
+    }
+}
+
+/// Every filter occurrence is bound before IPC, even for empty or unreachable data.
+#[test]
+fn window_filter_bindings_cannot_read_source_or_uncompleted_outputs() {
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let request = &cases
+        .iter()
+        .find(|case| case["case"] == "window_filter_truth_and_ties")
+        .unwrap()["request"];
+    for read in [
+        json!({"source":2}),
+        json!({"column":3}),
+        json!({"column":99}),
+    ] {
+        let mut invalid = request.clone();
+        invalid["columns"][2]["expression"]["number"]["filter"]["bindings"][0]["read"] = read;
+        assert!(matches!(
+            execute_dataset(&invalid.to_string(), b"bad ipc"),
+            Err(Error::InvalidPlan)
+        ));
     }
 }

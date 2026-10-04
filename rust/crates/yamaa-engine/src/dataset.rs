@@ -674,8 +674,8 @@ impl DatasetPlan {
             }
         }
         for assignment in &self.columns {
-            let numbers = if let Expression::Number(window) = &assignment.expression {
-                Some(numbering::execute(
+            let mut numbers = if let Expression::Number(window) = &assignment.expression {
+                Some(numbering::Run::new(
                     window,
                     &candidates,
                     self,
@@ -685,16 +685,17 @@ impl DatasetPlan {
             } else {
                 None
             };
-            for (row, candidate) in candidates.iter_mut().enumerate() {
-                candidate.values[assignment.column] = if let Some(numbers) = &numbers {
-                    finish(
-                        Value::Int(numbers[row]),
-                        assignment,
-                        candidate,
-                        self,
-                        row,
-                        &mut budget,
-                    )?
+            for row in 0..candidates.len() {
+                let number = if let (Some(run), Expression::Number(window)) =
+                    (&mut numbers, &assignment.expression)
+                {
+                    Some(run.value(row, window, &candidates, table, &mut budget)?)
+                } else {
+                    None
+                };
+                let candidate = &mut candidates[row];
+                candidate.values[assignment.column] = if let Some(value) = number {
+                    finish(value, assignment, candidate, self, row, &mut budget)?
                 } else {
                     evaluate(table, assignment, candidate, self, row, limits, &mut budget)?
                 };

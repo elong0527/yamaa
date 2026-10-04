@@ -243,6 +243,22 @@ def execute_with_source_provider(
         if column.derivation is not None
         and column.derivation.value.operation in {"row_number", "rank"}
     )
+    required.extend(
+        (
+            "window_filter",
+            UnsupportedFeature(
+                operation="native_window_filter",
+                spec_path=f"columns.{column.name}.derivation.{column.derivation.value.operation}.window.filter",
+            ),
+        )
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation in {"row_number", "rank"}
+        and column.derivation.value.root[column.derivation.value.operation]
+        .get("window", {})
+        .get("filter")
+        is not None
+    )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}

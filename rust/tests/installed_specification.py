@@ -54,7 +54,7 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
-    def test_committed_window_rank_subset(self):
+    def test_committed_window_numbering_subset(self):
         """Execute unchanged benchmark rank declarations against committed expected values."""
         case = ROOT / "specification-windows"
         document = yaml.safe_load((case / "spec.yaml").read_text())
@@ -67,6 +67,7 @@ class InstalledSpecification(unittest.TestCase):
             "TRTSDT",
             "VSSTRESN",
             "VSEVAL",
+            "VSSEQ",
             "SEVRANKC",
             "SEVRANKD",
         }
@@ -142,6 +143,67 @@ class InstalledSpecification(unittest.TestCase):
                         columns=source.columns, frame=source.frame.clear()
                     )
                     self.compare(spec, {"VS": empty})
+
+    def test_window_filter_truth_eagerness_empty_and_conversion_priority(self):
+        """Partition predicates execute before current conversion and after earlier partitions."""
+        document = {
+            "schema_version": "1.0",
+            "domain": "WIN",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "G", "V", "N"]},
+            "columns": [
+                {"name": name, "type": kind, "label": name, "derivation": f"SRC.{name}"}
+                for name, kind in [("ID", "int"), ("G", "str"), ("V", "int")]
+            ]
+            + [
+                {
+                    "name": "N",
+                    "type": "int",
+                    "label": "Number",
+                    "derivation": {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["G"],
+                                "order_by": [{"variable": "V", "nulls": "first"}],
+                                "filter": "V > 0",
+                            }
+                        }
+                    },
+                }
+            ],
+        }
+        columns = tuple(
+            TypedColumn(name=name, type=kind)
+            for name, kind in [("ID", "int"), ("G", "str"), ("V", "int")]
+        )
+        for kind in ["int", "date"]:
+            for predicate in [
+                "V > 0",
+                "FALSE",
+                "V IS NULL OR V > 'x'",
+                "FALSE AND V > 'x'",
+            ]:
+                for same_group in [False, True]:
+                    doc = copy.deepcopy(document)
+                    doc["columns"][-1]["type"] = kind
+                    doc["columns"][-1]["derivation"]["row_number"]["window"][
+                        "filter"
+                    ] = predicate
+                    spec = self.load(doc)
+                    source = frame_from_values(
+                        columns,
+                        [
+                            [1, "a", None],
+                            [2, "a" if same_group else "b", 1],
+                            [3, "a" if same_group else "c", -1],
+                        ],
+                    )
+                    with self.subTest(
+                        kind=kind, predicate=predicate, same_group=same_group
+                    ):
+                        self.compare(spec, {"SRC": source})
+                        self.compare(spec, {"SRC": frame_from_values(columns, [])})
 
     def load(self, document):
         """Validate authored test variants through the real schema and normalization pipeline."""

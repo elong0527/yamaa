@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -139,6 +139,8 @@ struct Numbering {
     kind: NumberingKind,
     group_by: Vec<usize>,
     order_by: Vec<OrderTerm>,
+    #[serde(default)]
+    filter: Option<Predicate>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -415,6 +417,7 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                         return Err(Error::RequestLimit);
                     }
                     dataset::Expression::Number(dataset::Numbering {
+                        filter: window.filter.map(Predicate::prepare).transpose()?,
                         kind: match window.kind {
                             NumberingKind::RowNumber => dataset::NumberingKind::RowNumber,
                             NumberingKind::Competition => dataset::NumberingKind::Competition,
