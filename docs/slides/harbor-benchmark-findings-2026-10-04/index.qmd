@@ -1,0 +1,281 @@
+---
+title: "Harbor benchmark findings"
+subtitle: "How prompt completeness drives agent success on CDISC derivations"
+author: "Yilong Zhang"
+date: "2026-10-04"
+embed-resources: true
+format:
+  revealjs:
+    theme: default
+    css: custom.css
+    mainfont: "Lato, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, Liberation Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji"
+    monofont: "JetBrains Mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace"
+    smaller: true
+    slide-number: true
+    scrollable: true
+    transition: fade
+    background-transition: fade
+    logo: ../../assets/logo.jpeg
+title-slide-attributes:
+  data-background-color: "#385898"
+---
+
+## Task pass rate by language and prompt tier {.center}
+
+::: {.center-body-left}
+Task pass rate = share of 133 tasks where the agent's output matched every
+cell of the golden dataset.
+
+| Tier | Python | R |
+|------|-------:|---:|
+| **Full** | 98.5% (131/133) | 85.7% (114/133) |
+| **Conventions** | 39.8% (53/133) | 36.8% (49/133) |
+| **Brief** | 18.0% (24/133) | 18.0% (24/133) |
+
+**Takeaway:** Python beats R at every tier, and the gap widens as prompts
+get less explicit. Pass rate collapses from ~99% to 18% as prompts lose
+detail — prompt completeness dominates.
+:::
+
+## Example 1: shift criteria with boundary rules
+
+`adam-adlb-shift-criteria` — one row per lab record, with normal-range
+indicators, shift text, and criterion flags.
+
+**Outcome:** full passes in both Python and R; conventions and brief fail
+in both.
+
+::: {.panel-tabset}
+
+### Full
+
+```text
+Following CDISC ADaM standards, use the provided ADLB_RAW dataset to
+create an ADLB dataset with one record per laboratory record.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI,
+ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL,
+CRIT2, CRIT2FL
+
+ANRIND is the record's own mark: LOW below the lower limit, HIGH above
+the upper limit, and NORMAL between them, limits included, so a result
+exactly at a limit reads NORMAL. It has no value when the result or
+either limit is missing.
+
+BASE repeats the flagged baseline record's value on every record of
+the subject and parameter; it has no value when no record carries the
+flag. BNRIND repeats the baseline record's mark the same way; it has
+no value with no flagged baseline, or when the baseline record itself
+could not be marked.
+
+SHIFT1 joins the baseline mark and the record's own mark, baseline
+first, so a result that stayed normal reads "NORMAL to NORMAL". It has
+no value when either mark is missing.
+
+R2BASE is the record's value as a multiple of the baseline value, not
+rounded, so the baseline record itself reads 1 when the ratio can be
+computed. It has no value when the record's value is missing, when
+there is no baseline, or when the baseline is zero.
+
+CRIT1 states the criterion the record was assessed against, a result
+greater than three times the upper limit of normal (ULN):
+"Result greater than 3 x ULN". It has no value when the result or the
+upper limit is missing. CRIT1FL says whether the record met it, Y or N;
+it has no value where it could not be assessed. A result exactly at
+three times the limit does not meet it.
+
+CRIT2 states a second criterion, a result less than the lower limit of
+normal (LLN): "Result less than LLN". It has no value when the result
+or the lower limit is missing, and it is assessed independently of the
+first criterion. CRIT2FL says whether the record met it, Y or N; it has
+no value where it could not be assessed. A result exactly at the lower
+limit does not meet it.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adlb.csv.
+```
+
+### Conventions
+
+```text
+Following CDISC ADaM standards, use the provided ADLB_RAW dataset to
+create an ADLB dataset with one record per laboratory record.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI,
+ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL,
+CRIT2, CRIT2FL
+
+ANRIND is LOW, HIGH, or NORMAL, or has no value.
+
+SHIFT1 joins the baseline mark and the record's own mark, baseline first.
+
+R2BASE is not rounded.
+
+CRIT1 is "Result greater than 3 x ULN" or has no value. CRIT1FL is Y or N, or
+has no value. CRIT2 is "Result less than LLN" or has no value. CRIT2FL is Y
+or N, or has no value.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adlb.csv.
+```
+
+### Brief
+
+```text
+Following CDISC ADaM standards, use the provided ADLB_RAW dataset to
+create an ADLB dataset with one record per laboratory record.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI,
+ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL,
+CRIT2, CRIT2FL
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adlb.csv.
+```
+
+:::
+
+## Example 2: age groups are sponsor decisions
+
+`adam-adsl-age-group` — derive AGEGR1/AGEGR1N from AGE.
+
+**Outcome:** full and conventions pass in both Python and R; brief fails
+in both. (Full and conventions are identical here — the rules *are* the
+conventions.)
+
+::: {.panel-tabset}
+
+### Full / Conventions
+
+```text
+Following CDISC ADaM standards, use the provided DM dataset to create an
+ADSL dataset with one record per subject.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, AGE, AGEU, AGEGR1, AGEGR1N
+
+Create AGEGR1 using these labels:
+- <18
+- 18-64
+- >64
+- Missing
+
+Create AGEGR1N as the numeric code of AGEGR1: 1 for <18, 2 for 18-64, and
+3 for >64. AGEGR1N has no value when AGEGR1 is Missing.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adsl.csv.
+```
+
+### Brief
+
+```text
+Following CDISC ADaM standards, use the provided DM dataset to create an
+ADSL dataset with one record per subject.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, AGE, AGEU, AGEGR1, AGEGR1N
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adsl.csv.
+```
+
+:::
+
+Age-group cutoffs are arbitrary sponsor decisions. No amount of CDISC
+knowledge tells the agent whether the sponsor used `<18 / 18-64 / >64`
+or `<65 / 65-74 / >=75` or anything else. Some information is genuinely
+not inferable.
+
+## Example 3: competition vs dense ranking
+
+`adam-adae-severity-rank` — rank each subject's adverse events by
+severity. SEVRANK is competition ranking (1, 2, 2, 4 — ties skip ranks);
+SEVLVL is dense ranking of distinct severities (1, 2, 2, 3).
+
+**Outcome:** full and conventions pass in both Python and R; brief fails
+in both.
+
+::: {.panel-tabset}
+
+### Full
+
+```text
+Following CDISC ADaM standards, use the provided AE dataset to create
+an ADAE dataset with one record per adverse event.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN, SEVRANK, SEVLVL
+
+ASEV is the reported severity, and is empty when severity was not
+reported. ASEVN is the numeric form of ASEV: 1 for MILD, 2 for
+MODERATE, and 3 for SEVERE, and is empty when ASEV is empty. SEVRANK
+ranks the subject's events by ASEVN, worst first. Events with equal
+severity share a rank and the ranks they would otherwise fill are
+skipped, so a rank of 1 means the subject reported nothing worse.
+SEVLVL numbers the distinct severities the subject reported, worst
+first with each severity counted once. An event with no reported
+severity sorts after every reported one, and unreported events share
+one rank with each other. A subject with a single event carries rank
+1, and when none of a subject's events has a reported severity every
+event shares rank 1.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adae.csv.
+```
+
+### Conventions
+
+```text
+Following CDISC ADaM standards, use the provided AE dataset to create
+an ADAE dataset with one record per adverse event.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN, SEVRANK, SEVLVL
+
+ASEVN is the numeric form of ASEV: 1 for MILD, 2 for MODERATE, and 3 for
+SEVERE. SEVRANK ranks the subject's events by ASEVN, worst first. Events
+with equal severity share a rank and the ranks they would otherwise fill
+are skipped. SEVLVL numbers the distinct severities the subject reported,
+worst first with each severity counted once. An event with no reported
+severity sorts after every reported one, and unreported events share one
+rank with each other.
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adae.csv.
+```
+
+### Brief
+
+```text
+Following CDISC ADaM standards, use the provided AE dataset to create
+an ADAE dataset with one record per adverse event.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN, SEVRANK, SEVLVL
+
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/adae.csv.
+```
+
+:::
+
+For statistical programmers this is the classic competition-vs-dense
+distinction. The brief prompt fails because nothing says which ranking
+method to use or how to handle ties and missing severity.
+
+## Takeaway {.center}
+
+::: {.center-body}
+**Prompt completeness matters more than model cleverness.**
+
+Sponsor cutoffs, region mappings, boundary rules, ranking methods — the
+brief prompt fails not because the agent is weak, but because the
+information is genuinely not inferable from CDISC knowledge alone.
+
+*Benchmarks:* [yamaa benchmark
+dashboard](https://elong0527.github.io/yamaa/benchmark/)
+:::
