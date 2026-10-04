@@ -1,7 +1,7 @@
 //! Run-local cumulative accounting for installed dataset boundary policies.
 use crate::dataset::{ExecutionError, Limits, Resource};
 use alloc::boxed::Box;
-use yamaa_core::{predicate, value::Value};
+use yamaa_core::{predicate, table::ValueRef, value::Value};
 
 /// These counters bound retained data and logical work, not allocator overhead or CPU time.
 pub(crate) struct Budget {
@@ -86,11 +86,24 @@ impl Budget {
         &mut self,
         values: impl Iterator<Item = &'a Value>,
     ) -> Result<(), Box<ExecutionError<E>>> {
+        self.identity_refs(values.map(ValueRef::from))
+    }
+
+    /// Admit borrowed source or output keys before copying any diagnostic payload.
+    pub(crate) fn identity_refs<'a, E>(
+        &mut self,
+        values: impl Iterator<Item = ValueRef<'a>>,
+    ) -> Result<(), Box<ExecutionError<E>>> {
         let mut cells = Some(0_usize);
         let mut text = Some(0_usize);
         for value in values {
             cells = cells.and_then(|cells| cells.checked_add(1));
-            text = text.and_then(|text| text.checked_add(text_bytes(value)));
+            text = text.and_then(|text| {
+                text.checked_add(match value {
+                    ValueRef::Str(text) => text.len(),
+                    _ => 0,
+                })
+            });
         }
         charge(
             &mut self.identity_cells,

@@ -248,6 +248,13 @@ the complete unchanged `schema-lookup` benchmark reaches its committed CSV.
 Derived/SELF/base intermediates, correlated filters, range matching and explicit
 row-template reads remain open, as do shared compilation and release qualification.
 
+Dataset `row_source_lookup` adds bounded record/group-template secondary reads on
+raw driver match keys. It shares the existing duplicate-count/absence scan and
+keeps match keys separate from converted output identities. Six independent
+shared fixtures and installed record/group/input-order/failure variants accompany
+the complete unchanged 24-row ADVS BMI benchmark. Multiple row drivers, broader
+joins and the separate ADSL BMI function/POWER integration remain open.
+
 Dataset `unconvertible` composes the same completed-value recovery across every
 admitted assignment, including keys, row/group columns, windows and named reads.
 Explicit declarations register at zero in planned order before execution; only

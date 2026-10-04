@@ -47,7 +47,7 @@ receives separate source declarations so nested mutable model data cannot replac
 the plan during IO. There is one provider invocation and one native dataset invocation, with no fallback,
 reference evaluation, reference verification or callback execution.
 
-The admitted record/group subset uses one source and explicit row templates, direct
+The admitted record/group subset uses one driver and explicit row templates, direct
 source or completed-column reads, scalar literals, and bare grouped `SUM`/`MEAN`
 over one qualified numeric source column. Planner-resolved dependencies and
 inherited row-template defaults retain their original phase/path. Conversion remains
@@ -79,8 +79,8 @@ No matching secondary record yields missing; one yields its value, including a
 missing value. Multiple matching records fail with REQ-0127 and the complete
 match-key context and output identity, even when donor values are identical.
 All base keys complete before secondary reads; earlier column failures still win.
-Policies on implicit secondary reads and explicit row-template joins remain
-unsupported. Named secondary intermediates can declare source-only filters,
+Policies on implicit secondary reads remain unsupported. Explicit row templates
+use the separate raw-driver lookup capability described below. Named secondary intermediates can declare source-only filters,
 paired order/keep policies, same-type match keys against completed outputs and
 literal `no_match` handling. The additive `named_intermediate` capability is
 checked before provider effects. Rust caches selected records per output row;
@@ -111,6 +111,17 @@ Unpaired policies, output/cross-source order references, unknown order fields,
 key/record/group selection and other source handlers remain explicitly unsupported;
 this bridge does not invent eager diagnostics for those lazy reference cases.
 
+Multi-input explicit rows additionally require `row_source_lookup`. All row
+templates must name the same declared driver; that driver may appear anywhere in
+the input mapping. Row-phase secondary scalar reads match raw same-type driver
+fields, or grouping fields in grouped templates, as resolved by the ordinary
+planner. Output-key conversion does not alter these match values. Missing match
+values do not match; no record yields missing, and duplicate records fail before
+donor reads and row filtering, even when donor values agree. Match diagnostics
+retain raw join keys independently of completed output identity. Secondary reads
+in column-phase explicit-row derivations, multiple drivers, row source-selection
+policies and named row intermediates remain outside this slice.
+
 Derivation-level `unconvertible` literal handlers require the additive
 `unconvertible` capability before source acquisition. Rust converts each result,
 then counts and converts a single replacement only if that conversion fails.
@@ -131,7 +142,8 @@ retained feeding records. Root filtering and explicit rows remain incompatible
 Explicit row-template filters support Boolean logic, comparisons, null tests,
 IN, BETWEEN and Unicode LIKE, including negation and explicit ESCAPE. The existing
 Python parser validates grammar and lowers the bound AST; Rust evaluates every
-operand. Record filters can read source fields and completed row columns; grouped
+operand. Record filters can read driver-source fields and completed row columns;
+direct secondary-source fields are refused before provider access. Grouped
 filters can read only completed row columns. Filtering follows row derivations
 and conversion, and precedes later whole-column derivations. Only true survives.
 The public root/row-filter diagnostic projection preserves the reference wrapper's
@@ -249,3 +261,9 @@ This qualifies the declared frontend slice only. The named BMI
 prototypes, full compiler/workflow/activation/publication, R specification frontend,
 all benchmark cases, performance measurements and release/default-cutover gates
 remain open. No speedup or full language parity is claimed.
+
+The complete unchanged `adam-advs-bmi` benchmark now exercises row-template
+secondary lookup, computation, filters and all five dataset checks. Installed
+comparisons require all 24 rows and the committed artifact CSV to match exactly,
+with reference lookup, arithmetic and conversion dispatch blocked during native
+execution. This does not qualify the separate ADSL BMI function/POWER case.

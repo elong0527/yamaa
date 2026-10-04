@@ -188,6 +188,13 @@ fn fixture(name: &str) -> &'static [u8] {
         "lookup-right-empty.arrow" => include_bytes!("fixtures/datasets/lookup-right-empty.arrow"),
         "lookup-duplicate.arrow" => include_bytes!("fixtures/datasets/lookup-duplicate.arrow"),
         "lookup-bad.arrow" => include_bytes!("fixtures/datasets/lookup-bad.arrow"),
+        "row-lookup-left.arrow" => include_bytes!("fixtures/datasets/row-lookup-left.arrow"),
+        "row-lookup-empty.arrow" => include_bytes!("fixtures/datasets/row-lookup-empty.arrow"),
+        "row-lookup-right.arrow" => include_bytes!("fixtures/datasets/row-lookup-right.arrow"),
+        "row-lookup-duplicate.arrow" => {
+            include_bytes!("fixtures/datasets/row-lookup-duplicate.arrow")
+        }
+        "row-lookup-missing.arrow" => include_bytes!("fixtures/datasets/row-lookup-missing.arrow"),
         other => panic!("unknown fixture {other}"),
     }
 }
@@ -377,7 +384,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -836,6 +843,52 @@ fn conversion_handler_admission_precedes_snapshot_decoding() {
     base["unconvertible"] = json!(vec![handler; 1089]);
     assert!(matches!(
         execute_dataset(&base.to_string(), b"bad IPC"),
+        Err(Error::RequestLimit)
+    ));
+}
+
+/// Raw driver match keys require available record/group fields before any IPC access.
+#[test]
+fn row_source_lookup_admission_precedes_snapshot_decoding() {
+    let mut base = request();
+    base["secondary"] =
+        json!([{"name":"OTHER","schema":[{"name":"id","kind":"int"},{"name":"v","kind":"str"}]}]);
+    base["columns"][1]["expression"] = json!({"row_lookup":{"source":0,"column":1,"keys":[{"source_column":0,"driver_column":0}]}});
+    for (field, value) in [
+        ("source", json!(2)),
+        ("column", json!(9)),
+        ("keys", json!([])),
+        ("keys", json!([{"source_column":0,"driver_column":9}])),
+    ] {
+        let mut invalid = base.clone();
+        invalid["columns"][1]["expression"]["row_lookup"][field] = value;
+        assert!(matches!(
+            yamaa_adapters::dataset_transport::execute_dataset_sources(
+                &invalid.to_string(),
+                b"bad IPC",
+                &[b"bad IPC"]
+            ),
+            Err(Error::InvalidPlan)
+        ));
+    }
+    let mut grouped = base.clone();
+    grouped["templates"][0]["mode"] = json!({"groups":[1]});
+    assert!(matches!(
+        yamaa_adapters::dataset_transport::execute_dataset_sources(
+            &grouped.to_string(),
+            b"bad IPC",
+            &[b"bad IPC"]
+        ),
+        Err(Error::InvalidPlan)
+    ));
+    base["columns"][1]["expression"]["row_lookup"]["keys"] =
+        json!(vec![json!({"source_column":0,"driver_column":0}); 65]);
+    assert!(matches!(
+        yamaa_adapters::dataset_transport::execute_dataset_sources(
+            &base.to_string(),
+            b"bad IPC",
+            &[b"bad IPC"]
+        ),
         Err(Error::RequestLimit)
     ));
 }

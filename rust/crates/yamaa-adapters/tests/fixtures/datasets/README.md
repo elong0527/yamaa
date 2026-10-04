@@ -121,3 +121,9 @@ replacements from missing, one failed replacement at its own path, zero counts
 on unused/empty paths, arithmetic bypass, and predeclared conversion counts
 preceding inherited named-selection counts after a failure. Expected outcomes
 and rows are constants written from the contracts, never captured from an engine.
+
+Six `row_lookup_*` cases use independently encoded string-key driver/donor
+snapshots. Literal truth distinguishes raw `02` from `2`, record/group scope,
+empty output, missing keys, duplicate equal-valued records and lookup failure
+before a false row filter. Match-key evidence remains raw and separate from
+unavailable output identity. JSON/TSV expectations are authored constants.

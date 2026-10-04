@@ -4970,3 +4970,128 @@ fn conversion_handler_admission_and_reached_resource_accounting() {
     ));
     assert_eq!(bad.handler_counts[0].count, 0);
 }
+
+/// Raw record/group match values remain independent of already converted output keys.
+#[test]
+fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
+    use yamaa_engine::dataset::{RowLookup, RowMatchKey, SecondarySource, SourceSchemas};
+    let driver = table(
+        &[("ID", ColumnType::Str)],
+        vec![vec![Value::Str("02".into())]],
+    );
+    let mut right = table(
+        &[("ID", ColumnType::Str), ("V", ColumnType::Str)],
+        vec![
+            vec![Value::Str("02".into()), Value::Str("7".into())],
+            vec![Value::Str("2".into()), Value::Str("99".into())],
+        ],
+    );
+    let binding = RowLookup {
+        source: 0,
+        column: 1,
+        keys: vec![RowMatchKey {
+            source_column: 0,
+            driver_column: 0,
+        }],
+    };
+    let make = |mode, binding| {
+        DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: driver.schema.clone(),
+                secondary: vec![SecondarySource {
+                    name: "OTHER".into(),
+                    schema: right.schema.clone(),
+                }],
+            },
+            vec![],
+            schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+            vec![RowTemplate {
+                mode,
+                filter: None,
+                assignments: vec![
+                    assign(0, Expression::Literal(Value::Int(99))),
+                    assign(1, Expression::RowLookup(binding)),
+                ],
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+    };
+    for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+        let plan = make(mode, binding.clone()).unwrap();
+        for _ in 0..2 {
+            driver.reads.borrow_mut().clear();
+            right.reads.borrow_mut().clear();
+            assert_eq!(
+                plan.execute_observed_sources(&driver, &[&right], limits())
+                    .result
+                    .unwrap()
+                    .dataset
+                    .rows(),
+                &[vec![Value::Int(99), Value::Int(7)]]
+            );
+            assert_eq!(*right.reads.borrow(), vec![(0, 0), (1, 0), (0, 1)]);
+        }
+    }
+    assert_eq!(
+        make(RowMode::Keys, binding.clone()),
+        Err(PlanError::InvalidKeyMode)
+    );
+    let mut invalid = binding.clone();
+    invalid.keys[0].driver_column = 9;
+    assert_eq!(
+        make(RowMode::Records, invalid),
+        Err(PlanError::InvalidLookup)
+    );
+    let plan = make(RowMode::Records, binding).unwrap();
+    right.rows.push(right.rows[0].clone());
+    right.fail = Some((0, 1));
+    right.reads.borrow_mut().clear();
+    let failed = plan.execute_observed_sources(&driver, &[&right], limits());
+    match *failed.result.unwrap_err() {
+        ExecutionError::MultipleMatches {
+            match_count,
+            matched_key,
+            identity,
+            ..
+        } => {
+            assert_eq!(match_count, 2);
+            assert_eq!(matched_key, vec![("ID".into(), Value::Str("02".into()))]);
+            assert_eq!(identity.unwrap().values, vec![Value::Int(99)]);
+        }
+        error => panic!("unexpected {error:?}"),
+    }
+    assert_eq!(*right.reads.borrow(), vec![(0, 0), (1, 0), (2, 0)]);
+    right.reads.borrow_mut().clear();
+    let missing = table(&[("ID", ColumnType::Str)], vec![vec![Value::Missing]]);
+    assert_eq!(
+        plan.execute_observed_sources(&missing, &[&right], limits())
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
+        &[vec![Value::Int(99), Value::Missing]]
+    );
+    assert!(right.reads.borrow().is_empty());
+    let mut failing = driver;
+    failing.fail = Some((0, 0));
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(&failing, &[&right], limits())
+            .result
+            .unwrap_err(),
+        ExecutionError::Cell { source_row: 0, .. }
+    ));
+    let mut tiny = limits();
+    tiny.work_cells = 0;
+    failing.reads.borrow_mut().clear();
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(&failing, &[&right], tiny)
+            .result
+            .unwrap_err(),
+        ExecutionError::Limit { .. }
+    ));
+    assert!(failing.reads.borrow().is_empty());
+}

@@ -54,6 +54,110 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
+    def test_committed_complete_advs_bmi_benchmark(self):
+        """Execute the unchanged two-source row-template BMI document and all output checks."""
+        case = ROOT / "specification-advs-bmi"
+        spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        sources = load_source_tables(spec.input, ProjectResources(case))
+        actual = self.compare(spec, sources)
+        self.assertIsInstance(actual.result, ExecutionSuccess)
+        self.assertEqual(actual.result.table.frame.height, 24)
+        expected = pl.read_csv(
+            case / "expected/advs.csv",
+            schema_overrides=actual.result.artifact.frame.schema,
+        )
+        self.assertTrue(actual.result.artifact.frame.equals(expected, null_equal=True))
+        self.assertEqual(len(actual.verifications), 5)
+
+    def test_row_secondary_lookup_raw_keys_and_failure_order(self):
+        """Driver fields match before output conversion, row filters and later column derivations."""
+        base = {
+            "schema_version": "1.0",
+            "domain": "ROW",
+            "keys": ["ID"],
+            "input": {"SRC": "source.csv", "OTHER": "other.csv"},
+            "output": {"path": "out.csv", "columns": ["ID", "V", "N"]},
+            "columns": [
+                {
+                    "name": "ID",
+                    "type": "str",
+                    "label": "ID",
+                    "derivation": {
+                        "value": {"source": "SRC.DISPLAY"},
+                        "unconvertible": 9,
+                    },
+                },
+                {"name": "V", "type": "int", "label": "V"},
+                {"name": "N", "type": "int", "label": "N", "derivation": "V"},
+            ],
+            "rows": [{"id": "r", "dataset": "SRC", "derivations": {"V": "OTHER.V"}}],
+        }
+        left_columns = (
+            TypedColumn(name="ID", type="str"),
+            TypedColumn(name="DISPLAY", type="str"),
+        )
+        right_columns = (
+            TypedColumn(name="ID", type="str"),
+            TypedColumn(name="V", type="str"),
+        )
+        for grouped, reverse, scenario in itertools.product(
+            [False, True],
+            [False, True],
+            [
+                "raw",
+                "missing",
+                "absent",
+                "duplicate",
+                "duplicate_filtered",
+                "bad_donor",
+                "empty",
+                "filtered",
+                "replacement",
+            ],
+        ):
+            with self.subTest(grouped=grouped, reverse=reverse, scenario=scenario):
+                doc = copy.deepcopy(base)
+                if grouped:
+                    doc["rows"][0]["group_by"] = ["SRC.ID", "SRC.DISPLAY"]
+                if reverse:
+                    doc["input"] = {"OTHER": "other.csv", "SRC": "source.csv"}
+                left = [["02"], ["1"]]
+                right = [["02", "7"], ["1", "8"], ["2", "99"]]
+                if scenario == "missing":
+                    left = [[None]]
+                    right = [[None, "5"]]
+                if scenario == "absent":
+                    right = []
+                if scenario in {"duplicate", "duplicate_filtered"}:
+                    right.insert(1, ["02", "7"])
+                if scenario in {"bad_donor", "replacement"}:
+                    right[0][1] = "bad"
+                if scenario == "empty":
+                    left = []
+                if scenario in {"filtered", "duplicate_filtered"}:
+                    doc["rows"][0]["filter"] = (
+                        "SRC.ID = 'excluded'" if not grouped else "V > 100"
+                    )
+                if scenario == "replacement":
+                    doc["rows"][0]["derivations"]["V"] = {
+                        "value": {"source": "OTHER.V"},
+                        "unconvertible": 17,
+                    }
+                actual = self.compare(
+                    self.load(doc),
+                    {
+                        "SRC": frame_from_values(
+                            left_columns, [[value, f"out-{value}"] for (value,) in left]
+                        ),
+                        "OTHER": frame_from_values(right_columns, right),
+                    },
+                )
+                if scenario == "raw":
+                    self.assertEqual(
+                        actual.result.table.frame.rows(),
+                        [("out-02", 7, 7), ("out-1", 8, 8)],
+                    )
+
     def test_completed_conversion_handlers_across_row_modes(self):
         """Compare zero, fired and failed replacements before dependent reads and filtering."""
         base = {
