@@ -19,6 +19,7 @@ sequence (`STUDYID`, `USUBJID`, `AESEQ`), the dictionary term
 **Note:** rows follow the order in which the events were
 collected, so the serious events of one subject stay interleaved
 with the serious events of other subjects exactly as collected. A
-non-serious event leaves no row.
+non-serious event -- or one whose seriousness was never recorded
+(blank `AESER`) -- leaves no row.
 
 **Standard:** ADaM | **Domain:** ADAE
