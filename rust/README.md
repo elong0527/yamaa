@@ -455,3 +455,8 @@ order, and checks results before conversion. A synchronous already-bound port
 keeps host errors opaque and results owned. Independent truth runs through Rust
 and the real Python reference; installed Python/R callback adapters and full
 environment activation remain pending.
+
+The installed Python [function/1 callback API](FUNCTION_TRANSPORT.md) now admits
+bounded normalized requests and calls an explicit Python callable on the current
+interpreter thread. It preserves exact scalars and portable fatal outcomes; R
+callbacks, production environment binding and dataset execution remain pending.
