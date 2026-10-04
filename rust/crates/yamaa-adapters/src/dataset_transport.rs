@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -113,10 +113,32 @@ struct Field {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Expression {
     Literal(ScalarValue),
+    Number(Numbering),
     Source(usize),
     Collect(CollectedSource),
     Column(usize),
     Reduce(Reduction),
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum NumberingKind {
+    RowNumber,
+    Competition,
+    Dense,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OrderTerm {
+    column: usize,
+    descending: bool,
+    nulls_first: bool,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Numbering {
+    kind: NumberingKind,
+    group_by: Vec<usize>,
+    order_by: Vec<OrderTerm>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -388,6 +410,29 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                     }
                 }
                 Expression::Column(column) => dataset::Expression::Column(column),
+                Expression::Number(window) => {
+                    if window.group_by.len() > MAX_COLUMNS || window.order_by.len() > MAX_COLUMNS {
+                        return Err(Error::RequestLimit);
+                    }
+                    dataset::Expression::Number(dataset::Numbering {
+                        kind: match window.kind {
+                            NumberingKind::RowNumber => dataset::NumberingKind::RowNumber,
+                            NumberingKind::Competition => dataset::NumberingKind::Competition,
+                            NumberingKind::Dense => dataset::NumberingKind::Dense,
+                        },
+                        group_by: window.group_by,
+                        order_by: window
+                            .order_by
+                            .into_iter()
+                            .map(|term| dataset::OrderTerm {
+                                column: term.column,
+                                descending: term.descending,
+                                nulls_first: term.nulls_first,
+                            })
+                            .collect(),
+                    })
+                }
+
                 Expression::Reduce(reduction) => {
                     path(&reduction.text)?;
                     dataset::Expression::Reduce {

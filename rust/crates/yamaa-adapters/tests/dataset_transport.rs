@@ -173,6 +173,8 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
             "key-grain-missing.arrow" => {
                 include_bytes!("fixtures/datasets/key-grain-missing.arrow")
             }
+            "numbering.arrow" => include_bytes!("fixtures/datasets/numbering.arrow"),
+            "numbering-empty.arrow" => include_bytes!("fixtures/datasets/numbering-empty.arrow"),
             other => panic!("unknown fixture {other}"),
         };
         let response = execute_dataset(&case["request"].to_string(), input).unwrap();
@@ -217,7 +219,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -395,6 +397,48 @@ fn invalid_key_grain_plans_fail_before_ipc_and_recover() {
         assert_eq!(
             snapshot["rows"],
             json!([[{"int":"2"},{"int":"7"}],[{"int":"1"},{"int":"8"}]])
+        );
+    }
+}
+
+/// Malformed numbering declarations fail before IPC, and admitted plans remain reusable.
+#[test]
+fn numbering_admission_precedes_ipc_and_repeated_execution_is_fresh() {
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/datasets/expected.json")).unwrap();
+    let request = &cases
+        .iter()
+        .find(|case| case["case"] == "numbering_exact_descending")
+        .unwrap()["request"];
+    for field in ["filter", "source", "unexpected"] {
+        let mut invalid = request.clone();
+        invalid["columns"][2]["expression"]["number"][field] = json!(null);
+        assert!(matches!(
+            execute_dataset(&invalid.to_string(), b"invalid ipc"),
+            Err(Error::InvalidRequest)
+        ));
+    }
+    for order in [
+        json!([]),
+        json!([{"column":3,"descending":false,"nulls_first":false}]),
+        json!([{"column":99,"descending":false,"nulls_first":false}]),
+    ] {
+        let mut invalid = request.clone();
+        invalid["columns"][2]["expression"]["number"]["order_by"] = order;
+        assert!(matches!(
+            execute_dataset(&invalid.to_string(), b"invalid ipc"),
+            Err(Error::InvalidPlan)
+        ));
+    }
+    let plan = PreparedDataset::parse(&request.to_string()).unwrap();
+    for _ in 0..2 {
+        let result = plan
+            .execute(include_bytes!("fixtures/datasets/numbering.arrow"))
+            .unwrap();
+        assert!(result.table.is_some());
+        assert_eq!(
+            serde_json::from_str::<Value>(&result.outcome).unwrap()["outcome"]["status"],
+            "success"
         );
     }
 }

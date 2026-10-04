@@ -87,6 +87,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_datasets.py" installed_datasets.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_specification.py" installed_specification.py
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
+          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
           cp -R "${GITHUB_WORKSPACE}/yaml" specification-yaml
           cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/datasets" datasets
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv" function_invocation.tsv

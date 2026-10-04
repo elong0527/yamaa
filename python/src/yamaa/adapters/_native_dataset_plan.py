@@ -23,7 +23,7 @@ from yamaa.planning import (
     preflight_execution,
 )
 
-OPERATIONS = frozenset({"source", "literal", "aggregate"})
+OPERATIONS = frozenset({"source", "literal", "aggregate", "row_number", "rank"})
 
 
 def admit(specification):
@@ -76,6 +76,23 @@ def admit(specification):
                 and isinstance(payload["variable"], str)
             ):
                 reject("source_selection", path)
+        elif operation in {"row_number", "rank"}:
+            window = payload.get("window", {}) if isinstance(payload, dict) else {}
+            if specification.rows or not isinstance(window, dict):
+                reject("window_scope", path)
+            elif window.get("filter") is not None:
+                reject("window_filter", f"{path}.window.filter")
+            else:
+                names = list(window.get("group_by", []))
+                names.extend(
+                    term if isinstance(term, str) else term["variable"]
+                    for term in window.get("order_by", [])
+                )
+                if any("." in name for name in names):
+                    reject("window_source", f"{path}.window")
+                groups = window.get("group_by", [])
+                if len(set(groups)) != len(groups):
+                    reject("window_repeated_group", f"{path}.window.group_by")
         elif operation == "aggregate":
             if not isinstance(payload, dict) or not isinstance(
                 payload.get("expr"), str
@@ -145,6 +162,11 @@ def admit(specification):
         if column.submission is not None:
             reject("submission", f"columns.{column.name}.submission")
         if column.derivation is not None:
+            if (
+                column.name in specification.keys
+                and column.derivation.value.operation in {"row_number", "rank"}
+            ):
+                reject("window_key", f"columns.{column.name}.derivation")
             expression(column.derivation, f"columns.{column.name}.derivation", False)
     for index, declaration in enumerate(specification.verifications or ()):
         operation = declaration.operation
@@ -245,6 +267,28 @@ def lower(plan, source):
                 if collect and "." in name
                 else reference(name)
             )
+        elif op in {"row_number", "rank"}:
+            window = value["window"]
+            expression = {
+                "number": {
+                    "kind": "row_number"
+                    if op == "row_number"
+                    else value.get("method", "competition"),
+                    "group_by": [outputs[name] for name in window.get("group_by", [])],
+                    "order_by": [
+                        {
+                            "column": outputs[
+                                term if isinstance(term, str) else term["variable"]
+                            ],
+                            "descending": isinstance(term, dict)
+                            and term.get("direction", "asc") == "desc",
+                            "nulls_first": isinstance(term, dict)
+                            and term.get("nulls", "last") == "first",
+                        }
+                        for term in window["order_by"]
+                    ],
+                }
+            }
         else:
             ast = parse_aggregate_cached(value["expr"])
             expression = {

@@ -54,6 +54,95 @@ class InstalledSpecification(unittest.TestCase):
         self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
         self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
 
+    def test_committed_window_rank_subset(self):
+        """Execute unchanged benchmark rank declarations against committed expected values."""
+        case = ROOT / "specification-windows"
+        document = yaml.safe_load((case / "spec.yaml").read_text())
+        retained = {
+            "STUDYID",
+            "USUBJID",
+            "VISITN",
+            "VISIT",
+            "VSDTC",
+            "TRTSDT",
+            "VSSTRESN",
+            "VSEVAL",
+            "SEVRANKC",
+            "SEVRANKD",
+        }
+        document["columns"] = [
+            column for column in document["columns"] if column["name"] in retained
+        ]
+        document["output"]["columns"] = [
+            column["name"] for column in document["columns"]
+        ]
+        spec = self.load(document)
+        sources = load_source_tables(spec.input, ProjectResources(case))
+        actual = self.compare(spec, sources)
+        self.assertIsInstance(actual.result, ExecutionSuccess)
+        expected = pl.read_csv(
+            case / "expected/advs.csv",
+            schema_overrides=actual.result.table.frame.schema,
+        )
+        self.assertTrue(
+            actual.result.table.frame.equals(
+                expected.select(document["output"]["columns"]), null_equal=True
+            )
+        )
+        # The complete benchmark still contains intentionally unimplemented windows.
+        original = load_specification(case / "spec.yaml", SCHEMA).specification
+        unsupported = execute_with_source_provider(
+            original, lambda _: self.fail("unsupported source effect")
+        )
+        self.assertEqual(unsupported.result.status, "unsupported")
+
+    def test_numbering_directions_ties_empty_and_conversion(self):
+        """Compare authored numbering variants, preserving complete result and failure evidence."""
+        case = ROOT / "specification-windows"
+        base = yaml.safe_load((case / "spec.yaml").read_text())
+        base["columns"] = [
+            column
+            for column in base["columns"]
+            if column["name"] in {"USUBJID", "VISITN", "VSSTRESN", "SEVRANKC"}
+        ]
+        base["output"]["columns"] = [column["name"] for column in base["columns"]]
+        for operation, kind in [
+            ("row_number", "int"),
+            ("rank", "str"),
+            ("rank", "date"),
+        ]:
+            for descending, first in itertools.product([False, True], repeat=2):
+                document = copy.deepcopy(base)
+                document["columns"][-1].update(
+                    type=kind,
+                    derivation={
+                        operation: {
+                            "window": {
+                                "group_by": [],
+                                "order_by": [
+                                    {
+                                        "variable": "VSSTRESN",
+                                        "direction": "desc" if descending else "asc",
+                                        "nulls": "first" if first else "last",
+                                    },
+                                    "VISITN",
+                                ],
+                            }
+                        }
+                    },
+                )
+                spec = self.load(document)
+                sources = load_source_tables(spec.input, ProjectResources(case))
+                with self.subTest(
+                    operation=operation, kind=kind, descending=descending, first=first
+                ):
+                    self.compare(spec, sources)
+                    source = sources["VS"].table
+                    empty = type(source)(
+                        columns=source.columns, frame=source.frame.clear()
+                    )
+                    self.compare(spec, {"VS": empty})
+
     def load(self, document):
         """Validate authored test variants through the real schema and normalization pipeline."""
         with tempfile.TemporaryDirectory() as directory:
@@ -98,6 +187,10 @@ class InstalledSpecification(unittest.TestCase):
             patch(
                 "yamaa.runtime.executor.evaluate_predicate",
                 side_effect=AssertionError("reference predicate evaluation"),
+            ),
+            patch(
+                "yamaa.runtime.rows.RowResolver._window",
+                side_effect=AssertionError("reference window evaluation"),
             ),
             patch(
                 "yamaa.runtime.executor._key_space",

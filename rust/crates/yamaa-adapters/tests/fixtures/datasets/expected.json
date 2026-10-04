@@ -4606,5 +4606,808 @@
       }
     },
     "snapshot": null
+  },
+  {
+    "case": "numbering_exact_descending",
+    "input": "numbering.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        },
+        {
+          "name": "SEQ",
+          "kind": "int"
+        },
+        {
+          "name": "RANK",
+          "kind": "int"
+        },
+        {
+          "name": "DENSE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.V"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.SEQ.derivation.row_number",
+          "expression": {
+            "number": {
+              "kind": "row_number",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": true,
+                  "nulls_first": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.RANK.derivation.rank",
+          "expression": {
+            "number": {
+              "kind": "competition",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": true,
+                  "nulls_first": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "column": 5,
+          "path": "columns.DENSE.derivation.rank",
+          "expression": {
+            "number": {
+              "kind": "dense",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": true,
+                  "nulls_first": false
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "G",
+          "str"
+        ],
+        [
+          "V",
+          "int"
+        ],
+        [
+          "SEQ",
+          "int"
+        ],
+        [
+          "RANK",
+          "int"
+        ],
+        [
+          "DENSE",
+          "int"
+        ]
+      ],
+      "row_count": "6",
+      "chunks": [
+        "6"
+      ],
+      "rows": [
+        [
+          {
+            "int": "1"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "int": "9007199254740992"
+          },
+          {
+            "int": "3"
+          },
+          {
+            "int": "3"
+          },
+          {
+            "int": "2"
+          }
+        ],
+        [
+          {
+            "int": "2"
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "3"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "int": "9007199254740993"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "4"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "missing": null
+          },
+          {
+            "int": "4"
+          },
+          {
+            "int": "4"
+          },
+          {
+            "int": "3"
+          }
+        ],
+        [
+          {
+            "int": "5"
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "6"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "int": "9007199254740993"
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "numbering_nulls_first",
+    "input": "numbering.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        },
+        {
+          "name": "SEQ",
+          "kind": "int"
+        },
+        {
+          "name": "RANK",
+          "kind": "int"
+        },
+        {
+          "name": "DENSE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.V"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.SEQ.derivation.row_number",
+          "expression": {
+            "number": {
+              "kind": "row_number",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": false,
+                  "nulls_first": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.RANK.derivation.rank",
+          "expression": {
+            "number": {
+              "kind": "competition",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": false,
+                  "nulls_first": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "column": 5,
+          "path": "columns.DENSE.derivation.rank",
+          "expression": {
+            "number": {
+              "kind": "dense",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": false,
+                  "nulls_first": true
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "G",
+          "str"
+        ],
+        [
+          "V",
+          "int"
+        ],
+        [
+          "SEQ",
+          "int"
+        ],
+        [
+          "RANK",
+          "int"
+        ],
+        [
+          "DENSE",
+          "int"
+        ]
+      ],
+      "row_count": "6",
+      "chunks": [
+        "6"
+      ],
+      "rows": [
+        [
+          {
+            "int": "1"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "int": "9007199254740992"
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "2"
+          }
+        ],
+        [
+          {
+            "int": "2"
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "3"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "int": "9007199254740993"
+          },
+          {
+            "int": "3"
+          },
+          {
+            "int": "3"
+          },
+          {
+            "int": "3"
+          }
+        ],
+        [
+          {
+            "int": "4"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "missing": null
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "5"
+          },
+          {
+            "missing": null
+          },
+          {
+            "missing": null
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "6"
+          },
+          {
+            "str": "a"
+          },
+          {
+            "int": "9007199254740993"
+          },
+          {
+            "int": "4"
+          },
+          {
+            "int": "3"
+          },
+          {
+            "int": "3"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "numbering_empty",
+    "input": "numbering-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "ID",
+          "kind": "int"
+        },
+        {
+          "name": "G",
+          "kind": "str"
+        },
+        {
+          "name": "V",
+          "kind": "int"
+        },
+        {
+          "name": "SEQ",
+          "kind": "int"
+        },
+        {
+          "name": "RANK",
+          "kind": "int"
+        },
+        {
+          "name": "DENSE",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "keys": null
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "columns.ID.derivation.source",
+              "expression": {
+                "source": 0
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [
+        {
+          "column": 1,
+          "path": "columns.G.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 1,
+              "identifier": "SRC.G"
+            }
+          }
+        },
+        {
+          "column": 2,
+          "path": "columns.V.derivation.source",
+          "expression": {
+            "collect": {
+              "column": 2,
+              "identifier": "SRC.V"
+            }
+          }
+        },
+        {
+          "column": 3,
+          "path": "columns.SEQ.derivation.row_number",
+          "expression": {
+            "number": {
+              "kind": "row_number",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": true,
+                  "nulls_first": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "column": 4,
+          "path": "columns.RANK.derivation.rank",
+          "expression": {
+            "number": {
+              "kind": "competition",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": true,
+                  "nulls_first": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "column": 5,
+          "path": "columns.DENSE.derivation.rank",
+          "expression": {
+            "number": {
+              "kind": "dense",
+              "group_by": [
+                1
+              ],
+              "order_by": [
+                {
+                  "column": 2,
+                  "descending": true,
+                  "nulls_first": false
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "ID",
+          "int"
+        ],
+        [
+          "G",
+          "str"
+        ],
+        [
+          "V",
+          "int"
+        ],
+        [
+          "SEQ",
+          "int"
+        ],
+        [
+          "RANK",
+          "int"
+        ],
+        [
+          "DENSE",
+          "int"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
   }
 ]

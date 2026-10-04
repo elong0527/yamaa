@@ -42,12 +42,28 @@ remaining columns complete in the supplied order. Literal conversion occurs per
 constructed value, including on plans reused with empty versus populated sources.
 Paths and expression text provide provenance, not filesystem or artifact authority.
 
+Unfiltered numbering is represented by `{number: {kind, group_by, order_by}}`.
+`kind` is `row_number`, `competition` or `dense`; `group_by` is an ordered list
+of distinct completed output-column indices (empty means one global partition).
+`order_by` is nonempty, with `{column, descending, nulls_first}` terms. Both booleans
+are required. This expression is admitted only in key-grain column assignments;
+source-qualified reads, row-phase windows and window filters are not represented.
+Each window partitions completed output rows, sorts once per partition and assigns
+its results back to their original positions. Null placement is independent of
+direction. Integers retain full precision, finite floats sort numerically, temporal
+precision does not affect ties, and construction order breaks remaining ties for
+row numbering. Ranks compare only declared terms: competition leaves gaps while
+dense rank counts distinct tuples. Empty outputs retain schema without conversion.
+Fallible merge sorting charges each term comparison, text operands and each merge
+pass against shared counters, stopping on the first resource failure. Numbering
+results then pass through the ordinary completed-value conversion lifecycle.
+
 Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
 may be omitted. Unique permits repeated references, matching the reference check.
 Only error-severity, whole-artifact bounds are represented. Root/source filters, fractions,
-grouped row counts, column checks, warnings, handlers, windows, joins, functions,
+grouped row counts, column checks, warnings, handlers, other windows, joins, functions,
 multiple sources remain outside the closed plan vocabulary.
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
@@ -115,7 +131,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
