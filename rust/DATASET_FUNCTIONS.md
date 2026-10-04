@@ -4,8 +4,8 @@ The trusted Rust `DatasetPlan` API can compose scalar host-function calls with
 row and column assignments using `Expression::Function(BoundFunction)`. This is
 an engine port, not a new `dataset/1` wire feature. Python/R dataset callbacks,
 normalized-specification admission, environment discovery, artifact verification,
-activation vectors and installed cross-host callback qualification remain open in
-#1585. Python stays the default and `execution_supported` remains false.
+activation vectors and installed cross-host callback qualification remain open
+in issue #1585. Python stays the default and `execution_supported` remains false.
 
 ## Admission and ownership
 
