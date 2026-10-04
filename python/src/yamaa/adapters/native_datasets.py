@@ -203,19 +203,39 @@ def execute_with_source_provider(
     execute = yamaa_native.execute_dataset
     if not callable(execute):
         raise TypeError("native execute_dataset must be callable")
-    filters = tuple(
-        UnsupportedFeature(operation="native_row_filter", spec_path=f"rows[{i}].filter")
+    required = [
+        (
+            "row_filter",
+            UnsupportedFeature(
+                operation="native_row_filter", spec_path=f"rows[{i}].filter"
+            ),
+        )
         for i, row in enumerate(specification.rows or ())
         if row.filter is not None
+    ]
+    required.extend(
+        (
+            "predicate_checks",
+            UnsupportedFeature(
+                operation="native_predicate_checks",
+                spec_path=f"verifications[{i}].{check.operation}",
+            ),
+        )
+        for i, check in enumerate(specification.verifications or ())
+        if check.operation in {"assert", "implies"}
     )
-    if filters:
+    if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
-        if capabilities.get(
-            "protocol"
-        ) != "dataset/1" or "row_filter" not in capabilities.get("features", []):
+        features = (
+            capabilities.get("features", [])
+            if capabilities.get("protocol") == "dataset/1"
+            else []
+        )
+        refused = tuple(feature for name, feature in required if name not in features)
+        if refused:
             return NativeDatasetRun(
-                ExecutionUnsupported(features=filters, handler_counts=())
+                ExecutionUnsupported(features=refused, handler_counts=())
             )
     try:
         sources = source_provider(
@@ -263,6 +283,8 @@ def execute_with_source_provider(
         raise NativeDatasetLimitError(outcome)
     records = ()
     if status == "condition":
+        if "verifications" in outcome:
+            records, _ = observations(specification, outcome)
         diagnostics = (condition(outcome, specification.keys),)
     elif status in {"success", "failure"}:
         records, diagnostics = observations(specification, outcome)

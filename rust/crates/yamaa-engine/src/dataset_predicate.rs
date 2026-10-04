@@ -18,9 +18,9 @@ pub struct Binding {
     pub read: Read,
 }
 
-/// A filter owns its predicate and complete, unique name-to-column map.
+/// A predicate owns its plan and complete, unique name-to-column map.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Filter {
+pub struct BoundPredicate {
     plan: predicate::Plan,
     bindings: Vec<Binding>,
 }
@@ -36,7 +36,7 @@ pub enum BindingError {
     GroupedSource,
 }
 
-impl Filter {
+impl BoundPredicate {
     /// Admit every occurrence before any table read, including unreachable nodes.
     pub fn new(plan: predicate::Plan, mut bindings: Vec<Binding>) -> Result<Self, BindingError> {
         if plan.spec_path().is_empty() {

@@ -7,6 +7,7 @@ extern crate alloc;
 pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;
+mod dataset_verification;
 pub mod function_invocation;
 pub mod numeric_lifecycle;
 pub mod table_grouping;

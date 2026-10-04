@@ -41,13 +41,28 @@ remaining columns complete in the supplied order. Literal conversion occurs per
 constructed value, including on plans reused with empty versus populated sources.
 Paths and expression text provide provenance, not filesystem or artifact authority.
 
-Checks are `{unique: [output_column_indices]}` or
+Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
 may be omitted. Unique permits repeated references, matching the reference check.
 Only error-severity, whole-artifact bounds are represented. Root/source filters, fractions,
 grouped row counts, column checks, warnings, handlers, windows, joins, functions,
 multiple sources and key-grain construction are outside the closed plan vocabulary.
+
+Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
+then: predicate}}`, using the predicate representation below. Bindings may read
+only completed output columns. Assertions fail on false or unknown; implications
+fail when `when` is true and `then` is not true. Both sides are evaluated eagerly
+per row. Each declaration first evaluates nonmissing representatives of all output
+types, even for an empty dataset, with `when` validated before `then`. This detects
+invalid predicate types before checking any actual rows. Checks run in declaration
+order after all derivation, conversion and output-key checks.
+
+The temporary compiler can also emit `{predicate_declaration: predicate}` as a
+declaration-only checkpoint. It validates the representatives without evaluating
+actual rows or emitting a verification record. This preserves a `when` type error
+ahead of a pending `then` syntax/name error retained by the host compiler; it is
+not an additional public verification operation.
 
 ## Row-template predicates
 
@@ -77,10 +92,10 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter"]`. This additive capability is
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
-frontend requires it for filters before calling the source provider. Older typed
-requests remain compatible when they omit filters.
+frontend requires the corresponding feature before calling the source provider.
+Older typed requests remain compatible when they omit these features.
 
 ## Outcomes and ownership
 
@@ -98,6 +113,8 @@ Outcome JSON contains `protocol` and one `outcome`:
 - `condition`: no IPC; the existing scalar/numeric diagnostic encoding plus an
   optional `identity`. A failure has identity only after all output key fields
   have completed. A completed missing key remains distinct from an unavailable key.
+  Predicate-check conditions additionally retain the completed `verifications`
+  prefix, including earlier failed checks, and have no invented row identity.
 - `limit`: no IPC; resource name and available decimal `limit`/`required` counts.
 
 A check observation retains `spec_path`, condition/requirement, evaluated and
@@ -142,7 +159,8 @@ Scalar text accounting precedes cloning/conversion, so repeated large strings
 cannot evade policy by converting to small numbers. Identity budgets apply before
 copying keys and accumulate across checks and runtime failure context. Counters
 reset per execution. Predicate node/scalar work shares the ordinary work counter,
-and predicate text shares cumulative scalar text accounting. Resolutions and LIKE
+and predicate text shares cumulative scalar text accounting. Predicate-check
+representatives and actual rows consume these same cumulative budgets. Resolutions and LIKE
 work have separate cumulative counters; each predicate also retains its smaller
 per-evaluation limits from PREDICATES.md. Refusals identify `predicate_work`,
 `predicate_resolutions`, `predicate_text_bytes` or `predicate_like_work`; required
@@ -160,6 +178,8 @@ Rust engine and include duplicate keys, failed row count, conversion timing,
 empty input, temporal literals, integer overflow, and explicit true/false/unknown
 row filters. Filter truth selects fixed row ordinals from the committed ADLB values. Rust, installed Python and
 installed R replay the same observations; R needs neither Arrow nor a JSON package.
+Predicate-check fixtures cover missing-value assertion identities, an eager
+implication error after completed checks, and invalid types on empty output.
 Installed tests check output-buffer independence, rejection before decoding,
 post-error recovery and the unchanged backend capability flag.
 

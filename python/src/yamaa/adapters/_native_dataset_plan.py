@@ -6,7 +6,13 @@ import math
 import struct
 
 from yamaa.adapters import _native_predicate_plan
-from yamaa.expressions import AggregateError, parse_aggregate_cached
+from yamaa.expressions import (
+    AggregateError,
+    PredicateError,
+    parse_aggregate_cached,
+    parse_predicate,
+    predicate_identifiers,
+)
 from yamaa.models import INT64_MAX, INT64_MIN
 from yamaa.planning import (
     ExecutionDiagnostic,
@@ -148,13 +154,14 @@ def admit(specification):
         path = f"verifications[{index}].{operation}"
         if operation == "unique" and isinstance(payload, list):
             payload = {"columns": payload}
-        allowed = (
-            {"columns", "id", "severity"}
-            if operation == "unique"
-            else {"min", "max", "id", "severity"}
-        )
+        allowed = {
+            "unique": {"columns", "id", "severity"},
+            "row_count": {"min", "max", "id", "severity"},
+            "assert": {"expr", "id", "severity"},
+            "implies": {"when", "then", "id", "severity"},
+        }.get(operation, set())
         if (
-            operation not in {"unique", "row_count"}
+            operation not in {"unique", "row_count", "assert", "implies"}
             or not isinstance(payload, dict)
             or set(payload) - allowed
             or payload.get("severity", "error") != "error"
@@ -165,6 +172,19 @@ def admit(specification):
             for value in (payload.get("min"), payload.get("max"))
         ):
             reject("row_count_bounds", path)
+        elif operation in {"assert", "implies"}:
+            for field in ("expr",) if operation == "assert" else ("when", "then"):
+                text = payload.get(field)
+                if not isinstance(text, str):
+                    continue
+                try:
+                    _native_predicate_plan.admit(text, f"{path}.{field}")
+                except ExecutionPlanningError:
+                    # A declaration error belongs after keys and earlier checks.
+                    # Lowering retains it as a pending error, never evaluates it.
+                    pass
+                except UnsupportedPlanningError as error:
+                    unsupported.extend(error.features)
     if diagnostics:
         raise ExecutionPlanningError(diagnostics)
     if unsupported:
@@ -285,14 +305,16 @@ def checks(specification, outputs):
     lowered = []
     identifiers = {}
 
-    def invalid(path, requirement, reason, condition="invalid_declaration"):
+    def invalid(
+        path, requirement, reason, condition="invalid_declaration", context=None
+    ):
         """Use the existing public declaration-diagnostic vocabulary exactly."""
         return lowered, ExecutionDiagnostic(
             phase="validation",
             condition=condition,
             spec_paths=(path,),
             requirement=requirement,
-            context={"reason": reason},
+            context=context or {"reason": reason},
         )
 
     for index, declaration in enumerate(specification.verifications or ()):
@@ -328,6 +350,52 @@ def checks(specification, outputs):
                         "unknown_field",
                     )
             check = {op: [outputs[name] for name in names]}
+        elif op in {"assert", "implies"}:
+            predicates = {}
+            for field in ("expr",) if op == "assert" else ("when", "then"):
+                if field == "then":
+                    # Validate when natively before any later syntax/name error
+                    # in then, without evaluating rows or emitting a record.
+                    lowered.append(
+                        {
+                            "path": path,
+                            "check": {"predicate_declaration": predicates["when"]},
+                        }
+                    )
+                text = payload.get(field)
+                predicate_path = f"{path}.{field}"
+                if not isinstance(text, str):
+                    return invalid(
+                        predicate_path, "REQ-0397", "a predicate must be text"
+                    )
+                try:
+                    ast = parse_predicate(text)
+                except PredicateError as error:
+                    return invalid(
+                        predicate_path,
+                        error.requirement,
+                        str(error),
+                        "invalid_predicate",
+                    )
+                unknown = sorted(set(predicate_identifiers(ast)) - outputs.keys())
+                if unknown:
+                    return invalid(
+                        predicate_path,
+                        "REQ-0405",
+                        f"predicate names unknown column {unknown[0]!r}",
+                        "unknown_field",
+                        {"identifier": unknown[0]},
+                    )
+                predicates[field] = _native_predicate_plan.lower(
+                    ast,
+                    text,
+                    predicate_path,
+                    lambda name: {"column": outputs[name]},
+                    literal,
+                )
+            if op == "implies":
+                lowered.pop()  # Both declarations are complete; use the ordinary check.
+            check = {op: predicates["expr"] if op == "assert" else predicates}
         else:
             minimum, maximum = payload.get("min"), payload.get("max")
             if any(

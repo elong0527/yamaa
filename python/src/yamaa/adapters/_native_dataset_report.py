@@ -92,6 +92,8 @@ def observations(specification, outcome):
             elif check is not None and check.operation == "row_count":
                 offending = [{}]
                 context["count"] = int(observed["output_rows"])
+            elif check is not None and check.operation in {"assert", "implies"}:
+                pass  # Predicate failures report counts and keys, without extra fields.
             else:
                 raise ValueError("unknown native verification observation")
             context[count_name] = int(observed["failed_count"])

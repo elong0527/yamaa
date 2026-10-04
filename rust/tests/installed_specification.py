@@ -100,6 +100,10 @@ class InstalledSpecification(unittest.TestCase):
                 side_effect=AssertionError("reference predicate evaluation"),
             ),
             patch(
+                "yamaa.verification.checks.evaluate_predicate",
+                side_effect=AssertionError("reference verification predicate"),
+            ),
+            patch(
                 "yamaa.verification.checks.check_dataset",
                 side_effect=AssertionError("reference checks"),
             ),
@@ -218,6 +222,87 @@ class InstalledSpecification(unittest.TestCase):
         self.assertEqual(
             self.compare(self.load(doc), self.sources).result.status, "failure"
         )
+
+    def test_assertion_and_implication_records(self):
+        """All completed check observations and exact failed identities survive native checks."""
+        for held in (False, True):
+            with self.subTest(held=held):
+                doc = copy.deepcopy(self.document)
+                doc["output"]["verification_log"] = "checks.csv"
+                doc["verifications"].extend(
+                    [
+                        {
+                            "assert": {
+                                "id": "avals",
+                                "expr": "AVAL IS NULL OR AVAL >= 0"
+                                if held
+                                else "AVAL IS NOT NULL",
+                            }
+                        },
+                        {
+                            "implies": {
+                                "id": "derived",
+                                "when": "DTYPE IS NOT NULL"
+                                if held
+                                else "DTYPE IS NULL",
+                                "then": "PARAMCD = 'TOTAL'"
+                                if held
+                                else "AVAL IS NOT NULL",
+                            }
+                        },
+                    ]
+                )
+                actual = self.compare(self.load(doc), self.sources)
+                self.assertEqual(actual.result.status, "success" if held else "failure")
+                self.assertEqual(
+                    [record.evaluated_count for record in actual.verifications],
+                    [17, 1, 17, 17],
+                )
+                if not held:
+                    self.assertEqual(
+                        [
+                            record.failure.context["failure_count"]
+                            for record in actual.verifications[2:]
+                        ],
+                        [4, 3],
+                    )
+
+    def test_predicate_check_conditions_and_declaration_order(self):
+        """Declaration and dynamic errors preserve exact diagnostics and prior ledger rows."""
+        cases = [
+            {"assert": {"expr": "AVAL = 'bad'"}},
+            {"assert": {"expr": "z = a"}},
+            {"assert": {"expr": "AVAL >"}},
+            {"implies": {"when": "FALSE", "then": "AVAL = 'bad'"}},
+            {"implies": {"when": "FALSE", "then": "'x' LIKE PARAMCD ESCAPE '1'"}},
+            {"implies": {"when": "AVAL = 'bad'", "then": "AVAL >"}},
+            {"implies": {"when": "AVAL = 'bad'", "then": "z = a"}},
+            {"implies": {"when": "'x' LIKE PARAMCD ESCAPE '1'", "then": "AVAL >"}},
+        ]
+        for case in cases:
+            for empty in (False, True):
+                with self.subTest(case=case, empty=empty):
+                    doc = copy.deepcopy(self.document)
+                    doc["output"]["verification_log"] = "checks.csv"
+                    doc["verifications"][1]["row_count"] = {"min": 18, "max": 18}
+                    doc["verifications"].append(case)
+                    table = self.sources["LB"].table
+                    if empty:
+                        table = table.model_copy(update={"frame": table.frame.head(0)})
+                    self.compare(self.load(doc), {"LB": table})
+
+    def test_check_predicates_follow_key_and_conversion_failures(self):
+        """Native sample evaluation cannot move a verification condition before data gates."""
+        for scenario in ("keys", "conversion"):
+            with self.subTest(scenario=scenario):
+                doc = copy.deepcopy(self.document)
+                doc["output"]["verification_log"] = "checks.csv"
+                doc["verifications"].append({"assert": {"expr": "AVAL = 'bad'"}})
+                if scenario == "keys":
+                    doc["keys"] = ["STUDYID"]
+                else:
+                    doc["rows"][0]["derivations"]["AVAL"] = {"literal": True}
+                self.compare(self.load(doc), self.sources)
 
     def test_failures_and_complete_logs(self):
         """Failed checks retain all records, sampled diagnostics and complete private keys."""

@@ -192,7 +192,7 @@ impl Node {
 
 impl Predicate {
     /// Validate the complete typed filter and bindings before decoding source IPC.
-    pub(crate) fn prepare(self) -> Result<engine::Filter, Error> {
+    pub(crate) fn prepare(self) -> Result<engine::BoundPredicate, Error> {
         if self.nodes.len() > 4096
             || self.bindings.len() > 4096
             || self.path.len() > 1024
@@ -233,6 +233,6 @@ impl Predicate {
             core::PlanError::Limit(_) => Error::RequestLimit,
             _ => Error::InvalidPlan,
         })?;
-        engine::Filter::new(plan, bindings).map_err(|_| Error::InvalidPlan)
+        engine::BoundPredicate::new(plan, bindings).map_err(|_| Error::InvalidPlan)
     }
 }
