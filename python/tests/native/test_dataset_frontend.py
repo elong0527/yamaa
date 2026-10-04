@@ -1158,6 +1158,39 @@ def test_named_intermediate_lowering_preserves_match_and_reading_paths(tmp_path)
     assert request["columns"][0]["path"] == "columns.DTHDY.derivation.source"
 
 
+def test_completed_column_name_can_match_named_intermediate(tmp_path):
+    """A bare name remains an output read even when a named selector has that identifier."""
+
+    def mutate(document):
+        """Keep qualified intermediate reads alongside a distinct bare output read."""
+        document["columns"].insert(
+            1,
+            {
+                "name": "DEATHEV",
+                "type": "int",
+                "label": "Output",
+                "derivation": {"literal": 17},
+            },
+        )
+        document["columns"].append(
+            {"name": "COPY", "type": "int", "label": "Copy", "derivation": "DEATHEV"}
+        )
+
+    spec = named_specification(tmp_path, mutate)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-lookup")
+    )
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    request, pending = lower(
+        plan,
+        sources["DM"].table,
+        {name: sources[name].table for name in ["AE", "MEDDRA"]},
+    )
+    assert pending is None
+    assert request["columns"][-1]["expression"] == {"column": 1}
+
+
 @pytest.mark.parametrize(
     "mutate",
     [

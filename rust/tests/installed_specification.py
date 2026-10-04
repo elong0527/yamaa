@@ -107,6 +107,7 @@ class InstalledSpecification(unittest.TestCase):
         document = yaml.safe_load((case / "spec.yaml").read_text())
         scenarios = [
             "empty",
+            "name_collision",
             "missing_base",
             "no_absence_handler",
             "no_order",
@@ -122,6 +123,25 @@ class InstalledSpecification(unittest.TestCase):
         for scenario in scenarios:
             with self.subTest(scenario=scenario):
                 doc = copy.deepcopy(document)
+                if scenario == "name_collision":
+                    doc["columns"].insert(
+                        1,
+                        {
+                            "name": "DEATHEV",
+                            "type": "int",
+                            "label": "Output",
+                            "derivation": {"literal": 17},
+                        },
+                    )
+                    doc["columns"].append(
+                        {
+                            "name": "COPY",
+                            "type": "int",
+                            "label": "Copy",
+                            "derivation": "DEATHEV",
+                        }
+                    )
+                    doc["output"]["columns"].extend(["DEATHEV", "COPY"])
                 if scenario == "no_absence_handler":
                     doc["intermediates"][0].pop("no_match")
                 if scenario == "no_order":
