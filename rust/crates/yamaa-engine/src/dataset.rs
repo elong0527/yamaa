@@ -256,7 +256,7 @@ impl DatasetPlan {
         let mut row_columns = None;
         for template in &templates {
             let keyed = matches!(template.mode, RowMode::Keys);
-            if keyed && (templates.len() != 1 || template.filter.is_some()) {
+            if keyed && templates.len() != 1 {
                 return Err(PlanError::InvalidKeyMode);
             }
             if let RowMode::Groups(keys) = &template.mode {
@@ -282,7 +282,7 @@ impl DatasetPlan {
                 filter
                     .validate(
                         source.columns().len(),
-                        &available,
+                        if keyed { &[] } else { &available },
                         matches!(template.mode, RowMode::Groups(_)),
                     )
                     .map_err(PlanError::Filter)?;

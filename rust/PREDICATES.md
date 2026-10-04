@@ -88,9 +88,9 @@ literal representations before constructing the plan, including static ESCAPE
 errors and literal overflow/temporal diagnostics. The typed interface cannot
 represent a portable-regex call; valid `str_contains` must remain explicitly
 unsupported at future admission until regex contract 2.0.0 is implemented and
-qualified. The shared parser/compiler, root/source filters,
+qualified. The shared parser/compiler, source-selection filters,
 lookup/window/BMI integration and full Python/R specification execution remain open
-gates. Explicit row-template filters and assert/implies checks compose this evaluator through the
+gates. Root/row-template filters and assert/implies checks compose this evaluator through the
 [dataset/1 bridge](DATASET_TRANSPORT.md), with complete phase-aware binding before
 source IPC decoding. Installed Python and R replay the shared typed filter cases;
 the optional Python frontend uses the existing parser as a temporary syntax port

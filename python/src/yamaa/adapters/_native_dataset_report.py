@@ -54,12 +54,12 @@ def condition(observed, keys):
         phase=diagnostic["phase"],
         condition=diagnostic["condition"],
         spec_paths=tuple(diagnostic["spec_paths"]),
-        # The reference's row-filter wrapper omits the primitive requirement.
+        # The reference's root/row-filter wrappers omit the primitive requirement.
         # The native diagnostic retains it; the ordinary public result matches
         # that existing site-specific report contract.
         requirement=None
         if all(
-            path.startswith("rows[") and path.endswith(".filter")
+            path == "filter" or (path.startswith("rows[") and path.endswith(".filter"))
             for path in diagnostic["spec_paths"]
         )
         else diagnostic["requirement"],

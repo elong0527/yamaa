@@ -41,7 +41,7 @@ def test_adlb_lowering_matches_independent_bound_plan(specification):
 @pytest.mark.parametrize(
     "feature",
     [
-        "filter",
+        "root_regex",
         "predicate_regex",
         "predicate_wide_literal",
         "handler",
@@ -73,9 +73,9 @@ def test_unsupported_run_never_reads_sources(specification, feature):
     for row in doc["rows"]:
         for declaration in row["derivations"].values():
             declaration.pop("unconvertible", None)
-    if feature == "filter":
-        doc["filter"] = "LB.LBSTRESN > 0"
-        doc["rows"] = None  # valid root-filter mode, still outside this bridge
+    if feature == "root_regex":
+        doc["filter"] = "str_contains(LB.LBTESTCD, 'COMP')"
+        doc["rows"] = None  # root regex remains outside the admitted predicate subset
         for column in doc["columns"]:
             if "derivation" not in column:
                 column["derivation"] = {"value": {"literal": None}}
@@ -821,4 +821,77 @@ def test_baseline_admission_precedes_provider(tmp_path, monkeypatch, scenario):
             "capability": "native_window_baseline",
         }[scenario]
         assert expected in {f.operation for f in result.result.features}
+    assert effects == []
+
+
+def test_root_filter_lowers_before_key_construction(tmp_path):
+    """The root filter binds qualified source fields, with original predicate provenance."""
+
+    def mutate(document):
+        document["filter"] = "VS.VISITN > 1"
+
+    spec = numbering_specification(tmp_path, mutate)
+    admit(spec)
+    sources = load_source_tables(
+        spec.input, ProjectResources(ROOT / "benchmarks/schema-window-functions")
+    )
+    request, error = lower(
+        plan_execution(spec, sources, supported_operations=OPERATIONS),
+        sources["VS"].table,
+    )
+    assert error is None
+    predicate = request["templates"][0]["filter"]
+    assert predicate["path"] == "filter"
+    index = next(
+        i for i, c in enumerate(sources["VS"].table.columns) if c.name == "VISITN"
+    )
+    assert predicate["bindings"] == [{"name": "VS.VISITN", "read": {"source": index}}]
+
+
+def test_old_native_package_refuses_root_filter_before_provider(tmp_path, monkeypatch):
+    """A key-grain package with row filters cannot implicitly execute root filtering."""
+
+    def mutate(document):
+        document["filter"] = "VS.VISITN > 1"
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": ["row_filter", "key_grain", "window_numbering"],
+                }
+            ),
+        ),
+    )
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "unsupported"
+    assert {f.operation for f in result.result.features} == {"native_root_filter"}
+    assert effects == []
+
+
+def test_root_filter_cannot_read_output_before_keys(tmp_path):
+    """An output-column root predicate is a phase error before provider effects."""
+
+    def mutate(document):
+        document["filter"] = "VISITN > 1"
+
+    spec = numbering_specification(tmp_path, mutate)
+    effects = []
+    result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert result.result.status == "failure"
+    assert len(result.result.diagnostics) == 1
+    diagnostic = result.result.diagnostics[0]
+    assert diagnostic.condition == "phase_boundary"
+    assert diagnostic.spec_paths == ("filter",)
+    assert diagnostic.context == {
+        "identifier": "VISITN",
+        "available_phase": "column_derivation",
+        "required_phase": "row_filter",
+    }
     assert effects == []

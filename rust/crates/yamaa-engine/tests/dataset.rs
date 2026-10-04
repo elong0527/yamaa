@@ -3445,3 +3445,126 @@ fn baseline_ties_count_all_matches_and_charge_partition_identity() {
         matches!(*baseline_plan(&source, vec![], None).execute(&source, Limits { identity_cells: 0, ..limits() }).unwrap_err(), ExecutionError::BaselineAmbiguity { partition, .. } if partition.is_empty())
     );
 }
+
+/// Bind a source-only root predicate before standalone key construction.
+fn root_filtered_plan(source: &Table, predicate: Filter) -> Result<DatasetPlan, PlanError> {
+    DatasetPlan::new(
+        source.schema.clone(),
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Str)]),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: Some(predicate),
+        }],
+        vec![assign(1, collect(1))],
+        vec![0],
+        vec![],
+    )
+}
+
+/// Filtering removes bad keys and conflicting values while preserving source memberships.
+#[test]
+fn root_filter_precedes_keys_and_retains_only_qualifying_feeders() {
+    let source = table(
+        &[
+            ("ID", ColumnType::Str),
+            ("V", ColumnType::Str),
+            ("KEEP", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Str("bad".into()),
+                Value::Str("bad".into()),
+                Value::Int(0),
+            ],
+            vec![
+                Value::Str("02".into()),
+                Value::Str("seven".into()),
+                Value::Int(1),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Str("conflict".into()),
+                Value::Missing,
+            ],
+            vec![
+                Value::Str("1".into()),
+                Value::Str("eight".into()),
+                Value::Int(1),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Str("seven".into()),
+                Value::Int(1),
+            ],
+        ],
+    );
+    let plan = root_filtered_plan(&source, positive(Read::Source(2))).unwrap();
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![Value::Int(2), Value::Str("seven".into())],
+            vec![Value::Int(1), Value::Str("eight".into())]
+        ]
+    );
+    let reads = source.reads.borrow();
+    assert_eq!(&reads[..5], &[(0, 2), (1, 2), (2, 2), (3, 2), (4, 2)]);
+    assert!(!reads.contains(&(0, 0)) && !reads.contains(&(2, 0)));
+    assert!(reads.contains(&(1, 1)) && reads.contains(&(3, 1)) && reads.contains(&(4, 1)));
+    assert!(!reads.contains(&(2, 1)));
+}
+
+/// A later predicate error precedes an earlier bad key; false/empty filters skip conversion.
+#[test]
+fn root_filter_completes_before_key_failures_and_recovers() {
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Str),
+            ("V", ColumnType::Str),
+            ("KEEP", ColumnType::Int),
+        ],
+        vec![
+            vec![
+                Value::Str("bad".into()),
+                Value::Str("value".into()),
+                Value::Int(1),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Str("value".into()),
+                Value::Int(1),
+            ],
+        ],
+    );
+    let plan = root_filtered_plan(&source, positive(Read::Source(2))).unwrap();
+    source.fail = Some((1, 2));
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Predicate { source_row: 1, .. }
+    ));
+    assert_eq!(*source.reads.borrow(), vec![(0, 2), (1, 2)]);
+    source.fail = None;
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Conversion { identity: None, .. }
+    ));
+    let excluded = root_filtered_plan(&source, filter(Node::Boolean(false), vec![])).unwrap();
+    assert!(excluded
+        .execute(&source, limits())
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+    source.rows.clear();
+    assert!(plan
+        .execute(&source, limits())
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+    assert!(matches!(
+        root_filtered_plan(&source, positive(Read::Column(0))),
+        Err(PlanError::Filter(BindingError::UnavailableColumn))
+    ));
+}

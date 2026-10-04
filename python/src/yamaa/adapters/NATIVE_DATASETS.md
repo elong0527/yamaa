@@ -58,7 +58,7 @@ values enter ordinary host table storage; ingested temporal values have the
 reference's full day/second precision. Source ordinals are assigned by the existing
 host ingestion port, then read as ordinary exact int64 values by Rust.
 
-When `rows` is absent or empty, Rust first evaluates and converts each input
+When `rows` is absent or empty, Rust evaluates and converts each retained input
 record's keys, then constructs distinct combinations in first-appearance order.
 Missing-key records remain separate for the output gate. Later direct source
 reads collect all records feeding the combination: repeated present values count
@@ -69,13 +69,20 @@ the existing planning/admission diagnostics. Key names remain associated with
 their values regardless of identity order. This path requires `key_grain` native
 capability before provider effects; it never calls the reference key constructor.
 
+A root `filter` in this mode additionally requires `root_filter` before source
+access. It reads qualified base-source fields only, retaining true rows and
+omitting false/unknown rows before any key conversion. Every predicate evaluation
+finishes before key construction starts. Collected non-key values use only the
+retained feeding records. Root filtering and explicit rows remain incompatible
+(REQ-1171); empty input skips predicate evaluation.
+
 Explicit row-template filters support Boolean logic, comparisons, null tests,
 IN, BETWEEN and Unicode LIKE, including negation and explicit ESCAPE. The existing
 Python parser validates grammar and lowers the bound AST; Rust evaluates every
 operand. Record filters can read source fields and completed row columns; grouped
 filters can read only completed row columns. Filtering follows row derivations
 and conversion, and precedes later whole-column derivations. Only true survives.
-The public row-filter diagnostic projection preserves the reference wrapper's
+The public root/row-filter diagnostic projection preserves the reference wrapper's
 omitted requirement; raw native diagnostics retain their requirement and operand
 route. Out-of-i64 predicate literals and non-scalar Unicode text are explicitly
 unsupported before source IO. Valid regex calls remain unsupported.
@@ -129,7 +136,7 @@ REQ-0322 with its exact count and declared partition keys, including missing key
 or the empty global identity. Filters use the existing `window_filter` gate.
 Other comparable baseline types remain explicitly unsupported in this slice.
 
-Root/source filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
+Source-selection filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
 multiple sources, intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.

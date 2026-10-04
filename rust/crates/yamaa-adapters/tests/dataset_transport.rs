@@ -178,6 +178,10 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
             "baseline.arrow" => include_bytes!("fixtures/datasets/baseline.arrow"),
             "baseline-tie.arrow" => include_bytes!("fixtures/datasets/baseline-tie.arrow"),
             "baseline-empty.arrow" => include_bytes!("fixtures/datasets/baseline-empty.arrow"),
+            "root-filter.arrow" => include_bytes!("fixtures/datasets/root-filter.arrow"),
+            "root-filter-empty.arrow" => {
+                include_bytes!("fixtures/datasets/root-filter-empty.arrow")
+            }
             other => panic!("unknown fixture {other}"),
         };
         let response = execute_dataset(&case["request"].to_string(), input).unwrap();
@@ -222,7 +226,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -377,8 +381,7 @@ fn invalid_key_grain_plans_fail_before_ipc_and_recover() {
     req["templates"].as_array_mut().unwrap().push(extra);
     variants.push(req);
     let mut req = key_request();
-    req["templates"][0]["filter"] =
-        json!({"path":"filter","text":"TRUE","root":0,"nodes":[{"boolean":true}],"bindings":[]});
+    req["templates"][0]["filter"] = json!({"path":"filter","text":"id = 1","root":0,"nodes":[{"compare":{"operator":"eq","left":{"identifier":"id"},"right":{"literal":{"int":"1"}}}}],"bindings":[{"name":"id","read":{"column":0}}]});
     variants.push(req);
     for req in variants {
         assert_eq!(
