@@ -4132,3 +4132,193 @@ fn source_order_uses_exact_typed_comparison_and_lazy_representation() {
     );
     assert_eq!(attempt.handler_counts[0].count, 1);
 }
+
+/// Bind an implicit many-to-one read against a separately owned immutable relation.
+fn secondary_lookup_plan(source: &Table, secondary: &Table) -> Result<DatasetPlan, PlanError> {
+    use yamaa_engine::dataset::{Lookup, MatchKey, SecondarySource};
+    DatasetPlan::new_with_sources(
+        source.schema.clone(),
+        vec![SecondarySource {
+            name: "OTHER".into(),
+            schema: secondary.schema.clone(),
+        }],
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![assign(
+            1,
+            Expression::Lookup(Lookup {
+                source: 0,
+                column: 1,
+                keys: vec![MatchKey {
+                    source_column: 0,
+                    output_column: 0,
+                }],
+            }),
+        )],
+        vec![0],
+        vec![],
+    )
+}
+
+/// Converted keys reach a secondary relation; no matching record answers missing.
+#[test]
+fn secondary_lookup_uses_completed_keys_and_preserves_missing_reads() {
+    let source = table(
+        &[("ID", ColumnType::Str)],
+        vec![
+            vec![Value::Str("02".into())],
+            vec![Value::Str("1".into())],
+            vec![Value::Str("3".into())],
+        ],
+    );
+    let mut secondary = table(
+        &[("ID", ColumnType::Int), ("V", ColumnType::Str)],
+        vec![
+            vec![Value::Int(2), Value::Str("7".into())],
+            vec![Value::Int(1), Value::Missing],
+            vec![Value::Missing, Value::Str("99".into())],
+        ],
+    );
+    let plan = secondary_lookup_plan(&source, &secondary).unwrap();
+    let attempt = plan.execute_observed_sources(&source, &[&secondary], limits());
+    assert!(attempt.handler_counts.is_empty());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        &[
+            vec![Value::Int(2), Value::Int(7)],
+            vec![Value::Int(1), Value::Missing],
+            vec![Value::Int(3), Value::Missing]
+        ]
+    );
+    assert!(!secondary.reads.borrow().contains(&(2, 1)));
+    secondary.rows.clear();
+    assert!(plan
+        .execute_observed_sources(&source, &[&secondary], limits())
+        .result
+        .unwrap()
+        .dataset
+        .rows()
+        .iter()
+        .all(|row| row[1] == Value::Missing));
+}
+
+/// Duplicate secondary records disagree about cardinality even when their values agree.
+#[test]
+fn secondary_lookup_counts_records_before_reading_donors() {
+    let source = table(
+        &[("ID", ColumnType::Str)],
+        vec![vec![Value::Str("02".into())]],
+    );
+    let mut secondary = table(
+        &[("ID", ColumnType::Int), ("V", ColumnType::Str)],
+        vec![
+            vec![Value::Int(2), Value::Str("7".into())],
+            vec![Value::Int(2), Value::Str("7".into())],
+            vec![Value::Int(2), Value::Missing],
+        ],
+    );
+    secondary.fail = Some((0, 1));
+    let plan = secondary_lookup_plan(&source, &secondary).unwrap();
+    let attempt = plan.execute_observed_sources(&source, &[&secondary], limits());
+    match *attempt.result.unwrap_err() {
+        ExecutionError::MultipleMatches {
+            dataset,
+            match_count,
+            matched_key,
+            identity,
+            ..
+        } => {
+            assert_eq!(dataset, "OTHER");
+            assert_eq!(match_count, 3);
+            assert_eq!(matched_key, vec![("ID".into(), Value::Int(2))]);
+            assert_eq!(identity.unwrap().values, vec![Value::Int(2)]);
+        }
+        error => panic!("wrong failure {error:?}"),
+    }
+    assert_eq!(*secondary.reads.borrow(), vec![(0, 0), (1, 0), (2, 0)]);
+    secondary.rows.truncate(1);
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(&source, &[&secondary], limits())
+            .result
+            .unwrap_err(),
+        ExecutionError::SecondaryCell {
+            source: 0,
+            source_row: 0,
+            ..
+        }
+    ));
+    secondary.fail = None;
+    secondary.rows[0][1] = Value::Str("bad".into());
+    assert!(
+        matches!(*plan.execute_observed_sources(&source,&[&secondary],limits()).result.unwrap_err(),ExecutionError::Conversion {path,identity:Some(_),..} if path=="columns.V")
+    );
+}
+
+/// Admission and base keys precede secondary reads; total input capacity and fresh budgets apply.
+#[test]
+fn secondary_lookup_validates_catalog_and_failure_order() {
+    let mut source = table(
+        &[("ID", ColumnType::Str)],
+        vec![
+            vec![Value::Str("02".into())],
+            vec![Value::Str("bad".into())],
+        ],
+    );
+    let mut secondary = table(
+        &[("ID", ColumnType::Int), ("V", ColumnType::Str)],
+        vec![vec![Value::Int(2), Value::Str("7".into())]],
+    );
+    secondary.fail = Some((0, 0));
+    let plan = secondary_lookup_plan(&source, &secondary).unwrap();
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(&source, &[&secondary], limits())
+            .result
+            .unwrap_err(),
+        ExecutionError::Conversion { identity: None, .. }
+    ));
+    assert!(secondary.reads.borrow().is_empty());
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::SchemaMismatch
+    ));
+    source.rows.pop();
+    secondary.fail = None;
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(
+                &source,
+                &[&secondary],
+                Limits {
+                    source_rows: 1,
+                    ..limits()
+                }
+            )
+            .result
+            .unwrap_err(),
+        ExecutionError::Capacity
+    ));
+    assert!(plan
+        .execute_observed_sources(&source, &[&secondary], limits())
+        .result
+        .is_ok());
+    source.rows.clear();
+    secondary.fail = Some((0, 0));
+    assert!(plan
+        .execute_observed_sources(&source, &[&secondary], limits())
+        .result
+        .unwrap()
+        .dataset
+        .rows()
+        .is_empty());
+    let wrong = table(&[("ID", ColumnType::Float), ("V", ColumnType::Str)], vec![]);
+    assert!(matches!(
+        secondary_lookup_plan(&source, &wrong),
+        Err(PlanError::InvalidLookup)
+    ));
+}

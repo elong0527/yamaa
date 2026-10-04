@@ -76,7 +76,11 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                 plan,
                 row,
                 limits,
-                &mut EvaluationState { budget, handlers },
+                &mut EvaluationState {
+                    budget,
+                    handlers,
+                    secondary: &[],
+                },
             )?;
             probe.completed[assignment.column] = true;
         }
