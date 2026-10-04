@@ -79,9 +79,15 @@ No matching secondary record yields missing; one yields its value, including a
 missing value. Multiple matching records fail with REQ-0127 and the complete
 match-key context and output identity, even when donor values are identical.
 All base keys complete before secondary reads; earlier column failures still win.
-Secondary filters/order policies, named intermediates and explicit row-template
-joins remain unsupported. The `schema-lookup` benchmark still needs named
-intermediate selection and therefore remains outside this frontend.
+Policies on implicit secondary reads and explicit row-template joins remain
+unsupported. Named secondary intermediates can declare source-only filters,
+paired order/keep policies, same-type match keys against completed outputs and
+literal `no_match` handling. The additive `named_intermediate` capability is
+checked before provider effects. Rust caches selected records per output row;
+each reading inherits the selected handler at its own source path. Duplicate
+records count independently even if values agree. Matched missing fields remain
+distinct from absent matches. Derived/SELF/base intermediates, correlated filters,
+ranges and key expressions remain unsupported.
 
 A non-key column can use `source: {variable: SRC.V, filter: predicate}` to narrow
 its feeding records. `source_filter` is required before provider effects. The
@@ -174,7 +180,7 @@ Other comparable baseline types remain explicitly unsupported in this slice.
 
 Broader source selection, portable regex calls, additional expression operations, source handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
-broader joins, intermediates, producer schemas,
+broader joins/intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.
 Unresolved inheritance remains unsupported; ordinary loader-resolved inheritance
 uses the resulting normalized declarations. Shared Rust YAML resolution/compilation
@@ -207,7 +213,13 @@ and datetime baselines, per-row reference dates, missing operands, three-way tie
 partition/global condition context, filtering, result conversion and empty output.
 Numbering and donor cases retain directions/null placement and exact representations.
 
-This qualifies the declared frontend slice only. The named lookup/BMI
+Installed tests execute the complete unchanged `schema-lookup` document against
+its committed expected CSV, with five inherited handler entries. Additional
+cases compare empty/unused relations, duplicate identical records, missing
+donors, exact order, ties, filters, absence literals and failure priority. Native
+comparisons disable reference named selection and lookup dispatch.
+
+This qualifies the declared frontend slice only. The named BMI
 prototypes, full compiler/workflow/activation/publication, R specification frontend,
 all benchmark cases, performance measurements and release/default-cutover gates
 remain open. No speedup or full language parity is claimed.

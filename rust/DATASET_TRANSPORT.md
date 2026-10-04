@@ -207,8 +207,38 @@ A multiple-match condition carries `matched_key: [{name, value}]` beside its
 output `identity`. The diagnostic records source name, synthetic implicit
 intermediate name and exact match count. The Python adapter reconstructs `key`
 and `intermediate_key` context from the named typed values; output `keys` remains
-the complete output identity. Named intermediates, cross-type key comparison and
-secondary-source filtering/ordered choice are separate qualification steps.
+the complete output identity. Cross-type key comparison and policies on implicit
+secondary reads remain outside this slice.
+
+## Named secondary intermediates
+
+`named_intermediate` adds an optional request `intermediates` list, bounded to 64
+declarations. Each item has `identifier`, `path`, secondary `source` index and
+nonempty `keys` pairs with the same type/dependency rules as implicit lookup.
+Optional `filter` binds only that secondary source, and optional `selection`
+uses the same source-indexed `order_by`/`keep` representation as `collect`.
+Optional `no_match` carries a tagged scalar: `{missing: null}` handles absence;
+omission leaves absence as `unmatched_key` / REQ-0124. Assignment expression
+`{intermediate: {index, column}}` reads a field from that named record selection.
+Only key-grain non-key assignments can read it; all match outputs must be complete.
+
+The first reached read materializes the whole source-only filter before matching,
+including when current keys are missing or unmatched. Empty output and unused
+declarations never evaluate the filter. Every matching record counts, including
+identical or missing donor values. Multiple matches require ordered selection or
+raise REQ-0127. Stable source position breaks ties, with exact typed order and
+independent null placement. Selection is cached once per output row/declaration;
+source eligibility is cached once per declaration within the attempt. Matching,
+cache entries, order reads and scalar copies consume cumulative resource budgets.
+
+Each reading records inherited `multiple_matches` or `no_match` at its own source
+handler path before conversion. Cached reads repeat that accounting; matched
+missing fields do not trigger `no_match`. Unused sites emit no zero counts. Join
+conditions name the original intermediate path/id, include typed `matched_key`
+and complete output identity. Predicate errors retain their filter provenance
+without output identity. Every execution starts with fresh caches and counts.
+Derived/SELF/base intermediates, correlated filters, ranges, extra handlers and
+explicit row-template reads remain outside this bounded vocabulary.
 
 ## Row-template predicates
 
@@ -238,7 +268,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

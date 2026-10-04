@@ -237,9 +237,16 @@ retains REQ-0127 match-key context and output identity. No match gives missing;
 identical duplicate values remain multiple matches. Shared fixtures cover values,
 absence, empty base, duplicates and conversion; installed comparisons prohibit
 host lookup dispatch. Total bytes/cells/rows and cumulative scan work are bounded.
-This initial scan is not a performance claim. Named intermediate caching,
-secondary filtering/selection and mixed numeric key matching remain open, so the
-unchanged multi-source lookup benchmark is not yet qualified.
+This initial scan is not a performance claim; mixed numeric key matching remains
+open. Named secondary intermediates additionally cache source-only eligibility
+once per reached declaration and selected records per output row. Same-type
+match keys may read earlier completed outputs; ordered choices count records,
+and literal absence handling preserves REQ-0124 when omitted. Each reading
+records inherited handlers at its own source path before conversion. Shared
+fixtures and installed tests cover exact values, counts and failure priority;
+the complete unchanged `schema-lookup` benchmark reaches its committed CSV.
+Derived/SELF/base intermediates, correlated filters, range matching and explicit
+row-template reads remain open, as do shared compilation and release qualification.
 
 The key-grain column phase also supports row numbering and competition/
 dense rank over completed output columns (REQ-0293/0301/0303/0340). Partitioning,

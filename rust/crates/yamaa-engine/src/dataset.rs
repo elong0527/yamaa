@@ -66,7 +66,7 @@ pub enum Keep {
     Last,
 }
 
-/// An ordered choice applies only when eligible present readings disagree.
+/// Stable record order; each caller determines when its cardinality requires a choice.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceSelection {
     pub order_by: Vec<OrderTerm>,

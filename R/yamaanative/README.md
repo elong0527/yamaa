@@ -269,5 +269,13 @@ The `multi_source` capability permits bound key-grain non-key `lookup` reads.
 Missing keys never match; absence yields missing, while duplicate matching
 records fail with exact match count and named match-key evidence even when values
 agree. Combined input is bounded to eight sources, 8 MiB, 262,144 cells and
-65,536 rows. Other source selection and named intermediate policies remain
-unqualified. This raw API does not introduce an R specification frontend.
+65,536 rows. This raw API does not introduce an R specification frontend.
+
+`named_intermediate` adds bounded named secondary selectors to the same request.
+Source-only filters run once when first needed; same-type keys bind completed
+outputs, and optional order/keep selects records with stable ties. Explicit
+tagged `no_match` handles absence; omission preserves REQ-0124. Cached record
+choices still record inherited `multiple_matches`/`no_match` at every reading's
+source path before conversion. Six independent shared cases replay cached reads,
+absence, duplicate identical records, empty output, false filters and retained
+counts on conversion failure. Broader intermediate policies remain unqualified.
