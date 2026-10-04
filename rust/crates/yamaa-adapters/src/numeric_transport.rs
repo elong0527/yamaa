@@ -564,6 +564,38 @@ fn compile_outcome(error: CompileError, expression: &str, path: String) -> Outco
     }
 }
 
+/// Encode compiled numeric failures identically for scalar and dataset execution.
+pub(crate) fn numeric(
+    error: yamaa_core::numeric_compiler::CompiledEvaluationError<Infallible>,
+) -> Result<Box<Diagnostic>, NumericTransportError> {
+    let EvaluationErrorKind::Numeric(condition) = error.evaluation.kind else {
+        return Err(NumericTransportError::Internal);
+    };
+    Ok(Box::new(Diagnostic {
+        phase: condition.phase(),
+        condition: condition.condition(),
+        requirement: condition.requirement(),
+        spec_paths: vec![error.evaluation.location.spec_path],
+        context: numeric_context(&condition, &error.evaluation.location.expression),
+        source_span: Some(error.source_span.into()),
+        operand_route: Some(
+            error
+                .evaluation
+                .location
+                .operands
+                .into_iter()
+                .map(|o| match o {
+                    Operand::Unary => "unary".into(),
+                    Operand::Left => "left".into(),
+                    Operand::Right => "right".into(),
+                    Operand::Argument(i) => format!("argument:{i}"),
+                })
+                .collect(),
+        ),
+        position: None,
+    }))
+}
+
 /// Preserve lifecycle ownership, source geometry and both replacement failures.
 fn lifecycle_outcome(
     result: Result<Value, Box<NumericLifecycleError<Infallible>>>,
@@ -573,37 +605,10 @@ fn lifecycle_outcome(
             value: ScalarValue::from_core(value),
         },
         Err(error) => match *error {
-            NumericLifecycleError::Evaluation(error) => {
-                let EvaluationErrorKind::Numeric(condition) = error.evaluation.kind else {
-                    return Err(NumericTransportError::Internal);
-                };
-                Outcome::Failure {
-                    diagnostic: Box::new(Diagnostic {
-                        phase: condition.phase(),
-                        condition: condition.condition(),
-                        requirement: condition.requirement(),
-                        spec_paths: vec![error.evaluation.location.spec_path],
-                        context: numeric_context(&condition, &error.evaluation.location.expression),
-                        source_span: Some(error.source_span.into()),
-                        operand_route: Some(
-                            error
-                                .evaluation
-                                .location
-                                .operands
-                                .into_iter()
-                                .map(|o| match o {
-                                    Operand::Unary => "unary".into(),
-                                    Operand::Left => "left".into(),
-                                    Operand::Right => "right".into(),
-                                    Operand::Argument(i) => format!("argument:{i}"),
-                                })
-                                .collect(),
-                        ),
-                        position: None,
-                    }),
-                    original: None,
-                }
-            }
+            NumericLifecycleError::Evaluation(error) => Outcome::Failure {
+                diagnostic: numeric(error)?,
+                original: None,
+            },
             NumericLifecycleError::Conversion { spec_path, error } => Outcome::Failure {
                 diagnostic: conversion(error, spec_path),
                 original: None,

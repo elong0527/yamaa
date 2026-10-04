@@ -79,6 +79,7 @@ pub struct CompiledNumeric {
     math_policy: MathPolicy,
     sources: Vec<(Vec<Operand>, SourceSpan)>,
     resolutions: usize,
+    identifiers: Vec<String>,
 }
 
 impl CompiledNumeric {
@@ -100,6 +101,16 @@ impl CompiledNumeric {
     /// Static maximum resolver calls for one evaluation, not distinct name count.
     pub fn resolution_count(&self) -> usize {
         self.resolutions
+    }
+
+    /// Distinct case-sensitive names in written first-occurrence order for static binding.
+    pub fn identifiers(&self) -> impl Iterator<Item = &str> {
+        self.identifiers.iter().map(String::as_str)
+    }
+
+    /// Semantic node visits charged by an enclosing application before evaluation.
+    pub fn node_count(&self) -> usize {
+        self.sources.len()
     }
 
     /// Evaluate within the compiled structural bounds and attach the failed span.
@@ -199,6 +210,7 @@ pub fn compile_numeric_with_policy(
         },
         sources,
         resolutions,
+        identifiers: parsed.identifiers().map(String::from).collect(),
     })
 }
 

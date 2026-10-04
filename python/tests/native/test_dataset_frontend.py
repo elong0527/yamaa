@@ -94,7 +94,7 @@ def test_unsupported_run_never_reads_sources(specification, feature):
         )
         doc["rows"][0]["derivations"]["AVAL"]["value"] = {"source": payload}
     elif feature == "compute":
-        doc["rows"][0]["derivations"]["AVAL"]["value"] = {"compute": "1 + 2"}
+        doc["rows"][0]["derivations"]["AVAL"]["value"] = {"compute": "POWER(2, 3)"}
     elif feature.startswith("aggregate_"):
         payload = {"expr": "SUM(LB.LBSTRESN)"}
         if feature == "aggregate_expression":

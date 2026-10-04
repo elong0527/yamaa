@@ -233,6 +233,25 @@ def execute_with_source_provider(
         for i, check in enumerate(specification.verifications or ())
         if check.operation in {"assert", "implies"}
     )
+    compute_sites = [
+        f"columns.{column.name}.derivation.compute"
+        for column in specification.columns
+        if column.derivation is not None
+        and column.derivation.value.operation == "compute"
+    ]
+    compute_sites.extend(
+        f"rows[{index}].derivations.{name}.compute"
+        for index, row in enumerate(specification.rows or ())
+        for name, declaration in row.derivations.items()
+        if declaration.value.operation == "compute"
+    )
+    required.extend(
+        (
+            "numeric_compute",
+            UnsupportedFeature(operation="native_numeric_compute", spec_path=path),
+        )
+        for path in compute_sites
+    )
     if specification.filter is not None:
         required.append(
             (

@@ -10,6 +10,9 @@ mod key_grain;
 #[path = "dataset_lookup.rs"]
 mod lookup;
 pub use intermediates::{Intermediate, SourceSchemas};
+#[path = "dataset_numeric.rs"]
+mod numeric;
+pub use numeric::BoundNumeric;
 #[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{OrderTerm, Window, WindowKind};
@@ -34,6 +37,8 @@ use yamaa_core::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Literal(Value),
+    /// Compiled scalar arithmetic over statically bound source/completed output reads.
+    Compute(BoundNumeric),
     /// Column-phase windows over completed key-grain output rows.
     Window(Window),
     Source(usize),
@@ -243,6 +248,7 @@ fn validate_assignment(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
+        Expression::Compute(expression) => expression.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidIntermediate);
@@ -471,6 +477,11 @@ impl DatasetPlan {
                     // A key combination reads all its feeding records, never a chosen first row.
                     return Err(PlanError::InvalidKeyMode);
                 }
+                if keyed
+                    && matches!(&assignment.expression, Expression::Compute(expression) if expression.reads_source())
+                {
+                    return Err(PlanError::InvalidKeyMode);
+                }
                 validate_assignment(
                     assignment,
                     &mut available,
@@ -602,6 +613,10 @@ pub struct ExecutionAttempt<E> {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    Numeric {
+        error: yamaa_core::numeric_compiler::CompiledEvaluationError<Infallible>,
+        identity: Option<RowIdentity>,
+    },
     HandlerAccounting(HandlerCountOverflow),
     MultipleMatches {
         path: String,
@@ -756,6 +771,9 @@ fn evaluate<T: TableAccess + ?Sized>(
                 budget.scalar_text(text.len())?;
             }
             value.clone()
+        }
+        Expression::Compute(expression) => {
+            numeric::evaluate(expression, table, candidate, plan, row, budget)?
         }
         Expression::Column(column) => {
             let value = &candidate.values[*column];

@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute"]}"#
 }
 
 /// Bound host argument collections before copying any source buffers.
@@ -116,6 +116,7 @@ struct Field {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Expression {
     Literal(ScalarValue),
+    Compute(Compute),
     Number(Window),
     Window(Window),
     Source(usize),
@@ -124,6 +125,38 @@ enum Expression {
     Intermediate(IntermediateRead),
     Column(usize),
     Reduce(Reduction),
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Compute {
+    text: String,
+    bindings: Vec<crate::predicate_transport::Binding>,
+}
+
+impl Compute {
+    /// Compile the supported numerical policy and bind every name before snapshot decoding.
+    fn prepare(self, path: &str) -> Result<dataset::BoundNumeric, Error> {
+        use yamaa_core::{
+            numeric_compiler::{compile_numeric, CompileError, CompileLimits},
+            numeric_parser::ParseError,
+        };
+        if self.bindings.len() > 4096 {
+            return Err(Error::RequestLimit);
+        }
+        let expression = compile_numeric(&self.text, path, CompileLimits::default()).map_err(
+            |error| match error {
+                CompileError::ResolutionLimit { .. }
+                | CompileError::Parse(ParseError::Limit { .. }) => Error::RequestLimit,
+                _ => Error::InvalidPlan,
+            },
+        )?;
+        let bindings = self
+            .bindings
+            .into_iter()
+            .map(crate::predicate_transport::Binding::prepare)
+            .collect::<Result<Vec<_>, _>>()?;
+        dataset::BoundNumeric::new(expression, bindings).map_err(|_| Error::InvalidPlan)
+    }
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -659,6 +692,9 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                 Expression::Literal(value) => dataset::Expression::Literal(
                     value.into_core().map_err(|_| Error::InvalidScalar)?,
                 ),
+                Expression::Compute(expression) => {
+                    dataset::Expression::Compute(expression.prepare(&assignment.path)?)
+                }
                 Expression::Source(column) => dataset::Expression::Source(column),
                 Expression::Intermediate(read) => dataset::Expression::Intermediate {
                     index: read.index,
@@ -814,6 +850,16 @@ fn records(records: Vec<CheckRecord>) -> Vec<Record> {
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
 fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
     Ok(match error {
+        ExecutionError::Numeric {
+            error,
+            identity: keys,
+        } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::numeric(error).map_err(|_| Error::Internal)?,
+            identity: keys.map(identity),
+            matched_key: None,
+            partition: None,
+            verifications: None,
+        },
         ExecutionError::BaselineAmbiguity {
             path,
             column,
