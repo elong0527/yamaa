@@ -179,6 +179,9 @@ fn rejected(reason: &str, returned: Option<String>) -> CallbackError {
 /// Admit exact numeric/temporal built-ins, compatible text subclasses, and None.
 /// ABI3 date fields use safe attributes after exact built-in type admission.
 fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackError> {
+    if let Ok(temporal) = value.extract::<PyRef<'_, crate::temporal_result::TemporalResult>>() {
+        return temporal.value();
+    }
     if value.is_none() {
         return Ok(Value::Missing);
     }
