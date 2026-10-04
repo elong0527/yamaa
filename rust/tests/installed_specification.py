@@ -308,6 +308,24 @@ class InstalledSpecification(unittest.TestCase):
             actual.result.table.frame["ORD"].to_list(), list(range(1, 13)) + [0] * 5
         )
 
+    def test_admitted_specification_is_owned_across_provider_effects(self):
+        """Caller/provider mutations cannot replace the already admitted expressions."""
+        spec = self.spec
+
+        def provider(declarations):
+            """Mutate both caller-owned model internals and the supplied IO declarations."""
+            spec.rows[0].derivations["AVAL"].value.root.clear()
+            spec.rows[0].derivations["AVAL"].value.root["compute"] = "1 / 0"
+            declarations.clear()
+            return self.sources
+
+        actual = execute_with_source_provider(spec, provider)
+        self.assertEqual(actual.result.status, "success")
+        self.assertEqual(
+            render_artifact(actual.result.artifact),
+            (CASE / "expected/adlb.csv").read_bytes(),
+        )
+
     def test_native_limit_is_not_a_semantic_result(self):
         """Resource refusal propagates once without an accepted artifact or fallback."""
         doc = copy.deepcopy(self.document)

@@ -37,7 +37,9 @@ before requesting sources. It checks aggregate grammar rather than mistaking
 malformed syntax for a valid unimplemented expression. The native entrypoint must
 exist before the provider runs. Binding against actual source schemas follows
 source ingestion; Rust admits the complete bound request before IPC decoding.
-There is one provider invocation and one native dataset invocation, with no fallback,
+The admitted specification is copied before provider effects, and the provider
+receives separate source declarations so nested mutable model data cannot replace
+the plan during IO. There is one provider invocation and one native dataset invocation, with no fallback,
 reference evaluation, reference verification or callback execution.
 
 The admitted subset is one source, explicit record/group row templates, direct

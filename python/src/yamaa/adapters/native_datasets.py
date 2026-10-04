@@ -185,6 +185,9 @@ def execute_with_source_provider(
     callbacks, implicit backend fallback, file publication or expected-file reads.
     Native transport/resource errors propagate separately from semantic failures.
     """
+    # Frozen Pydantic models still contain mutable lists/dictionaries. Retain
+    # the admitted run independently of caller/provider mutations during IO.
+    specification = specification.model_copy(deep=True)
     try:
         admit(specification)
     except ExecutionPlanningError as error:
@@ -201,7 +204,12 @@ def execute_with_source_provider(
     if not callable(execute):
         raise TypeError("native execute_dataset must be callable")
     try:
-        sources = source_provider(specification.input)
+        sources = source_provider(
+            {
+                name: declaration.model_copy(deep=True)
+                for name, declaration in specification.input.items()
+            }
+        )
     except SourceError as error:
         return _failure(error.diagnostics)
     except ProducerSchemaUnresolved as error:
