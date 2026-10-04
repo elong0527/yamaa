@@ -25,7 +25,8 @@ All objects reject unknown fields. The required top-level fields are:
 - `source` and `output`: ordered arrays of `{name, kind}`; kinds are `str`, `int`,
   `float`, `date`, `datetime`. Names are unique and nonempty.
 - `templates`: ordered `{mode, assignments, filter?}` entries. Mode is `{records: null}` or
-  `{groups: [source_column_indices]}` with nonempty, distinct grouping fields.
+  `{groups: [source_column_indices]}` with nonempty, distinct grouping fields, or
+  the sole `{keys: null}` template described below.
 - `columns`: assignments for the later whole-column phase, in resolved order.
 - `keys`: nonempty, distinct output column indices.
 - `verifications`: ordered `{path, check}` entries with unique nonempty paths.
@@ -47,7 +48,7 @@ At least one row-count bound is required; `min` cannot exceed `max`. Missing bou
 may be omitted. Unique permits repeated references, matching the reference check.
 Only error-severity, whole-artifact bounds are represented. Root/source filters, fractions,
 grouped row counts, column checks, warnings, handlers, windows, joins, functions,
-multiple sources and key-grain construction are outside the closed plan vocabulary.
+multiple sources remain outside the closed plan vocabulary.
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
 then: predicate}}`, using the predicate representation below. Bindings may read
@@ -63,6 +64,28 @@ declaration-only checkpoint. It validates the representatives without evaluating
 actual rows or emitting a verification record. This preserves a `when` type error
 ahead of a pending `then` syntax/name error retained by the host compiler; it is
 not an additional public verification operation.
+
+## Standalone key combinations
+
+A sole `{keys: null}` template represents absent/empty public `rows` (REQ-0042).
+Its assignments complete exactly the declared output keys, in dependency order,
+using direct source reads, earlier keys or literals. It has no filter. Every
+input record completes all key conversions before any non-key derivation runs.
+Converted key combinations collapse in first-appearance order; each record with
+a missing key remains separate for the later output gate. Names stay associated
+with their values even when identity order differs from column/dependency order.
+
+The later `columns` phase cannot use `{source: index}` in this mode. It instead
+uses `{collect: {column: source_index, identifier: original_qualified_name}}`.
+This reads every feeding record and counts distinct present raw values before
+target conversion: no present value yields missing, one yields its first
+representation, and multiple values yield REQ-0075 with the exact count and
+complete output identity. For example, text `07` and `7` are two source values
+even when an integer destination would convert both to 7. Repeated values and
+missing readings do not create additional values. Collected reads are forbidden
+in key assignments and in ordinary record/group templates. Root/source filters,
+selection handlers, multiple inputs and additional expression families remain
+unsupported.
 
 ## Row-template predicates
 
@@ -92,7 +115,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
@@ -170,6 +193,14 @@ bounds candidates before each template's filter, not only final surviving rows.
 Group comparisons still depend on key lengths and tree depth;
 these policies are not CPU deadlines, allocator-byte guarantees or an OOM sandbox.
 Input-byte and plan-complexity limits also bound work not counted as logical cells.
+Key-grain construction admits source rows times key width against `key_cells`
+before key reads. It stores only completed keys during probing; all temporary key
+text consumes the retained-text budget until duplicate keys are released. Those
+releases never refund work or processed text. Output row/cell capacity applies to
+the resulting key combinations, so repeated input identities can collapse under
+a smaller output-row limit. Collected reads charge every feeding cell and its
+text before copying the selected value. Partition comparisons and sorting groups
+by first source position remain subject to the documented non-deadline policy.
 
 ## Evidence and remaining gates
 
@@ -180,6 +211,9 @@ row filters. Filter truth selects fixed row ordinals from the committed ADLB val
 installed R replay the same observations; R needs neither Arrow nor a JSON package.
 Predicate-check fixtures cover missing-value assertion identities, an eager
 implication error after completed checks, and invalid types on empty output.
+Key-grain fixtures independently pin converted identity/order, missing source
+readings, empty output, raw-value conflicts before conversion and a valid key
+shaped like the former Python missing-record token.
 Installed tests check output-buffer independence, rejection before decoding,
 post-error recovery and the unchanged backend capability flag.
 

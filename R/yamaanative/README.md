@@ -206,5 +206,7 @@ Boolean logic, comparisons, null tests, IN, BETWEEN and Unicode LIKE. The R pack
 also advertises `predicate_checks` for typed assert/implies checks over completed
 output columns. These validate declaration types even for empty output, evaluate
 implication sides eagerly and retain earlier check records on a predicate condition.
-The package
+The `key_grain` feature additionally supports standalone key combinations with
+complete source memberships, first-occurrence order and exact raw-value conflict
+diagnostics. Missing identities remain separate until output validation. The package
 still has no normalized-specification frontend and does not change backend defaults.

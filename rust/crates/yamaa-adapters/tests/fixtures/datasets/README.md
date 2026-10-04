@@ -34,3 +34,13 @@ whose dynamic LIKE pattern ends in the explicit escape; and empty output still
 detects an incompatible float/text comparison. The latter two retain the two
 completed check records preceding the invalid predicate. These are independent
 truth and error-order cases, not new benchmark claims.
+
+`key-grain.arrow` and its empty/missing variants are independently authored
+three-string-column inputs encoded by PyArrow. The valid case converts `02`/`2`
+and `01`/`1` before key grouping, preserves the first group order, and combines
+missing/repeated raw value readings into one value. Another plan reads the raw
+identity text as its non-key value: `02` and `2` must conflict before integer
+conversion. The missing case combines a valid `("__missing_key__", 1)` identity
+with a missing record at position 1; those records remain separate and fail the
+missing-key gate. All outcomes and snapshots are explicit constants, checked
+separately against the reference after its named-key/sentinel corrections.

@@ -35,7 +35,7 @@ this interface's input contract.
 The frontend rejects unimplemented syntax across the whole normalized specification
 before requesting sources. It checks aggregate grammar rather than mistaking
 malformed syntax for a valid unimplemented expression. The native entrypoint must
-exist before the provider runs. Row-filter and assert/implies requests also require the native
+exist before the provider runs. Row-filter, assert/implies and key-grain requests also require the native
 `dataset_capabilities()` advertisement before provider effects. Missing or
 incompatible requested capability returns `ExecutionUnsupported`. Source-independent
 filter scope/phase errors are also checked before IO, including grouped source
@@ -57,6 +57,17 @@ Temporal precision remains inside native evaluation and drops only when accepted
 values enter ordinary host table storage; ingested temporal values have the
 reference's full day/second precision. Source ordinals are assigned by the existing
 host ingestion port, then read as ordinary exact int64 values by Rust.
+
+When `rows` is absent or empty, Rust first evaluates and converts each input
+record's keys, then constructs distinct combinations in first-appearance order.
+Missing-key records remain separate for the output gate. Later direct source
+reads collect all records feeding the combination: repeated present values count
+once, missing readings do not add a value, and multiple distinct raw values fail
+with their exact count and complete identity before target conversion. Keys may
+depend on earlier keys; non-key dependencies and unsupported expressions retain
+the existing planning/admission diagnostics. Key names remain associated with
+their values regardless of identity order. This path requires `key_grain` native
+capability before provider effects; it never calls the reference key constructor.
 
 Explicit row-template filters support Boolean logic, comparisons, null tests,
 IN, BETWEEN and Unicode LIKE, including negation and explicit ESCAPE. The existing
@@ -93,7 +104,7 @@ retains its existing header-only behavior. Metadata labels do not activate code.
 
 Root/source filters, portable regex calls, additional expression operations, source selection/handlers, column checks,
 warning checks, grouped/filtered/fractional row-count checks, wide integer literals,
-multiple sources, intermediates, producer schemas, no-row/key-grain construction,
+multiple sources, intermediates, producer schemas,
 submission semantics, callbacks and environment/workflow execution are unsupported.
 Unresolved inheritance remains unsupported; ordinary loader-resolved inheritance
 uses the resulting normalized declarations. Shared Rust YAML resolution/compilation

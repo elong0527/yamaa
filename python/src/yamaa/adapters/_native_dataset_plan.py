@@ -53,8 +53,6 @@ def admit(specification):
     for field in ("intermediates", "filter", "submission"):
         if getattr(specification, field) is not None:
             reject(field, field)
-    if not specification.rows:
-        reject("key_grain_rows", "rows")
     for name, source in specification.input.items():
         if source.schema_path is not None:
             reject("source_schema", f"input.{name}.schema")
@@ -223,6 +221,7 @@ def lower(plan, source):
     dataset = next(iter(spec.input))
     inputs = {column.name: index for index, column in enumerate(source.columns)}
     outputs = {column.name: index for index, column in enumerate(spec.columns)}
+    keyed = not spec.rows
 
     def reference(name):
         """Only the admitted driver or completed output columns are readable."""
@@ -233,15 +232,18 @@ def lower(plan, source):
             raise ValueError("native plan contains an unadmitted source binding")
         return {"source": inputs[field]}
 
-    def assignment(derived):
+    def assignment(derived, collect=False):
         """Keep the original operation-qualified path and reduction text."""
         op = derived.declaration.value.operation
         value = derived.declaration.value.root[op]
         if op == "literal":
             expression = {"literal": literal(value)}
         elif op == "source":
-            expression = reference(
-                value if isinstance(value, str) else value["variable"]
+            name = value if isinstance(value, str) else value["variable"]
+            expression = (
+                {"collect": {"column": reference(name)["source"], "identifier": name}}
+                if collect and "." in name
+                else reference(name)
             )
         else:
             ast = parse_aggregate_cached(value["expr"])
@@ -269,6 +271,17 @@ def lower(plan, source):
         ],
         "templates": [
             {
+                "mode": {"keys": None},
+                "assignments": [
+                    assignment(item)
+                    for item in plan.columns
+                    if item.column in spec.keys
+                ],
+            }
+        ]
+        if keyed
+        else [
+            {
                 "mode": {"groups": [inputs[name] for name in row.group_fields]}
                 if row.grouped
                 else {"records": None},
@@ -289,7 +302,11 @@ def lower(plan, source):
             }
             for row in plan.rows
         ],
-        "columns": [assignment(item) for item in plan.columns],
+        "columns": [
+            assignment(item, collect=keyed)
+            for item in plan.columns
+            if not keyed or item.column not in spec.keys
+        ],
         "keys": [outputs[name] for name in spec.keys],
         "verifications": verifications,
     }, declaration_error

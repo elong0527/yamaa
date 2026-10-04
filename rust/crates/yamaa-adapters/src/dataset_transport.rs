@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain"]}"#
 }
 
 const MAX_COLUMNS: usize = 64;
@@ -114,8 +114,15 @@ struct Field {
 enum Expression {
     Literal(ScalarValue),
     Source(usize),
+    Collect(CollectedSource),
     Column(usize),
     Reduce(Reduction),
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CollectedSource {
+    column: usize,
+    identifier: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -142,6 +149,7 @@ struct Assignment {
 enum Mode {
     Records(()),
     Groups(Vec<usize>),
+    Keys(()),
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -226,6 +234,7 @@ impl PreparedDataset {
                 .map(|template| {
                     let mode = match template.mode {
                         Mode::Records(()) => dataset::RowMode::Records,
+                        Mode::Keys(()) => dataset::RowMode::Keys,
                         Mode::Groups(keys) => {
                             if keys.len() > MAX_COLUMNS {
                                 return Err(Error::RequestLimit);
@@ -371,6 +380,13 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                     value.into_core().map_err(|_| Error::InvalidScalar)?,
                 ),
                 Expression::Source(column) => dataset::Expression::Source(column),
+                Expression::Collect(source) => {
+                    path(&source.identifier)?;
+                    dataset::Expression::Collect {
+                        column: source.column,
+                        identifier: source.identifier,
+                    }
+                }
                 Expression::Column(column) => dataset::Expression::Column(column),
                 Expression::Reduce(reduction) => {
                     path(&reduction.text)?;
@@ -460,6 +476,16 @@ fn records(records: Vec<CheckRecord>) -> Vec<Record> {
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
 fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
     Ok(match error {
+        ExecutionError::MultipleValues {
+            path,
+            identifier,
+            value_count,
+            identity: keys,
+        } => Outcome::Condition {
+            diagnostic: crate::numeric_transport::multiple_values(path, identifier, value_count)?,
+            identity: keys.map(identity),
+            verifications: None,
+        },
         ExecutionError::Limit {
             resource,
             limit,

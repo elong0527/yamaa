@@ -34,7 +34,7 @@ Python only; the explicit ADLB prototype below is not a qualified full backend.
 | Lossless R primitive scalars: REQ-0014, 0006, 0022-0027 | Validated tag/byte codec, shared checked arithmetic and exact numeric comparisons | Existing full-range native callback scalars | Installed int64/UTF-8 carriers, no NA collision/NUL loss, exact conversions and encoding/ownership tests | Connected to R FunctionPort; full workflow/release qualification remains |
 | Installed R callbacks: REQ-0563-0564, 0570, 0676-0686, 0700-0704 | Shared function/1 invocation and checked temporal epoch codec | Installed callback facade preserves known temporal model precision | Real synchronous R callbacks; lossless scalars, explicit UTC, 42 shared cases plus ownership/reentrancy/interrupt/error/limit tests | Environment activation, specification/dataset execution and release gates |
 | Python temporal result compatibility: REQ-0563, 0570, 0686, 0702 | Closed owned native temporal result carrier with exact field/calendar/precision admission | Optional non-editable facade bridges known DateValue/DateTimeValue subtypes; installed wheel/source independent truth and reference comparison | Existing Date/UTC POSIXct callback mapping | Full environment/workflow integration and release qualification |
-| Typed single-source dataset application: REQ-0036-0039, 0047, 0059-0061, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates, direct/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count/assert/implies observations; committed ADLB source/expected replay plus failure/order tests | Installed typed-plan bridge; no specification compilation | Installed typed-plan bridge; no specification compilation | Full verification/report contracts, handlers, remaining operators and workflow/release gates |
+| Typed single-source dataset application: REQ-0036-0039, 0042, 0044, 0047, 0059-0061, 0074-0075, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates and standalone key combinations, direct/collected/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count/assert/implies observations; committed ADLB source/expected replay plus failure/order tests | Installed typed-plan bridge; no specification compilation | Installed typed-plan bridge; no specification compilation | Full verification/report contracts, handlers, remaining operators and workflow/release gates |
 | Bounded typed dataset bridge | dataset/1 composes immutable plan admission, owned Arrow snapshots and checked output; cumulative work/text/identity policies | Installed typed-plan entrypoint; optional Python normalization frontend below | Explicit installed raw-IPC/JSON entrypoint; no specification frontend/default dispatch | Shared Rust compiler, full portable reports/publication, remaining named fixtures and release gates |
 | Normalized single-source specification bridge | Rust dataset/1 owns admitted derivation, conversion, grouping, output-key and dataset checks | Explicit optional Python loader/planner/IO bridge; actual installed ADLB YAML matches committed CSV and portable observations | Typed-plan execution only; no Python dependency introduced | Remaining named prototype fixtures, shared Rust compiler, workflow and release qualification |
 | Full application/workflow, verification, publication | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
@@ -199,6 +199,13 @@ Source/output row, output-cell and key-cell budgets are resource limits rather
 than language restrictions. These are not byte-level memory or allocator-failure
 guarantees: strings, tree nodes and verification observations allocate normally.
 
+Absent/empty row templates can use native standalone key construction: every
+input key lifecycle completes before non-key derivation; converted combinations
+retain first occurrence and complete feeding memberships. Missing-key records
+remain separate. Direct source reads count all distinct present raw values before
+conversion, preserving exact counts and identity on REQ-0075 conflicts. Named
+identity and dependency order remain separate; no source representative is chosen.
+
 Output keys are checked before dataset verifications. The closed error-severity
 verification subset includes unique combinations, whole-artifact integer
 row-count bounds and assert/implies predicates on completed output columns.
@@ -218,8 +225,7 @@ not YAML compilation, installed host dispatch, source discovery or release
 qualification. No capability flag or benchmark execution manifest changes.
 
 A future compiler must reject the entire run before execution if it requires
-unsupported syntax: handlers, callbacks, root/source filters, regex, windows, joins, key-grain row
-construction, multiple sources, other expression operations, column checks,
+unsupported syntax: handlers, callbacks, root/source filters, regex, windows, joins, multiple sources, other expression operations, column checks,
 warning checks, grouped/filtered/fractional row counts or file publication.
 The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
 Rust specification compiler and the remaining benchmark gates are still open.

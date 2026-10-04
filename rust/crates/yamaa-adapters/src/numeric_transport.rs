@@ -306,6 +306,29 @@ fn target_name(value: ColumnType) -> &'static str {
     }
 }
 
+/// Preserve exact raw-value counts and identifier provenance for a key-grain source read.
+pub(crate) fn multiple_values(
+    path: String,
+    identifier: String,
+    count: usize,
+) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
+    let count = i64::try_from(count)
+        .map_err(|_| crate::dataset_transport::DatasetTransportError::Internal)?;
+    let mut context = Context::new();
+    context.insert("identifier".into(), text(identifier));
+    context.insert("value_count".into(), scalar(Value::Int(count)));
+    Ok(Box::new(Diagnostic {
+        phase: "derivation",
+        condition: "multiple_values_per_key",
+        requirement: "REQ-0075",
+        spec_paths: vec![path],
+        context,
+        source_span: None,
+        operand_route: None,
+        position: None,
+    }))
+}
+
 /// Transport conversion data, including canonical out-of-range integer diagnostics.
 pub(crate) fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
     let mut context = Context::new();

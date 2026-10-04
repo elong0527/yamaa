@@ -168,6 +168,11 @@ fn shared_dataset_cases_match_independent_values_and_observations() {
             "adlb.arrow" => include_bytes!("fixtures/datasets/adlb.arrow"),
             "adlb-empty.arrow" => include_bytes!("fixtures/datasets/adlb-empty.arrow"),
             "integer-sum.arrow" => include_bytes!("fixtures/datasets/integer-sum.arrow"),
+            "key-grain.arrow" => include_bytes!("fixtures/datasets/key-grain.arrow"),
+            "key-grain-empty.arrow" => include_bytes!("fixtures/datasets/key-grain-empty.arrow"),
+            "key-grain-missing.arrow" => {
+                include_bytes!("fixtures/datasets/key-grain-missing.arrow")
+            }
             other => panic!("unknown fixture {other}"),
         };
         let response = execute_dataset(&case["request"].to_string(), input).unwrap();
@@ -212,7 +217,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -334,4 +339,62 @@ fn declaration_checkpoint_emits_no_record_and_does_not_evaluate_rows() {
     assert_eq!(result["status"], "condition");
     assert_eq!(result["diagnostic"]["condition"], "invalid_predicate");
     assert_eq!(result["verifications"].as_array().unwrap().len(), 1);
+}
+
+/// An authored key-only phase precedes collection across complete source memberships.
+fn key_request() -> Value {
+    let mut req = request();
+    let assignment = req["columns"].as_array_mut().unwrap().remove(0);
+    req["templates"][0] = json!({"mode":{"keys":null},"assignments":[assignment]});
+    req["columns"][0]["expression"] = json!({"collect":{"column":1,"identifier":"SRC.x"}});
+    req["verifications"] = json!([]);
+    req
+}
+/// Key and collected-value phase mistakes fail before any input bytes are decoded.
+#[test]
+fn invalid_key_grain_plans_fail_before_ipc_and_recover() {
+    let mut variants = Vec::new();
+    let mut req = key_request();
+    req["columns"][0]["expression"] = json!({"source":1});
+    variants.push(req);
+    let mut req = key_request();
+    req["templates"][0]["assignments"] = json!([]);
+    variants.push(req);
+    let mut req = key_request();
+    req["templates"][0]["assignments"][0]["expression"] =
+        json!({"collect":{"column":0,"identifier":"SRC.id"}});
+    variants.push(req);
+    let mut req = key_request();
+    req["columns"][0]["expression"]["collect"]["column"] = json!(99);
+    variants.push(req);
+    let mut req = key_request();
+    let extra = req["templates"][0].clone();
+    req["templates"].as_array_mut().unwrap().push(extra);
+    variants.push(req);
+    let mut req = key_request();
+    req["templates"][0]["filter"] =
+        json!({"path":"filter","text":"TRUE","root":0,"nodes":[{"boolean":true}],"bindings":[]});
+    variants.push(req);
+    for req in variants {
+        assert_eq!(
+            execute_dataset(&req.to_string(), b"bad IPC").err(),
+            Some(Error::InvalidPlan),
+            "{req}"
+        );
+    }
+    let prepared = PreparedDataset::parse(&key_request().to_string()).unwrap();
+    for _ in 0..2 {
+        let result = prepared
+            .execute(&source(
+                vec![Some(2), Some(1), Some(2)],
+                vec![None, Some("8"), Some("7")],
+            ))
+            .unwrap();
+        let snapshot: Value =
+            serde_json::from_str(&table_snapshot(&result.table.unwrap()).unwrap()).unwrap();
+        assert_eq!(
+            snapshot["rows"],
+            json!([[{"int":"2"},{"int":"7"}],[{"int":"1"},{"int":"8"}]])
+        );
+    }
 }
