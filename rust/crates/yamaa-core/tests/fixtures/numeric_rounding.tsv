@@ -1,0 +1,35 @@
+id	expression	bindings	expected	trace	path
+tie	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=int:1	float:3ff4cccccccccccd	A,D	-
+negative_tie	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:-1.25;D=int:1	float:bff4cccccccccccd	A,D	-
+ordinary	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.24;D=int:1	float:3ff3333333333333	A,D	-
+left_tie	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:145.0;D=int:-1	float:4062c00000000000	A,D	-
+left_below	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:144.0;D=int:-1	float:4061800000000000	A,D	-
+threshold	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:0.4999999850988388;D=int:0	float:3ff0000000000000	A,D	-
+below_threshold	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:0.49999998509883875;D=int:0	float:0000000000000000	A,D	-
+above_threshold	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:0.49999998509883886;D=int:0	float:3ff0000000000000	A,D	-
+negative_threshold	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:-0.4999999850988388;D=int:0	float:bff0000000000000	A,D	-
+negative_below_threshold	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:-0.49999998509883875;D=int:0	float:0000000000000000	A,D	-
+threshold_hundreds	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:49.99999850988388;D=int:-2	float:4059000000000000	A,D	-
+threshold_third	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:249.99999850988388;D=int:-2	float:4072c00000000000	A,D	-
+negative_zero	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:-0.0;D=int:2	float:0000000000000000	A,D	-
+rounded_negative_zero	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:-0.04;D=int:1	float:0000000000000000	A,D	-
+minimum_subnormal	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:5e-324;D=int:324	float:0000000000000001	A,D	-
+minimum_subnormal_to_zero	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:5e-324;D=int:323	float:0000000000000000	A,D	-
+maximum_finite	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.7976931348623157e+308;D=int:0	float:7fefffffffffffff	A,D	-
+maximum_overflow	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.7976931348623157e+308;D=int:-308	missing	A,D	-
+negative_maximum_overflow	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:-1.7976931348623157e+308;D=int:-308	missing	A,D	-
+far_left	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:123.456;D=int:-400	float:0000000000000000	A,D	-
+far_right	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:123.456;D=int:400	float:405edd2f1a9fbe77	A,D	-
+min_i64_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:123.456;D=int:-9223372036854775808	float:0000000000000000	A,D	-
+max_i64_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:123.456;D=int:9223372036854775807	float:405edd2f1a9fbe77	A,D	-
+integer_promotion	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=int:9007199254740993;D=int:0	float:4340000000000000	A,D	-
+missing_value	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=int:0	missing	A,D	-
+missing_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=missing	missing	A,D	-
+missing_before_type	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=float:1.0	missing	A,D	-
+float_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=float:1.0	error:incompatible_input_type:REQ-0418:float	A,D	-
+non_numeric_digits	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=missing;D=str:bad	error:incompatible_input_type:REQ-0444:D:str	A,D	R
+missing_eager_error	ROUND_HALF_AWAY_FROM_ZERO(NULL, 1 / 0)	-	error:division_by_zero:REQ-0430	-	R
+first_failure	ROUND_HALF_AWAY_FROM_ZERO(A / 0, B)	A=int:1;B=int:0	error:division_by_zero:REQ-0430	A	L
+unknown_digits	ROUND_HALF_AWAY_FROM_ZERO(NULL, D)	-	error:unknown_field:REQ-0443:D	D	R
+nested_failure	1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=float:1.25;D=float:1.0	error:incompatible_input_type:REQ-0418:float	A,D	R
+literal_overflow	ROUND_HALF_AWAY_FROM_ZERO(9223372036854775808, D)	D=int:0	error:integer_overflow:REQ-0434:9223372036854775808	-	L

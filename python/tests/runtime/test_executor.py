@@ -1114,3 +1114,65 @@ def test_mh_volunteered_condition_at_unknown_visit_still_fails() -> None:
     assert isinstance(result, ExecutionFailure)
     assert result.diagnostics[0].condition == "unmapped_value"
     assert result.diagnostics[0].spec_paths == ("rows[1].derivations.EVENTORD.case",)
+
+
+@pytest.mark.parametrize("standalone", [False, True])
+def test_corrected_rounding_reaches_conversion_and_csv_without_overflow(standalone):
+    """REQ-0418 endpoints flow into dependent int columns and exact output bytes."""
+
+    def derive(expression):
+        """Build the normal expression wrapper without a custom execution path."""
+        return HandledExpression(value=Expression(root=expression))
+
+    rounded = (
+        {"round_half_away_from_zero": {"source": "SRC.X", "digits": 0}}
+        if standalone
+        else {"compute": "ROUND_HALF_AWAY_FROM_ZERO(SRC.X, 0)"}
+    )
+    overflow = (
+        {"round_half_away_from_zero": {"source": "SRC.BIG", "digits": -308}}
+        if standalone
+        else {"compute": "ROUND_HALF_AWAY_FROM_ZERO(SRC.BIG, -308)"}
+    )
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        base="SRC",
+        keys=["ID"],
+        input={"SRC": DatasetSource(path="input/source.csv")},
+        output=Output(
+            path="out.csv", decimals=1, columns=["ID", "ROUNDED", "ASINT", "OVERFLOW"]
+        ),
+        columns=[
+            Column(name="ID", type="int", derivation=derive({"source": "SRC.ID"})),
+            Column(name="ROUNDED", type="float", derivation=derive(rounded)),
+            Column(name="ASINT", type="int", derivation=derive({"compute": "ROUNDED"})),
+            Column(name="OVERFLOW", type="float", derivation=derive(overflow)),
+        ],
+    )
+    maximum = float.fromhex("0x1.fffffffffffffp1023")
+    sources = {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="ID", type="int"),
+                TypedColumn(name="X", type="float"),
+                TypedColumn(name="BIG", type="float"),
+            ),
+            frame=pl.DataFrame(
+                {
+                    "ID": [1, 2],
+                    "X": [0.5 - 2**-26, -(0.5 - 2**-26)],
+                    "BIG": [maximum, -maximum],
+                },
+                schema={"ID": pl.Int64, "X": pl.Float64, "BIG": pl.Float64},
+            ),
+        )
+    }
+    result = execute_specification(specification, sources)
+    assert isinstance(result, ExecutionSuccess)
+    assert result.handler_counts == ()
+    assert result.artifact.frame.rows() == [(1, 1.0, 1, None), (2, -1.0, -1, None)]
+    assert (
+        render_artifact(result.artifact)
+        == b"ID,ROUNDED,ASINT,OVERFLOW\n1,1.0,1,\n2,-1.0,-1,\n"
+    )

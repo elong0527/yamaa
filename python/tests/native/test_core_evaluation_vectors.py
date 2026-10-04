@@ -35,6 +35,11 @@ with FIXTURE.with_name("numeric_sqrt.tsv").open(encoding="utf-8", newline="") as
 with FIXTURE.with_name("numeric_math.tsv").open(encoding="utf-8", newline="") as stream:
     VECTORS.extend(csv.DictReader(stream, delimiter="\t"))
 
+with FIXTURE.with_name("numeric_rounding.tsv").open(
+    encoding="utf-8", newline=""
+) as stream:
+    VECTORS.extend(csv.DictReader(stream, delimiter="\t"))
+
 
 def _value(token):
     """Decode only the explicit scalar types used by the independent fixture."""
@@ -90,8 +95,14 @@ def test_reference_matches_evaluation_and_resolution_trace(vector):
             actual += f":{condition.context['identifier']}"
         elif condition.condition == "incompatible_input_type":
             assert condition.phase == "validation"
-            assert condition.context["expected"] == "numeric"
-            actual += f":{condition.context['source']}:{condition.context['actual']}"
+            if condition.requirement == "REQ-0418":
+                assert condition.context["expected"] == "int"
+                actual += f":{condition.context['actual']}"
+            else:
+                assert condition.context["expected"] == "numeric"
+                actual += (
+                    f":{condition.context['source']}:{condition.context['actual']}"
+                )
         else:
             assert condition.phase == "derivation"
             if condition.condition == "integer_overflow":
