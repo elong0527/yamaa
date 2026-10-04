@@ -155,7 +155,9 @@ def admit(specification):
         if source.schema_path is not None:
             reject("source_schema", f"input.{name}.schema")
 
-    def expression(declaration, path, grouped, allow_source_filter=False):
+    def expression(
+        declaration, path, grouped, allow_source_filter=False, keyed_nonkey=False
+    ):
         """Admit syntax without evaluating literals or converting output values."""
         if "unconvertible" in declaration.model_fields_set:
             reject("unconvertible", f"{path}.unconvertible")
@@ -204,6 +206,7 @@ def admit(specification):
             for name in numeric_identifiers(ast):
                 if "." in name and (
                     grouped
+                    or keyed_nonkey
                     or name.split(".", 1)[0]
                     != (specification.base or next(iter(specification.input)))
                 ):
@@ -438,6 +441,8 @@ def admit(specification):
                 f"columns.{column.name}.derivation",
                 False,
                 allow_source_filter=not specification.rows
+                and column.name not in specification.keys,
+                keyed_nonkey=not specification.rows
                 and column.name not in specification.keys,
             )
     for index, declaration in enumerate(specification.verifications or ()):

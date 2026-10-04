@@ -1505,3 +1505,15 @@ def test_numeric_syntax_error_precedes_provider(tmp_path):
         ("columns.N.derivation.compute.expr",),
     )
     assert effects == []
+
+
+def test_key_grain_source_compute_refuses_before_provider(tmp_path):
+    """Non-key computations cannot read source rows after key-grain creation."""
+    spec = compute_specification(tmp_path, "SRC.X + 1")
+    effects = []
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "compute_binding_scope"
+    }
+    assert effects == []
