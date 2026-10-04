@@ -56,21 +56,14 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 
 ## Evidence: prompt completeness decides success
 
-::: {.columns}
-::: {.column width="48%"}
-<div class="big-number">98%</div>
-<div class="metric-label">task pass rate with explicit prompts</div>
-:::
-
-::: {.column width="48%"}
-<div class="big-number">18%</div>
-<div class="metric-label">task pass rate with minimal prompts</div>
-:::
-:::
+| Prompt tier | Python | R |
+| --- | --- | --- |
+| Full (every rule stated) | 98.5% (131/133) | 85.7% (114/133) |
+| Conventions (vocabulary only) | 39.8% (53/133) | 36.8% (49/133) |
+| Brief (columns only) | 18.0% (24/133) | 18.0% (24/133) |
 
 * Same 133 benchmarks, same agent — only the prompt changed.
-* Explicit prompts state every rule and boundary; minimal prompts list columns only.
-* Python outscores R at every tier; the gap widens as prompts get vaguer.
+* Task pass rate collapses as prompts lose detail; Python outscores R at every tier.
 
 ## Example: age groups
 
