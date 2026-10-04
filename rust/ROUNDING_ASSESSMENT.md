@@ -1,8 +1,10 @@
 # Decimal rounding characterization
 
-Status: assessment only. Rust still rejects ROUND_HALF_AWAY_FROM_ZERO under both
-math policies. Production Python, normative rules and benchmark expectations are
-unchanged. This work identifies decisions needed before implementing rounding.
+Status: the Python reference now follows the exact near-tie rule; Rust still
+rejects ROUND_HALF_AWAY_FROM_ZERO under both math policies. The initial assessment
+in #1623 did not change production behavior. Its evidence is retained below;
+the subsequent reference correction is described at the end of this document.
+Normative rules and existing benchmark expectations are unchanged.
 
 ## Independent interpretation of REQ-0418
 
@@ -17,7 +19,7 @@ helper is separately recorded and never silently normalized by the assessment.
 
 This directly implements the inclusive near-tie interval in REQ-0418. It does not
 call Python `round`, a libm power or the production rounding helper. The Python
-helper currently adds a binary64 approximation to the tolerance, then uses
+helper assessed in #1623 adds a binary64 approximation to the tolerance, then uses
 Python's decimal ties-to-even rounding. Floating-point addition can land exactly
 on a tie or cross the specified near-tie boundary. The two procedures therefore
 need explicit compatibility review; copying the helper is not proof of the rule.
@@ -49,7 +51,8 @@ observations for every case, with a separate complete mismatch list. Outputs are
 assessment evidence, not benchmark goldens. Reports are uploaded by all six native
 OS/Python CI combinations as `rounding-assessment-*` artifacts.
 
-On local macOS arm64/Python 3.14.7, 2,888 cases agree and 48 differ: 38 result-bit
+For the pre-correction reference on all six native CI targets, 2,888 cases agree
+and 48 differ: 38 result-bit
 differences and 10 escaped OverflowError outcomes. For example, the exactly
 representable input `0.5 - 2^-26` at zero places is the inclusive near-tie endpoint:
 the rule selects 1.0, while adding the tolerance lands exactly on 0.5 and Python's
@@ -71,3 +74,26 @@ Before Rust implementation, resolve the reference/rule discrepancy explicitly,
 add independently specified regression expectations to both runners, qualify
 cross-platform results and assess downstream conversion/CSV consequences. Do not
 relax these comparisons with a blanket tolerance or regenerate benchmark truth.
+
+## Intentional Python reference correction
+
+The scalar helper now scales the input's exact integer ratio, compares the
+remainder to `(2^25 - 1) / 2^26` inclusively, and converts only the selected
+decimal result back to binary64. Both compute and standalone forms normalize
+result overflow to missing under REQ-0006. No host-wide settings or dependencies
+change. Argument validation, eager operand evaluation and failure order remain
+unchanged; missing still precedes integer-digits validation in the compute form.
+
+This deliberately changes values at previously incorrect near-tie boundaries and
+replaces escaping OverflowError with missing. For example, `0.5 - 2^-26` at zero
+places now returns float 1.0; dependent integer conversion yields 1 and one-place
+CSV output contains `1.0`. These corrections can affect downstream computations,
+conditions and outputs, and are not described as historical bit compatibility.
+
+The 34 independent vectors in `crates/yamaa-core/tests/fixtures/numeric_rounding.tsv` specify
+results, diagnostics and eager resolver traces for the future shared runner.
+Python replays the compute vectors and applicable standalone values. Additional
+tests require exact agreement on all 2,936 rational-oracle cases and exercise
+dependent conversion, missing overflow, handler counts and exact CSV output
+through normal dataset execution. Rust does not yet replay these vectors or
+implement rounding. Matching this finite sample alone remains `not-qualified`.

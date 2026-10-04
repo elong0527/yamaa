@@ -151,6 +151,7 @@ for migration implications and remaining release gates.
 
 Decimal rounding remains unsupported in both compiler policies. The independent
 rational assessment in [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md) identifies
-REQ-0418 near-tie and overflow discrepancies in the existing Python scalar helper.
-Its 2,936-case reports retain every observation; passing assessment CI does not
-qualify rounding or authorize a reference behavior change.
+REQ-0418 near-tie and overflow discrepancies in the pre-correction Python scalar
+helper. Python now implements the exact rule, with 34 independent compute vectors,
+standalone replay and end-to-end conversion/CSV regressions. Its 2,936-case reports
+retain every observation; matching this sample does not qualify Rust rounding.

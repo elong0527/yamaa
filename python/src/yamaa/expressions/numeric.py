@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import math
 import re
-import sys
 from collections.abc import Mapping
 from functools import lru_cache
 from typing import Any, TypeAlias
@@ -698,27 +697,37 @@ def numeric_handlers() -> dict[str, ExpressionHandler]:
     }
 
 
-# sqrt(2^-52): values within this times 10^-digits below a tie count as ties,
-# matching metalite::round_half_away_from_zero (adapted from tidytlg::roundSAS).
-_TIE_TOLERANCE_FACTOR = math.sqrt(sys.float_info.epsilon)
-
-
 def _round_half_away_from_zero_scalar(value: float, digits: int) -> float:
-    """Round one finite value with ties half away from zero (REQ-0418)."""
-    sign = -1.0 if value < 0 else 1.0
-    magnitude = abs(value)
+    """Apply REQ-0418's inclusive near-tie interval using exact integer ratios.
+
+    The input is already promoted to finite binary64. Decimal scaling and tie
+    selection are exact; only the selected decimal result converts to binary64.
+    Callers normalize result overflow to missing under REQ-0006.
+    """
+    # Bound powers before constructing them, including arbitrary integer digits
+    # accepted by the standalone operation. Every binary64 is unchanged beyond
+    # 340 places; below -309 places even the largest finite input rounds to zero.
+    if digits > 340:
+        return value if value else 0.0
+    if digits < -309:
+        return 0.0
+    numerator, denominator = abs(value).as_integer_ratio()
+    power = 10 ** abs(digits)
+    if digits >= 0:
+        numerator *= power
+    else:
+        denominator *= power
+    lower, remainder = divmod(numerator, denominator)
+    # fractional part >= 1/2 - 2^-26, including the exact lower endpoint.
+    if (remainder << 26) >= denominator * ((1 << 25) - 1):
+        lower += 1
     try:
-        tolerance = _TIE_TOLERANCE_FACTOR * (10.0**-digits)
+        rounded = lower / power if digits >= 0 else float(lower * power)
     except OverflowError:
-        # Far left of the decimal point every double sits below half a
-        # quantum, so the nudge saturates without changing the rounded result.
-        tolerance = math.inf
-    # Nudge sub-tie values just above the tie without overflowing near DBL_MAX.
-    magnitude += min(tolerance, sys.float_info.max - magnitude)
-    rounded = round(magnitude, digits)
+        rounded = math.inf
     if rounded == 0:
-        return 0.0  # Positive zero: formatted output never shows "-0.0".
-    return sign * rounded
+        return 0.0
+    return -rounded if value < 0 else rounded
 
 
 def _round_half_away_from_zero(payload: object, resolver: Resolver) -> EvaluationResult:
@@ -786,4 +795,4 @@ def _round_half_away_from_zero(payload: object, resolver: Resolver) -> Evaluatio
     if not math.isfinite(number):
         # REQ-0006 normalizes non-finite values after every operator.
         return ValueResult(value=MISSING)
-    return ValueResult(value=_round_half_away_from_zero_scalar(number, digits))
+    return ValueResult(value=_finite(_round_half_away_from_zero_scalar(number, digits)))
