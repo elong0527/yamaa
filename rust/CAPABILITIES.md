@@ -1,6 +1,6 @@
 # Rust migration capability coverage
 
-This matrix tracks the scalar slices of [#1585](https://github.com/elong0527/yamaa/issues/1585).
+This matrix tracks the implemented slices of [#1585](https://github.com/elong0527/yamaa/issues/1585).
 Core tests are not dataset execution. Every native installation probe still
 reports `execution_supported = false`; all 315 benchmark cases remain executable
 through the Python backend only, as declared by
@@ -25,7 +25,8 @@ through the Python backend only, as declared by
 | Numeric completed-result lifecycle: REQ-0211-0214, 0343-0344, 0359, 0361, 0363-0364, 0366 | Engine service: conversion, optional literal replacement, structured fatal errors, deterministic per-path counts; 31 shared Python/Rust cases and fake-port reuse/failure/dependency tests | No dataset execution | No dataset execution | Normalized specification dispatch, host diagnostics and remaining handlers (steps 5, 7, 8) |
 | Installed numeric application: REQ-0211-0214, 0359, 0361, 0366 and numeric conditions | Bounded numeric/1 protocol composes existing core compilation and engine lifecycle; 59 independent shared outcomes with typed diagnostic context, paths/spans, resolution order and handler counts | Installed wheel/source numeric execution; no dataset execution | Installed source numeric execution and lossless diagnostics; no dataset execution | Full specification dispatch, tables, callbacks, workflow and release qualification (steps 5-11) |
 | Scalar host transport: REQ-0002, 0006-0007, 0014, 0570 | Adapter-only versioned JSON-to-core-to-JSON probe; 52 independent cases and byte limits | Installed wheel/source scalar round trips; no dataset execution | Installed source-package scalar round trips; full i64 carried as decimal text; no dataset execution | Arrow ownership, callbacks, diagnostic transport and full runtime integration (step 5) |
-| Full application/workflow, tables, verification, publication, callbacks | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
+| Ordered table access and SUM/MEAN: REQ-0471, 0479-0480, 0487, 0492, 0510 | Borrowed normalized cells, ordered zero-row schema, bounded selected-column consumer; 32 shared exact outcomes plus fake-port error/selection tests | Reference aggregate truth replay; no native table API or dataset execution | No native table API or dataset execution | Arrow storage, precision/ownership interchange, full aggregate compilation and lifecycle (steps 5-7) |
+| Full application/workflow, verification, publication, callbacks | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
 
 `compare_present` mirrors the current Python value comparator: it does not round
 an i64 through binary64 to decide ordering. Arithmetic promotion intentionally
