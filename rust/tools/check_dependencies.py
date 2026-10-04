@@ -8,7 +8,15 @@ WORKSPACE = Path(__file__).resolve().parents[1]
 ALLOWED = {
     "yamaa-core": {"ryu", "libm", "num-bigint"},
     "yamaa-engine": {"yamaa-core"},
-    "yamaa-adapters": {"yamaa-core", "yamaa-engine", "serde", "serde_json"},
+    "yamaa-adapters": {
+        "yamaa-core",
+        "yamaa-engine",
+        "serde",
+        "serde_json",
+        "arrow-array",
+        "arrow-schema",
+        "arrow-buffer",
+    },
     "yamaa-python": {"yamaa-engine", "yamaa-adapters", "pyo3", "pyo3-build-config"},
     "yamaa-r": {"yamaa-engine", "yamaa-adapters", "extendr-api"},
 }

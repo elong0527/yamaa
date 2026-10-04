@@ -8,3 +8,6 @@ pub mod scalar_transport;
 pub fn installation_resource() -> &'static str {
     include_str!("../resources/installation.txt")
 }
+
+pub mod arrow_table;
+mod arrow_temporal;

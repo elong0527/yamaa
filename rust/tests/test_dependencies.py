@@ -26,7 +26,15 @@ class DependencyTests(unittest.TestCase):
     def test_rejects_runtime_build_and_dev_edges(self):
         for crate in ("yamaa-core", "yamaa-engine"):
             for kind in (None, "build", "dev"):
-                for dependency in ("polars", "arrow", "pyo3", "extendr-api"):
+                for dependency in (
+                    "polars",
+                    "arrow",
+                    "arrow-array",
+                    "arrow-schema",
+                    "arrow-buffer",
+                    "pyo3",
+                    "extendr-api",
+                ):
                     with self.subTest(crate=crate, kind=kind, dependency=dependency):
                         metadata = self.metadata()
                         package = next(
