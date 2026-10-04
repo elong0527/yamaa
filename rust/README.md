@@ -448,3 +448,10 @@ restoration retain values and temporal precision. See
 [TABLE_TRANSPORT.md](TABLE_TRANSPORT.md) for the closed schema, limits, error
 categories, qualification evidence and remaining gates. This does not enable
 specification execution or change backend defaults.
+
+The trusted internal [function invocation service](FUNCTION_INVOCATION.md) now
+validates exact signatures/defaults, preserves missing short-circuit and callback
+order, and checks results before conversion. A synchronous already-bound port
+keeps host errors opaque and results owned. Independent truth runs through Rust
+and the real Python reference; installed Python/R callback adapters and full
+environment activation remain pending.

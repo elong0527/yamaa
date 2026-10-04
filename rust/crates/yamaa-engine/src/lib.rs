@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+pub mod function_invocation;
 pub mod numeric_lifecycle;
 
 /// Bootstrap capability information, independent of Python and R representations.
