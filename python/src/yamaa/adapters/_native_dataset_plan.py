@@ -1,0 +1,314 @@
+"""Temporary normalized-specification lowering for the closed dataset/1 bridge."""
+
+from __future__ import annotations
+
+import math
+import struct
+
+from yamaa.expressions import AggregateError, parse_aggregate_cached
+from yamaa.models import INT64_MAX, INT64_MIN
+from yamaa.planning import (
+    ExecutionDiagnostic,
+    ExecutionPlanningError,
+    UnsupportedFeature,
+    UnsupportedPlanningError,
+    expression_path,
+    preflight_execution,
+)
+
+OPERATIONS = frozenset({"source", "literal", "aggregate"})
+
+
+def admit(specification):
+    """Reject the entire unsupported vocabulary before requesting source tables.
+
+    This accepts schema-normalized models, not arbitrary document dictionaries.
+    Binding against actual source schemas remains a later planning operation.
+    """
+    diagnostics = []
+    unsupported = []
+    try:
+        preflight_execution(specification, supported_operations=OPERATIONS)
+    except ExecutionPlanningError as error:
+        diagnostics.extend(error.diagnostics)
+    except UnsupportedPlanningError as error:
+        unsupported.extend(error.features)
+
+    def reject(operation, path):
+        """Retain each unsupported declaration at its original owning path."""
+        feature = UnsupportedFeature(operation=operation, spec_path=path)
+        if feature not in unsupported:
+            unsupported.append(feature)
+
+    if len(specification.input) != 1:
+        reject("multiple_sources", "input")
+    for field in ("intermediates", "filter", "submission"):
+        if getattr(specification, field) is not None:
+            reject(field, field)
+    if not specification.rows:
+        reject("key_grain_rows", "rows")
+    for name, source in specification.input.items():
+        if source.schema_path is not None:
+            reject("source_schema", f"input.{name}.schema")
+
+    def expression(declaration, path, grouped):
+        """Admit syntax without evaluating literals or converting output values."""
+        if "unconvertible" in declaration.model_fields_set:
+            reject("unconvertible", f"{path}.unconvertible")
+        operation = declaration.value.operation
+        payload = declaration.value.root[operation]
+        path = f"{expression_path(path, declaration)}.{operation}"
+        if operation == "literal":
+            if type(payload) is int and not INT64_MIN <= payload <= INT64_MAX:
+                reject("wide_integer_literal", path)
+            elif not (payload is None or type(payload) in (str, bool, int, float)):
+                reject("literal_representation", path)
+        elif operation == "source":
+            if not isinstance(payload, str) and not (
+                isinstance(payload, dict)
+                and set(payload) == {"variable"}
+                and isinstance(payload["variable"], str)
+            ):
+                reject("source_selection", path)
+        elif operation == "aggregate":
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("expr"), str
+            ):
+                diagnostics.append(
+                    ExecutionDiagnostic(
+                        phase="validation",
+                        condition="invalid_field_type",
+                        spec_paths=(path,),
+                        requirement="REQ-0321",
+                        context={
+                            "operation": "aggregate",
+                            "expected": "a reducer expression",
+                        },
+                    )
+                )
+                return
+            try:
+                ast = parse_aggregate_cached(payload["expr"])
+            except AggregateError as error:
+                diagnostics.append(
+                    ExecutionDiagnostic(
+                        phase="validation",
+                        condition=error.condition,
+                        spec_paths=(
+                            path if set(payload) == {"expr"} else f"{path}.expr",
+                        ),
+                        requirement=error.requirement,
+                        context={"expr": payload["expr"], **error.context},
+                    )
+                )
+                return
+            if not (
+                grouped
+                and set(payload) == {"expr"}
+                and ast["kind"] == "reduction"
+                and ast["name"] in {"SUM", "MEAN"}
+                and ast["argument"]["kind"] == "identifier"
+                and "." in ast["argument"]["name"]
+            ):
+                reject("aggregate_scope_or_expression", path)
+        else:
+            reject(operation, path)
+
+    for index, row in enumerate(specification.rows or ()):
+        for field in ("filter", "submission"):
+            if getattr(row, field) is not None:
+                reject(field, f"rows[{index}].{field}")
+        for name, declaration in row.derivations.items():
+            expression(
+                declaration,
+                f"rows[{index}].derivations.{name}",
+                row.group_by is not None,
+            )
+    for column in specification.columns:
+        if column.verifications:
+            reject("column_verifications", f"columns.{column.name}.verifications")
+        if column.submission is not None:
+            reject("submission", f"columns.{column.name}.submission")
+        if column.derivation is not None:
+            expression(column.derivation, f"columns.{column.name}.derivation", False)
+    for index, declaration in enumerate(specification.verifications or ()):
+        operation = declaration.operation
+        payload = declaration.root[operation]
+        path = f"verifications[{index}].{operation}"
+        if operation == "unique" and isinstance(payload, list):
+            payload = {"columns": payload}
+        allowed = (
+            {"columns", "id", "severity"}
+            if operation == "unique"
+            else {"min", "max", "id", "severity"}
+        )
+        if (
+            operation not in {"unique", "row_count"}
+            or not isinstance(payload, dict)
+            or set(payload) - allowed
+            or payload.get("severity", "error") != "error"
+        ):
+            reject("dataset_verification", path)
+        elif operation == "row_count" and any(
+            type(value) is int and not INT64_MIN <= value <= INT64_MAX
+            for value in (payload.get("min"), payload.get("max"))
+        ):
+            reject("row_count_bounds", path)
+    if diagnostics:
+        raise ExecutionPlanningError(diagnostics)
+    if unsupported:
+        raise UnsupportedPlanningError(unsupported)
+
+
+def literal(value):
+    """Encode admitted scalar literals without completed-result conversion."""
+    if value is None or (type(value) is float and not math.isfinite(value)):
+        return {"missing": None}
+    if type(value) is bool:
+        return {"bool": value}
+    if type(value) is int:
+        return {"int": str(value)}
+    if type(value) is float:
+        return {"float": struct.pack(">d", value).hex()}
+    return {"str": value}
+
+
+def lower(plan, source):
+    """Lower validated dependency order and bindings, never evaluate expressions."""
+    spec = plan.specification
+    dataset = next(iter(spec.input))
+    inputs = {column.name: index for index, column in enumerate(source.columns)}
+    outputs = {column.name: index for index, column in enumerate(spec.columns)}
+
+    def reference(name):
+        """Only the admitted driver or completed output columns are readable."""
+        if "." not in name:
+            return {"column": outputs[name]}
+        qualifier, field = name.split(".", 1)
+        if qualifier != dataset:
+            raise ValueError("native plan contains an unadmitted source binding")
+        return {"source": inputs[field]}
+
+    def assignment(derived):
+        """Keep the original operation-qualified path and reduction text."""
+        op = derived.declaration.value.operation
+        value = derived.declaration.value.root[op]
+        if op == "literal":
+            expression = {"literal": literal(value)}
+        elif op == "source":
+            expression = reference(
+                value if isinstance(value, str) else value["variable"]
+            )
+        else:
+            ast = parse_aggregate_cached(value["expr"])
+            expression = {
+                "reduce": {
+                    "column": reference(ast["argument"]["name"])["source"],
+                    "reducer": ast["name"],
+                    "text": value["expr"],
+                }
+            }
+        return {
+            "column": outputs[derived.column],
+            "path": derived.operation_path,
+            "expression": expression,
+        }
+
+    verifications, declaration_error = checks(spec, outputs)
+    return {
+        "protocol": "dataset/1",
+        "source": [
+            {"name": column.name, "kind": column.type} for column in source.columns
+        ],
+        "output": [
+            {"name": column.name, "kind": column.type} for column in spec.columns
+        ],
+        "templates": [
+            {
+                "mode": {"groups": [inputs[name] for name in row.group_fields]}
+                if row.grouped
+                else {"records": None},
+                "assignments": [assignment(item) for item in row.derivations],
+            }
+            for row in plan.rows
+        ],
+        "columns": [assignment(item) for item in plan.columns],
+        "keys": [outputs[name] for name in spec.keys],
+        "verifications": verifications,
+    }, declaration_error
+
+
+def checks(specification, outputs):
+    """Lower the valid check prefix and retain the first runtime declaration error.
+
+    The reference evaluates declarations in order. An invalid later declaration
+    retains earlier records but overrides their data failures; derivation and
+    output-key failures still take precedence. No table is checked in Python.
+    """
+    lowered = []
+    identifiers = {}
+
+    def invalid(path, requirement, reason, condition="invalid_declaration"):
+        """Use the existing public declaration-diagnostic vocabulary exactly."""
+        return lowered, ExecutionDiagnostic(
+            phase="validation",
+            condition=condition,
+            spec_paths=(path,),
+            requirement=requirement,
+            context={"reason": reason},
+        )
+
+    for index, declaration in enumerate(specification.verifications or ()):
+        op = declaration.operation
+        payload = declaration.root[op]
+        if isinstance(payload, list):
+            payload = {"columns": payload}
+        path = f"verifications[{index}].{op}"
+        identifier = payload.get("id")
+        if "id" in payload:
+            if not isinstance(identifier, str) or not identifier:
+                return invalid(path, "REQ-0374", "a verification id is text")
+            if identifier in identifiers:
+                return invalid(
+                    path,
+                    "REQ-0398",
+                    f"verification id {identifier!r} repeats {identifiers[identifier]}",
+                    "duplicate_identifier",
+                )
+            identifiers[identifier] = path
+        if op == "unique":
+            names = payload.get("columns")
+            if not isinstance(names, list) or not names:
+                return invalid(path, "REQ-0397", "columns names at least one column")
+            if any(not isinstance(name, str) for name in names):
+                return invalid(path, "REQ-0397", "columns names are text")
+            for name in names:
+                if name not in outputs:
+                    return invalid(
+                        f"{path}.columns",
+                        "REQ-0405",
+                        f"unknown column {name!r}",
+                        "unknown_field",
+                    )
+            check = {op: [outputs[name] for name in names]}
+        else:
+            minimum, maximum = payload.get("min"), payload.get("max")
+            if any(
+                value is not None and type(value) is not int
+                for value in (minimum, maximum)
+            ):
+                return invalid(path, "REQ-0397", "a row_count bound is an int")
+            if minimum is None and maximum is None:
+                return invalid(path, "REQ-0399", "row_count requires one bound")
+            if minimum is not None and maximum is not None and minimum > maximum:
+                return invalid(path, "REQ-0399", "row_count min exceeds max")
+            check = {
+                op: {
+                    bound: str(payload[bound])
+                    if payload.get(bound) is not None
+                    else None
+                    for bound in ("min", "max")
+                }
+            }
+        lowered.append({"path": path, "check": check})
+    return lowered, None

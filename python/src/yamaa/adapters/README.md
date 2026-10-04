@@ -89,3 +89,8 @@ native extension must include the private temporal bridge; an incompatible
 extension fails before callback effects. No fallback or default-backend dispatch
 is introduced. See `rust/FUNCTION_TRANSPORT.md` for the protocol and remaining
 activation, workflow and release gates.
+
+The explicit optional [native dataset frontend](NATIVE_DATASETS.md) runs the admitted
+single-source normalized specification subset through Rust. It retains the ordinary
+result and report types while keeping source/artifact IO as temporary host ports.
+It does not change backend defaults or enable workflow execution.
