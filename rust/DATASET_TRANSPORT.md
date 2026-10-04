@@ -104,9 +104,11 @@ Checks include `{unique: [output_column_indices]}` and
 `{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
 At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
 may be omitted. Unique permits repeated references, matching the reference check.
-Only error-severity, whole-artifact bounds are represented. Ordered source selection, fractional bounds,
-grouped row counts, column checks, warnings, other handlers, other windows, joins, functions,
-multiple sources remain outside the closed plan vocabulary.
+Only error-severity, whole-artifact bounds are represented. The `source_selection`
+capability supports ordered selection within `collect`. Broader source selection,
+fractional bounds, grouped row counts, column checks, warnings, other handlers,
+other windows, joins, functions, and multiple sources remain outside the closed
+plan vocabulary.
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
 then: predicate}}`, using the predicate representation below. Bindings may read
