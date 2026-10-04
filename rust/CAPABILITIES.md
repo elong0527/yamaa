@@ -33,7 +33,8 @@ through the Python backend only, as declared by
 | Lossless R primitive scalars: REQ-0014, 0006, 0022-0027 | Validated tag/byte codec, shared checked arithmetic and exact numeric comparisons | Existing full-range native callback scalars | Installed int64/UTF-8 carriers, no NA collision/NUL loss, exact conversions and encoding/ownership tests | Connected to R FunctionPort; full workflow/release qualification remains |
 | Installed R callbacks: REQ-0563-0564, 0570, 0676-0686, 0700-0704 | Shared function/1 invocation and checked temporal epoch codec | Installed callback facade preserves known temporal model precision | Real synchronous R callbacks; lossless scalars, explicit UTC, 42 shared cases plus ownership/reentrancy/interrupt/error/limit tests | Environment activation, specification/dataset execution and release gates |
 | Python temporal result compatibility: REQ-0563, 0570, 0686, 0702 | Closed owned native temporal result carrier with exact field/calendar/precision admission | Optional non-editable facade bridges known DateValue/DateTimeValue subtypes; installed wheel/source independent truth and reference comparison | Existing Date/UTC POSIXct callback mapping | Full environment/workflow integration and release qualification |
-| Typed single-source dataset application: REQ-0036-0039, 0047, 0059-0061, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates, direct/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count observations; committed ADLB source/expected replay plus failure/order tests | No installed dataset dispatch or specification compilation | No installed dataset dispatch or specification compilation | Versioned plan bridge, full verification/report contracts, handlers, remaining operators and workflow/release gates |
+| Typed single-source dataset application: REQ-0036-0039, 0047, 0059-0061, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates, direct/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count observations; committed ADLB source/expected replay plus failure/order tests | Installed typed-plan bridge; no specification compilation | Installed typed-plan bridge; no specification compilation | Full verification/report contracts, handlers, remaining operators and workflow/release gates |
+| Bounded typed dataset bridge | dataset/1 composes immutable plan admission, owned Arrow snapshots and checked output; cumulative work/text/identity policies | Explicit installed typed-plan entrypoint; no specification frontend/default dispatch | Explicit installed raw-IPC/JSON entrypoint; no specification frontend/default dispatch | Normalized-spec bridge, full portable reports/publication, all named fixtures and release gates |
 | Full application/workflow, verification, publication | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
 
 `compare_present` mirrors the current Python value comparator: it does not round
@@ -216,3 +217,11 @@ construction, multiple sources, other expression operations, column checks,
 warning checks, grouped/filtered/fractional row counts or file publication.
 The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
 Rust specification compiler and the remaining benchmark gates are still open.
+
+The optional [dataset/1 bridge](DATASET_TRANSPORT.md) connects this application
+service to copied canonical IPC. It bounds plan complexity, scalar text processed,
+retained output/identity payloads and cumulative logical work before exposing the
+service to host requests. Runtime failures retain known complete output identities;
+unconstructed keys remain unavailable. The bridge reports raw typed observations,
+not complete public verification logs, warning handling or publication. The Python
+normalization frontend and all full-workflow/default-cutover gates remain open.

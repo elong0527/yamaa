@@ -18,8 +18,10 @@ from yamaa.specification import load_specification
 @pytest.mark.parametrize("literal", ["TOTAL", True])
 @pytest.mark.parametrize("grouped", [False, True])
 @pytest.mark.parametrize("count", [0, 1])
+@pytest.mark.parametrize("row_phase", [False, True])
+@pytest.mark.parametrize("missing_key", [False, True])
 def test_literal_conversion_is_a_per_candidate_lifecycle(
-    tmp_path, literal, grouped, count
+    tmp_path, literal, grouped, count, row_phase, missing_key
 ):
     """A valid literal is converted only when its template actually builds a row."""
     row = {"id": "collected", "derivations": {"value": {"literal": literal}}}
@@ -37,11 +39,16 @@ def test_literal_conversion_is_a_per_candidate_lifecycle(
         ],
         "rows": [row],
     }
+    if not row_phase:
+        document["columns"][1]["derivation"] = {"literal": literal}
+        row["derivations"] = {"id": "T.id"}
     path = tmp_path / "spec.yaml"
     path.write_text(yaml.safe_dump(document), encoding="utf-8")
     schema = Path(__file__).parents[3] / "yaml"
     spec = load_specification(path, schema).specification
-    table = frame_from_values((TypedColumn(name="id", type="str"),), [["a"]] * count)
+    table = frame_from_values(
+        (TypedColumn(name="id", type="str"),), [[None if missing_key else "a"]] * count
+    )
     result = execute_specification(spec, {"T": table})
     if count == 0:
         assert isinstance(result, ExecutionSuccess)
@@ -60,6 +67,11 @@ def test_literal_conversion_is_a_per_candidate_lifecycle(
                     "from": "bool" if isinstance(literal, bool) else "str",
                     "to": "float",
                     "value": literal,
+                    **(
+                        {"keys": [{"id": None if missing_key else "a"}]}
+                        if not row_phase
+                        else {}
+                    ),
                 },
             }
         ]

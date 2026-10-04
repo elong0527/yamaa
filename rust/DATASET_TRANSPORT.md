@@ -1,0 +1,124 @@
+# Typed dataset bridge
+
+`dataset/1` is an explicit temporary typed-plan bridge for #1585 steps 5 and 7.
+It does not parse specifications, activate environments, select a backend, read
+files or publish artifacts. Python remains default and every installation probe
+still reports `execution_supported = false`. A future specification compiler must
+admit the whole run and reject unsupported features before source/callback effects;
+this transport rejects malformed typed plans rather than interpreting YAML.
+
+Python calls `yamaa_native.execute_dataset(request, source)` with JSON text and
+canonical IPC bytes, returning `(table_or_none, outcome_json)`. R calls
+`yamaanative::execute_dataset(request, source)` with unclassed JSON character text
+and raw IPC, returning `list(table, outcome)`. R uses the existing strict text
+encoding policy and passes raw request bytes for checked UTF-8 decoding in Rust.
+Both adapters invoke the same service synchronously on the calling thread.
+There are no callbacks, retries, fallback or external writes in this protocol.
+
+## Request
+
+See [the ADLB plan](crates/yamaa-adapters/tests/fixtures/datasets/adlb-plan.json)
+for a complete independently authored request corresponding to the benchmark.
+All objects reject unknown fields. The required top-level fields are:
+
+- `protocol`: exactly `dataset/1`.
+- `source` and `output`: ordered arrays of `{name, kind}`; kinds are `str`, `int`,
+  `float`, `date`, `datetime`. Names are unique and nonempty.
+- `templates`: ordered `{mode, assignments}` entries. Mode is `{records: null}` or
+  `{groups: [source_column_indices]}` with nonempty, distinct grouping fields.
+- `columns`: assignments for the later whole-column phase, in resolved order.
+- `keys`: nonempty, distinct output column indices.
+- `verifications`: ordered `{path, check}` entries with unique nonempty paths.
+
+An assignment has an output `column` index, original diagnostic `path`, and one
+`expression`: `{literal: scalar}`, `{source: index}`, `{column: index}`, or
+`{reduce: {column: source_index, reducer: SUM_or_MEAN, text: original_expression}}`.
+Indices are zero-based. Literal scalars use [the existing lossless codec](../R/yamaanative/README.md#scalar-transport-probe).
+Reduction is only admitted in group scope over a numeric source column. Scalar
+grouped reads must reference a grouping field. Output-column reads require an
+already completed assignment. Every template completes the same row-phase fields;
+remaining columns complete in the supplied order. Literal conversion occurs per
+constructed value, including on plans reused with empty versus populated sources.
+Paths and expression text provide provenance, not filesystem or artifact authority.
+
+Checks are `{unique: [output_column_indices]}` or
+`{row_count: {min: canonical_i64_text_or_null, max: canonical_i64_text_or_null}}`.
+At least one row-count bound is required; `min` cannot exceed `max`. Missing bounds
+may be omitted. Unique permits repeated references, matching the reference check.
+Only error-severity, whole-artifact bounds are represented. Filters, fractions,
+grouped row counts, column checks, warnings, handlers, windows, joins, functions,
+multiple sources and key-grain construction are outside the closed plan vocabulary.
+
+## Outcomes and ownership
+
+Plan admission precedes IPC decoding. The existing table preflight validates
+framing, schema, shapes, buffer bounds, UTF-8 and logical text amplification;
+owned Arrow arrays then supply immutable normalized cells. Output IPC is rebuilt
+from visible owned values, preserving exact i64, binary64, missingness, ordering
+and internal temporal precision. No source buffer is retained after the call.
+
+Outcome JSON contains `protocol` and one `outcome`:
+
+- `success`: accepted IPC plus all evaluated `verifications` in declaration order.
+- `failure`: no IPC; `phase` is `output` or `verification`, with complete check
+  observations including successful checks preceding/following failed checks.
+- `condition`: no IPC; the existing scalar/numeric diagnostic encoding plus an
+  optional `identity`. A failure has identity only after all output key fields
+  have completed. A completed missing key remains distinct from an unavailable key.
+- `limit`: no IPC; resource name and available decimal `limit`/`required` counts.
+
+A check observation retains `spec_path`, condition/requirement, evaluated and
+failed counts, output cardinality, and full offending identities. Each identity
+has a decimal row `position` and ordered lossless `keys`. Counts never pass through
+host binary64. Raw observations are intended for the caller and may contain input
+data; they are not automatically logged or published. These are bridge observations,
+not the complete public diagnostic/verification ledger, warning-log or sampling
+contracts. Formatting those reports and retaining partial ledgers after boundary
+resource failures remain integration gates.
+
+Malformed requests, incompatible schemas, invalid IPC and boundary failures raise
+host transport errors; semantic outcomes return normally. Neither host receives
+accepted table bytes if evaluation, verification or response construction fails.
+Control interruption is deferred while the bounded synchronous native call runs;
+full workflow cancellation and asynchronous execution remain qualification gates.
+
+## Resource policy
+
+| Resource | Fixed limit |
+| --- | --- |
+| Plan JSON | 1 MiB UTF-8 |
+| IPC input / accepted output | 8 MiB each |
+| Outcome JSON | 8 MiB |
+| Source/output columns | 64 each |
+| Templates / verification declarations | 16 each |
+| Assignments per template / column phase | 64 each |
+| Schema name / provenance text | 256 / 1,024 UTF-8 bytes |
+| Source/output rows | 65,536 each |
+| Output cells / cells per partition key scan | 262,144 each |
+| Cumulative logical work cells | 4,194,304 |
+| Cumulative scalar input text processed | 16 MiB |
+| Retained output text | 1 MiB |
+| Retained identity cells / identity text | 65,536 / 1 MiB |
+
+Work cells charge assignments, direct/aggregate source reads, partition key scans,
+key checks, row-count checks and identity copies before the relevant operation.
+Scalar text accounting precedes cloning/conversion, so repeated large strings
+cannot evade policy by converting to small numbers. Identity budgets apply before
+copying keys and accumulate across checks and runtime failure context. Counters
+reset per execution. Group comparisons still depend on key lengths and tree depth;
+these policies are not CPU deadlines, allocator-byte guarantees or an OOM sandbox.
+Input-byte and plan-complexity limits also bound work not counted as logical cells.
+
+## Evidence and remaining gates
+
+Shared fixtures encode committed ADLB source/expected values independently of the
+Rust engine and include duplicate keys, failed row count, conversion timing,
+empty input, temporal literals and integer overflow. Rust, installed Python and
+installed R replay the same observations; R needs neither Arrow nor a JSON package.
+Installed tests check output-buffer independence, rejection before decoding,
+post-error recovery and the unchanged backend capability flag.
+
+The normalized-specification frontend and complete public reports/publication
+are not implemented by this bridge. The four named prototype datasets, all
+benchmark cases, workflow/activation, numerical policy and release/default-cutover
+gates remain tracked in #1585.

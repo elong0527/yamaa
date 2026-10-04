@@ -70,6 +70,30 @@ fn table_snapshot(request: Raw) -> List {
     }
 }
 
+/// Validate raw JSON before constructing a string; run the shared typed dataset service.
+#[extendr]
+fn execute_dataset(request: Raw, source: Raw) -> List {
+    if request.len() > yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES {
+        return list!(value = NULL, error = "dataset plan exceeds resource limit");
+    }
+    let text = match std::str::from_utf8(request.as_slice()) {
+        Ok(text) => text,
+        Err(_) => return list!(value = NULL, error = "invalid UTF-8 JSON request"),
+    };
+    match yamaa_adapters::dataset_transport::execute_dataset(text, source.as_slice()) {
+        Ok(result) => {
+            let table = result
+                .table
+                .map_or_else(|| r!(NULL), |bytes| Raw::from_bytes(&bytes).into_robj());
+            list!(
+                value = list!(table = table, outcome = result.outcome),
+                error = NULL
+            )
+        }
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
 #[extendr]
 fn engine_info() -> List {
     let info = yamaa_engine::engine_info();
@@ -90,4 +114,5 @@ extendr_module! {
     fn evaluate_numeric;
     fn table_round_trip;
     fn table_snapshot;
+    fn execute_dataset;
 }

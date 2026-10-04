@@ -4,7 +4,8 @@ Version: 0.1.0
 Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
 Description: Optional installation, lossless scalar transport and bounded numeric
     application interfaces for the shared yamaa Rust core. Validates native
-    host boundaries without evaluating specifications or tables.
+    host boundaries and provides an explicit bounded typed dataset-plan bridge.
+    Does not compile specifications or select the default execution backend.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.6.1)

@@ -175,7 +175,7 @@ fn text(value: impl Into<String>) -> ContextValue {
 }
 
 #[derive(Serialize)]
-struct Diagnostic {
+pub(crate) struct Diagnostic {
     phase: &'static str,
     condition: &'static str,
     requirement: &'static str,
@@ -264,7 +264,7 @@ fn target_name(value: ColumnType) -> &'static str {
 }
 
 /// Transport conversion data, including canonical out-of-range integer diagnostics.
-fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
+pub(crate) fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
     let mut context = Context::new();
     context.insert(
         "from".into(),
@@ -285,6 +285,23 @@ fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
         requirement,
         spec_paths: vec![path],
         context,
+        source_span: None,
+        operand_route: None,
+        position: None,
+    })
+}
+
+/// Reuse exact arithmetic diagnostic encoding for already-bound dataset reductions.
+pub(crate) fn arithmetic(
+    error: yamaa_core::numeric::ArithmeticError,
+    path: String,
+) -> Box<Diagnostic> {
+    Box::new(Diagnostic {
+        phase: error.phase(),
+        condition: error.condition(),
+        requirement: error.requirement(),
+        spec_paths: vec![path],
+        context: numeric_context(&NumericCondition::Arithmetic(error.kind), &error.expression),
         source_span: None,
         operand_route: None,
         position: None,

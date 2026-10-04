@@ -47,6 +47,32 @@ fn table_snapshot(request: &[u8]) -> PyResult<String> {
     yamaa_adapters::table_transport::table_snapshot(request).map_err(table_error)
 }
 
+/// Execute an explicitly supplied dataset/1 plan over copied canonical IPC.
+/// Success returns owned IPC and observations; failure never returns a table.
+#[pyfunction]
+fn execute_dataset<'py>(
+    py: Python<'py>,
+    request: &str,
+    source: &[u8],
+) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
+    yamaa_adapters::dataset_transport::execute_dataset(request, source)
+        .map(|result| {
+            (
+                result
+                    .table
+                    .map(|bytes| pyo3::types::PyBytes::new(py, &bytes)),
+                result.outcome,
+            )
+        })
+        .map_err(|error| {
+            if error.is_internal() {
+                pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+            } else {
+                pyo3::exceptions::PyValueError::new_err(error.to_string())
+            }
+        })
+}
+
 /// Keep internal failures separate from rejected input or resource policy.
 fn table_error(error: yamaa_adapters::table_transport::TableTransportError) -> PyErr {
     if error == yamaa_adapters::table_transport::TableTransportError::Internal {
@@ -82,5 +108,6 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(evaluate_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;
+    module.add_function(wrap_pyfunction!(execute_dataset, module)?)?;
     Ok(())
 }

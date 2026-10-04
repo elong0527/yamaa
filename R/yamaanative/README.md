@@ -187,3 +187,14 @@ result and condition-detail budgets follow
 callback's own allocations or execution. Caller labels do not verify artifact
 membership. Environment activation, specification execution and full release
 qualification remain open.
+
+## Explicit typed dataset execution
+
+`execute_dataset(request, source)` invokes the shared bounded `dataset/1` service
+with JSON plan text and raw canonical IPC. It returns owned IPC only for an accepted
+dataset, alongside exact JSON observations; failures never return table bytes.
+No R Arrow or JSON package is required. This is a temporary typed-plan bridge,
+not specification compilation or automatic backend selection. See
+[`rust/DATASET_TRANSPORT.md`](../../rust/DATASET_TRANSPORT.md) for the closed scope,
+resource policy, synchronous control behavior, data-bearing diagnostic identities
+and remaining integration gates. Python remains the default backend.

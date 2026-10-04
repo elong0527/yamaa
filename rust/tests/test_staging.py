@@ -41,13 +41,15 @@ class StagingTests(unittest.TestCase):
                     ).read_bytes(),
                 )
 
-            for source in (
-                staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/tables"
-            ).iterdir():
-                self.assertEqual(
-                    (destination / "inst/tables" / source.name).read_bytes(),
-                    source.read_bytes(),
+            for family in ("tables", "datasets"):
+                fixtures = (
+                    staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures" / family
                 )
+                for source in fixtures.iterdir():
+                    self.assertEqual(
+                        (destination / "inst" / family / source.name).read_bytes(),
+                        source.read_bytes(),
+                    )
             self.assertEqual(
                 (destination / "inst/function_invocation.tsv").read_bytes(),
                 (
