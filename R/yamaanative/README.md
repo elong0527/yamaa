@@ -52,3 +52,83 @@ packages replay 52 independent positive/negative vectors, reuse results after
 input release/garbage collection, and recover after invalid requests. This
 qualifies copied scalar text only, not Arrow buffer ownership, callbacks,
 diagnostic transport, dataset execution, R Windows installation or CRAN safety.
+
+## Numeric application prototype
+
+`evaluate_numeric(request)` in R and `yamaa_native.evaluate_numeric(request)` in
+Python execute the same bounded compiler and numeric lifecycle service. Inputs
+are explicit normalized bindings; the call never discovers files, calls host
+functions, executes tables, publishes output or falls back to another evaluator.
+This is an opt-in prototype API, not the current-schema dataset backend.
+
+```json
+{
+  "protocol": "numeric/1",
+  "expression": "A + 1",
+  "column_path": "columns.A",
+  "target": "int",
+  "bindings": [{"name": "A", "value": {"int": "7"}}],
+  "math_policy": "reference_subset",
+  "unconvertible": {"value": {"missing": null}}
+}
+```
+
+The required fields are `protocol`, `expression`, `column_path`, `target` and
+`bindings`. Targets are `str`, `int`, `float`, `date` or `datetime`. Each binding
+has exactly `name` and a scalar/1 `value`; duplicate/empty names are invalid.
+An unbound name is absent, distinct from a binding with a missing value.
+All supplied bindings are validated before compilation, including unused ones.
+A request has at most 1 MiB of UTF-8 JSON and 4,096 bindings. Core parser/compiler
+budgets also apply; these prototype resource policies are not language limits.
+
+`math_policy` defaults to `reference_subset`, which rejects EXP/LN/POWER before
+resolution. `portable_libm_v1` explicitly opts into the pinned math policy and
+its documented differences from historical Python platform math. It never
+silently changes policy. Unknown versions, fields, policy names and duplicate
+fields are invalid transport, as are noncanonical or out-of-range runtime scalars.
+
+Omit `unconvertible` for no handler. A present handler must have the shown `value`
+wrapper; a bare JSON null is rejected. A wrapped missing value is an explicit
+null replacement. Handlers accept primitive literals only: missing, str, int,
+float and bool. Use temporal text literals for date/datetime replacements. A valid
+but unconvertible literal is only converted when the handler fires; decoding its
+wire type is not result conversion. Numeric failures never fire this handler.
+
+Responses have `protocol`, `math_policy`, `outcome`, `handler_counts` and
+`resolutions`. Every invocation owns fresh state. `resolutions` lists each reached
+name in written order, including repeats. Counts are decimal strings with their
+handler name and specification path. A successfully compiled plan registers its
+handler at zero before evaluation; compile failures have no registered handlers
+or resolutions. A failed replacement remains counted once and preserves the
+original result-conversion diagnostic. No result is published by this call.
+
+The closed outcome `status` vocabulary is:
+
+- `value`: `value` uses the scalar/1 codec, after column conversion and handling.
+- `failure`: `diagnostic` carries phase, condition, requirement, specification
+  paths and complete typed context. A replacement failure also carries `original`.
+- `unsupported`: written unsupported functions and name spans, with original
+  expression and specification path. No identifier has been resolved.
+- `limit`: parser/compiler resource name, limit, optional required count and
+  position, with original expression and path. It is not a language failure.
+
+Diagnostic context values use the same scalar codec. The additional
+`{"integer":"..."}` form is diagnostic-only canonical decimal integer data;
+it is never a valid runtime binding. This preserves out-of-range parsed integer
+conversion errors independently of R/JSON number limits. Arithmetic/literal
+integer-overflow context retains the reference's decimal string value and
+full i64 bounds. Invalid POWER retains the promoted binary64 argument bits.
+
+Grammar diagnostics use the normalized `.derivation.value.compute.expr` path;
+evaluation diagnostics use `.derivation.value.compute`; result conversion uses
+the column path and replacement conversion uses `.derivation.unconvertible`.
+Grammar `position` has separate byte and Unicode-scalar offsets. Evaluation
+`source_span` is half-open UTF-8 bytes, and `operand_route` retains structural
+`left`, `right`, `unary` or `argument:N` steps. Offsets/counts are decimal strings.
+Extra source geometry is outside the reference diagnostic context.
+
+Malformed transport raises a host error; language failures/unsupported/limits
+return structured outcomes. Unwind containment covers the shared adapter, not
+allocation failures, process aborts or arbitrary host callbacks. This API handles
+only normalized scalar requests. Whole-specification preflight, datasets, Arrow,
+callbacks, workflow publication, release locking and default cutover remain gates.

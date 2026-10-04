@@ -31,13 +31,15 @@ class StagingTests(unittest.TestCase):
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
             self.assertFalse((embedded / "target").exists())
             self.assertFalse((embedded / "Cargo.lock").exists())
-            self.assertEqual(
-                (destination / "inst/scalar_transport.tsv").read_bytes(),
-                (
-                    staging.WORKSPACE
-                    / "crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv"
-                ).read_bytes(),
-            )
+            for fixture in ("scalar_transport.tsv", "numeric_transport.tsv"):
+                self.assertEqual(
+                    (destination / "inst" / fixture).read_bytes(),
+                    (
+                        staging.WORKSPACE
+                        / "crates/yamaa-adapters/tests/fixtures"
+                        / fixture
+                    ).read_bytes(),
+                )
 
     def test_existing_destination_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:

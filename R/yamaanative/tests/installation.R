@@ -10,21 +10,25 @@ stopifnot(
 
 # Exercise the same independent wire truth after package installation. Values
 # stay as lossless envelopes; no ordinary R numeric vector carries an i64.
-vectors <- read.delim(
-  system.file("scalar_transport.tsv", package = "yamaanative"),
-  sep = "\t", quote = "", comment.char = "", stringsAsFactors = FALSE,
-  fileEncoding = "UTF-8", check.names = FALSE
-)
-for (i in seq_len(nrow(vectors))) {
-  actual <- tryCatch(scalar_round_trip(vectors$request[i]), error = identity)
-  expected <- vectors$expected[i]
-  if (startsWith(expected, "error:")) {
-    stopifnot(inherits(actual, "error"))
-    stopifnot(identical(conditionMessage(actual), substring(expected, 7L)))
-  } else {
-    stopifnot(identical(actual, expected))
+check_vectors <- function(fixture, invoke) {
+  vectors <- read.delim(
+    system.file(fixture, package = "yamaanative"),
+    sep = "\t", quote = "", comment.char = "", stringsAsFactors = FALSE,
+    fileEncoding = "UTF-8", check.names = FALSE
+  )
+  for (i in seq_len(nrow(vectors))) {
+    actual <- tryCatch(invoke(vectors$request[i]), error = identity)
+    expected <- vectors$expected[i]
+    if (startsWith(expected, "error:")) {
+      stopifnot(inherits(actual, "error"))
+      stopifnot(identical(conditionMessage(actual), substring(expected, 7L)))
+    } else {
+      stopifnot(identical(actual, expected))
+    }
   }
+  vectors
 }
+vectors <- check_vectors("scalar_transport.tsv", scalar_round_trip)
 owned <- scalar_round_trip(vectors$request[1L])
 rm(vectors)
 invisible(gc())
@@ -41,3 +45,30 @@ stopifnot(
   identical(conditionMessage(failure), "scalar transport request exceeds byte limit"),
   identical(scalar_round_trip(owned), owned)
 )
+
+
+# The numeric API invokes shared core compilation and engine lifecycle handling.
+numeric_vectors <- check_vectors("numeric_transport.tsv", evaluate_numeric)
+owned_numeric <- evaluate_numeric(numeric_vectors$request[1L])
+request_numeric <- '{"protocol":"numeric/1","expression":"1.5","column_path":"columns.A","target":"int","bindings":[],"unconvertible":{"value":{"int":"7"}}}'
+handled_numeric <- evaluate_numeric(request_numeric)
+for (i in seq_len(100L)) {
+  stopifnot(identical(evaluate_numeric(request_numeric), handled_numeric))
+}
+stopifnot(grepl('"count":"1"', handled_numeric, fixed = TRUE))
+for (invalid in list(NA_character_, character(), c("a", "b"), 1, NULL, too_large)) {
+  stopifnot(inherits(tryCatch(evaluate_numeric(invalid), error = identity), "error"))
+}
+limit_request <- paste0('{"protocol":"numeric/1","expression":"',
+                        paste(rep("A", 65537L), collapse = ""),
+                        '","column_path":"columns.A","target":"int","bindings":[]}')
+limit_result <- evaluate_numeric(limit_request)
+stopifnot(
+  grepl('"status":"limit"', limit_result, fixed = TRUE),
+  grepl('"resource":"bytes","limit":"65536"', limit_result, fixed = TRUE),
+  grepl('"handler_counts":[],"resolutions":[]', limit_result, fixed = TRUE),
+  identical(evaluate_numeric(numeric_vectors$request[1L]), owned_numeric)
+)
+rm(numeric_vectors, request_numeric, limit_request)
+invisible(gc())
+stopifnot(grepl('"status":"value"', owned_numeric, fixed = TRUE))
