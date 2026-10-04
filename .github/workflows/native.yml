@@ -76,6 +76,7 @@ jobs:
           python -m pip install --no-deps native-dist/*.whl
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_python.py" installed_python.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv" scalar_transport.tsv
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv" numeric_transport.tsv
           python installed_python.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}

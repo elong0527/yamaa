@@ -2,9 +2,9 @@ Package: yamaanative
 Title: Native Boundary Prototype for yamaa
 Version: 0.1.0
 Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
-Description: Optional installation and lossless scalar transport probes for the shared
-    yamaa Rust core. Reports bootstrap capabilities and validates scalar host
-    boundaries without evaluating specifications.
+Description: Optional installation, lossless scalar transport and bounded numeric
+    application interfaces for the shared yamaa Rust core. Validates native
+    host boundaries without evaluating specifications or tables.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.6.1)

@@ -12,6 +12,15 @@ fn scalar_round_trip(request: &str) -> List {
     }
 }
 
+/// Return numeric outcome JSON normally before the R facade raises transport errors.
+#[extendr]
+fn evaluate_numeric(request: &str) -> List {
+    match yamaa_adapters::numeric_transport::evaluate_numeric(request) {
+        Ok(value) => list!(value = value, error = NULL),
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
 #[extendr]
 fn engine_info() -> List {
     let info = yamaa_engine::engine_info();
@@ -27,4 +36,5 @@ extendr_module! {
     mod yamaanative;
     fn engine_info;
     fn scalar_round_trip;
+    fn evaluate_numeric;
 }

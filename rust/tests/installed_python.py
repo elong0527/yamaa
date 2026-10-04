@@ -1,6 +1,7 @@
 """Run against the installed wheel from a directory outside the checkout."""
 
 import csv
+import json
 import unittest
 from pathlib import Path
 
@@ -25,31 +26,28 @@ class InstallationTests(unittest.TestCase):
         self.assertIs(yamaa_native.engine_info()["execution_supported"], False)
 
 
+def assert_shared_vectors(test, invoke, fixture):
+    """Replay shared expected text and recover after malformed requests."""
+    with Path(__file__).with_name(fixture).open(encoding="utf-8", newline="") as stream:
+        vectors = list(csv.DictReader(stream, delimiter="\t"))
+    for vector in vectors:
+        with test.subTest(case=vector["id"]):
+            if vector["expected"].startswith("error:"):
+                with test.assertRaises(ValueError) as caught:
+                    invoke(vector["request"])
+                test.assertEqual(str(caught.exception), vector["expected"][6:])
+            else:
+                test.assertEqual(invoke(vector["request"]), vector["expected"])
+    test.assertEqual(invoke(vectors[0]["request"]), vectors[0]["expected"])
+
+
 class ScalarTransportTests(unittest.TestCase):
     """Exercise the installed extension without importing the reference engine."""
 
     def test_shared_vectors_and_recovery(self):
         """Independent truth checks each wire value and the next call after failure."""
-        with (
-            Path(__file__)
-            .with_name("scalar_transport.tsv")
-            .open(encoding="utf-8", newline="") as stream
-        ):
-            vectors = list(csv.DictReader(stream, delimiter="\t"))
-        for vector in vectors:
-            with self.subTest(case=vector["id"]):
-                if vector["expected"].startswith("error:"):
-                    with self.assertRaises(ValueError) as caught:
-                        yamaa_native.scalar_round_trip(vector["request"])
-                    self.assertEqual(str(caught.exception), vector["expected"][6:])
-                else:
-                    self.assertEqual(
-                        yamaa_native.scalar_round_trip(vector["request"]),
-                        vector["expected"],
-                    )
-        self.assertEqual(
-            yamaa_native.scalar_round_trip(vectors[0]["request"]),
-            vectors[0]["expected"],
+        assert_shared_vectors(
+            self, yamaa_native.scalar_round_trip, "scalar_transport.tsv"
         )
 
     def test_ownership_limits_and_host_types(self):
@@ -65,6 +63,60 @@ class ScalarTransportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds byte limit"):
             yamaa_native.scalar_round_trip("x" * 1048577)
         self.assertEqual(yamaa_native.scalar_round_trip(result), result)
+
+
+class NumericTransportTests(unittest.TestCase):
+    """Exercise actual native compilation, lifecycle and diagnostics outside the checkout."""
+
+    def test_shared_vectors(self):
+        """All positive, negative, unsupported and malformed cases use written truth."""
+        assert_shared_vectors(
+            self, yamaa_native.evaluate_numeric, "numeric_transport.tsv"
+        )
+
+    def test_limits_and_exact_diagnostics(self):
+        """Resource outcomes precede resolution and long errors retain exact decimal text."""
+        request = {
+            "protocol": "numeric/1",
+            "expression": "A" * 65537,
+            "column_path": "columns.A",
+            "target": "int",
+            "bindings": [],
+        }
+        result = json.loads(yamaa_native.evaluate_numeric(json.dumps(request)))
+        self.assertEqual(result["outcome"]["status"], "limit")
+        self.assertEqual(result["outcome"]["resource"], "bytes")
+        self.assertEqual(result["outcome"]["limit"], "65536")
+        self.assertEqual(result["resolutions"], [])
+        self.assertEqual(result["handler_counts"], [])
+        request["expression"] = "9" * 5000
+        output = yamaa_native.evaluate_numeric(json.dumps(request))
+        del request
+        value = json.loads(output)["outcome"]["diagnostic"]["context"]["value"]
+        self.assertEqual(value, {"str": "9" * 5000})
+        with self.assertRaisesRegex(ValueError, "exceeds resource limit"):
+            yamaa_native.evaluate_numeric(" " * 1048577)
+        for invalid in (None, [], 1):
+            with self.assertRaises(TypeError):
+                yamaa_native.evaluate_numeric(invalid)
+
+    def test_repeated_calls_do_not_share_handler_counts(self):
+        """Every invocation owns its inputs, result and run-local accounting."""
+        request = json.dumps(
+            {
+                "protocol": "numeric/1",
+                "expression": "1.5",
+                "column_path": "columns.A",
+                "target": "int",
+                "bindings": [],
+                "unconvertible": {"value": {"int": "7"}},
+            }
+        )
+        owned = yamaa_native.evaluate_numeric(request)
+        for _ in range(100):
+            self.assertEqual(yamaa_native.evaluate_numeric(request), owned)
+        del request
+        self.assertEqual(json.loads(owned)["handler_counts"][0]["count"], "1")
 
 
 if __name__ == "__main__":

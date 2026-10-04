@@ -156,8 +156,8 @@ in debug and release profiles on all native Python targets.
 
 This service accepts already normalized declarations. It does not decode a
 specification, plan dependencies, execute tables, implement expression-local
-handlers, verify columns or publish output. Installed host probes still expose
-only installation capabilities. The full workflow and FFI gates remain open.
+handlers, verify columns or publish output. Installed hosts now expose this service through an explicitly versioned normalized
+numeric request. The full workflow, table and callback gates remain open.
 
 ## Packaging decision
 
@@ -201,7 +201,27 @@ process aborts or allocation failure. The 52 independent shared transport cases
 run against Rust and installed Python wheel/source and R source packages. R uses
 its own registered native entry point without Python or a JSON-package dependency.
 Repeated calls test independent ownership and recovery after rejected requests.
-Arrow ownership, callbacks and structured diagnostic transport remain later gates.
+Arrow ownership and callbacks remain later gates.
+
+The installed `evaluate_numeric` API now composes core compilation and the engine
+numeric lifecycle through a strict `numeric/1` adapter protocol. See the
+[request/outcome contract](../R/yamaanative/README.md#numeric-application-prototype).
+It reuses the scalar codec for bindings, completed values and diagnostic context;
+diagnostic-only wide integers have a distinct decimal representation. Grammar,
+unsupported-function, resource-limit and runtime failure outcomes stay separate.
+Original expression/path/source geometry, written resolution traces, handler counts
+and both replacement/original conversion failures are retained. Bindings are static
+caller-owned data: no callbacks, file access, table execution or publication occurs.
+
+The 59-case shared corpus extends the independent lifecycle truth with compile,
+policy, diagnostic, input-validation and Unicode-position cases. Rust and installed
+Python/R packages compare exact responses; 47 applicable cases also replay through
+Python's real lifecycle, comparing values and complete primary diagnostic context.
+Rust-only source spans and original replacement context are independently pinned.
+Long exact errors, limits and repeated fresh accounting have additional tests.
+The native execution flag still means specification/dataset support and remains
+false. No default backend, existing production Python behavior or benchmark golden
+changes are implied by this normalized numeric prototype.
 
 Rust 1.90.0, PyO3 0.27.2, extendr 0.9.0, and Maturin 1.9.6 are pinned. Cargo's
 generated lockfile is ignored: the repository's current no-hashing rule permits

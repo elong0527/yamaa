@@ -10,6 +10,23 @@ use yamaa_core::value::Value;
 pub const MAX_REQUEST_BYTES: usize = 1_048_576;
 const PROTOCOL: &str = "scalar/1";
 
+/// Reuse the closed scalar codec inside other versioned adapter protocols.
+#[derive(Deserialize, Serialize)]
+#[serde(transparent)]
+pub(crate) struct ScalarValue(Scalar);
+
+impl ScalarValue {
+    /// Decode to a normalized core value without exposing wire internals.
+    pub(crate) fn into_core(self) -> Result<Value, TransportError> {
+        self.0.into_core()
+    }
+
+    /// Encode a core value using the same lossless scalar representation.
+    pub(crate) fn from_core(value: Value) -> Self {
+        Self(Scalar::from_core(value))
+    }
+}
+
 /// Stable boundary categories; messages deliberately do not reproduce input data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransportError {
