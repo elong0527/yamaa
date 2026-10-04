@@ -69,7 +69,7 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 Harness: [Harbor](https://hub.harborframework.com) · Agent: opencode · Model: muse-spark-1.3 · 133 trials per tier, Oct 2026
 :::
 
-## Example: age groups — the three prompts
+## Example: AE severity ranking — the three prompts
 
 ::: {.columns}
 ::: {.column width="32%"}
@@ -77,28 +77,39 @@ Harness: [Harbor](https://hub.harborframework.com) · Agent: opencode · Model: 
 
 ```text
 Following CDISC ADaM standards, use the
-provided DM dataset to create an ADSL
-dataset with one record per subject.
+provided AE dataset to create an ADAE
+dataset with one record per adverse
+event.
 
 The output dataset should contain the
 following columns in this order:
-STUDYID, USUBJID, AGE, AGEU, AGEGR1,
-AGEGR1N
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN,
+SEVRANK, SEVLVL
 
-Create AGEGR1 using these labels:
-- <18
-- 18-64
-- >64
-- Missing
-
-Create AGEGR1N as the numeric code of
-AGEGR1: 1 for <18, 2 for 18-64, and
-3 for >64. AGEGR1N has no value when
-AGEGR1 is Missing.
+ASEV is the reported severity, and is
+empty when severity was not reported.
+ASEVN is the numeric form of ASEV:
+1 for MILD, 2 for MODERATE, and 3 for
+SEVERE, and is empty when ASEV is empty.
+SEVRANK ranks the subject's events by
+ASEVN, worst first. Events with equal
+severity share a rank and the ranks they
+would otherwise fill are skipped, so a
+rank of 1 means the subject reported
+nothing worse. SEVLVL numbers the
+distinct severities the subject reported,
+worst first with each severity counted
+once. An event with no reported severity
+sorts after every reported one, and
+unreported events share one rank with
+each other. A subject with a single event
+carries rank 1, and when none of a
+subject's events has a reported severity
+every event shares rank 1.
 
 Read the source datasets from /app/input
 and save the completed dataset as
-/app/output/adsl.csv.
+/app/output/adae.csv.
 ```
 :::
 
@@ -106,7 +117,33 @@ and save the completed dataset as
 **Conventions** — passes ✅
 
 ```text
-(identical to the full prompt)
+Following CDISC ADaM standards, use the
+provided AE dataset to create an ADAE
+dataset with one record per adverse
+event.
+
+The output dataset should contain the
+following columns in this order:
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN,
+SEVRANK, SEVLVL
+
+ASEVN is the numeric form of ASEV:
+1 for MILD, 2 for MODERATE, and 3 for
+SEVERE. SEVRANK ranks the subject's
+events by ASEVN, worst first. Events
+with equal severity share a rank and
+the ranks they would otherwise fill
+are skipped. SEVLVL numbers the
+distinct severities the subject
+reported, worst first with each
+severity counted once. An event with
+no reported severity sorts after every
+reported one, and unreported events
+share one rank with each other.
+
+Read the source datasets from /app/input
+and save the completed dataset as
+/app/output/adae.csv.
 ```
 :::
 
@@ -115,22 +152,23 @@ and save the completed dataset as
 
 ```text
 Following CDISC ADaM standards, use the
-provided DM dataset to create an ADSL
-dataset with one record per subject.
+provided AE dataset to create an ADAE
+dataset with one record per adverse
+event.
 
 The output dataset should contain the
 following columns in this order:
-STUDYID, USUBJID, AGE, AGEU, AGEGR1,
-AGEGR1N
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN,
+SEVRANK, SEVLVL
 
 Read the source datasets from /app/input
 and save the completed dataset as
-/app/output/adsl.csv.
+/app/output/adae.csv.
 ```
 :::
 :::
 
-* Age-group cutoffs are a sponsor decision — no agent can infer them from CDISC knowledge.
+* SEVRANK is competition ranking (1, 2, 2, 4); SEVLVL is dense ranking (1, 2, 2, 3) — the brief prompt names neither.
 
 ## Goal
 
