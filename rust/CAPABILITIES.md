@@ -2,9 +2,9 @@
 
 This matrix tracks the implemented slices of [#1585](https://github.com/elong0527/yamaa/issues/1585).
 Unit and typed-plan tests are not installed specification execution. Every native installation probe still
-reports `execution_supported = false`; all 315 benchmark cases remain executable
-through the Python backend only, as declared by
-[`execution-manifest.yaml`](../benchmarks/execution-manifest.yaml).
+reports `execution_supported = false`. The
+[`execution-manifest.yaml`](../benchmarks/execution-manifest.yaml) still advertises
+Python only; the explicit ADLB prototype below is not a qualified full backend.
 
 | Contract / requirements | Rust core coverage | Python / Rust backend | R / Rust backend | Remaining gate |
 | --- | --- | --- | --- | --- |
@@ -34,7 +34,8 @@ through the Python backend only, as declared by
 | Installed R callbacks: REQ-0563-0564, 0570, 0676-0686, 0700-0704 | Shared function/1 invocation and checked temporal epoch codec | Installed callback facade preserves known temporal model precision | Real synchronous R callbacks; lossless scalars, explicit UTC, 42 shared cases plus ownership/reentrancy/interrupt/error/limit tests | Environment activation, specification/dataset execution and release gates |
 | Python temporal result compatibility: REQ-0563, 0570, 0686, 0702 | Closed owned native temporal result carrier with exact field/calendar/precision admission | Optional non-editable facade bridges known DateValue/DateTimeValue subtypes; installed wheel/source independent truth and reference comparison | Existing Date/UTC POSIXct callback mapping | Full environment/workflow integration and release qualification |
 | Typed single-source dataset application: REQ-0036-0039, 0047, 0059-0061, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates, direct/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count observations; committed ADLB source/expected replay plus failure/order tests | Installed typed-plan bridge; no specification compilation | Installed typed-plan bridge; no specification compilation | Full verification/report contracts, handlers, remaining operators and workflow/release gates |
-| Bounded typed dataset bridge | dataset/1 composes immutable plan admission, owned Arrow snapshots and checked output; cumulative work/text/identity policies | Explicit installed typed-plan entrypoint; no specification frontend/default dispatch | Explicit installed raw-IPC/JSON entrypoint; no specification frontend/default dispatch | Normalized-spec bridge, full portable reports/publication, all named fixtures and release gates |
+| Bounded typed dataset bridge | dataset/1 composes immutable plan admission, owned Arrow snapshots and checked output; cumulative work/text/identity policies | Installed typed-plan entrypoint; optional Python normalization frontend below | Explicit installed raw-IPC/JSON entrypoint; no specification frontend/default dispatch | Shared Rust compiler, full portable reports/publication, remaining named fixtures and release gates |
+| Normalized single-source specification bridge | Rust dataset/1 owns admitted derivation, conversion, grouping, output-key and dataset checks | Explicit optional Python loader/planner/IO bridge; actual installed ADLB YAML matches committed CSV and portable observations | Typed-plan execution only; no Python dependency introduced | Remaining named prototype fixtures, shared Rust compiler, workflow and release qualification |
 | Full application/workflow, verification, publication | Not implemented | No dataset execution | No dataset execution | Fake-port application tests; Arrow and FFI tests; bounded vertical prototype (steps 5-10) |
 
 `compare_present` mirrors the current Python value comparator: it does not round
@@ -223,5 +224,6 @@ service to copied canonical IPC. It bounds plan complexity, scalar text processe
 retained output/identity payloads and cumulative logical work before exposing the
 service to host requests. Runtime failures retain known complete output identities;
 unconstructed keys remain unavailable. The bridge reports raw typed observations,
-not complete public verification logs, warning handling or publication. The Python
-normalization frontend and all full-workflow/default-cutover gates remain open.
+not complete public verification logs, warning handling or publication. An optional [Python normalization frontend](../python/src/yamaa/adapters/NATIVE_DATASETS.md)
+now executes the ADLB specification through this bridge. The shared Rust compiler,
+remaining named prototypes and all full-workflow/default-cutover gates remain open.

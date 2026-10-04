@@ -118,7 +118,9 @@ installed R replay the same observations; R needs neither Arrow nor a JSON packa
 Installed tests check output-buffer independence, rejection before decoding,
 post-error recovery and the unchanged backend capability flag.
 
-The normalized-specification frontend and complete public reports/publication
-are not implemented by this bridge. The four named prototype datasets, all
+The optional [Python normalized-specification frontend](../python/src/yamaa/adapters/NATIVE_DATASETS.md)
+now composes this bridge with host loading/planning/IO and report formatting.
+The shared Rust compiler and complete public reports/publication are not implemented
+by this transport. The four named prototype datasets, all
 benchmark cases, workflow/activation, numerical policy and release/default-cutover
 gates remain tracked in #1585.

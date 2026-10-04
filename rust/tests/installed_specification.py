@@ -1,0 +1,390 @@
+"""Installed normalized-spec frontend: native values and portable failure evidence."""
+
+import copy
+import datetime as dt
+import itertools
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import polars as pl
+import yamaa
+import yamaa_native
+from yamaa.adapters.native_datasets import (
+    NativeDatasetLimitError,
+    execute_with_source_provider,
+)
+from yamaa.adapters.observations import observe_scalar
+from yamaa.io import ProjectResources, load_source_tables, render_artifact
+from yamaa.io.polars import frame_from_values
+from yamaa.models import TypedColumn
+from yamaa.runtime import ExecutionHooks, ExecutionSuccess, execute_specification
+from yamaa.specification import load_specification
+from yamaa.verification import check_dataset
+
+import yaml
+
+ROOT = Path(__file__).parent
+CASE = ROOT / "specification-adlb"
+SCHEMA = ROOT / "specification-yaml"
+
+
+def record_truth(records):
+    """Retain private complete offending identities as well as public sampled context."""
+    result = []
+    for record in records:
+        value = record.model_dump(mode="json")
+        if record.failure is not None:
+            value["failure"].update(
+                offending_keys=list(record.failure.offending_keys),
+                log_context=record.failure.log_context,
+                severity=record.failure.severity,
+            )
+        result.append(value)
+    return result
+
+
+class InstalledSpecification(unittest.TestCase):
+    """Exercise actual specification loading and installed Rust without reference fallback."""
+
+    def setUp(self):
+        """Retain the unchanged benchmark document and freshly ingested source table."""
+        self.document = yaml.safe_load((CASE / "spec.yaml").read_text())
+        self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
+        self.sources = load_source_tables(self.spec.input, ProjectResources(CASE))
+
+    def load(self, document):
+        """Validate authored test variants through the real schema and normalization pipeline."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "spec.yaml"
+            path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+            return load_specification(path, SCHEMA).specification
+
+    def compare(self, spec, sources):
+        """Compare native production with independently invoked reference observations."""
+        records = []
+
+        def dataset(table, declarations, keys, *, records=None):
+            """Capture the reference's real checks only in the reference execution."""
+            observed = []
+            try:
+                return check_dataset(table, declarations, keys, records=observed)
+            finally:
+                reference_records.extend(observed)
+                if records is not None:
+                    records.extend(observed)
+
+        reference_records = records
+        reference = execute_specification(
+            spec, sources, hooks=ExecutionHooks(dataset=dataset)
+        )
+        effects = []
+
+        def provider(declarations):
+            """Prove one provider call and preserve declared sources without discovery."""
+            effects.append(tuple(declarations))
+            return sources
+
+        with (
+            patch(
+                "yamaa.runtime.executor.execute_specification",
+                side_effect=AssertionError("reference execution"),
+            ),
+            patch(
+                "yamaa.runtime.lifecycle.ExpressionDispatcher.evaluate",
+                side_effect=AssertionError("reference evaluation"),
+            ),
+            patch(
+                "yamaa.verification.checks.check_dataset",
+                side_effect=AssertionError("reference checks"),
+            ),
+            patch(
+                "yamaa.verification.checks.check_keys",
+                side_effect=AssertionError("reference keys"),
+            ),
+        ):
+            actual = execute_with_source_provider(spec, provider)
+        self.assertEqual(effects, [tuple(spec.input)])
+        self.assertEqual(actual.result.status, reference.status)
+        self.assertEqual(actual.result.handler_counts, reference.handler_counts)
+        self.assertEqual(record_truth(actual.verifications), record_truth(records))
+        if isinstance(reference, ExecutionSuccess):
+            self.assertEqual(actual.result.table.columns, reference.table.columns)
+            self.assertTrue(
+                actual.result.table.frame.equals(reference.table.frame, null_equal=True)
+            )
+            self.assertEqual(
+                [
+                    [observe_scalar(value) for value in row]
+                    for row in actual.result.table.frame.iter_rows()
+                ],
+                [
+                    [observe_scalar(value) for value in row]
+                    for row in reference.table.frame.iter_rows()
+                ],
+            )
+            self.assertEqual(
+                render_artifact(actual.result.artifact),
+                render_artifact(reference.artifact),
+            )
+            if reference.warning_log is not None:
+                self.assertEqual(
+                    render_artifact(actual.result.warning_log),
+                    render_artifact(reference.warning_log),
+                )
+        else:
+            self.assertEqual(actual.result.diagnostics, reference.diagnostics)
+            self.assertFalse(hasattr(actual.result, "artifact"))
+        if reference.verification_log is not None:
+            self.assertEqual(
+                render_artifact(actual.result.verification_log),
+                render_artifact(reference.verification_log),
+            )
+        return actual
+
+    def test_real_adlb_matches_committed_truth(self):
+        """Run the actual YAML/input through installed code and match unchanged CSV bytes."""
+        self.assertIn("site-packages", str(Path(yamaa.__file__).resolve()))
+        self.assertIn("site-packages", str(Path(yamaa_native.__file__).resolve()))
+        actual = self.compare(self.spec, self.sources)
+        self.assertEqual(
+            render_artifact(actual.result.artifact),
+            (CASE / "expected/adlb.csv").read_bytes(),
+        )
+        self.assertEqual(
+            [record.evaluated_count for record in actual.verifications], [17, 1]
+        )
+        self.assertFalse(yamaa_native.engine_info()["execution_supported"])
+
+    def test_failures_and_complete_logs(self):
+        """Failed checks retain all records, sampled diagnostics and complete private keys."""
+        for scenario in (
+            "held",
+            "row_count",
+            "unique",
+            "duplicate",
+            "missing",
+            "conversion",
+            "overflow",
+        ):
+            with self.subTest(scenario=scenario):
+                doc = copy.deepcopy(self.document)
+                doc["output"]["verification_log"] = "verification.csv"
+                doc["output"]["warning_log"] = "warnings.csv"
+                doc["verifications"][0]["unique"]["id"] = "identity-check"
+                table = self.sources["LB"].table
+                if scenario == "row_count":
+                    doc["verifications"][1]["row_count"] = {
+                        "min": 18,
+                        "max": 18,
+                        "id": "count-check",
+                    }
+                elif scenario == "unique":
+                    doc["verifications"][0]["unique"]["columns"] = ["STUDYID"]
+                elif scenario == "duplicate":
+                    doc["keys"] = ["STUDYID"]
+                elif scenario == "missing":
+                    table = table.model_copy(
+                        update={
+                            "frame": table.frame.with_columns(
+                                pl.lit(None, dtype=pl.String).alias("STUDYID")
+                            )
+                        }
+                    )
+                elif scenario == "conversion":
+                    doc["rows"][0]["derivations"]["AVAL"] = {"literal": True}
+                elif scenario == "overflow":
+                    doc["input"]["LB"]["types"]["LBSTRESN"] = "int"
+                    columns = tuple(
+                        TypedColumn(
+                            name=c.name, type="int" if c.name == "LBSTRESN" else c.type
+                        )
+                        for c in table.columns
+                    )
+                    table = frame_from_values(
+                        columns,
+                        [
+                            list(row[:-1]) + [2**63 - 1]
+                            for row in table.frame.iter_rows()
+                        ],
+                    )
+                actual = self.compare(self.load(doc), {"LB": table})
+                self.assertEqual(
+                    actual.result.status, "success" if scenario == "held" else "failure"
+                )
+
+    def test_empty_templates_and_completed_missing_keys(self):
+        """Literal conversion timing and identity completeness survive the real frontend."""
+        for count, row_phase, missing, grouped in itertools.product(
+            (0, 1), (False, True), (False, True), (False, True)
+        ):
+            with self.subTest(
+                count=count, row_phase=row_phase, missing=missing, grouped=grouped
+            ):
+                doc = {
+                    "schema_version": "1.0",
+                    "domain": "TEST",
+                    "keys": ["id"],
+                    "input": {"T": {"path": "input.csv"}},
+                    "output": {
+                        "path": "output.csv",
+                        "columns": ["id", "value"],
+                        "verification_log": "checks.csv",
+                    },
+                    "columns": [
+                        {"name": "id", "type": "str", "label": "ID"},
+                        {"name": "value", "type": "float", "label": "Value"},
+                    ],
+                    "rows": [{"id": "r", "derivations": {}}],
+                }
+                if row_phase:
+                    doc["rows"][0]["derivations"]["value"] = {"literal": True}
+                    doc["columns"][0]["derivation"] = "T.id"
+                else:
+                    doc["rows"][0]["derivations"]["id"] = "T.id"
+                    doc["columns"][1]["derivation"] = {"literal": True}
+                if grouped:
+                    doc["rows"][0]["group_by"] = ["T.id"]
+                table = frame_from_values(
+                    (TypedColumn(name="id", type="str"),),
+                    [[None if missing else "a"]] * count,
+                )
+                self.compare(self.load(doc), {"T": table})
+
+    def test_invalid_later_declarations_retain_check_prefix(self):
+        """Invalid declarations retain prior check records while key/derivation failures win."""
+        for scenario in (
+            "first",
+            "after_pass",
+            "after_fail",
+            "after_keys",
+            "after_conversion",
+            "duplicate_id",
+        ):
+            with self.subTest(scenario=scenario):
+                doc = copy.deepcopy(self.document)
+                doc["output"]["verification_log"] = "verification.csv"
+                bad = {"unique": {"columns": ["NOPE"]}}
+                if scenario == "first":
+                    doc["verifications"].insert(0, bad)
+                else:
+                    doc["verifications"].append(bad)
+                if scenario == "after_fail":
+                    doc["verifications"][0]["unique"]["columns"] = ["STUDYID"]
+                elif scenario == "after_keys":
+                    doc["keys"] = ["STUDYID"]
+                elif scenario == "after_conversion":
+                    doc["rows"][0]["derivations"]["AVAL"] = {"literal": True}
+                elif scenario == "duplicate_id":
+                    doc["verifications"][0]["unique"]["id"] = "repeated"
+                    doc["verifications"][-1] = {
+                        "unique": {"columns": ["STUDYID"], "id": "repeated"}
+                    }
+                self.compare(self.load(doc), self.sources)
+
+    def test_defaults_projection_order_and_decimals(self):
+        """Resolved template defaults and host artifact formatting retain reference behavior."""
+        doc = copy.deepcopy(self.document)
+        doc["rows"][1]["derivations"].pop("DTYPE")
+        doc["columns"][6]["derivation"] = {"literal": "DEFAULT"}
+        doc["output"]["columns"] = list(reversed(doc["output"]["columns"]))
+        doc["output"]["decimals"] = 4
+        doc["output"]["order_by"] = [{"variable": "USUBJID", "direction": "desc"}]
+        self.compare(self.load(doc), self.sources)
+
+    def test_source_ordinals(self):
+        """The existing ingestion port assigns ordinals which native rows read losslessly."""
+        doc = copy.deepcopy(self.document)
+        doc["input"]["LB"]["ordinal"] = "RECNO"
+        doc["columns"].append({"name": "ORD", "type": "int", "label": "Ordinal"})
+        doc["output"]["columns"].append("ORD")
+        doc["rows"][0]["derivations"]["ORD"] = "LB.RECNO"
+        doc["rows"][1]["derivations"]["ORD"] = {"literal": 0}
+        spec = self.load(doc)
+        sources = load_source_tables(spec.input, ProjectResources(CASE))
+        actual = self.compare(spec, sources)
+        self.assertEqual(
+            actual.result.table.frame["ORD"].to_list(), list(range(1, 13)) + [0] * 5
+        )
+
+    def test_admitted_specification_is_owned_across_provider_effects(self):
+        """Caller/provider mutations cannot replace the already admitted expressions."""
+        spec = self.spec
+
+        def provider(declarations):
+            """Mutate both caller-owned model internals and the supplied IO declarations."""
+            spec.rows[0].derivations["AVAL"].value.root.clear()
+            spec.rows[0].derivations["AVAL"].value.root["compute"] = "1 / 0"
+            declarations.clear()
+            return self.sources
+
+        actual = execute_with_source_provider(spec, provider)
+        self.assertEqual(actual.result.status, "success")
+        self.assertEqual(
+            render_artifact(actual.result.artifact),
+            (CASE / "expected/adlb.csv").read_bytes(),
+        )
+
+    def test_native_limit_is_not_a_semantic_result(self):
+        """Resource refusal propagates once without an accepted artifact or fallback."""
+        doc = copy.deepcopy(self.document)
+        doc["rows"][0]["derivations"]["DTYPE"] = {"literal": "x" * 100000}
+        spec = self.load(doc)
+        effects = []
+
+        def provider(_):
+            """Count the only provider call made before bounded native execution."""
+            effects.append("read")
+            return self.sources
+
+        with self.assertRaises(NativeDatasetLimitError) as raised:
+            execute_with_source_provider(spec, provider)
+        self.assertEqual(raised.exception.resource, "output_text_bytes")
+        self.assertEqual(effects, ["read"])
+        self.assertEqual(
+            execute_with_source_provider(
+                self.spec, lambda _: self.sources
+            ).result.status,
+            "success",
+        )
+
+    def test_temporal_host_storage_and_missingness(self):
+        """Civil extrema and null temporal parents retain values through both host boundaries."""
+        for kind, values in (
+            ("date", [dt.date(1, 1, 1), None, dt.date(9999, 12, 31)]),
+            (
+                "datetime",
+                [dt.datetime(1, 1, 1), None, dt.datetime(9999, 12, 31, 23, 59, 59)],  # noqa: DTZ001 - zone-free civil time
+            ),
+        ):
+            with self.subTest(kind=kind):
+                doc = {
+                    "schema_version": "1.0",
+                    "domain": "TEST",
+                    "keys": ["id"],
+                    "input": {"T": {"path": "input.csv", "types": {"D": kind}}},
+                    "output": {"path": "out.csv", "columns": ["id", "D"]},
+                    "columns": [
+                        {
+                            "name": "id",
+                            "type": "int",
+                            "label": "ID",
+                            "derivation": "T.id",
+                        },
+                        {"name": "D", "type": kind, "label": "Date"},
+                    ],
+                    "rows": [{"id": "r", "derivations": {"D": "T.D"}}],
+                }
+                columns = (
+                    TypedColumn(name="id", type="int"),
+                    TypedColumn(name="D", type=kind),
+                )
+                table = frame_from_values(
+                    columns, [[index, value] for index, value in enumerate(values)]
+                )
+                self.compare(self.load(doc), {"T": table})
+
+
+if __name__ == "__main__":
+    unittest.main()

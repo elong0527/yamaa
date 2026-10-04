@@ -1,0 +1,2 @@
+# Installed engine qualification compares the committed CSV bytes on every OS.
+expected/adlb.csv text eol=lf
