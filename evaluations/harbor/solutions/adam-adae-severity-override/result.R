@@ -15,8 +15,14 @@ ae <- read_csv(
 adae <- ae |>
   mutate(
     ASEV = toupper(AESEV),
-    # An approved correction reassigns this one event to SEVERE.
-    ASEV = if_else(USUBJID == "CATH-01-001" & AESEQ == 2L, "SEVERE", ASEV),
+    # Approved corrections reassign two events to SEVERE, including one
+    # whose severity was unreported.
+    ASEV = if_else(
+      (USUBJID == "CATH-01-001" & AESEQ == 2L) |
+        (USUBJID == "CATH-01-003" & AESEQ == 1L),
+      "SEVERE",
+      ASEV
+    ),
     ASEVN = case_when(
       ASEV == "MILD" ~ 1L,
       ASEV == "MODERATE" ~ 2L,

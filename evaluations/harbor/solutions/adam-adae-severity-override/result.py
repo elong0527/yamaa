@@ -13,9 +13,13 @@ ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
 )
 
 asev = pl.col("AESEV").str.to_uppercase()
-# An approved correction reassigns this one event to SEVERE.
+# Approved corrections reassign two events to SEVERE, including one whose
+# severity was unreported.
 asev = (
-    pl.when((pl.col("USUBJID") == "CATH-01-001") & (pl.col("AESEQ") == 2))
+    pl.when(
+        ((pl.col("USUBJID") == "CATH-01-001") & (pl.col("AESEQ") == 2))
+        | ((pl.col("USUBJID") == "CATH-01-003") & (pl.col("AESEQ") == 1))
+    )
     .then(pl.lit("SEVERE"))
     .otherwise(asev)
 )
