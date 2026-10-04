@@ -149,7 +149,7 @@ benchmark, parametric variants.
    > `adam-adlbc-row-window` and `adam-adlbc-window-chain` (the names
    > above are stale). Contents verified against both specs: the
    > difference is mechanical, not parametric. `window-chain` is the
-   > only benchmark in the suite whose `row_value` reads a derived
+   > only positive benchmark in the suite whose `row_value` reads a derived
    > column (PREV2 = the previous visit's CHG, read after CHG is
    > complete for every row); neither `schema-window-functions` (all
    > its `row_value` sources are input columns) nor
