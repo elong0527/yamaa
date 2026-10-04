@@ -307,3 +307,43 @@ def test_non_scalar_predicate_text_is_unsupported_before_io(specification, expre
     )
     assert isinstance(result.result, ExecutionUnsupported)
     assert result.result.features[0].operation == "predicate_non_scalar_text"
+
+
+@pytest.mark.parametrize(
+    "index,expression",
+    [
+        (0, "ABSENT > 0"),
+        (1, "ABSENT IS NULL"),
+        (1, "LB.STUDYID = 'S'"),
+        (1, "ABSENT IS NULL AND LB.STUDYID IS NOT NULL"),
+    ],
+)
+def test_filter_phase_errors_match_planner_before_provider(
+    specification, index, expression
+):
+    """Known phase/scope failures retain planner diagnostics without starting IO."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["rows"][index]["filter"] = expression
+    spec = Specification.model_validate(doc)
+    sources = load_source_tables(spec.input, ProjectResources(CASE))
+    with pytest.raises(ExecutionPlanningError) as expected:
+        plan_execution(spec, sources, supported_operations=OPERATIONS)
+    result = execute_with_source_provider(spec, lambda _: pytest.fail("source read"))
+    assert result.result.status == "failure"
+    assert result.result.diagnostics == expected.value.diagnostics
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_filter_scope_allows_promoted_column_defaults(specification, index):
+    """REQ-1260 defaults read by filters become row-local in either template mode."""
+    doc = specification.model_dump(exclude_unset=True)
+    doc["rows"][index]["filter"] = "STUDYID IS NOT NULL"
+    spec = Specification.model_validate(doc)
+    admit(spec)
+    sources = load_source_tables(spec.input, ProjectResources(CASE))
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    req, error = lower(plan, sources["LB"].table)
+    assert error is None
+    assert req["templates"][index]["filter"]["bindings"] == [
+        {"name": "STUDYID", "read": {"column": 0}}
+    ]

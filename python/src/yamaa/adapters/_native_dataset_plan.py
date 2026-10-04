@@ -28,6 +28,7 @@ def admit(specification):
     """
     diagnostics = []
     unsupported = []
+    filters = []
     try:
         preflight_execution(specification, supported_operations=OPERATIONS)
     except ExecutionPlanningError as error:
@@ -120,7 +121,10 @@ def admit(specification):
             reject("submission", f"rows[{index}].submission")
         if row.filter is not None:
             try:
-                _native_predicate_plan.admit(row.filter, f"rows[{index}].filter")
+                path = f"rows[{index}].filter"
+                filters.append(
+                    (row, path, _native_predicate_plan.admit(row.filter, path))
+                )
             except ExecutionPlanningError as error:
                 diagnostics.extend(error.diagnostics)
             except UnsupportedPlanningError as error:
@@ -165,6 +169,19 @@ def admit(specification):
         raise ExecutionPlanningError(diagnostics)
     if unsupported:
         raise UnsupportedPlanningError(unsupported)
+    # In this admitted subset, every column-level source/literal derivation is
+    # row-local and is promoted when a filter reads it (REQ-1260). Windows,
+    # dataset aggregates and intermediates were refused above; do not infer
+    # their phase availability here or duplicate the general planner.
+    defaults = {column.name for column in specification.columns if column.derivation}
+    for row, path, ast in filters:
+        diagnostics.extend(
+            _native_predicate_plan.row_scope(
+                ast, row, path, defaults | row.derivations.keys()
+            )
+        )
+    if diagnostics:
+        raise ExecutionPlanningError(diagnostics)
 
 
 def literal(value):
