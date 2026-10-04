@@ -47,6 +47,8 @@ pub enum Expression {
     Source(usize),
     /// Read one record from a secondary source on completed output match values.
     Lookup(Lookup),
+    /// Row-phase equality against raw driver fields, never unfinished outputs.
+    RowLookup(RowLookup),
     /// Read a field from the run-local cached named record selection.
     Intermediate {
         index: usize,
@@ -101,6 +103,21 @@ pub struct Lookup {
     pub source: usize,
     pub column: usize,
     pub keys: Vec<MatchKey>,
+}
+
+/// Equality pairs compare a secondary field with a raw driver field.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowMatchKey {
+    pub source_column: usize,
+    pub driver_column: usize,
+}
+
+/// Row-template secondary read on record fields or available grouping fields.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowLookup {
+    pub source: usize,
+    pub column: usize,
+    pub keys: Vec<RowMatchKey>,
 }
 
 /// One completed-value assignment, with original specification provenance.
@@ -273,6 +290,7 @@ fn validate_assignment(
                 output,
             )?;
         }
+        Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
         Expression::Lookup(lookup) => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidLookup);
@@ -444,6 +462,7 @@ impl DatasetPlan {
                             Expression::Collect { .. }
                                 | Expression::Window(_)
                                 | Expression::Lookup(_)
+                                | Expression::RowLookup(_)
                                 | Expression::Intermediate { .. }
                         ))
                 {
@@ -812,6 +831,18 @@ fn evaluate<T: TableAccess + ?Sized>(
             }
             own(value)
         }
+        Expression::RowLookup(lookup) => lookup::read_row(
+            table,
+            secondary[lookup.source],
+            lookup,
+            &lookup::Context {
+                assignment,
+                candidate,
+                plan,
+                row,
+            },
+            budget,
+        )?,
         Expression::Lookup(lookup) => lookup::read(
             secondary[lookup.source],
             lookup,

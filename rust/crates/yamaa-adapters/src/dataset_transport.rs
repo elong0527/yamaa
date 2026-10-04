@@ -22,7 +22,7 @@ use yamaa_engine::{
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup"]}"#
 }
 
 /// Bound host argument collections before copying any source buffers.
@@ -122,6 +122,7 @@ enum Expression {
     Source(usize),
     Collect(CollectedSource),
     Lookup(Lookup),
+    RowLookup(RowLookup),
     Intermediate(IntermediateRead),
     Column(usize),
     Reduce(Reduction),
@@ -279,6 +280,19 @@ struct Lookup {
     source: usize,
     column: usize,
     keys: Vec<MatchKey>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RowMatchKey {
+    source_column: usize,
+    driver_column: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RowLookup {
+    source: usize,
+    column: usize,
+    keys: Vec<RowMatchKey>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -738,6 +752,23 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                         filter: source.filter.map(Predicate::prepare).transpose()?,
                         selection: source.selection.map(SourceSelection::prepare).transpose()?,
                     }
+                }
+                Expression::RowLookup(lookup) => {
+                    if lookup.keys.len() > MAX_COLUMNS {
+                        return Err(Error::RequestLimit);
+                    }
+                    dataset::Expression::RowLookup(dataset::RowLookup {
+                        source: lookup.source,
+                        column: lookup.column,
+                        keys: lookup
+                            .keys
+                            .into_iter()
+                            .map(|key| dataset::RowMatchKey {
+                                source_column: key.source_column,
+                                driver_column: key.driver_column,
+                            })
+                            .collect(),
+                    })
                 }
                 Expression::Lookup(lookup) => {
                     if lookup.keys.len() > MAX_COLUMNS {

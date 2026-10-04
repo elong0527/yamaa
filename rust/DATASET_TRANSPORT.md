@@ -310,7 +310,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
@@ -420,3 +420,21 @@ The shared Rust compiler and complete public reports/publication are not impleme
 by this transport. The four named prototype datasets, all
 benchmark cases, workflow/activation, numerical policy and release/default-cutover
 gates remain tracked in #1585.
+
+## Row-template secondary sources
+
+`row_source_lookup` admits `{row_lookup: {source, column, keys}}`, with key entries
+`{source_column, driver_column}`. Record scopes read raw driver fields; grouped
+scopes require each driver field to belong to the grouping key. Key-grain plans
+reject this form. Driver/secondary field types must match, target fields and key
+references must exist, and secondary key fields cannot repeat. These rules are
+checked before snapshot decoding.
+
+The engine resolves driver match fields before scanning the secondary snapshot,
+charges each read/text observation, skips missing keys and counts all matching
+records before reading a donor. Zero records yield missing; duplicate records
+retain exact raw match-key evidence even if donor values agree. The existing
+completed-output lookup uses the same scan. Both run before assignment conversion;
+row filtering follows completed row derivations, so a false filter cannot hide an
+earlier duplicate-match error. Source errors remain opaque; budgets and diagnostic
+copy limits apply before reads and copies. No index or performance claim is made.

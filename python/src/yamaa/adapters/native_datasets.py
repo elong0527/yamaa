@@ -22,6 +22,7 @@ from yamaa.adapters._native_dataset_plan import (
     WINDOWS,
     admit,
     lower,
+    primary_source,
 )
 from yamaa.adapters._native_dataset_report import condition, observations
 from yamaa.io import (
@@ -233,6 +234,15 @@ def execute_with_source_provider(
         for i, check in enumerate(specification.verifications or ())
         if check.operation in {"assert", "implies"}
     )
+    if len(specification.input) > 1 and specification.rows:
+        required.append(
+            (
+                "row_source_lookup",
+                UnsupportedFeature(
+                    operation="native_row_source_lookup", spec_path="rows"
+                ),
+            )
+        )
     handler_sites = [
         f"columns.{column.name}.derivation.unconvertible"
         for column in specification.columns
@@ -428,7 +438,7 @@ def execute_with_source_provider(
         return NativeDatasetRun(
             ExecutionUnsupported(features=error.features, handler_counts=())
         )
-    dataset = specification.base or next(iter(specification.input))
+    dataset = primary_source(specification)
     source = sources[dataset]
     source = source.table if isinstance(source, LoadedDataset) else source
     secondary = {

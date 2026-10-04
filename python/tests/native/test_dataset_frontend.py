@@ -56,7 +56,7 @@ def test_adlb_lowering_matches_independent_bound_plan(specification):
         "warning",
         "fraction",
         "grouped_count",
-        "multiple_sources",
+        "multiple_row_drivers",
         "source_schema",
         "wide_literal",
     ],
@@ -115,10 +115,11 @@ def test_unsupported_run_never_reads_sources(specification, feature):
         doc["verifications"][1]["row_count"]["min_fraction"] = 0.5
     elif feature == "grouped_count":
         doc["verifications"][1]["row_count"]["group_by"] = ["STUDYID"]
-    elif feature == "multiple_sources":
+    elif feature == "multiple_row_drivers":
         doc["input"]["OTHER"] = {"path": "other.csv"}
         for row in doc["rows"]:
             row["dataset"] = "LB"
+        doc["rows"][0]["dataset"] = "OTHER"
     elif feature == "source_schema":
         doc["input"]["LB"]["schema_path"] = "producer.yaml"
     else:
@@ -1569,4 +1570,95 @@ def test_key_grain_source_compute_refuses_before_provider(tmp_path):
     assert {feature.operation for feature in actual.result.features} == {
         "compute_binding_scope"
     }
+    assert effects == []
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_row_lookup_lowering_uses_raw_driver_keys(reverse):
+    """The complete BMI plan uses driver fields even when its input is not listed first."""
+    case = ROOT / "benchmarks/adam-advs-bmi"
+    spec = load_specification(case / "spec.yaml", ROOT / "yaml").specification
+    if reverse:
+        spec = spec.model_copy(
+            update={"input": dict(reversed(list(spec.input.items())))}
+        )
+    admit(spec)
+    sources = load_source_tables(spec.input, ProjectResources(case))
+    plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
+    request, pending = lower(plan, sources["VS"].table, {"ADSL": sources["ADSL"].table})
+    assert pending is None
+    item = next(
+        item for item in request["templates"][1]["assignments"] if item["column"] == 5
+    )
+    driver = {
+        column.name: index for index, column in enumerate(sources["VS"].table.columns)
+    }
+    secondary = {
+        column.name: index for index, column in enumerate(sources["ADSL"].table.columns)
+    }
+    assert item["expression"] == {
+        "row_lookup": {
+            "source": 0,
+            "column": secondary["HEIGHTBL"],
+            "keys": [
+                {"source_column": secondary[name], "driver_column": driver[name]}
+                for name in ["STUDYID", "USUBJID"]
+            ],
+        }
+    }
+
+
+def test_old_native_package_refuses_row_lookups_before_provider(monkeypatch):
+    """Legacy multi-source support cannot imply row-scope raw-key matching."""
+    case = ROOT / "benchmarks/adam-advs-bmi"
+    spec = load_specification(case / "spec.yaml", ROOT / "yaml").specification
+    effects = []
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        SimpleNamespace(
+            execute_dataset=lambda *_: effects.append("execute"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": [
+                        "row_filter",
+                        "predicate_checks",
+                        "multi_source",
+                        "numeric_compute",
+                    ],
+                }
+            ),
+        ),
+    )
+    actual = execute_with_source_provider(spec, lambda _: effects.append("provider"))
+    assert actual.result.status == "unsupported"
+    assert {feature.operation for feature in actual.result.features} == {
+        "native_row_source_lookup"
+    }
+    assert effects == []
+
+
+@pytest.mark.parametrize(
+    "predicate", ["ADSL.HEIGHTBL > 0", "VS.VSSTRESN > 0 AND ADSL.HEIGHTBL > 0"]
+)
+def test_secondary_row_filter_refuses_before_provider(predicate):
+    """Row lookups do not extend the driver-only predicate binder to secondary fields."""
+    case = ROOT / "benchmarks/adam-advs-bmi"
+    spec = load_specification(case / "spec.yaml", ROOT / "yaml").specification
+    document = spec.model_dump(exclude_unset=True)
+    document["rows"][0]["filter"] = predicate
+    spec = type(spec).model_validate(document)
+    effects = []
+
+    def provider(_):
+        """Supply valid tables if admission incorrectly reaches acquisition."""
+        effects.append("provider")
+        return load_source_tables(spec.input, ProjectResources(case))
+
+    actual = execute_with_source_provider(spec, provider)
+    assert actual.result.status == "unsupported"
+    assert {
+        (feature.operation, feature.spec_path) for feature in actual.result.features
+    } == {("secondary_row_filter", "rows[0].filter")}
     assert effects == []

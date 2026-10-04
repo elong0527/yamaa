@@ -47,6 +47,13 @@ NUMERIC_FUNCTIONS = frozenset(
 )
 
 
+def primary_source(specification):
+    """Select the one admitted driver independently of input mapping order."""
+    if specification.rows:
+        return specification.rows[0].dataset or next(iter(specification.input))
+    return specification.base or next(iter(specification.input))
+
+
 def admit(specification):
     """Reject the entire unsupported vocabulary before requesting source tables.
 
@@ -69,10 +76,19 @@ def admit(specification):
         if feature not in unsupported:
             unsupported.append(feature)
 
-    if len(specification.input) != 1 and (
-        specification.rows or specification.base is None or len(specification.input) > 8
+    primary = primary_source(specification)
+    if len(specification.input) > 8 or (
+        len(specification.input) > 1
+        and not specification.rows
+        and specification.base is None
     ):
         reject("multiple_sources", "input")
+    if (
+        len(specification.input) > 1
+        and specification.rows
+        and any(row.dataset != primary for row in specification.rows)
+    ):
+        reject("multiple_row_drivers", "rows")
     if specification.submission is not None:
         reject("submission", "submission")
     named = {item.id for item in specification.intermediates or ()}
@@ -83,7 +99,7 @@ def admit(specification):
         if (
             specification.rows
             or item.dataset not in specification.input
-            or item.dataset == (specification.base or next(iter(specification.input)))
+            or item.dataset == primary
         ):
             reject("intermediate_scope", path)
         if any(
@@ -156,7 +172,12 @@ def admit(specification):
             reject("source_schema", f"input.{name}.schema")
 
     def expression(
-        declaration, path, grouped, allow_source_filter=False, keyed_nonkey=False
+        declaration,
+        path,
+        grouped,
+        allow_source_filter=False,
+        allow_row_lookup=False,
+        keyed_nonkey=False,
     ):
         """Admit syntax without evaluating literals or converting output values."""
         if "unconvertible" in declaration.model_fields_set:
@@ -211,10 +232,7 @@ def admit(specification):
             inspect(ast)
             for name in numeric_identifiers(ast):
                 if "." in name and (
-                    grouped
-                    or keyed_nonkey
-                    or name.split(".", 1)[0]
-                    != (specification.base or next(iter(specification.input)))
+                    grouped or keyed_nonkey or name.split(".", 1)[0] != primary
                 ):
                     reject("compute_binding_scope", path)
         elif operation == "source":
@@ -235,10 +253,8 @@ def admit(specification):
                     reject("intermediate_read_scope", path)
                 if isinstance(payload, dict) and set(payload) != {"variable"}:
                     reject("intermediate_read_selection", path)
-            if qualifier in specification.input and qualifier != (
-                specification.base or next(iter(specification.input))
-            ):
-                if not allow_source_filter:
+            if qualifier in specification.input and qualifier != primary:
+                if not (allow_source_filter or allow_row_lookup):
                     reject("secondary_source_scope", path)
                 if isinstance(payload, dict) and set(payload) != {"variable"}:
                     reject("secondary_source_selection", path)
@@ -418,9 +434,13 @@ def admit(specification):
         if row.filter is not None:
             try:
                 path = f"rows[{index}].filter"
-                filters.append(
-                    (row, path, _native_predicate_plan.admit(row.filter, path))
-                )
+                ast = _native_predicate_plan.admit(row.filter, path)
+                filters.append((row, path, ast))
+                if row.group_by is None and any(
+                    "." in name and name.split(".", 1)[0] != primary
+                    for name in predicate_identifiers(ast)
+                ):
+                    reject("secondary_row_filter", path)
             except ExecutionPlanningError as error:
                 diagnostics.extend(error.diagnostics)
             except UnsupportedPlanningError as error:
@@ -430,6 +450,7 @@ def admit(specification):
                 declaration,
                 f"rows[{index}].derivations.{name}",
                 row.group_by is not None,
+                allow_row_lookup=True,
             )
     for column in specification.columns:
         if column.verifications:
@@ -523,7 +544,7 @@ def literal(value):
 def lower(plan, source, secondary=None):
     """Lower validated dependency order and bindings, never evaluate expressions."""
     spec = plan.specification
-    dataset = spec.base or next(iter(spec.input))
+    dataset = primary_source(spec)
     secondary = secondary or {}
     secondary_indices = {name: index for index, name in enumerate(secondary)}
     secondary_fields = {
@@ -637,11 +658,50 @@ def lower(plan, source, secondary=None):
                 )
                 fields = secondary_fields[qualifier]
                 table = secondary[qualifier]
+                row_keys = join.match_variables if join is not None else None
+                if row_keys is not None:
+                    if len(row_keys) != len(join.keys) or any(
+                        not variable.startswith(f"{dataset}.")
+                        or variable.count(".") != 1
+                        or variable.split(".", 1)[1] not in inputs
+                        or key not in fields
+                        or table.columns[fields[key]].type
+                        != source.columns[inputs[variable.split(".", 1)[1]]].type
+                        for key, variable in zip(join.keys, row_keys, strict=True)
+                    ):
+                        raise UnsupportedPlanningError(
+                            (
+                                UnsupportedFeature(
+                                    operation="row_source_binding",
+                                    spec_path=derived.operation_path,
+                                ),
+                            )
+                        )
+                    return {
+                        "column": outputs[derived.column],
+                        "path": derived.operation_path,
+                        "expression": {
+                            "row_lookup": {
+                                "source": secondary_indices[qualifier],
+                                "column": fields[field],
+                                "keys": [
+                                    {
+                                        "source_column": fields[key],
+                                        "driver_column": inputs[
+                                            variable.split(".", 1)[1]
+                                        ],
+                                    }
+                                    for key, variable in zip(
+                                        join.keys, row_keys, strict=True
+                                    )
+                                ],
+                            }
+                        },
+                    }
                 if (
                     not collect
                     or join is None
                     or not join.keys
-                    or join.match_variables is not None
                     or any(
                         key not in outputs
                         or key not in fields
