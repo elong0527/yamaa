@@ -1,5 +1,8 @@
 //! Bounded protocol for an explicit already-bound callable, not artifact activation.
-use crate::scalar_transport::ScalarValue;
+use crate::{
+    function_signature::{check_name, Identity, Kind, Signature, WireParameter, MAX_PARAMETERS},
+    scalar_transport::ScalarValue,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -9,16 +12,13 @@ use std::{
 };
 use yamaa_core::value::{ColumnType, Value, ValueType};
 use yamaa_engine::function_invocation::{
-    FailureKind, FunctionIdentity, FunctionPort, InvocationFailure, InvocationPlan, Parameter,
-    Presence,
+    FailureKind, FunctionPort, InvocationFailure, InvocationPlan,
 };
 
 pub const MAX_REQUEST_BYTES: usize = 1_048_576;
 pub const MAX_RESULT_BYTES: usize = 1_048_576;
 pub const MAX_OUTPUT_BYTES: usize = 8 * 1_048_576;
 pub const MAX_ERROR_BYTES: usize = 8192;
-const MAX_PARAMETERS: usize = 256;
-const MAX_NAME_BYTES: usize = 1024;
 const PROTOCOL: &str = "function/1";
 
 /// Boundary failures are distinct from normative function conditions.
@@ -70,64 +70,6 @@ pub enum CallbackError {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Identity {
-    name: String,
-    contract_version: String,
-    implementation_version: String,
-    call: String,
-}
-#[derive(Deserialize, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-enum Kind {
-    Str,
-    Int,
-    Float,
-    Bool,
-    Date,
-    Datetime,
-}
-impl Kind {
-    /// Closed parameter vocabulary includes Boolean only at the function boundary.
-    fn core(self) -> ValueType {
-        match self {
-            Self::Str => ValueType::Str,
-            Self::Int => ValueType::Int,
-            Self::Float => ValueType::Float,
-            Self::Bool => ValueType::Bool,
-            Self::Date => ValueType::Date,
-            Self::Datetime => ValueType::DateTime,
-        }
-    }
-    /// Column/result vocabulary deliberately excludes Boolean.
-    fn column(self) -> Result<ColumnType, Error> {
-        Ok(match self {
-            Self::Str => ColumnType::Str,
-            Self::Int => ColumnType::Int,
-            Self::Float => ColumnType::Float,
-            Self::Bool => return Err(Error::InvalidSignature),
-            Self::Date => ColumnType::Date,
-            Self::Datetime => ColumnType::DateTime,
-        })
-    }
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct WireParameter {
-    name: String,
-    host_name: String,
-    #[serde(rename = "type")]
-    kind: Kind,
-    accepts_missing: bool,
-    presence: WirePresence,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum WirePresence {
-    Required(()),
-    Optional(ScalarValue),
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Binding {
     name: String,
     value: ScalarValue,
@@ -148,7 +90,6 @@ struct Request {
 pub struct PreparedInvocation {
     plan: InvocationPlan,
     arguments: BTreeMap<String, Value>,
-    host_names: Vec<String>,
 }
 impl PreparedInvocation {
     /// Decode/admit the entire request before project code can be invoked.
@@ -167,46 +108,13 @@ impl PreparedInvocation {
         if wire.parameters.len() > MAX_PARAMETERS || wire.arguments.len() > MAX_PARAMETERS {
             return Err(Error::RequestLimit);
         }
-        for text in [
-            &wire.identity.name,
-            &wire.identity.contract_version,
-            &wire.identity.implementation_version,
-            &wire.identity.call,
-        ] {
-            check_name(text)?;
+        let plan = Signature {
+            identity: wire.identity,
+            parameters: wire.parameters,
+            returns: wire.returns,
+            may_return_missing: wire.may_return_missing,
         }
-        let identity = FunctionIdentity {
-            name: wire.identity.name,
-            contract_version: wire.identity.contract_version,
-            implementation_version: wire.identity.implementation_version,
-            call: wire.identity.call,
-        };
-        let mut parameters = Vec::new();
-        let mut host_names = Vec::new();
-        for p in wire.parameters {
-            check_name(&p.name)?;
-            check_name(&p.host_name)?;
-            host_names.push(p.host_name.clone());
-            parameters.push(Parameter {
-                name: p.name,
-                host_name: p.host_name,
-                kind: p.kind.core(),
-                accepts_missing: p.accepts_missing,
-                presence: match p.presence {
-                    WirePresence::Required(()) => Presence::Required,
-                    WirePresence::Optional(s) => {
-                        Presence::Optional(s.into_core().map_err(|_| Error::InvalidScalar)?)
-                    }
-                },
-            });
-        }
-        let plan = InvocationPlan::new(
-            identity,
-            parameters,
-            wire.returns.column()?,
-            wire.may_return_missing,
-        )
-        .map_err(|_| Error::InvalidSignature)?;
+        .prepare()?;
         let mut arguments = BTreeMap::new();
         for binding in wire.arguments {
             check_name(&binding.name)?;
@@ -218,15 +126,11 @@ impl PreparedInvocation {
                 return Err(Error::InvalidRequest);
             }
         }
-        Ok(Self {
-            plan,
-            arguments,
-            host_names,
-        })
+        Ok(Self { plan, arguments })
     }
     /// Inspect admitted host mappings for language-specific identifier checks.
     pub fn host_names(&self) -> impl Iterator<Item = &str> {
-        self.host_names.iter().map(String::as_str)
+        self.plan.parameters().iter().map(|p| p.host_name.as_str())
     }
     /// Invoke synchronously once and contain unwind failures without replay.
     /// A callback may have changed host state before any returned failure. This
@@ -265,17 +169,6 @@ impl PreparedInvocation {
         .map_err(|_| Error::Internal)?
     }
 }
-/// Bound every name before cloning, sorting or echoing diagnostic context.
-fn check_name(name: &str) -> Result<(), Error> {
-    if name.len() > MAX_NAME_BYTES {
-        Err(Error::RequestLimit)
-    } else if name.is_empty() {
-        Err(Error::InvalidRequest)
-    } else {
-        Ok(())
-    }
-}
-
 #[derive(Serialize)]
 struct Envelope {
     protocol: &'static str,
