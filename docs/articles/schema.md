@@ -26,6 +26,7 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema_verification.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_verification.yaml) | Dataset and column verifications (Verification) |
 | [`schema_metadata.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_metadata.yaml) | Governed dataset and column metadata (Submission metadata) |
 | [`schema_define.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_define.yaml) | Define-XML composition inputs (Define-XML) |
+| [`conditions.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/conditions.yaml) | The validation-condition registry: every condition an implementation may raise, keyed to the phases that may raise it |
 
 The derivation verbs in full, with what each one is for, are tabulated in
 [Schema introduction](schema-intro.md#the-derivation-vocabulary). The
