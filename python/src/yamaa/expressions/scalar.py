@@ -9,6 +9,7 @@ here that produces a new string.
 
 from __future__ import annotations
 
+import math
 from bisect import bisect_left, bisect_right
 from collections.abc import Mapping, Sequence
 from itertools import pairwise
@@ -328,6 +329,11 @@ def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
     ):
         return _invalid_payload("cut", "numeric breaks")
     thresholds = [float(value) for value in breaks]
+    if any(math.isnan(threshold) for threshold in thresholds):
+        # NaN is unordered: it defeats the ascending check below and makes
+        # bisect return an implementation-defined label. Infinite breaks are
+        # legitimate cut boundaries and keep their ordering semantics.
+        return _invalid_payload("cut", "breaks without NaN")
     if any(later <= earlier for earlier, later in pairwise(thresholds)):
         return _invalid_payload("cut", "ascending breaks")
 
