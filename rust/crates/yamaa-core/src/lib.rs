@@ -25,5 +25,7 @@ pub mod value;
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub mod regex;
+
 pub mod reduction;
 pub mod table;
