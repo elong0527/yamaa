@@ -63,7 +63,7 @@ class InstalledReferences(unittest.TestCase):
 
     def test_intermediate_truth_against_unchanged_reference_rules(self):
         """Authored wire findings also match the separate default visibility and donor rules."""
-        with (ROOT / "reference_intermediate.tsv").open() as stream:
+        with (ROOT / "reference_intermediate.tsv").open(encoding="utf-8") as stream:
             cases = list(csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE))
         for case in cases:
             with self.subTest(case=case["case"]):
@@ -160,7 +160,7 @@ class InstalledReferences(unittest.TestCase):
 
     def test_scope_truth_against_unchanged_reference_rules(self):
         """Replay authored scope outcomes through the separate default Python implementation."""
-        with (ROOT / "reference_scope.tsv").open() as stream:
+        with (ROOT / "reference_scope.tsv").open(encoding="utf-8") as stream:
             cases = list(csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE))
         for case in cases:
             with self.subTest(case=case["case"]):
@@ -242,7 +242,7 @@ class InstalledReferences(unittest.TestCase):
 
     def test_key_truth_against_default_rules(self):
         """Replay independent comparison/inference truth through the retained default rules."""
-        with (ROOT / "reference_keys.tsv").open() as stream:
+        with (ROOT / "reference_keys.tsv").open(encoding="utf-8") as stream:
             for case in csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE):
                 data = json.loads(case["request"])
                 query = data["queries"][0]
@@ -431,7 +431,7 @@ class InstalledReferences(unittest.TestCase):
             "reference_intermediate.tsv",
             "reference_keys.tsv",
         ):
-            with (ROOT / fixture).open() as stream:
+            with (ROOT / fixture).open(encoding="utf-8") as stream:
                 cases.extend(
                     csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE)
                 )
