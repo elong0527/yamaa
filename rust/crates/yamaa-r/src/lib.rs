@@ -78,6 +78,19 @@ fn analyze_column_dependencies(request: Raw) -> List {
     )
 }
 
+/// Parse aggregate syntax and return normally before the R facade raises errors.
+#[extendr]
+fn analyze_aggregate(request: Raw) -> List {
+    json_request(
+        request,
+        yamaa_adapters::aggregate_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::aggregate_transport::analyze_aggregate(text)
+                .map_err(|error| error.to_string())
+        },
+    )
+}
+
 /// Return numeric outcome JSON normally before the R facade raises transport errors.
 #[extendr]
 fn evaluate_numeric(request: Raw) -> List {
@@ -188,6 +201,7 @@ extendr_module! {
     fn analyze_column_dependencies;
     fn scalar_round_trip;
     fn evaluate_numeric;
+    fn analyze_aggregate;
     fn table_round_trip;
     fn table_snapshot;
     fn execute_dataset;

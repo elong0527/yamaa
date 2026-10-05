@@ -313,3 +313,9 @@ argument inputs for key-grain non-key calls. All feeding records participate;
 missing values are ignored and conflicting present values stop the call with
 exact ambiguity evidence. The six additional shared cases replay this behavior
 through the installed R bridge without changing existing expected values.
+
+`analyze_aggregate()` exposes the shared `aggregate-syntax/1` compiler service.
+It returns syntax, ordered references or portable grammar/resource diagnostics
+without requiring Python. See [the transport contract](../../rust/AGGREGATE_SYNTAX.md).
+Parsing the closed vocabulary does not enable new dataset execution forms or
+provide a current-schema specification compiler.

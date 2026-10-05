@@ -12,3 +12,5 @@ license = "MIT"
 [tool.maturin]
 bindings = "pyo3"
 module-name = "yamaa_native"
+# The sdist moves pyproject.toml to its root; retain the stub beside it.
+include = [{ path = "yamaa_native.pyi", format = "sdist" }]

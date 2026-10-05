@@ -142,7 +142,7 @@ impl NumericFunction {
     }
 
     /// Look up a case-insensitive spelling without extending the vocabulary.
-    fn lookup(name: &str) -> Option<Self> {
+    pub(crate) fn lookup(name: &str) -> Option<Self> {
         [
             Self::Abs,
             Self::Ceil,
@@ -164,7 +164,7 @@ impl NumericFunction {
     }
 
     /// Check the closed fixed/variadic arities after the whole call parses.
-    fn accepts(self, count: usize) -> bool {
+    pub(crate) fn accepts(self, count: usize) -> bool {
         match self {
             Self::Greatest | Self::Least => count >= 2,
             Self::Coalesce => count >= 1,
@@ -251,7 +251,7 @@ pub fn parse_numeric(text: &str, mut limits: ParseLimits) -> Result<ParsedNumeri
     if text.len() > limits.bytes {
         return Err(limit_error(text, 0, ParseResource::Bytes, limits.bytes));
     }
-    let tokens = tokenize(text, limits.tokens)?;
+    let tokens = tokenize(text, limits.tokens, false)?;
     let mut parser = Parser {
         text,
         tokens,
@@ -316,16 +316,17 @@ fn limit_error(text: &str, byte: usize, resource: ParseResource, limit: usize) -
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TokenKind {
+pub(crate) enum TokenKind {
+    QualifiedStar,
     Number,
     Name,
     Symbol(u8),
     End,
 }
 #[derive(Clone, Copy, Debug)]
-struct Token {
-    kind: TokenKind,
-    span: SourceSpan,
+pub(crate) struct Token {
+    pub(crate) kind: TokenKind,
+    pub(crate) span: SourceSpan,
 }
 
 /// ASCII name start from the shared predicate/name production.
@@ -385,7 +386,11 @@ fn number_end(bytes: &[u8], start: usize) -> usize {
 }
 
 /// Tokenize all input before parsing, while bounding allocation by token count.
-fn tokenize(text: &str, budget: usize) -> Result<Vec<Token>, ParseError> {
+pub(crate) fn tokenize(
+    text: &str,
+    budget: usize,
+    aggregate: bool,
+) -> Result<Vec<Token>, ParseError> {
     let bytes = text.as_bytes();
     let mut tokens = Vec::new();
     let mut index = 0;
@@ -408,7 +413,11 @@ fn tokenize(text: &str, budget: usize) -> Result<Vec<Token>, ParseError> {
             TokenKind::Number
         } else if name_start(bytes[index]) {
             index = name_end(bytes, index);
-            if bytes.get(index) == Some(&b'.') {
+            let qualified_star =
+                aggregate && bytes.get(index) == Some(&b'.') && bytes.get(index + 1) == Some(&b'*');
+            if qualified_star {
+                index += 2;
+            } else if bytes.get(index) == Some(&b'.') {
                 if !bytes.get(index + 1).is_some_and(|&byte| name_start(byte)) {
                     return Err(grammar_error(
                         text,
@@ -425,7 +434,11 @@ fn tokenize(text: &str, budget: usize) -> Result<Vec<Token>, ParseError> {
                     GrammarFailure::ProhibitedConstruct { construct },
                 ));
             }
-            TokenKind::Name
+            if qualified_star {
+                TokenKind::QualifiedStar
+            } else {
+                TokenKind::Name
+            }
         } else if b"+-*/(),".contains(&bytes[index]) {
             index += 1;
             TokenKind::Symbol(bytes[start])
