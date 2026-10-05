@@ -240,6 +240,188 @@ class InstalledReferences(unittest.TestCase):
                     ],
                 )
 
+    def test_key_truth_against_default_rules(self):
+        """Replay independent comparison/inference truth through the retained default rules."""
+        with (ROOT / "reference_keys.tsv").open() as stream:
+            for case in csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE):
+                data = json.loads(case["request"])
+                query = data["queries"][0]
+                expected = json.loads(case["expected"])["outcome"]["results"][0]
+                with self.subTest(case=case["case"]):
+                    if query["kind"] == "comparable_types":
+                        self.assertEqual(
+                            reference_planning._reference_comparable_types(
+                                query["left"], query["right"]
+                            ),
+                            expected["comparable"],
+                        )
+                        continue
+                    keys = tuple(query["keys"])
+                    finding = reference_planning._reference_applicable_keys(
+                        keys,
+                        {
+                            field["name"]: field["type"]
+                            for field in data["catalog"]["outputs"]
+                        },
+                        {field["name"]: field["type"] for field in query["fields"]},
+                    )
+                    expected = expected["inference"]
+                    self.assertEqual(finding.kind, expected["kind"])
+                    self.assertEqual(
+                        finding.keys, tuple(keys[i] for i in expected.get("keys", []))
+                    )
+                    self.assertEqual(
+                        finding.key,
+                        keys[expected["key"]] if "key" in expected else None,
+                    )
+                    self.assertEqual(finding.expected, expected.get("expected"))
+                    self.assertEqual(finding.actual, expected.get("actual"))
+
+    def test_range_bound_compatibility_keeps_diagnostic_provenance(self):
+        """Range type comparison uses the same Rust relation rule with REQ-0121 paths."""
+        for value in ("K", "SRC.X"):
+            spec = specification(
+                [
+                    Column(
+                        name="K", type="int", derivation=expression({"source": "SRC.N"})
+                    ),
+                    Column(
+                        name="V",
+                        type="int",
+                        derivation=expression({"source": "SRC.N"}),
+                    ),
+                ]
+            ).model_copy(
+                update={
+                    "intermediates": [
+                        Intermediate(
+                            id="LOOK",
+                            dataset="SRC",
+                            key={"N": "K"},
+                            between={"value": value, "lower": "N", "upper": "N"},
+                        )
+                    ]
+                }
+            )
+            for native in (False, True):
+                with self.subTest(value=value, native=native):
+                    if value == "K":
+                        self.assertEqual(
+                            self.plan(spec, native).intermediates[0].identifier, "LOOK"
+                        )
+                        continue
+                    with self.assertRaises(ExecutionPlanningError) as caught:
+                        self.plan(spec, native)
+                    (diagnostic,) = caught.exception.diagnostics
+                    self.assertEqual(
+                        (
+                            diagnostic.condition,
+                            diagnostic.requirement,
+                            diagnostic.spec_paths,
+                            dict(diagnostic.context),
+                        ),
+                        (
+                            "incomparable_range_types",
+                            "REQ-0121",
+                            ("intermediates[0].between",),
+                            {
+                                "intermediate": "LOOK",
+                                "value_type": "str",
+                                "lower_type": "int",
+                                "upper_type": "int",
+                            },
+                        ),
+                    )
+
+    def test_unknown_static_key_type_defers_without_comparison(self):
+        """Mapping keys retain REQ-1259 runtime typing in both compiler paths."""
+        spec = specification(
+            [
+                Column(
+                    name="K", type="str", derivation=expression({"source": "SRC.X"})
+                ),
+                Column(
+                    name="V", type="int", derivation=expression({"source": "LOOK.N"})
+                ),
+            ]
+        ).model_copy(
+            update={
+                "intermediates": [
+                    Intermediate(
+                        id="LOOK",
+                        dataset="SRC",
+                        key={"N": {"mapping": {"source": "K", "dict": {"x": 1}}}},
+                    )
+                ]
+            }
+        )
+        for native in (False, True):
+            with self.subTest(native=native):
+                plan = self.plan(spec, native)
+                self.assertEqual(plan.intermediates[0].match_fields, ("N",))
+                self.assertEqual(plan.intermediates[0].match_variables, ("key[N]",))
+
+    def test_inferred_key_paths_types_and_order(self):
+        """Actual optional planning owns inference; failures retain authored join provenance."""
+        for kind in ("float", "str", None):
+            spec = specification(
+                [
+                    Column(
+                        name="K", type="int", derivation=expression({"source": "SRC.N"})
+                    ),
+                    Column(
+                        name="V",
+                        type="int",
+                        derivation=expression({"source": "OTHER.N"}),
+                    ),
+                ]
+            ).model_copy(
+                update={
+                    "input": {
+                        "SRC": DatasetSource(path="src.csv"),
+                        "OTHER": DatasetSource(path="other.csv"),
+                    }
+                }
+            )
+            columns = [TypedColumn(name="N", type="int")]
+            values = [1]
+            if kind is not None:
+                columns.insert(0, TypedColumn(name="K", type=kind))
+                values.insert(0, 1.0 if kind == "float" else "x")
+            sources = {"OTHER": frame_from_values(tuple(columns), [values])}
+            for native in (False, True):
+                with self.subTest(kind=kind, native=native):
+                    if kind == "float":
+                        plan = self.plan(spec, native, sources)
+                        self.assertEqual(plan.columns[1].implicit_joins[0].keys, ("K",))
+                        continue
+                    with self.assertRaises(ExecutionPlanningError) as caught:
+                        self.plan(spec, native, sources)
+                    (diagnostic,) = caught.exception.diagnostics
+                    self.assertEqual(
+                        diagnostic.spec_paths, ("columns.V.derivation.source",)
+                    )
+                    if kind == "str":
+                        self.assertEqual(
+                            diagnostic.condition, "incompatible_input_type"
+                        )
+                        self.assertEqual(diagnostic.requirement, "REQ-0151")
+                        self.assertEqual(
+                            dict(diagnostic.context),
+                            {"source": "K", "expected": "int", "actual": "str"},
+                        )
+                    else:
+                        self.assertEqual(diagnostic.condition, "no_applicable_keys")
+                        self.assertEqual(diagnostic.requirement, "REQ-0152")
+                        self.assertEqual(
+                            dict(diagnostic.context),
+                            {
+                                "dataset": "OTHER",
+                                "keys": ["K"],
+                                "hint": "declare an explicit `intermediate:` with `source`/`key` pairs",
+                            },
+                        )
+
     def test_shared_truth_batch_prepared_and_owned(self):
         """Replay authored bindings/conditions through both interfaces after request release."""
         cases = []
@@ -247,6 +429,7 @@ class InstalledReferences(unittest.TestCase):
             "reference_binding.tsv",
             "reference_scope.tsv",
             "reference_intermediate.tsv",
+            "reference_keys.tsv",
         ):
             with (ROOT / fixture).open() as stream:
                 cases.extend(
@@ -281,7 +464,7 @@ class InstalledReferences(unittest.TestCase):
         with self.assertRaises(TypeError):
             yamaa_native._ReferenceCatalog()
 
-    def plan(self, spec, native=True):
+    def plan(self, spec, native=True, extra_sources=None):
         """Select the actual compiled catalog and forbid reference binding fallback."""
         sources = {
             "SRC": frame_from_values(
@@ -289,6 +472,7 @@ class InstalledReferences(unittest.TestCase):
                 [["x", 1]],
             )
         }
+        sources.update(extra_sources or {})
         if not native:
             return plan_execution(
                 spec, sources, supported_operations=DEFAULT_EXPRESSION_OPERATIONS
@@ -313,6 +497,16 @@ class InstalledReferences(unittest.TestCase):
                 reference_planning,
                 "_reference_intermediate_visibility",
                 side_effect=AssertionError("reference intermediate visibility"),
+            ),
+            patch.object(
+                reference_planning,
+                "_reference_comparable_types",
+                side_effect=AssertionError("reference key rules"),
+            ),
+            patch.object(
+                reference_planning,
+                "_reference_applicable_keys",
+                side_effect=AssertionError("reference key rules"),
             ),
             patch.object(
                 reference_planning,
@@ -697,6 +891,7 @@ class InstalledReferences(unittest.TestCase):
                     "output_validation",
                     "qualified_validation",
                     "intermediate_validation",
+                    "key_relations",
                 ],
             },
         )
@@ -915,6 +1110,16 @@ class InstalledReferences(unittest.TestCase):
                     ),
                     patch.object(
                         reference_planning,
+                        "_reference_comparable_types",
+                        side_effect=AssertionError("reference key rules"),
+                    ),
+                    patch.object(
+                        reference_planning,
+                        "_reference_applicable_keys",
+                        side_effect=AssertionError("reference key rules"),
+                    ),
+                    patch.object(
+                        reference_planning,
                         "_reference_intermediate_reads",
                         side_effect=AssertionError("reference donor scope"),
                     ),
@@ -1040,6 +1245,89 @@ class InstalledReferences(unittest.TestCase):
             (case / "expected" / Path(spec.output.path).name).read_bytes(),
         )
 
+    def test_key_query_limit_prevents_execution_and_allows_explicit_retry(
+        self,
+    ):
+        """A failed metadata query has no fallback; an explicit retry rereads source data."""
+        case = ROOT / "specification-lookup"
+        spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        compile_catalog = yamaa_native._compile_reference_catalog
+        inject_limit = True
+        sources = []
+
+        def compile_with_limit(request):
+            """Keep the real catalog and inject one admitted-query policy outcome."""
+            catalog, status = compile_catalog(request)
+
+            def analyze(query):
+                """Only the key comparison query fails; all other calls use native Rust."""
+                nonlocal inject_limit
+                if inject_limit and any(
+                    item["kind"] == "comparable_types"
+                    for item in json.loads(query)["queries"]
+                ):
+                    inject_limit = False
+                    return json.dumps(
+                        {
+                            "protocol": "reference-analysis/1",
+                            "outcome": {
+                                "status": "limit",
+                                "resource": "key_entries",
+                                "limit": "65536",
+                                "required": "65537",
+                            },
+                        }
+                    )
+                return catalog.analyze(query)
+
+            return SimpleNamespace(analyze=analyze), status
+
+        def provider(declarations):
+            """Source ownership remains with the caller on each explicitly requested attempt."""
+            sources.append("source")
+            return load_source_tables(declarations, ProjectResources(case))
+
+        with (
+            patch.object(
+                yamaa_native, "_compile_reference_catalog", compile_with_limit
+            ),
+            patch.object(
+                yamaa_native, "execute_dataset", wraps=yamaa_native.execute_dataset
+            ) as execute,
+            patch.object(
+                yamaa_native,
+                "execute_dataset_sources",
+                wraps=yamaa_native.execute_dataset_sources,
+            ) as execute_sources,
+            patch.object(
+                reference_planning,
+                "_reference_comparable_types",
+                side_effect=AssertionError("reference fallback"),
+            ),
+        ):
+            with self.assertRaises(NativeReferenceLimitError) as caught:
+                native_datasets.execute_with_source_provider(spec, provider)
+            self.assertEqual(
+                (
+                    caught.exception.resource,
+                    caught.exception.limit,
+                    caught.exception.required,
+                ),
+                ("key_entries", 65536, 65537),
+            )
+            self.assertFalse(inject_limit)
+            self.assertFalse(execute.called)
+            self.assertFalse(execute_sources.called)
+            self.assertEqual(sources, ["source"])
+            actual = native_datasets.execute_with_source_provider(spec, provider)
+            self.assertTrue(execute.called or execute_sources.called)
+        self.assertEqual(sources, ["source", "source"])
+        self.assertEqual(actual.result.status, "success")
+        self.assertEqual(
+            render_artifact(actual.result.artifact),
+            (case / "expected" / Path(spec.output.path).name).read_bytes(),
+        )
+
     def test_intermediate_capability_precedes_activation_and_data(self):
         """The previous query set cannot enter intermediate planning in either frontend."""
         case = ROOT / "specification-functions"
@@ -1072,6 +1360,42 @@ class InstalledReferences(unittest.TestCase):
             self.assertEqual(
                 [(f.operation, f.spec_path) for f in actual.result.features],
                 [("native_intermediate_reference_validation", "$")],
+            )
+            self.assertEqual(actual.result.handler_counts, ())
+            self.assertEqual(actual.verifications, ())
+
+    def test_key_capability_precedes_activation_and_data(self):
+        """The previous query set cannot enter key planning in either frontend."""
+        case = ROOT / "specification-functions"
+        project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        ordinary_spec = load_specification(
+            ROOT / "specification-adlb" / "spec.yaml", SCHEMA
+        ).specification
+        with (
+            patch.object(
+                yamaa_native,
+                "reference_capabilities",
+                lambda: (
+                    '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}'
+                ),
+            ),
+            patch.object(
+                native_datasets,
+                "activate_project",
+                side_effect=AssertionError("activation"),
+            ),
+        ):
+            project = native_datasets.execute_with_project_functions(
+                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            )
+            ordinary = native_datasets.execute_with_source_provider(
+                ordinary_spec, lambda _: self.fail("source")
+            )
+        for actual in (ordinary, project):
+            self.assertEqual(actual.result.status, "unsupported")
+            self.assertEqual(
+                [(f.operation, f.spec_path) for f in actual.result.features],
+                [("native_key_relations", "$")],
             )
             self.assertEqual(actual.result.handler_counts, ())
             self.assertEqual(actual.verifications, ())

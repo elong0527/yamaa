@@ -43,6 +43,7 @@ from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnal
 from yamaa.planning.references import (
     IntermediateReadScope,
     IntermediateScope,
+    KeyInference,
     QualifiedFinding,
     QualifiedScope,
     ReferenceCompiler,
@@ -2304,6 +2305,7 @@ def _validate_paired_type(
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> None:
     """Check the two halves of a declared key pair against REQ-0305."""
     if reference.same_type_as is None:
@@ -2319,7 +2321,11 @@ def _validate_paired_type(
     else:
         actual = _reference_type(reference.name, bindings, column_types)
     expected = _reference_type(reference.same_type_as, bindings, column_types)
-    if actual is None or expected is None or _comparable_types(actual, expected):
+    if (
+        actual is None
+        or expected is None
+        or _comparable_types(actual, expected, reference_compiler=reference_compiler)
+    ):
         return
     diagnostics.append(
         _diagnostic(
@@ -2331,9 +2337,40 @@ def _validate_paired_type(
     )
 
 
-def _comparable_types(left: ColumnType, right: ColumnType) -> bool:
-    """Return whether REQ-0005 makes two declared types mutually comparable."""
+def _reference_comparable_types(left: ColumnType, right: ColumnType) -> bool:
+    """Retain the default backend's declared-type rule independently of Rust."""
     return left == right or {left, right} <= {"int", "float"}
+
+
+def _comparable_types(
+    left: ColumnType,
+    right: ColumnType,
+    reference_compiler: ReferenceCompiler | None = None,
+) -> bool:
+    """Select REQ-0005 comparison through the captured backend compiler port."""
+    if reference_compiler is not None:
+        return reference_compiler.comparable_types(left, right)
+    return _reference_comparable_types(left, right)
+
+
+def _reference_applicable_keys(
+    keys: tuple[str, ...],
+    column_types: Mapping[str, ColumnType],
+    fields: Mapping[str, ColumnType],
+) -> KeyInference:
+    """Retain default backend inference with explicit invalid-identity admission."""
+    for key in keys:
+        if key not in column_types:
+            return KeyInference("undeclared_output", key=key)
+    applicable = tuple(key for key in keys if key in fields)
+    if not applicable:
+        return KeyInference("no_applicable_keys")
+    for key in applicable:
+        if not _reference_comparable_types(column_types[key], fields[key]):
+            return KeyInference(
+                "incompatible", key=key, expected=column_types[key], actual=fields[key]
+            )
+    return KeyInference("keys", keys=applicable)
 
 
 def _infer_applicable_keys(
@@ -2347,6 +2384,7 @@ def _infer_applicable_keys(
     hint: str = "declare an explicit `intermediate:` with `source`/`key` pairs",
     requirement: str = "REQ-0152",
     fields: Mapping[str, ColumnType] | None = None,
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> tuple[str, ...] | None:
     """Infer the applicable keys REQ-0150 defines for an implicit join.
 
@@ -2354,8 +2392,16 @@ def _infer_applicable_keys(
     right-side dataset, or None after recording why the key is unclear.
     """
     fields = fields if fields is not None else _dataset_types(bindings, dataset)
-    keys = tuple(key for key in specification.keys if key in fields)
-    if not keys:
+    keys = tuple(specification.keys)
+    inference = (
+        _reference_applicable_keys(keys, column_types, fields)
+        if reference_compiler is None
+        else reference_compiler.infer_keys(keys, fields)
+    )
+    if inference.kind == "undeclared_output":
+        # REQ-0220 was already diagnosed during source-independent preflight.
+        return None
+    if inference.kind == "no_applicable_keys":
         # REQ-0152: with no applicable key the intended match is unclear,
         # so the author must state it explicitly.
         diagnostics.append(
@@ -2371,26 +2417,24 @@ def _infer_applicable_keys(
             )
         )
         return None
-    mismatched = [
-        key for key in keys if not _comparable_types(column_types[key], fields[key])
-    ]
-    if mismatched:
-        # REQ-0151: an inferred key must compare equal on both sides.
-        key = mismatched[0]
+    if inference.kind == "incompatible":
+        # REQ-0151: preserve the first mismatch selected in output-key order.
         diagnostics.append(
             _diagnostic(
                 "incompatible_input_type",
                 path,
                 {
-                    "source": key,
-                    "expected": column_types[key],
-                    "actual": fields[key],
+                    "source": inference.key,
+                    "expected": inference.expected,
+                    "actual": inference.actual,
                 },
                 requirement="REQ-0151",
             )
         )
         return None
-    return keys
+    if inference.kind != "keys":
+        raise ValueError("unknown key inference outcome")
+    return inference.keys
 
 
 def _resolve_implicit_joins(
@@ -2401,6 +2445,7 @@ def _resolve_implicit_joins(
     intermediates: Mapping[str, PlannedIntermediate],
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> tuple[_Reference, ...]:
     """Annotate plain cross-dataset scalar sources with their implicit join.
 
@@ -2440,6 +2485,7 @@ def _resolve_implicit_joins(
             qualifier,
             reference.path,
             diagnostics,
+            reference_compiler=reference_compiler,
         )
         if keys is None:
             annotated.append(reference)
@@ -2462,6 +2508,7 @@ def _row_join_match_variables(
     driver: str,
     bindings: BindingPlan,
     diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> tuple[_Reference, ...]:
     """Point a row-phase implicit join's match at the driver record.
 
@@ -2518,7 +2565,9 @@ def _row_join_match_variables(
                 )
                 continue
             right = _dataset_types(bindings, reference.join_relation).get(key)
-            if right is not None and not _comparable_types(fields[key], right):
+            if right is not None and not _comparable_types(
+                fields[key], right, reference_compiler=reference_compiler
+            ):
                 # REQ-0151: an inferred key must compare equal on both sides.
                 diagnostics.append(
                     _diagnostic(
@@ -2550,6 +2599,7 @@ def _with_relation_dependencies(
     resolved: list[ResolvedJoin],
     *,
     inferred_paths: frozenset[str] = frozenset(),
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> PlannedDerivation:
     """Add the current-row values a derivation needs to reach another relation.
 
@@ -2606,6 +2656,7 @@ def _with_relation_dependencies(
                     bindings,
                     column_types,
                     diagnostics,
+                    reference_compiler=reference_compiler,
                 )
             extra.extend(reference.join_match_values)
             pairing = (
@@ -2683,6 +2734,7 @@ def _validate_aggregate_keys(
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> None:
     """Check the declared pairs one aggregate matches on.
 
@@ -2733,7 +2785,7 @@ def _validate_aggregate_keys(
                 )
                 continue
         right = fields[field]
-        if _comparable_types(left, right):
+        if _comparable_types(left, right, reference_compiler=reference_compiler):
             continue
         diagnostics.append(
             _diagnostic(
@@ -2928,6 +2980,7 @@ def _plan_lookups(
                 hint="declare the `key` explicitly",
                 requirement="REQ-0153",
                 fields=fields,
+                reference_compiler=reference_compiler,
             )
             if inferred is None:
                 continue
@@ -3017,7 +3070,11 @@ def _plan_lookups(
             right = fields.get(field)
             if right is None and field in derived:
                 right = _DERIVED_RESULT_TYPES.get(derived[field].value.operation)
-            if left is None or right is None or _comparable_types(left, right):
+            if (
+                left is None
+                or right is None
+                or _comparable_types(left, right, reference_compiler=reference_compiler)
+            ):
                 continue
             diagnostics.append(
                 _diagnostic(
@@ -3289,6 +3346,7 @@ def _plan_lookups(
                     bindings,
                     column_types,
                     diagnostics,
+                    reference_compiler=reference_compiler,
                 )
                 or failed
             )
@@ -3656,6 +3714,7 @@ def _validate_intermediate_between(
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> bool:
     """Check the closed range an intermediate matches by, before any data is read."""
     if between.lower is None and between.upper is None:
@@ -3683,6 +3742,7 @@ def _validate_intermediate_between(
         bindings,
         column_types,
         diagnostics,
+        reference_compiler=reference_compiler,
     )
 
 
@@ -3696,6 +3756,7 @@ def _check_between(
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> bool:
     """Check the closed range an intermediate matches by, before any data is read."""
     context = {"intermediate": identifier} if identifier is not None else {}
@@ -3729,7 +3790,10 @@ def _check_between(
         )
         return True
     types = {side: fields[name] for name, side in stated}
-    if all(_comparable_types(value_type, bound_type) for bound_type in types.values()):
+    if all(
+        _comparable_types(value_type, bound_type, reference_compiler=reference_compiler)
+        for bound_type in types.values()
+    ):
         return False
     # REQ-0121: report the runtime types before any record is compared.
     diagnostics.append(
@@ -4245,6 +4309,17 @@ def _preflight_findings(
     diagnostics.extend(_sidecar_declarations(specification))
     if not specification.parents:
         diagnostics.extend(_odm_read_diagnostics(specification))
+        declared_columns = {column.name for column in specification.columns}
+        for index, key in enumerate(specification.keys):
+            if key not in declared_columns:
+                diagnostics.append(
+                    _diagnostic(
+                        "undeclared_column",
+                        f"keys[{index}]",
+                        {"column": key},
+                        requirement="REQ-0220",
+                    )
+                )
 
     rows = specification.rows or ()
     if not specification.parents:
@@ -4872,6 +4947,7 @@ def plan_execution(
             deferred,
             hint="declare the `source`/`key` pairs explicitly",
             requirement="REQ-0153",
+            reference_compiler=reference_compiler,
         )
 
     intermediates = _plan_lookups(
@@ -5012,6 +5088,7 @@ def plan_execution(
                     intermediates,
                     column_types,
                     diagnostics,
+                    reference_compiler=reference_compiler,
                 )
                 # REQ-0156/REQ-0157: a row-phase join matches the driver
                 # record (or the group keys), not output columns.
@@ -5021,6 +5098,7 @@ def plan_execution(
                     driver=driver,
                     bindings=bindings,
                     diagnostics=diagnostics,
+                    reference_compiler=reference_compiler,
                 )
                 derivations[name] = _with_relation_dependencies(
                     planned,
@@ -5033,6 +5111,7 @@ def plan_execution(
                     column_types,
                     resolved_joins,
                     inferred_paths=inferred_paths,
+                    reference_compiler=reference_compiler,
                 )
                 row_references[(index, name)] = annotated
 
@@ -5241,7 +5320,11 @@ def plan_execution(
                             )
                         )
                     _validate_paired_type(
-                        reference, bindings, column_types, diagnostics
+                        reference,
+                        bindings,
+                        column_types,
+                        diagnostics,
+                        reference_compiler=reference_compiler,
                     )
 
             graph = {
@@ -5331,6 +5414,7 @@ def plan_execution(
             intermediates,
             column_types,
             diagnostics,
+            reference_compiler=reference_compiler,
         )
         column_plans.append(
             _with_relation_dependencies(
@@ -5344,6 +5428,7 @@ def plan_execution(
                 column_types,
                 resolved_joins,
                 inferred_paths=inferred_paths,
+                reference_compiler=reference_compiler,
             )
         )
         for reference in annotated:
@@ -5396,7 +5481,13 @@ def plan_execution(
                         requirement=reference.requirement,
                     )
                 )
-            _validate_paired_type(reference, bindings, column_types, diagnostics)
+            _validate_paired_type(
+                reference,
+                bindings,
+                column_types,
+                diagnostics,
+                reference_compiler=reference_compiler,
+            )
 
     column_graph = {
         planned.column: tuple(

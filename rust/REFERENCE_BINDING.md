@@ -187,6 +187,40 @@ a wheel advertising only earlier queries returns
 `native_intermediate_reference_validation` unsupported status at `$`. There is no
 fallback to Python rules after selecting the native compiler.
 
+## Key relations
+
+The `key_relations` feature adds two metadata queries. `comparable_types` takes
+`left` and `right` declared types and returns `kind: comparable_types` with a
+`comparable` boolean. Exact types compare; `int` and `float` also compare in
+either direction. `date` and `datetime` remain distinct. Unknown static expression
+types are deferred by the host before this query, without guessing a type.
+
+`infer_keys` takes ordered output `keys` and a `fields` list of `{name, type}`
+right-side declarations, including normalized SELF/derived fields when applicable.
+It consults the immutable output catalog and returns `kind: key_inference` with
+an `inference` tagged by `kind`: `keys` (original key indices),
+`no_applicable_keys`, `undeclared_output` (key index), or `incompatible`
+(first mismatched key index, `expected` and `actual` declared types).
+Selection and mismatch order follow the output keys, independently of right-field
+order. Names are literal and Unicode is not normalized. Duplicate key entries
+remain distinct indices; duplicate right fields and empty names are invalid
+metadata. All submitted names count toward 65,536 entries and 1,048,576 UTF-8
+bytes before semantic early exits, including unused fields and repeated keys.
+
+Native planning uses these queries for implicit and omitted-key inference and
+declared pair compatibility in row joins, aggregates, lookups and range bounds.
+Hosts still determine expression types, row/group availability, unknown-name
+priority, relation dependencies and diagnostic provenance. An invalid root key
+now receives REQ-0220 `undeclared_column` at `keys[i]` before source access in both
+frontends. Direct planning also refuses inference for invalid output identity,
+preventing the previous `KeyError` when a source carried an undeclared output key.
+Unresolved inherited declarations wait for parent normalization.
+
+The frontend requires `key_relations` before activation/source access; previous
+query sets return `native_key_relations` unsupported at `$`. A query error aborts
+planning without executing a partial plan or falling back to Python. Explicit
+retry reacquires sources; earlier provider effects are not rolled back.
+
 ## Evidence and remaining boundaries
 
 Twenty-nine independent shared cases pin exact bindings, literal dotted names,
@@ -206,6 +240,10 @@ Unicode, absent targets, phase priority and self-cycle deferral. The same corpus
 runs through both installed hosts and the unchanged default Python rules.
 Installed planning tests disable both reference intermediate helpers and compare
 full diagnostic paths, contexts, requirements and combined finding order.
+Thirty-nine authored key cases cover all 25 declared-type pairs plus ordered
+inference, numeric compatibility, first mismatches, invalid identity, empty
+intersections, literal Unicode/dotted names and duplicate key indices. The same
+truth is replayed by the default Python rules and native batch/prepared services.
 
 Installed Python planning checks exact diagnostic paths, requirements and
 contexts against explicit expectations and the unchanged default planner.
@@ -216,8 +254,8 @@ CI runs installed tests against both the wheel and an independently rebuilt
 source archive, plus the installed R source package.
 
 This service does not own YAML/schema loading, normalization, derivation
-inheritance, phase selection, implicit-join inference, intermediate expression
-traversal/dependency collection, paired-key type comparisons or typed dataset lowering. Bare-name validation is
+inheritance, phase selection, join construction, intermediate expression
+traversal/dependency collection, expression typing or typed dataset lowering. Bare-name validation is
 connected to row and column output-expression checks; other scope-specific
 validation remains in the host. R current-schema compilation, full language and
 workflow coverage, numerical policy, performance and release gates remain open.

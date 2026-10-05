@@ -69,8 +69,29 @@ class IntermediateFinding:
     dependency: int | None = None
 
 
+@dataclass(frozen=True)
+class KeyInference:
+    """Core-selected join keys or one failure, translated back to authored names."""
+
+    kind: str
+    keys: tuple[str, ...] = ()
+    key: str | None = None
+    expected: ColumnType | None = None
+    actual: ColumnType | None = None
+
+
 class ReferenceCompiler(Protocol):
     """An immutable catalog captured for one planning attempt, never a user extension hook."""
+
+    def comparable_types(self, left: ColumnType, right: ColumnType) -> bool:
+        """Compare declared types without coercing values or resolving unknown types."""
+        ...
+
+    def infer_keys(
+        self, keys: tuple[str, ...], fields: Mapping[str, ColumnType]
+    ) -> KeyInference:
+        """Select applicable keys in output order against normalized right-side fields."""
+        ...
 
     def bind(self, name: str) -> BindingResult:
         """Resolve one exact name without reading records."""

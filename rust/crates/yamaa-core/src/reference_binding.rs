@@ -117,6 +117,11 @@ fn limit(resource: &'static str, required: usize, allowed: usize) -> Result<(), 
 }
 
 impl Catalog {
+    /// Read an exact output declaration without interpreting it as a source path.
+    pub(crate) fn output_type(&self, name: &str) -> Option<ColumnType> {
+        self.outputs.get(name).map(|&(_, kind)| kind)
+    }
+
     /// Inspect literal stored-field visibility, retaining an absent relation as distinct metadata.
     pub(crate) fn has_stored_field(&self, dataset: &str, field: &str) -> Option<bool> {
         self.datasets

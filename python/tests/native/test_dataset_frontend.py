@@ -285,6 +285,38 @@ def _native_module(**members):
             """Evaluate metadata in the unrelated facade double, never as expected truth."""
             results = []
             for query in json.loads(request)["queries"]:
+                if query["kind"] == "comparable_types":
+                    from yamaa.planning.execution import _reference_comparable_types
+
+                    results.append(
+                        {
+                            "kind": "comparable_types",
+                            "comparable": _reference_comparable_types(
+                                query["left"], query["right"]
+                            ),
+                        }
+                    )
+                    continue
+                if query["kind"] == "infer_keys":
+                    from yamaa.planning.execution import _reference_applicable_keys
+
+                    names = tuple(query["keys"])
+                    finding = _reference_applicable_keys(
+                        names,
+                        outputs,
+                        {field["name"]: field["type"] for field in query["fields"]},
+                    )
+                    inference = {"kind": finding.kind}
+                    if finding.kind == "keys":
+                        inference["keys"] = [names.index(key) for key in finding.keys]
+                    elif finding.key is not None:
+                        inference["key"] = names.index(finding.key)
+                    if finding.kind == "incompatible":
+                        inference.update(
+                            expected=finding.expected, actual=finding.actual
+                        )
+                    results.append({"kind": "key_inference", "inference": inference})
+                    continue
                 if query["kind"] in (
                     "validate_intermediate",
                     "validate_intermediate_read",
@@ -364,7 +396,11 @@ def _native_module(**members):
         reference_capabilities=lambda: json.dumps(
             {
                 "protocol": "reference-analysis/1",
-                "features": ["qualified_validation", "intermediate_validation"],
+                "features": [
+                    "qualified_validation",
+                    "intermediate_validation",
+                    "key_relations",
+                ],
             }
         ),
         analyze_dependencies=analyze,

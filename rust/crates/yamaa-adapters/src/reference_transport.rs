@@ -1,5 +1,6 @@
 //! Bounded reference metadata transport, shared by batch and prepared host adapters.
 mod intermediate;
+mod keys;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{fmt, panic::catch_unwind};
@@ -12,7 +13,7 @@ const MAX_QUERIES: usize = 4096;
 
 /// Advertise only implemented metadata queries, before activation or source access.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}"#
+    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}"#
 }
 
 /// Invalid transport and metadata stay distinct from language diagnostics and limits.
@@ -114,6 +115,14 @@ struct QueryRequest {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Query {
+    ComparableTypes {
+        left: Kind,
+        right: Kind,
+    },
+    InferKeys {
+        keys: Vec<String>,
+        fields: Vec<Field>,
+    },
     ValidateIntermediate {
         field: String,
         target: intermediate::Intermediate,
@@ -264,6 +273,12 @@ enum Diagnostic {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum QueryResult {
+    ComparableTypes {
+        comparable: bool,
+    },
+    KeyInference {
+        inference: keys::Inference,
+    },
     IntermediateValidation {
         diagnostics: Vec<intermediate::Finding>,
     },
@@ -382,6 +397,11 @@ impl CompiledCatalog {
         let mut results = Vec::with_capacity(queries.len());
         for query in queries {
             let result = match query {
+                Query::ComparableTypes { left, right } => Ok(QueryResult::ComparableTypes {
+                    comparable: yamaa_core::key_relation::comparable(left.core(), right.core()),
+                }),
+                Query::InferKeys { keys, fields } => keys::infer(&self.0, keys, fields)
+                    .map(|inference| QueryResult::KeyInference { inference }),
                 Query::ValidateIntermediate { field, target } => {
                     intermediate::field(&self.0, field, target)
                         .map(|diagnostics| QueryResult::IntermediateValidation { diagnostics })
