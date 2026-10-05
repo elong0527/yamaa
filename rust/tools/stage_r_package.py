@@ -40,6 +40,10 @@ def stage(destination: Path):
         WORKSPACE / "crates/yamaa-engine/tests/fixtures/function_invocation.tsv",
         resources / "function_invocation.tsv",
     )
+    shutil.copy2(
+        WORKSPACE / "crates/yamaa-core/tests/fixtures/dependency_analysis.tsv",
+        resources / "dependency_analysis.tsv",
+    )
     print(destination)
 
 

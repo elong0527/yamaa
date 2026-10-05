@@ -1,7 +1,8 @@
 # Shared native engine bootstrap
 
-This is the installation slice of [#1585](https://github.com/elong0527/yamaa/issues/1585).
-It does not evaluate specifications. Both installed bindings call the same
+This is the shared engine prototype for [#1585](https://github.com/elong0527/yamaa/issues/1585).
+It supports bounded opt-in execution, not full specification compatibility.
+Both installed bindings call the same
 `yamaa-engine`/`yamaa-core` code and report `execution_supported = false`.
 The existing Python engine remains the default; the legacy R package is unchanged.
 
@@ -14,6 +15,9 @@ remaining parser/dataset integration are described in [PREDICATES.md](PREDICATES
 
 Opt-in dataset stage instrumentation and the installed, fresh-process measurement
 procedure are described in [PHASE_MEASUREMENTS.md](PHASE_MEASUREMENTS.md).
+
+Shared cycle selection and stable scheduling, connected to actual optional native
+planning, are described in [DEPENDENCY_ANALYSIS.md](DEPENDENCY_ANALYSIS.md).
 
 ## Boundaries
 

@@ -4,6 +4,19 @@ mod function_callback;
 mod temporal_result;
 use pyo3::types::PyDict;
 
+/// Analyze an already-bound graph through shared Rust without accessing host data.
+#[pyfunction]
+fn analyze_dependencies(request: &str) -> PyResult<String> {
+    use yamaa_adapters::dependency_transport::TransportError;
+    yamaa_adapters::dependency_transport::analyze_dependencies(request).map_err(|error| {
+        if error == TransportError::Internal {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        } else {
+            pyo3::exceptions::PyValueError::new_err(error.to_string())
+        }
+    })
+}
+
 /// Round-trip a versioned scalar envelope through normalized core values.
 #[pyfunction]
 fn scalar_round_trip(request: &str) -> PyResult<String> {
@@ -153,6 +166,7 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
+    module.add_function(wrap_pyfunction!(analyze_dependencies, module)?)?;
     module.add_function(wrap_pyfunction!(
         function_callback::invoke_function,
         module

@@ -141,6 +141,33 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assert_csv(self.execute(cache=cache))
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
+    def test_graph_failure_after_activation_and_source_allows_explicit_retry(self):
+        """Analysis failure cannot execute data or invalidate already qualified vectors."""
+        cache = NativeActivationCache()
+        failure = ValueError("dependency analysis boundary failure")
+        with (
+            patch.object(
+                yamaa_native, "analyze_dependencies", side_effect=failure
+            ) as analyze,
+            patch.object(
+                yamaa_native,
+                "execute_dataset_functions",
+                side_effect=AssertionError("dataset execution after graph failure"),
+            ),
+            self.assertRaises(ValueError) as caught,
+        ):
+            self.execute(cache=cache)
+        self.assertIs(caught.exception, failure)
+        self.assertEqual(analyze.call_count, 1)
+        self.assertEqual(self.events, VECTORS + ["source"])
+
+        # No automatic retry or provider rollback is promised. The caller starts
+        # another attempt; its provider reopens the original inputs. Cached vector
+        # qualification remains valid even though the earlier dataset never ran.
+        self.events.clear()
+        self.assert_csv(self.execute(cache=cache))
+        self.assertEqual(self.events, ["source"] + CALLS)
+
     def test_reference_activation_cannot_qualify_native(self):
         """Reject reference cache authority and independently qualify the native invocation path."""
         cache = ActivationCache()

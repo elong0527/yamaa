@@ -1,5 +1,6 @@
 useDynLib(yamaanative, .registration = TRUE)
 export(engine_info)
+export(analyze_dependencies)
 export(scalar_round_trip)
 export(evaluate_numeric)
 export(table_round_trip)
