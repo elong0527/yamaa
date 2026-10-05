@@ -160,8 +160,9 @@ may be omitted. Unique permits repeated references, matching the reference check
 Only error-severity, whole-artifact bounds are represented. The `source_selection`
 capability supports ordered selection within `collect`. Broader source selection,
 fractional bounds, grouped row counts, column checks, warnings, other handlers,
-other windows, broader joins and functions remain outside the closed plan
-vocabulary.
+other windows and broader joins remain outside the closed plan vocabulary.
+Typed function assignments are described under [Explicit host functions](#explicit-host-functions);
+normalized-specification function lowering remains unsupported.
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
 then: predicate}}`, using the predicate representation below. Bindings may read
