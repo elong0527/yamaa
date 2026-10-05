@@ -461,6 +461,17 @@ def _execute(specification, source_provider, prepare_functions=None):
         execute = getattr(yamaa_native, "execute_dataset_sources", None)
         if not callable(execute):
             raise TypeError("native execute_dataset_sources must be callable")
+    if not callable(getattr(yamaa_native, "analyze_dependencies", None)):
+        return NativeDatasetRun(
+            ExecutionUnsupported(
+                features=(
+                    UnsupportedFeature(
+                        operation="native_dependency_analysis", spec_path="$"
+                    ),
+                ),
+                handler_counts=(),
+            )
+        )
     dependency_analyzer = bind_dependency_analyzer(yamaa_native)
     functions = None
     if prepare_functions is not None:

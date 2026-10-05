@@ -74,7 +74,9 @@ reuse. Admission tests cover shape limits, invalid indices and repeated calls.
 Installed planning tests disable the reference graph functions and check actual
 native execution against original ADLB, window, lookup and project-function CSVs.
 They verify that source-provider mutation cannot replace the captured service,
-and that an absent service fails before activation or data access. Additional
+and that an absent or noncallable service returns explicit
+`native_dependency_analysis` unsupported status before activation or data access,
+including when the separately installed wheel predates this service. Additional
 installed cases pin row order, completed-phase reads, column/intermediate cycle
 provenance, forward-reference rejection and graph-limit outcomes. The existing
 installed project tests retain independent activation and callback trace truth.

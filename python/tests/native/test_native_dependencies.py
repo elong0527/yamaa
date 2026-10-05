@@ -12,9 +12,11 @@ from yamaa.adapters._native_dependencies import (
 
 
 def test_bound_names_omit_external_and_completed_phase_values():
+    """Only dependencies on nodes in this scheduling phase cross the Rust boundary."""
     calls = []
 
     def invoke(request):
+        """Record the bound graph and supply an explicit independently authored order."""
         calls.append(json.loads(request))
         return json.dumps(
             {
@@ -31,7 +33,10 @@ def test_bound_names_omit_external_and_completed_phase_values():
 
 
 def test_native_resource_limit_retains_exact_policy_counts():
+    """Policy failures preserve resource counters rather than becoming cycle diagnostics."""
+
     def invoke(_):
+        """Return a written-edge budget outcome without running a graph algorithm."""
         return json.dumps(
             {
                 "protocol": "dependency-analysis/1",
@@ -55,9 +60,11 @@ def test_native_resource_limit_retains_exact_policy_counts():
 
 
 def test_transport_failure_propagates_without_host_fallback():
+    """Once selected, a failing native service cannot switch to reference scheduling."""
     failure = ValueError("native graph admission failed")
 
     def invoke(_):
+        """Raise the original boundary failure so identity can be verified."""
         raise failure
 
     analyze = bind_dependency_analyzer(SimpleNamespace(analyze_dependencies=invoke))

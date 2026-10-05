@@ -154,11 +154,17 @@ class InstalledDependencies(unittest.TestCase):
                 "activate_project",
                 side_effect=AssertionError("activation"),
             ),
-            self.assertRaisesRegex(TypeError, "analyze_dependencies"),
         ):
-            native_datasets.execute_with_project_functions(
+            actual = native_datasets.execute_with_project_functions(
                 spec, lambda _: self.fail("source read"), case / "python", SCHEMA
             )
+        self.assertEqual(actual.result.status, "unsupported")
+        self.assertEqual(
+            [(f.operation, f.spec_path) for f in actual.result.features],
+            [("native_dependency_analysis", "$")],
+        )
+        self.assertEqual(actual.result.handler_counts, ())
+        self.assertEqual(actual.verifications, ())
 
     def plan(self, spec):
         """Run real planning with the installed service and prohibit reference algorithms."""

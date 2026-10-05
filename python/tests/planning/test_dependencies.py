@@ -18,6 +18,7 @@ with TRUTH.open() as stream:
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case["case"])
 def test_reference_graph_analysis_against_authored_truth(case):
+    """Pin the reference's cycle spelling and scheduling order to shared explicit truth."""
     names = tuple(str(n) for n in range(int(case["nodes"])))
     graph = dict.fromkeys(names, ())
     if case["edges"] != "-":

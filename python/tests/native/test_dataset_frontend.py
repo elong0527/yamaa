@@ -58,6 +58,26 @@ def specification():
     return load_specification(CASE / "spec.yaml", ROOT / "yaml").specification
 
 
+@pytest.mark.parametrize("analyzer", ["absent", None, False])
+def test_missing_dependency_service_is_unsupported_before_io(
+    specification, monkeypatch, analyzer
+):
+    """A separately installed older wheel cannot abort a run or start source effects."""
+    native = SimpleNamespace(execute_dataset=lambda *_: pytest.fail("execution"))
+    if analyzer != "absent":
+        native.analyze_dependencies = analyzer
+    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    result = execute_with_source_provider(
+        specification, lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert [(f.operation, f.spec_path) for f in result.result.features] == [
+        ("native_dependency_analysis", "$")
+    ]
+    assert result.result.handler_counts == ()
+    assert result.verifications == ()
+
+
 def test_adlb_lowering_matches_independent_bound_plan(specification):
     """The frontend recovers every expression, scope, index and original path."""
     admit(specification)
