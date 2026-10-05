@@ -364,6 +364,7 @@ def test_a_predicate_integer_literal_just_past_int64_reports_an_int_valued_overf
     assert isinstance(result, ConditionResult)
     assert result.condition.phase == "derivation"
     assert result.condition.condition == "integer_overflow"
+    assert result.condition.requirement is None
     assert result.condition.context == {
         "value": 9223372036854775808,
         "minimum": INT64_MIN,
