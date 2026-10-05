@@ -138,6 +138,21 @@ benchmark, parametric variants.
    record to each planned visit". Likely variant-level differences
    in one LOCF pattern. Keep `adam-adqs-missed-visit-locf`
    separate: different domain, different application.
+
+   > REVIEWED 2026-10-05 (benchmark-maintenance run) -- candidate
+   > REJECTED. Contents verified against both specs: the two are
+   > distinct derivation patterns, not variant-level differences.
+   > `adam-advs-locf` fills a single column in place (`locf` on
+   > AVALCOL within the VS table; no earlier value stays missing,
+   > zero is a value). `adam-advs-locf-record` is plan-spine as-of
+   > donor selection: the latest ANL01FL='Y' observation with a
+   > non-null AVAL at or before each planned visit (AVISITN then
+   > QSSEQ tie-break), carrying the AVAL/ADT/QSSEQ record bundle
+   > together, with a no-donor-leaves-all-missing `implies` check.
+   > The plan-spine driver, the donor-selection mechanic, and the
+   > multi-column record carry have no counterpart in
+   > `adam-advs-locf`. Merging into parametric variants would lose
+   > this coverage; keep both.
 3. **`adam-adlb-row-window`** + **`adam-adlb-window-chain`** -- "lag
    a result across visits while constructing change parameters" vs
    "carry a previous visit's change". Both pin previous-visit
