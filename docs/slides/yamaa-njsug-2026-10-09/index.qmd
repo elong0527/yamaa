@@ -88,7 +88,8 @@ Agent: opencode · Model: muse-spark-1.3 , Oct 2026
 
 ::: {.map-takeaway}
 **Brief omits both the MAP formula and the rule for adding a record.**<br>
-SBP = systolic blood pressure; DBP = diastolic blood pressure. · [View MAP benchmark](https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html)
+SBP = systolic blood pressure; DBP = diastolic blood pressure.<br>
+<https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
 :::
 
 ::: {.notes}
