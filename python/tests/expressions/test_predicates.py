@@ -15,6 +15,7 @@ from yamaa.expressions import (
     parse_predicate,
 )
 from yamaa.models import ConditionResult, DateValue
+from yamaa.models.values import INT64_MAX, INT64_MIN
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 GRAMMAR = yaml.safe_load(
@@ -327,3 +328,52 @@ def test_str_detect_is_not_a_predicate_function() -> None:
 def test_bare_str_contains_without_parens_stays_an_identifier() -> None:
     with pytest.raises(PredicateError):
         parse_predicate("str_contains")
+
+
+@pytest.mark.parametrize(
+    ("written", "canonical"),
+    [
+        ("9" * 5000, "9" * 5000),
+        ("-" + "9" * 5000, "-" + "9" * 5000),
+        ("0" * 10 + "9" * 20, "9" * 20),
+    ],
+)
+def test_a_predicate_integer_literal_beyond_the_host_digit_limit_is_a_structured_condition(
+    written: str, canonical: str
+) -> None:
+    """Long literals report integer_overflow like the numeric evaluator (REQ-0434)."""
+    result = _evaluate(f"AVAL = {written}", {"AVAL": 1})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "derivation"
+    assert result.condition.condition == "integer_overflow"
+    assert result.condition.requirement == "REQ-0434"
+    assert result.condition.context == {
+        "value": canonical,
+        "minimum": INT64_MIN,
+        "maximum": INT64_MAX,
+    }
+
+
+def test_a_predicate_integer_literal_just_past_int64_reports_an_int_valued_overflow() -> (
+    None
+):
+    """A 19-digit literal out of int64 range keeps the fall-through overflow context."""
+    result = _evaluate("AVAL = 9223372036854775808", {"AVAL": 1})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "derivation"
+    assert result.condition.condition == "integer_overflow"
+    assert result.condition.requirement is None
+    assert result.condition.context == {
+        "value": 9223372036854775808,
+        "minimum": INT64_MIN,
+        "maximum": INT64_MAX,
+    }
+
+
+def test_a_predicate_integer_literal_of_insignificant_zeros_still_evaluates() -> None:
+    """Zero-stripping keeps long all-zero literals inside the host digit limit."""
+    assert _evaluate(f"AVAL = {'0' * 5000}", {"AVAL": 0}) == PredicateValue(
+        value=TruthValue.TRUE
+    )
