@@ -184,6 +184,10 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
     module.add_class::<reference_catalog::ReferenceCatalog>()?;
     module.add_function(wrap_pyfunction!(
+        reference_catalog::reference_capabilities,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
         reference_catalog::_compile_reference_catalog,
         module
     )?)?;

@@ -56,6 +56,7 @@ pub enum Error {
     InvalidAvailableOutput,
     InvalidCandidateDataset,
     QualifiedOutputQuery,
+    BareQualifiedQuery,
 }
 
 /// A resolved declaration and exact declared type, with no host representation.

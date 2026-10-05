@@ -9,6 +9,7 @@ fn shared_truth_and_prepared_catalog_ownership() {
     for line in include_str!("fixtures/reference_binding.tsv")
         .lines()
         .skip(1)
+        .chain(include_str!("fixtures/reference_scope.tsv").lines().skip(1))
     {
         let fields: Vec<_> = line.split('\t').collect();
         let expected: Value = serde_json::from_str(fields[2]).unwrap();
@@ -176,5 +177,61 @@ fn limits_are_not_language_diagnostics() {
     assert_eq!(
         outcome["outcome"],
         json!({"status":"limit","resource":"reference_bytes","limit":"65536","required":"65537"})
+    );
+}
+
+/// Qualified queries reject malformed context and admit written budgets before name findings.
+#[test]
+fn qualified_scope_admission_and_capabilities() {
+    assert_eq!(
+        yamaa_adapters::reference_transport::capabilities(),
+        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}"#
+    );
+    let mut data = request();
+    data["queries"] = json!([{"kind":"validate_qualified", "name":"SRC.N", "expected":null,
+        "scope":{"drivers":["SRC"], "current_driver":false, "reach":"scalar", "joined":false,
+            "phase":{"kind":"row","group_by":null}}}]);
+    for (pointer, value) in [
+        ("/queries/0/scope/reach", json!("future")),
+        ("/queries/0/scope/drivers", json!([false])),
+        ("/queries/0/scope/current_driver", json!("yes")),
+        ("/queries/0/scope/phase", json!({"kind":"future"})),
+        (
+            "/queries/0/scope/phase",
+            json!({"kind":"column","groups":null}),
+        ),
+    ] {
+        let mut invalid = data.clone();
+        *invalid.pointer_mut(pointer).unwrap() = value;
+        assert_eq!(
+            analyze_references(&invalid.to_string()),
+            Err(TransportError::InvalidEnvelope)
+        );
+    }
+    let mut invalid = data.clone();
+    invalid["queries"][0]["scope"]["extra"] = json!(true);
+    assert_eq!(
+        analyze_references(&invalid.to_string()),
+        Err(TransportError::InvalidEnvelope)
+    );
+    let mut invalid = data.clone();
+    invalid["queries"][0]["name"] = json!("A");
+    assert_eq!(
+        analyze_references(&invalid.to_string()),
+        Err(TransportError::InvalidQuery)
+    );
+    data["queries"][0]["scope"]["drivers"] = json!(vec!["SRC"; 257]);
+    let result: Value =
+        serde_json::from_str(&analyze_references(&data.to_string()).unwrap()).unwrap();
+    assert_eq!(
+        result["outcome"],
+        json!({"status":"limit","resource":"scope_drivers","limit":"256","required":"257"})
+    );
+    data["queries"][0]["scope"]["drivers"] = json!(["SRC"]);
+    let result: Value =
+        serde_json::from_str(&analyze_references(&data.to_string()).unwrap()).unwrap();
+    assert_eq!(
+        result["outcome"],
+        json!({"status":"complete","results":[{"kind":"qualified_validation","diagnostics":[{"kind":"unknown_field"}]}]})
     );
 }

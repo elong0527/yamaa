@@ -1,11 +1,17 @@
 //! Bounded reference metadata transport, shared by batch and prepared host adapters.
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{fmt, panic::catch_unwind};
+use yamaa_core::reference_scope;
 use yamaa_core::{reference_binding as core, value::ColumnType};
 
 /// Admit UTF-8 bytes before JSON allocations; clients cannot raise these policies.
 pub const MAX_REQUEST_BYTES: usize = 1_048_576;
 const MAX_QUERIES: usize = 4096;
+
+/// Advertise only implemented metadata queries, before activation or source access.
+pub fn capabilities() -> &'static str {
+    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}"#
+}
 
 /// Invalid transport and metadata stay distinct from language diagnostics and limits.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -115,6 +121,113 @@ enum Query {
         available: Option<Vec<usize>>,
         candidates: Vec<usize>,
     },
+    ValidateQualified {
+        name: String,
+        expected: Option<Kind>,
+        scope: WireScope,
+    },
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Reach {
+    Scalar,
+    Record,
+    Relation,
+    Declared,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireScope {
+    drivers: Vec<String>,
+    current_driver: bool,
+    reach: Reach,
+    joined: bool,
+    phase: Phase,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum Phase {
+    Row { group_by: Option<Vec<String>> },
+    Column { groups: Vec<Vec<String>> },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum QualifiedFinding {
+    DriverMismatch,
+    UnknownField,
+    RowPhase,
+    RowGroup,
+    ColumnGroup,
+    IncompatibleInputType { expected: Kind, actual: Kind },
+}
+
+impl From<reference_scope::Finding> for QualifiedFinding {
+    /// Transport core-selected scope findings without interpreting their priority.
+    fn from(value: reference_scope::Finding) -> Self {
+        use reference_scope::Finding as F;
+        match value {
+            F::DriverMismatch => Self::DriverMismatch,
+            F::UnknownField => Self::UnknownField,
+            F::RowPhase => Self::RowPhase,
+            F::RowGroup => Self::RowGroup,
+            F::ColumnGroup => Self::ColumnGroup,
+            F::IncompatibleInputType { expected, actual } => Self::IncompatibleInputType {
+                expected: expected.into(),
+                actual: actual.into(),
+            },
+        }
+    }
+}
+
+/// Borrow decoded context for one pure validation without retaining wire buffers.
+fn qualified(
+    catalog: &core::Catalog,
+    name: &str,
+    expected: Option<Kind>,
+    scope: &WireScope,
+) -> Result<Vec<QualifiedFinding>, core::Error> {
+    let drivers: Vec<_> = scope.drivers.iter().map(String::as_str).collect();
+    let groups: Vec<Vec<&str>> = match &scope.phase {
+        Phase::Row { group_by } => group_by
+            .iter()
+            .map(|group| group.iter().map(String::as_str).collect())
+            .collect(),
+        Phase::Column { groups } => groups
+            .iter()
+            .map(|group| group.iter().map(String::as_str).collect())
+            .collect(),
+    };
+    let slices: Vec<_> = groups.iter().map(Vec::as_slice).collect();
+    let phase = match scope.phase {
+        Phase::Row { .. } => reference_scope::Phase::Row {
+            group_by: slices.first().copied(),
+        },
+        Phase::Column { .. } => reference_scope::Phase::Column { groups: &slices },
+    };
+    let scope = reference_scope::Scope {
+        drivers: &drivers,
+        current_driver: scope.current_driver,
+        joined: scope.joined,
+        phase,
+        reach: match scope.reach {
+            Reach::Scalar => reference_scope::Reach::Scalar,
+            Reach::Record => reference_scope::Reach::Record,
+            Reach::Relation => reference_scope::Reach::Relation,
+            Reach::Declared => reference_scope::Reach::Declared,
+        },
+    };
+    reference_scope::validate(
+        catalog,
+        name,
+        expected.map(Kind::core),
+        scope,
+        reference_scope::Limits::default(),
+    )
+    .map(|findings| findings.into_iter().map(Into::into).collect())
 }
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -144,6 +257,7 @@ enum Diagnostic {
 enum QueryResult {
     Binding { binding: Option<Bound> },
     Validation { diagnostic: Option<Diagnostic> },
+    QualifiedValidation { diagnostics: Vec<QualifiedFinding> },
 }
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -250,6 +364,12 @@ impl CompiledCatalog {
         let mut results = Vec::with_capacity(queries.len());
         for query in queries {
             let result = match query {
+                Query::ValidateQualified {
+                    name,
+                    expected,
+                    scope,
+                } => qualified(&self.0, name, *expected, scope)
+                    .map(|diagnostics| QueryResult::QualifiedValidation { diagnostics }),
                 Query::Bind { name } => self.0.bind(name).map(|binding| QueryResult::Binding {
                     binding: binding.map(|bound| match bound {
                         core::Binding::Output {

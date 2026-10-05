@@ -60,10 +60,96 @@ def specification(columns):
 class InstalledReferences(unittest.TestCase):
     """Both native entrypoints and the actual optional frontend must use the shared core."""
 
+    def test_scope_truth_against_unchanged_reference_rules(self):
+        """Replay authored scope outcomes through the separate default Python implementation."""
+        with (ROOT / "reference_scope.tsv").open() as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE))
+        for case in cases:
+            with self.subTest(case=case["case"]):
+                data = json.loads(case["request"])
+                (query,) = data["queries"]
+                scope, name = query["scope"], query["name"]
+                phase, qualifier = scope["phase"], name.split(".", 1)[0]
+                bindings = reference_bindings.BindingPlan(
+                    domain="OUT",
+                    output_columns=(),
+                    datasets={
+                        dataset["name"]: reference_bindings.DatasetBinding(
+                            dataset=dataset["name"],
+                            columns=tuple(
+                                TypedColumn(name=field["name"], type=field["type"])
+                                for field in dataset["fields"]
+                            ),
+                        )
+                        for dataset in data["catalog"]["datasets"]
+                    },
+                )
+                diagnostics = []
+                reference_planning._validate_direct_qualified_reference(
+                    reference_planning._Reference(
+                        name,
+                        "authored.path",
+                        expected_type=query["expected"],
+                        current_driver=scope["current_driver"],
+                        reach=scope["reach"],
+                        join_relation=qualifier if scope["joined"] else None,
+                    ),
+                    scope["drivers"],
+                    bindings,
+                    {},
+                    diagnostics,
+                    intermediates={},
+                    row=Row(id="r", group_by=phase["group_by"], derivations={})
+                    if phase["kind"] == "row"
+                    else None,
+                    grouped_by_driver={qualifier: phase.get("groups", [])},
+                )
+                actual = []
+                for diagnostic in diagnostics:
+                    if diagnostic.condition == "unknown_field":
+                        actual.append(
+                            {
+                                "kind": "driver_mismatch"
+                                if "drivers" in diagnostic.context
+                                else "unknown_field"
+                            }
+                        )
+                    elif diagnostic.condition == "phase_boundary":
+                        actual.append({"kind": "row_phase"})
+                    elif diagnostic.condition == "ungrouped_driver_field":
+                        actual.append(
+                            {
+                                "kind": "row_group"
+                                if diagnostic.requirement == "REQ-0067"
+                                else "column_group"
+                            }
+                        )
+                    else:
+                        self.assertEqual(
+                            diagnostic.condition, "incompatible_input_type"
+                        )
+                        actual.append(
+                            {
+                                "kind": diagnostic.condition,
+                                "expected": diagnostic.context["expected"],
+                                "actual": diagnostic.context["actual"],
+                            }
+                        )
+                self.assertEqual(
+                    actual,
+                    json.loads(case["expected"])["outcome"]["results"][0][
+                        "diagnostics"
+                    ],
+                )
+
     def test_shared_truth_batch_prepared_and_owned(self):
         """Replay authored bindings/conditions through both interfaces after request release."""
-        with (ROOT / "reference_binding.tsv").open() as stream:
-            cases = list(csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE))
+        cases = []
+        for fixture in ("reference_binding.tsv", "reference_scope.tsv"):
+            with (ROOT / fixture).open() as stream:
+                cases.extend(
+                    csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE)
+                )
         for case in cases:
             with self.subTest(case=case["case"]):
                 expected = json.loads(case["expected"])
@@ -116,6 +202,11 @@ class InstalledReferences(unittest.TestCase):
                 "_unresolvable_reference_diagnostic",
                 side_effect=AssertionError("reference bare-name rules"),
             ),
+            patch.object(
+                reference_planning,
+                "_validate_direct_qualified_reference",
+                side_effect=AssertionError("reference qualified rules"),
+            ),
         ):
             return plan_execution(
                 spec,
@@ -159,6 +250,139 @@ class InstalledReferences(unittest.TestCase):
                     ),
                     (condition, ("columns.V.derivation.source",), context),
                 )
+
+    def test_qualified_scope_priority_and_provenance(self):
+        """Real planning preserves unknown/group/type ordering and authored context."""
+        plain = specification(
+            [
+                Column(
+                    name="K", type="str", derivation=expression({"source": "SRC.X"})
+                ),
+                Column(
+                    name="V",
+                    type="str",
+                    derivation=expression({"source": "SRC.ABSENT"}),
+                ),
+            ]
+        )
+        grouped = specification(
+            [Column(name="K", type="str"), Column(name="V", type="str")]
+        ).model_copy(
+            update={
+                "rows": [
+                    Row(
+                        id="g",
+                        group_by=["SRC.X"],
+                        derivations={
+                            "K": expression({"source": "SRC.X"}),
+                            "V": expression(
+                                {"str_case": {"source": "SRC.N", "to": "upper"}}
+                            ),
+                        },
+                    )
+                ]
+            }
+        )
+        column = specification(
+            [
+                Column(
+                    name="K", type="str", derivation=expression({"source": "SRC.X"})
+                ),
+                Column(
+                    name="V", type="int", derivation=expression({"source": "SRC.N"})
+                ),
+            ]
+        ).model_copy(update={"rows": [Row(id="g", group_by=["SRC.X"], derivations={})]})
+        for spec, expected in [
+            (
+                plain,
+                [
+                    (
+                        "unknown_field",
+                        "REQ-0103",
+                        ("columns.V.derivation.source",),
+                        {"identifier": "SRC.ABSENT"},
+                    )
+                ],
+            ),
+            (
+                grouped,
+                [
+                    (
+                        "ungrouped_driver_field",
+                        "REQ-0067",
+                        ("rows[0].derivations.V.str_case.source",),
+                        {"identifier": "SRC.N", "row": "g", "dataset": "SRC"},
+                    ),
+                    (
+                        "incompatible_input_type",
+                        "REQ-0308",
+                        ("rows[0].derivations.V.str_case.source",),
+                        {"source": "SRC.N", "expected": "str", "actual": "int"},
+                    ),
+                ],
+            ),
+            (
+                column,
+                [
+                    (
+                        "ungrouped_driver_field",
+                        "REQ-0107",
+                        ("columns.V.derivation.source",),
+                        {"identifier": "SRC.N", "dataset": "SRC"},
+                    )
+                ],
+            ),
+        ]:
+            for native in (False, True):
+                with (
+                    self.subTest(native=native, expected=expected),
+                    self.assertRaises(ExecutionPlanningError) as caught,
+                ):
+                    self.plan(spec, native)
+                self.assertEqual(
+                    [
+                        (d.condition, d.requirement, d.spec_paths, dict(d.context))
+                        for d in caught.exception.diagnostics
+                    ],
+                    expected,
+                )
+
+    def test_qualified_capability_precedes_activation_and_data(self):
+        """Missing or older query advertisements refuse before host effects."""
+        self.assertEqual(
+            json.loads(yamaa_native.reference_capabilities()),
+            {
+                "protocol": "reference-analysis/1",
+                "features": ["binding", "output_validation", "qualified_validation"],
+            },
+        )
+        case = ROOT / "specification-functions"
+        spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        for capability in (
+            None,
+            lambda: (
+                '{"protocol":"reference-analysis/1","features":["binding","output_validation"]}'
+            ),
+        ):
+            with (
+                patch.object(yamaa_native, "reference_capabilities", capability),
+                patch.object(
+                    native_datasets,
+                    "activate_project",
+                    side_effect=AssertionError("activation"),
+                ),
+            ):
+                actual = native_datasets.execute_with_project_functions(
+                    spec, lambda _: self.fail("source"), case / "python", SCHEMA
+                )
+            self.assertEqual(actual.result.status, "unsupported")
+            self.assertEqual(
+                [(f.operation, f.spec_path) for f in actual.result.features],
+                [("native_qualified_reference_validation", "$")],
+            )
+            self.assertEqual(actual.result.handler_counts, ())
+            self.assertEqual(actual.verifications, ())
 
     def test_expected_type_diagnostic_keeps_requirement(self):
         """A bound bare numeric output does not satisfy a string operation's expected type."""
@@ -335,6 +559,11 @@ class InstalledReferences(unittest.TestCase):
                         reference_planning,
                         "_unresolvable_reference_diagnostic",
                         side_effect=AssertionError("reference output rules"),
+                    ),
+                    patch.object(
+                        reference_planning,
+                        "_validate_direct_qualified_reference",
+                        side_effect=AssertionError("reference qualified rules"),
                     ),
                 ):
                     if name == "specification-functions":

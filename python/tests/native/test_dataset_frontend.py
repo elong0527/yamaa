@@ -130,11 +130,92 @@ def _native_module(**members):
         output_names = tuple(outputs)
         dataset_names = tuple(datasets)
 
+        def qualified(query):
+            """Use reference rules only for the facade double, never for native expected truth."""
+            from yamaa.models import TypedColumn
+            from yamaa.odm.bindings import BindingPlan, DatasetBinding
+            from yamaa.planning.execution import (
+                _Reference,
+                _validate_direct_qualified_reference,
+            )
+            from yamaa.specification.models import Row
+
+            scope = query["scope"]
+            phase = scope["phase"]
+            qualifier = query["name"].split(".", 1)[0]
+            bindings = BindingPlan(
+                domain="OUT",
+                output_columns=output_names,
+                datasets={
+                    name: DatasetBinding(
+                        dataset=name,
+                        columns=tuple(
+                            TypedColumn(name=field, type=kind)
+                            for field, kind in fields.items()
+                        ),
+                    )
+                    for name, fields in datasets.items()
+                },
+            )
+            findings = []
+            _validate_direct_qualified_reference(
+                _Reference(
+                    query["name"],
+                    "test",
+                    expected_type=query["expected"],
+                    current_driver=scope["current_driver"],
+                    reach=scope["reach"],
+                    join_relation=qualifier if scope["joined"] else None,
+                ),
+                scope["drivers"],
+                bindings,
+                outputs,
+                findings,
+                intermediates={},
+                row=Row(id="row", derivations={}, group_by=phase["group_by"])
+                if phase["kind"] == "row"
+                else None,
+                grouped_by_driver={qualifier: phase.get("groups", [])},
+            )
+            results = []
+            for finding in findings:
+                if finding.condition == "unknown_field":
+                    results.append(
+                        {
+                            "kind": "driver_mismatch"
+                            if "drivers" in finding.context
+                            else "unknown_field"
+                        }
+                    )
+                elif finding.condition == "phase_boundary":
+                    results.append({"kind": "row_phase"})
+                elif finding.condition == "ungrouped_driver_field":
+                    results.append(
+                        {
+                            "kind": "row_group"
+                            if finding.requirement == "REQ-0067"
+                            else "column_group"
+                        }
+                    )
+                else:
+                    assert finding.condition == "incompatible_input_type"
+                    results.append(
+                        {
+                            "kind": finding.condition,
+                            "expected": finding.context["expected"],
+                            "actual": finding.context["actual"],
+                        }
+                    )
+            return {"kind": "qualified_validation", "diagnostics": results}
+
         def analyze_references(request):
             """Evaluate metadata in the unrelated facade double, never as expected truth."""
             results = []
             for query in json.loads(request)["queries"]:
                 name = query["name"]
+                if query["kind"] == "validate_qualified":
+                    results.append(qualified(query))
+                    continue
                 if query["kind"] == "bind":
                     bound = None
                     if "." not in name and name in outputs:
@@ -201,6 +282,9 @@ def _native_module(**members):
         )
 
     return SimpleNamespace(
+        reference_capabilities=lambda: json.dumps(
+            {"protocol": "reference-analysis/1", "features": ["qualified_validation"]}
+        ),
         analyze_dependencies=analyze,
         analyze_column_dependencies=analyze_columns,
         _compile_reference_catalog=compile_references,
@@ -238,6 +322,36 @@ def test_missing_dependency_service_is_unsupported_before_io(
     assert isinstance(result.result, ExecutionUnsupported)
     assert [(f.operation, f.spec_path) for f in result.result.features] == [
         (operation, "$")
+    ]
+    assert result.result.handler_counts == ()
+    assert result.verifications == ()
+
+
+@pytest.mark.parametrize(
+    "capability",
+    [
+        None,
+        False,
+        {},
+        {"protocol": "reference-analysis/1", "features": []},
+        {"protocol": "future/2", "features": ["qualified_validation"]},
+    ],
+)
+def test_qualified_reference_capability_is_checked_before_io(
+    monkeypatch, specification, capability
+):
+    """An older query contract cannot enter source loading before explicit refusal."""
+    native = _native_module(execute_dataset=lambda *_: pytest.fail("execution"))
+    native.reference_capabilities = (
+        (lambda: json.dumps(capability)) if isinstance(capability, dict) else capability
+    )
+    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    result = execute_with_source_provider(
+        specification, lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert [(f.operation, f.spec_path) for f in result.result.features] == [
+        ("native_qualified_reference_validation", "$")
     ]
     assert result.result.handler_counts == ()
     assert result.verifications == ()

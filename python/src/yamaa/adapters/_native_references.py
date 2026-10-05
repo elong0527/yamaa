@@ -4,7 +4,11 @@ import json
 
 from yamaa.models import RuntimeCondition
 from yamaa.odm.bindings import BindingFailure, BoundReference
-from yamaa.planning.references import ReferenceCompilerFactory, ReferenceFinding
+from yamaa.planning.references import (
+    QualifiedFinding,
+    ReferenceCompilerFactory,
+    ReferenceFinding,
+)
 
 
 class NativeReferenceLimitError(RuntimeError):
@@ -91,6 +95,33 @@ def bind_reference_compiler(native) -> ReferenceCompilerFactory:
 
         class Compiler:
             """Per-attempt prepared compiler; returned indices only recover host names."""
+
+            def validate_qualified(self, name, expected, scope):
+                """Serialize selected scope metadata and preserve ordered core findings."""
+                phase = (
+                    {"kind": "row", "group_by": scope.group_by}
+                    if scope.phase == "row"
+                    else {"kind": "column", "groups": scope.groups}
+                )
+                result = query(
+                    {
+                        "kind": "validate_qualified",
+                        "name": name,
+                        "expected": expected,
+                        "scope": {
+                            "drivers": scope.drivers,
+                            "current_driver": scope.current_driver,
+                            "reach": scope.reach,
+                            "joined": scope.joined,
+                            "phase": phase,
+                        },
+                    }
+                )
+                if result["kind"] != "qualified_validation":
+                    raise ValueError("unexpected native qualified reference result")
+                return tuple(
+                    QualifiedFinding(**finding) for finding in result["diagnostics"]
+                )
 
             def bind(self, name):
                 """Convert a core binding into the existing host binding representation."""

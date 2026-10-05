@@ -18,8 +18,24 @@ null for column derivation) and candidates (dataset indices for suggestions).
 Validation returns the first applicable condition in unknown-name, phase, then
 expected-type order. Suggestions choose the lexically earliest matching candidate
 dataset name. Results use zero-based declaration indices; hosts attach names,
-row identity and authored paths. This does not check qualified-reference reach,
-grouping, joins or the rest of the language, and is not a current-schema compiler.
+row identity and authored paths. Named-intermediate visibility, join inference
+and the rest of the language remain outside these metadata services; this is not
+a current-schema compiler.
+
+A validate_qualified query has name, optional expected, and scope. Scope contains
+drivers (names), current_driver (boolean), reach (scalar, record, relation or
+declared), joined (boolean) and phase. A row phase has kind row and optional/null
+group_by or a list of complete qualified names. A column phase has kind column
+and groups, the group-name lists of that dataset's grouped templates. Results
+have kind qualified_validation and ordered diagnostics: driver_mismatch,
+unknown_field, row_phase, row_group, column_group or incompatible_input_type.
+Driver/existence failures stop; phase/grouping failures retain later type errors.
+The host selects authoritative scope metadata and attaches authored paths;
+these queries do not grant data access or execution authority.
+
+Scope limits are 256 written driver names, 4,096 groups, 65,536 group-name entries
+and 1,048,576 combined UTF-8 context bytes. Duplicate entries count. Query support
+is advertised by reference_capabilities(); existing query forms remain unchanged.
 
 The envelope limit is 1,048,576 UTF-8 bytes. Core policies allow 4,096 output
 columns, 256 datasets, 65,536 stored fields, 1,048,576 catalog-name bytes and

@@ -1,7 +1,7 @@
 # Shared reference binding
 
-The bounded reference service for #1585 owns exact name binding and bare-output
-unknown-name, phase and expected-type checks. Optional Python native planning
+The bounded reference service for #1585 owns exact name binding, bare-output
+unknown-name/phase/type checks and direct qualified-field scope/grouping checks. Optional Python native planning
 uses it with an owned catalog compiled once per planning attempt. Installed R
 exposes the same core through a stateless batch interface. Python remains the
 default and both bindings retain `execution_supported=false`.
@@ -83,6 +83,58 @@ also remain host errors. Rejected requests do not mutate a prepared catalog.
 Stable error text does not echo caller names or panic payloads. Adapter unwind
 containment does not qualify allocation failure, process aborts or host recovery.
 
+## Direct qualified-field validation
+
+Both bindings export `reference_capabilities()`, returning the
+`reference-analysis/1` protocol with `binding`, `output_validation` and
+`qualified_validation` features. Existing query shapes remain unchanged. The
+optional Python frontend requires the qualified feature before activation or
+source access; older packages return `native_qualified_reference_validation`
+unsupported status at `$`. Capability discovery grants no data or callback
+authority. The already captured compiler creates the actual catalog after source
+metadata is available.
+
+Batch and prepared interfaces accept this additional query, using the catalog
+from the installed-interface example above:
+
+```json
+{"kind":"validate_qualified","name":"SRC.X","expected":"str","scope":{"drivers":["SRC"],"current_driver":false,"reach":"scalar","joined":false,"phase":{"kind":"row","group_by":null}}}
+```
+
+The result is `qualified_validation` with ordered `diagnostics`, here
+`[{"kind":"incompatible_input_type","expected":"str","actual":"int"}]`.
+The query must name a qualified stored field. `expected` may be omitted or null.
+`scope` requires drivers, current_driver, reach, joined and phase. Reach is one
+of `scalar`, `record`, `relation` or `declared`. A row phase has optional/null
+`group_by` for an ungrouped row, or a list of complete qualified group names;
+an empty list is distinct from null. A column phase requires `groups`, the group
+name lists of the bound dataset's grouped templates. These are normalized compiler
+facts, not user assertions that permit source access. The service does not select
+drivers, infer joins, validate the group declarations themselves or select phases.
+
+Shared rules retain the reference order: current-driver mismatch, then field
+existence, then the already-failed implicit-join suppression rule, then row-phase
+or grouping checks, then strict expected type. Driver/existence findings stop
+further checks. Grouping or row-phase findings retain a later type finding.
+Declared/record reads and planned joins preserve row-phase exemptions; a direct
+foreign scalar source with an unresolved implicit join does not gain a second
+phase failure. Column scalar reads must be a group key in every supplied grouped
+template. No new implicit int/float conversion is introduced.
+
+Finding kinds are `driver_mismatch`, `unknown_field`, `row_phase`, `row_group`,
+`column_group`, and `incompatible_input_type`. Hosts attach the authored reference
+and row names/path. Unknown fields use REQ-0103; row/column grouping uses
+REQ-0067/0107; row-phase findings have no requirement. Driver/type findings keep
+the originating operation's requirement. Multiple findings retain that order.
+
+Scope admission allows 256 written driver names, 4,096 groups, 65,536 total group
+name entries and 1,048,576 combined UTF-8 context bytes per query. Duplicate entries
+count toward policy limits. Name and request/query budgets above also apply.
+Malformed scope shapes, unknown reaches/phases and bare qualified-query names are
+transport errors; scope resource failures remain separate limit outcomes. Context
+is consumed per query without a mutable scope cache. Native findings do not
+authorize execution of an otherwise invalid or unsupported plan.
+
 The optional frontend captures the compiler before activation or source access.
 An older wheel without the service yields `native_reference_binding` unsupported
 status at `$` before either effect. Actual catalog compilation occurs after
@@ -98,6 +150,12 @@ Unicode, suggestions, phase/type priority and declaration identities. Rust core,
 transport, installed Python batch/prepared interfaces and installed R replay
 authored truth. Prepared calls remain valid after their original request is
 discarded. Admission tests cover metadata errors, limits and subsequent reuse.
+Another 29 authored scope cases replay through Rust, both installed native
+interfaces, R and the unchanged default Python rules. They cover driver/existence
+priority, join exemptions/suppression, grouped-row and multi-template column grain,
+empty groups, duplicate drivers and combined scope/type findings. Installed
+planning tests pin full diagnostic requirements, contexts and paths with the
+reference qualified-field helper disabled, including unchanged original CSVs.
 
 Installed Python planning checks exact diagnostic paths, requirements and
 contexts against explicit expectations and the unchanged default planner.
@@ -108,8 +166,8 @@ CI runs installed tests against both the wheel and an independently rebuilt
 source archive, plus the installed R source package.
 
 This service does not own YAML/schema loading, normalization, derivation
-inheritance, phase selection, qualified-reference reachability/grouping/joins,
-paired-key type comparisons or typed dataset lowering. Bare-name validation is
+inheritance, phase selection, implicit-join inference, named-intermediate/SELF
+field visibility and traversal, paired-key type comparisons or typed dataset lowering. Bare-name validation is
 connected to row and column output-expression checks; other scope-specific
 validation remains in the host. R current-schema compilation, full language and
 workflow coverage, numerical policy, performance and release gates remain open.

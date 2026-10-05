@@ -2,6 +2,12 @@
 use pyo3::prelude::*;
 use yamaa_adapters::reference_transport::{self, CompiledCatalog, TransportError};
 
+/// Report metadata-query support without preparing a catalog or accessing host data.
+#[pyfunction]
+pub fn reference_capabilities() -> &'static str {
+    reference_transport::capabilities()
+}
+
 /// An immutable catalog owned by Python and independent of the request's buffers.
 #[pyclass(frozen, module = "yamaa_native", name = "_ReferenceCatalog")]
 pub struct ReferenceCatalog {
