@@ -116,15 +116,16 @@ artifact.
 ## Columns fill the constructed rows
 
 Columns resolve in declaration order, so a later column may read an earlier
-one. A column may be derived in exactly one of two places:
+one. A column-level derivation is the column's default: every `rows` entry
+inherits it, and a `rows` entry may name the column in its own `derivations`
+to override the default for that entry's rows only. A column with no
+column-level derivation must be derived in every `rows` entry; use
+`{literal: null}` when its value is deliberately missing in one section.
 
-- At column level, using the same derivation for every constructed row.
-- At row level, using `derivations` in every row template so each section can
-  supply different logic.
-
-A column cannot mix the two placements. A row-derived column must appear in
-every row template; use `{literal: null}` when its value is deliberately
-missing in one section.
+One restriction: a column-level derivation that reads across rows -- a
+lookup, an aggregate, a window, or a named intermediate -- is not row-local,
+so pairing it with a `rows` entry's own derivation for the same column fails
+validation instead of deriving the column twice.
 
 ## More examples
 
