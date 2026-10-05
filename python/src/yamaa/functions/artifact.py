@@ -159,11 +159,18 @@ class LoadedArtifact:
         """Return the private package name this artifact's modules live in.
 
         The name is derived from the reference, so code from two artifacts
-        never shares a module identity. A reference is expected to name one
-        immutable artifact; repointing it at different bytes within a single
-        process reuses the modules already imported under that name.
+        never shares a module identity. The escaping is injective: every
+        non-alphanumeric character becomes ``_x<hex>_`` (an underscore
+        itself becomes ``_x5f_``), so distinct references such as
+        ``my-artifact`` and ``my_artifact`` never collide in ``sys.modules``.
+        A reference is expected to name one immutable artifact; repointing
+        it at different bytes within a single process reuses the modules
+        already imported under that name.
         """
-        safe = "".join(c if c.isalnum() else "_" for c in self.reference)
+        safe = "".join(
+            char if char.isalnum() else f"_x{ord(char):x}_"
+            for char in self.reference
+        )
         return f"_yamaa_artifact_{safe}"
 
     def load(self, call: str) -> Callable[..., object]:
