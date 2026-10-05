@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: write # cache save for Swatinem/rust-cache
 
 defaults:
   run:
@@ -32,6 +33,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          # Rust artifacts are OS-specific only; share the cache across the
+          # Python matrix entries on the same OS.
+          shared-key: native-python-${{ matrix.os }}
       - name: Install build tools
         run: |
           rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
@@ -94,7 +101,6 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/column_dependencies.tsv" column_dependencies.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_binding.tsv" reference_binding.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_scope.tsv" reference_scope.tsv
-          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_intermediate.tsv" reference_intermediate.tsv
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
@@ -174,6 +180,10 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          shared-key: native-r-${{ matrix.os }}
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           r-version: '4.6.1'
