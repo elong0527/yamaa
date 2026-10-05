@@ -312,7 +312,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions", "function_source_collection"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
@@ -478,7 +478,18 @@ on empty input or when all rows will be filtered out. Legacy entrypoints reject
 function declarations without bindings before decoding any snapshot. Invalid slots,
 unknown/duplicate arguments, omitted required names and illegal reads are rejected
 at plan admission. Grouped source arguments must be grouping fields; key-grain calls
-may occur only in non-key assignments over completed columns or literals.
+may occur only in non-key assignments over completed columns, literals or explicit
+collected source arguments. `function_source_collection` admits the argument input
+`{collect: {column, identifier}}` only for key-grain non-key calls. `identifier`
+is the authored source name used in diagnostics and follows the 1,024-byte function
+name limit. The read visits every feeding record, ignores missing readings, retains
+the first representation when all present values compare equal, and fails with
+`multiple_values_per_key` / REQ-0075 if multiple distinct values remain. All supplied
+arguments still resolve in authored order before missing-value short circuit.
+Collection failures bypass result-conversion handlers and retain assignment/output
+identity. No per-argument filter, selection, secondary or named-source policy is
+admitted. Each potential feeding read is charged before the scan; text and identity
+limits remain cumulative.
 
 The entire request remains bounded to 1 MiB. Each declaration and supplied argument
 list permits at most 256 parameters; names use the function/1 limits. Copying a
@@ -500,7 +511,7 @@ of a successfully validated result can use an unconvertible handler. Boundary,
 resource and internal errors retain their existing transport error classification.
 No failure undoes earlier callback side effects or causes automatic retry.
 
-Thirteen independently authored shared cases in `callbacks.json` / `callbacks.tsv`
+Nineteen independently authored shared cases in `callbacks.json` / `callbacks.tsv`
 pin complete output observations and traces for both installed hosts. Additional
 tests cover metadata rejection before invalid IPC, expanded-plan limits, panic and
 interruption containment, subsequent-run recovery, captured bindings, signed zero

@@ -81,7 +81,8 @@ fn shared_dataset_callbacks_retain_complete_observations() {
         serde_json::from_str(&std::fs::read_to_string(root.join("callbacks.json")).unwrap())
             .unwrap();
     for case in cases {
-        let prepared = PreparedDataset::parse(&case["request"].to_string()).unwrap();
+        let prepared = PreparedDataset::parse(&case["request"].to_string())
+            .unwrap_or_else(|error| panic!("{}: {error:?}", case["case"]));
         let source = std::fs::read(root.join(case["input"].as_str().unwrap())).unwrap();
         for _ in 0..2 {
             let mut callbacks = Callbacks {
@@ -287,4 +288,53 @@ fn callback_boundary_contains_panics_and_reuses_fresh_attempts() {
         .table
         .is_some());
     assert_eq!(port.calls, 3);
+}
+
+/// Collected argument shapes and scopes fail at admission, before malformed IPC matters.
+#[test]
+fn collected_argument_wire_admission_is_closed_and_bounded() {
+    let cases: Vec<Json> =
+        serde_json::from_str(include_str!("fixtures/datasets/callbacks.json")).unwrap();
+    let base = cases
+        .iter()
+        .find(|case| case["case"] == "collected_equal")
+        .unwrap()["request"]
+        .clone();
+    let input = "/columns/0/expression/function/arguments/0/input/collect";
+    let mut extra = base.clone();
+    extra
+        .pointer_mut(input)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("filter".into(), serde_json::json!(false));
+    assert!(matches!(
+        PreparedDataset::parse(&extra.to_string()),
+        Err(Error::InvalidRequest)
+    ));
+    let mut invalid = base.clone();
+    invalid.pointer_mut(input).unwrap()["column"] = serde_json::json!(99);
+    assert!(matches!(
+        PreparedDataset::parse(&invalid.to_string()),
+        Err(Error::InvalidPlan)
+    ));
+    let mut wide = base.clone();
+    wide.pointer_mut(input).unwrap()["identifier"] = serde_json::json!("x".repeat(1025));
+    assert!(matches!(
+        PreparedDataset::parse(&wide.to_string()),
+        Err(Error::Function(
+            yamaa_adapters::function_transport::FunctionTransportError::RequestLimit
+        ))
+    ));
+    for mode in [
+        serde_json::json!({"records":null}),
+        serde_json::json!({"groups":[0,1,2]}),
+    ] {
+        let mut invalid = base.clone();
+        invalid["templates"][0]["mode"] = mode;
+        assert!(matches!(
+            PreparedDataset::parse(&invalid.to_string()),
+            Err(Error::InvalidPlan)
+        ));
+    }
 }

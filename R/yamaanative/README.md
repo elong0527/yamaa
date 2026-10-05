@@ -299,3 +299,9 @@ See [the dataset protocol](../../rust/DATASET_TRANSPORT.md#explicit-host-functio
 for limits and independent installed-host fixtures. This raw bridge does not
 provide normalized specification lowering or production artifact activation;
 Python remains the default and `execution_supported` remains false.
+
+`function_source_collection` permits `{collect: {column, identifier}}` callback
+argument inputs for key-grain non-key calls. All feeding records participate;
+missing values are ignored and conflicting present values stop the call with
+exact ambiguity evidence. The six additional shared cases replay this behavior
+through the installed R bridge without changing existing expected values.

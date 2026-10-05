@@ -16,7 +16,12 @@ literals, primary-source fields or completed output fields. Construction rejects
 unknown/duplicate names and omitted required arguments. Assignment admission
 checks field bounds and phase availability. Grouped calls may read grouping
 fields only. Key-grain key assignments do not admit calls; non-key key-grain calls
-may read completed output columns or literals, never one chosen feeding record.
+may read completed output columns, literals, or explicit `FunctionInput::Collect`
+leaves over all records feeding the key combination. A collected leaf ignores
+missing readings, retains the first equal present representation, and fails on
+multiple distinct readings using the existing source-collection service. It is
+illegal in record/group scopes or key construction. No call chooses one arbitrary
+feeding record.
 There are no secondary/named/correlated argument reads or expression arguments.
 
 The caller passes `FunctionBindings` to `execute_observed_functions`. Before any

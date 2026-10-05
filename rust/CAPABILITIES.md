@@ -340,8 +340,14 @@ remaining named prototypes and all full-workflow/default-cutover gates remain op
 The trusted Rust dataset API also composes prebound host-function calls with
 record/group assignments and completed key-grain outputs. The explicit Python/R
 `execute_dataset_functions` bridge checks bindings before IPC decoding and reuses
-the same scalar invocation lifecycle. Thirteen shared cases and host boundary tests
+the same scalar invocation lifecycle. Nineteen shared cases and host boundary tests
 qualify this typed-plan subset; normalized-specification function dispatch and
 production activation remain unsupported.
 See [dataset function composition](DATASET_FUNCTIONS.md) for phase, error and
 resource contracts and the remaining frontend/activation qualification gates.
+
+The additive `function_source_collection` capability admits plain primary-source
+arguments for key-grain non-key callbacks. It reuses distinct-present collection,
+authored resolution order, source diagnostics and cumulative budgets. This is a
+prerequisite for the unchanged `schema-functions` specification; normalized call
+lowering and native project activation are still unqualified.

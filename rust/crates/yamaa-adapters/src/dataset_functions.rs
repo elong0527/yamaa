@@ -34,6 +34,7 @@ enum Input {
     Literal(ScalarValue),
     Source(usize),
     Column(usize),
+    Collect { column: usize, identifier: String },
 }
 
 pub(super) struct Admission {
@@ -105,6 +106,10 @@ impl Admission {
                         ),
                         Input::Source(column) => FunctionInput::Read(Read::Source(column)),
                         Input::Column(column) => FunctionInput::Read(Read::Column(column)),
+                        Input::Collect { column, identifier } => {
+                            function_signature::check_name(&identifier).map_err(Error::Function)?;
+                            FunctionInput::Collect { column, identifier }
+                        }
                     },
                 })
             })

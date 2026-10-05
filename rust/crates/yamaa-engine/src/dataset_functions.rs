@@ -11,6 +11,11 @@ use alloc::collections::BTreeSet;
 pub enum FunctionInput {
     Literal(Value),
     Read(Read),
+    /// Distinct present readings across every record feeding a key-grain output.
+    Collect {
+        column: usize,
+        identifier: String,
+    },
 }
 
 /// One supplied logical argument, retained in authored order (not signature order).
@@ -86,19 +91,27 @@ impl BoundFunction {
         mode: &RowMode,
     ) -> Result<(), PlanError> {
         for argument in &self.arguments {
-            match argument.input {
+            match &argument.input {
                 FunctionInput::Read(Read::Source(column)) => {
-                    if column >= source.columns().len() {
+                    if *column >= source.columns().len() {
                         return Err(PlanError::InvalidSource);
                     }
-                    if matches!(mode, RowMode::Groups(keys) if !keys.contains(&column)) {
+                    if matches!(mode, RowMode::Groups(keys) if !keys.contains(column)) {
                         return Err(PlanError::NonGroupSource);
                     }
                 }
                 FunctionInput::Read(Read::Column(column))
-                    if !available.get(column).copied().unwrap_or(false) =>
+                    if !available.get(*column).copied().unwrap_or(false) =>
                 {
                     return Err(PlanError::UnavailableColumn);
+                }
+                FunctionInput::Collect { column, identifier } => {
+                    if *column >= source.columns().len() {
+                        return Err(PlanError::InvalidSource);
+                    }
+                    if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
+                        return Err(PlanError::InvalidKeyMode);
+                    }
                 }
                 _ => {}
             }
@@ -162,12 +175,36 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     context: Context<'_>,
     budget: &mut Budget,
+    handlers: &mut HandlerCounter,
     bindings: &mut dyn FunctionBindings<Error = T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let mut supplied = BTreeMap::new();
     for argument in &function.arguments {
         budget.work(1, 1)?;
+        if let FunctionInput::Collect { column, identifier } = &argument.input {
+            budget.work(candidate.members.len(), 1)?;
+            let value = key_grain::collect_bound(
+                table,
+                key_grain::Collection {
+                    column: *column,
+                    identifier,
+                    filter: None,
+                    selection: None,
+                },
+                key_grain::CollectionContext {
+                    assignment: context.assignment,
+                    candidate,
+                    plan: context.plan,
+                    row: context.row,
+                },
+                budget,
+                handlers,
+            )?;
+            supplied.insert(argument.name.clone(), value);
+            continue;
+        }
         let value = match &argument.input {
+            FunctionInput::Collect { .. } => unreachable!("collected input was resolved above"),
             FunctionInput::Literal(value) => ValueRef::from(value),
             FunctionInput::Read(Read::Column(column)) => ValueRef::from(&candidate.values[*column]),
             FunctionInput::Read(Read::Source(column)) => {
