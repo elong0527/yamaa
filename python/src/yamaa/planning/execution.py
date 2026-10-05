@@ -40,7 +40,13 @@ from yamaa.odm import (
 )
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
 from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
-from yamaa.planning.references import ReferenceCompilerFactory, ReferenceFinding
+from yamaa.planning.references import (
+    QualifiedFinding,
+    QualifiedScope,
+    ReferenceCompiler,
+    ReferenceCompilerFactory,
+    ReferenceFinding,
+)
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
@@ -1889,6 +1895,7 @@ def _validate_qualified_reference(
     intermediates: Mapping[str, PlannedIntermediate] = {},
     row: Row | None = None,
     grouped_by_driver: Mapping[str, Sequence[tuple[str, ...]]] | None = None,
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> None:
     """Check one qualified name against the relation it reaches.
 
@@ -1924,8 +1931,96 @@ def _validate_qualified_reference(
                 diagnostics,
                 row=row,
                 grouped_by_driver=grouped_by_driver,
+                reference_compiler=reference_compiler,
             )
         return
+    if reference_compiler is not None:
+        scope = QualifiedScope(
+            drivers=tuple(drivers),
+            current_driver=reference.current_driver,
+            reach=reference.reach,
+            joined=reference.join_relation is not None,
+            phase="row" if row is not None else "column",
+            group_by=None
+            if row is None or row.group_by is None
+            else tuple(row.group_by),
+            groups=tuple((grouped_by_driver or {}).get(qualifier, ())),
+        )
+        for finding in reference_compiler.validate_qualified(
+            reference.name, reference.expected_type, scope
+        ):
+            _append_qualified_finding(finding, reference, drivers, diagnostics, row=row)
+        return
+    _validate_direct_qualified_reference(
+        reference,
+        drivers,
+        bindings,
+        column_types,
+        diagnostics,
+        intermediates=intermediates,
+        row=row,
+        grouped_by_driver=grouped_by_driver,
+    )
+
+
+def _append_qualified_finding(
+    finding: QualifiedFinding,
+    reference: _Reference,
+    drivers: Collection[str],
+    diagnostics: list[ExecutionDiagnostic],
+    *,
+    row: Row | None,
+) -> None:
+    """Attach authored names, paths and requirements without re-evaluating native scope rules."""
+    requirement = reference.requirement
+    context: dict[str, JsonValue] = {"identifier": reference.name}
+    if finding.kind == "driver_mismatch":
+        condition = "unknown_field"
+        context["drivers"] = sorted(drivers)
+    elif finding.kind == "unknown_field":
+        condition, requirement = "unknown_field", "REQ-0103"
+    elif finding.kind in ("row_phase", "row_group"):
+        if row is None:
+            raise ValueError("native row scope finding outside row construction")
+        context["row"] = row.id
+        if finding.kind == "row_phase":
+            condition, requirement = "phase_boundary", None
+            context.update(
+                available_phase="column_derivation", required_phase="row_construction"
+            )
+        else:
+            condition, requirement = "ungrouped_driver_field", "REQ-0067"
+            context["dataset"] = reference.name.split(".", 1)[0]
+    elif finding.kind == "column_group":
+        condition, requirement = "ungrouped_driver_field", "REQ-0107"
+        context["dataset"] = reference.name.split(".", 1)[0]
+    elif finding.kind == "incompatible_input_type":
+        condition = "incompatible_input_type"
+        context = {
+            "source": reference.name,
+            "expected": finding.expected,
+            "actual": finding.actual,
+        }
+    else:
+        raise ValueError("unknown native qualified reference finding")
+    diagnostics.append(
+        _diagnostic(condition, reference.path, context, requirement=requirement)
+    )
+
+
+def _validate_direct_qualified_reference(
+    reference: _Reference,
+    drivers: Collection[str],
+    bindings: BindingPlan,
+    column_types: Mapping[str, ColumnType],
+    diagnostics: list[ExecutionDiagnostic],
+    *,
+    intermediates: Mapping[str, PlannedIntermediate],
+    row: Row | None,
+    grouped_by_driver: Mapping[str, Sequence[tuple[str, ...]]] | None,
+) -> None:
+    """Unchanged reference rules; native planning selects the shared compiler above."""
+    qualifier = reference.name.split(".", 1)[0]
     if reference.current_driver and set(drivers) != {qualifier}:
         diagnostics.append(
             _diagnostic(
@@ -4716,6 +4811,7 @@ def plan_execution(
                             column_types,
                             diagnostics,
                             intermediates=intermediates,
+                            reference_compiler=reference_compiler,
                         )
                     else:
                         diagnostics.append(
@@ -4782,6 +4878,7 @@ def plan_execution(
                                 column_types,
                                 diagnostics,
                                 intermediates=intermediates,
+                                reference_compiler=reference_compiler,
                             )
 
             derivations: dict[str, PlannedDerivation] = {}
@@ -4956,6 +5053,7 @@ def plan_execution(
                             diagnostics,
                             intermediates=intermediates,
                             row=row,
+                            reference_compiler=reference_compiler,
                         )
                         diagnostics.extend(
                             _diagnostic(
@@ -5158,6 +5256,7 @@ def plan_execution(
                     diagnostics,
                     intermediates=intermediates,
                     grouped_by_driver=grouped_by_driver,
+                    reference_compiler=reference_compiler,
                 )
             elif reference.key_expression is not None:
                 # REQ-1259: an expression match value's synthetic match name is

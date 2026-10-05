@@ -3,6 +3,8 @@
 #' Accepts reference-analysis/1 JSON containing an ordered typed catalog and
 #' query batch. Resolves exact output/dataset references and validates bare
 #' output names, suggestions, phase availability and expected types.
+#' Also checks normalized direct qualified-field driver, scope and grouping
+#' metadata. Discover query support with reference_capabilities().
 #' No records, callbacks or Python installation are involved.
 #' @param request One unclassed, nonmissing JSON character string without attributes.
 #' @return Owned outcome JSON. Language diagnostics and resource limits are data;

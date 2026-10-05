@@ -477,6 +477,25 @@ def _execute(specification, source_provider, prepare_functions=None):
                     handler_counts=(),
                 )
             )
+    discover_references = getattr(yamaa_native, "reference_capabilities", None)
+    reference_features = (
+        json.loads(discover_references()) if callable(discover_references) else {}
+    )
+    if reference_features.get(
+        "protocol"
+    ) != "reference-analysis/1" or "qualified_validation" not in reference_features.get(
+        "features", []
+    ):
+        return NativeDatasetRun(
+            ExecutionUnsupported(
+                features=(
+                    UnsupportedFeature(
+                        operation="native_qualified_reference_validation", spec_path="$"
+                    ),
+                ),
+                handler_counts=(),
+            )
+        )
     dependency_analyzer = bind_dependency_analyzer(yamaa_native)
     column_dependency_analyzer = bind_column_dependency_analyzer(yamaa_native)
     reference_compiler_factory = bind_reference_compiler(yamaa_native)

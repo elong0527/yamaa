@@ -160,6 +160,12 @@ fn dataset_capabilities() -> &'static str {
     yamaa_adapters::dataset_transport::capabilities()
 }
 
+/// Report the shared metadata-query contract without preparing a catalog.
+#[extendr]
+fn reference_capabilities() -> &'static str {
+    yamaa_adapters::reference_transport::capabilities()
+}
+
 #[extendr]
 fn engine_info() -> List {
     let info = yamaa_engine::engine_info();
@@ -178,6 +184,7 @@ extendr_module! {
     fn engine_info;
     fn analyze_dependencies;
     fn analyze_references;
+    fn reference_capabilities;
     fn analyze_column_dependencies;
     fn scalar_round_trip;
     fn evaluate_numeric;

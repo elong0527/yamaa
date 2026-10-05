@@ -19,7 +19,7 @@ procedure are described in [PHASE_MEASUREMENTS.md](PHASE_MEASUREMENTS.md).
 Shared cycle selection, stable scheduling and column dependency rules, connected
 to actual optional native planning, are described in [DEPENDENCY_ANALYSIS.md](DEPENDENCY_ANALYSIS.md).
 
-Shared name binding and bare-output validation use an immutable catalog during
+Shared name binding, bare-output and direct qualified-field validation use an immutable catalog during
 optional native planning; see [REFERENCE_BINDING.md](REFERENCE_BINDING.md).
 
 ## Boundaries
