@@ -86,6 +86,119 @@ def grouped_count_source(rows=None):
 class InstalledAggregatePlanning(unittest.TestCase):
     """The native metadata service and retained default planner obey independent expectations."""
 
+    def test_foreign_grouped_count_is_invalid_before_host_effects(self):
+        """REQ-0329 is known from the row driver and needs neither activation nor schemas."""
+        for relation in ("OTHER", "ABSENT"):
+            for argument in ("*", "V"):
+                expr = f"COUNT({relation}.{argument})"
+                spec = grouped_count_spec()
+                derivations = dict(spec.rows[0].derivations)
+                derivations["PRESENT"] = r.expression({"aggregate": {"expr": expr}})
+                spec = spec.model_copy(
+                    update={
+                        "input": {
+                            **spec.input,
+                            "OTHER": r.DatasetSource(path="other.csv"),
+                        },
+                        "rows": [
+                            spec.rows[0].model_copy(update={"derivations": derivations})
+                        ],
+                    }
+                )
+                reference = execute_with_source_provider(
+                    spec,
+                    lambda _: {
+                        **grouped_count_source(),
+                        "OTHER": grouped_count_source()["SRC"],
+                    },
+                )
+                for project in (False, True):
+                    with (
+                        self.subTest(expr=expr, project=project),
+                        patch.object(
+                            r.native_datasets,
+                            "activate_project",
+                            side_effect=AssertionError("activation"),
+                        ),
+                    ):
+                        run = (
+                            r.native_datasets.execute_with_project_functions(
+                                spec,
+                                lambda _: self.fail("source"),
+                                r.ROOT / "specification-functions" / "python",
+                                r.SCHEMA,
+                            )
+                            if project
+                            else r.native_datasets.execute_with_source_provider(
+                                spec, lambda _: self.fail("source")
+                            )
+                        )
+                        self.assertEqual(run.result.status, "failure")
+                        self.assertEqual(run.result.diagnostics, reference.diagnostics)
+                        self.assertEqual(
+                            [
+                                (
+                                    d.condition,
+                                    d.requirement,
+                                    d.spec_paths,
+                                    dict(d.context),
+                                )
+                                for d in run.result.diagnostics
+                            ],
+                            [
+                                (
+                                    "invalid_aggregate_context",
+                                    "REQ-0329",
+                                    ("rows[0].derivations.PRESENT.aggregate",),
+                                    {
+                                        "expr": expr,
+                                        "reason": f"a grouped row aggregate reads 'SRC', not {relation!r}",
+                                    },
+                                )
+                            ],
+                        )
+                        self.assertEqual(run.result.handler_counts, ())
+                        self.assertEqual(run.verifications, ())
+
+    def test_count_binding_uses_its_row_driver(self):
+        """Input order never selects the driver; unsupported multiple drivers stay unsupported."""
+        spec = grouped_count_spec()
+        spec = spec.model_copy(
+            update={"input": {"OTHER": r.DatasetSource(path="other.csv"), **spec.input}}
+        )
+        result = r.native_datasets.execute_with_source_provider(
+            spec,
+            lambda _: {
+                **grouped_count_source(),
+                "OTHER": grouped_count_source([])["SRC"],
+            },
+        ).result
+        self.assertEqual(result.status, "success")
+        self.assertEqual(
+            r.render_artifact(result.artifact), b"K,RECORDS,PRESENT\n2,2,1\n1,1,0\n"
+        )
+        second = spec.rows[0].model_copy(
+            update={
+                "id": "other",
+                "dataset": "OTHER",
+                "group_by": ["OTHER.K"],
+                "derivations": {
+                    "K": r.expression({"source": "OTHER.K"}),
+                    "RECORDS": r.expression({"aggregate": {"expr": "COUNT(OTHER.*)"}}),
+                    "PRESENT": r.expression({"aggregate": {"expr": "COUNT(OTHER.V)"}}),
+                },
+            }
+        )
+        spec = spec.model_copy(update={"rows": [*spec.rows, second]})
+        result = r.native_datasets.execute_with_source_provider(
+            spec, lambda _: self.fail("source")
+        ).result
+        self.assertEqual(result.status, "unsupported")
+        self.assertIn(
+            ("multiple_row_drivers", "rows"),
+            [(f.operation, f.spec_path) for f in result.features],
+        )
+
     def test_grouped_count_execution_against_authored_csv(self):
         """Actual native execution counts records and present text without reference evaluation."""
         spec = grouped_count_spec()

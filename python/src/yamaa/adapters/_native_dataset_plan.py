@@ -184,6 +184,7 @@ def admit(specification, *, allow_functions=False):
         allow_source_filter=False,
         allow_row_lookup=False,
         keyed_nonkey=False,
+        grouped_driver=None,
     ):
         """Admit syntax without evaluating literals or converting output values."""
         if "unconvertible" in declaration.model_fields_set:
@@ -460,6 +461,32 @@ def admit(specification, *, allow_functions=False):
                 )
             ):
                 reject("aggregate_scope_or_expression", path)
+            elif ast["name"] == "COUNT":
+                argument = ast["argument"]
+                relation = (
+                    argument["dataset"]
+                    if argument["kind"] == "star"
+                    else argument["name"].split(".", 1)[0]
+                )
+                if relation != grouped_driver:
+                    # This context error is independent of the source schema.
+                    # Retain REQ-0329 instead of running activation or loading
+                    # data merely to discover the same invalid grouped read.
+                    diagnostics.append(
+                        ExecutionDiagnostic(
+                            phase="validation",
+                            condition="invalid_aggregate_context",
+                            spec_paths=(path,),
+                            requirement="REQ-0329",
+                            context={
+                                "expr": payload["expr"],
+                                "reason": (
+                                    f"a grouped row aggregate reads {grouped_driver!r}, "
+                                    f"not {relation!r}"
+                                ),
+                            },
+                        )
+                    )
         else:
             reject(operation, path)
 
@@ -485,6 +512,7 @@ def admit(specification, *, allow_functions=False):
                 declaration,
                 f"rows[{index}].derivations.{name}",
                 row.group_by is not None,
+                grouped_driver=row.dataset or primary,
                 allow_row_lookup=True,
             )
     for column in specification.columns:
