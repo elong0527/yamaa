@@ -17,6 +17,8 @@ from yamaa.expressions.core import (
     Resolver,
 )
 from yamaa.models.values import (
+    INT64_MAX,
+    INT64_MIN,
     MISSING,
     ConditionResult,
     DateTimeValue,
@@ -467,7 +469,28 @@ def _operand(node: PredicateAst, resolver: Resolver) -> OperandResult:
         if value_type == "str":
             return normalize_runtime_value(node["value"])
         if value_type == "int":
-            return normalize_runtime_value(int(node["value"], 10))
+            written = node["value"]
+            # Mirror the numeric evaluator's host-digit-limit guard: refuse
+            # before constructing an unbounded host integer, keeping
+            # insignificant zeros out of both the conversion and the
+            # diagnostic text. Shorter out-of-range literals still fall
+            # through to the i64 range check.
+            digits = written.lstrip("+-").lstrip("0") or "0"
+            canonical = ("-" if written.startswith("-") else "") + digits
+            if len(digits) > 19:
+                return ConditionResult(
+                    condition=RuntimeCondition(
+                        phase="derivation",
+                        condition="integer_overflow",
+                        context={
+                            "value": canonical,
+                            "minimum": INT64_MIN,
+                            "maximum": INT64_MAX,
+                        },
+                        requirement="REQ-0434",
+                    )
+                )
+            return normalize_runtime_value(int(canonical, 10))
         if value_type == "float":
             return normalize_runtime_value(float(node["value"]))
         try:

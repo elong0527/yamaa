@@ -327,3 +327,22 @@ def test_str_detect_is_not_a_predicate_function() -> None:
 def test_bare_str_contains_without_parens_stays_an_identifier() -> None:
     with pytest.raises(PredicateError):
         parse_predicate("str_contains")
+
+
+def test_a_predicate_integer_literal_beyond_the_host_digit_limit_is_a_structured_condition() -> (
+    None
+):
+    """Long literals report integer_overflow like the numeric evaluator (REQ-0434)."""
+    result = _evaluate(f"AVAL = {'9' * 5000}", {"AVAL": 1})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "derivation"
+    assert result.condition.condition == "integer_overflow"
+    assert result.condition.requirement == "REQ-0434"
+
+
+def test_a_predicate_integer_literal_of_insignificant_zeros_still_evaluates() -> None:
+    """Zero-stripping keeps long all-zero literals inside the host digit limit."""
+    assert _evaluate(f"AVAL = {'0' * 5000}", {"AVAL": 0}) == PredicateValue(
+        value=TruthValue.TRUE
+    )
