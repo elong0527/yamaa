@@ -1,9 +1,20 @@
 name: R package tests
 
 on:
+
   push:
     branches: [main]
+    paths:
+      - 'R/**'
+      - '.github/workflows/r.yml'
   pull_request:
+    paths:
+      - 'R/**'
+      - '.github/workflows/r.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

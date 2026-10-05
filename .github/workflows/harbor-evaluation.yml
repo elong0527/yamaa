@@ -30,6 +30,10 @@ on:
       - 'python/uv.lock'
       - '.github/workflows/harbor-evaluation.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
