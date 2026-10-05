@@ -2,7 +2,8 @@
 
 Rust owns all admitted derivation, conversion, grouping and table checks. The
 existing Python loader/planner/source and artifact adapters are temporary ports;
-this interface does not activate environments, publish files or run workflows.
+Project execution explicitly activates verified bindings before source IO. This
+interface does not publish files or run workflows.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 import polars as pl
 import pyarrow as pa
@@ -25,6 +27,13 @@ from yamaa.adapters._native_dataset_plan import (
     primary_source,
 )
 from yamaa.adapters._native_dataset_report import condition, observations
+from yamaa.adapters._native_project_functions import (
+    NATIVE_ACTIVATION_CACHE,
+    NativeActivationCache,
+    activate_project,
+)
+from yamaa.functions.artifact import ArtifactResolver
+from yamaa.functions.errors import FunctionActivationError
 from yamaa.io import (
     ArtifactError,
     LoadedDataset,
@@ -195,11 +204,38 @@ def execute_with_source_provider(
     callbacks, implicit backend fallback, file publication or expected-file reads.
     Native transport/resource errors propagate separately from semantic failures.
     """
+    return _execute(specification, source_provider)
+
+
+def execute_with_project_functions(
+    specification: Specification,
+    source_provider: SourceProvider,
+    project_root: str | Path,
+    schema_root: str | Path,
+    *,
+    resolver: ArtifactResolver | None = None,
+    cache: NativeActivationCache | None = NATIVE_ACTIVATION_CACHE,
+) -> NativeDatasetRun:
+    """Activate a pinned project through native invocation before reading sources.
+
+    The host loads environments, verifies artifacts and compares activation
+    vectors. Rust owns each invocation and all admitted dataset derivations.
+    Reference activation cache entries cannot qualify this optional backend.
+    """
+    return _execute(
+        specification,
+        source_provider,
+        lambda spec: activate_project(spec, project_root, schema_root, resolver, cache),
+    )
+
+
+def _execute(specification, source_provider, prepare_functions=None):
+    """Capture and admit a whole run before activating callbacks or reading data."""
     # Frozen Pydantic models still contain mutable lists/dictionaries. Retain
     # the admitted run independently of caller/provider mutations during IO.
     specification = specification.model_copy(deep=True)
     try:
-        admit(specification)
+        admit(specification, allow_functions=prepare_functions is not None)
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
     except UnsupportedPlanningError as error:
@@ -391,6 +427,22 @@ def execute_with_source_provider(
                 UnsupportedFeature(operation="native_multi_source", spec_path="input"),
             )
         )
+    if prepare_functions is not None:
+        required.append(
+            (
+                "host_functions",
+                UnsupportedFeature(operation="native_host_functions", spec_path="$"),
+            )
+        )
+        if not specification.rows:
+            required.append(
+                (
+                    "function_source_collection",
+                    UnsupportedFeature(
+                        operation="native_function_source_collection", spec_path="$"
+                    ),
+                )
+            )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
@@ -408,6 +460,15 @@ def execute_with_source_provider(
         execute = getattr(yamaa_native, "execute_dataset_sources", None)
         if not callable(execute):
             raise TypeError("native execute_dataset_sources must be callable")
+    functions = None
+    if prepare_functions is not None:
+        execute = getattr(yamaa_native, "execute_dataset_functions", None)
+        if not callable(execute):
+            raise TypeError("native execute_dataset_functions must be callable")
+        try:
+            functions = prepare_functions(specification)
+        except FunctionActivationError as error:
+            return _failure(error.diagnostics)
     try:
         sources = source_provider(
             {
@@ -431,7 +492,13 @@ def execute_with_source_provider(
             )
         )
     try:
-        plan = plan_execution(specification, sources, supported_operations=OPERATIONS)
+        plan = plan_execution(
+            specification,
+            sources,
+            supported_operations=OPERATIONS | {"function"}
+            if functions is not None
+            else OPERATIONS,
+        )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
     except UnsupportedPlanningError as error:
@@ -447,7 +514,7 @@ def execute_with_source_provider(
         if name != dataset
     }
     try:
-        lowered, declaration_error = lower(plan, source, secondary)
+        lowered, declaration_error = lower(plan, source, secondary, functions=functions)
     except UnsupportedPlanningError as error:
         return NativeDatasetRun(
             ExecutionUnsupported(features=error.features, handler_counts=())
@@ -458,9 +525,18 @@ def execute_with_source_provider(
             request,
             _source_ipc(source),
             [_source_ipc(table) for table in secondary.values()],
+            list(functions.callbacks),
         )
-        if secondary
-        else execute(request, _source_ipc(source))
+        if functions is not None
+        else (
+            execute(
+                request,
+                _source_ipc(source),
+                [_source_ipc(table) for table in secondary.values()],
+            )
+            if secondary
+            else execute(request, _source_ipc(source))
+        )
     )
     envelope = json.loads(encoded)
     if envelope["protocol"] != "dataset/1":

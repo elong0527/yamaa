@@ -39,7 +39,11 @@ def identity(row, keys):
 def condition(observed, keys):
     """Map an engine condition and optional completed identity to public context."""
     diagnostic = observed["diagnostic"]
-    context = {name: scalar(value) for name, value in diagnostic["context"].items()}
+    context = (
+        dict(diagnostic["context"])
+        if "applicable_handler" in diagnostic
+        else {name: scalar(value) for name, value in diagnostic["context"].items()}
+    )
     if observed["identity"] is not None:
         context["keys"] = [identity(observed["identity"], keys)]
     if observed.get("partition") is not None:

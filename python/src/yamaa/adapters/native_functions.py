@@ -17,6 +17,13 @@ def invoke_function(request: str, callback: Callable[..., object]) -> str:
     """
     import yamaa_native
 
+    return yamaa_native.invoke_function(request, adapt_callback(callback))
+
+
+def adapt_callback(callback: Callable[..., object]) -> Callable[..., object]:
+    """Capture one callable and preserve designated temporal result representations."""
+    import yamaa_native
+
     if not callable(callback):
         raise TypeError("callback must be callable")
     make_temporal = yamaa_native._temporal_result
@@ -39,4 +46,4 @@ def invoke_function(request: str, callback: Callable[..., object]) -> str:
             return make_temporal(None, None, None)
         return make_temporal(kind, fields, precision)
 
-    return yamaa_native.invoke_function(request, adapted)
+    return adapted

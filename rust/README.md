@@ -458,7 +458,9 @@ validates exact signatures/defaults, preserves missing short-circuit and callbac
 order, and checks results before conversion. A synchronous already-bound port
 keeps host errors opaque and results owned. Independent truth runs through Rust
 and the real Python reference; installed Python/R adapters now call this service.
-Full environment activation remains pending.
+The optional Python project frontend now runs activation vectors through this
+invoker over shared verified artifact bindings. Environment loading and vector
+comparison remain host ports; full shared environment activation remains pending.
 
 The installed Python [function/1 callback API](FUNCTION_TRANSPORT.md) now admits
 bounded normalized requests and calls an explicit Python callable on the current

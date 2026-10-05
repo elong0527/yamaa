@@ -45,7 +45,51 @@ source ingestion; Rust admits the complete bound request before IPC decoding.
 The admitted specification is copied before provider effects, and the provider
 receives separate source declarations so nested mutable model data cannot replace
 the plan during IO. There is one provider invocation and one native dataset invocation, with no fallback,
-reference evaluation, reference verification or callback execution.
+reference evaluation or reference verification. Project callbacks require the
+separate explicit project entrypoint below.
+
+## Optional project functions
+
+`native_datasets.execute_with_project_functions(specification, source_provider,
+project_root, schema_root, *, resolver=None, cache=...)` additionally admits direct
+project-function expressions in record templates and non-key column derivations.
+The last two arguments are keyword-only. It returns the same `NativeDatasetRun`.
+The ordinary `execute_with_source_provider` still refuses function expressions.
+
+Before source IO, the project entrypoint checks native capabilities, loads and
+validates the environment and calls, resolves the pinned artifact, validates its
+binding signatures, and runs activation vectors through Rust's `function/1`
+invoker. It shares the existing host artifact-binding and vector-comparison ports;
+it does not use reference function evaluation. Conformance comparison still uses
+the existing host comparator, including its declared decimal float comparison.
+This does not qualify EXP/LN/POWER or a new numerical policy.
+
+Only `NativeActivationCache` success can skip native vectors. A reference
+`ActivationCache` is rejected. Passing `cache=None` reruns vectors; the native
+cache keys use the existing canonical identities without content hashing. Failed
+or interrupted activation never records success or calls the source provider.
+
+The activated signatures and adapted callables are captured for the run. Arguments
+retain authored order, exact scalar types, omitted defaults and explicit missing.
+Primary-source arguments on non-key key-grain columns collect all feeding records;
+ambiguity fails before invocation. Record templates read the current source row,
+and unqualified references read completed output columns. Known DateValue and
+DateTimeValue returns use the existing temporal adapter. Rust owns invocation,
+result admission, conversion and handler accounting. Fatal callback conditions
+retain their function context and output identity and cannot be caught by an
+unconvertible handler. Earlier callback effects are never retried or rolled back.
+
+Function calls in specifications with grouped templates, key-construction calls
+and secondary/named-intermediate arguments remain explicitly unsupported before
+activation/source effects. General
+transport and runtime resource limits remain applicable. Installed tests replay
+the unchanged `schema-functions` expected CSV and independently authored complete
+callback traces, activation/cache/failure ordering and record templates. They
+disable reference invocation and dataset evaluation. R continues to expose the
+typed callback bridge; it has no corresponding normalized-specification project
+frontend in this slice. Shared specification compilation, workflow integration
+and release qualification remain open; Python stays default and
+`execution_supported=false`.
 
 The admitted record/group subset uses one driver and explicit row templates, direct
 source or completed-column reads, scalar literals, and bare grouped `SUM`/`MEAN`

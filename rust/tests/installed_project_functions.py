@@ -1,0 +1,333 @@
+"""Installed native project activation and dataset execution over unchanged R018 truth."""
+
+import json
+import shutil
+import tempfile
+import unittest
+from contextlib import ExitStack
+from pathlib import Path
+from unittest.mock import patch
+
+import polars as pl
+import yamaa
+import yamaa_native
+from yamaa.adapters.native_datasets import (
+    NativeActivationCache,
+    execute_with_project_functions,
+    execute_with_source_provider,
+)
+from yamaa.functions.activation import ActivationCache
+from yamaa.functions.artifact import LoadedArtifact
+from yamaa.functions.execution import activate_project_functions
+from yamaa.functions.execution import (
+    execute_with_project_functions as reference_project,
+)
+from yamaa.io import ProjectResources, load_source_tables, render_artifact
+from yamaa.models import TypedTable
+from yamaa.specification import load_specification
+
+import yaml
+
+ROOT = Path(__file__).parent
+CASE = ROOT / "specification-functions"
+SCHEMA = ROOT / "specification-yaml"
+# Independent authored callback truth: four short-circuit vectors never invoke.
+VECTORS = [
+    (10.0, 4.0, 2, 0.0, False),
+    (0.0, 5.0, 2, 0.0, False),
+    (7.0, 2.0, 2, 0.0, False),
+    (9.0, 4.0, 2, None, False),
+    (1.0, 2.0, 2, 0.0, True),
+    (1.0, 2.0, 2, 0.0, False),
+]
+VALUES = [(10.0, 4.0), (1.0, 3.0), (7.0, 2.0), (0.0, 5.0), (9.0, 4.0)]
+CALLS = (
+    [(n, d, 2, 0.0, False) for n, d in VALUES] * 2
+    + [(n, d, 1, 0.0, True) for n, d in VALUES]
+    + [
+        (n, d, 2, a, False)
+        for (n, d), a in zip(VALUES, [None, 0.5, 0.25, None, -0.5], strict=True)
+    ]
+)
+
+
+class InstalledProjectFunctions(unittest.TestCase):
+    """Prove Rust owns invocation, with activation-before-data and no reference fallback."""
+
+    def setUp(self):
+        """Resolve the original schema-normalized benchmark without opening source data."""
+        self.spec = load_specification(CASE / "spec.yaml", SCHEMA).specification
+        self.events = []
+        self.read = False
+        self.mode = None
+        original = LoadedArtifact.load
+
+        def load(artifact, call):
+            target = original(artifact, call)
+
+            def observed(
+                numerator, denominator, decimals=2, adjust=None, as_percent=False
+            ):
+                self.events.append(
+                    (numerator, denominator, decimals, adjust, as_percent)
+                )
+                if self.mode == "activation_bad" or (
+                    self.read and self.mode == "bad_result"
+                ):
+                    return "wrong type"
+                if self.read and self.mode == "raised":
+                    raise ValueError("project callback failed")
+                if self.mode == "control":
+                    raise KeyboardInterrupt("project interrupted")
+                return target(numerator, denominator, decimals, adjust, as_percent)
+
+            return observed
+
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(LoadedArtifact, "load", load))
+
+    def provider(self, declarations):
+        """Observe the source boundary and read the unchanged CSV through the host adapter."""
+        self.events.append("source")
+        self.read = True
+        return load_source_tables(declarations, ProjectResources(CASE))
+
+    def execute(self, *, spec=None, cache=None, provider=None, project=None):
+        """Forbid reference evaluation throughout native activation and dataset execution."""
+        with ExitStack() as stack:
+            for target in (
+                "yamaa.functions.invocation.BoundFunction.invoke",
+                "yamaa.runtime.executor.execute_specification",
+                "yamaa.runtime.lifecycle.ExpressionDispatcher.evaluate",
+                "yamaa.runtime.lifecycle.convert_value",
+            ):
+                stack.enter_context(
+                    patch(target, side_effect=AssertionError("reference fallback"))
+                )
+            return execute_with_project_functions(
+                self.spec if spec is None else spec,
+                self.provider if provider is None else provider,
+                CASE / "python" if project is None else project,
+                SCHEMA,
+                cache=cache,
+            )
+
+    def assert_csv(self, run):
+        """Use committed independent bytes, not a reference-generated replacement golden."""
+        self.assertEqual(run.result.status, "success")
+        self.assertEqual(
+            render_artifact(run.result.artifact),
+            (CASE / "expected/test.csv").read_bytes(),
+        )
+
+    def test_unchanged_csv_and_entire_callback_trace(self):
+        self.assertNotIn("/python/src/", yamaa.__file__)
+        self.assert_csv(self.execute())
+        self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
+
+    def test_native_cache_only_skips_vectors(self):
+        cache = NativeActivationCache()
+        for expected in (VECTORS + ["source"] + CALLS, ["source"] + CALLS):
+            self.events.clear()
+            self.assert_csv(self.execute(cache=cache))
+            self.assertEqual(self.events, expected)
+        cache.clear()
+        self.events.clear()
+        self.assert_csv(self.execute(cache=cache))
+        self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
+
+    def test_reference_activation_cannot_qualify_native(self):
+        cache = ActivationCache()
+        activate_project_functions(self.spec, CASE / "python", SCHEMA, cache=cache)
+        self.events.clear()
+        with self.assertRaisesRegex(TypeError, "NativeActivationCache"):
+            self.execute(cache=cache)
+        self.assertEqual(self.events, [])
+        self.assert_csv(self.execute(cache=NativeActivationCache()))
+        self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
+
+    def test_failed_activation_does_not_read_or_cache(self):
+        cache = NativeActivationCache()
+        self.mode = "activation_bad"
+        failed = self.execute(cache=cache)
+        self.assertEqual(failed.result.status, "failure")
+        self.assertEqual(
+            failed.result.diagnostics[0].condition, "function_conformance_failed"
+        )
+        self.assertEqual(self.events, VECTORS[:1])
+        self.mode = None
+        self.events.clear()
+        self.assert_csv(self.execute(cache=cache))
+        self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
+
+    def test_control_exception_escapes_without_cache_or_source(self):
+        cache = NativeActivationCache()
+        self.mode = "control"
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute(cache=cache)
+        self.assertEqual(self.events, VECTORS[:1])
+        self.mode = None
+        self.events.clear()
+        self.assert_csv(self.execute(cache=cache))
+        self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
+
+    def test_missing_capability_never_resolves_or_reads(self):
+        with patch.object(
+            yamaa_native,
+            "dataset_capabilities",
+            return_value=json.dumps(
+                {"protocol": "dataset/1", "features": ["key_grain"]}
+            ),
+        ):
+            result = self.execute()
+        self.assertEqual(result.result.status, "unsupported")
+        self.assertEqual(self.events, [])
+
+    def test_bad_call_precedes_activation_and_source(self):
+        self.spec.columns[1].derivation.value.root["function"]["contract_version"] = (
+            "9.0.0"
+        )
+        result = self.execute()
+        self.assertEqual(
+            result.result.diagnostics[0].condition, "function_contract_mismatch"
+        )
+        self.assertEqual(self.events, [])
+
+    def test_ordinary_api_still_refuses_project_callbacks(self):
+        result = execute_with_source_provider(self.spec, self.provider)
+        self.assertEqual(result.result.status, "unsupported")
+        self.assertEqual(self.events, [])
+
+    def test_data_callback_failures_are_fatal_with_original_identity(self):
+        for mode, condition in (
+            ("bad_result", "invalid_function_result"),
+            ("raised", "function_call_failed"),
+        ):
+            with self.subTest(mode=mode):
+                self.events.clear()
+                self.read = False
+                self.mode = mode
+                result = self.execute()
+                self.assertEqual(result.result.status, "failure")
+                diagnostic = result.result.diagnostics[0]
+                self.assertEqual(diagnostic.condition, condition)
+                self.assertEqual(
+                    diagnostic.spec_paths, ("columns.RATIO.derivation.function",)
+                )
+                self.assertEqual(diagnostic.context["keys"], [{"ID": "R1"}])
+                self.assertEqual(self.events, VECTORS + ["source"] + CALLS[:1])
+                self.read = False
+                reference = reference_project(
+                    self.spec, self.provider, CASE / "python", SCHEMA, cache=None
+                )
+                self.assertEqual(result.result.diagnostics, reference.diagnostics)
+
+    def test_provider_cannot_replace_admitted_expression_or_binding(self):
+        def provider(declarations):
+            self.spec.columns[1].derivation.value.root.clear()
+            # A later module mutation cannot replace an already captured target.
+            with patch.object(
+                LoadedArtifact, "load", side_effect=AssertionError("late binding")
+            ):
+                return self.provider(declarations)
+
+        self.assert_csv(self.execute(provider=provider))
+        self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
+
+    def test_changed_vector_identity_invalidates_native_cache(self):
+        cache = NativeActivationCache()
+        self.assert_csv(self.execute(cache=cache))
+        self.events.clear()
+        self.read = False
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "project"
+            shutil.copytree(CASE / "python", project)
+            path = project / "conformance/project_ratio.yaml"
+            vectors = yaml.safe_load(path.read_text())
+            vectors["cases"][0]["result"] = 99.0
+            path.write_text(yaml.safe_dump(vectors, sort_keys=False))
+            result = self.execute(cache=cache, project=project)
+        self.assertEqual(
+            result.result.diagnostics[0].condition, "function_conformance_failed"
+        )
+        self.assertEqual(self.events, VECTORS[:1])
+
+    def test_later_ambiguous_argument_precedes_missing_short_circuit(self):
+        def provider(declarations):
+            sources = self.provider(declarations)
+            table = sources["SOURCE"].table
+            # The first argument is missing on both feeders; the later argument
+            # must still report its two distinct values before any data callback.
+            first = table.frame.head(1).with_columns(
+                pl.lit(None, dtype=pl.Float64).alias("NUM")
+            )
+            second = first.with_columns(pl.lit(5.0).alias("DEN"))
+            return {
+                "SOURCE": TypedTable(columns=table.columns, frame=first.vstack(second))
+            }
+
+        result = self.execute(provider=provider)
+        diagnostic = result.result.diagnostics[0]
+        self.assertEqual(diagnostic.condition, "multiple_values_per_key")
+        self.assertEqual(
+            diagnostic.context,
+            {"identifier": "SOURCE.DEN", "value_count": 2, "keys": [{"ID": "R1"}]},
+        )
+        self.assertEqual(self.events, VECTORS + ["source"])
+
+    def test_record_templates_preserve_row_major_callback_order(self):
+        document = yaml.safe_load((CASE / "spec.yaml").read_text())
+        document["rows"] = [
+            {
+                "id": "records",
+                "dataset": "SOURCE",
+                "derivations": {
+                    column["name"]: column.pop("derivation")
+                    for column in document["columns"][1:]
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "spec.yaml"
+            path.write_text(yaml.safe_dump(document, sort_keys=False))
+            spec = load_specification(path, SCHEMA).specification
+        self.assert_csv(self.execute(spec=spec))
+        expected = [
+            CALLS[offset + row] for row in range(5) for offset in (0, 5, 10, 15)
+        ]
+        self.assertEqual(self.events, VECTORS + ["source"] + expected)
+
+    def test_unqualified_scopes_are_refused_before_activation(self):
+        for scenario in ("key", "secondary", "grouped"):
+            with self.subTest(scenario=scenario):
+                spec = self.spec.model_copy(deep=True)
+                if scenario == "key":
+                    spec = spec.model_copy(update={"keys": ["RATIO"]})
+                elif scenario == "secondary":
+                    spec.columns[1].derivation.value.root["function"]["args"][
+                        "numerator"
+                    ] = "OTHER.NUM"
+                else:
+                    document = yaml.safe_load((CASE / "spec.yaml").read_text())
+                    document["rows"] = [
+                        {
+                            "id": "groups",
+                            "dataset": "SOURCE",
+                            "group_by": ["SOURCE.ID"],
+                            "derivations": {
+                                column["name"]: column.pop("derivation")
+                                for column in document["columns"][1:]
+                            },
+                        }
+                    ]
+                    with tempfile.TemporaryDirectory() as directory:
+                        path = Path(directory) / "spec.yaml"
+                        path.write_text(yaml.safe_dump(document, sort_keys=False))
+                        spec = load_specification(path, SCHEMA).specification
+                self.assertEqual(self.execute(spec=spec).result.status, "unsupported")
+                self.assertEqual(self.events, [])
+
+
+if __name__ == "__main__":
+    unittest.main()
