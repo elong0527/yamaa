@@ -9,8 +9,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import yaml
-
 WORKSPACE = Path(__file__).resolve().parents[1]
 
 
@@ -23,6 +21,8 @@ def exact(accepted=True, *, groups=0, full=False, match=None):
 
 def cases():
     """Combine committed YAML truth, authored edge cases and independent set/count cases."""
+    import yaml
+
     observations = []
     contract = yaml.safe_load(
         (WORKSPACE.parent / "yaml/conformance/regex.yaml").read_text(encoding="ascii")
@@ -158,6 +158,7 @@ def main():
             for _, p, s, _, _ in observations
         ),
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=True,
     )

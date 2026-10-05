@@ -73,8 +73,14 @@ of 64. Flat concatenations and repetition use explicit tasks rather than native
 recursion; only bounded group parsing and nested assertions recurse.
 
 Each match has a fresh budget shared by every search position, backtrack and
-assertion. Defaults allow 1,048,576 subject bytes, 1,000,000 work units and
-1,000,000 cumulative logical state cells. Scalar indexing and capture/task copies
+assertion. Default independent ceilings are 1,048,576 subject bytes, 1,000,000
+work units and 1,000,000 cumulative logical state cells. Passing the byte check
+does not promise that indexing or matching fits either remaining budget: scalar
+indexing alone costs `2 * scalar_count + 1` cells, so the default storage cap
+refuses an ASCII subject above 499,999 scalars before matching. Backtracking and
+capture/task copies can exhaust budgets on much smaller inputs. Callers can
+raise individual limits explicitly; the default policy does not guarantee any
+maximum subject size will match under every pattern. Scalar indexing and capture/task copies
 are charged before allocation. Cells count logical slots rather than allocator
 capacity or process-wide memory. Allocator failure, caller-owned input allocation,
 concurrent calls and total process memory are outside this policy. Resource

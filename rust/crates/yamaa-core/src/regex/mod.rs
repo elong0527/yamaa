@@ -55,8 +55,11 @@ pub enum CompileError {
 }
 
 /// Per-call budgets span every candidate position, backtrack and lookaround.
+/// These are independent ceilings, not a guarantee that every admitted input
+/// fits the remaining work/storage budgets. Callers may raise them separately.
 #[derive(Clone, Copy, Debug)]
 pub struct MatchLimits {
+    /// Input byte ceiling checked before scalar indexing or matching.
     pub subject_bytes: usize,
     pub work: usize,
     /// Cumulative logical task/capture/scalar cells created or copied.

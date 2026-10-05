@@ -323,3 +323,38 @@ fn large_flat_patterns_and_cumulative_assertion_work() {
         })
     ));
 }
+
+/// Byte admission never promises sufficient storage; callers can raise a separate cap.
+#[test]
+fn independent_subject_and_storage_ceilings() {
+    let limits = MatchLimits::default();
+    let subject = "a".repeat(limits.subject_bytes);
+    let compiled = pattern("a");
+    assert_eq!(
+        compiled.search(&subject, limits),
+        Err(MatchError {
+            resource: Resource::StateCells,
+            limit: limits.state_cells,
+        })
+    );
+    let sufficient = MatchLimits {
+        state_cells: 3 * limits.subject_bytes,
+        ..limits
+    };
+    assert_eq!(
+        compiled
+            .search(&subject, sufficient)
+            .unwrap()
+            .unwrap()
+            .groups,
+        vec![Some("a")]
+    );
+    let oversized = subject + "a";
+    assert_eq!(
+        compiled.search(&oversized, sufficient),
+        Err(MatchError {
+            resource: Resource::SubjectBytes,
+            limit: limits.subject_bytes,
+        })
+    );
+}

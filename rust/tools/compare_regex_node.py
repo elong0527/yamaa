@@ -126,6 +126,7 @@ def main():
         cwd=WORKSPACE,
         input="".join(json.dumps(request) + "\n" for request in observations),
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=True,
     )
@@ -134,7 +135,10 @@ def main():
 
     expected = json.loads(
         subprocess.check_output(
-            [args.node, "-e", js], input=json.dumps(observations), text=True
+            [args.node, "-e", js],
+            input=json.dumps(observations),
+            text=True,
+            encoding="utf-8",
         )
     )
     assert len(actual) == len(expected) == len(observations)
