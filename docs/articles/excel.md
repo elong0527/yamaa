@@ -54,9 +54,9 @@ verifications:                 # <- no cell for this either
   - unique:
       columns: [STUDYID, USUBJID]
   - implies:
-      id: bmi-missing-only-without-usable-height
+      id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
-      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0"
+      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
 ```
 
 ### What the two tables above have no cell for
@@ -73,7 +73,7 @@ what has no Excel counterpart at all. Four things:
    jobs. yamaa splits them into `columns` order and `output.columns`.
 4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
    but nothing executes it. The `implies` rule -- "BMI is empty only when
-   height is unusable" -- normally survives as a sentence in a review email.
+   height or weight is unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, every one of the eleven columns has a yamaa field --
 two live in governed submission metadata rather than in the derivation:
@@ -217,7 +217,7 @@ Excel:
 
 | Variable | Label | Type | Length | Origin | Codelist | Comment |
 |---|---|---|---|---|---|---|
-| SEX | Sex | Char | 1 | Predecessor: DM.SEX | SEX | Map to M/F/U, case-insensitive; if not collected or unrecognised -> U |
+| SEX | Sex | Char | 1 | Predecessor: DM.SEX | SEX | Carry through as collected; if not collected -> U |
 | SEXN | Sex (N) | Num | 8 | Derived | | M=1, F=2, U=0 |
 | AGEGR1 | Pooled Age Group 1 | Char | 5 | Derived | AGEGR1 | <18 / 18-64 / >=65; UNKNOWN if AGE missing |
 
@@ -227,17 +227,28 @@ yamaa:
   - name: SEX
     type: str
     label: Sex
+    derivation:
+      first_available:
+        sources: [DM.SEX]
+        missing: U
     verifications:
       - not_missing: {}
       - allowed_values:
           values: [M, F, U]
+      - matches:
+          pattern: '^[MFU]$'
+
+  - name: SEXN
+    type: int
+    label: Sex (N)
     derivation:
       mapping:
-        source: DM.SEX
-        case_sensitive: false
-        dict: {M: M, F: F, U: U}
-        missing: U
-        unmapped: U
+        source: SEX
+        dict:
+          M: 1
+          F: 2
+          U: 0
+        missing: 0
 
   - name: AGEGR1
     type: str
@@ -252,10 +263,15 @@ yamaa:
 
 What changed:
 
-- Excel packs "if not collected -> U" and "if unrecognised -> U" into one
-  sentence. yamaa keeps them two conditions: `missing` answers "not
-  collected" and `unmapped` answers "unrecognised". A condition with no
-  handler stops the run instead of turning into a blank.
+- SEX needs no translation at all: `first_available` carries the collected
+  value through unchanged, and only the uncollected case needs a handler
+  (`missing: U`). The M=1/F=2/U=0 coding is a separate `mapping` on SEXN,
+  where the missing case repeats (`missing: 0`) and there is no
+  "unrecognised" branch to answer -- SEX is already constrained to three
+  values. Where a wording genuinely can surprise you, the same benchmark's
+  RACEN shows both handlers at once: `unmapped: 99` for a race the
+  dictionary does not know, `missing: null` for an empty one. A condition
+  with no handler stops the run instead of turning into a blank.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `submission.codelist` if you generate define.xml -- see
@@ -279,9 +295,9 @@ What changed:
 
 verifications:
   - implies:
-      id: bmi-missing-only-without-usable-height
+      id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
-      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0"
+      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
 ```
 
 What changed:
@@ -292,8 +308,9 @@ What changed:
 - **"rounded to 1 decimal" has no translation, on purpose.** A derivation does
   not round; decimal places are a project rendering setting. Rounding belongs
   to the TFL, not to the ADaM value.
-- The `implies` verification turns "BMI is empty exactly when height is
-  unusable" -- normally a note to the reviewer -- into an executable assertion.
+- The `implies` verification turns "BMI is empty exactly when height or weight
+  is unusable" -- normally a note to the reviewer -- into an executable
+  assertion.
 
 ### Example 3: Predecessor and the declared-key lookup
 
