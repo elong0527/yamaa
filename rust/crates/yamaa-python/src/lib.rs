@@ -5,6 +5,19 @@ mod reference_catalog;
 mod temporal_result;
 use pyo3::types::PyDict;
 
+/// Parse R010 numeric syntax through shared Rust without binding or execution.
+#[pyfunction]
+fn analyze_numeric(request: &str) -> PyResult<String> {
+    use yamaa_adapters::numeric_syntax::TransportError;
+    yamaa_adapters::numeric_syntax::analyze_numeric(request).map_err(|error| {
+        if error == TransportError::Internal {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        } else {
+            pyo3::exceptions::PyValueError::new_err(error.to_string())
+        }
+    })
+}
+
 /// Parse R013 aggregate syntax through shared Rust without binding or execution.
 #[pyfunction]
 fn analyze_aggregate(request: &str) -> PyResult<String> {
@@ -225,6 +238,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(scalar_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_aggregate, module)?)?;
+    module.add_function(wrap_pyfunction!(analyze_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;
     module.add_function(wrap_pyfunction!(execute_dataset, module)?)?;

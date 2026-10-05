@@ -32,6 +32,7 @@ from yamaa.adapters._native_dependencies import (
     bind_column_dependency_analyzer,
     bind_dependency_analyzer,
 )
+from yamaa.adapters._native_numeric_syntax import bind_numeric_analyzer
 from yamaa.adapters._native_project_functions import (
     NATIVE_ACTIVATION_CACHE,
     NativeActivationCache,
@@ -241,6 +242,7 @@ def _execute(specification, source_provider, prepare_functions=None):
     # the admitted run independently of caller/provider mutations during IO.
     specification = specification.model_copy(deep=True)
     aggregate_analyzer = None
+    numeric_analyzer = None
 
     def analyze_aggregate(text):
         """Capture syntax on first use while preserving source-independent admission."""
@@ -251,11 +253,21 @@ def _execute(specification, source_provider, prepare_functions=None):
             aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
         return aggregate_analyzer(text)
 
+    def analyze_numeric(text):
+        """Capture syntax on first use while preserving source-independent admission."""
+        nonlocal numeric_analyzer
+        if numeric_analyzer is None:
+            import yamaa_native
+
+            numeric_analyzer = bind_numeric_analyzer(yamaa_native)
+        return numeric_analyzer(text)
+
     try:
         admit(
             specification,
             allow_functions=prepare_functions is not None,
             aggregate_analyzer=analyze_aggregate,
+            numeric_analyzer=analyze_numeric,
         )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
@@ -268,6 +280,8 @@ def _execute(specification, source_provider, prepare_functions=None):
 
     if aggregate_analyzer is None:
         aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
+    if numeric_analyzer is None:
+        numeric_analyzer = bind_numeric_analyzer(yamaa_native)
     # Fail on a missing native API before the source provider runs.
     execute = yamaa_native.execute_dataset
     if not callable(execute):
@@ -576,6 +590,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             column_dependency_analyzer=column_dependency_analyzer,
             reference_compiler_factory=reference_compiler_factory,
             aggregate_analyzer=aggregate_analyzer,
+            numeric_analyzer=numeric_analyzer,
         )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
@@ -598,6 +613,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             secondary,
             functions=functions,
             aggregate_analyzer=aggregate_analyzer,
+            numeric_analyzer=numeric_analyzer,
         )
     except UnsupportedPlanningError as error:
         return NativeDatasetRun(

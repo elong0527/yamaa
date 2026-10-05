@@ -481,6 +481,33 @@ def _native_module(**members):
             }
         return json.dumps({"protocol": "aggregate-syntax/1", "outcome": outcome})
 
+    def analyze_numeric(request):
+        """Facade-only syntax double; installed tests forbid the reference parser."""
+        from yamaa.expressions.numeric import NumericError
+        from yamaa.planning.numeric_syntax import analyze_numeric as analyze_syntax
+
+        text = json.loads(request)["expression"]
+        try:
+            syntax = analyze_syntax(text)
+        except NumericError as error:
+            outcome = {
+                "status": "invalid",
+                "condition": error.condition,
+                "requirement": error.requirement,
+                "context": error.context,
+                "position": {
+                    "character": error.position,
+                    "byte": len(text[: error.position].encode()),
+                },
+            }
+        else:
+            outcome = {
+                "status": "parsed",
+                "ast": syntax.ast,
+                "identifiers": syntax.identifiers,
+            }
+        return json.dumps({"protocol": "numeric-syntax/1", "outcome": outcome})
+
     return SimpleNamespace(
         reference_capabilities=lambda: json.dumps(
             {
@@ -495,6 +522,7 @@ def _native_module(**members):
             }
         ),
         analyze_aggregate=analyze_aggregate,
+        analyze_numeric=analyze_numeric,
         analyze_dependencies=analyze,
         analyze_column_dependencies=analyze_columns,
         _compile_reference_catalog=compile_references,
