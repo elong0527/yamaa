@@ -124,11 +124,11 @@ Raw run-total milliseconds in repeat order, with no dropped samples:
 | schema-functions | native | 33.054, 33.490, 33.931, 32.977, 33.935 |
 | schema-functions | native-profile | 34.228, 33.375, 32.952, 32.419, 33.461 |
 
-In profiled samples, package-import medians were 351–356 ms and schema loading
-61–69 ms. The native call itself was 0.39–0.54 ms; derivation medians were
-0.033–0.094 ms and verification 0.001–0.012 ms. Project activation in the
-function fixture took 26.2 ms. Median peak RSS was 110.8–111.7 MiB for the
-reference and 125.5–127.6 MiB for ordinary native execution.
+In profiled samples, package-import medians were 351-356 ms and schema loading
+61-69 ms. The native call itself was 0.39-0.54 ms; derivation medians were
+0.033-0.094 ms and verification 0.001-0.012 ms. Project activation in the
+function fixture took 26.2 ms. Median peak RSS was 110.8-111.7 MiB for the
+reference and 125.5-127.6 MiB for ordinary native execution.
 
 Instrumentation deltas overlap ordinary sample variability here; they do not
 establish a stable overhead percentage. Native execution has no consistent
