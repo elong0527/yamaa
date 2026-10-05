@@ -91,6 +91,33 @@ fn strict_transport_admission() {
     ));
 }
 
+/// Omitted optional checks mean no type or phase restriction in either interface.
+#[test]
+fn omitted_validation_fields_preserve_wire_defaults() {
+    let mut data = request();
+    data["queries"] = json!([{"kind":"validate_output","name":"A","candidates":[]}]);
+    let expected = json!({"protocol":"reference-analysis/1","outcome":{
+        "status":"complete","results":[{"kind":"validation","diagnostic":null}]}});
+    let batch: Value =
+        serde_json::from_str(&analyze_references(&data.to_string()).unwrap()).unwrap();
+    assert_eq!(batch, expected);
+
+    let (catalog, _) = compile_reference_catalog(
+        &json!({"protocol":"reference-catalog/1","catalog":data["catalog"]}).to_string(),
+    )
+    .unwrap();
+    let prepared: Value = serde_json::from_str(
+        &catalog
+            .unwrap()
+            .analyze(
+                &json!({"protocol":"reference-queries/1","queries":data["queries"]}).to_string(),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(prepared, expected);
+}
+
 /// Metadata errors reject the whole batch; completed language outcomes are not partial output.
 #[test]
 fn invalid_catalog_and_context_then_fresh_query() {
