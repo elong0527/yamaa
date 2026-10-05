@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import yamaa_native
 from yamaa.adapters import native_datasets
+from yamaa.adapters._native_aggregate_syntax import bind_aggregate_analyzer
 from yamaa.adapters._native_dependencies import (
     bind_column_dependency_analyzer,
     bind_dependency_analyzer,
@@ -784,6 +785,11 @@ class InstalledReferences(unittest.TestCase):
             )
         with (
             patch.object(
+                reference_planning,
+                "analyze_aggregate",
+                side_effect=AssertionError("reference aggregate syntax"),
+            ),
+            patch.object(
                 reference_bindings,
                 "_bind_reference",
                 side_effect=AssertionError("reference binder"),
@@ -838,6 +844,7 @@ class InstalledReferences(unittest.TestCase):
                     yamaa_native
                 ),
                 reference_compiler_factory=bind_reference_compiler(yamaa_native),
+                aggregate_analyzer=bind_aggregate_analyzer(yamaa_native),
             )
 
     def test_suggestion_and_unknown_keep_exact_paths(self):

@@ -12,7 +12,6 @@ from yamaa.expressions import (
     NumericError,
     PredicateError,
     numeric_identifiers,
-    parse_aggregate_cached,
     parse_numeric_cached,
     parse_predicate,
     predicate_identifiers,
@@ -26,6 +25,7 @@ from yamaa.planning import (
     expression_path,
     preflight_execution,
 )
+from yamaa.planning.aggregate_syntax import analyze_aggregate
 
 NUMBERING = frozenset({"row_number", "rank"})
 WINDOW_VALUES = frozenset({"row_value", "previous_non_missing", "locf"})
@@ -55,12 +55,14 @@ def primary_source(specification):
     return specification.base or next(iter(specification.input))
 
 
-def admit(specification, *, allow_functions=False):
+def admit(specification, *, allow_functions=False, aggregate_analyzer=None):
     """Reject the entire unsupported vocabulary before requesting source tables.
 
     This accepts schema-normalized models, not arbitrary document dictionaries.
     Binding against actual source schemas remains a later planning operation.
     """
+    if aggregate_analyzer is None:
+        aggregate_analyzer = analyze_aggregate
     diagnostics = []
     unsupported = []
     filters = []
@@ -70,6 +72,7 @@ def admit(specification, *, allow_functions=False):
             supported_operations=OPERATIONS | {"function"}
             if allow_functions
             else OPERATIONS,
+            aggregate_analyzer=aggregate_analyzer,
         )
     except ExecutionPlanningError as error:
         diagnostics.extend(error.diagnostics)
@@ -433,7 +436,7 @@ def admit(specification, *, allow_functions=False):
                 )
                 return
             try:
-                ast = parse_aggregate_cached(payload["expr"])
+                ast = aggregate_analyzer(payload["expr"]).ast
             except AggregateError as error:
                 diagnostics.append(
                     ExecutionDiagnostic(
@@ -604,7 +607,7 @@ def literal(value):
     return {"str": value}
 
 
-def lower(plan, source, secondary=None, *, functions=None):
+def lower(plan, source, secondary=None, *, functions=None, aggregate_analyzer=None):
     """Lower validated dependency order and bindings, never evaluate expressions."""
     spec = plan.specification
     dataset = primary_source(spec)
@@ -916,7 +919,9 @@ def lower(plan, source, secondary=None, *, functions=None):
                     literal,
                 )
         else:
-            ast = parse_aggregate_cached(value["expr"])
+            ast = (
+                analyze_aggregate if aggregate_analyzer is None else aggregate_analyzer
+            )(value["expr"]).ast
             if ast["name"] == "COUNT":
                 expression = {
                     "count": {

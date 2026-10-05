@@ -364,6 +364,10 @@ The [aggregate-syntax/1 parser](AGGREGATE_SYNTAX.md) admits the complete closed
 R013 syntax, retains exact reducer/literal spelling and returns portable grammar
 and resource outcomes. The same service is exported by Python and R without
 reading data or resolving names. Parsing MIN/MAX/ONLY, aggregate arithmetic or
-EXP/LN/POWER does not advertise their dataset execution support. The current
-normalized frontend still uses the Python parser; replacing that bridge and
-compiling current-schema documents in R remain separate integration gates.
+EXP/LN/POWER does not advertise their dataset execution support. The optional
+normalized frontend uses the shared service for aggregate admission, planner
+metadata (including inferred keys) and lowering, with no reference syntax
+fallback. Context/type rules, the rest of shared specification compilation and
+current-schema documents in R remain separate integration gates. Installed
+tests forbid reference syntax/metadata helpers and preserve activation-before-data,
+exact authored outputs, service capture and distinct resource failures.
