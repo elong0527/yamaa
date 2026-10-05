@@ -102,6 +102,10 @@ class ReferenceCompiler(Protocol):
         """Select applicable keys in output order against normalized right-side fields."""
         ...
 
+    def has_relation(self, name: str) -> bool:
+        """Resolve a whole declared relation without requiring a stored field."""
+        ...
+
     def bind(self, name: str) -> BindingResult:
         """Resolve one exact name without reading records."""
         ...

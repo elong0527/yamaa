@@ -285,6 +285,17 @@ def _native_module(**members):
             """Evaluate metadata in the unrelated facade double, never as expected truth."""
             results = []
             for query in json.loads(request)["queries"]:
+                if query["kind"] == "bind_relation":
+                    name = query["name"]
+                    results.append(
+                        {
+                            "kind": "relation_binding",
+                            "dataset": dataset_names.index(name)
+                            if name in datasets
+                            else None,
+                        }
+                    )
+                    continue
                 if query["kind"] == "match_value_type":
                     from yamaa.models import TypedColumn
                     from yamaa.odm.bindings import BindingPlan, DatasetBinding
@@ -450,6 +461,7 @@ def _native_module(**members):
                     "intermediate_validation",
                     "key_relations",
                     "match_value_typing",
+                    "relation_binding",
                 ],
             }
         ),

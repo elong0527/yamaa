@@ -21,6 +21,11 @@ fn shared_truth_and_prepared_catalog_ownership() {
                 .lines()
                 .skip(1),
         )
+        .chain(
+            include_str!("fixtures/reference_relations.tsv")
+                .lines()
+                .skip(1),
+        )
     {
         let fields: Vec<_> = line.split('\t').collect();
         let expected: Value = serde_json::from_str(fields[2]).unwrap();
@@ -259,7 +264,7 @@ fn limits_are_not_language_diagnostics() {
 fn qualified_scope_admission_and_capabilities() {
     assert_eq!(
         yamaa_adapters::reference_transport::capabilities(),
-        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations","match_value_typing"]}"#
+        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations","match_value_typing","relation_binding"]}"#
     );
     let mut data = request();
     data["queries"] = json!([{"kind":"validate_qualified", "name":"SRC.N", "expected":null,
@@ -389,5 +394,55 @@ fn match_value_admission_is_atomic_and_reusable() {
     assert_eq!(
         serde_json::from_str::<Value>(&catalog.analyze(&query.to_string()).unwrap()).unwrap(),
         json!({"protocol":"reference-analysis/1","outcome":{"status":"complete","results":[{"kind":"match_value_type","result_type":"float"}]}})
+    );
+}
+
+/// Whole-relation queries retain strict shapes, atomic late failure and prepared catalog reuse.
+#[test]
+fn relation_binding_admission_and_atomic_failure() {
+    let mut data = request();
+    data["catalog"]["datasets"] = json!([{"name":"EMPTY","fields":[]}]);
+    for query in [
+        json!({"kind":"bind_relation","name":false}),
+        json!({"kind":"bind_relation","name":"EMPTY","field":"N"}),
+    ] {
+        data["queries"] = json!([query]);
+        assert_eq!(
+            analyze_references(&data.to_string()),
+            Err(TransportError::InvalidEnvelope)
+        );
+    }
+    let (catalog, _) = compile_reference_catalog(
+        &json!({"protocol":"reference-catalog/1","catalog":data["catalog"]}).to_string(),
+    )
+    .unwrap();
+    let catalog = catalog.unwrap();
+    let valid = json!({"kind":"bind_relation","name":"EMPTY"});
+    data["queries"] = json!([valid, {"kind":"bind_relation","name":"\u{e9}".repeat(32769)}]);
+    let expected = json!({"protocol":"reference-analysis/1","outcome":{"status":"limit","resource":"reference_bytes","limit":"65536","required":"65538"}});
+    assert_eq!(
+        serde_json::from_str::<Value>(&analyze_references(&data.to_string()).unwrap()).unwrap(),
+        expected
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(
+            &catalog
+                .analyze(
+                    &json!({"protocol":"reference-queries/1","queries":data["queries"]})
+                        .to_string()
+                )
+                .unwrap()
+        )
+        .unwrap(),
+        expected
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(
+            &catalog
+                .analyze(&json!({"protocol":"reference-queries/1","queries":[valid]}).to_string())
+                .unwrap()
+        )
+        .unwrap(),
+        json!({"protocol":"reference-analysis/1","outcome":{"status":"complete","results":[{"kind":"relation_binding","dataset":0}]}})
     );
 }

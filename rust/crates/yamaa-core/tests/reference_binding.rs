@@ -382,3 +382,40 @@ fn query_admission_is_separate_and_stateless() {
         );
     }
 }
+
+/// Whole-relation binding preserves declaration indices, including empty schemas and UTF-8 limits.
+#[test]
+fn relation_identity_is_not_a_stored_field() {
+    let catalog = Catalog::compile(
+        &[field("OUT", Str)],
+        &[
+            Dataset {
+                name: "EMPTY",
+                fields: &[],
+            },
+            Dataset {
+                name: "A.B",
+                fields: &[],
+            },
+        ],
+        Limits {
+            reference_bytes: 5,
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(catalog.bind_relation("EMPTY"), Ok(Some(0)));
+    assert_eq!(catalog.bind_relation("A.B"), Ok(Some(1)));
+    assert_eq!(catalog.bind_relation("OUT"), Ok(None));
+    assert_eq!(catalog.bind_relation(""), Ok(None));
+    assert_eq!(catalog.bind("EMPTY"), Ok(None));
+    assert_eq!(
+        catalog.bind_relation("\u{e9}\u{e9}\u{e9}"),
+        Err(Error::Limit {
+            resource: "reference_bytes",
+            limit: 5,
+            required: 6,
+        })
+    );
+    assert_eq!(catalog.bind_relation("EMPTY"), Ok(Some(0)));
+}
