@@ -94,21 +94,30 @@ fn dataset_result<'py>(
     >,
 ) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
     result
-        .map(|result| {
-            (
-                result
-                    .table
-                    .map(|bytes| pyo3::types::PyBytes::new(py, &bytes)),
-                result.outcome,
-            )
-        })
-        .map_err(|error| {
-            if error.is_internal() {
-                pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
-            } else {
-                pyo3::exceptions::PyValueError::new_err(error.to_string())
-            }
-        })
+        .map(|result| dataset_output(py, result))
+        .map_err(dataset_error)
+}
+
+/// Materialize result ownership identically for ordinary and instrumented executions.
+fn dataset_output<'py>(
+    py: Python<'py>,
+    result: yamaa_adapters::dataset_transport::DatasetResponse,
+) -> (Option<Bound<'py, pyo3::types::PyBytes>>, String) {
+    (
+        result
+            .table
+            .map(|bytes| pyo3::types::PyBytes::new(py, &bytes)),
+        result.outcome,
+    )
+}
+
+/// Preserve the existing distinction between internal failures and rejected transport input.
+fn dataset_error(error: yamaa_adapters::dataset_transport::DatasetTransportError) -> PyErr {
+    if error.is_internal() {
+        pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+    } else {
+        pyo3::exceptions::PyValueError::new_err(error.to_string())
+    }
 }
 
 /// Keep internal failures separate from rejected input or resource policy.
@@ -150,6 +159,10 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     module.add_function(wrap_pyfunction!(
         function_callback::execute_dataset_functions,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        function_callback::_profile_dataset_functions,
         module
     )?)?;
     module.add_function(wrap_pyfunction!(scalar_round_trip, module)?)?;

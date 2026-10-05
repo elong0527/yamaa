@@ -46,11 +46,42 @@ pub fn execute_dataset_functions<'py>(
     secondary: &Bound<'py, pyo3::types::PyList>,
     callbacks: &Bound<'py, pyo3::types::PyList>,
 ) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
+    execute_dataset_bound(request, source, secondary, callbacks, None)
+        .map(|result| crate::dataset_output(py, result))
+}
+
+/// Benchmark one execution with separate phase metadata; never retry calls to measure them.
+/// This private instrumentation entrypoint is not an additional execution capability.
+#[pyfunction]
+pub fn _profile_dataset_functions<'py>(
+    py: Python<'py>,
+    request: &str,
+    source: &[u8],
+    secondary: &Bound<'py, pyo3::types::PyList>,
+    callbacks: &Bound<'py, pyo3::types::PyList>,
+) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String, String)> {
+    let mut profile = yamaa_adapters::dataset_profile::DatasetProfile::new();
+    let result = execute_dataset_bound(request, source, secondary, callbacks, Some(&mut profile))?;
+    let (table, outcome) = crate::dataset_output(py, result);
+    let metrics = profile
+        .finish()
+        .map_err(|_| PyRuntimeError::new_err("profile encoding failed"))?;
+    Ok((table, outcome, metrics))
+}
+
+/// Share complete admission, captured bindings and interruption propagation between both paths.
+fn execute_dataset_bound(
+    request: &str,
+    source: &[u8],
+    secondary: &Bound<'_, pyo3::types::PyList>,
+    callbacks: &Bound<'_, pyo3::types::PyList>,
+    mut profile: Option<&mut yamaa_adapters::dataset_profile::DatasetProfile>,
+) -> PyResult<yamaa_adapters::dataset_transport::DatasetResponse> {
     use yamaa_adapters::dataset_transport::{PreparedDataset, MAX_SOURCES};
-    let prepared = match PreparedDataset::parse(request) {
-        Ok(plan) => plan,
-        Err(error) => return crate::dataset_result(py, Err(error)),
-    };
+    let prepared = PreparedDataset::parse(request).map_err(crate::dataset_error)?;
+    if let Some(profile) = profile.as_deref_mut() {
+        profile.enter(yamaa_adapters::dataset_profile::ProfilePhase::HostBindings);
+    }
     if callbacks.len() != prepared.function_signatures().len() {
         return Err(PyValueError::new_err(
             "callback count does not match dataset declarations",
@@ -88,11 +119,15 @@ pub fn execute_dataset_functions<'py>(
         callbacks,
         interrupted: None,
     };
-    let result = prepared.execute_sources_functions(source, &slices, &mut bindings);
+    let result = if let Some(profile) = profile {
+        prepared.execute_sources_functions_profiled(source, &slices, &mut bindings, profile)
+    } else {
+        prepared.execute_sources_functions(source, &slices, &mut bindings)
+    };
     if let Some(interrupted) = bindings.interrupted {
         return Err(interrupted);
     }
-    crate::dataset_result(py, result)
+    result.map_err(crate::dataset_error)
 }
 
 struct PythonBindings<'a, 'py> {

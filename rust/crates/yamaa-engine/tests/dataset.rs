@@ -5333,6 +5333,108 @@ mod dataset_functions {
         )
     }
 
+    /// Phase observation must not repeat source reads or callbacks or expose partial output.
+    #[test]
+    fn phase_observation_preserves_execution_and_effects() {
+        use yamaa_engine::dataset::ExecutionPhase::*;
+        let source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(2), Value::Missing, Value::Int(30)],
+        ]);
+        let plan = plan(
+            &source,
+            RowMode::Records,
+            true,
+            None,
+            signature(ColumnType::Int),
+            arguments(),
+        )
+        .unwrap();
+        let mut calls = callbacks();
+        let mut phases = Vec::new();
+        let measured =
+            plan.execute_with_phase_observer(&source, &[], &mut calls, limits(), &mut |phase| {
+                phases.push((phase, source.reads.borrow().len()))
+            });
+        assert_eq!(
+            phases,
+            vec![
+                (Admission, 0),
+                (Derivation, 0),
+                (OutputKeys, 6),
+                (Verification, 6),
+                (Finished, 6)
+            ]
+        );
+        assert_eq!(
+            measured.result.as_ref().unwrap().dataset.rows(),
+            &[
+                vec![Value::Int(1), Value::Int(11)],
+                vec![Value::Int(2), Value::Missing]
+            ]
+        );
+        assert_eq!(calls.calls.len(), 1);
+        let reads = source.reads.borrow().clone();
+        assert_eq!(reads, vec![(0, 0), (0, 2), (0, 1), (1, 0), (1, 2), (1, 1)]);
+        source.reads.borrow_mut().clear();
+        let mut plain_calls = callbacks();
+        let plain = plan.execute_observed_functions(&source, &[], &mut plain_calls, limits());
+        assert_eq!(measured, plain);
+        assert_eq!(calls.calls, plain_calls.calls);
+        assert_eq!(*source.reads.borrow(), reads);
+    }
+
+    /// Every returned failure closes the reached phase without inventing later work.
+    #[test]
+    fn phase_observation_finishes_at_the_actual_failure_boundary() {
+        use yamaa_engine::dataset::ExecutionPhase::*;
+        for failure in [Admission, Derivation, OutputKeys, Verification] {
+            let mut source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]]);
+            let plan = record_plan(
+                &source,
+                schema(&[("ID", ColumnType::Int)]),
+                vec![assign(0, Expression::Source(0))],
+                vec![verification(Check::RowCount {
+                    min: None,
+                    max: Some(0),
+                })],
+            );
+            match failure {
+                Admission => source.schema = schema(&[("OTHER", ColumnType::Int)]),
+                Derivation => source.fail = Some((0, 0)),
+                OutputKeys => source.rows[0][0] = Value::Missing,
+                Verification => (),
+                Finished => unreachable!(),
+            }
+            let mut phases = Vec::new();
+            let measured = plan.execute_with_phase_observer(
+                &source,
+                &[],
+                &mut callbacks(),
+                limits(),
+                &mut |phase| phases.push(phase),
+            );
+            let error = measured.result.unwrap_err();
+            assert!(match failure {
+                Admission => matches!(*error, ExecutionError::SchemaMismatch),
+                Derivation => matches!(
+                    *error,
+                    ExecutionError::Cell {
+                        error: CellError::Access("source failure"),
+                        ..
+                    }
+                ),
+                OutputKeys => matches!(*error, ExecutionError::KeyFailures(_)),
+                Verification => matches!(*error, ExecutionError::VerificationFailures(_)),
+                Finished => false,
+            });
+            let mut expected = vec![Admission, Derivation, OutputKeys, Verification];
+            expected.truncate(expected.iter().position(|phase| *phase == failure).unwrap() + 1);
+            expected.push(Finished);
+            assert_eq!(phases, expected);
+        }
+    }
+
     /// Authored reads precede declaration-order checks/defaults and each attempt is fresh.
     #[test]
     fn authored_reads_and_mapped_calls_preserve_distinct_orders() {

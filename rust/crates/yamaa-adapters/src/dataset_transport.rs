@@ -1,6 +1,7 @@
 //! Bounded dataset/1 typed-plan bridge over copied, verified Arrow snapshots.
 //! This protocol is not a specification compiler, file runner or default backend.
 use crate::{
+    dataset_profile::{DatasetProfile, ProfilePhase},
     function_transport::{CallbackError, FunctionTransportError},
     numeric_transport::{arithmetic, conversion, Diagnostic},
     predicate_transport::Predicate,
@@ -653,7 +654,22 @@ impl PreparedDataset {
         functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
     ) -> Result<DatasetResponse, Error> {
         catch_unwind(AssertUnwindSafe(|| {
-            self.execute_bound(source, secondary, functions)
+            self.execute_bound(source, secondary, functions, None)
+        }))
+        .map_err(|_| Error::Internal)?
+    }
+
+    /// Measure one actual execution with unchanged result bytes and callback authority.
+    /// The profile is caller-owned; resource/host failures never become successful samples.
+    pub fn execute_sources_functions_profiled(
+        &self,
+        source: &[u8],
+        secondary: &[&[u8]],
+        functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+        profile: &mut DatasetProfile,
+    ) -> Result<DatasetResponse, Error> {
+        catch_unwind(AssertUnwindSafe(|| {
+            self.execute_bound(source, secondary, functions, Some(profile))
         }))
         .map_err(|_| Error::Internal)?
     }
@@ -664,6 +680,7 @@ impl PreparedDataset {
         source: &[u8],
         secondary: &[&[u8]],
         functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+        mut profile: Option<&mut DatasetProfile>,
     ) -> Result<DatasetResponse, Error> {
         for (slot, signature) in self.functions.iter().enumerate() {
             if functions.signature(slot) != Some(signature) {
@@ -678,6 +695,9 @@ impl PreparedDataset {
             .try_fold(source.len(), |sum, bytes| sum.checked_add(bytes.len()));
         if bytes.is_none_or(|size| size > crate::table_transport::MAX_INPUT_BYTES) {
             return Err(Error::Table(TableTransportError::InputLimit));
+        }
+        if let Some(profile) = profile.as_deref_mut() {
+            profile.enter(ProfilePhase::SnapshotDecode);
         }
         {
             let source = functions::Snapshot(decode_snapshot(source).map_err(Error::Table)?);
@@ -705,9 +725,18 @@ impl PreparedDataset {
                 .iter()
                 .map(|table| table as &dyn TableAccess<Error = CallbackError>)
                 .collect();
-            let attempt =
+            let attempt = if let Some(profile) = profile {
+                self.plan.execute_with_phase_observer(
+                    &source,
+                    &references,
+                    functions,
+                    LIMITS,
+                    &mut |phase| profile.engine_phase(phase),
+                )
+            } else {
                 self.plan
-                    .execute_observed_functions(&source, &references, functions, LIMITS);
+                    .execute_observed_functions(&source, &references, functions, LIMITS)
+            };
             let (table, outcome) = match attempt.result {
                 Ok(result) => (
                     Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
