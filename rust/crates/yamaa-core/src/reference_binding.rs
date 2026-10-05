@@ -1,5 +1,5 @@
 //! Owned reference catalogs and output-reference validation, without data access.
-use alloc::{collections::BTreeMap, string::String};
+use alloc::{collections::BTreeMap, string::String, vec};
 
 use crate::value::ColumnType;
 
@@ -228,14 +228,21 @@ impl Catalog {
             return Err(Error::InvalidCandidateDataset);
         }
         let Some(&(column, actual)) = self.outputs.get(name) else {
+            if candidates.is_empty() {
+                return Ok(Some(Diagnostic::UnknownField));
+            }
+            // Admission above bounds these declaration indices. Build membership
+            // once instead of rescanning every candidate for every dataset.
+            let mut eligible = vec![false; self.datasets.len()];
+            for &index in candidates {
+                eligible[index] = true;
+            }
             // The map's lexicographic order preserves the reference compiler's
             // sorted dataset-name suggestion, regardless of declaration order.
             return Ok(Some(
                 self.datasets
                     .values()
-                    .find(|dataset| {
-                        candidates.contains(&dataset.index) && dataset.fields.contains_key(name)
-                    })
+                    .find(|dataset| eligible[dataset.index] && dataset.fields.contains_key(name))
                     .map_or(Diagnostic::UnknownField, |dataset| {
                         Diagnostic::UnresolvableName {
                             dataset: dataset.index,

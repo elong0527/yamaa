@@ -184,6 +184,46 @@ fn output_conditions_and_suggestion_order() {
     }
 }
 
+/// Large candidate sets keep lexical selection, duplicate admission and per-query isolation.
+#[test]
+fn maximum_candidate_membership_preserves_suggestions() {
+    let names: Vec<_> = (0..256).rev().map(|index| format!("D{index:03}")).collect();
+    let fields = [field("F", Str)];
+    let datasets: Vec<_> = names
+        .iter()
+        .map(|name| Dataset {
+            name,
+            fields: &fields,
+        })
+        .collect();
+    let catalog = Catalog::compile(&[], &datasets, Limits::default()).unwrap();
+    let candidates: Vec<_> = (0..256).collect();
+    assert_eq!(
+        catalog.validate_output("ABSENT", None, None, &candidates),
+        Ok(Some(Diagnostic::UnknownField))
+    );
+    assert_eq!(
+        catalog.validate_output("F", None, None, &candidates),
+        Ok(Some(Diagnostic::UnresolvableName { dataset: 255 }))
+    );
+    assert_eq!(
+        catalog.validate_output("F", None, None, &[0; 256]),
+        Ok(Some(Diagnostic::UnresolvableName { dataset: 0 }))
+    );
+    assert_eq!(
+        catalog.validate_output("F", None, None, &[]),
+        Ok(Some(Diagnostic::UnknownField))
+    );
+    assert_eq!(
+        catalog.validate_output("F", None, None, &[0; 257]),
+        Err(Error::Limit {
+            resource: "candidate_datasets",
+            limit: 256,
+            required: 257
+        })
+    );
+}
+
 /// Limits count written metadata before duplicate admission or owned allocation.
 #[test]
 fn catalog_admission_limits_and_reuse() {
