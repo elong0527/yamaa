@@ -39,6 +39,17 @@ use yamaa_core::{
     value::Value,
 };
 
+/// Contiguous stages of one attempt; clocks and measurement storage belong to adapters.
+/// Derivation includes source reads, callbacks and per-value result conversion.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionPhase {
+    Admission,
+    Derivation,
+    OutputKeys,
+    Verification,
+    Finished,
+}
+
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
@@ -998,15 +1009,33 @@ impl DatasetPlan {
         functions: &mut dyn FunctionBindings<Error = T::Error>,
         limits: Limits,
     ) -> ExecutionAttempt<T::Error> {
+        self.execute_with_phase_observer(table, secondary, functions, limits, &mut |_| {})
+    }
+
+    /// Observe stage transitions without repeating evaluation or exposing intermediate output.
+    /// The trusted observer owns its clock and must not mutate sources or callback state.
+    /// Finished follows every returned success/failure, but is not guaranteed after a panic.
+    pub fn execute_with_phase_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionPhase),
+    ) -> ExecutionAttempt<T::Error> {
+        observer(ExecutionPhase::Admission);
         let mut handlers = HandlerCounter::default();
         for declaration in &self.conversion_handlers {
             handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
         }
-        let result = self.execute_inner(table, secondary, functions, limits, &mut handlers);
-        ExecutionAttempt {
+        let result =
+            self.execute_inner(table, secondary, functions, limits, &mut handlers, observer);
+        let attempt = ExecutionAttempt {
             result,
             handler_counts: handlers.snapshot().to_vec(),
-        }
+        };
+        observer(ExecutionPhase::Finished);
+        attempt
     }
 
     /// Share one handler ledger and resource budget for this immutable plan attempt.
@@ -1017,6 +1046,7 @@ impl DatasetPlan {
         functions: &mut dyn FunctionBindings<Error = T::Error>,
         limits: Limits,
         handlers: &mut HandlerCounter,
+        observer: &mut dyn FnMut(ExecutionPhase),
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         for assignment in self
             .templates
@@ -1049,6 +1079,7 @@ impl DatasetPlan {
         if rows.is_none_or(|rows| rows > limits.source_rows) {
             return Err(Box::new(ExecutionError::Capacity));
         }
+        observer(ExecutionPhase::Derivation);
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
@@ -1177,6 +1208,7 @@ impl DatasetPlan {
                 candidate.completed[assignment.column] = true;
             }
         }
+        observer(ExecutionPhase::OutputKeys);
         let dataset = Dataset {
             schema: self.output.clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
@@ -1224,6 +1256,7 @@ impl DatasetPlan {
         if !failures.is_empty() {
             return Err(Box::new(ExecutionError::KeyFailures(failures)));
         }
+        observer(ExecutionPhase::Verification);
         let mut records = Vec::new();
         for verification in &self.verifications {
             let record = match &verification.check {
