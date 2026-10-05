@@ -263,18 +263,14 @@ def _concrete_signature(target: object) -> inspect.Signature:
     return inspect.signature(callable_target, follow_wrapped=False)
 
 
-def activate(
+def resolve_bindings(
     loaded: LoadedEnvironment,
     resolver: ArtifactResolver | None = None,
-    *,
-    cache: ActivationCache | None = ACTIVATION_CACHE,
-) -> ActivatedEnvironment:
-    """Verify this runner may run the project, then activate its bindings.
+) -> tuple[LoadedArtifact, dict[str, BoundFunction]]:
+    """Resolve verified artifact-owned targets without executing activation vectors.
 
-    The language and the artifact are checked before any code is loaded
-    (REQ-0667), every binding is resolved inside that artifact (REQ-0666), and
-    the vectors run last (REQ-0691) -- after which the environment is ready
-    for a specification and not before.
+    This host binding port does not establish activation or record cache success.
+    Each execution backend must run its own invocation lifecycle before source IO.
     """
     environment = loaded.environment
     check_runner_language(environment)
@@ -289,6 +285,24 @@ def activate(
             contract=contract,
             target=target,
         )
+
+    return artifact, functions
+
+
+def activate(
+    loaded: LoadedEnvironment,
+    resolver: ArtifactResolver | None = None,
+    *,
+    cache: ActivationCache | None = ACTIVATION_CACHE,
+) -> ActivatedEnvironment:
+    """Verify this runner may run the project, then activate its bindings.
+
+    The language and the artifact are checked before any code is loaded
+    (REQ-0667), every binding is resolved inside that artifact (REQ-0666), and
+    the vectors run last (REQ-0691) -- after which the environment is ready
+    for a specification and not before.
+    """
+    artifact, functions = resolve_bindings(loaded, resolver)
 
     key = ActivationCache.key(loaded)
     cached = cache is not None and cache.passed(key)
@@ -309,4 +323,5 @@ __all__ = [
     "ActivatedEnvironment",
     "ActivationCache",
     "activate",
+    "resolve_bindings",
 ]

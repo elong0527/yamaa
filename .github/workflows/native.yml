@@ -86,6 +86,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_temporal_results.py" installed_temporal_results.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_datasets.py" installed_datasets.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_specification.py" installed_specification.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
+          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-lookup" specification-lookup
@@ -99,6 +101,7 @@ jobs:
           python installed_temporal_results.py
           python installed_datasets.py
           python installed_specification.py
+          python installed_project_functions.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -110,6 +113,7 @@ jobs:
           python installed_temporal_results.py
           python installed_datasets.py
           python installed_specification.py
+          python installed_project_functions.py
       - name: Preserve distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

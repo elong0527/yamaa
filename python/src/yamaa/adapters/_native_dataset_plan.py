@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import struct
 
@@ -54,7 +55,7 @@ def primary_source(specification):
     return specification.base or next(iter(specification.input))
 
 
-def admit(specification):
+def admit(specification, *, allow_functions=False):
     """Reject the entire unsupported vocabulary before requesting source tables.
 
     This accepts schema-normalized models, not arbitrary document dictionaries.
@@ -64,7 +65,12 @@ def admit(specification):
     unsupported = []
     filters = []
     try:
-        preflight_execution(specification, supported_operations=OPERATIONS)
+        preflight_execution(
+            specification,
+            supported_operations=OPERATIONS | {"function"}
+            if allow_functions
+            else OPERATIONS,
+        )
     except ExecutionPlanningError as error:
         diagnostics.extend(error.diagnostics)
     except UnsupportedPlanningError as error:
@@ -196,6 +202,30 @@ def admit(specification):
                 reject("wide_integer_literal", path)
             elif not (payload is None or type(payload) in (str, bool, int, float)):
                 reject("literal_representation", path)
+        elif operation == "function" and allow_functions:
+            from yamaa.functions.invocation import AuthoredValueError, runtime_value
+
+            if grouped or any(
+                row.group_by is not None for row in specification.rows or ()
+            ):
+                reject("grouped_project_function", path)
+            if not specification.rows and not keyed_nonkey:
+                reject("key_project_function", path)
+            for name, value in payload.get("args", {}).items():
+                argument_path = f"{path}.args.{name}"
+                if isinstance(value, str):
+                    if "." in value and value.split(".", 1)[0] != primary:
+                        reject("secondary_function_argument", argument_path)
+                else:
+                    value = (
+                        value["literal"]
+                        if isinstance(value, dict) and set(value) == {"literal"}
+                        else value
+                    )
+                    try:
+                        runtime_value(value)
+                    except AuthoredValueError:
+                        reject("function_argument_representation", argument_path)
         elif operation == "compute":
             if not isinstance(payload, dict) or set(payload) != {"expr"}:
                 reject("compute_policy", path)
@@ -541,7 +571,7 @@ def literal(value):
     return {"str": value}
 
 
-def lower(plan, source, secondary=None):
+def lower(plan, source, secondary=None, *, functions=None):
     """Lower validated dependency order and bindings, never evaluate expressions."""
     spec = plan.specification
     dataset = primary_source(spec)
@@ -629,6 +659,36 @@ def lower(plan, source, secondary=None):
         value = derived.declaration.value.root[op]
         if op == "literal":
             expression = {"literal": literal(value)}
+        elif op == "function":
+            from yamaa.adapters._native_project_functions import authored
+
+            if functions is None:
+                raise ValueError("native project functions require activated bindings")
+            arguments = []
+            for name, argument in value.get("args", {}).items():
+                if isinstance(argument, str):
+                    read = reference(argument)
+                    if collect and "source" in read:
+                        read = {
+                            "collect": {
+                                "column": read["source"],
+                                "identifier": argument,
+                            }
+                        }
+                else:
+                    item = (
+                        argument["literal"]
+                        if isinstance(argument, dict) and set(argument) == {"literal"}
+                        else argument
+                    )
+                    read = {"literal": authored(item)}
+                arguments.append({"name": name, "input": read})
+            expression = {
+                "function": {
+                    "slot": functions.names.index(value["name"]),
+                    "arguments": arguments,
+                }
+            }
         elif op == "compute":
             expression = {
                 "compute": {
@@ -856,6 +916,11 @@ def lower(plan, source, secondary=None):
     verifications, declaration_error = checks(spec, outputs)
     return {
         "protocol": "dataset/1",
+        **(
+            {"functions": json.loads(functions.declarations)}
+            if functions is not None
+            else {}
+        ),
         **({"unconvertible": list(handlers.values())} if handlers else {}),
         **({"intermediates": intermediates} if intermediates else {}),
         "source": [

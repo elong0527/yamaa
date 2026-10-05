@@ -162,7 +162,8 @@ capability supports ordered selection within `collect`. Broader source selection
 fractional bounds, grouped row counts, column checks, warnings, other handlers,
 other windows and broader joins remain outside the closed plan vocabulary.
 Typed function assignments are described under [Explicit host functions](#explicit-host-functions);
-normalized-specification function lowering remains unsupported.
+the optional Python project frontend supports the bounded subset documented
+in [Native datasets](../python/src/yamaa/adapters/NATIVE_DATASETS.md#optional-project-functions).
 
 Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
 then: predicate}}`, using the predicate representation below. Bindings may read
@@ -515,6 +516,8 @@ Nineteen independently authored shared cases in `callbacks.json` / `callbacks.ts
 pin complete output observations and traces for both installed hosts. Additional
 tests cover metadata rejection before invalid IPC, expanded-plan limits, panic and
 interruption containment, subsequent-run recovery, captured bindings, signed zero
-and temporal encoding. This capability does not yet lower function expressions
-from normalized specifications or implement production activation; the remaining gates
+and temporal encoding. The separate optional Python project frontend lowers
+bounded normalized function calls after artifact binding and native activation
+vectors. The typed transport itself owns neither environment loading nor artifact
+authority; R specification integration and production activation remain open. The remaining gates
 in issue #1585 and `execution_supported=false` remain unchanged.
