@@ -352,5 +352,7 @@ resource contracts and the remaining frontend/activation qualification gates.
 The additive `function_source_collection` capability admits plain primary-source
 arguments for key-grain non-key callbacks. It reuses distinct-present collection,
 authored resolution order, source diagnostics and cumulative budgets. This is a
-prerequisite for the unchanged `schema-functions` specification; normalized call
-lowering and native project activation are still unqualified.
+prerequisite for the unchanged `schema-functions` specification. Bounded
+normalized call lowering and native activation vectors are now qualified
+through the optional Python project frontend; R normalized-spec integration
+and full shared environment activation remain open.
