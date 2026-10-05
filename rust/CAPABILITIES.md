@@ -371,3 +371,15 @@ fallback. Context/type rules, the rest of shared specification compilation and
 current-schema documents in R remain separate integration gates. Installed
 tests forbid reference syntax/metadata helpers and preserve activation-before-data,
 exact authored outputs, service capture and distinct resource failures.
+
+## Shared numeric syntax service
+
+The [numeric-syntax/1 service](NUMERIC_SYNTAX.md) exposes the existing bounded
+R010 parser through Python and R. The optional normalized frontend uses its AST
+and ordered metadata for numeric admission, dependency discovery and lowering.
+Installed tests forbid reference parsing and retain exact authored results,
+diagnostic paths, resource separation and service capture before host effects.
+The complete grammar parses independently of numerical policy: POWER/EXP/LN
+remain unsupported in the default native frontend. Context/type rules, predicate
+syntax and full shared specification compilation remain open. Python remains
+default and `execution_supported=false`.

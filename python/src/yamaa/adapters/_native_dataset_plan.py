@@ -11,8 +11,6 @@ from yamaa.expressions import (
     AggregateError,
     NumericError,
     PredicateError,
-    numeric_identifiers,
-    parse_numeric_cached,
     parse_predicate,
     predicate_identifiers,
 )
@@ -26,6 +24,7 @@ from yamaa.planning import (
     preflight_execution,
 )
 from yamaa.planning.aggregate_syntax import analyze_aggregate
+from yamaa.planning.numeric_syntax import analyze_numeric
 
 NUMBERING = frozenset({"row_number", "rank"})
 WINDOW_VALUES = frozenset({"row_value", "previous_non_missing", "locf"})
@@ -55,7 +54,13 @@ def primary_source(specification):
     return specification.base or next(iter(specification.input))
 
 
-def admit(specification, *, allow_functions=False, aggregate_analyzer=None):
+def admit(
+    specification,
+    *,
+    allow_functions=False,
+    aggregate_analyzer=None,
+    numeric_analyzer=None,
+):
     """Reject the entire unsupported vocabulary before requesting source tables.
 
     This accepts schema-normalized models, not arbitrary document dictionaries.
@@ -63,6 +68,8 @@ def admit(specification, *, allow_functions=False, aggregate_analyzer=None):
     """
     if aggregate_analyzer is None:
         aggregate_analyzer = analyze_aggregate
+    if numeric_analyzer is None:
+        numeric_analyzer = analyze_numeric
     diagnostics = []
     unsupported = []
     filters = []
@@ -73,6 +80,7 @@ def admit(specification, *, allow_functions=False, aggregate_analyzer=None):
             if allow_functions
             else OPERATIONS,
             aggregate_analyzer=aggregate_analyzer,
+            numeric_analyzer=numeric_analyzer,
         )
     except ExecutionPlanningError as error:
         diagnostics.extend(error.diagnostics)
@@ -235,7 +243,9 @@ def admit(specification, *, allow_functions=False, aggregate_analyzer=None):
                 reject("compute_policy", path)
                 return
             try:
-                ast = parse_numeric_cached(payload["expr"])
+                if not isinstance(payload["expr"], str):
+                    raise NumericError("numeric expression must be a string", 0)
+                syntax = numeric_analyzer(payload["expr"])
             except NumericError as error:
                 diagnostic = ExecutionDiagnostic(
                     phase="validation",
@@ -263,8 +273,8 @@ def admit(specification, *, allow_functions=False, aggregate_analyzer=None):
                     for child in node:
                         inspect(child)
 
-            inspect(ast)
-            for name in numeric_identifiers(ast):
+            inspect(syntax.ast)
+            for name in syntax.identifiers:
                 if "." in name and (
                     grouped or keyed_nonkey or name.split(".", 1)[0] != primary
                 ):
@@ -607,7 +617,15 @@ def literal(value):
     return {"str": value}
 
 
-def lower(plan, source, secondary=None, *, functions=None, aggregate_analyzer=None):
+def lower(
+    plan,
+    source,
+    secondary=None,
+    *,
+    functions=None,
+    aggregate_analyzer=None,
+    numeric_analyzer=None,
+):
     """Lower validated dependency order and bindings, never evaluate expressions."""
     spec = plan.specification
     dataset = primary_source(spec)
@@ -731,9 +749,11 @@ def lower(plan, source, secondary=None, *, functions=None, aggregate_analyzer=No
                     "text": value["expr"],
                     "bindings": [
                         {"name": name, "read": reference(name)}
-                        for name in numeric_identifiers(
-                            parse_numeric_cached(value["expr"])
-                        )
+                        for name in (
+                            analyze_numeric
+                            if numeric_analyzer is None
+                            else numeric_analyzer
+                        )(value["expr"]).identifiers
                     ],
                 }
             }

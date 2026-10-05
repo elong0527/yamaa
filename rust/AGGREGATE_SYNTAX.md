@@ -77,9 +77,12 @@ Installed tests forbid reference syntax and metadata helpers during native
 planning and grouped SUM/MEAN/COUNT execution. They check exact authored CSV,
 failure-before-host-effects, service capture across provider mutation and retry
 after a policy failure. Full aggregate context/type rules still live in the
-temporary Python planner, and numeric/predicate syntax, schema normalization,
+temporary Python planner, and predicate syntax, schema normalization,
 inheritance and R current-schema compilation remain separate integration work.
 Parsing more grammar does not enable additional aggregate execution families.
+
+Numeric syntax now has its own [shared service and planner port](NUMERIC_SYNTAX.md);
+its closed grammar continues to reject aggregate reducers and record stars.
 
 The Python source archive also carries `yamaa_native.pyi` beside its relocated
 `pyproject.toml`. This preserves the public type stub and `py.typed` marker when

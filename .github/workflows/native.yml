@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'rust/**'
+      - 'R/yamaanative/**'
       - 'python/**'
       - 'benchmarks/**'
       - 'yaml/**'
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - 'rust/**'
+      - 'R/yamaanative/**'
       - 'python/**'
       - 'benchmarks/**'
       - 'yaml/**'
@@ -70,6 +72,7 @@ jobs:
           python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment.json"
           uv run --project ../python --locked python tools/check_numeric_grammar.py
           uv run --project ../python --locked python tools/check_aggregate_grammar.py
+          uv run --project ../python --locked python tools/check_numeric_syntax.py
           python tools/check_dependencies.py
           python -m unittest discover -s tests -p 'test_*.py'
       - name: Preserve Python 3.12 numerical assessment coverage
@@ -127,7 +130,9 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_references.py" installed_references.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_planning.py" installed_aggregate_planning.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_syntax.py" installed_aggregate_syntax.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_numeric_syntax.py" installed_numeric_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv" aggregate_syntax.tsv
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_syntax.tsv" numeric_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv" dependency_analysis.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/column_dependencies.tsv" column_dependencies.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_binding.tsv" reference_binding.tsv
@@ -156,6 +161,7 @@ jobs:
           python installed_references.py
           python installed_aggregate_planning.py
           python installed_aggregate_syntax.py
+          python installed_numeric_syntax.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
@@ -174,6 +180,7 @@ jobs:
           python installed_references.py
           python installed_aggregate_planning.py
           python installed_aggregate_syntax.py
+          python installed_numeric_syntax.py
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -258,6 +265,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript references.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/aggregate_syntax.R" aggregate_syntax.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript aggregate_syntax.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/numeric_syntax.R" numeric_syntax.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript numeric_syntax.R
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

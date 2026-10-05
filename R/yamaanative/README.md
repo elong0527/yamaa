@@ -319,3 +319,9 @@ It returns syntax, ordered references or portable grammar/resource diagnostics
 without requiring Python. See [the transport contract](../../rust/AGGREGATE_SYNTAX.md).
 Parsing the closed vocabulary does not enable new dataset execution forms or
 provide a current-schema specification compiler.
+
+`analyze_numeric()` exposes `numeric-syntax/1` through the same shared Rust
+parser used by optional Python admission and planning. It retains exact literal
+text, ordered identifiers and portable diagnostics without evaluating anything.
+See [the numeric syntax contract](../../rust/NUMERIC_SYNTAX.md). Parsing
+POWER/EXP/LN does not enable their dataset execution or change numerical policy.
