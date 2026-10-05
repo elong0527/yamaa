@@ -56,6 +56,12 @@ jobs:
           uv run --project ../python --locked python tools/check_aggregate_grammar.py
           python tools/check_dependencies.py
           python -m unittest discover -s tests -p 'test_*.py'
+      - name: Preserve Python 3.12 numerical assessment coverage
+        working-directory: rust
+        # The native build matrix uses 3.14, but portable-math-exact still
+        # requires independent observations from both supported interpreters.
+        # Reuse the Rust probe; this stdlib-only assessment needs no wheel build.
+        run: uv run --no-project --python 3.12 python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment-3.12/math-assessment.json"
       - name: Assess decimal rounding independently
         if: always()
         working-directory: rust
@@ -66,6 +72,13 @@ jobs:
         with:
           name: math-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/math-assessment.json
+          if-no-files-found: error
+      - name: Preserve Python 3.12 candidate math assessment
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: math-assessment-${{ matrix.os }}-3.12
+          path: ${{ runner.temp }}/math-assessment-3.12/math-assessment.json
           if-no-files-found: error
       - name: Preserve rounding assessment (not parity qualification)
         if: always()

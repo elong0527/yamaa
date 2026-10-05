@@ -17,6 +17,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from yamaa.adapters._native_aggregate_syntax import bind_aggregate_analyzer
 from yamaa.adapters._native_dataset_plan import (
     NUMBERING,
     OPERATIONS,
@@ -37,7 +38,6 @@ from yamaa.adapters._native_project_functions import (
     activate_project,
 )
 from yamaa.adapters._native_references import bind_reference_compiler
-from yamaa.expressions.aggregate import parse_aggregate_cached
 from yamaa.functions.artifact import ArtifactResolver
 from yamaa.functions.errors import FunctionActivationError
 from yamaa.io import (
@@ -240,8 +240,23 @@ def _execute(specification, source_provider, prepare_functions=None):
     # Frozen Pydantic models still contain mutable lists/dictionaries. Retain
     # the admitted run independently of caller/provider mutations during IO.
     specification = specification.model_copy(deep=True)
+    aggregate_analyzer = None
+
+    def analyze_aggregate(text):
+        """Capture syntax on first use while preserving source-independent admission."""
+        nonlocal aggregate_analyzer
+        if aggregate_analyzer is None:
+            import yamaa_native
+
+            aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
+        return aggregate_analyzer(text)
+
     try:
-        admit(specification, allow_functions=prepare_functions is not None)
+        admit(
+            specification,
+            allow_functions=prepare_functions is not None,
+            aggregate_analyzer=analyze_aggregate,
+        )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
     except UnsupportedPlanningError as error:
@@ -251,6 +266,8 @@ def _execute(specification, source_provider, prepare_functions=None):
 
     import yamaa_native
 
+    if aggregate_analyzer is None:
+        aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
     # Fail on a missing native API before the source provider runs.
     execute = yamaa_native.execute_dataset
     if not callable(execute):
@@ -334,7 +351,7 @@ def _execute(specification, source_provider, prepare_functions=None):
         for index, row in enumerate(specification.rows or ())
         for name, declaration in row.derivations.items()
         if declaration.value.operation == "aggregate"
-        and parse_aggregate_cached(declaration.value.root["aggregate"]["expr"])["name"]
+        and aggregate_analyzer(declaration.value.root["aggregate"]["expr"]).ast["name"]
         == "COUNT"
     )
     if specification.filter is not None:
@@ -558,6 +575,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             dependency_analyzer=dependency_analyzer,
             column_dependency_analyzer=column_dependency_analyzer,
             reference_compiler_factory=reference_compiler_factory,
+            aggregate_analyzer=aggregate_analyzer,
         )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
@@ -574,7 +592,13 @@ def _execute(specification, source_provider, prepare_functions=None):
         if name != dataset
     }
     try:
-        lowered, declaration_error = lower(plan, source, secondary, functions=functions)
+        lowered, declaration_error = lower(
+            plan,
+            source,
+            secondary,
+            functions=functions,
+            aggregate_analyzer=aggregate_analyzer,
+        )
     except UnsupportedPlanningError as error:
         return NativeDatasetRun(
             ExecutionUnsupported(features=error.features, handler_counts=())

@@ -3,10 +3,9 @@
 `aggregate-syntax/1` is a compiler service for the complete closed R013 grammar.
 Python and R call the same Rust parser through `analyze_aggregate(request)`.
 It does not select records, bind names, evaluate reducers or enable additional
-execution capabilities. The optional normalized-specification frontend still
-uses Python aggregate parsing; routing its admission and planning through this
-service is a subsequent integration gate. Python remains the default backend and
-`execution_supported` remains false.
+execution capabilities. The optional normalized-specification frontend uses this
+service for aggregate admission, planner metadata and lowering. Python remains
+the default backend and `execution_supported` remains false.
 
 A request contains exactly `protocol` and `expression`:
 
@@ -62,6 +61,25 @@ hosts. CI runs Python direct-wheel and source-rebuild tests outside the checkout
 and R installed tests from its standalone source archive. These gates qualify
 syntax and transport; shared specification compilation and release qualification
 remain open.
+
+The Python planner accepts an explicit aggregate-analysis port. Its default
+implementation retains the reference parser; the optional native frontend
+captures the Rust service before activation or source acquisition. Admission,
+inferred aggregate keys, dependency discovery and lowering share its AST and
+ordered metadata through a bounded, run-local cache. Metadata is projected
+directly from the response, without a Python AST walk. Source-independent
+admission failures still precede loading services they do not use. A missing
+native API, transport defect or resource limit never selects the reference
+parser. Resource limits remain exceptions distinct from language diagnostics;
+grammar failures retain their requirement, context and authored expression path.
+
+Installed tests forbid reference syntax and metadata helpers during native
+planning and grouped SUM/MEAN/COUNT execution. They check exact authored CSV,
+failure-before-host-effects, service capture across provider mutation and retry
+after a policy failure. Full aggregate context/type rules still live in the
+temporary Python planner, and numeric/predicate syntax, schema normalization,
+inheritance and R current-schema compilation remain separate integration work.
+Parsing more grammar does not enable additional aggregate execution families.
 
 The Python source archive also carries `yamaa_native.pyi` beside its relocated
 `pyproject.toml`. This preserves the public type stub and `py.typed` marker when

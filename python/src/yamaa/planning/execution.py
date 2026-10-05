@@ -15,17 +15,13 @@ from yamaa.expressions import (
     PredicateAst,
     PredicateError,
     TemplateError,
-    aggregate_identifiers,
-    aggregate_star_datasets,
     numeric_identifiers,
-    parse_aggregate_cached,
     parse_numeric_cached,
     parse_predicate,
     parse_template_cached,
     predicate_identifiers,
     source_operand,
     template_identifiers,
-    ungrouped_identifiers,
     window_spec,
 )
 from yamaa.io.artifact import profile_of
@@ -39,6 +35,7 @@ from yamaa.odm import (
     build_binding_plan,
 )
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
+from yamaa.planning.aggregate_syntax import AggregateAnalyzer, analyze_aggregate
 from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
 from yamaa.planning.references import (
     ComparableType,
@@ -472,6 +469,7 @@ def _expression_info(
     *,
     scope: _Scope = _COLUMN_SCOPE,
     dataset_fields: Mapping[str, Collection[str]] | None = None,
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> _ExpressionInfo:
     operation = expression.operation
     operation_path = f"{path}.{operation}"
@@ -498,6 +496,7 @@ def _expression_info(
             supported_operations,
             scope=scope,
             dataset_fields=dataset_fields,
+            aggregate_analyzer=aggregate_analyzer,
         )
         references.extend(info.references)
         unsupported.extend(info.unsupported)
@@ -619,6 +618,7 @@ def _expression_info(
                 scope,
                 supported_operations,
                 unsupported,
+                aggregate_analyzer=aggregate_analyzer,
             )
         )
     elif operation == "str_template":
@@ -1227,6 +1227,7 @@ def _aggregate_references(
     scope: _Scope,
     supported_operations: Collection[str],
     unsupported: list[UnsupportedFeature],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> list[ExecutionDiagnostic]:
     """Read one R013 reduction and report the context R007 does not permit."""
     if isinstance(payload, str):
@@ -1254,7 +1255,9 @@ def _aggregate_references(
     # so the operation is the narrowest location both spellings share.
     expr_path = operation_path if set(payload) == {"expr"} else f"{operation_path}.expr"
     try:
-        ast = parse_aggregate_cached(expr)
+        syntax = (
+            analyze_aggregate if aggregate_analyzer is None else aggregate_analyzer
+        )(expr)
     except AggregateError as error:
         return [
             ExecutionDiagnostic(
@@ -1266,10 +1269,10 @@ def _aggregate_references(
             )
         ]
 
-    identifiers = aggregate_identifiers(ast)
+    identifiers = syntax.identifiers
     qualifiers = {name.split(".", 1)[0] for name in identifiers if "." in name}
     unqualified = [name for name in identifiers if "." not in name]
-    relations = qualifiers | set(aggregate_star_datasets(ast))
+    relations = qualifiers | set(syntax.star_datasets)
     if len(relations) > 1 or (relations and unqualified):
         # REQ-0468: a reduction is not a join, so one expression names one
         # relation and two datasets are composed through two columns.
@@ -1425,7 +1428,7 @@ def _aggregate_references(
             {"expr": expr, "dataset": relation, "identifier": name},
             requirement="REQ-0503",
         )
-        for name in ungrouped_identifiers(ast)
+        for name in syntax.ungrouped_identifiers
         if name not in grain
     )
 
@@ -1474,6 +1477,7 @@ def _aggregate_references(
                     f"{operation_path}.key.{key}",
                     supported_operations,
                     scope=scope,
+                    aggregate_analyzer=aggregate_analyzer,
                 )
                 planned = MatchValueExpression(
                     column=key,
@@ -1550,7 +1554,7 @@ def _aggregate_references(
     # COUNT(D.*) contributes no field identifier, but still reads its relation
     # and declared key pair. A field/filter/bound reference already carries the
     # pairing when present; preserve that path and avoid duplicate diagnostics.
-    for dataset in aggregate_star_datasets(ast):
+    for dataset in syntax.star_datasets:
         if not any(
             ref.name.partition(".")[0] == dataset for ref in references[read_start:]
         ):
@@ -1726,6 +1730,7 @@ def _fill_omitted_lookup_keys(
     value_path: str,
     scope: _Scope,
     infer: Callable[[str, str], tuple[str, ...] | None],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> tuple[HandledExpression, frozenset[str]]:
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
@@ -1768,13 +1773,15 @@ def _fill_omitted_lookup_keys(
         if not isinstance(expr, str):
             return None
         try:
-            ast = parse_aggregate_cached(expr)
+            syntax = (
+                analyze_aggregate if aggregate_analyzer is None else aggregate_analyzer
+            )(expr)
         except AggregateError:
             return None
-        identifiers = aggregate_identifiers(ast)
+        identifiers = syntax.identifiers
         qualifiers = {name.split(".", 1)[0] for name in identifiers if "." in name}
         unqualified = [name for name in identifiers if "." not in name]
-        relations = qualifiers | set(aggregate_star_datasets(ast))
+        relations = qualifiers | set(syntax.star_datasets)
         if len(relations) > 1 or (relations and unqualified):
             return None
         relation = next(iter(sorted(relations)), None)
@@ -1849,6 +1856,7 @@ def _plan_derivation(
         Callable[[str, str, list[ExecutionDiagnostic]], tuple[str, ...] | None] | None
     ) = None,
     dataset_fields: Mapping[str, Collection[str]] | None = None,
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...], frozenset[str]]:
     value_path = expression_path(path, declaration)
     inferred_paths: frozenset[str] = frozenset()
@@ -1859,6 +1867,7 @@ def _plan_derivation(
             value_path,
             scope,
             lambda dataset, path: infer_keys(dataset, path, deferred),
+            aggregate_analyzer=aggregate_analyzer,
         )
     info = _expression_info(
         declaration.value,
@@ -1866,6 +1875,7 @@ def _plan_derivation(
         supported_operations,
         scope=scope,
         dataset_fields=dataset_fields,
+        aggregate_analyzer=aggregate_analyzer,
     )
     references = list(info.references)
     unsupported.extend(info.unsupported)
@@ -2953,6 +2963,7 @@ def _plan_lookups(
     default_columns: frozenset[str],
     dependency_analyzer: DependencyAnalyzer | None = None,
     reference_compiler: ReferenceCompiler | None = None,
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
@@ -3072,6 +3083,7 @@ def _plan_lookups(
                 f"{path}.key.{field}",
                 supported_operations,
                 dataset_fields=dataset_fields,
+                aggregate_analyzer=aggregate_analyzer,
             )
             keyed = MatchValueExpression(
                 column=field,
@@ -3102,6 +3114,7 @@ def _plan_lookups(
             reads=intermediate_reads,
             driver_reads=driver_reads,
             row_drivers=row_drivers,
+            aggregate_analyzer=aggregate_analyzer,
         )
         # REQ-1185: a name whose derivation failed validation is already
         # reported at its derivation path; the key below must not repeat the
@@ -3655,6 +3668,7 @@ def _validate_intermediate_derivations(
     reads: list[_IntermediateRead] | None = None,
     driver_reads: list[_Reference] | None = None,
     row_drivers: Collection[str | None] = (),
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> dict[str, HandledExpression]:
     """Validate one intermediate's REQ-1185 derivations.
 
@@ -3696,6 +3710,7 @@ def _validate_intermediate_derivations(
             supported_operations,
             dataset_fields=dataset_fields,
             scope=_Scope(column_phase=False),
+            aggregate_analyzer=aggregate_analyzer,
         )
         unsupported.extend(info.unsupported)
         diagnostics.extend(info.diagnostics)
@@ -3943,6 +3958,7 @@ def _topological_row_order(
 def _coverage_diagnostics(
     specification: Specification,
     supported_operations: Collection[str],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> list[ExecutionDiagnostic]:
     diagnostics: list[ExecutionDiagnostic] = []
     rows = specification.rows or ()
@@ -3954,7 +3970,9 @@ def _coverage_diagnostics(
         and any(column.name in row.derivations for row in rows)
     ]
     column_phase_only = (
-        _column_level_reads(specification, supported_operations)[1]
+        _column_level_reads(
+            specification, supported_operations, aggregate_analyzer=aggregate_analyzer
+        )[1]
         if overridden
         else frozenset()
     )
@@ -4338,12 +4356,15 @@ def _odm_read_diagnostics(specification: Specification) -> list[ExecutionDiagnos
 def _preflight_findings(
     specification: Specification,
     supported_operations: Collection[str],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> tuple[list[ExecutionDiagnostic], list[UnsupportedFeature]]:
     """Find source-independent failures before any dataset is ingested."""
     diagnostics = (
         []
         if specification.parents
-        else _coverage_diagnostics(specification, supported_operations)
+        else _coverage_diagnostics(
+            specification, supported_operations, aggregate_analyzer=aggregate_analyzer
+        )
     )
     unsupported: list[UnsupportedFeature] = []
 
@@ -4429,6 +4450,7 @@ def _preflight_findings(
                     expression_path(path, declaration),
                     supported_operations,
                     scope=scope,
+                    aggregate_analyzer=aggregate_analyzer,
                 ).unsupported
             )
 
@@ -4447,6 +4469,7 @@ def _preflight_findings(
                 expression_path(path, declaration),
                 supported_operations,
                 scope=column_scope,
+                aggregate_analyzer=aggregate_analyzer,
             ).unsupported
         )
 
@@ -4457,9 +4480,12 @@ def preflight_execution(
     specification: Specification,
     *,
     supported_operations: Collection[str] = INITIAL_OPERATIONS,
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> None:
     """Reject source-independent failures before a source provider is called."""
-    diagnostics, unsupported = _preflight_findings(specification, supported_operations)
+    diagnostics, unsupported = _preflight_findings(
+        specification, supported_operations, aggregate_analyzer=aggregate_analyzer
+    )
     if diagnostics:
         raise ExecutionPlanningError(diagnostics)
     if unsupported:
@@ -4474,6 +4500,7 @@ _DATASET_LEVEL_OPERATIONS = frozenset({"aggregate", *WINDOW_OPERATIONS})
 def _column_level_reads(
     specification: Specification,
     supported_operations: Collection[str],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> tuple[dict[str, frozenset[str]], frozenset[str]]:
     """Return each column-level derivation's bare reads and the non-row-local names.
 
@@ -4499,6 +4526,7 @@ def _column_level_reads(
             f"columns.{column.name}.derivation",
             row_local_operations,
             scope=_Scope(intermediates=intermediates),
+            aggregate_analyzer=aggregate_analyzer,
         )
         if any(
             feature.operation in _DATASET_LEVEL_OPERATIONS
@@ -4526,6 +4554,7 @@ def _row_phase_default_columns(
     specification: Specification,
     supported_operations: Collection[str],
     dataset_fields: Mapping[str, Mapping[str, ColumnType]],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> frozenset[str]:
     """Column names whose column-level derivations are row-phase defaults.
 
@@ -4543,7 +4572,9 @@ def _row_phase_default_columns(
         # Without row templates there is no row phase; column-level
         # derivations keep their column-phase meaning.
         return frozenset()
-    reads, blocked = _column_level_reads(specification, supported_operations)
+    reads, blocked = _column_level_reads(
+        specification, supported_operations, aggregate_analyzer=aggregate_analyzer
+    )
     candidates = reads.keys() - blocked
     if not candidates:
         return frozenset()
@@ -4561,7 +4592,11 @@ def _row_phase_default_columns(
         declaration: HandledExpression, path: str, scope: _Scope = _COLUMN_SCOPE
     ) -> tuple[_Reference, ...]:
         return _expression_info(
-            declaration.value, path, supported_operations, scope=scope
+            declaration.value,
+            path,
+            supported_operations,
+            scope=scope,
+            aggregate_analyzer=aggregate_analyzer,
         ).references
 
     def donor_reads(found: Sequence[_Reference]) -> set[str]:
@@ -4595,6 +4630,7 @@ def _row_phase_default_columns(
                     entry,
                     f"intermediates[{index}].key.{field}",
                     supported_operations,
+                    aggregate_analyzer=aggregate_analyzer,
                 )
                 names.extend(reference.name for reference in info.references)
         if intermediate.between is not None:
@@ -4816,6 +4852,7 @@ def _bind_intermediate_drivers(
     bindings: BindingPlan,
     diagnostics: list[ExecutionDiagnostic],
     supported_operations: Collection[str],
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> BindingPlan:
     """Expose source-only intermediate records as typed row drivers."""
     declared = {item.id: item for item in specification.intermediates or ()}
@@ -4850,6 +4887,7 @@ def _bind_intermediate_drivers(
                 f"intermediates.{identifier}.derivations.{name}",
                 supported_operations,
                 scope=_Scope(column_phase=False),
+                aggregate_analyzer=aggregate_analyzer,
             )
             if any(
                 ref.name.partition(".")[0] in specification.input
@@ -4917,6 +4955,7 @@ def plan_execution(
     dependency_analyzer: DependencyAnalyzer | None = None,
     column_dependency_analyzer: ColumnDependencyAnalyzer | None = None,
     reference_compiler_factory: ReferenceCompilerFactory | None = None,
+    aggregate_analyzer: AggregateAnalyzer | None = None,
 ) -> ExecutionPlan:
     """Validate and plan the initial record-driven execution subset.
 
@@ -4924,10 +4963,13 @@ def plan_execution(
     broken dependency or phase boundary distinct from a valid declaration that
     belongs to a later runtime component.
 
-    A trusted backend may supply shared bound-graph analysis. Reference planning
-    retains its existing algorithms when the implementation port is absent.
+    A trusted backend may supply shared graph, reference and aggregate syntax
+    analysis. Reference planning retains its existing algorithms when an
+    implementation port is absent.
     """
-    diagnostics, unsupported = _preflight_findings(specification, supported_operations)
+    diagnostics, unsupported = _preflight_findings(
+        specification, supported_operations, aggregate_analyzer=aggregate_analyzer
+    )
     declared_sources = tuple(specification.input)
     supplied_sources = tuple(sources)
     if set(declared_sources) != set(supplied_sources):
@@ -4958,7 +5000,11 @@ def plan_execution(
         )
         raise ExecutionPlanningError(diagnostics) from error
     bindings = _bind_intermediate_drivers(
-        specification, bindings, diagnostics, supported_operations
+        specification,
+        bindings,
+        diagnostics,
+        supported_operations,
+        aggregate_analyzer=aggregate_analyzer,
     )
 
     column_order = [column.name for column in specification.columns]
@@ -4980,7 +5026,10 @@ def plan_execution(
     # inherit it, planned in each template's own row scope. Computed before
     # the intermediates, since a default is a SELF donor field.
     default_columns = _row_phase_default_columns(
-        specification, supported_operations, dataset_fields
+        specification,
+        supported_operations,
+        dataset_fields,
+        aggregate_analyzer=aggregate_analyzer,
     )
     default_derivations = {
         column.name: column.derivation
@@ -5016,6 +5065,7 @@ def plan_execution(
         default_columns,
         dependency_analyzer,
         reference_compiler,
+        aggregate_analyzer=aggregate_analyzer,
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
@@ -5134,6 +5184,7 @@ def plan_execution(
                     scope=row_scope,
                     infer_keys=infer_lookup_keys,
                     dataset_fields=dataset_fields,
+                    aggregate_analyzer=aggregate_analyzer,
                 )
                 annotated = _resolve_implicit_joins(
                     references,
@@ -5460,6 +5511,7 @@ def plan_execution(
             ),
             infer_keys=infer_lookup_keys,
             dataset_fields=dataset_fields,
+            aggregate_analyzer=aggregate_analyzer,
         )
         annotated = _resolve_implicit_joins(
             references,

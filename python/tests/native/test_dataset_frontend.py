@@ -452,6 +452,35 @@ def _native_module(**members):
             }
         )
 
+    def analyze_aggregate(request):
+        """Facade-only syntax double; installed tests forbid the reference parser."""
+        from yamaa.expressions.aggregate import AggregateError
+        from yamaa.planning.aggregate_syntax import analyze_aggregate as analyze_syntax
+
+        text = json.loads(request)["expression"]
+        try:
+            syntax = analyze_syntax(text)
+        except AggregateError as error:
+            outcome = {
+                "status": "invalid",
+                "condition": error.condition,
+                "requirement": error.requirement,
+                "context": error.context,
+                "position": {
+                    "character": error.position,
+                    "byte": len(text[: error.position].encode()),
+                },
+            }
+        else:
+            outcome = {
+                "status": "parsed",
+                "ast": syntax.ast,
+                "identifiers": syntax.identifiers,
+                "star_datasets": syntax.star_datasets,
+                "ungrouped_identifiers": syntax.ungrouped_identifiers,
+            }
+        return json.dumps({"protocol": "aggregate-syntax/1", "outcome": outcome})
+
     return SimpleNamespace(
         reference_capabilities=lambda: json.dumps(
             {
@@ -465,11 +494,18 @@ def _native_module(**members):
                 ],
             }
         ),
+        analyze_aggregate=analyze_aggregate,
         analyze_dependencies=analyze,
         analyze_column_dependencies=analyze_columns,
         _compile_reference_catalog=compile_references,
         **members,
     )
+
+
+@pytest.fixture(autouse=True)
+def native_syntax_double(monkeypatch):
+    """Facade tests need no native installation; installed suites qualify Rust ownership."""
+    monkeypatch.setitem(sys.modules, "yamaa_native", _native_module())
 
 
 @pytest.fixture
