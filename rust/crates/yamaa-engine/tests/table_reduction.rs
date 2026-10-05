@@ -5,7 +5,81 @@ use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use yamaa_engine::table_reduction::{reduce_column, TableReductionError};
+use yamaa_engine::table_reduction::{count_selected, reduce_column, TableReductionError};
+
+/// Record counts never read cells; field counts visit every selected value in order.
+#[test]
+fn count_selection_preserves_access_and_absence_semantics() {
+    let mut table = Table::new(vec![Value::Missing, Value::Str("".into()), Value::Missing]);
+    assert_eq!(
+        count_selected(&table, None, &[0, 1, 2], 3),
+        Ok(Number::Int(3))
+    );
+    assert!(table.reads.borrow().is_empty());
+    assert_eq!(
+        count_selected(&table, Some(0), &[0, 1, 2], 3),
+        Ok(Number::Int(1))
+    );
+    assert_eq!(*table.reads.borrow(), [0, 1, 2]);
+    table.reads.borrow_mut().clear();
+    assert_eq!(
+        count_selected(&table, Some(0), &[0, 2], 3),
+        Ok(Number::Int(0))
+    );
+    assert_eq!(*table.reads.borrow(), [0, 2]);
+    table.reads.borrow_mut().clear();
+    for column in [None, Some(0)] {
+        assert_eq!(count_selected(&table, column, &[], 0), Ok(Number::Missing));
+    }
+    assert!(table.reads.borrow().is_empty());
+    table.fail_at = Some(2);
+    assert_eq!(
+        count_selected(&table, Some(0), &[0, 1, 2], 3),
+        Err(TableReductionError::Cell {
+            position: 2,
+            error: CellError::Access(PortError("read failed"))
+        })
+    );
+    assert_eq!(*table.reads.borrow(), [0, 1, 2]);
+}
+
+/// Both count forms validate complete selections before touching any source value.
+#[test]
+fn count_coordinates_and_limits_precede_reads() {
+    let table = Table::new(vec![Value::Missing]);
+    for column in [None, Some(0)] {
+        assert_eq!(
+            count_selected(&table, column, &[0], 0),
+            Err(TableReductionError::RowLimit {
+                limit: 0,
+                required: 1
+            })
+        );
+        assert_eq!(
+            count_selected(&table, column, &[1], 1),
+            Err(TableReductionError::InvalidRow {
+                position: 0,
+                row: 1
+            })
+        );
+        assert_eq!(
+            count_selected(&table, column, &[0, 0], 2),
+            Err(TableReductionError::UnorderedSelection { position: 1 })
+        );
+    }
+    assert_eq!(
+        count_selected(&table, Some(1), &[], 0),
+        Err(TableReductionError::InvalidColumn { column: 1 })
+    );
+    assert!(table.reads.borrow().is_empty());
+    let mut fieldless = Table::new(vec![Value::Missing]);
+    fieldless.schema = TableSchema::new(vec![]).unwrap();
+    assert_eq!(
+        count_selected(&fieldless, None, &[0], 1),
+        Ok(Number::Int(1))
+    );
+    assert!(fieldless.reads.borrow().is_empty());
+}
 
 // Deliberately not Clone: storage errors must remain opaque and movable.
 #[derive(Debug, PartialEq, Eq)]

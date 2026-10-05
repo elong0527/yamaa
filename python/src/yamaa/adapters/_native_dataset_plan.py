@@ -450,9 +450,14 @@ def admit(specification, *, allow_functions=False):
                 grouped
                 and set(payload) == {"expr"}
                 and ast["kind"] == "reduction"
-                and ast["name"] in {"SUM", "MEAN"}
-                and ast["argument"]["kind"] == "identifier"
-                and "." in ast["argument"]["name"]
+                and (
+                    (
+                        ast["name"] in {"SUM", "MEAN", "COUNT"}
+                        and ast["argument"]["kind"] == "identifier"
+                        and "." in ast["argument"]["name"]
+                    )
+                    or (ast["name"] == "COUNT" and ast["argument"]["kind"] == "star")
+                )
             ):
                 reject("aggregate_scope_or_expression", path)
         else:
@@ -884,13 +889,25 @@ def lower(plan, source, secondary=None, *, functions=None):
                 )
         else:
             ast = parse_aggregate_cached(value["expr"])
-            expression = {
-                "reduce": {
-                    "column": reference(ast["argument"]["name"])["source"],
-                    "reducer": ast["name"],
-                    "text": value["expr"],
+            if ast["name"] == "COUNT":
+                expression = {
+                    "count": {
+                        "column": (
+                            None
+                            if ast["argument"]["kind"] == "star"
+                            else reference(ast["argument"]["name"])["source"]
+                        ),
+                        "text": value["expr"],
+                    }
                 }
-            }
+            else:
+                expression = {
+                    "reduce": {
+                        "column": reference(ast["argument"]["name"])["source"],
+                        "reducer": ast["name"],
+                        "text": value["expr"],
+                    }
+                }
         return {
             "column": outputs[derived.column],
             "path": derived.operation_path,

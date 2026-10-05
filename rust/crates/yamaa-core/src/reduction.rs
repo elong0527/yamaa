@@ -1,4 +1,4 @@
-//! Ordered SUM/MEAN primitives over already collected arguments (REQ-0479/0480).
+//! COUNT and ordered SUM/MEAN over collected arguments (REQ-0477/0479/0480/0492).
 
 use crate::{
     numeric::{binary, ArithmeticError, BinaryOperator, Number},
@@ -36,6 +36,31 @@ pub enum ReductionError {
         error: ArithmeticError,
     },
     CountOverflow,
+}
+
+/// Count records without resolving a field; an absent relation remains missing.
+pub fn count_records(records: usize) -> Result<Number, ReductionError> {
+    if records == 0 {
+        return Ok(Number::Missing);
+    }
+    i64::try_from(records)
+        .map(Number::Int)
+        .map_err(|_| ReductionError::CountOverflow)
+}
+
+/// Count present values of any type after every argument has been collected.
+/// An existing all-missing group yields zero, unlike a group containing no record.
+pub fn count_values(values: &[ValueRef<'_>]) -> Result<Number, ReductionError> {
+    if values.is_empty() {
+        return Ok(Number::Missing);
+    }
+    let count = values
+        .iter()
+        .filter(|value| !matches!(value, ValueRef::Missing))
+        .count();
+    i64::try_from(count)
+        .map(Number::Int)
+        .map_err(|_| ReductionError::CountOverflow)
 }
 
 /// Collect arguments before calling this function: a later resolution failure

@@ -1,9 +1,42 @@
 use yamaa_core::{
     numeric::{ArithmeticErrorKind, Number},
-    reduction::{reduce_numeric, NumericReducer, ReductionError},
+    reduction::{count_records, count_values, reduce_numeric, NumericReducer, ReductionError},
     table::ValueRef,
     value::Value,
 };
+
+/// Missing relations, missing values, empty text and false remain distinct.
+#[test]
+fn counts_are_exact_cardinalities_without_type_coercion() {
+    assert_eq!(count_records(0), Ok(Number::Missing));
+    assert_eq!(count_values(&[]), Ok(Number::Missing));
+    assert_eq!(count_records(3), Ok(Number::Int(3)));
+    assert_eq!(count_values(&[ValueRef::Missing; 3]), Ok(Number::Int(0)));
+    let values = [
+        Value::Missing,
+        Value::Str("".into()),
+        Value::Bool(false),
+        Value::Int(i64::MIN),
+        Value::float(-0.0),
+        Value::Missing,
+    ];
+    assert_eq!(
+        count_values(&values.iter().map(ValueRef::from).collect::<Vec<_>>()),
+        Ok(Number::Int(4))
+    );
+}
+
+/// Cardinality conversion is checked independently of allocating or visiting rows.
+#[test]
+fn record_count_capacity_does_not_wrap_into_a_negative_value() {
+    if let Ok(maximum) = usize::try_from(i64::MAX) {
+        assert_eq!(count_records(maximum), Ok(Number::Int(i64::MAX)));
+        assert_eq!(
+            count_records(maximum + 1),
+            Err(ReductionError::CountOverflow)
+        );
+    }
+}
 
 /// Decode hand-written fixture inputs without consulting either evaluator.
 fn value(token: &str) -> Value {

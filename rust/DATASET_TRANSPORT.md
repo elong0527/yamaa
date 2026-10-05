@@ -53,6 +53,23 @@ remaining columns complete in the supplied order. Literal conversion occurs per
 constructed value, including on plans reused with empty versus populated sources.
 Paths and expression text provide provenance, not filesystem or artifact authority.
 
+The additive `grouped_count` capability admits
+`{count: {column: source_index_or_null, text: original_expression}}` in group scope.
+A null or omitted column counts selected records without reading a stored field;
+an index counts present values of any declared column type. Empty selections
+return missing, while a nonempty selection with only missing field values returns
+zero. Empty text and numeric zero are present. Selection coordinates and budgets
+are checked before reads, and a field count collects every selected value in
+source order before counting. COUNT does not sum or coerce the field values.
+Both forms charge selected-record visits against cumulative work limits.
+
+The optional Python specification bridge admits bare grouped `COUNT(SRC.*)` and
+`COUNT(SRC.field)` row derivations and checks this capability before activation or
+source access. Root and row filters retain their existing phases; per-aggregate
+filters, arithmetic aggregate expressions and qualified key-matched reductions
+remain unsupported by this bridge. The R entry point accepts the same bound typed
+COUNT plan; current-schema compilation from R is still unimplemented.
+
 The additive `unconvertible` capability admits an optional top-level list:
 `unconvertible: [{assignment_path, path, value: scalar}]`. Its order is declaration
 order, independent of execution order. `assignment_path` must name an admitted
@@ -313,7 +330,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions", "function_source_collection"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions", "function_source_collection", "grouped_count"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.

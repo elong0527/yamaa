@@ -30,7 +30,7 @@ mod functions;
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection","grouped_count"]}"#
 }
 
 /// Bound host argument collections before copying any source buffers.
@@ -145,6 +145,7 @@ enum Expression {
     Intermediate(IntermediateRead),
     Column(usize),
     Reduce(Reduction),
+    Count(Count),
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -387,6 +388,12 @@ enum Reducer {
 struct Reduction {
     column: usize,
     reducer: Reducer,
+    text: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Count {
+    column: Option<usize>,
     text: String,
 }
 #[derive(Deserialize)]
@@ -898,6 +905,13 @@ fn assignments(
                         return Err(Error::InvalidPlan);
                     }
                     dataset::Expression::Window(window.prepare()?)
+                }
+                Expression::Count(count) => {
+                    path(&count.text)?;
+                    dataset::Expression::Count {
+                        column: count.column,
+                        text: count.text,
+                    }
                 }
                 Expression::Reduce(reduction) => {
                     path(&reduction.text)?;

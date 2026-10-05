@@ -28,7 +28,7 @@ use crate::{
     dataset_predicate::{BindingError, BoundPredicate},
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow, HandlerCounter, HandlerKind},
     table_grouping::{partition, GroupingError},
-    table_reduction::{reduce_column, TableReductionError},
+    table_reduction::{count_selected, reduce_column, TableReductionError},
 };
 use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
 use core::convert::Infallible;
@@ -82,6 +82,11 @@ pub enum Expression {
     Reduce {
         column: usize,
         reducer: NumericReducer,
+        text: String,
+    },
+    /// Count grouped records (None) or present field values (Some), without coercion.
+    Count {
+        column: Option<usize>,
         text: String,
     },
 }
@@ -370,6 +375,17 @@ fn validate_assignment(
                 {
                     return Err(PlanError::InvalidSourceOrder);
                 }
+            }
+        }
+        Expression::Count { column, text } => {
+            if column.is_some_and(|column| column >= source.columns().len()) {
+                return Err(PlanError::InvalidSource);
+            }
+            if !matches!(mode, RowMode::Groups(_)) {
+                return Err(PlanError::UngroupedReduction);
+            }
+            if text.is_empty() {
+                return Err(PlanError::EmptyPath);
             }
         }
         Expression::Reduce { column, text, .. } => {
@@ -838,7 +854,9 @@ fn evaluate<T: TableAccess + ?Sized>(
     budget.work(1, 1)?;
     let reads = match &assignment.expression {
         Expression::Source(_) => 1,
-        Expression::Reduce { .. } | Expression::Collect { .. } => candidate.members.len(),
+        Expression::Reduce { .. } | Expression::Count { .. } | Expression::Collect { .. } => {
+            candidate.members.len()
+        }
         _ => 0,
     };
     budget.work(reads, 1)?;
@@ -912,6 +930,17 @@ fn evaluate<T: TableAccess + ?Sized>(
         Expression::Collect { .. } => {
             key_grain::collect(table, assignment, candidate, plan, row, budget, handlers)?
         }
+        Expression::Count { column, .. } => Value::from(
+            count_selected(table, *column, &candidate.members, limits.source_rows).map_err(
+                |error| {
+                    Box::new(ExecutionError::Reduction {
+                        path: assignment.path.clone(),
+                        error,
+                        identity: None,
+                    })
+                },
+            )?,
+        ),
         Expression::Reduce {
             column,
             reducer,

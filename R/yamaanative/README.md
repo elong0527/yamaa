@@ -190,6 +190,14 @@ qualification remain open.
 
 ## Explicit typed dataset execution
 
+The additive `grouped_count` capability accepts a grouped assignment
+`{count: {column: index_or_null, text: original_expression}}` through the typed
+dataset entry point. A null column counts records without reading a stored field;
+an index counts present values of any column type. No selected records yields
+missing, whereas an existing all-missing field group counts zero. Empty text is
+present. This is bound-plan execution; the R package does not yet compile
+current-schema specifications. See [the transport contract](../../rust/DATASET_TRANSPORT.md).
+
 `execute_dataset(request, source)` invokes the shared bounded `dataset/1` service
 with JSON plan text and raw canonical IPC. It returns owned IPC only for an accepted
 dataset, alongside exact JSON observations; failures never return table bytes.

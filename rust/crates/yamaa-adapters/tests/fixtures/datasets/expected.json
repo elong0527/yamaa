@@ -14355,5 +14355,349 @@
       ],
       "rows": []
     }
+  },
+  {
+    "case": "grouped_count",
+    "input": "grouped-count.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "int"
+        },
+        {
+          "name": "x",
+          "kind": "str"
+        }
+      ],
+      "output": [
+        {
+          "name": "id",
+          "kind": "int"
+        },
+        {
+          "name": "records",
+          "kind": "int"
+        },
+        {
+          "name": "present",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "groups": [
+              0
+            ]
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "rows[0].derivations.id.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "rows[0].derivations.records.aggregate",
+              "expression": {
+                "count": {
+                  "column": null,
+                  "text": "COUNT(SRC.*)"
+                }
+              }
+            },
+            {
+              "column": 2,
+              "path": "rows[0].derivations.present.aggregate",
+              "expression": {
+                "count": {
+                  "column": 1,
+                  "text": "COUNT(SRC.x)"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "id",
+          "int"
+        ],
+        [
+          "records",
+          "int"
+        ],
+        [
+          "present",
+          "int"
+        ]
+      ],
+      "row_count": "2",
+      "chunks": [
+        "2"
+      ],
+      "rows": [
+        [
+          {
+            "int": "2"
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "1"
+          }
+        ],
+        [
+          {
+            "int": "1"
+          },
+          {
+            "int": "1"
+          },
+          {
+            "int": "0"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "case": "grouped_count_empty",
+    "input": "grouped-count-empty.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "int"
+        },
+        {
+          "name": "x",
+          "kind": "str"
+        }
+      ],
+      "output": [
+        {
+          "name": "id",
+          "kind": "int"
+        },
+        {
+          "name": "records",
+          "kind": "int"
+        },
+        {
+          "name": "present",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "groups": [
+              0
+            ]
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "rows[0].derivations.id.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "rows[0].derivations.records.aggregate",
+              "expression": {
+                "count": {
+                  "column": null,
+                  "text": "COUNT(SRC.*)"
+                }
+              }
+            },
+            {
+              "column": 2,
+              "path": "rows[0].derivations.present.aggregate",
+              "expression": {
+                "count": {
+                  "column": 1,
+                  "text": "COUNT(SRC.x)"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "id",
+          "int"
+        ],
+        [
+          "records",
+          "int"
+        ],
+        [
+          "present",
+          "int"
+        ]
+      ],
+      "row_count": "0",
+      "chunks": [
+        "0"
+      ],
+      "rows": []
+    }
+  },
+  {
+    "case": "grouped_count_extreme_integer_values",
+    "input": "integer-sum.arrow",
+    "request": {
+      "protocol": "dataset/1",
+      "source": [
+        {
+          "name": "id",
+          "kind": "int"
+        },
+        {
+          "name": "x",
+          "kind": "int"
+        }
+      ],
+      "output": [
+        {
+          "name": "id",
+          "kind": "int"
+        },
+        {
+          "name": "records",
+          "kind": "int"
+        },
+        {
+          "name": "present",
+          "kind": "int"
+        }
+      ],
+      "templates": [
+        {
+          "mode": {
+            "groups": [
+              0
+            ]
+          },
+          "assignments": [
+            {
+              "column": 0,
+              "path": "rows[0].derivations.id.source",
+              "expression": {
+                "source": 0
+              }
+            },
+            {
+              "column": 1,
+              "path": "rows[0].derivations.records.aggregate",
+              "expression": {
+                "count": {
+                  "column": null,
+                  "text": "COUNT(SRC.*)"
+                }
+              }
+            },
+            {
+              "column": 2,
+              "path": "rows[0].derivations.present.aggregate",
+              "expression": {
+                "count": {
+                  "column": 1,
+                  "text": "COUNT(SRC.x)"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "columns": [],
+      "keys": [
+        0
+      ],
+      "verifications": []
+    },
+    "expected": {
+      "protocol": "dataset/1",
+      "outcome": {
+        "status": "success",
+        "verifications": []
+      }
+    },
+    "snapshot": {
+      "protocol": "table/1",
+      "columns": [
+        [
+          "id",
+          "int"
+        ],
+        [
+          "records",
+          "int"
+        ],
+        [
+          "present",
+          "int"
+        ]
+      ],
+      "row_count": "1",
+      "chunks": [
+        "1"
+      ],
+      "rows": [
+        [
+          {
+            "int": "5"
+          },
+          {
+            "int": "2"
+          },
+          {
+            "int": "2"
+          }
+        ]
+      ]
+    }
   }
 ]

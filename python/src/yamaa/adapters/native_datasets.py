@@ -37,6 +37,7 @@ from yamaa.adapters._native_project_functions import (
     activate_project,
 )
 from yamaa.adapters._native_references import bind_reference_compiler
+from yamaa.expressions.aggregate import parse_aggregate_cached
 from yamaa.functions.artifact import ArtifactResolver
 from yamaa.functions.errors import FunctionActivationError
 from yamaa.io import (
@@ -321,6 +322,20 @@ def _execute(specification, source_provider, prepare_functions=None):
             UnsupportedFeature(operation="native_numeric_compute", spec_path=path),
         )
         for path in compute_sites
+    )
+    required.extend(
+        (
+            "grouped_count",
+            UnsupportedFeature(
+                operation="native_grouped_count",
+                spec_path=f"rows[{index}].derivations.{name}.aggregate",
+            ),
+        )
+        for index, row in enumerate(specification.rows or ())
+        for name, declaration in row.derivations.items()
+        if declaration.value.operation == "aggregate"
+        and parse_aggregate_cached(declaration.value.root["aggregate"]["expr"])["name"]
+        == "COUNT"
     )
     if specification.filter is not None:
         required.append(
