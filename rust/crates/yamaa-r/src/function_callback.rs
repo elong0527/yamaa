@@ -31,6 +31,92 @@ fn invoke_function(request: Raw, dispatch: Function) -> List {
     }
 }
 
+/// Execute an admitted dataset with a bounded snapshot of R-owned callback dispatchers.
+#[extendr]
+fn execute_dataset_functions(
+    request: Raw,
+    source: Raw,
+    secondary: List,
+    dispatchers: List,
+) -> List {
+    use yamaa_adapters::dataset_transport::{
+        DatasetTransportError as DatasetError, PreparedDataset, MAX_SOURCES,
+    };
+    let run = || {
+        if request.len() > yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES {
+            return Err(DatasetError::RequestLimit);
+        }
+        let text =
+            std::str::from_utf8(request.as_slice()).map_err(|_| DatasetError::InvalidRequest)?;
+        let prepared = PreparedDataset::parse(text)?;
+        if dispatchers.len() != prepared.function_signatures().len() {
+            return Err(DatasetError::FunctionBinding);
+        }
+        if !prepared
+            .function_signatures()
+            .iter()
+            .all(|s| s.parameters().iter().all(|p| host_name(&p.host_name)))
+        {
+            return Err(DatasetError::Function(Error::InvalidHostName));
+        }
+        let callbacks = dispatchers
+            .iter()
+            .map(|(_, value)| value.as_function().ok_or(DatasetError::FunctionBinding))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        if secondary.len() >= MAX_SOURCES {
+            return Err(DatasetError::RequestLimit);
+        }
+        let buffers = secondary
+            .iter()
+            .map(|(_, value)| value.as_raw().ok_or(DatasetError::InvalidRequest))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let slices = buffers
+            .iter()
+            .map(|bytes| bytes.as_slice())
+            .collect::<Vec<_>>();
+        let mut bindings = RBindings {
+            signatures: prepared.function_signatures(),
+            callbacks,
+        };
+        prepared.execute_sources_functions(source.as_slice(), &slices, &mut bindings)
+    };
+    match run() {
+        Ok(result) => {
+            let table = result
+                .table
+                .map_or_else(|| r!(NULL), |bytes| Raw::from_bytes(&bytes).into_robj());
+            list!(
+                value = list!(table = table, outcome = result.outcome),
+                error = NULL
+            )
+        }
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
+struct RBindings<'a> {
+    signatures: &'a [yamaa_engine::function_invocation::InvocationPlan],
+    callbacks: Vec<Function>,
+}
+impl yamaa_engine::dataset::FunctionBindings for RBindings<'_> {
+    type Error = CallbackError;
+    /// Borrow immutable admitted metadata independently of callback evaluation.
+    fn signature(&self, slot: usize) -> Option<&yamaa_engine::function_invocation::InvocationPlan> {
+        self.signatures.get(slot)
+    }
+    /// Root one stable dispatcher and reuse the existing scalar/condition boundary.
+    fn call(
+        &mut self,
+        slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> std::result::Result<Value, HostError<CallbackError>> {
+        RPort {
+            dispatch: self.callbacks[slot].clone(),
+        }
+        .call(arguments)
+    }
+}
+
 /// Match the environment's ASCII R host-name policy, including reserved forms.
 fn host_name(name: &str) -> bool {
     let b = name.as_bytes();
@@ -182,4 +268,5 @@ fn detail(
 extendr_module! {
     mod function_callback;
     fn invoke_function;
+    fn execute_dataset_functions;
 }

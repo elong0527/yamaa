@@ -132,3 +132,22 @@ Two additional `row_lookup_*_after_false_filter` cases place the same ambiguous
 lookup in the later column phase, in record and grouped plans. Unlike the
 row-assignment case, both yield an independently specified empty successful
 snapshot. All 76 cases replay through Rust and the installed Python/R bridges.
+
+## Dataset callbacks
+
+`callbacks.arrow` contains integer rows `(ID,A,B) = (1,10,20), (2,missing,30),
+(3,40,50)`. `callbacks-groups.arrow` contains `(1,10,20)` twice and
+`(2,missing,30)` once. The empty variant has the same three-column schema and
+zero rows. The extreme variant supplies `INT64_MIN`, `INT64_MAX` and `2^53+1`
+as A values for IDs 1, 2 and 3. PyArrow encoded these authored rows independently
+of the native decoder/executor.
+
+`callbacks.json` and its compact TSV twin specify thirteen plans, complete
+observations and callback traces. The sum callback receives `(lhs,rhs,scale)`
+and adds the three integers with default scale 5; identity returns its exact
+argument. Thus ordinary results are 35/missing/95, and key-grain calls over
+IDs 1 and 2 plus literal 20 return 26/27. Filter timing, grouping and column
+order determine which trace entries occur. Other modes deliberately return
+Boolean or unconvertible text, or raise FixtureError on the second call.
+Their expected failure identity, context and handler counts are authored from
+the contracts. Neither execution engine generated expected output or traces.

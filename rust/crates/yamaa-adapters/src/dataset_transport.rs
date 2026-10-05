@@ -1,13 +1,17 @@
 //! Bounded dataset/1 typed-plan bridge over copied, verified Arrow snapshots.
 //! This protocol is not a specification compiler, file runner or default backend.
 use crate::{
+    function_transport::{CallbackError, FunctionTransportError},
     numeric_transport::{arithmetic, conversion, Diagnostic},
     predicate_transport::Predicate,
     scalar_transport::{ScalarValue, MAX_REQUEST_BYTES},
     table_transport::{bounded_json, decode_snapshot, encode_dataset, TableTransportError},
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::Infallible, fmt, panic::catch_unwind};
+use std::{
+    fmt,
+    panic::{catch_unwind, AssertUnwindSafe},
+};
 use yamaa_core::{
     reduction::{NumericReducer, ReductionError},
     table::{Column, TableAccess, TableSchema},
@@ -19,10 +23,13 @@ use yamaa_engine::{
     table_reduction::TableReductionError,
 };
 
+#[path = "dataset_functions.rs"]
+mod functions;
+
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions"]}"#
 }
 
 /// Bound host argument collections before copying any source buffers.
@@ -55,6 +62,8 @@ pub enum DatasetTransportError {
     InvalidScalar,
     InvalidPlan,
     OutputLimit,
+    Function(FunctionTransportError),
+    FunctionBinding,
     Table(TableTransportError),
     Internal,
 }
@@ -63,7 +72,11 @@ impl DatasetTransportError {
     pub fn is_internal(self) -> bool {
         matches!(
             self,
-            Self::Internal | Self::Table(TableTransportError::Internal)
+            Self::Internal
+                | Self::Table(TableTransportError::Internal)
+                | Self::Function(
+                    FunctionTransportError::Internal | FunctionTransportError::Interrupted
+                )
         )
     }
 }
@@ -77,6 +90,10 @@ impl fmt::Display for DatasetTransportError {
             Self::InvalidScalar => "invalid dataset literal representation",
             Self::InvalidPlan => "invalid bound dataset plan",
             Self::OutputLimit => "dataset response exceeds byte limit",
+            Self::Function(error) => return error.fmt(f),
+            Self::FunctionBinding => {
+                "dataset callback bindings do not match the admitted signatures"
+            }
             Self::Table(error) => return error.fmt(f),
             Self::Internal => "internal dataset transport failure",
         })
@@ -117,6 +134,7 @@ struct Field {
 enum Expression {
     Literal(ScalarValue),
     Compute(Compute),
+    Function(functions::Call),
     Number(Window),
     Window(Window),
     Source(usize),
@@ -439,6 +457,8 @@ struct Verification {
 struct Request {
     protocol: String,
     #[serde(default)]
+    functions: Vec<crate::function_signature::Signature>,
+    #[serde(default)]
     unconvertible: Vec<ConversionHandler>,
     source: Vec<Field>,
     #[serde(default)]
@@ -456,6 +476,7 @@ struct Request {
 pub struct PreparedDataset {
     plan: DatasetPlan,
     secondary_count: usize,
+    functions: Vec<yamaa_engine::function_invocation::InvocationPlan>,
 }
 
 /// A checked table is present only for success. JSON carries exact typed observations.
@@ -499,6 +520,7 @@ impl PreparedDataset {
             {
                 return Err(Error::RequestLimit);
             }
+            let mut functions = functions::Admission::new(request.functions)?;
             let secondary_count = request.secondary.len();
             let secondary = request
                 .secondary
@@ -535,11 +557,11 @@ impl PreparedDataset {
                     Ok(dataset::RowTemplate {
                         filter: template.filter.map(Predicate::prepare).transpose()?,
                         mode,
-                        assignments: assignments(template.assignments)?,
+                        assignments: assignments(template.assignments, &mut functions)?,
                     })
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
-            let columns = assignments(request.columns)?;
+            let columns = assignments(request.columns, &mut functions)?;
             let verifications = request
                 .verifications
                 .into_iter()
@@ -597,6 +619,7 @@ impl PreparedDataset {
             Ok(Self {
                 plan,
                 secondary_count,
+                functions: functions.signatures,
             })
         })
         .map_err(|_| Error::Internal)?
@@ -613,6 +636,40 @@ impl PreparedDataset {
         source: &[u8],
         secondary: &[&[u8]],
     ) -> Result<DatasetResponse, Error> {
+        self.execute_sources_functions(source, secondary, &mut functions::Unavailable)
+    }
+
+    /// Borrow admitted metadata for a host-owned, stable registry; labels do not prove activation.
+    pub fn function_signatures(&self) -> &[yamaa_engine::function_invocation::InvocationPlan] {
+        &self.functions
+    }
+
+    /// Admit every binding before decoding IPC, then invoke only on the caller's thread.
+    /// Call effects are neither retried nor rolled back after any failure or unwind.
+    pub fn execute_sources_functions(
+        &self,
+        source: &[u8],
+        secondary: &[&[u8]],
+        functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+    ) -> Result<DatasetResponse, Error> {
+        catch_unwind(AssertUnwindSafe(|| {
+            self.execute_bound(source, secondary, functions)
+        }))
+        .map_err(|_| Error::Internal)?
+    }
+
+    /// The containment boundary includes binding metadata inspection and all callback effects.
+    fn execute_bound(
+        &self,
+        source: &[u8],
+        secondary: &[&[u8]],
+        functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+    ) -> Result<DatasetResponse, Error> {
+        for (slot, signature) in self.functions.iter().enumerate() {
+            if functions.signature(slot) != Some(signature) {
+                return Err(Error::FunctionBinding);
+            }
+        }
         if secondary.len() != self.secondary_count {
             return Err(Error::InvalidRequest);
         }
@@ -622,11 +679,15 @@ impl PreparedDataset {
         if bytes.is_none_or(|size| size > crate::table_transport::MAX_INPUT_BYTES) {
             return Err(Error::Table(TableTransportError::InputLimit));
         }
-        catch_unwind(|| {
-            let source = decode_snapshot(source).map_err(Error::Table)?;
+        {
+            let source = functions::Snapshot(decode_snapshot(source).map_err(Error::Table)?);
             let secondary = secondary
                 .iter()
-                .map(|bytes| decode_snapshot(bytes).map_err(Error::Table))
+                .map(|bytes| {
+                    decode_snapshot(bytes)
+                        .map(functions::Snapshot)
+                        .map_err(Error::Table)
+                })
                 .collect::<Result<Vec<_>, Error>>()?;
             let total_cells = secondary.iter().chain(core::iter::once(&source)).try_fold(
                 0_usize,
@@ -640,13 +701,13 @@ impl PreparedDataset {
             if total_cells.is_none_or(|cells| cells > MAX_SOURCE_CELLS) {
                 return Err(Error::Table(TableTransportError::ShapeLimit));
             }
-            let references: Vec<&dyn TableAccess<Error = Infallible>> = secondary
+            let references: Vec<&dyn TableAccess<Error = CallbackError>> = secondary
                 .iter()
-                .map(|table| table as &dyn TableAccess<Error = Infallible>)
+                .map(|table| table as &dyn TableAccess<Error = CallbackError>)
                 .collect();
-            let attempt = self
-                .plan
-                .execute_observed_sources(&source, &references, LIMITS);
+            let attempt =
+                self.plan
+                    .execute_observed_functions(&source, &references, functions, LIMITS);
             let (table, outcome) = match attempt.result {
                 Ok(result) => (
                     Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
@@ -680,8 +741,7 @@ impl PreparedDataset {
                 }
             })?;
             Ok(DatasetResponse { table, outcome })
-        })
-        .map_err(|_| Error::Internal)?
+        }
     }
 }
 
@@ -724,7 +784,10 @@ fn bound(value: Option<String>) -> Result<Option<i64>, Error> {
         .transpose()
 }
 /// Lower the closed expression vocabulary without performing any evaluation.
-fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Error> {
+fn assignments(
+    values: Vec<Assignment>,
+    functions: &mut functions::Admission,
+) -> Result<Vec<dataset::Assignment>, Error> {
     if values.len() > MAX_COLUMNS {
         return Err(Error::RequestLimit);
     }
@@ -736,6 +799,7 @@ fn assignments(values: Vec<Assignment>) -> Result<Vec<dataset::Assignment>, Erro
                 Expression::Literal(value) => dataset::Expression::Literal(
                     value.into_core().map_err(|_| Error::InvalidScalar)?,
                 ),
+                Expression::Function(call) => dataset::Expression::Function(functions.bind(call)?),
                 Expression::Compute(expression) => {
                     dataset::Expression::Compute(expression.prepare(&assignment.path)?)
                 }
@@ -860,6 +924,11 @@ enum Outcome {
         #[serde(skip_serializing_if = "Option::is_none")]
         verifications: Option<Vec<Record>>,
     },
+    #[serde(rename = "condition")]
+    FunctionCondition {
+        diagnostic: functions::Diagnostic,
+        identity: Option<Identity>,
+    },
     Limit {
         resource: &'static str,
         limit: Option<String>,
@@ -909,8 +978,17 @@ fn records(records: Vec<CheckRecord>) -> Vec<Record> {
         .collect()
 }
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
-fn failure(error: ExecutionError<Infallible>) -> Result<Outcome, Error> {
+fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
     Ok(match error {
+        ExecutionError::Function {
+            path,
+            error,
+            identity: keys,
+        } => Outcome::FunctionCondition {
+            diagnostic: functions::Diagnostic::new(path, error)?,
+            identity: keys.map(identity),
+        },
+        ExecutionError::FunctionBinding { .. } => return Err(Error::FunctionBinding),
         ExecutionError::Numeric {
             error,
             identity: keys,

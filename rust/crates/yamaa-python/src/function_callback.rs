@@ -37,6 +37,91 @@ pub fn invoke_function(request: &str, callback: &Bound<'_, PyAny>) -> PyResult<S
     }
     result.map_err(transport_error)
 }
+/// Execute a typed dataset with an explicitly supplied, per-run snapshot of callables.
+#[pyfunction]
+pub fn execute_dataset_functions<'py>(
+    py: Python<'py>,
+    request: &str,
+    source: &[u8],
+    secondary: &Bound<'py, pyo3::types::PyList>,
+    callbacks: &Bound<'py, pyo3::types::PyList>,
+) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
+    use yamaa_adapters::dataset_transport::{PreparedDataset, MAX_SOURCES};
+    let prepared = match PreparedDataset::parse(request) {
+        Ok(plan) => plan,
+        Err(error) => return crate::dataset_result(py, Err(error)),
+    };
+    if callbacks.len() != prepared.function_signatures().len() {
+        return Err(PyValueError::new_err(
+            "callback count does not match dataset declarations",
+        ));
+    }
+    if !prepared
+        .function_signatures()
+        .iter()
+        .all(|s| s.parameters().iter().all(|p| host_name(&p.host_name)))
+    {
+        return Err(transport_error(Error::InvalidHostName));
+    }
+    let callbacks = callbacks
+        .iter()
+        .map(|callback| {
+            if !callback.is_callable() {
+                return Err(PyTypeError::new_err("callback must be callable"));
+            }
+            Ok(callback)
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    if secondary.len() >= MAX_SOURCES {
+        return Err(PyValueError::new_err("too many secondary dataset sources"));
+    }
+    let buffers = secondary
+        .iter()
+        .map(|value| value.cast_into::<pyo3::types::PyBytes>())
+        .collect::<Result<Vec<_>, _>>()?;
+    let slices = buffers
+        .iter()
+        .map(|bytes| bytes.as_bytes())
+        .collect::<Vec<_>>();
+    let mut bindings = PythonBindings {
+        signatures: prepared.function_signatures(),
+        callbacks,
+        interrupted: None,
+    };
+    let result = prepared.execute_sources_functions(source, &slices, &mut bindings);
+    if let Some(interrupted) = bindings.interrupted {
+        return Err(interrupted);
+    }
+    crate::dataset_result(py, result)
+}
+
+struct PythonBindings<'a, 'py> {
+    signatures: &'a [yamaa_engine::function_invocation::InvocationPlan],
+    callbacks: Vec<Bound<'py, PyAny>>,
+    interrupted: Option<PyErr>,
+}
+impl yamaa_engine::dataset::FunctionBindings for PythonBindings<'_, '_> {
+    type Error = CallbackError;
+    /// Metadata is borrowed from the fully admitted request and remains stable for the run.
+    fn signature(&self, slot: usize) -> Option<&yamaa_engine::function_invocation::InvocationPlan> {
+        self.signatures.get(slot)
+    }
+    /// Reuse exact scalar encoding and original control-flow propagation without retries.
+    fn call(
+        &mut self,
+        slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> Result<Value, HostError<CallbackError>> {
+        let mut port = PythonPort {
+            callback: &self.callbacks[slot],
+            interrupted: None,
+        };
+        let result = port.call(arguments);
+        self.interrupted = port.interrupted;
+        result
+    }
+}
+
 /// Keep cancellation and unexpected internal failures separate from invalid inputs.
 fn transport_error(error: Error) -> PyErr {
     if matches!(error, Error::Internal | Error::Interrupted) {

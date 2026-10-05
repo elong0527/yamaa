@@ -2,9 +2,10 @@
 
 The trusted Rust `DatasetPlan` API can compose scalar host-function calls with
 row and column assignments using `Expression::Function(BoundFunction)`. This is
-an engine port, not a new `dataset/1` wire feature. Python/R dataset callbacks,
-normalized-specification admission, environment discovery, artifact verification,
-activation vectors and installed cross-host callback qualification remain open
+an engine port also composed by the explicit Python/R `dataset/1` callback
+entrypoints described in [the transport contract](DATASET_TRANSPORT.md#explicit-host-functions).
+Normalized-specification function admission, environment discovery, artifact
+verification, activation vectors and full workflow qualification remain open
 in issue #1585. Python stays the default and `execution_supported` remains false.
 
 ## Admission and ownership
@@ -72,4 +73,5 @@ errors, conversion recovery, converted dependent values and resource exhaustion.
 Separate Python reference observations pin argument ordering without generating
 expected Rust results. Existing scalar invocation fixtures remain the authority
 for temporal encoding and host representation details; this slice does not
-claim installed Python/R dataset callback parity or ADSL BMI completion.
+claim full workflow parity or ADSL BMI completion. The explicit installed callback
+subset has separate shared fixture and boundary qualification in the transport tests.

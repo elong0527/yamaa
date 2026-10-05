@@ -148,6 +148,10 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         function_callback::invoke_function,
         module
     )?)?;
+    module.add_function(wrap_pyfunction!(
+        function_callback::execute_dataset_functions,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(scalar_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
