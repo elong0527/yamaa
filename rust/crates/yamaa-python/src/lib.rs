@@ -1,6 +1,7 @@
 //! Optional Python installation probe; this is not an execution backend.
 use pyo3::prelude::*;
 mod function_callback;
+mod reference_catalog;
 mod temporal_result;
 use pyo3::types::PyDict;
 
@@ -181,6 +182,15 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
+    module.add_class::<reference_catalog::ReferenceCatalog>()?;
+    module.add_function(wrap_pyfunction!(
+        reference_catalog::_compile_reference_catalog,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        reference_catalog::analyze_references,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(analyze_dependencies, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_column_dependencies, module)?)?;
     module.add_function(wrap_pyfunction!(

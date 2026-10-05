@@ -39,6 +39,19 @@ fn scalar_round_trip(request: Raw) -> List {
     )
 }
 
+/// Compile and analyze a bounded metadata batch without retaining R objects.
+#[extendr]
+fn analyze_references(request: Raw) -> List {
+    json_request(
+        request,
+        yamaa_adapters::reference_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::reference_transport::analyze_references(text)
+                .map_err(|error| error.to_string())
+        },
+    )
+}
+
 /// Return shared graph analysis before the R facade raises any transport condition.
 #[extendr]
 fn analyze_dependencies(request: Raw) -> List {
@@ -164,6 +177,7 @@ extendr_module! {
     use function_callback;
     fn engine_info;
     fn analyze_dependencies;
+    fn analyze_references;
     fn analyze_column_dependencies;
     fn scalar_round_trip;
     fn evaluate_numeric;

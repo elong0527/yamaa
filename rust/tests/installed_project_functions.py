@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import polars as pl
@@ -167,6 +168,52 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.events.clear()
         self.assert_csv(self.execute(cache=cache))
         self.assertEqual(self.events, ["source"] + CALLS)
+
+    def test_reference_compiler_failure_preserves_activation_and_retry(self):
+        """Compile/query failures cannot execute callbacks or erase passed vector authority."""
+        original = yamaa_native._compile_reference_catalog
+        for stage in ("compile", "query"):
+            with self.subTest(stage=stage):
+                self.events.clear()
+                self.read = False
+                cache = NativeActivationCache()
+                failure = ValueError("reference compiler boundary failure")
+                calls = []
+
+                def reject_query(_, calls=calls, failure=failure):
+                    """Inject one query boundary failure after genuine catalog compilation."""
+                    calls.append("query")
+                    raise failure
+
+                def compile_catalog(request, calls=calls, stage=stage, failure=failure):
+                    """Distinguish preparation failure from failure of a ready catalog query."""
+                    calls.append("compile")
+                    if stage == "compile":
+                        raise failure
+                    catalog, status = original(request)
+                    self.assertIsNotNone(catalog)
+                    return SimpleNamespace(analyze=reject_query), status
+
+                with (
+                    patch.object(
+                        yamaa_native, "_compile_reference_catalog", compile_catalog
+                    ),
+                    patch.object(
+                        yamaa_native,
+                        "execute_dataset_functions",
+                        side_effect=AssertionError("execution after compiler failure"),
+                    ),
+                    self.assertRaises(ValueError) as caught,
+                ):
+                    self.execute(cache=cache)
+                self.assertIs(caught.exception, failure)
+                self.assertEqual(
+                    calls, ["compile"] if stage == "compile" else ["compile", "query"]
+                )
+                self.assertEqual(self.events, VECTORS + ["source"])
+                self.events.clear()
+                self.assert_csv(self.execute(cache=cache))
+                self.assertEqual(self.events, ["source"] + CALLS)
 
     def test_reference_activation_cannot_qualify_native(self):
         """Reject reference cache authority and independently qualify the native invocation path."""
