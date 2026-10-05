@@ -1,7 +1,7 @@
 # Shared dependency analysis
 
-This bounded compiler slice for issue #1585 moves dependency-cycle selection and
-stable derivation scheduling into `yamaa-core`. The optional Python native
+The bounded compiler services for issue #1585 move dependency-cycle selection,
+stable derivation scheduling and column dependency rules into `yamaa-core`. The optional Python native
 frontend selects this service before project activation or source-provider
 effects and uses it during actual planning. The default Python planner remains
 unchanged. Both installed Python and R bindings expose the same service; this
@@ -27,12 +27,13 @@ earlier node therefore precedes an already waiting later node. Cycles and their
 blocked readers are omitted from the returned maximal schedulable order. The
 cycle result remains available alongside that order; it is not a transport error.
 
-Python planning uses the result for intermediate-read cycle checks, row-derivation
-cycle/order analysis and column-derivation cycle/order analysis. Existing host
-diagnostics still own requirement IDs, source paths, contexts and diagnostic
-ordering. Forward references, key dependencies and phase-boundary restrictions
-are still checked; a topologically sortable graph does not waive those rules.
-Native analysis failures propagate without running the Python graph algorithms.
+Python planning uses this graph result for intermediate-read cycle checks and
+row-derivation cycle/order analysis. The separate column service below owns
+column cycle/order analysis, forward-reference and key-dependency rules. Hosts
+attach authored source paths and names to core-selected column diagnostics;
+other validation, including phase-boundary restrictions, remains host-owned.
+Native analysis failures propagate without running Python graph or column-rule
+fallbacks. A topologically sortable graph does not waive language rules.
 
 ## Installed transport
 
@@ -62,6 +63,49 @@ language diagnostic. Malformed transport raises a host error. R validates scalar
 text and converts native errors to R errors only after the native call returns.
 No request content or panic payload is included in stable native error text.
 
+## Column dependency rules
+
+`column_dependencies::analyze` implements REQ-0071, REQ-0072 and REQ-0074 over
+already-bound output declarations. Both bindings export
+`analyze_column_dependencies` with a separate `column-dependencies/1` envelope:
+
+```json
+{"protocol":"column-dependencies/1","dependencies":[[1],[]],"keys":[1],"has_rows":false}
+```
+
+This request returns `order: [1,0]` and `diagnostics: []` in a complete outcome:
+the later key is exempt from the forward-reference restriction and is scheduled
+before its reader. Dependencies include every output declaration: `null` means
+no column-phase derivation, while `[]` means a derivation without output-column
+references. The binder omits source references, retains dependency first-occurrence
+order, and supplies keys in authored key order. `has_rows` records whether the
+specification has row templates. No names, schemas, source tables or callbacks
+cross this boundary.
+
+Completed row-phase values remain in the declaration catalog for forward-reference
+and key checks. Their edges are removed before scheduling, so a completed value
+cannot delay a reader behind an unrelated column. Rule failures are returned in
+the existing order: first the selected cycle; then forward references in column
+and written dependency order, excluding that cycle's members and key targets;
+then, without row templates, missing key derivations and non-key dependencies in
+authored key order. Other cycles do not suppress their forward-reference failures.
+Any diagnostic prevents execution, even when a partial schedule is available.
+
+Each diagnostic carries `condition`, `requirement`, `location` and ordered
+`columns` indices. Locations select the authored operation, expression or
+column-derivation declaration path. The host attaches paths and names without
+re-evaluating column rules. Name resolution, derivation inheritance and phase
+selection remain in the Python compiler; this is not full shared compilation.
+
+The column envelope uses the same fixed byte/node/written-edge limits as graph
+analysis. All declarations and written edges count, including completed-phase
+references and duplicates. Limits precede index admission; invalid/duplicate key
+indices are transport errors. Duplicate edges affect written diagnostic order,
+while scheduling deduplicates them. The normalized Python binder supplies only
+first occurrences. The optional frontend captures both services before activation
+or data access. An older wheel without the column service yields explicit
+`native_column_dependency_analysis` unsupported status before either effect.
+
 ## Qualification and remaining work
 
 Thirteen hand-authored shared cases pin empty/isolated graphs, chains, diamonds,
@@ -80,6 +124,12 @@ including when the separately installed wheel predates this service. Additional
 installed cases pin row order, completed-phase reads, column/intermediate cycle
 provenance, forward-reference rejection and graph-limit outcomes. The existing
 installed project tests retain independent activation and callback trace truth.
+Twenty additional hand-authored column cases replay through core, transport and
+both installed hosts. They pin diagnostic priority, authored key/dependency order,
+key exemptions, multiple cycles, completed-phase scheduling and row-template
+exceptions. Installed Python planning also checks the actual diagnostic paths,
+contexts and order against explicit truth (including the unchanged default planner),
+service capture, older-service refusal, failure propagation and explicit retry.
 CI repeats installed tests for the wheel and independently rebuilt source archive,
 and tests the R source package outside the checkout.
 

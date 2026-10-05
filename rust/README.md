@@ -16,8 +16,8 @@ remaining parser/dataset integration are described in [PREDICATES.md](PREDICATES
 Opt-in dataset stage instrumentation and the installed, fresh-process measurement
 procedure are described in [PHASE_MEASUREMENTS.md](PHASE_MEASUREMENTS.md).
 
-Shared cycle selection and stable scheduling, connected to actual optional native
-planning, are described in [DEPENDENCY_ANALYSIS.md](DEPENDENCY_ANALYSIS.md).
+Shared cycle selection, stable scheduling and column dependency rules, connected
+to actual optional native planning, are described in [DEPENDENCY_ANALYSIS.md](DEPENDENCY_ANALYSIS.md).
 
 ## Boundaries
 

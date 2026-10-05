@@ -39,7 +39,7 @@ from yamaa.odm import (
     build_binding_plan,
 )
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
-from yamaa.planning.dependencies import DependencyAnalyzer
+from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
@@ -4563,6 +4563,7 @@ def plan_execution(
     *,
     supported_operations: Collection[str] = INITIAL_OPERATIONS,
     dependency_analyzer: DependencyAnalyzer | None = None,
+    column_dependency_analyzer: ColumnDependencyAnalyzer | None = None,
 ) -> ExecutionPlan:
     """Validate and plan the initial record-driven execution subset.
 
@@ -5150,77 +5151,110 @@ def plan_execution(
         )
         for planned in column_plans
     }
-    names = [name for name in column_order if name in column_graph]
-    column_analysis = (
-        dependency_analyzer(names, column_graph)
-        if dependency_analyzer is not None
-        else None
-    )
-    cycle = (
-        _find_cycle(names, column_graph)
-        if column_analysis is None
-        else column_analysis.cycle
-    )
-    cycle_members = set(cycle[:-1]) if cycle is not None else set()
-    if cycle is not None:
-        by_name = {planned.column: planned for planned in column_plans}
-        paths = tuple(
-            dict.fromkeys(by_name[name].operation_path for name in cycle[:-1])
+    if column_dependency_analyzer is not None:
+        column_analysis = column_dependency_analyzer(
+            column_order, column_graph, specification.keys, bool(specification.rows)
         )
-        diagnostics.append(
-            _diagnostic(
-                "dependency_cycle",
-                paths,
-                {"cycle": list(cycle)},
-                requirement="REQ-0072",
-            )
-        )
-
-    key_set = set(specification.keys)
-    for planned in column_plans:
-        if planned.column in cycle_members:
-            continue
-        for dependency in planned.dependencies:
-            if dependency in key_set or dependency not in column_positions:
-                continue  # keys predate column derivation (REQ-0074)
-            if column_positions[dependency] >= column_positions[planned.column]:
-                diagnostics.append(
-                    _diagnostic(
-                        "forward_reference",
-                        planned.operation_path,
-                        {"column": planned.column, "dependency": dependency},
-                        requirement="REQ-0071",
+        planned_by_column = {planned.column: planned for planned in column_plans}
+        for finding in column_analysis.diagnostics:
+            if finding.condition == "dependency_cycle":
+                paths = tuple(
+                    dict.fromkeys(
+                        planned_by_column[name].operation_path
+                        for name in finding.columns[:-1]
                     )
                 )
-
-    planned_by_column = {planned.column: planned for planned in column_plans}
-    has_templates = bool(specification.rows)
-    for key in specification.keys:
-        planned = planned_by_column.get(key)
-        if planned is None:
-            if has_templates:
-                continue
+                context = {"cycle": list(finding.columns)}
+            else:
+                column = finding.columns[0]
+                if finding.location == "declaration":
+                    paths = f"columns.{column}.derivation"
+                elif finding.location == "operation":
+                    paths = planned_by_column[column].operation_path
+                elif finding.location == "expression":
+                    paths = planned_by_column[column].expression_path
+                else:
+                    raise ValueError("unknown native column dependency location")
+                context = {"column": column}
+                if len(finding.columns) == 2:
+                    context["dependency"] = finding.columns[1]
             diagnostics.append(
                 _diagnostic(
-                    "key_dependency",
-                    f"columns.{key}.derivation",
-                    {"column": key},
-                    requirement="REQ-0074",
+                    finding.condition, paths, context, requirement=finding.requirement
                 )
             )
-            continue
-        for dependency in planned.dependencies:
-            if dependency in column_types and dependency not in key_set:
+    else:
+        names = [name for name in column_order if name in column_graph]
+        column_analysis = (
+            dependency_analyzer(names, column_graph)
+            if dependency_analyzer is not None
+            else None
+        )
+        cycle = (
+            _find_cycle(names, column_graph)
+            if column_analysis is None
+            else column_analysis.cycle
+        )
+        cycle_members = set(cycle[:-1]) if cycle is not None else set()
+        if cycle is not None:
+            by_name = {planned.column: planned for planned in column_plans}
+            paths = tuple(
+                dict.fromkeys(by_name[name].operation_path for name in cycle[:-1])
+            )
+            diagnostics.append(
+                _diagnostic(
+                    "dependency_cycle",
+                    paths,
+                    {"cycle": list(cycle)},
+                    requirement="REQ-0072",
+                )
+            )
+
+        key_set = set(specification.keys)
+        for planned in column_plans:
+            if planned.column in cycle_members:
+                continue
+            for dependency in planned.dependencies:
+                if dependency in key_set or dependency not in column_positions:
+                    continue  # keys predate column derivation (REQ-0074)
+                if column_positions[dependency] >= column_positions[planned.column]:
+                    diagnostics.append(
+                        _diagnostic(
+                            "forward_reference",
+                            planned.operation_path,
+                            {"column": planned.column, "dependency": dependency},
+                            requirement="REQ-0071",
+                        )
+                    )
+
+        planned_by_column = {planned.column: planned for planned in column_plans}
+        has_templates = bool(specification.rows)
+        for key in specification.keys:
+            planned = planned_by_column.get(key)
+            if planned is None:
                 if has_templates:
                     continue
                 diagnostics.append(
                     _diagnostic(
                         "key_dependency",
-                        planned.expression_path,
-                        {"column": key, "dependency": dependency},
+                        f"columns.{key}.derivation",
+                        {"column": key},
                         requirement="REQ-0074",
                     )
                 )
+                continue
+            for dependency in planned.dependencies:
+                if dependency in column_types and dependency not in key_set:
+                    if has_templates:
+                        continue
+                    diagnostics.append(
+                        _diagnostic(
+                            "key_dependency",
+                            planned.expression_path,
+                            {"column": key, "dependency": dependency},
+                            requirement="REQ-0074",
+                        )
+                    )
 
     if diagnostics:
         raise ExecutionPlanningError(diagnostics)

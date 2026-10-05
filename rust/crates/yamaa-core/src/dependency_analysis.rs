@@ -44,14 +44,28 @@ pub struct Analysis {
 /// repetition do not change the result, but repeated edges still consume budget.
 /// This service neither resolves references nor decides whether forward reads are legal.
 pub fn analyze(dependencies: &[Vec<usize>], limits: Limits) -> Result<Analysis, Error> {
-    if dependencies.len() > limits.nodes {
+    admit(
+        dependencies.len(),
+        dependencies.iter().map(Vec::as_slice),
+        limits,
+    )?;
+    Ok(analyze_admitted(dependencies.to_vec()))
+}
+
+/// Admit borrowed edges before either graph service copies or filters them.
+pub(crate) fn admit<'a>(
+    nodes: usize,
+    dependencies: impl Iterator<Item = &'a [usize]> + Clone,
+    limits: Limits,
+) -> Result<(), Error> {
+    if nodes > limits.nodes {
         return Err(Error::NodeLimit {
             limit: limits.nodes,
-            required: dependencies.len(),
+            required: nodes,
         });
     }
     let edges = dependencies
-        .iter()
+        .clone()
         .try_fold(0usize, |count, dependencies| {
             count
                 .checked_add(dependencies.len())
@@ -63,22 +77,26 @@ pub fn analyze(dependencies: &[Vec<usize>], limits: Limits) -> Result<Analysis, 
             required: edges,
         });
     }
-    for (node, dependencies_for_node) in dependencies.iter().enumerate() {
+    for (node, dependencies_for_node) in dependencies.enumerate() {
         for &dependency in dependencies_for_node {
-            if dependency >= dependencies.len() {
+            if dependency >= nodes {
                 return Err(Error::InvalidDependency { node, dependency });
             }
         }
     }
-    let mut graph = dependencies.to_vec();
+    Ok(())
+}
+
+/// Analyze an owned graph after its caller has admitted indices and work limits.
+pub(crate) fn analyze_admitted(mut graph: Vec<Vec<usize>>) -> Analysis {
     for dependencies in &mut graph {
         dependencies.sort_unstable();
         dependencies.dedup();
     }
-    Ok(Analysis {
+    Analysis {
         cycle: first_cycle(&graph),
         order: stable_order(&graph),
-    })
+    }
 }
 
 /// Reproduce declaration-ordered DFS with an explicit stack rather than host recursion.

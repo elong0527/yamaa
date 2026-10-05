@@ -52,6 +52,19 @@ fn analyze_dependencies(request: Raw) -> List {
     )
 }
 
+/// Return shared column dependency analysis before the R facade raises any transport condition.
+#[extendr]
+fn analyze_column_dependencies(request: Raw) -> List {
+    json_request(
+        request,
+        yamaa_adapters::column_dependency_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::column_dependency_transport::analyze_column_dependencies(text)
+                .map_err(|error| error.to_string())
+        },
+    )
+}
+
 /// Return numeric outcome JSON normally before the R facade raises transport errors.
 #[extendr]
 fn evaluate_numeric(request: Raw) -> List {
@@ -151,6 +164,7 @@ extendr_module! {
     use function_callback;
     fn engine_info;
     fn analyze_dependencies;
+    fn analyze_column_dependencies;
     fn scalar_round_trip;
     fn evaluate_numeric;
     fn table_round_trip;

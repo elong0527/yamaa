@@ -27,7 +27,10 @@ from yamaa.adapters._native_dataset_plan import (
     primary_source,
 )
 from yamaa.adapters._native_dataset_report import condition, observations
-from yamaa.adapters._native_dependencies import bind_dependency_analyzer
+from yamaa.adapters._native_dependencies import (
+    bind_column_dependency_analyzer,
+    bind_dependency_analyzer,
+)
 from yamaa.adapters._native_project_functions import (
     NATIVE_ACTIVATION_CACHE,
     NativeActivationCache,
@@ -461,18 +464,19 @@ def _execute(specification, source_provider, prepare_functions=None):
         execute = getattr(yamaa_native, "execute_dataset_sources", None)
         if not callable(execute):
             raise TypeError("native execute_dataset_sources must be callable")
-    if not callable(getattr(yamaa_native, "analyze_dependencies", None)):
-        return NativeDatasetRun(
-            ExecutionUnsupported(
-                features=(
-                    UnsupportedFeature(
-                        operation="native_dependency_analysis", spec_path="$"
-                    ),
-                ),
-                handler_counts=(),
+    for service, operation in (
+        ("analyze_dependencies", "native_dependency_analysis"),
+        ("analyze_column_dependencies", "native_column_dependency_analysis"),
+    ):
+        if not callable(getattr(yamaa_native, service, None)):
+            return NativeDatasetRun(
+                ExecutionUnsupported(
+                    features=(UnsupportedFeature(operation=operation, spec_path="$"),),
+                    handler_counts=(),
+                )
             )
-        )
     dependency_analyzer = bind_dependency_analyzer(yamaa_native)
+    column_dependency_analyzer = bind_column_dependency_analyzer(yamaa_native)
     functions = None
     if prepare_functions is not None:
         execute = getattr(yamaa_native, "execute_dataset_functions", None)
@@ -512,6 +516,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             if functions is not None
             else OPERATIONS,
             dependency_analyzer=dependency_analyzer,
+            column_dependency_analyzer=column_dependency_analyzer,
         )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)

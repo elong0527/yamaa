@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+pub mod column_dependencies;
 pub mod conversion;
 mod decimal_rounding;
 pub mod dependency_analysis;
