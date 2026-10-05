@@ -188,6 +188,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript functions.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/datasets.R" datasets.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript datasets.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dataset_callbacks.R" dataset_callbacks.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dataset_callbacks.R
       - name: Preserve source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
