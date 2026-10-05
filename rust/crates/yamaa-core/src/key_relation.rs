@@ -41,10 +41,29 @@ pub enum Inference {
     },
 }
 
-/// REQ-0005 permits exact types or the int/float family, never date/datetime coercion.
-pub fn comparable(left: ColumnType, right: ColumnType) -> bool {
+/// A known expression type can be boolean even though declared columns cannot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComparableType {
+    Column(ColumnType),
+    Boolean,
+}
+
+impl From<ColumnType> for ComparableType {
+    /// Keep the closed declared-column vocabulary separate from expression booleans.
+    fn from(value: ColumnType) -> Self {
+        Self::Column(value)
+    }
+}
+
+/// REQ-0005 permits exact types or the int/float family, never boolean/numeric coercion.
+pub fn comparable(left: ComparableType, right: ComparableType) -> bool {
     use ColumnType::{Float, Int};
-    left == right || matches!((left, right), (Int, Float) | (Float, Int))
+    use ComparableType::Column;
+    left == right
+        || matches!(
+            (left, right),
+            (Column(Int), Column(Float)) | (Column(Float), Column(Int))
+        )
 }
 
 /// Infer REQ-0150 keys in output order and report the first REQ-0151 type mismatch.
@@ -103,7 +122,7 @@ pub fn infer(
     let mut selected = Vec::new();
     for (key, (name, expected)) in keys.iter().zip(output_types).enumerate() {
         if let Some(&actual) = right.get(name) {
-            if !comparable(expected, actual) {
+            if !comparable(expected.into(), actual.into()) {
                 return Ok(Inference::Incompatible {
                     key,
                     expected,
@@ -138,9 +157,14 @@ mod tests {
         ];
         for (i, left) in kinds.iter().enumerate() {
             for (j, right) in kinds.iter().enumerate() {
-                assert_eq!(comparable(*left, *right), expected[i][j]);
+                assert_eq!(comparable((*left).into(), (*right).into()), expected[i][j]);
             }
         }
+        for kind in kinds {
+            assert!(!comparable(ComparableType::Boolean, kind.into()));
+            assert!(!comparable(kind.into(), ComparableType::Boolean));
+        }
+        assert!(comparable(ComparableType::Boolean, ComparableType::Boolean));
     }
 
     fn catalog() -> Catalog {

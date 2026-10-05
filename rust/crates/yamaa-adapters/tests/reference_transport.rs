@@ -315,10 +315,11 @@ fn key_query_admission_and_reuse() {
     .unwrap();
     let catalog = catalog.unwrap();
     for invalid in [
-        json!({"kind":"comparable_types","left":"bool","right":"int"}),
+        json!({"kind":"comparable_types","left":"number","right":"int"}),
         json!({"kind":"comparable_types","left":null,"right":"int"}),
         json!({"kind":"comparable_types","left":"int","right":"int","coerce":true}),
         json!({"kind":"infer_keys","keys":[false],"fields":[]}),
+        json!({"kind":"infer_keys","keys":["A"],"fields":[{"name":"A","type":"bool"}]}),
         json!({"kind":"infer_keys","keys":["A"],"fields":[{"name":"A","type":"int","value":1}]}),
     ] {
         assert_eq!(catalog.analyze(&json!({"protocol":"reference-queries/1","queries":[{"kind":"bind","name":"A"},invalid]}).to_string()), Err(TransportError::InvalidEnvelope));

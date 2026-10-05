@@ -333,6 +333,55 @@ class InstalledReferences(unittest.TestCase):
                         ),
                     )
 
+    def test_boolean_expression_keys_report_language_type_mismatch(self):
+        """Known boolean expressions remain distinct from int keys in both compiler paths."""
+        for value in (
+            {"literal": True},
+            {"literal": False},
+            {"str_contains": {"source": "K", "pattern": "x"}},
+        ):
+            spec = specification(
+                [
+                    Column(
+                        name="K", type="str", derivation=expression({"source": "SRC.X"})
+                    ),
+                ]
+            ).model_copy(
+                update={
+                    "intermediates": [
+                        Intermediate(
+                            id="LOOK",
+                            dataset="SRC",
+                            key={"N": value},
+                        )
+                    ]
+                }
+            )
+            for native in (False, True):
+                with self.subTest(value=value, native=native):
+                    with self.assertRaises(ExecutionPlanningError) as caught:
+                        self.plan(spec, native)
+                    (diagnostic,) = caught.exception.diagnostics
+                    self.assertEqual(
+                        (
+                            diagnostic.condition,
+                            diagnostic.requirement,
+                            diagnostic.spec_paths,
+                            dict(diagnostic.context),
+                        ),
+                        (
+                            "incompatible_input_type",
+                            "REQ-0323",
+                            ("intermediates[0].key",),
+                            {
+                                "intermediate": "LOOK",
+                                "source": "key[N]",
+                                "expected": "bool",
+                                "actual": "int",
+                            },
+                        ),
+                    )
+
     def test_unknown_static_key_type_defers_without_comparison(self):
         """Mapping keys retain REQ-1259 runtime typing in both compiler paths."""
         spec = specification(

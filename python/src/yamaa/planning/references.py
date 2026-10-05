@@ -7,6 +7,8 @@ from typing import Literal, Protocol
 from yamaa.models import ColumnType
 from yamaa.odm.bindings import BindingPlan, BindingResult
 
+ComparableType = ColumnType | Literal["bool"]
+
 
 @dataclass(frozen=True)
 class ReferenceFinding:
@@ -83,8 +85,8 @@ class KeyInference:
 class ReferenceCompiler(Protocol):
     """An immutable catalog captured for one planning attempt, never a user extension hook."""
 
-    def comparable_types(self, left: ColumnType, right: ColumnType) -> bool:
-        """Compare declared types without coercing values or resolving unknown types."""
+    def comparable_types(self, left: ComparableType, right: ComparableType) -> bool:
+        """Compare known types, including expression booleans, without coercing values."""
         ...
 
     def infer_keys(

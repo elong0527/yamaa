@@ -190,9 +190,10 @@ fallback to Python rules after selecting the native compiler.
 ## Key relations
 
 The `key_relations` feature adds two metadata queries. `comparable_types` takes
-`left` and `right` declared types and returns `kind: comparable_types` with a
+`left` and `right` known static types and returns `kind: comparable_types` with a
 `comparable` boolean. Exact types compare; `int` and `float` also compare in
-either direction. `date` and `datetime` remain distinct. Unknown static expression
+either direction. `date` and `datetime` remain distinct. Known `bool` expression results compare only with `bool`; this does not add a
+boolean column type to catalogs or inferred-key fields. Unknown static expression
 types are deferred by the host before this query, without guessing a type.
 
 `infer_keys` takes ordered output `keys` and a `fields` list of `{name, type}`
@@ -240,7 +241,8 @@ Unicode, absent targets, phase priority and self-cycle deferral. The same corpus
 runs through both installed hosts and the unchanged default Python rules.
 Installed planning tests disable both reference intermediate helpers and compare
 full diagnostic paths, contexts, requirements and combined finding order.
-Thirty-nine authored key cases cover all 25 declared-type pairs plus ordered
+Fifty authored key cases cover all 36 known-type pairs (including expression
+booleans) plus ordered
 inference, numeric compatibility, first mismatches, invalid identity, empty
 intersections, literal Unicode/dotted names and duplicate key indices. The same
 truth is replayed by the default Python rules and native batch/prepared services.

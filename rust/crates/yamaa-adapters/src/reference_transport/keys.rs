@@ -1,7 +1,33 @@
 //! Wire translation for shared key inference; hosts retain authored diagnostic paths.
 use super::{core, field, Field, Kind};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use yamaa_core::key_relation;
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum ComparableKind {
+    Str,
+    Int,
+    Float,
+    Date,
+    Datetime,
+    Bool,
+}
+
+impl ComparableKind {
+    /// Accept known expression booleans only for comparison, never catalog declarations.
+    pub(super) fn core(self) -> key_relation::ComparableType {
+        use yamaa_core::value::ColumnType;
+        match self {
+            Self::Str => ColumnType::Str.into(),
+            Self::Int => ColumnType::Int.into(),
+            Self::Float => ColumnType::Float.into(),
+            Self::Date => ColumnType::Date.into(),
+            Self::Datetime => ColumnType::DateTime.into(),
+            Self::Bool => key_relation::ComparableType::Boolean,
+        }
+    }
+}
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]

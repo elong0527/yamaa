@@ -116,8 +116,8 @@ struct QueryRequest {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Query {
     ComparableTypes {
-        left: Kind,
-        right: Kind,
+        left: keys::ComparableKind,
+        right: keys::ComparableKind,
     },
     InferKeys {
         keys: Vec<String>,

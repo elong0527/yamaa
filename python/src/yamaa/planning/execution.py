@@ -41,6 +41,7 @@ from yamaa.odm import (
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
 from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
 from yamaa.planning.references import (
+    ComparableType,
     IntermediateReadScope,
     IntermediateScope,
     KeyInference,
@@ -830,7 +831,7 @@ def _match_value_entries(values: Sequence[object]) -> tuple[str | Expression, ..
 # for the REQ-0118 comparability check on expression match values. `source` and
 # `literal` take their types from their payloads below. Operations absent
 # here defer the check to runtime comparison of values.
-_MATCH_VALUE_RESULT_TYPES: dict[str, ColumnType] = {
+_MATCH_VALUE_RESULT_TYPES: dict[str, ComparableType] = {
     "baseline_flag": "str",
     "cut": "str",
     "date_diff": "int",
@@ -862,7 +863,7 @@ def _match_value_result_type(
     expression: Expression,
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
-) -> ColumnType | None:
+) -> ComparableType | None:
     """Infer an expression match value's static result type, if it is known.
 
     `source` takes its variable's type, `literal` takes its value's type,
@@ -2337,14 +2338,14 @@ def _validate_paired_type(
     )
 
 
-def _reference_comparable_types(left: ColumnType, right: ColumnType) -> bool:
+def _reference_comparable_types(left: ComparableType, right: ComparableType) -> bool:
     """Retain the default backend's declared-type rule independently of Rust."""
     return left == right or {left, right} <= {"int", "float"}
 
 
 def _comparable_types(
-    left: ColumnType,
-    right: ColumnType,
+    left: ComparableType,
+    right: ComparableType,
     reference_compiler: ReferenceCompiler | None = None,
 ) -> bool:
     """Select REQ-0005 comparison through the captured backend compiler port."""
