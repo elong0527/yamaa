@@ -24,6 +24,7 @@ def stage(destination: Path):
     resources = destination / "inst"
     resources.mkdir(exist_ok=True)
     for fixture in (
+        "aggregate_syntax.tsv",
         "scalar_transport.tsv",
         "numeric_transport.tsv",
         "reference_binding.tsv",

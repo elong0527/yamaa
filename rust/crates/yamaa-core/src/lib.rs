@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+pub mod aggregate_parser;
 pub mod column_dependencies;
 pub mod conversion;
 mod decimal_rounding;

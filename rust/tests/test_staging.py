@@ -32,6 +32,7 @@ class StagingTests(unittest.TestCase):
             self.assertFalse((embedded / "target").exists())
             self.assertFalse((embedded / "Cargo.lock").exists())
             for fixture in (
+                "aggregate_syntax.tsv",
                 "scalar_transport.tsv",
                 "numeric_transport.tsv",
                 "reference_binding.tsv",

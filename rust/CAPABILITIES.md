@@ -357,3 +357,13 @@ prerequisite for the unchanged `schema-functions` specification. Bounded
 normalized call lowering and native activation vectors are now qualified
 through the optional Python project frontend; R normalized-spec integration
 and full shared environment activation remain open.
+
+## Shared aggregate syntax service
+
+The [aggregate-syntax/1 parser](AGGREGATE_SYNTAX.md) admits the complete closed
+R013 syntax, retains exact reducer/literal spelling and returns portable grammar
+and resource outcomes. The same service is exported by Python and R without
+reading data or resolving names. Parsing MIN/MAX/ONLY, aggregate arithmetic or
+EXP/LN/POWER does not advertise their dataset execution support. The current
+normalized frontend still uses the Python parser; replacing that bridge and
+compiling current-schema documents in R remain separate integration gates.
