@@ -219,6 +219,40 @@ def test_a_complete_source_is_returned_unchanged_whatever_the_bound_says() -> No
     assert value.collected_precision == "day"
 
 
+def test_a_complete_source_ignores_an_unresolvable_bound() -> None:
+    # REQ-0586/REQ-0587: the bound applies after completion, so a complete
+    # source never reaches bound resolution.
+    value = _value(
+        "date_impute",
+        impute(None, not_before="NOPE"),
+        {"S": "2025-01-05"},
+    )
+
+    assert value == date("2025-01-05")
+
+
+def test_a_complete_source_ignores_a_mistyped_bound() -> None:
+    # REQ-0586: a complete source is returned unchanged whatever the bound says.
+    value = _value(
+        "date_impute",
+        impute(None, not_before="B"),
+        {"S": "2025-01-05", "B": 42},
+    )
+
+    assert value == date("2025-01-05")
+
+
+def test_an_incomplete_source_still_validates_its_bound() -> None:
+    # The bound is read for an incomplete source, so a broken reference fails.
+    result = _condition(
+        "date_impute",
+        impute(None, not_before="NOPE"),
+        {"S": "2025-01"},
+    )
+
+    assert result.condition.condition == "unknown_field"
+
+
 def test_a_truncated_source_is_completed_and_keeps_its_collected_precision() -> None:
     # REQ-0579: which components were supplied is a property of the value.
     month = _value("date_impute", impute(None), {"S": "2025-01"})

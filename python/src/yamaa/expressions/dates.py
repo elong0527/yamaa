@@ -329,6 +329,12 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         # invalid text, so neither handler answers it.
         return ValueResult(value=MISSING)
 
+    if precision == "day":
+        # REQ-0586: a complete source supplied nothing for the bound to move,
+        # so it is returned unchanged whatever the bound says -- including a
+        # bound whose reference would not resolve.
+        return ValueResult(value=DateValue.parse(source))
+
     bound = None
     if "not_before" in payload:
         read = _read(payload, "not_before", resolver, "date_impute")
@@ -343,10 +349,6 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         if isinstance(operand, ConditionResult):
             return operand
         bound = operand
-
-    if precision == "day":
-        # REQ-0586: a complete source supplied nothing for the bound to move.
-        return ValueResult(value=DateValue.parse(source))
 
     year, source_month = _prefix_fields(source, precision)
     completed_month = source_month if source_month is not None else month
