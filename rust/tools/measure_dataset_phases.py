@@ -187,21 +187,25 @@ def measure(args):
             modes = MODES[repeat % len(MODES) :] + MODES[: repeat % len(MODES)]
             for mode in modes:
                 started = time.perf_counter_ns()
-                completed = subprocess.run(
-                    [
-                        sys.executable,
-                        "-I",
-                        str(Path(__file__).resolve()),
-                        "--root",
-                        str(args.root.resolve()),
-                        "--sample",
-                        case,
-                        mode,
-                    ],
-                    text=True,
-                    capture_output=True,
-                    check=True,
-                )
+                try:
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            "-I",
+                            str(Path(__file__).resolve()),
+                            "--root",
+                            str(args.root.resolve()),
+                            "--sample",
+                            case,
+                            mode,
+                        ],
+                        text=True,
+                        capture_output=True,
+                        check=True,
+                    )
+                except subprocess.CalledProcessError as error:
+                    sys.stderr.write(error.stderr)
+                    raise
                 elapsed = (time.perf_counter_ns() - started) / 1e9
                 record = json.loads(completed.stdout)
                 record["repeat"] = repeat + 1
