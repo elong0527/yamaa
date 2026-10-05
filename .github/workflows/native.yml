@@ -62,14 +62,14 @@ jobs:
         run: uv run --project ../python --locked python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: math-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/math-assessment.json
           if-no-files-found: error
       - name: Preserve rounding assessment (not parity qualification)
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: rounding-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/rounding-assessment.json
@@ -138,12 +138,12 @@ jobs:
           python installed_dependencies.py
           python installed_references.py
       - name: Preserve distributions
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-python-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/native-dist
       - name: Preserve measurement smoke samples
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: dataset-phases-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/dataset-phases.json
@@ -220,7 +220,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/references.R" references.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript references.R
       - name: Preserve source archive
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-r-${{ matrix.os }}
           path: ${{ runner.temp }}/yamaanative_0.1.0.tar.gz
