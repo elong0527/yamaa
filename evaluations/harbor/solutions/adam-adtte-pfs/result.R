@@ -9,7 +9,9 @@ library(readr)
 
 adsl <- read_csv(
   "/app/input/adsl.csv",
-  col_types = cols(RANDDT = col_date(), .default = col_character())
+  col_types = cols(
+    RANDDT = col_date(), NTXSTDT = col_date(), .default = col_character()
+  )
 )
 rs <- read_csv(
   "/app/input/rs.csv",
@@ -40,20 +42,44 @@ last_assessment <- rs |>
   distinct(USUBJID, .keep_all = TRUE) |>
   select(USUBJID, CENSORDT = RSDTC, LASTSEQ = RSSEQ)
 
+# The last adequate assessment dated on or before new-therapy start, for
+# subjects who began one.
+pre_therapy <- rs |>
+  inner_join(select(adsl, USUBJID, NTXSTDT), by = "USUBJID") |>
+  filter(
+    RSTESTCD %in% "OVRLRESP", ADEQFL %in% "Y", !is.na(RSDTC),
+    !is.na(NTXSTDT), RSDTC <= NTXSTDT
+  ) |>
+  arrange(USUBJID, desc(RSDTC), desc(RSSEQ)) |>
+  distinct(USUBJID, .keep_all = TRUE) |>
+  select(USUBJID, PRECENSORDT = RSDTC, PRESEQ = RSSEQ)
+
 adtte <- adsl |>
   left_join(progression, by = "USUBJID") |>
   left_join(death, by = "USUBJID") |>
   left_join(last_assessment, by = "USUBJID") |>
+  left_join(pre_therapy, by = "USUBJID") |>
   mutate(
     PARAMCD = "PFS",
     PARAM = "Progression-Free Survival",
     STARTDT = RANDDT,
+    # A progression or death dated after new-therapy start is not an event.
+    PDDT = if_else(!is.na(NTXSTDT) & PDDT > NTXSTDT, as.Date(NA), PDDT),
+    DTHDT = if_else(!is.na(NTXSTDT) & DTHDT > NTXSTDT, as.Date(NA), DTHDT),
+    # The censoring assessment: the last adequate one overall, or the last
+    # one dated on or before therapy start when therapy began.
+    CENSORASSESSDT = if_else(is.na(NTXSTDT), CENSORDT, PRECENSORDT),
+    CENSORSEQ = if_else(is.na(NTXSTDT), LASTSEQ, PRESEQ),
+    # With no usable adequate assessment the subject is censored at
+    # randomization, for a 1-day PFS.
+    CENSORDT = coalesce(CENSORASSESSDT, STARTDT),
     EVENTDT = case_when(
       !is.na(PDDT) & !is.na(DTHDT) ~ pmin(PDDT, DTHDT),
       !is.na(PDDT) ~ PDDT,
       !is.na(DTHDT) ~ DTHDT
     ),
-    # The event always wins, even after the last adequate assessment.
+    # The event always wins, even after the last adequate assessment,
+    # unless new anti-cancer therapy started first.
     CNSR = if_else(!is.na(EVENTDT), 0L, 1L),
     ADT = coalesce(EVENTDT, CENSORDT),
     AVAL = as.integer(ADT - STARTDT) + 1L,
@@ -63,17 +89,22 @@ adtte <- adsl |>
       !is.na(PDDT) & (is.na(DTHDT) | PDDT <= DTHDT) ~ "DISEASE PROGRESSION",
       .default = "DEATH"
     ),
-    SRCDOM = if_else(EVNTDESC == "DEATH", "DS", "RS"),
-    SRCVAR = if_else(EVNTDESC == "DEATH", "DSDTC", "RSDTC"),
+    SRCDOM = case_when(
+      EVNTDESC == "DEATH" ~ "DS",
+      is.na(CENSORASSESSDT) ~ NA_character_,
+      .default = "RS"
+    ),
+    SRCVAR = case_when(
+      EVNTDESC == "DEATH" ~ "DSDTC",
+      is.na(CENSORASSESSDT) ~ NA_character_,
+      .default = "RSDTC"
+    ),
     SRCSEQ = case_when(
       EVNTDESC == "DISEASE PROGRESSION" ~ PDSEQ,
       EVNTDESC == "DEATH" ~ DTHSEQ,
-      .default = LASTSEQ
-    ),
-    # A record with no date has no trace; the fixture always has one.
-    SRCDOM = if_else(is.na(ADT), NA_character_, SRCDOM),
-    SRCVAR = if_else(is.na(ADT), NA_character_, SRCVAR),
-    SRCSEQ = if_else(is.na(ADT), NA_integer_, SRCSEQ)
+      is.na(CENSORASSESSDT) ~ NA_integer_,
+      .default = CENSORSEQ
+    )
   ) |>
   arrange(USUBJID) |>
   select(
