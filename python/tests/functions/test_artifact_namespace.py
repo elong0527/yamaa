@@ -54,9 +54,5 @@ def test_one_artifact_does_not_leak_modules_into_another(tmp_path):
     two = LoadedArtifact(reference="dash_artifact", root=second)
     assert one.load("mod.who")() == "one"
     assert two.load("mod.who")() == "two"
-    module_names = [
-        name
-        for name in sys.modules
-        if name.startswith("_yamaa_artifact_")
-    ]
+    module_names = [name for name in sys.modules if name.startswith("_yamaa_artifact_")]
     assert len({name.split(".")[0] for name in module_names}) == 2

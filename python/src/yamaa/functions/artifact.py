@@ -168,8 +168,7 @@ class LoadedArtifact:
         already imported under that name.
         """
         safe = "".join(
-            char if char.isalnum() else f"_x{ord(char):x}_"
-            for char in self.reference
+            char if char.isalnum() else f"_x{ord(char):x}_" for char in self.reference
         )
         return f"_yamaa_artifact_{safe}"
 
