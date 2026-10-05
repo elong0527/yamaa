@@ -396,6 +396,12 @@ def test_cut_refuses_a_non_numeric_source() -> None:
         {"source": "AGE", "breaks": [65, 18], "labels": ["a", "b", "c"]},
         {"source": "AGE", "breaks": [18, 18], "labels": ["a", "b", "c"]},
         {"source": "AGE", "breaks": ["18"], "labels": ["a", "b"]},
+        {"source": "AGE", "breaks": [float("nan")], "labels": ["a", "b"]},
+        {
+            "source": "AGE",
+            "breaks": [18, float("nan"), 65],
+            "labels": ["a", "b", "c", "d"],
+        },
     ],
 )
 def test_a_cut_declaration_that_labels_nothing_usable_is_refused(
@@ -405,6 +411,19 @@ def test_a_cut_declaration_that_labels_nothing_usable_is_refused(
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_field_type"
+
+
+def test_cut_accepts_infinite_breaks() -> None:
+    """Infinite breaks keep their ordering semantics; only NaN is unordered."""
+    result = _evaluate(
+        _cut(
+            breaks=[float("-inf"), 18, float("inf")],
+            labels=["a", "b", "c", "d"],
+        ),
+        {"AGE": 30},
+    )
+
+    assert result == ValueResult(value="c")
 
 
 @pytest.mark.parametrize(
