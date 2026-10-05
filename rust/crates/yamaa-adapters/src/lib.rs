@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod dataset_transport;
+mod function_signature;
 pub mod function_transport;
 pub mod numeric_transport;
 mod predicate_transport;

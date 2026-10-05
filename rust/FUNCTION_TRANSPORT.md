@@ -48,6 +48,13 @@ engine subsequently owns unknown argument names, requiredness, exact runtime
 types, missing short-circuit and result checks as described in
 [FUNCTION_INVOCATION.md](FUNCTION_INVOCATION.md).
 
+Signature metadata and defaults are admitted in the adapter's shared
+`function_signature` module, separately from supplied argument decoding. This
+keeps the existing `function/1` request shape and rejection order while preparing
+reuse by dataset callback transport. Host-name inspection borrows the admitted
+parameter list in declaration order. This refactor adds no dataset callback
+transport or activation capability.
+
 Policy is fixed by the adapter: 1 MiB UTF-8 request, at most 256 parameters and
 256 supplied arguments, and at most 1,024 bytes per identity/name field. Python
 host names must be ASCII identifiers and not hard keywords. Returned text is
