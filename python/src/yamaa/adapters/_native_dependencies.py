@@ -68,9 +68,15 @@ def bind_column_dependency_analyzer(native) -> ColumnDependencyAnalyzer:
         raise TypeError("native analyze_column_dependencies must be callable")
 
     def analyze(names, dependencies, keys, has_rows):
-        """Translate bound names and returned metadata without deciding language rules."""
+        """Translate bound names and returned metadata without deciding language rules.
+
+        A key naming no declared column cannot cross as an index, so it is
+        reported here as the REQ-0074 `key_dependency` diagnostic the
+        reference planner raises for it, rather than failing name lookup.
+        """
         names = tuple(names)
         positions = {name: index for index, name in enumerate(names)}
+        undeclared = [key for key in keys if key not in positions]
         request = {
             "protocol": "column-dependencies/1",
             "dependencies": [
@@ -83,7 +89,7 @@ def bind_column_dependency_analyzer(native) -> ColumnDependencyAnalyzer:
                 else None
                 for name in names
             ],
-            "keys": [positions[key] for key in keys],
+            "keys": [positions[key] for key in keys if key in positions],
             "has_rows": has_rows,
         }
         response = json.loads(invoke(json.dumps(request, separators=(",", ":"))))
@@ -104,6 +110,19 @@ def bind_column_dependency_analyzer(native) -> ColumnDependencyAnalyzer:
                     columns=tuple(names[index] for index in item["columns"]),
                 )
                 for item in outcome["diagnostics"]
+            )
+            + tuple(
+                # The reference planner reports an undeclared key as
+                # `key_dependency` after the shared analysis diagnostics;
+                # row templates exempt keys the same way (REQ-0074).
+                ColumnDependencyDiagnostic(
+                    condition="key_dependency",
+                    requirement="REQ-0074",
+                    location="declaration",
+                    columns=(key,),
+                )
+                for key in undeclared
+                if not has_rows
             ),
         )
 

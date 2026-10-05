@@ -137,3 +137,61 @@ def test_column_transport_failure_never_falls_back():
     with pytest.raises(ValueError) as caught:
         analyze(("A",), {"A": ()}, ("A",), False)
     assert caught.value is failure
+
+
+def test_column_undeclared_key_reports_key_dependency():
+    """A key naming no declared column diagnoses instead of failing lookup."""
+    calls = []
+
+    def invoke(request):
+        """Record the translated keys and return a complete empty analysis."""
+        calls.append(json.loads(request))
+        return json.dumps(
+            {
+                "protocol": "column-dependencies/1",
+                "outcome": {"status": "complete", "order": [0], "diagnostics": []},
+            }
+        )
+
+    analyze = bind_column_dependency_analyzer(
+        SimpleNamespace(analyze_column_dependencies=invoke)
+    )
+    result = analyze(("A",), {"A": ()}, ("A", "NOTACOLUMN"), False)
+    assert calls == [
+        {
+            "protocol": "column-dependencies/1",
+            "dependencies": [[]],
+            "keys": [0],
+            "has_rows": False,
+        }
+    ]
+    assert result.order == ("A",)
+    (finding,) = result.diagnostics
+    assert (
+        finding.condition,
+        finding.requirement,
+        finding.location,
+        finding.columns,
+    ) == ("key_dependency", "REQ-0074", "declaration", ("NOTACOLUMN",))
+
+
+def test_column_undeclared_key_exempt_with_row_templates():
+    """Row templates exempt undeclared keys the way the reference planner does."""
+    calls = []
+
+    def invoke(request):
+        """Record the translated keys and return a complete empty analysis."""
+        calls.append(json.loads(request))
+        return json.dumps(
+            {
+                "protocol": "column-dependencies/1",
+                "outcome": {"status": "complete", "order": [0], "diagnostics": []},
+            }
+        )
+
+    analyze = bind_column_dependency_analyzer(
+        SimpleNamespace(analyze_column_dependencies=invoke)
+    )
+    result = analyze(("A",), {"A": ()}, ("NOTACOLUMN",), True)
+    assert calls[0]["keys"] == []
+    assert result.diagnostics == ()
