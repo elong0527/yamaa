@@ -208,10 +208,89 @@ def _native_module(**members):
                     )
             return {"kind": "qualified_validation", "diagnostics": results}
 
+        def intermediate(query):
+            """Use reference rules for the facade double, without producing native expected truth."""
+            from yamaa.planning.execution import (
+                _IntermediateRead,
+                _Reference,
+                _reference_intermediate_reads,
+                _reference_intermediate_visibility,
+            )
+
+            def target(wire):
+                if wire is None:
+                    return None
+                source = wire["source"]
+                return SimpleNamespace(
+                    dataset="SELF" if source["kind"] == "self" else source["name"],
+                    self_fields=tuple(source.get("fields", ())),
+                    derived=tuple((name, None) for name in wire["derived"]),
+                    readable_columns=tuple(wire["readable"]),
+                    dependencies=tuple(wire["dependencies"]),
+                )
+
+            findings = []
+            if query["kind"] == "validate_intermediate":
+                _reference_intermediate_visibility(
+                    _Reference("lookup." + query["field"], "test"),
+                    target(query["target"]),
+                    SimpleNamespace(
+                        datasets={
+                            name: SimpleNamespace(field_names=tuple(fields))
+                            for name, fields in datasets.items()
+                        }
+                    ),
+                    findings,
+                )
+                diagnostics = [{"kind": "unknown_field"} for _ in findings]
+            else:
+                read = query["read"]
+                value = target(read["target"])
+                planned = {read["target_name"]: value} if value is not None else {}
+                _reference_intermediate_reads(
+                    planned,
+                    {
+                        read["reader"]: [
+                            _IntermediateRead(
+                                read["reader"],
+                                read["donor_dataset"],
+                                read["target_name"],
+                                read["field"],
+                                "test",
+                                frozenset(read["visible"]),
+                            )
+                        ]
+                    },
+                    datasets,
+                    findings,
+                )
+                diagnostics = []
+                for finding in findings:
+                    if finding.condition == "phase_boundary":
+                        diagnostics.append({"kind": "self_phase"})
+                    elif finding.requirement == "REQ-0125":
+                        diagnostics.append({"kind": "unknown_field"})
+                    else:
+                        diagnostics.append(
+                            {
+                                "kind": "unavailable_dependency",
+                                "dependency": value.dependencies.index(
+                                    finding.context["identifier"]
+                                ),
+                            }
+                        )
+            return {"kind": "intermediate_validation", "diagnostics": diagnostics}
+
         def analyze_references(request):
             """Evaluate metadata in the unrelated facade double, never as expected truth."""
             results = []
             for query in json.loads(request)["queries"]:
+                if query["kind"] in (
+                    "validate_intermediate",
+                    "validate_intermediate_read",
+                ):
+                    results.append(intermediate(query))
+                    continue
                 name = query["name"]
                 if query["kind"] == "validate_qualified":
                     results.append(qualified(query))
@@ -283,7 +362,10 @@ def _native_module(**members):
 
     return SimpleNamespace(
         reference_capabilities=lambda: json.dumps(
-            {"protocol": "reference-analysis/1", "features": ["qualified_validation"]}
+            {
+                "protocol": "reference-analysis/1",
+                "features": ["qualified_validation", "intermediate_validation"],
+            }
         ),
         analyze_dependencies=analyze,
         analyze_column_dependencies=analyze_columns,
@@ -296,6 +378,29 @@ def _native_module(**members):
 def specification():
     """Load the actual schema-validated ADLB document, without reading source data."""
     return load_specification(CASE / "spec.yaml", ROOT / "yaml").specification
+
+
+def test_older_reference_features_refuse_intermediate_queries_before_io(
+    specification, monkeypatch
+):
+    """A wheel with qualified-field support alone cannot start the new planner path."""
+    native = _native_module(execute_dataset=lambda *_: pytest.fail("execution"))
+    native.reference_capabilities = lambda: json.dumps(
+        {
+            "protocol": "reference-analysis/1",
+            "features": ["binding", "output_validation", "qualified_validation"],
+        }
+    )
+    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    result = execute_with_source_provider(
+        specification, lambda _: pytest.fail("source read")
+    )
+    assert isinstance(result.result, ExecutionUnsupported)
+    assert [(f.operation, f.spec_path) for f in result.result.features] == [
+        ("native_intermediate_reference_validation", "$")
+    ]
+    assert result.result.handler_counts == ()
+    assert result.verifications == ()
 
 
 @pytest.mark.parametrize("analyzer", ["absent", None, False])

@@ -1,4 +1,6 @@
 //! Bounded reference metadata transport, shared by batch and prepared host adapters.
+mod intermediate;
+
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{fmt, panic::catch_unwind};
 use yamaa_core::reference_scope;
@@ -10,7 +12,7 @@ const MAX_QUERIES: usize = 4096;
 
 /// Advertise only implemented metadata queries, before activation or source access.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}"#
+    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}"#
 }
 
 /// Invalid transport and metadata stay distinct from language diagnostics and limits.
@@ -112,6 +114,13 @@ struct QueryRequest {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Query {
+    ValidateIntermediate {
+        field: String,
+        target: intermediate::Intermediate,
+    },
+    ValidateIntermediateRead {
+        read: intermediate::Read,
+    },
     Bind {
         name: String,
     },
@@ -255,9 +264,18 @@ enum Diagnostic {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum QueryResult {
-    Binding { binding: Option<Bound> },
-    Validation { diagnostic: Option<Diagnostic> },
-    QualifiedValidation { diagnostics: Vec<QualifiedFinding> },
+    IntermediateValidation {
+        diagnostics: Vec<intermediate::Finding>,
+    },
+    Binding {
+        binding: Option<Bound>,
+    },
+    Validation {
+        diagnostic: Option<Diagnostic>,
+    },
+    QualifiedValidation {
+        diagnostics: Vec<QualifiedFinding>,
+    },
 }
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -364,6 +382,12 @@ impl CompiledCatalog {
         let mut results = Vec::with_capacity(queries.len());
         for query in queries {
             let result = match query {
+                Query::ValidateIntermediate { field, target } => {
+                    intermediate::field(&self.0, field, target)
+                        .map(|diagnostics| QueryResult::IntermediateValidation { diagnostics })
+                }
+                Query::ValidateIntermediateRead { read } => intermediate::read(&self.0, read)
+                    .map(|diagnostics| QueryResult::IntermediateValidation { diagnostics }),
                 Query::ValidateQualified {
                     name,
                     expected,

@@ -38,11 +38,54 @@ class QualifiedFinding:
     actual: ColumnType | None = None
 
 
+@dataclass(frozen=True)
+class IntermediateScope:
+    """A normalized intermediate's source, field visibility and ordered dependencies."""
+
+    dataset: str
+    self_fields: tuple[str, ...]
+    derived: tuple[str, ...]
+    readable: tuple[str, ...]
+    dependencies: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class IntermediateReadScope:
+    """One correlated donor read with the fields available at its authored position."""
+
+    reader: str
+    target_name: str
+    target: IntermediateScope | None
+    field: str
+    donor_dataset: str
+    visible: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class IntermediateFinding:
+    """A core visibility/phase finding or index of an unavailable donor dependency."""
+
+    kind: str
+    dependency: int | None = None
+
+
 class ReferenceCompiler(Protocol):
     """An immutable catalog captured for one planning attempt, never a user extension hook."""
 
     def bind(self, name: str) -> BindingResult:
         """Resolve one exact name without reading records."""
+        ...
+
+    def validate_intermediate(
+        self, field: str, target: IntermediateScope
+    ) -> tuple[IntermediateFinding, ...]:
+        """Check declared intermediate field visibility without evaluating the relation."""
+        ...
+
+    def validate_intermediate_read(
+        self, read: IntermediateReadScope
+    ) -> tuple[IntermediateFinding, ...]:
+        """Check donor scope and SELF phase before recursive intermediate execution."""
         ...
 
     def validate_qualified(

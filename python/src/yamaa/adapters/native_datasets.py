@@ -481,21 +481,21 @@ def _execute(specification, source_provider, prepare_functions=None):
     reference_features = (
         json.loads(discover_references()) if callable(discover_references) else {}
     )
-    if reference_features.get(
-        "protocol"
-    ) != "reference-analysis/1" or "qualified_validation" not in reference_features.get(
-        "features", []
+    for feature, operation in (
+        ("qualified_validation", "native_qualified_reference_validation"),
+        ("intermediate_validation", "native_intermediate_reference_validation"),
     ):
-        return NativeDatasetRun(
-            ExecutionUnsupported(
-                features=(
-                    UnsupportedFeature(
-                        operation="native_qualified_reference_validation", spec_path="$"
-                    ),
-                ),
-                handler_counts=(),
+        if reference_features.get(
+            "protocol"
+        ) != "reference-analysis/1" or feature not in reference_features.get(
+            "features", []
+        ):
+            return NativeDatasetRun(
+                ExecutionUnsupported(
+                    features=(UnsupportedFeature(operation=operation, spec_path="$"),),
+                    handler_counts=(),
+                )
             )
-        )
     dependency_analyzer = bind_dependency_analyzer(yamaa_native)
     column_dependency_analyzer = bind_column_dependency_analyzer(yamaa_native)
     reference_compiler_factory = bind_reference_compiler(yamaa_native)

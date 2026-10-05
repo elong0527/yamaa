@@ -117,6 +117,13 @@ fn limit(resource: &'static str, required: usize, allowed: usize) -> Result<(), 
 }
 
 impl Catalog {
+    /// Inspect literal stored-field visibility, retaining an absent relation as distinct metadata.
+    pub(crate) fn has_stored_field(&self, dataset: &str, field: &str) -> Option<bool> {
+        self.datasets
+            .get(dataset)
+            .map(|dataset| dataset.fields.contains_key(field))
+    }
+
     /// Admit resource budgets and nonempty names before allocating reusable name indexes.
     pub fn compile(
         outputs: &[Field<'_>],

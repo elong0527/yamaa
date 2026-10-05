@@ -4,6 +4,7 @@ import csv
 import json
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import yamaa_native
@@ -59,6 +60,103 @@ def specification(columns):
 
 class InstalledReferences(unittest.TestCase):
     """Both native entrypoints and the actual optional frontend must use the shared core."""
+
+    def test_intermediate_truth_against_unchanged_reference_rules(self):
+        """Authored wire findings also match the separate default visibility and donor rules."""
+        with (ROOT / "reference_intermediate.tsv").open() as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE))
+        for case in cases:
+            with self.subTest(case=case["case"]):
+                data = json.loads(case["request"])
+                (query,) = data["queries"]
+                datasets = {
+                    dataset["name"]: {
+                        field["name"]: field["type"] for field in dataset["fields"]
+                    }
+                    for dataset in data["catalog"]["datasets"]
+                }
+                is_read = query["kind"] == "validate_intermediate_read"
+                read = query.get("read", {})
+                wire = read.get("target") if is_read else query["target"]
+                target = (
+                    None
+                    if wire is None
+                    else SimpleNamespace(
+                        dataset="SELF"
+                        if wire["source"]["kind"] == "self"
+                        else wire["source"]["name"],
+                        self_fields=tuple(wire["source"].get("fields", ())),
+                        derived=tuple((name, None) for name in wire["derived"]),
+                        readable_columns=tuple(wire["readable"]),
+                        dependencies=tuple(wire["dependencies"]),
+                    )
+                )
+                findings = []
+                if is_read:
+                    reference_planning._reference_intermediate_reads(
+                        {} if target is None else {read["target_name"]: target},
+                        {
+                            read["reader"]: [
+                                reference_planning._IntermediateRead(
+                                    read["reader"],
+                                    read["donor_dataset"],
+                                    read["target_name"],
+                                    read["field"],
+                                    "authored.path",
+                                    frozenset(read["visible"]),
+                                )
+                            ]
+                        },
+                        datasets,
+                        findings,
+                    )
+                else:
+                    reference_planning._reference_intermediate_visibility(
+                        reference_planning._Reference(
+                            "lookup." + query["field"], "authored.path"
+                        ),
+                        target,
+                        SimpleNamespace(
+                            datasets={
+                                name: SimpleNamespace(field_names=tuple(fields))
+                                for name, fields in datasets.items()
+                            }
+                        ),
+                        findings,
+                    )
+                expected = []
+                for finding in json.loads(case["expected"])["outcome"]["results"][0][
+                    "diagnostics"
+                ]:
+                    context = (
+                        {"identifier": "lookup." + query["field"]}
+                        if not is_read
+                        else {
+                            "intermediate": read["reader"],
+                            "identifier": read["target_name"] + "." + read["field"],
+                        }
+                    )
+                    if finding["kind"] == "unknown_field":
+                        condition, requirement = "unknown_field", "REQ-0125"
+                    elif finding["kind"] == "self_phase":
+                        condition, requirement = "phase_boundary", "REQ-1263"
+                    else:
+                        self.assertEqual(finding["kind"], "unavailable_dependency")
+                        condition, requirement = "unknown_field", "REQ-1263"
+                        context["identifier"] = wire["dependencies"][
+                            finding["dependency"]
+                        ]
+                        context["read"] = read["target_name"]
+                    expected.append(
+                        (condition, requirement, ("authored.path",), context)
+                    )
+                self.assertEqual(
+                    [
+                        (d.condition, d.requirement, d.spec_paths, dict(d.context))
+                        for d in findings
+                    ],
+                    expected,
+                )
 
     def test_scope_truth_against_unchanged_reference_rules(self):
         """Replay authored scope outcomes through the separate default Python implementation."""
@@ -145,7 +243,11 @@ class InstalledReferences(unittest.TestCase):
     def test_shared_truth_batch_prepared_and_owned(self):
         """Replay authored bindings/conditions through both interfaces after request release."""
         cases = []
-        for fixture in ("reference_binding.tsv", "reference_scope.tsv"):
+        for fixture in (
+            "reference_binding.tsv",
+            "reference_scope.tsv",
+            "reference_intermediate.tsv",
+        ):
             with (ROOT / fixture).open() as stream:
                 cases.extend(
                     csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE)
@@ -207,6 +309,21 @@ class InstalledReferences(unittest.TestCase):
                 "_validate_direct_qualified_reference",
                 side_effect=AssertionError("reference qualified rules"),
             ),
+            patch.object(
+                reference_planning,
+                "_reference_intermediate_visibility",
+                side_effect=AssertionError("reference intermediate visibility"),
+            ),
+            patch.object(
+                reference_planning,
+                "_reference_intermediate_reads",
+                side_effect=AssertionError("reference donor scope"),
+            ),
+            patch.object(
+                reference_planning,
+                "_find_cycle",
+                side_effect=AssertionError("reference cycle analysis"),
+            ),
         ):
             return plan_execution(
                 spec,
@@ -249,6 +366,227 @@ class InstalledReferences(unittest.TestCase):
                         dict(diagnostic.context),
                     ),
                     (condition, ("columns.V.derivation.source",), context),
+                )
+
+    def test_intermediate_visibility_and_donor_diagnostic_provenance(self):
+        """Actual planning retains hidden-field-before-donor-dependency findings and paths."""
+        for hidden, unavailable in (
+            (False, False),
+            (True, False),
+            (False, True),
+            (True, True),
+        ):
+            target = Intermediate(
+                id="LOOK",
+                dataset="SRC",
+                key={"X": "K" if unavailable else "SRC.X"},
+                columns=["X"] if hidden else None,
+            )
+            reader = Intermediate(
+                id="READER",
+                dataset="SRC",
+                key={"X": "K"},
+                derivations={"D": expression({"source": "LOOK.N"})},
+            )
+            spec = specification(
+                [
+                    Column(
+                        name="K", type="str", derivation=expression({"source": "SRC.X"})
+                    ),
+                    Column(
+                        name="V",
+                        type="int",
+                        derivation=expression({"source": "READER.D"}),
+                    ),
+                ]
+            ).model_copy(update={"intermediates": [target, reader]})
+            expected = []
+            if hidden:
+                expected.append(
+                    (
+                        "unknown_field",
+                        "REQ-0125",
+                        ("intermediates[1].derivations.D.source",),
+                        {"intermediate": "READER", "identifier": "LOOK.N"},
+                    )
+                )
+            if unavailable:
+                expected.append(
+                    (
+                        "unknown_field",
+                        "REQ-1263",
+                        ("intermediates[1].derivations.D.source",),
+                        {"intermediate": "READER", "identifier": "K", "read": "LOOK"},
+                    )
+                )
+            for native in (False, True):
+                with self.subTest(
+                    hidden=hidden, unavailable=unavailable, native=native
+                ):
+                    if expected:
+                        with self.assertRaises(ExecutionPlanningError) as caught:
+                            self.plan(spec, native)
+                        self.assertEqual(
+                            [
+                                (
+                                    d.condition,
+                                    d.requirement,
+                                    d.spec_paths,
+                                    dict(d.context),
+                                )
+                                for d in caught.exception.diagnostics
+                            ],
+                            expected,
+                        )
+                    else:
+                        plan = self.plan(spec, native)
+                        self.assertEqual(
+                            tuple(item.identifier for item in plan.intermediates),
+                            ("LOOK", "READER"),
+                        )
+
+    def test_direct_intermediate_visibility_and_self_donor_phase(self):
+        """REQ-0125 direct reads and REQ-1263 SELF donor reads keep distinct provenance."""
+        direct = specification(
+            [
+                Column(
+                    name="K", type="str", derivation=expression({"source": "SRC.X"})
+                ),
+                Column(
+                    name="V", type="int", derivation=expression({"source": "LOOK.N"})
+                ),
+            ]
+        ).model_copy(
+            update={
+                "intermediates": [
+                    Intermediate(
+                        id="LOOK", dataset="SRC", key={"X": "K"}, columns=["X"]
+                    )
+                ]
+            }
+        )
+        own = specification(
+            [
+                Column(name="K", type="str"),
+                Column(
+                    name="V", type="str", derivation=expression({"source": "READER.D"})
+                ),
+            ]
+        ).model_copy(
+            update={
+                "rows": [
+                    Row(id="r", derivations={"K": expression({"source": "SRC.X"})})
+                ],
+                "intermediates": [
+                    Intermediate(id="DONOR", dataset="SELF", key=["K"]),
+                    Intermediate(
+                        id="READER",
+                        dataset="SRC",
+                        key={"X": "K"},
+                        derivations={"D": expression({"source": "DONOR.K"})},
+                    ),
+                ],
+            }
+        )
+        for spec, expected in [
+            (
+                direct,
+                (
+                    "unknown_field",
+                    "REQ-0125",
+                    ("columns.V.derivation.source",),
+                    {"identifier": "LOOK.N"},
+                ),
+            ),
+            (
+                own,
+                (
+                    "phase_boundary",
+                    "REQ-1263",
+                    ("intermediates[1].derivations.D.source",),
+                    {"intermediate": "READER", "identifier": "DONOR.K"},
+                ),
+            ),
+        ]:
+            for native in (False, True):
+                with (
+                    self.subTest(native=native, expected=expected),
+                    self.assertRaises(ExecutionPlanningError) as caught,
+                ):
+                    self.plan(spec, native)
+                self.assertEqual(
+                    [
+                        (d.condition, d.requirement, d.spec_paths, dict(d.context))
+                        for d in caught.exception.diagnostics
+                    ],
+                    [expected],
+                )
+
+    def test_intermediate_cycle_deferral_retains_authored_paths(self):
+        """Shared visibility defers self-reads and preserves mutual-cycle diagnosis afterward."""
+        for mutual in (False, True):
+            reader = Intermediate(
+                id="READER",
+                dataset="SRC",
+                key={"X": "SRC.X"},
+                derivations={
+                    "D": expression({"source": "LOOK.N" if mutual else "READER.N"})
+                },
+            )
+            intermediates = (
+                [
+                    Intermediate(
+                        id="LOOK",
+                        dataset="SRC",
+                        key={"X": "SRC.X"},
+                        derivations={"BACK": expression({"source": "READER.N"})},
+                    )
+                ]
+                if mutual
+                else []
+            ) + [reader]
+            spec = specification(
+                [
+                    Column(
+                        name="K", type="str", derivation=expression({"source": "SRC.X"})
+                    ),
+                    Column(
+                        name="V",
+                        type="int",
+                        derivation=expression({"source": "READER.D"}),
+                    ),
+                ]
+            ).model_copy(update={"intermediates": intermediates})
+            expected_cycle = (
+                ["LOOK", "READER", "LOOK"] if mutual else ["READER", "READER"]
+            )
+            expected_paths = (
+                (
+                    "intermediates[0].derivations.BACK.source",
+                    "intermediates[1].derivations.D.source",
+                )
+                if mutual
+                else ("intermediates[0].derivations.D.source",)
+            )
+            for native in (False, True):
+                with (
+                    self.subTest(mutual=mutual, native=native),
+                    self.assertRaises(ExecutionPlanningError) as caught,
+                ):
+                    self.plan(spec, native)
+                self.assertEqual(
+                    [
+                        (d.condition, d.requirement, d.spec_paths, dict(d.context))
+                        for d in caught.exception.diagnostics
+                    ],
+                    [
+                        (
+                            "dependency_cycle",
+                            "REQ-1263",
+                            expected_paths,
+                            {"cycle": expected_cycle},
+                        )
+                    ],
                 )
 
     def test_qualified_scope_priority_and_provenance(self):
@@ -354,7 +692,12 @@ class InstalledReferences(unittest.TestCase):
             json.loads(yamaa_native.reference_capabilities()),
             {
                 "protocol": "reference-analysis/1",
-                "features": ["binding", "output_validation", "qualified_validation"],
+                "features": [
+                    "binding",
+                    "output_validation",
+                    "qualified_validation",
+                    "intermediate_validation",
+                ],
             },
         )
         case = ROOT / "specification-functions"
@@ -565,6 +908,16 @@ class InstalledReferences(unittest.TestCase):
                         "_validate_direct_qualified_reference",
                         side_effect=AssertionError("reference qualified rules"),
                     ),
+                    patch.object(
+                        reference_planning,
+                        "_reference_intermediate_visibility",
+                        side_effect=AssertionError("reference intermediate visibility"),
+                    ),
+                    patch.object(
+                        reference_planning,
+                        "_reference_intermediate_reads",
+                        side_effect=AssertionError("reference donor scope"),
+                    ),
                 ):
                     if name == "specification-functions":
                         actual = native_datasets.execute_with_project_functions(
@@ -603,6 +956,125 @@ class InstalledReferences(unittest.TestCase):
         )
         self.assertEqual(actual.result.handler_counts, ())
         self.assertEqual(actual.verifications, ())
+
+    def test_intermediate_query_limit_prevents_execution_and_allows_explicit_retry(
+        self,
+    ):
+        """A failed metadata query has no fallback; an explicit retry rereads source data."""
+        case = ROOT / "specification-lookup"
+        spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        compile_catalog = yamaa_native._compile_reference_catalog
+        inject_limit = True
+        sources = []
+
+        def compile_with_limit(request):
+            """Keep the real catalog and inject one admitted-query policy outcome."""
+            catalog, status = compile_catalog(request)
+
+            def analyze(query):
+                """Only the new intermediate query fails; all other calls use native Rust."""
+                nonlocal inject_limit
+                if inject_limit and any(
+                    item["kind"] == "validate_intermediate"
+                    for item in json.loads(query)["queries"]
+                ):
+                    inject_limit = False
+                    return json.dumps(
+                        {
+                            "protocol": "reference-analysis/1",
+                            "outcome": {
+                                "status": "limit",
+                                "resource": "intermediate_entries",
+                                "limit": "65536",
+                                "required": "65537",
+                            },
+                        }
+                    )
+                return catalog.analyze(query)
+
+            return SimpleNamespace(analyze=analyze), status
+
+        def provider(declarations):
+            """Source ownership remains with the caller on each explicitly requested attempt."""
+            sources.append("source")
+            return load_source_tables(declarations, ProjectResources(case))
+
+        with (
+            patch.object(
+                yamaa_native, "_compile_reference_catalog", compile_with_limit
+            ),
+            patch.object(
+                yamaa_native, "execute_dataset", wraps=yamaa_native.execute_dataset
+            ) as execute,
+            patch.object(
+                yamaa_native,
+                "execute_dataset_sources",
+                wraps=yamaa_native.execute_dataset_sources,
+            ) as execute_sources,
+            patch.object(
+                reference_planning,
+                "_reference_intermediate_visibility",
+                side_effect=AssertionError("reference fallback"),
+            ),
+        ):
+            with self.assertRaises(NativeReferenceLimitError) as caught:
+                native_datasets.execute_with_source_provider(spec, provider)
+            self.assertEqual(
+                (
+                    caught.exception.resource,
+                    caught.exception.limit,
+                    caught.exception.required,
+                ),
+                ("intermediate_entries", 65536, 65537),
+            )
+            self.assertFalse(inject_limit)
+            self.assertFalse(execute.called)
+            self.assertFalse(execute_sources.called)
+            self.assertEqual(sources, ["source"])
+            actual = native_datasets.execute_with_source_provider(spec, provider)
+            self.assertTrue(execute.called or execute_sources.called)
+        self.assertEqual(sources, ["source", "source"])
+        self.assertEqual(actual.result.status, "success")
+        self.assertEqual(
+            render_artifact(actual.result.artifact),
+            (case / "expected" / Path(spec.output.path).name).read_bytes(),
+        )
+
+    def test_intermediate_capability_precedes_activation_and_data(self):
+        """The previous query set cannot enter intermediate planning in either frontend."""
+        case = ROOT / "specification-functions"
+        project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        ordinary_spec = load_specification(
+            ROOT / "specification-adlb" / "spec.yaml", SCHEMA
+        ).specification
+        with (
+            patch.object(
+                yamaa_native,
+                "reference_capabilities",
+                lambda: (
+                    '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}'
+                ),
+            ),
+            patch.object(
+                native_datasets,
+                "activate_project",
+                side_effect=AssertionError("activation"),
+            ),
+        ):
+            project = native_datasets.execute_with_project_functions(
+                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            )
+            ordinary = native_datasets.execute_with_source_provider(
+                ordinary_spec, lambda _: self.fail("source")
+            )
+        for actual in (ordinary, project):
+            self.assertEqual(actual.result.status, "unsupported")
+            self.assertEqual(
+                [(f.operation, f.spec_path) for f in actual.result.features],
+                [("native_intermediate_reference_validation", "$")],
+            )
+            self.assertEqual(actual.result.handler_counts, ())
+            self.assertEqual(actual.verifications, ())
 
     def test_compile_failure_then_explicit_retry(self):
         """Compiler errors are propagated once and cannot poison a later planning attempt."""

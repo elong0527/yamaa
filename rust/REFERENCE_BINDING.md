@@ -1,7 +1,8 @@
 # Shared reference binding
 
 The bounded reference service for #1585 owns exact name binding, bare-output
-unknown-name/phase/type checks and direct qualified-field scope/grouping checks. Optional Python native planning
+unknown-name/phase/type checks, direct qualified-field scope/grouping, and
+intermediate field visibility/donor-scope checks. Optional Python native planning
 uses it with an owned catalog compiled once per planning attempt. Installed R
 exposes the same core through a stateless batch interface. Python remains the
 default and both bindings retain `execution_supported=false`.
@@ -87,7 +88,7 @@ containment does not qualify allocation failure, process aborts or host recovery
 
 Both bindings export `reference_capabilities()`, returning the
 `reference-analysis/1` protocol with `binding`, `output_validation` and
-`qualified_validation` features. Existing query shapes remain unchanged. The
+`qualified_validation` and `intermediate_validation` features. Existing query shapes remain unchanged. The
 optional Python frontend requires the qualified feature before activation or
 source access; older packages return `native_qualified_reference_validation`
 unsupported status at `$`. Capability discovery grants no data or callback
@@ -143,6 +144,49 @@ compile/query failures propagate without Python binding fallback, automatic
 retry or rollback. Explicit retry re-reads sources; a successful activation cache
 entry still retains vector qualification. Stateful providers own their recovery.
 
+## Intermediate visibility and donor scope
+
+The additive `validate_intermediate` query contains `field` and `target`. A target
+requires `source`, `derived`, `readable` and `dependencies`. Source is either
+`{"kind":"dataset","name":"SRC"}` or `{"kind":"self","fields":["K"]}`;
+the other fields are ordered name lists. A field is visible when stored or
+derived and, if `readable` is nonempty, explicitly listed there. An empty readable
+list means unrestricted visibility. An absent backing dataset adds no direct
+field finding because its declaration already failed. Selecting a field in a
+readable list cannot invent it. Dotted suffixes remain literal fields.
+
+`validate_intermediate_read` contains `read`, requiring `reader`, `target_name`,
+`field`, `donor_dataset`, `visible`, and an optional/null `target` in the shape
+above. The core skips a reader naming itself (shared cycle analysis owns that
+failure) and an unavailable target. Reading another SELF target produces a
+`self_phase` finding and suppresses later findings. Otherwise the selected field
+must be visible, followed by each target dependency in authored order. Bare
+dependencies must occur in the donor's visible fields; qualified dependencies
+must name that donor dataset and a visible literal suffix. Duplicate dependencies
+retain their individual indices. Even after a field finding, unavailable
+dependencies are reported. A missing donor target's backing dataset has no stored
+fields, but its explicitly derived fields remain visible.
+
+Both queries return `intermediate_validation` with ordered `diagnostics`:
+`unknown_field`, `self_phase`, or `unavailable_dependency` with a zero-based
+`dependency` index. Python attaches REQ-0125 field provenance or REQ-1263 donor
+provenance at the existing sites. Expression traversal, dependency collection,
+derivation typing and phase selection remain normalized host inputs; the query
+does not execute an intermediate or authorize callback/data access.
+
+Each query admits at most 65,536 written name entries and 1,048,576 total UTF-8
+context bytes. Counts include query identity/field names and all target/donor
+lists, including duplicates and context belonging to a skipped read. Limits
+produce separate `intermediate_entries` or `intermediate_context_bytes` outcomes.
+The request byte cap applies before decoding. A per-query donor-name index avoids
+repeated linear membership scans and is discarded after validation. The owned
+catalog remains unchanged after malformed, limited or repeated queries.
+
+The frontend requires `intermediate_validation` before activation/source access;
+a wheel advertising only earlier queries returns
+`native_intermediate_reference_validation` unsupported status at `$`. There is no
+fallback to Python rules after selecting the native compiler.
+
 ## Evidence and remaining boundaries
 
 Twenty-nine independent shared cases pin exact bindings, literal dotted names,
@@ -156,6 +200,12 @@ priority, join exemptions/suppression, grouped-row and multi-template column gra
 empty groups, duplicate drivers and combined scope/type findings. Installed
 planning tests pin full diagnostic requirements, contexts and paths with the
 reference qualified-field helper disabled, including unchanged original CSVs.
+Thirty-one additional authored intermediate cases cover stored/derived/SELF
+visibility, declared-column restrictions, donor dependencies, duplicate indices,
+Unicode, absent targets, phase priority and self-cycle deferral. The same corpus
+runs through both installed hosts and the unchanged default Python rules.
+Installed planning tests disable both reference intermediate helpers and compare
+full diagnostic paths, contexts, requirements and combined finding order.
 
 Installed Python planning checks exact diagnostic paths, requirements and
 contexts against explicit expectations and the unchanged default planner.
@@ -166,8 +216,8 @@ CI runs installed tests against both the wheel and an independently rebuilt
 source archive, plus the installed R source package.
 
 This service does not own YAML/schema loading, normalization, derivation
-inheritance, phase selection, implicit-join inference, named-intermediate/SELF
-field visibility and traversal, paired-key type comparisons or typed dataset lowering. Bare-name validation is
+inheritance, phase selection, implicit-join inference, intermediate expression
+traversal/dependency collection, paired-key type comparisons or typed dataset lowering. Bare-name validation is
 connected to row and column output-expression checks; other scope-specific
 validation remains in the host. R current-schema compilation, full language and
 workflow coverage, numerical policy, performance and release gates remain open.

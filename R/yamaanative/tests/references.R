@@ -2,9 +2,10 @@ library(yamaanative)
 read_truth <- function(name) read.delim(system.file(name, package = "yamaanative"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
-truth <- rbind(read_truth("reference_binding.tsv"), read_truth("reference_scope.tsv"))
+truth <- rbind(read_truth("reference_binding.tsv"), read_truth("reference_scope.tsv"),
+  read_truth("reference_intermediate.tsv"))
 stopifnot(identical(reference_capabilities(),
-  '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}'))
+  '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}'))
 for (i in seq_len(nrow(truth))) {
   for (attempt in 1:2) stopifnot(identical(analyze_references(truth$request[i]), truth$expected[i]))
 }
