@@ -31,7 +31,15 @@ class StagingTests(unittest.TestCase):
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
             self.assertFalse((embedded / "target").exists())
             self.assertFalse((embedded / "Cargo.lock").exists())
-            for fixture in ("scalar_transport.tsv", "numeric_transport.tsv"):
+            for fixture in (
+                "scalar_transport.tsv",
+                "numeric_transport.tsv",
+                "reference_binding.tsv",
+                "reference_scope.tsv",
+                "reference_intermediate.tsv",
+                "reference_keys.tsv",
+                "reference_match_values.tsv",
+            ):
                 self.assertEqual(
                     (destination / "inst" / fixture).read_bytes(),
                     (

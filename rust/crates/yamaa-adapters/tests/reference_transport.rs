@@ -16,6 +16,11 @@ fn shared_truth_and_prepared_catalog_ownership() {
                 .skip(1),
         )
         .chain(include_str!("fixtures/reference_keys.tsv").lines().skip(1))
+        .chain(
+            include_str!("fixtures/reference_match_values.tsv")
+                .lines()
+                .skip(1),
+        )
     {
         let fields: Vec<_> = line.split('\t').collect();
         let expected: Value = serde_json::from_str(fields[2]).unwrap();
@@ -254,7 +259,7 @@ fn limits_are_not_language_diagnostics() {
 fn qualified_scope_admission_and_capabilities() {
     assert_eq!(
         yamaa_adapters::reference_transport::capabilities(),
-        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}"#
+        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations","match_value_typing"]}"#
     );
     let mut data = request();
     data["queries"] = json!([{"kind":"validate_qualified", "name":"SRC.N", "expected":null,
@@ -339,5 +344,50 @@ fn key_query_admission_and_reuse() {
     assert_eq!(
         recovered["outcome"],
         json!({"status":"complete","results":[{"kind":"key_inference","inference":{"kind":"keys","keys":[0]}}]})
+    );
+}
+
+/// Strict shapes reject unknown data; a late resource failure cannot expose earlier results.
+#[test]
+fn match_value_admission_is_atomic_and_reusable() {
+    let mut data = request();
+    for expression in [
+        json!({"kind":"source","name":true}),
+        json!({"kind":"literal","scalar":"date"}),
+        json!({"kind":"literal","scalar":"int","value":1}),
+        json!({"kind":"operation","name":"compute","payload":{}}),
+        json!({"kind":"unresolved","name":"hidden"}),
+        json!({"kind":"future"}),
+    ] {
+        data["queries"] = json!([{"kind":"match_value_type","expression":expression}]);
+        assert_eq!(
+            analyze_references(&data.to_string()),
+            Err(TransportError::InvalidEnvelope)
+        );
+    }
+    let (catalog, _) = compile_reference_catalog(
+        &json!({"protocol":"reference-catalog/1","catalog":data["catalog"]}).to_string(),
+    )
+    .unwrap();
+    let catalog = catalog.unwrap();
+    data["queries"] = json!([
+        {"kind":"match_value_type","expression":{"kind":"literal","scalar":"bool"}},
+        {"kind":"match_value_type","expression":{"kind":"operation","name":"é".repeat(32769)}}
+    ]);
+    let expected = json!({"protocol":"reference-analysis/1","outcome":{"status":"limit","resource":"operation_bytes","limit":"65536","required":"65538"}});
+    assert_eq!(
+        serde_json::from_str::<Value>(&analyze_references(&data.to_string()).unwrap()).unwrap(),
+        expected
+    );
+    let mut query = json!({"protocol":"reference-queries/1","queries":data["queries"]});
+    assert_eq!(
+        serde_json::from_str::<Value>(&catalog.analyze(&query.to_string()).unwrap()).unwrap(),
+        expected
+    );
+    query["queries"] =
+        json!([{"kind":"match_value_type","expression":{"kind":"operation","name":"compute"}}]);
+    assert_eq!(
+        serde_json::from_str::<Value>(&catalog.analyze(&query.to_string()).unwrap()).unwrap(),
+        json!({"protocol":"reference-analysis/1","outcome":{"status":"complete","results":[{"kind":"match_value_type","result_type":"float"}]}})
     );
 }

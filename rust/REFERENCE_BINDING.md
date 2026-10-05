@@ -210,7 +210,7 @@ bytes before semantic early exits, including unused fields and repeated keys.
 
 Native planning uses these queries for implicit and omitted-key inference and
 declared pair compatibility in row joins, aggregates, lookups and range bounds.
-Hosts still determine expression types, row/group availability, unknown-name
+Hosts still determine row/group availability, unknown-name
 priority, relation dependencies and diagnostic provenance. An invalid root key
 now receives REQ-0220 `undeclared_column` at `keys[i]` before source access in both
 frontends. Direct planning also refuses inference for invalid output identity,
@@ -221,6 +221,47 @@ The frontend requires `key_relations` before activation/source access; previous
 query sets return `native_key_relations` unsupported at `$`. A query error aborts
 planning without executing a partial plan or falling back to Python. Explicit
 retry reacquires sources; earlier provider effects are not rolled back.
+
+## Match-expression result typing
+
+The `match_value_typing` feature adds `match_value_type` with an `expression`
+metadata object. The tagged shapes are `source` with a `name`, `literal` with a
+`scalar` representation tag (`str`, `int`, `float`, `bool`, `missing`, `other`),
+`operation` with a `name`, and `unresolved` without other fields. Unknown fields
+and representation tags are rejected. Literal values and operation arguments
+are not transported. This avoids JSON coercion of arbitrary-size integers,
+negative zero and nonfinite floats. The Python adapter recognizes bool before
+int and unwraps existing `variable`/`value` wrappers without evaluating handlers.
+
+The core applies the complete closed table in REQ-1259 and resolves source names
+against its owned catalog. Results have `kind: match_value_type` and
+`result_type`, either one of the six known comparison classes or null for runtime
+deferral. In particular, mapping/case/greatest/least remain unknown, and compute's
+float comparison class does not change its runtime value. Local replacement
+handlers do not alter this static type. The `unresolved` tag represents a source
+payload that supplies no string variable. Empty and unknown operation names also
+have no static type; this query does not validate expression syntax.
+
+Operation names admit at most 65,536 UTF-8 bytes before semantic selection;
+source names retain the catalog's reference byte limit. Existing whole-request
+and query-count limits apply. A later query failure publishes no earlier partial
+results, and the immutable catalog remains reusable. Both frontends require the
+new feature before activation or source access. Previous query sets refuse with
+`native_match_value_typing` at `$`; query errors propagate without Python fallback.
+Source effects that preceded a query error are not rolled back, and an explicit
+retry reacquires sources.
+
+Fifty-three independently authored cases cover every fixed operation, all scalar
+tags, source binding (including literal dotted suffixes and distinct Unicode
+spellings), and explicit unknown types. Rust batch/prepared interfaces and
+installed Python/R adapters replay that same truth. Installed Python also checks
+the retained default rules, scalar extremes and wrappers, planning with reference
+typing disabled, admission before effects, failure/retry and original CSVs.
+Expression match keys remain unsupported by the bounded native dataset executor;
+these cases qualify installed shared planning metadata, not expression-key execution.
+This feature does not move intermediate-field inference or general expression
+validation into Rust, nor establish a current-schema R compiler or full engine
+readiness. Python remains the default and `execution_supported=false`.
 
 ## Evidence and remaining boundaries
 

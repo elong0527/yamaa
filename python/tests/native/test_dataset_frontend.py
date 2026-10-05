@@ -285,6 +285,55 @@ def _native_module(**members):
             """Evaluate metadata in the unrelated facade double, never as expected truth."""
             results = []
             for query in json.loads(request)["queries"]:
+                if query["kind"] == "match_value_type":
+                    from yamaa.models import TypedColumn
+                    from yamaa.odm.bindings import BindingPlan, DatasetBinding
+                    from yamaa.planning.execution import (
+                        _reference_match_value_result_type,
+                    )
+                    from yamaa.specification.models import Expression
+
+                    metadata = query["expression"]
+                    if metadata["kind"] == "source":
+                        root = {"source": metadata["name"]}
+                    elif metadata["kind"] == "literal":
+                        root = {
+                            "literal": {
+                                "str": "x",
+                                "int": 1,
+                                "float": 1.5,
+                                "bool": True,
+                                "missing": None,
+                                "other": [],
+                            }[metadata["scalar"]]
+                        }
+                    elif metadata["kind"] == "operation":
+                        root = {metadata["name"]: None}
+                    else:
+                        root = {"literal": None}
+                    bindings = BindingPlan(
+                        domain="OUT",
+                        output_columns=tuple(outputs),
+                        datasets={
+                            name: DatasetBinding(
+                                dataset=name,
+                                columns=tuple(
+                                    TypedColumn(name=field, type=kind)
+                                    for field, kind in fields.items()
+                                ),
+                            )
+                            for name, fields in datasets.items()
+                        },
+                    )
+                    results.append(
+                        {
+                            "kind": "match_value_type",
+                            "result_type": _reference_match_value_result_type(
+                                Expression(root=root), bindings, outputs
+                            ),
+                        }
+                    )
+                    continue
                 if query["kind"] == "comparable_types":
                     from yamaa.planning.execution import _reference_comparable_types
 
@@ -400,6 +449,7 @@ def _native_module(**members):
                     "qualified_validation",
                     "intermediate_validation",
                     "key_relations",
+                    "match_value_typing",
                 ],
             }
         ),

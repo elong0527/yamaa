@@ -1,6 +1,7 @@
 """Name/index translation for the native immutable reference compiler catalog."""
 
 import json
+from collections.abc import Mapping
 
 from yamaa.models import RuntimeCondition
 from yamaa.odm.bindings import BindingFailure, BoundReference
@@ -97,6 +98,50 @@ def bind_reference_compiler(native) -> ReferenceCompilerFactory:
 
         class Compiler:
             """Per-attempt prepared compiler; returned indices only recover host names."""
+
+            def match_value_type(self, expression):
+                """Project representation tags, never literal values or host type policy."""
+                operation = expression.operation
+                payload = expression.root[operation]
+                if operation == "source":
+                    name = (
+                        payload.get("variable")
+                        if isinstance(payload, Mapping)
+                        else payload
+                    )
+                    metadata = (
+                        {"kind": "source", "name": name}
+                        if isinstance(name, str)
+                        else {"kind": "unresolved"}
+                    )
+                elif operation == "literal":
+                    value = (
+                        payload.get("value")
+                        if isinstance(payload, Mapping)
+                        else payload
+                    )
+                    # bool precedes int; arbitrary-size integers and nonfinite floats
+                    # never cross JSON, and cannot be coerced by transport decoding.
+                    scalar = (
+                        "bool"
+                        if isinstance(value, bool)
+                        else "int"
+                        if isinstance(value, int)
+                        else "float"
+                        if isinstance(value, float)
+                        else "str"
+                        if isinstance(value, str)
+                        else "missing"
+                        if value is None
+                        else "other"
+                    )
+                    metadata = {"kind": "literal", "scalar": scalar}
+                else:
+                    metadata = {"kind": "operation", "name": operation}
+                result = query({"kind": "match_value_type", "expression": metadata})
+                if result["kind"] != "match_value_type":
+                    raise ValueError("unexpected native match value type result")
+                return result["result_type"]
 
             def comparable_types(self, left, right):
                 """Return the shared declared-type comparison without host coercion."""

@@ -2,10 +2,13 @@
 
 from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from yamaa.models import ColumnType
 from yamaa.odm.bindings import BindingPlan, BindingResult
+
+if TYPE_CHECKING:
+    from yamaa.specification.models import Expression
 
 ComparableType = ColumnType | Literal["bool"]
 
@@ -84,6 +87,10 @@ class KeyInference:
 
 class ReferenceCompiler(Protocol):
     """An immutable catalog captured for one planning attempt, never a user extension hook."""
+
+    def match_value_type(self, expression: "Expression") -> ComparableType | None:
+        """Select the closed REQ-1259 comparison class or defer explicitly to runtime."""
+        ...
 
     def comparable_types(self, left: ComparableType, right: ComparableType) -> bool:
         """Compare known types, including expression booleans, without coercing values."""

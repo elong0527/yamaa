@@ -240,6 +240,260 @@ class InstalledReferences(unittest.TestCase):
                     ],
                 )
 
+    def test_aggregate_match_typing_keeps_diagnostic_provenance(self):
+        """Aggregate keys use the same core table and retain their own authored diagnostic."""
+        for value in (1, True):
+            spec = specification(
+                [
+                    Column(
+                        name="K", type="str", derivation=expression({"source": "SRC.X"})
+                    ),
+                    Column(
+                        name="V",
+                        type="int",
+                        derivation=expression(
+                            {
+                                "aggregate": {
+                                    "dataset": "OTHER",
+                                    "key": {"N": {"literal": value}},
+                                    "expr": "SUM(OTHER.N)",
+                                }
+                            }
+                        ),
+                    ),
+                ]
+            )
+            spec = spec.model_copy(
+                update={
+                    "input": {**spec.input, "OTHER": DatasetSource(path="other.csv")}
+                }
+            )
+            sources = {
+                "OTHER": frame_from_values((TypedColumn(name="N", type="int"),), [[1]])
+            }
+            for native in (False, True):
+                with self.subTest(value=value, native=native):
+                    if value is True:
+                        with self.assertRaises(ExecutionPlanningError) as caught:
+                            self.plan(spec, native, sources)
+                        self.assertEqual(
+                            [
+                                (
+                                    d.condition,
+                                    d.requirement,
+                                    d.spec_paths,
+                                    dict(d.context),
+                                )
+                                for d in caught.exception.diagnostics
+                            ],
+                            [
+                                (
+                                    "incompatible_input_type",
+                                    "REQ-0004",
+                                    ("columns.V.derivation.aggregate.expr",),
+                                    {
+                                        "source": "key[N]",
+                                        "expected": "bool",
+                                        "actual": "int",
+                                    },
+                                )
+                            ],
+                        )
+                    else:
+                        self.assertEqual(
+                            self.plan(spec, native, sources).columns[-1].column, "V"
+                        )
+
+    def test_match_value_truth_and_literal_projection(self):
+        """Independent REQ-1259 truth covers the real port and the retained default policy."""
+        with (ROOT / "reference_match_values.tsv").open(encoding="utf-8") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE))
+        for case in cases:
+            request = json.loads(case["request"])
+            catalog = request["catalog"]
+            columns = {field["name"]: field["type"] for field in catalog["outputs"]}
+            bindings = reference_bindings.BindingPlan(
+                domain="OUT",
+                output_columns=tuple(columns),
+                datasets={
+                    dataset["name"]: reference_bindings.DatasetBinding(
+                        dataset=dataset["name"],
+                        columns=tuple(
+                            TypedColumn(name=field["name"], type=field["type"])
+                            for field in dataset["fields"]
+                        ),
+                    )
+                    for dataset in catalog["datasets"]
+                },
+            )
+            compiler = bind_reference_compiler(yamaa_native)(bindings, columns)
+            metadata = request["queries"][0]["expression"]
+            kind = metadata["kind"]
+            if kind == "source":
+                roots = [
+                    {"source": metadata["name"]},
+                    {"source": {"variable": metadata["name"], "missing": "fallback"}},
+                ]
+            elif kind == "literal":
+                values = {
+                    "str": ["", "\u00e9", "2026-10-05"],
+                    "int": [0, -1, 10**100],
+                    "float": [0.0, -0.0, float("nan"), float("inf"), -float("inf")],
+                    "bool": [True, False],
+                    "missing": [None],
+                    "other": [[], [1]],
+                }[metadata["scalar"]]
+                roots = [{"literal": value} for value in values] + [
+                    {
+                        "literal": {
+                            "value": value,
+                            "missing": "replacement",
+                            "invalid": 1,
+                        }
+                    }
+                    for value in values
+                ]
+            elif kind == "operation":
+                roots = [
+                    {metadata["name"]: None},
+                    {
+                        metadata["name"]: {
+                            "missing": True,
+                            "invalid": 1,
+                            "no_match": "replacement",
+                        }
+                    },
+                ]
+            else:
+                roots = [{"source": None}, {"source": {}}, {"source": 12}]
+            expected = json.loads(case["expected"])["outcome"]["results"][0][
+                "result_type"
+            ]
+            for root in roots:
+                with self.subTest(case=case["case"], root=root):
+                    value = Expression(root=root)
+                    self.assertEqual(compiler.match_value_type(value), expected)
+                    self.assertEqual(
+                        reference_planning._reference_match_value_result_type(
+                            value, bindings, columns
+                        ),
+                        expected,
+                    )
+
+    def test_match_value_query_errors_and_limits_do_not_fall_back(self):
+        """A failed query publishes no result, and an explicit later attempt can retry."""
+        bindings = reference_bindings.BindingPlan(
+            domain="OUT", output_columns=(), datasets={}
+        )
+        compiler = bind_reference_compiler(yamaa_native)(bindings, {})
+        for operation, resource in (
+            ("source", "reference_bytes"),
+            ("\u00e9" * 32769, "operation_bytes"),
+        ):
+            value = Expression(root={operation: "\u00e9" * 32769})
+            with (
+                self.subTest(resource=resource),
+                self.assertRaises(NativeReferenceLimitError) as caught,
+            ):
+                compiler.match_value_type(value)
+            self.assertEqual(
+                (
+                    caught.exception.resource,
+                    caught.exception.limit,
+                    caught.exception.required,
+                ),
+                (resource, 65536, 65538),
+            )
+        self.assertEqual(
+            compiler.match_value_type(Expression(root={"literal": True})), "bool"
+        )
+        original = yamaa_native._compile_reference_catalog
+        failure = ValueError("match type query failed")
+
+        def fail_typing(request):
+            """Inject only at the new query, allowing real catalog and preceding queries."""
+            catalog, status = original(request)
+
+            def analyze(request):
+                """Fail only typing while all other metadata uses the actual native catalog."""
+                if any(
+                    query["kind"] == "match_value_type"
+                    for query in json.loads(request)["queries"]
+                ):
+                    raise failure
+                return catalog.analyze(request)
+
+            return SimpleNamespace(analyze=analyze), status
+
+        spec = specification(
+            [
+                Column(
+                    name="K", type="str", derivation=expression({"source": "SRC.X"})
+                ),
+                Column(
+                    name="V", type="int", derivation=expression({"source": "LOOK.N"})
+                ),
+            ]
+        ).model_copy(
+            update={
+                "intermediates": [
+                    Intermediate(id="LOOK", dataset="SRC", key={"N": {"literal": 1}})
+                ]
+            }
+        )
+        with (
+            patch.object(yamaa_native, "_compile_reference_catalog", fail_typing),
+            self.assertRaises(ValueError) as caught,
+        ):
+            self.plan(spec)
+        self.assertIs(caught.exception, failure)
+        self.assertEqual(self.plan(spec).intermediates[0].match_fields, ("N",))
+        # Shared planning metadata does not enable expression keys in the bounded executor.
+        result = native_datasets.execute_with_source_provider(
+            spec, lambda _: self.fail("source")
+        )
+        self.assertEqual(result.result.status, "unsupported")
+        self.assertIn(
+            ("intermediate_key", "intermediates[0].key"),
+            [(f.operation, f.spec_path) for f in result.result.features],
+        )
+
+    def test_match_value_capability_precedes_activation_and_data(self):
+        """The previous installed query set refuses both frontends before side effects."""
+        case = ROOT / "specification-functions"
+        project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
+        ordinary_spec = load_specification(
+            ROOT / "specification-adlb" / "spec.yaml", SCHEMA
+        ).specification
+        with (
+            patch.object(
+                yamaa_native,
+                "reference_capabilities",
+                lambda: (
+                    '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}'
+                ),
+            ),
+            patch.object(
+                native_datasets,
+                "activate_project",
+                side_effect=AssertionError("activation"),
+            ),
+        ):
+            project = native_datasets.execute_with_project_functions(
+                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            )
+            ordinary = native_datasets.execute_with_source_provider(
+                ordinary_spec, lambda _: self.fail("source")
+            )
+        for actual in (ordinary, project):
+            self.assertEqual(actual.result.status, "unsupported")
+            self.assertEqual(
+                [(f.operation, f.spec_path) for f in actual.result.features],
+                [("native_match_value_typing", "$")],
+            )
+            self.assertEqual(actual.result.handler_counts, ())
+            self.assertEqual(actual.verifications, ())
+
     def test_key_truth_against_default_rules(self):
         """Replay independent comparison/inference truth through the retained default rules."""
         with (ROOT / "reference_keys.tsv").open(encoding="utf-8") as stream:
@@ -479,6 +733,7 @@ class InstalledReferences(unittest.TestCase):
             "reference_scope.tsv",
             "reference_intermediate.tsv",
             "reference_keys.tsv",
+            "reference_match_values.tsv",
         ):
             with (ROOT / fixture).open(encoding="utf-8") as stream:
                 cases.extend(
@@ -551,6 +806,11 @@ class InstalledReferences(unittest.TestCase):
                 reference_planning,
                 "_reference_comparable_types",
                 side_effect=AssertionError("reference key rules"),
+            ),
+            patch.object(
+                reference_planning,
+                "_reference_match_value_result_type",
+                side_effect=AssertionError("reference match value typing"),
             ),
             patch.object(
                 reference_planning,
@@ -941,6 +1201,7 @@ class InstalledReferences(unittest.TestCase):
                     "qualified_validation",
                     "intermediate_validation",
                     "key_relations",
+                    "match_value_typing",
                 ],
             },
         )
@@ -1161,6 +1422,11 @@ class InstalledReferences(unittest.TestCase):
                         reference_planning,
                         "_reference_comparable_types",
                         side_effect=AssertionError("reference key rules"),
+                    ),
+                    patch.object(
+                        reference_planning,
+                        "_reference_match_value_result_type",
+                        side_effect=AssertionError("reference match value typing"),
                     ),
                     patch.object(
                         reference_planning,

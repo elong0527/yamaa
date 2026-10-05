@@ -1,6 +1,7 @@
 //! Bounded reference metadata transport, shared by batch and prepared host adapters.
 mod intermediate;
 mod keys;
+mod match_value;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{fmt, panic::catch_unwind};
@@ -13,7 +14,7 @@ const MAX_QUERIES: usize = 4096;
 
 /// Advertise only implemented metadata queries, before activation or source access.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}"#
+    r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations","match_value_typing"]}"#
 }
 
 /// Invalid transport and metadata stay distinct from language diagnostics and limits.
@@ -115,6 +116,9 @@ struct QueryRequest {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Query {
+    MatchValueType {
+        expression: match_value::Expression,
+    },
     ComparableTypes {
         left: keys::ComparableKind,
         right: keys::ComparableKind,
@@ -273,6 +277,9 @@ enum Diagnostic {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum QueryResult {
+    MatchValueType {
+        result_type: Option<keys::ComparableKind>,
+    },
     ComparableTypes {
         comparable: bool,
     },
@@ -397,6 +404,13 @@ impl CompiledCatalog {
         let mut results = Vec::with_capacity(queries.len());
         for query in queries {
             let result = match query {
+                Query::MatchValueType { expression } => {
+                    yamaa_core::match_value::result_type(&self.0, expression.core()).map(|kind| {
+                        QueryResult::MatchValueType {
+                            result_type: kind.map(Into::into),
+                        }
+                    })
+                }
                 Query::ComparableTypes { left, right } => Ok(QueryResult::ComparableTypes {
                     comparable: yamaa_core::key_relation::comparable(left.core(), right.core()),
                 }),

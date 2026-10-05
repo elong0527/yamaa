@@ -859,7 +859,7 @@ _MATCH_VALUE_RESULT_TYPES: dict[str, ComparableType] = {
 }
 
 
-def _match_value_result_type(
+def _reference_match_value_result_type(
     expression: Expression,
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
@@ -891,6 +891,18 @@ def _match_value_result_type(
             return "str"
         return None
     return _MATCH_VALUE_RESULT_TYPES.get(operation)
+
+
+def _match_value_result_type(
+    expression: Expression,
+    bindings: BindingPlan,
+    column_types: Mapping[str, ColumnType],
+    reference_compiler: ReferenceCompiler | None = None,
+) -> ComparableType | None:
+    """Use the captured compiler for native planning, retaining the default reference rules."""
+    if reference_compiler is not None:
+        return reference_compiler.match_value_type(expression)
+    return _reference_match_value_result_type(expression, bindings, column_types)
 
 
 _WINDOW_VARIABLES: dict[str, tuple[str, ...]] = {
@@ -2315,7 +2327,10 @@ def _validate_paired_type(
         # REQ-1259: an expression match value compares its statically known
         # result type; an unknown static type defers the check to the runtime.
         actual = _match_value_result_type(
-            reference.key_expression.expression, bindings, column_types
+            reference.key_expression.expression,
+            bindings,
+            column_types,
+            reference_compiler,
         )
         if actual is None:
             return
@@ -2770,7 +2785,9 @@ def _validate_aggregate_keys(
             # REQ-1259: an expression match value compares its statically
             # known result type; an unknown static type defers to the runtime.
             # The inner references were validated separately.
-            left = _match_value_result_type(keyed.expression, bindings, column_types)
+            left = _match_value_result_type(
+                keyed.expression, bindings, column_types, reference_compiler
+            )
             if left is None:
                 continue
         else:
@@ -3062,7 +3079,7 @@ def _plan_lookups(
                 # statically known result type; an unknown static type defers
                 # the check to the runtime.
                 left = _match_value_result_type(
-                    keyed.expression, bindings, column_types
+                    keyed.expression, bindings, column_types, reference_compiler
                 )
                 if left is None:
                     continue
