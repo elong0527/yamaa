@@ -35,7 +35,11 @@ from yamaa.models.values import (
 
 
 class NativeActivationCache:
-    """Keep native vector success separate from reference activation, without digests."""
+    """Keep native success separate; owners serialize activation and clearing.
+
+    Artifact references identify immutable code. This process-local cache neither
+    revokes in-flight activation nor coordinates concurrent project execution.
+    """
 
     def __init__(self):
         """Create a process-local cache of canonical native activation identities."""

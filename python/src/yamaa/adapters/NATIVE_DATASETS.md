@@ -68,6 +68,13 @@ Only `NativeActivationCache` success can skip native vectors. A reference
 `ActivationCache` is rejected. Passing `cache=None` reruns vectors; the native
 cache keys use the existing canonical identities without content hashing. Failed
 or interrupted activation never records success or calls the source provider.
+Artifact references must name immutable code, as in the existing reference
+resolver; changing files or remapping an already imported reference does not
+establish a new artifact identity. Project code runs with the host's authority.
+The process-local cache is not a concurrency coordinator: callers sharing it
+must serialize activation and clearing, or use an independently owned cache per
+run (`cache=None` disables reuse). Concurrent clearing is not a cancellation or
+revocation mechanism for in-flight activation.
 
 The activated signatures and adapted callables are captured for the run. Arguments
 retain authored order, exact scalar types, omitted defaults and explicit missing.

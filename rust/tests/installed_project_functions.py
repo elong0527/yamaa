@@ -63,11 +63,13 @@ class InstalledProjectFunctions(unittest.TestCase):
         original = LoadedArtifact.load
 
         def load(artifact, call):
+            """Wrap the verified artifact target with a concrete signature and effect recorder."""
             target = original(artifact, call)
 
             def observed(
                 numerator, denominator, decimals=2, adjust=None, as_percent=False
             ):
+                """Record one actual host invocation and inject only the selected failure scenario."""
                 self.events.append(
                     (numerator, denominator, decimals, adjust, as_percent)
                 )
@@ -122,11 +124,13 @@ class InstalledProjectFunctions(unittest.TestCase):
         )
 
     def test_unchanged_csv_and_entire_callback_trace(self):
+        """Compare committed CSV and every vector/data callback without reference evaluation."""
         self.assertNotIn("/python/src/", yamaa.__file__)
         self.assert_csv(self.execute())
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
     def test_native_cache_only_skips_vectors(self):
+        """Retain all data callbacks on cache hits and rerun vectors after explicit clearing."""
         cache = NativeActivationCache()
         for expected in (VECTORS + ["source"] + CALLS, ["source"] + CALLS):
             self.events.clear()
@@ -138,6 +142,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
     def test_reference_activation_cannot_qualify_native(self):
+        """Reject reference cache authority and independently qualify the native invocation path."""
         cache = ActivationCache()
         activate_project_functions(self.spec, CASE / "python", SCHEMA, cache=cache)
         self.events.clear()
@@ -148,6 +153,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
     def test_failed_activation_does_not_read_or_cache(self):
+        """Stop on a failed vector and require a complete activation on the next attempt."""
         cache = NativeActivationCache()
         self.mode = "activation_bad"
         failed = self.execute(cache=cache)
@@ -162,6 +168,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
     def test_control_exception_escapes_without_cache_or_source(self):
+        """Preserve original interruption and leave data access and activation success untouched."""
         cache = NativeActivationCache()
         self.mode = "control"
         with self.assertRaises(KeyboardInterrupt):
@@ -173,6 +180,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
     def test_missing_capability_never_resolves_or_reads(self):
+        """Reject unsupported native installations before artifact callbacks or source access."""
         with patch.object(
             yamaa_native,
             "dataset_capabilities",
@@ -185,6 +193,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, [])
 
     def test_bad_call_precedes_activation_and_source(self):
+        """Report contract mismatch before invoking project code or reading study data."""
         self.spec.columns[1].derivation.value.root["function"]["contract_version"] = (
             "9.0.0"
         )
@@ -195,11 +204,13 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, [])
 
     def test_ordinary_api_still_refuses_project_callbacks(self):
+        """Require explicit project authority rather than silently enabling ordinary native calls."""
         result = execute_with_source_provider(self.spec, self.provider)
         self.assertEqual(result.result.status, "unsupported")
         self.assertEqual(self.events, [])
 
     def test_data_callback_failures_are_fatal_with_original_identity(self):
+        """Preserve the first failing callback path and complete identity with reference diagnostics."""
         for mode, condition in (
             ("bad_result", "invalid_function_result"),
             ("raised", "function_call_failed"),
@@ -224,7 +235,10 @@ class InstalledProjectFunctions(unittest.TestCase):
                 self.assertEqual(result.result.diagnostics, reference.diagnostics)
 
     def test_provider_cannot_replace_admitted_expression_or_binding(self):
+        """Keep the admitted snapshot and captured target despite mutations during source IO."""
+
         def provider(declarations):
+            """Supply controlled source data while preserving an observable source boundary."""
             self.spec.columns[1].derivation.value.root.clear()
             # A later module mutation cannot replace an already captured target.
             with patch.object(
@@ -236,6 +250,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"] + CALLS)
 
     def test_changed_vector_identity_invalidates_native_cache(self):
+        """Requalify changed vector truth even when artifact and contract identities stay equal."""
         cache = NativeActivationCache()
         self.assert_csv(self.execute(cache=cache))
         self.events.clear()
@@ -254,7 +269,10 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS[:1])
 
     def test_later_ambiguous_argument_precedes_missing_short_circuit(self):
+        """Resolve later collected arguments before applying an earlier missing short circuit."""
+
         def provider(declarations):
+            """Supply controlled source data while preserving an observable source boundary."""
             sources = self.provider(declarations)
             table = sources["SOURCE"].table
             # The first argument is missing on both feeders; the later argument
@@ -277,6 +295,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"])
 
     def test_record_templates_preserve_row_major_callback_order(self):
+        """Retain record-local execution order while producing the same independent CSV truth."""
         document = yaml.safe_load((CASE / "spec.yaml").read_text())
         document["rows"] = [
             {
@@ -299,6 +318,7 @@ class InstalledProjectFunctions(unittest.TestCase):
         self.assertEqual(self.events, VECTORS + ["source"] + expected)
 
     def test_unqualified_scopes_are_refused_before_activation(self):
+        """Reject grouped, key and secondary function scopes before callback or source effects."""
         for scenario in ("key", "secondary", "grouped"):
             with self.subTest(scenario=scenario):
                 spec = self.spec.model_copy(deep=True)
