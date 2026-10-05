@@ -3,7 +3,7 @@ use super::{core, field, Field, Kind};
 use serde::{Deserialize, Serialize};
 use yamaa_core::key_relation;
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum ComparableKind {
     Str,
@@ -25,6 +25,23 @@ impl ComparableKind {
             Self::Date => ColumnType::Date.into(),
             Self::Datetime => ColumnType::DateTime.into(),
             Self::Bool => key_relation::ComparableType::Boolean,
+        }
+    }
+}
+
+impl From<key_relation::ComparableType> for ComparableKind {
+    /// Preserve known expression comparison classes without admitting boolean columns.
+    fn from(value: key_relation::ComparableType) -> Self {
+        use yamaa_core::value::ColumnType;
+        match value {
+            key_relation::ComparableType::Boolean => Self::Bool,
+            key_relation::ComparableType::Column(kind) => match kind {
+                ColumnType::Str => Self::Str,
+                ColumnType::Int => Self::Int,
+                ColumnType::Float => Self::Float,
+                ColumnType::Date => Self::Date,
+                ColumnType::DateTime => Self::Datetime,
+            },
         }
     }
 }

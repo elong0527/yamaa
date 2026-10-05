@@ -3,9 +3,10 @@ read_truth <- function(name) read.delim(system.file(name, package = "yamaanative
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 truth <- rbind(read_truth("reference_binding.tsv"), read_truth("reference_scope.tsv"),
-  read_truth("reference_intermediate.tsv"), read_truth("reference_keys.tsv"))
+  read_truth("reference_intermediate.tsv"), read_truth("reference_keys.tsv"),
+  read_truth("reference_match_values.tsv"))
 stopifnot(identical(reference_capabilities(),
-  '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}'))
+  '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations","match_value_typing"]}'))
 for (i in seq_len(nrow(truth))) {
   for (attempt in 1:2) stopifnot(identical(analyze_references(truth$request[i]), truth$expected[i]))
 }

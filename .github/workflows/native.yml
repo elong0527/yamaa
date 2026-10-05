@@ -102,6 +102,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_scope.tsv" reference_scope.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_intermediate.tsv" reference_intermediate.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_keys.tsv" reference_keys.tsv
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_match_values.tsv" reference_match_values.tsv
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
