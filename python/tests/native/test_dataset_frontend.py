@@ -117,9 +117,93 @@ def _native_module(**members):
             }
         )
 
+    def compile_references(request):
+        """Facade-only fake; installed tests require the actual Rust compiler and truth."""
+        catalog = json.loads(request)["catalog"]
+        outputs = {field["name"]: field["type"] for field in catalog["outputs"]}
+        datasets = {
+            dataset["name"]: {
+                field["name"]: field["type"] for field in dataset["fields"]
+            }
+            for dataset in catalog["datasets"]
+        }
+        output_names = tuple(outputs)
+        dataset_names = tuple(datasets)
+
+        def analyze_references(request):
+            """Evaluate metadata in the unrelated facade double, never as expected truth."""
+            results = []
+            for query in json.loads(request)["queries"]:
+                name = query["name"]
+                if query["kind"] == "bind":
+                    bound = None
+                    if "." not in name and name in outputs:
+                        bound = {
+                            "kind": "output",
+                            "column": output_names.index(name),
+                            "type": outputs[name],
+                        }
+                    elif "." in name:
+                        dataset, field = name.split(".", 1)
+                        if dataset in datasets and field in datasets[dataset]:
+                            bound = {
+                                "kind": "dataset",
+                                "dataset": dataset_names.index(dataset),
+                                "field": tuple(datasets[dataset]).index(field),
+                                "type": datasets[dataset][field],
+                            }
+                    results.append({"kind": "binding", "binding": bound})
+                    continue
+                finding = None
+                if name not in outputs:
+                    candidates = sorted(
+                        dataset_names[index]
+                        for index in query["candidates"]
+                        if name in datasets[dataset_names[index]]
+                    )
+                    finding = (
+                        {
+                            "condition": "unresolvable_name",
+                            "dataset": dataset_names.index(candidates[0]),
+                        }
+                        if candidates
+                        else {"condition": "unknown_field"}
+                    )
+                elif (
+                    query["available"] is not None
+                    and output_names.index(name) not in query["available"]
+                ):
+                    finding = {
+                        "condition": "phase_boundary",
+                        "column": output_names.index(name),
+                    }
+                elif (
+                    query["expected"] is not None and outputs[name] != query["expected"]
+                ):
+                    finding = {
+                        "condition": "incompatible_input_type",
+                        "expected": query["expected"],
+                        "actual": outputs[name],
+                    }
+                results.append({"kind": "validation", "diagnostic": finding})
+            return json.dumps(
+                {
+                    "protocol": "reference-analysis/1",
+                    "outcome": {"status": "complete", "results": results},
+                }
+            )
+
+        return SimpleNamespace(analyze=analyze_references), json.dumps(
+            {
+                "protocol": "reference-catalog/1",
+                "outcome": {"status": "complete", "results": []},
+            }
+        )
+
     return SimpleNamespace(
         analyze_dependencies=analyze,
         analyze_column_dependencies=analyze_columns,
+        _compile_reference_catalog=compile_references,
         **members,
     )
 
@@ -136,6 +220,7 @@ def specification():
     [
         ("analyze_dependencies", "native_dependency_analysis"),
         ("analyze_column_dependencies", "native_column_dependency_analysis"),
+        ("_compile_reference_catalog", "native_reference_binding"),
     ],
 )
 def test_missing_dependency_service_is_unsupported_before_io(

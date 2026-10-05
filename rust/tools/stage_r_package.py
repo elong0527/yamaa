@@ -23,7 +23,11 @@ def stage(destination: Path):
     )
     resources = destination / "inst"
     resources.mkdir(exist_ok=True)
-    for fixture in ("scalar_transport.tsv", "numeric_transport.tsv"):
+    for fixture in (
+        "scalar_transport.tsv",
+        "numeric_transport.tsv",
+        "reference_binding.tsv",
+    ):
         shutil.copy2(
             WORKSPACE / "crates/yamaa-adapters/tests/fixtures" / fixture,
             resources / fixture,

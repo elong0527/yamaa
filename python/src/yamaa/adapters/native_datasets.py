@@ -36,6 +36,7 @@ from yamaa.adapters._native_project_functions import (
     NativeActivationCache,
     activate_project,
 )
+from yamaa.adapters._native_references import bind_reference_compiler
 from yamaa.functions.artifact import ArtifactResolver
 from yamaa.functions.errors import FunctionActivationError
 from yamaa.io import (
@@ -467,6 +468,7 @@ def _execute(specification, source_provider, prepare_functions=None):
     for service, operation in (
         ("analyze_dependencies", "native_dependency_analysis"),
         ("analyze_column_dependencies", "native_column_dependency_analysis"),
+        ("_compile_reference_catalog", "native_reference_binding"),
     ):
         if not callable(getattr(yamaa_native, service, None)):
             return NativeDatasetRun(
@@ -477,6 +479,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             )
     dependency_analyzer = bind_dependency_analyzer(yamaa_native)
     column_dependency_analyzer = bind_column_dependency_analyzer(yamaa_native)
+    reference_compiler_factory = bind_reference_compiler(yamaa_native)
     functions = None
     if prepare_functions is not None:
         execute = getattr(yamaa_native, "execute_dataset_functions", None)
@@ -517,6 +520,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             else OPERATIONS,
             dependency_analyzer=dependency_analyzer,
             column_dependency_analyzer=column_dependency_analyzer,
+            reference_compiler_factory=reference_compiler_factory,
         )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)

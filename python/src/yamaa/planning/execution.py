@@ -40,6 +40,7 @@ from yamaa.odm import (
 )
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
 from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
+from yamaa.planning.references import ReferenceCompilerFactory, ReferenceFinding
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
@@ -2633,6 +2634,33 @@ def _match_value_suggestion(
     return None
 
 
+def _append_reference_finding(
+    finding: ReferenceFinding | None,
+    reference: _Reference,
+    diagnostics: list[ExecutionDiagnostic],
+    *,
+    row: Row | None = None,
+) -> None:
+    """Attach the authored path and row identity to a core-selected reference condition."""
+    if finding is None:
+        return
+    context = dict(finding.context)
+    requirement = reference.requirement
+    if finding.condition == "phase_boundary":
+        if row is None:
+            raise ValueError("native output phase finding outside row construction")
+        context = {
+            "identifier": context["identifier"],
+            "row": row.id,
+            "available_phase": context["available_phase"],
+            "required_phase": context["required_phase"],
+        }
+        requirement = None
+    diagnostics.append(
+        _diagnostic(finding.condition, reference.path, context, requirement=requirement)
+    )
+
+
 def _unresolvable_reference_diagnostic(
     reference: _Reference,
     candidate_datasets: Collection[str],
@@ -4564,6 +4592,7 @@ def plan_execution(
     supported_operations: Collection[str] = INITIAL_OPERATIONS,
     dependency_analyzer: DependencyAnalyzer | None = None,
     column_dependency_analyzer: ColumnDependencyAnalyzer | None = None,
+    reference_compiler_factory: ReferenceCompilerFactory | None = None,
 ) -> ExecutionPlan:
     """Validate and plan the initial record-driven execution subset.
 
@@ -4611,6 +4640,13 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
+    reference_compiler = (
+        reference_compiler_factory(bindings, column_types)
+        if reference_compiler_factory is not None
+        else None
+    )
+    if reference_compiler is not None:
+        bindings = bindings.with_reference_binder(reference_compiler.bind)
     # REQ-0120: a named intermediate's filter/order_by suggests the qualified
     # spelling, so the lookup datasets' columns ride along for suggestions.
     dataset_fields = {
@@ -4956,6 +4992,18 @@ def plan_execution(
                         # were validated separately, so only the paired-type
                         # check below applies.
                         pass
+                    elif reference_compiler is not None:
+                        _append_reference_finding(
+                            reference_compiler.validate_output(
+                                reference.name,
+                                reference.expected_type,
+                                row_names,
+                                (driver,),
+                            ),
+                            reference,
+                            diagnostics,
+                            row=row,
+                        )
                     elif reference.name not in column_types:
                         # REQ-0106: an unqualified name only ever binds to an
                         # output column; when the bare name is a driver field
@@ -5116,6 +5164,14 @@ def plan_execution(
                 # not a real variable; the inner references were validated
                 # separately, so only the paired-type check below applies.
                 pass
+            elif reference_compiler is not None:
+                _append_reference_finding(
+                    reference_compiler.validate_output(
+                        reference.name, reference.expected_type, None, drivers
+                    ),
+                    reference,
+                    diagnostics,
+                )
             elif reference.name not in column_types:
                 # REQ-0106: an unqualified name only ever binds to an output
                 # column; when the bare name is a field of a row driver the

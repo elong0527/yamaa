@@ -31,7 +31,9 @@ Python planning uses this graph result for intermediate-read cycle checks and
 row-derivation cycle/order analysis. The separate column service below owns
 column cycle/order analysis, forward-reference and key-dependency rules. Hosts
 attach authored source paths and names to core-selected column diagnostics;
-other validation, including phase-boundary restrictions, remains host-owned.
+other validation remains outside this service. The separate
+[reference catalog](REFERENCE_BINDING.md) now owns exact binding and bare-output
+unknown/phase/type checks during optional native planning.
 Native analysis failures propagate without running Python graph or column-rule
 fallbacks. A topologically sortable graph does not waive language rules.
 
@@ -144,7 +146,7 @@ own recovery before requesting another attempt; concurrent coordination remains
 the cache owner's responsibility.
 
 This is one compiler service, not a complete shared specification compiler.
-YAML/schema loading, normalization, inheritance, name binding, most validation,
+YAML/schema loading, normalization, inheritance, scope-specific validation,
 typed dataset lowering and host capability selection remain in Python. Shared
 workflow compilation, R current-spec execution, broader language coverage,
 numerical policy, performance and release/default-cutover gates remain open.

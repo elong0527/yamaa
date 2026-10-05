@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from yamaa.io.source import LoadedDataset
 from yamaa.models import RuntimeCondition, TypedColumn, TypedTable
@@ -70,27 +70,44 @@ class BindingPlan(_FrozenModel):
     datasets: dict[str, DatasetBinding]
     output_columns: tuple[str, ...]
 
-    def bind(self, name: str) -> BindingResult:
-        """Classify one complete variable name without reading a row."""
-        if not name or "." not in name:
-            if name in self.output_columns:
-                return BoundReference(name=name, kind="output", field=name)
-            return _unknown(name)
+    _reference_binder: Callable[[str], BindingResult] | None = PrivateAttr(default=None)
 
-        dataset_name, field = name.split(".", 1)
-        dataset = self.datasets.get(dataset_name)
-        if dataset is None:
-            return _unknown(name)
-        if field in dataset.field_names:
-            return BoundReference(
-                name=name,
-                kind="dataset",
-                dataset=dataset_name,
-                field=field,
-            )
-        # An ODM item is read with `odm` (REQ-1265), never through a
-        # variable name, so any other suffix names no field.
+    def with_reference_binder(
+        self, binder: Callable[[str], BindingResult]
+    ) -> BindingPlan:
+        """Attach a trusted compiler to a snapshot after the planner finishes its catalog."""
+        result = self.model_copy(update={"datasets": dict(self.datasets)})
+        result._reference_binder = binder
+        return result
+
+    def bind(self, name: str) -> BindingResult:
+        """Classify a name with the selected compiler, without reading a row."""
+        if self._reference_binder is not None:
+            return self._reference_binder(name)
+        return _bind_reference(name, self.datasets, self.output_columns)
+
+
+def _bind_reference(name, datasets, output_columns) -> BindingResult:
+    """Default reference binding; native planning supplies its own captured compiler."""
+    if not name or "." not in name:
+        if name in output_columns:
+            return BoundReference(name=name, kind="output", field=name)
         return _unknown(name)
+
+    dataset_name, field = name.split(".", 1)
+    dataset = datasets.get(dataset_name)
+    if dataset is None:
+        return _unknown(name)
+    if field in dataset.field_names:
+        return BoundReference(
+            name=name,
+            kind="dataset",
+            dataset=dataset_name,
+            field=field,
+        )
+    # An ODM item is read with `odm` (REQ-1265), never through a
+    # variable name, so any other suffix names no field.
+    return _unknown(name)
 
 
 def _typed_table(value: LoadedDataset | TypedTable) -> TypedTable:
