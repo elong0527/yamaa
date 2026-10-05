@@ -199,6 +199,23 @@ def _check_signature(name: str, contract: FunctionContract) -> None:
         )
 
 
+def _check_comparison_decimals(name: str, contract: FunctionContract) -> None:
+    """Reject a negative `comparison_decimals` before activation (REQ-0664).
+
+    The schema types `comparison_decimals` as a plain int, so a negative
+    value passes document validation and reaches `fixed_point` through
+    `results_match`, where the decimal context's precision underflows and
+    the activation crashes with an unhandled host `ValueError` instead of
+    reporting the malformed environment.
+    """
+    if contract.comparison_decimals < 0:
+        raise _invalid(
+            "comparison_decimals must be a non-negative integer",
+            function=f"functions.{name}",
+            actual=contract.comparison_decimals,
+        )
+
+
 def _check_binding(name: str, contract: FunctionContract, language: str) -> None:
     """Check the statically written callable and host names of REQ-0683."""
     path = f"functions.{name}"
@@ -462,6 +479,7 @@ def load_environment(
     vector_parts: list[str] = []
     for name, contract in sorted(environment.functions.items()):
         _check_signature(name, contract)
+        _check_comparison_decimals(name, contract)
         _check_binding(name, contract, environment.runtime.language)
         try:
             fingerprints[name] = contract_fingerprint(name, contract)
