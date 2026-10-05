@@ -209,8 +209,7 @@ Warnings are printed to standard output but do not fail validation. The Python
 validator checks column labels for every resolved specification, orders
 inherited columns by dependency, and enforces declaration order, output
 contracts, and dependency cycles for every example, so no second semantic
-scan owns those policies. The remaining Ruby check under
-`.github/scripts/examples/` covers label text only.
+scan owns those policies.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 

@@ -3,8 +3,6 @@
 Keep workflow definitions in `workflows/` and their supporting code in
 `scripts/`, grouped by purpose:
 
-- `scripts/examples/`: Ruby checks for example column labels and dependency
-  order, their shared specification discovery helper, and unit tests.
 - `scripts/benchmark-docs/`: deterministic HTML dashboards generated from benchmark
   fixtures, their shared template, and checks for source fidelity and freshness.
 - `scripts/yaml-validation/`: Python repository and validation blocker checks,
