@@ -73,7 +73,7 @@ what has no Excel counterpart at all. Four things:
    jobs. yamaa splits them into `columns` order and `output.columns`.
 4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
    but nothing executes it. The `implies` rule -- "BMI is empty only when
-   height is unusable" -- normally survives as a sentence in a review email.
+   height or weight is unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, every one of the eleven columns has a yamaa field --
 two live in governed submission metadata rather than in the derivation:
