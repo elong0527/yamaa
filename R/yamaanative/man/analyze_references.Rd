@@ -37,6 +37,18 @@ Scope limits are 256 written driver names, 4,096 groups, 65,536 group-name entri
 and 1,048,576 combined UTF-8 context bytes. Duplicate entries count. Query support
 is advertised by reference_capabilities(); existing query forms remain unchanged.
 
+The key_relations feature provides comparable_types (left and right known static
+types, returning comparable) and infer_keys (ordered keys and typed fields).
+Key inference returns key_inference with an inference kind: keys (original key
+indices), no_applicable_keys, undeclared_output (key index), or incompatible
+(first key index, expected and actual types). Exact types and int/float pairs
+compare; date/datetime pairs do not. Known bool expression results compare only
+with bool; catalogs and inferred-key fields still reject boolean column types.
+Names are literal. All written names count
+toward 65,536 entries and 1,048,576 UTF-8 bytes, before early semantic returns.
+Duplicate right fields and empty names are invalid metadata. Hosts still own
+expression typing, authored diagnostic paths and current-schema compilation.
+
 A validate_intermediate query has field and target. Target contains source
 (kind dataset with name, or kind self with fields), derived, readable and
 dependencies name lists. An empty readable list means unrestricted visibility.

@@ -6,6 +6,7 @@ from yamaa.models import RuntimeCondition
 from yamaa.odm.bindings import BindingFailure, BoundReference
 from yamaa.planning.references import (
     IntermediateFinding,
+    KeyInference,
     QualifiedFinding,
     ReferenceCompilerFactory,
     ReferenceFinding,
@@ -96,6 +97,48 @@ def bind_reference_compiler(native) -> ReferenceCompilerFactory:
 
         class Compiler:
             """Per-attempt prepared compiler; returned indices only recover host names."""
+
+            def comparable_types(self, left, right):
+                """Return the shared declared-type comparison without host coercion."""
+                result = query(
+                    {"kind": "comparable_types", "left": left, "right": right}
+                )
+                if result["kind"] != "comparable_types":
+                    raise ValueError("unexpected native type comparison result")
+                return result["comparable"]
+
+            def infer_keys(self, keys, fields):
+                """Send all ordered key names and right metadata; Rust selects the keys."""
+                result = query(
+                    {
+                        "kind": "infer_keys",
+                        "keys": keys,
+                        "fields": [
+                            {"name": name, "type": kind}
+                            for name, kind in fields.items()
+                        ],
+                    }
+                )
+                if result["kind"] != "key_inference":
+                    raise ValueError("unexpected native key inference result")
+                inference = result["inference"]
+                kind = inference["kind"]
+                if kind == "keys":
+                    return KeyInference(
+                        kind, keys=tuple(keys[i] for i in inference["keys"])
+                    )
+                if kind == "undeclared_output":
+                    return KeyInference(kind, key=keys[inference["key"]])
+                if kind == "incompatible":
+                    return KeyInference(
+                        kind,
+                        key=keys[inference["key"]],
+                        expected=inference["expected"],
+                        actual=inference["actual"],
+                    )
+                if kind == "no_applicable_keys":
+                    return KeyInference(kind)
+                raise ValueError("unknown native key inference outcome")
 
             @staticmethod
             def _intermediate(target):

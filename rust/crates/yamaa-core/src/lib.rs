@@ -10,6 +10,7 @@ mod decimal_rounding;
 pub mod dependency_analysis;
 pub mod evaluation;
 pub mod intermediate_reference;
+pub mod key_relation;
 pub mod numeric;
 pub mod numeric_compiler;
 pub mod numeric_parser;

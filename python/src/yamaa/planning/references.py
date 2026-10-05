@@ -7,6 +7,8 @@ from typing import Literal, Protocol
 from yamaa.models import ColumnType
 from yamaa.odm.bindings import BindingPlan, BindingResult
 
+ComparableType = ColumnType | Literal["bool"]
+
 
 @dataclass(frozen=True)
 class ReferenceFinding:
@@ -69,8 +71,29 @@ class IntermediateFinding:
     dependency: int | None = None
 
 
+@dataclass(frozen=True)
+class KeyInference:
+    """Core-selected join keys or one failure, translated back to authored names."""
+
+    kind: str
+    keys: tuple[str, ...] = ()
+    key: str | None = None
+    expected: ColumnType | None = None
+    actual: ColumnType | None = None
+
+
 class ReferenceCompiler(Protocol):
     """An immutable catalog captured for one planning attempt, never a user extension hook."""
+
+    def comparable_types(self, left: ComparableType, right: ComparableType) -> bool:
+        """Compare known types, including expression booleans, without coercing values."""
+        ...
+
+    def infer_keys(
+        self, keys: tuple[str, ...], fields: Mapping[str, ColumnType]
+    ) -> KeyInference:
+        """Select applicable keys in output order against normalized right-side fields."""
+        ...
 
     def bind(self, name: str) -> BindingResult:
         """Resolve one exact name without reading records."""

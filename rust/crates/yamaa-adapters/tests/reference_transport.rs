@@ -15,6 +15,7 @@ fn shared_truth_and_prepared_catalog_ownership() {
                 .lines()
                 .skip(1),
         )
+        .chain(include_str!("fixtures/reference_keys.tsv").lines().skip(1))
     {
         let fields: Vec<_> = line.split('\t').collect();
         let expected: Value = serde_json::from_str(fields[2]).unwrap();
@@ -253,7 +254,7 @@ fn limits_are_not_language_diagnostics() {
 fn qualified_scope_admission_and_capabilities() {
     assert_eq!(
         yamaa_adapters::reference_transport::capabilities(),
-        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}"#
+        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}"#
     );
     let mut data = request();
     data["queries"] = json!([{"kind":"validate_qualified", "name":"SRC.N", "expected":null,
@@ -301,5 +302,42 @@ fn qualified_scope_admission_and_capabilities() {
     assert_eq!(
         result["outcome"],
         json!({"status":"complete","results":[{"kind":"qualified_validation","diagnostics":[{"kind":"unknown_field"}]}]})
+    );
+}
+
+/// Key queries reject malformed types/fields without publishing an earlier valid result.
+#[test]
+fn key_query_admission_and_reuse() {
+    let data = request();
+    let (catalog, _) = compile_reference_catalog(
+        &json!({"protocol":"reference-catalog/1","catalog":data["catalog"]}).to_string(),
+    )
+    .unwrap();
+    let catalog = catalog.unwrap();
+    for invalid in [
+        json!({"kind":"comparable_types","left":"number","right":"int"}),
+        json!({"kind":"comparable_types","left":null,"right":"int"}),
+        json!({"kind":"comparable_types","left":"int","right":"int","coerce":true}),
+        json!({"kind":"infer_keys","keys":[false],"fields":[]}),
+        json!({"kind":"infer_keys","keys":["A"],"fields":[{"name":"A","type":"bool"}]}),
+        json!({"kind":"infer_keys","keys":["A"],"fields":[{"name":"A","type":"int","value":1}]}),
+    ] {
+        assert_eq!(catalog.analyze(&json!({"protocol":"reference-queries/1","queries":[{"kind":"bind","name":"A"},invalid]}).to_string()), Err(TransportError::InvalidEnvelope));
+    }
+    for fields in [
+        json!([{"name":"A","type":"int"},{"name":"A","type":"str"}]),
+        json!([{"name":"","type":"int"}]),
+    ] {
+        assert_eq!(catalog.analyze(&json!({"protocol":"reference-queries/1","queries":[{"kind":"bind","name":"A"},{"kind":"infer_keys","keys":["ABSENT"],"fields":fields}]}).to_string()), Err(TransportError::InvalidQuery));
+    }
+    let limit: Value = serde_json::from_str(&catalog.analyze(&json!({"protocol":"reference-queries/1","queries":[{"kind":"infer_keys","keys":vec!["A"; 65537],"fields":[]}]}).to_string()).unwrap()).unwrap();
+    assert_eq!(
+        limit["outcome"],
+        json!({"status":"limit","resource":"key_entries","limit":"65536","required":"65537"})
+    );
+    let recovered: Value = serde_json::from_str(&catalog.analyze(r#"{"protocol":"reference-queries/1","queries":[{"kind":"infer_keys","keys":["A"],"fields":[{"name":"A","type":"float"}]}]}"#).unwrap()).unwrap();
+    assert_eq!(
+        recovered["outcome"],
+        json!({"status":"complete","results":[{"kind":"key_inference","inference":{"kind":"keys","keys":[0]}}]})
     );
 }
