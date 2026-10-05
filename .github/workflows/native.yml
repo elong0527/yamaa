@@ -3,7 +3,23 @@ name: Native installation prototype
 on:
   push:
     branches: [main]
+    paths:
+      - 'rust/**'
+      - 'python/**'
+      - 'benchmarks/**'
+      - 'yaml/**'
+      - '.github/workflows/native.yml'
   pull_request:
+    paths:
+      - 'rust/**'
+      - 'python/**'
+      - 'benchmarks/**'
+      - 'yaml/**'
+      - '.github/workflows/native.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
