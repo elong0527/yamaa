@@ -109,6 +109,26 @@ Conventions used below:
   validation philosophy (independent-programming compare as judge pattern)
   plus ADSL flag derivations.
 
+- **Progression-Free Survival (PFS) Analysis in Solid Tumor Clinical Studies**
+  (Li, 2019) -
+  https://pharmasug.org/proceedings/2019/SS/PharmaSUG-2019-SS-027.pdf -
+  PFS event/censoring rules with worked ADTTE examples: no post-baseline
+  tumor assessment -> censored at the randomization date (PFS = 1 day);
+  non-study anti-cancer intervention before a PD -> censored at the last
+  adequate assessment before the intervention, the later PD not an event.
+  TA: oncology. Grounding: PFS censoring conventions for ADTTE
+  (new-therapy cut, no-assessment fallback) and judge test vectors.
+
+## CDISC standards
+
+- **ADaM Basic Data Structure for Time-to-Event Analyses v1.0** (CDISC, 2012) -
+  https://www.cdisc.org/standards/foundational/adam -
+  Time-to-Event example (p. 19): PFS records with CNSR/EVNTDESC/CNSDTDSC,
+  including "NEW ANTI-CANCER THERAPY. CENSORED AT TIME OF LAST ASSESSMENT."
+  and "NO BASELINE ASSESSMENT. CENSORED AT TIME OF RANDOMIZATION."
+  TA: cross-TA. Grounding: canonical PFS censoring conventions and
+  censoring-reason descriptions for ADTTE benchmarks.
+
 ## pharmaverse
 
 - **admiral** - https://github.com/pharmaverse/admiral -

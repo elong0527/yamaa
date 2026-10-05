@@ -10,20 +10,26 @@ import polars as pl
 
 
 def read(name: str) -> pl.DataFrame:
+    """Read a benchmark input CSV with every column as text."""
     return pl.read_csv(f"/app/input/{name}", infer_schema=False)
 
 
 def first_per_subject(records: pl.DataFrame, by: list[str]) -> pl.DataFrame:
+    """Keep the earliest record per subject, breaking ties by sequence."""
     return records.sort(by).unique("USUBJID", keep="first", maintain_order=True)
 
 
 def last_per_subject(records: pl.DataFrame, by: list[str]) -> pl.DataFrame:
+    """Keep the latest record per subject, breaking ties by sequence."""
     return records.sort(by, descending=True).unique(
         "USUBJID", keep="first", maintain_order=True
     )
 
 
-adsl = read("adsl.csv").with_columns(pl.col("RANDDT").str.to_date(strict=False))
+adsl = read("adsl.csv").with_columns(
+    pl.col("RANDDT").str.to_date(strict=False),
+    pl.col("NTXSTDT").str.to_date(strict=False),
+)
 rs = read("rs.csv").with_columns(
     pl.col("RSDTC").str.to_date(strict=False),
     pl.col("RSSEQ").cast(pl.Int64, strict=False),
@@ -61,19 +67,60 @@ last_assessment = last_per_subject(
     ["RSDTC", "RSSEQ"],
 ).select("USUBJID", CENSORDT="RSDTC", LASTSEQ="RSSEQ")
 
+# The last adequate assessment dated on or before new-therapy start, for
+# subjects who began one.
+pre_therapy = last_per_subject(
+    rs.join(adsl.select("USUBJID", "NTXSTDT"), on="USUBJID", how="left").filter(
+        (pl.col("RSTESTCD") == "OVRLRESP")
+        & (pl.col("ADEQFL") == "Y")
+        & pl.col("RSDTC").is_not_null()
+        & pl.col("NTXSTDT").is_not_null()
+        & (pl.col("RSDTC") <= pl.col("NTXSTDT"))
+    ),
+    ["RSDTC", "RSSEQ"],
+).select("USUBJID", PRECENSORDT="RSDTC", PRESEQ="RSSEQ")
+
 PDDT, DTHDT = pl.col("PDDT"), pl.col("DTHDT")
 
 adtte = (
     adsl.join(progression, on="USUBJID", how="left")
     .join(death, on="USUBJID", how="left")
     .join(last_assessment, on="USUBJID", how="left")
+    .join(pre_therapy, on="USUBJID", how="left")
+    # A progression or death dated after new-therapy start is not an event.
+    .with_columns(
+        PDDT=pl.when(
+            pl.col("NTXSTDT").is_not_null() & (pl.col("PDDT") > pl.col("NTXSTDT"))
+        )
+        .then(None)
+        .otherwise("PDDT"),
+        DTHDT=pl.when(
+            pl.col("NTXSTDT").is_not_null() & (pl.col("DTHDT") > pl.col("NTXSTDT"))
+        )
+        .then(None)
+        .otherwise("DTHDT"),
+    )
     .with_columns(
         EVENTDT=pl.min_horizontal("PDDT", "DTHDT"),
         STARTDT=pl.col("RANDDT"),
         PARAMCD=pl.lit("PFS"),
         PARAM=pl.lit("Progression-Free Survival"),
+        # The censoring assessment: the last adequate one overall, or the
+        # last one dated on or before therapy start when therapy began.
+        CENSORASSESSDT=pl.when(pl.col("NTXSTDT").is_null())
+        .then(pl.col("CENSORDT"))
+        .otherwise(pl.col("PRECENSORDT")),
+        CENSORSEQ=pl.when(pl.col("NTXSTDT").is_null())
+        .then(pl.col("LASTSEQ"))
+        .otherwise(pl.col("PRESEQ")),
     )
-    # The event always wins, even after the last adequate assessment.
+    # With no usable adequate assessment the subject is censored at
+    # randomization, for a 1-day PFS.
+    .with_columns(
+        CENSORDT=pl.coalesce("CENSORASSESSDT", "STARTDT"),
+    )
+    # The event always wins, even after the last adequate assessment,
+    # unless new anti-cancer therapy started first.
     .with_columns(
         CNSR=pl.when(pl.col("EVENTDT").is_not_null()).then(0).otherwise(1),
         ADT=pl.coalesce("EVENTDT", "CENSORDT"),
@@ -90,21 +137,21 @@ adtte = (
     .with_columns(
         SRCDOM=pl.when(pl.col("EVNTDESC") == "DEATH")
         .then(pl.lit("DS"))
+        .when(pl.col("CENSORASSESSDT").is_null())
+        .then(None)
         .otherwise(pl.lit("RS")),
         SRCVAR=pl.when(pl.col("EVNTDESC") == "DEATH")
         .then(pl.lit("DSDTC"))
+        .when(pl.col("CENSORASSESSDT").is_null())
+        .then(None)
         .otherwise(pl.lit("RSDTC")),
         SRCSEQ=pl.when(pl.col("EVNTDESC") == "DISEASE PROGRESSION")
         .then(pl.col("PDSEQ"))
         .when(pl.col("EVNTDESC") == "DEATH")
         .then(pl.col("DTHSEQ"))
-        .otherwise(pl.col("LASTSEQ")),
-    )
-    # A record with no date has no trace; the fixture always has one.
-    .with_columns(
-        SRCDOM=pl.when(pl.col("ADT").is_null()).then(None).otherwise("SRCDOM"),
-        SRCVAR=pl.when(pl.col("ADT").is_null()).then(None).otherwise("SRCVAR"),
-        SRCSEQ=pl.when(pl.col("ADT").is_null()).then(None).otherwise("SRCSEQ"),
+        .when(pl.col("CENSORASSESSDT").is_null())
+        .then(None)
+        .otherwise(pl.col("CENSORSEQ")),
     )
     .sort("USUBJID")
     .select(

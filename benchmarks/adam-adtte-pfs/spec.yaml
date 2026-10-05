@@ -2,9 +2,9 @@ schema_version: "1.0"
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
-  ADSL: {path: input/adsl.csv, types: {RANDDT: date}}
-  RS: {path: input/rs.csv, types: {RSSEQ: int}}
-  DS: {path: input/ds.csv, types: {DSSEQ: int}}
+  ADSL: {path: input/adsl.csv, types: {RANDDT: date, NTXSTDT: date}}
+  RS: {path: input/rs.csv, types: {RSDTC: date, RSSEQ: int}}
+  DS: {path: input/ds.csv, types: {DSDTC: date, DSSEQ: int}}
 base: ADSL
 
 output:
@@ -14,10 +14,11 @@ output:
 
 intermediates:
   # Per subject: the first adequate progression (PD), the first death, and
-  # the last adequate assessment, which sets the censoring date. Records
-  # sharing a date are ordered by sequence number. An undated record can
-  # never supply a date: the date picks (MIN/MAX) skip blank dates, so
-  # the filters exclude undated records outright (issue #1008).
+  # the last adequate assessment. Records sharing a date are ordered by
+  # sequence number. An undated record can never supply a date: the date
+  # picks skip blank dates, so the filters exclude undated records
+  # outright (issue #1008). The new-therapy cut below is applied at the
+  # column level: intermediate filters cannot correlate to the base row.
   - id: PROGRESSION
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD'
@@ -39,6 +40,7 @@ intermediates:
       AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
+    no_match: null
 
 columns:
   - name: STUDYID
@@ -66,21 +68,100 @@ columns:
     label: Time to Event Origin Date for Subject
     derivation: ADSL.RANDDT
 
-  # The chosen records' dates as dates: RS and DS hold them as text.
+  # The subject-level start date of new anti-cancer therapy, when one was
+  # started; empty for subjects with no new therapy. Carried as a column
+  # only: it drives the therapy cut below and is not in the output.
+  - name: NTXSTDT
+    type: date
+    label: New Anti-Cancer Therapy Start Date
+    derivation: ADSL.NTXSTDT
+
+  # A progression dated after the start of new anti-cancer therapy is not
+  # an event: the subject is censored at the last adequate assessment by
+  # therapy start instead (ADaM TTE v1.0; PharmaSUG 2019 SS-027). Dates on
+  # or before therapy start stay usable.
   - name: PDDT
     type: date
     label: Disease Progression Date
-    derivation: PROGRESSION.RSDTC
+    derivation:
+      case:
+        - when: "NTXSTDT IS NOT NULL AND PROGRESSION.RSDTC > NTXSTDT"
+          then: {literal: null}
+        - otherwise: PROGRESSION.RSDTC
 
+  # A death dated after the start of new anti-cancer therapy is likewise
+  # not an event under the same censoring convention.
   - name: DEATHDT
     type: date
     label: Death Date
-    derivation: DEATH.DSDTC
+    derivation:
+      case:
+        - when: "NTXSTDT IS NOT NULL AND DEATH.DSDTC > NTXSTDT"
+          then: {literal: null}
+        - otherwise: DEATH.DSDTC
 
+  # The last adequate assessment dated on or before new-therapy start;
+  # empty when no therapy was started or no adequate assessment is usable
+  # by then. The between match is per current row: a missing therapy date
+  # admits no records, so the aggregate is empty then.
+  - name: PRENTXDT
+    type: date
+    label: Last Adequate Assessment By New-Therapy Start
+    derivation:
+      aggregate:
+        filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'
+          AND RS.RSDTC IS NOT NULL"
+        group_by: [RS.STUDYID, RS.USUBJID]
+        between:
+          value: NTXSTDT
+          lower: RSDTC
+        expr: "MAX(RS.RSDTC)"
+
+  # The sequence number of that assessment: the latest sequence among the
+  # records sharing the censoring date.
+  - name: PRENTXSEQ
+    type: int
+    label: Sequence of Last Adequate Assessment By New-Therapy Start
+    derivation:
+      aggregate:
+        filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'
+          AND RS.RSDTC IS NOT NULL"
+        group_by: [RS.STUDYID, RS.USUBJID]
+        between:
+          value: PRENTXDT
+          lower: RSDTC
+          upper: RSDTC
+        expr: "MAX(RS.RSSEQ)"
+
+  # The assessment supplying the censoring date: the last adequate one
+  # overall, or the last one dated on or before new-therapy start when
+  # therapy was started. Empty when no adequate assessment is usable.
+  - name: CENSORASSESSDT
+    type: date
+    label: Censoring Assessment Date
+    derivation:
+      case:
+        - when: "NTXSTDT IS NULL"
+          then: LASTASSESS.RSDTC
+        - otherwise: PRENTXDT
+
+  - name: CENSORSEQ
+    type: int
+    label: Censoring Assessment Sequence Number
+    derivation:
+      case:
+        - when: "NTXSTDT IS NULL"
+          then: LASTASSESS.RSSEQ
+        - otherwise: PRENTXSEQ
+
+  # With no usable adequate assessment the subject is censored at
+  # randomization, for a 1-day PFS (ADaM TTE v1.0; PharmaSUG 2019 SS-027).
   - name: CENSORDT
     type: date
     label: Censoring Date
-    derivation: LASTASSESS.RSDTC
+    derivation:
+      first_available:
+        sources: [CENSORASSESSDT, STARTDT]
 
   - name: EVENTDT
     type: date
@@ -90,7 +171,8 @@ columns:
         sources: [PDDT, DEATHDT]
 
   # An event (progression or death) always wins over censoring, even when
-  # it comes after the last adequate assessment.
+  # it comes after the last adequate assessment -- unless a new therapy
+  # started first, which censors the subject instead.
   - name: CNSR
     type: int
     label: Censor
@@ -130,6 +212,8 @@ columns:
           then: {literal: DISEASE PROGRESSION}
         - otherwise: {literal: DEATH}
 
+  # A subject censored at randomization has no source assessment, so the
+  # traceability triplet is empty rather than half-filled.
   - name: SRCDOM
     type: str
     label: Source Data
@@ -137,6 +221,8 @@ columns:
       case:
         - when: "EVNTDESC = 'DEATH'"
           then: {literal: DS}
+        - when: "CENSORASSESSDT IS NULL"
+          then: {literal: null}
         - otherwise: {literal: RS}
 
   - name: SRCVAR
@@ -146,6 +232,8 @@ columns:
       case:
         - when: "EVNTDESC = 'DEATH'"
           then: {literal: DSDTC}
+        - when: "CENSORASSESSDT IS NULL"
+          then: {literal: null}
         - otherwise: {literal: RSDTC}
 
   - name: SRCSEQ
@@ -157,12 +245,14 @@ columns:
           then: PROGRESSION.RSSEQ
         - when: "EVNTDESC = 'DEATH'"
           then: DEATH.DSSEQ
-        - otherwise: LASTASSESS.RSSEQ
+        - when: "CENSORASSESSDT IS NULL"
+          then: {literal: null}
+        - otherwise: CENSORSEQ
 
 verifications:
   - row_count:
-      min: 9
-      max: 9
+      min: 12
+      max: 12
   - all_or_none:
       id: traceability-triplet-is-complete
       columns: [SRCDOM, SRCVAR, SRCSEQ]
