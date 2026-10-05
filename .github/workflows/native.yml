@@ -88,6 +88,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_specification.py" installed_specification.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv" dependency_analysis.tsv
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
@@ -104,6 +106,7 @@ jobs:
           python installed_specification.py
           python installed_project_functions.py
           python installed_profile.py
+          python installed_dependencies.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
@@ -118,6 +121,7 @@ jobs:
           python installed_specification.py
           python installed_project_functions.py
           python installed_profile.py
+          python installed_dependencies.py
       - name: Preserve distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -190,6 +194,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript datasets.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dataset_callbacks.R" dataset_callbacks.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dataset_callbacks.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dependencies.R" dependencies.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dependencies.R
       - name: Preserve source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

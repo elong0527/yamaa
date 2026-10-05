@@ -39,6 +39,7 @@ from yamaa.odm import (
     build_binding_plan,
 )
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
+from yamaa.planning.dependencies import DependencyAnalyzer
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
@@ -2677,6 +2678,7 @@ def _plan_lookups(
     supported_operations: Collection[str],
     unsupported: list[UnsupportedFeature],
     default_columns: frozenset[str],
+    dependency_analyzer: DependencyAnalyzer | None = None,
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
@@ -3161,7 +3163,9 @@ def _plan_lookups(
         )
         if intermediate_reads:
             reads[intermediate.id] = tuple(intermediate_reads)
-    _validate_intermediate_reads(planned, reads, dataset_fields, diagnostics)
+    _validate_intermediate_reads(
+        planned, reads, dataset_fields, diagnostics, dependency_analyzer
+    )
     return planned
 
 
@@ -3170,6 +3174,7 @@ def _validate_intermediate_reads(
     reads: Mapping[str, Sequence[_IntermediateRead]],
     dataset_fields: Mapping[str, Mapping[str, ColumnType]],
     diagnostics: list[ExecutionDiagnostic],
+    dependency_analyzer: DependencyAnalyzer | None = None,
 ) -> None:
     """Check each REQ-1263 read once every intermediate is planned.
 
@@ -3241,7 +3246,11 @@ def _validate_intermediate_reads(
     graph = {
         reader: {read.target for read in entries} for reader, entries in reads.items()
     }
-    cycle = _find_cycle(order, graph)
+    cycle = (
+        _find_cycle(order, graph)
+        if dependency_analyzer is None
+        else dependency_analyzer(order, graph).cycle
+    )
     if cycle is not None:
         members = cycle[:-1]
         paths = tuple(
@@ -4553,12 +4562,16 @@ def plan_execution(
     sources: Mapping[str, LoadedDataset | TypedTable],
     *,
     supported_operations: Collection[str] = INITIAL_OPERATIONS,
+    dependency_analyzer: DependencyAnalyzer | None = None,
 ) -> ExecutionPlan:
     """Validate and plan the initial record-driven execution subset.
 
     Validation failures take precedence over unsupported status. This keeps a
     broken dependency or phase boundary distinct from a valid declaration that
     belongs to a later runtime component.
+
+    A trusted backend may supply shared bound-graph analysis. Reference planning
+    retains its existing algorithms when the implementation port is absent.
     """
     diagnostics, unsupported = _preflight_findings(specification, supported_operations)
     declared_sources = tuple(specification.input)
@@ -4639,6 +4652,7 @@ def plan_execution(
         supported_operations,
         unsupported,
         default_columns,
+        dependency_analyzer,
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
@@ -4991,9 +5005,13 @@ def plan_execution(
                 )
                 for name, planned in derivations.items()
             }
-            cycle = _find_cycle(
-                [name for name in column_order if name in derivations], graph
+            names = [name for name in column_order if name in derivations]
+            analysis = (
+                dependency_analyzer(names, graph)
+                if dependency_analyzer is not None
+                else None
             )
+            cycle = _find_cycle(names, graph) if analysis is None else analysis.cycle
             if cycle is not None:
                 paths = tuple(
                     dict.fromkeys(
@@ -5008,7 +5026,11 @@ def plan_execution(
                         requirement="REQ-0072",
                     )
                 )
-            ordered = _topological_row_order(derivations, column_order)
+            ordered = (
+                _topological_row_order(derivations, column_order)
+                if analysis is None
+                else tuple(derivations[name] for name in analysis.order)
+            )
             row_plans.append(
                 PlannedRow(
                     index=index,
@@ -5128,8 +5150,16 @@ def plan_execution(
         )
         for planned in column_plans
     }
-    cycle = _find_cycle(
-        [name for name in column_order if name in column_graph], column_graph
+    names = [name for name in column_order if name in column_graph]
+    column_analysis = (
+        dependency_analyzer(names, column_graph)
+        if dependency_analyzer is not None
+        else None
+    )
+    cycle = (
+        _find_cycle(names, column_graph)
+        if column_analysis is None
+        else column_analysis.cycle
     )
     cycle_members = set(cycle[:-1]) if cycle is not None else set()
     if cycle is not None:
@@ -5212,9 +5242,11 @@ def plan_execution(
     # deriving a column after the dependencies the validator allowed through.
     # The sort is stable: declaration order is kept wherever no dependency
     # forces a move.
-    ordered_columns = _topological_row_order(
-        {planned.column: planned for planned in column_plans},
-        column_order,
+    by_name = {planned.column: planned for planned in column_plans}
+    ordered_columns = (
+        _topological_row_order(by_name, column_order)
+        if column_analysis is None
+        else tuple(by_name[name] for name in column_analysis.order)
     )
     return ExecutionPlan(
         specification=specification,

@@ -1,0 +1,14 @@
+case	nodes	edges	cycle	order
+empty	0	-	-	-
+isolated	3	-	-	0,1,2
+chain	3	0:1;1:2	-	2,1,0
+newly_ready_precedes_waiting	4	0:2;1:2	-	2,0,1,3
+diamond	4	0:2,1;1:3;2:3	-	3,1,2,0
+duplicate_edges	3	0:1,1,1;1:2,2	-	2,1,0
+self_cycle	2	0:0	0,0	1
+rotated_cycle	4	0:2;1:2;2:3;3:1	1,2,3,1	-
+first_reachable_cycle	5	0:3;1:1;3:4;4:3	3,4,3	2
+sorted_dependency_cycle	5	0:3,1;1:1;3:3	1,1	2,4
+cycle_blocked_readers	5	0:1;1:0;2:0;3:4	0,1,0	4,3
+acyclic_prefix_and_cycle	4	1:2;2:1;3:0	1,2,1	0,3
+cycle_keeps_edge_direction	3	0:2;1:0;2:1	0,2,1,0	-

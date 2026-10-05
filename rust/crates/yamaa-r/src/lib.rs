@@ -39,6 +39,19 @@ fn scalar_round_trip(request: Raw) -> List {
     )
 }
 
+/// Return shared graph analysis before the R facade raises any transport condition.
+#[extendr]
+fn analyze_dependencies(request: Raw) -> List {
+    json_request(
+        request,
+        yamaa_adapters::dependency_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::dependency_transport::analyze_dependencies(text)
+                .map_err(|error| error.to_string())
+        },
+    )
+}
+
 /// Return numeric outcome JSON normally before the R facade raises transport errors.
 #[extendr]
 fn evaluate_numeric(request: Raw) -> List {
@@ -137,6 +150,7 @@ extendr_module! {
     use scalars;
     use function_callback;
     fn engine_info;
+    fn analyze_dependencies;
     fn scalar_round_trip;
     fn evaluate_numeric;
     fn table_round_trip;
