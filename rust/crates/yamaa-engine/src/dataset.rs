@@ -842,6 +842,7 @@ fn evaluate<T: TableAccess + ?Sized>(
                 assignment,
             },
             budget,
+            handlers,
             *functions,
         )?,
         Expression::Window(_) => unreachable!("window assignments execute by whole column"),

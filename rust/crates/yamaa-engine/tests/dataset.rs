@@ -5840,4 +5840,255 @@ mod dataset_functions {
             ]
         );
     }
+    /// A key-grain call explicitly collects each source leaf in authored order.
+    fn collected_arguments() -> Vec<FunctionArgument> {
+        [("second", 2, "SOURCE.B"), ("first", 1, "SOURCE.A")]
+            .into_iter()
+            .map(|(name, column, identifier)| FunctionArgument {
+                name: name.into(),
+                input: FunctionInput::Collect {
+                    column,
+                    identifier: identifier.into(),
+                },
+            })
+            .collect()
+    }
+
+    /// Equal donors collapse without changing the first representation or callback order.
+    #[test]
+    fn collected_arguments_use_all_feeders_and_preserve_missing() {
+        let source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(2), Value::Missing, Value::Int(30)],
+        ]);
+        let plan = plan(
+            &source,
+            RowMode::Keys,
+            false,
+            None,
+            signature(ColumnType::Int),
+            collected_arguments(),
+        )
+        .unwrap();
+        for _ in 0..2 {
+            source.reads.borrow_mut().clear();
+            let mut calls = callbacks();
+            let result = plan
+                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .result
+                .unwrap();
+            assert_eq!(
+                result.dataset.rows(),
+                &[
+                    vec![Value::Int(1), Value::Int(11)],
+                    vec![Value::Int(2), Value::Missing]
+                ]
+            );
+            assert_eq!(
+                calls.calls,
+                vec![vec![
+                    ("lhs".into(), "Int(10)".into()),
+                    ("rhs".into(), "Int(20)".into()),
+                    ("scale".into(), "Int(5)".into())
+                ]]
+            );
+            assert_eq!(
+                *source.reads.borrow(),
+                vec![
+                    (0, 0),
+                    (1, 0),
+                    (2, 0),
+                    (0, 2),
+                    (1, 2),
+                    (0, 1),
+                    (1, 1),
+                    (2, 2),
+                    (2, 1)
+                ]
+            );
+        }
+    }
+
+    /// Missing earlier arguments cannot suppress later ambiguity or opaque source failures.
+    #[test]
+    fn collected_argument_resolution_finishes_before_missing_short_circuit() {
+        let mut source = source(vec![
+            vec![Value::Int(1), Value::Int(10), Value::Missing],
+            vec![Value::Int(1), Value::Int(11), Value::Missing],
+            vec![Value::Int(1), Value::Int(12), Value::Missing],
+        ]);
+        let plan = plan(
+            &source,
+            RowMode::Keys,
+            false,
+            None,
+            signature(ColumnType::Int),
+            collected_arguments(),
+        )
+        .unwrap();
+        let mut calls = callbacks();
+        let error = plan
+            .execute_observed_functions(&source, &[], &mut calls, limits())
+            .result
+            .unwrap_err();
+        match *error {
+            ExecutionError::MultipleValues {
+                path,
+                identifier,
+                value_count,
+                identity,
+            } => {
+                assert_eq!(path, "columns.C1.derivation");
+                assert_eq!(identifier, "SOURCE.A");
+                assert_eq!(value_count, 3);
+                assert_eq!(identity.unwrap().values, vec![Value::Int(1)]);
+            }
+            other => panic!("unexpected error {other:?}"),
+        }
+        assert!(calls.calls.is_empty());
+        assert_eq!(
+            *source.reads.borrow(),
+            vec![
+                (0, 0),
+                (1, 0),
+                (2, 0),
+                (0, 2),
+                (1, 2),
+                (2, 2),
+                (0, 1),
+                (1, 1),
+                (2, 1)
+            ]
+        );
+        source.fail = Some((2, 1));
+        source.reads.borrow_mut().clear();
+        assert!(matches!(
+            *plan
+                .execute_observed_functions(&source, &[], &mut calls, limits())
+                .result
+                .unwrap_err(),
+            ExecutionError::Cell {
+                source_row: 2,
+                error: CellError::Access("source failure"),
+                ..
+            }
+        ));
+        assert!(calls.calls.is_empty());
+    }
+
+    /// Collected leaves are only legal after key construction, with bounded valid metadata.
+    #[test]
+    fn collected_argument_admission_precedes_source_effects() {
+        let source = source(vec![]);
+        for mode in [RowMode::Records, RowMode::Groups(vec![0, 1, 2])] {
+            assert_eq!(
+                plan(
+                    &source,
+                    mode,
+                    false,
+                    None,
+                    signature(ColumnType::Int),
+                    collected_arguments()
+                ),
+                Err(PlanError::InvalidKeyMode)
+            );
+        }
+        for (column, identifier, expected) in [
+            (99, "SOURCE.X", PlanError::InvalidSource),
+            (1, "", PlanError::InvalidKeyMode),
+        ] {
+            let mut args = collected_arguments();
+            args[0].input = FunctionInput::Collect {
+                column,
+                identifier: identifier.into(),
+            };
+            assert_eq!(
+                plan(
+                    &source,
+                    RowMode::Keys,
+                    false,
+                    None,
+                    signature(ColumnType::Int),
+                    args
+                ),
+                Err(expected)
+            );
+        }
+        assert!(source.reads.borrow().is_empty());
+    }
+
+    /// Work limits stop before a collected scan; fresh attempts and text limits remain independent.
+    #[test]
+    fn collected_argument_budgets_precede_reads_and_callbacks() {
+        let source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]; 2]);
+        let plan = plan(
+            &source,
+            RowMode::Keys,
+            false,
+            None,
+            signature(ColumnType::Int),
+            collected_arguments(),
+        )
+        .unwrap();
+        let mut calls = callbacks();
+        let mut tiny = limits();
+        tiny.work_cells = 14;
+        assert!(matches!(
+            *plan
+                .execute_observed_functions(&source, &[], &mut calls, tiny)
+                .result
+                .unwrap_err(),
+            ExecutionError::Limit {
+                resource: yamaa_engine::dataset::Resource::WorkCells,
+                ..
+            }
+        ));
+        assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
+        assert!(calls.calls.is_empty());
+        assert!(plan
+            .execute_observed_functions(&source, &[], &mut calls, limits())
+            .result
+            .is_ok());
+        assert_eq!(calls.calls.len(), 1);
+
+        let mut text_source = table(
+            &[
+                ("ID", ColumnType::Int),
+                ("A", ColumnType::Int),
+                ("B", ColumnType::Str),
+            ],
+            vec![vec![Value::Int(1), Value::Int(10), Value::Str("large".into())]; 2],
+        );
+        let text_plan = super::dataset_functions::plan(
+            &text_source,
+            RowMode::Keys,
+            false,
+            None,
+            signature(ColumnType::Int),
+            collected_arguments(),
+        )
+        .unwrap();
+        tiny = limits();
+        tiny.scalar_text_bytes = 4;
+        calls.calls.clear();
+        assert!(matches!(
+            *text_plan
+                .execute_observed_functions(&text_source, &[], &mut calls, tiny)
+                .result
+                .unwrap_err(),
+            ExecutionError::Limit {
+                resource: yamaa_engine::dataset::Resource::ScalarTextBytes,
+                ..
+            }
+        ));
+        assert_eq!(*text_source.reads.borrow(), vec![(0, 0), (1, 0), (0, 2)]);
+        assert!(calls.calls.is_empty());
+        text_source.rows.clear();
+        assert!(text_plan
+            .execute_observed_functions(&text_source, &[], &mut calls, limits())
+            .result
+            .is_ok());
+        assert!(calls.calls.is_empty());
+    }
 }

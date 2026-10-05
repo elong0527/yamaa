@@ -165,6 +165,62 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     else {
         unreachable!("only collected-source assignments use this service")
     };
+    collect_bound(
+        table,
+        Collection {
+            column: *column,
+            identifier,
+            filter: filter.as_ref(),
+            selection: selection.as_ref(),
+        },
+        CollectionContext {
+            assignment,
+            candidate,
+            plan,
+            row,
+        },
+        budget,
+        handlers,
+    )
+}
+
+/// Borrow one admitted source read; function arguments use no selection policy.
+pub(super) struct Collection<'a> {
+    pub column: usize,
+    pub identifier: &'a str,
+    pub filter: Option<&'a BoundPredicate>,
+    pub selection: Option<&'a SourceSelection>,
+}
+
+/// Carry diagnostic provenance without constructing a synthetic output assignment.
+pub(super) struct CollectionContext<'a> {
+    pub assignment: &'a Assignment,
+    pub candidate: &'a Candidate,
+    pub plan: &'a DatasetPlan,
+    pub row: usize,
+}
+
+/// Reuse exact distinct-reading semantics for assignments and collected callback arguments.
+/// The caller charges all potential member reads before entering this service.
+pub(super) fn collect_bound<T: TableAccess + ?Sized>(
+    table: &T,
+    read: Collection<'_>,
+    context: CollectionContext<'_>,
+    budget: &mut Budget,
+    handlers: &mut HandlerCounter,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let Collection {
+        column,
+        identifier,
+        filter,
+        selection,
+    } = read;
+    let CollectionContext {
+        assignment,
+        candidate,
+        plan,
+        row,
+    } = context;
     // Complete eligibility before reading values, including later predicate failures.
     let mut retained = Vec::new();
     let members = if let Some(filter) = filter {
@@ -198,7 +254,7 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
     let mut distinct = BTreeSet::new();
     let mut first = None;
     for &source_row in members {
-        let value = table.cell(source_row, *column).map_err(|error| {
+        let value = table.cell(source_row, column).map_err(|error| {
             Box::new(ExecutionError::Cell {
                 path: assignment.path.clone(),
                 source_row,
@@ -222,7 +278,7 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
         if let Some(selection) = selection {
             let chosen = select(table, assignment, &carrying, selection, budget)?;
             budget.work(1, 1)?;
-            let value = table.cell(chosen, *column).map_err(|error| {
+            let value = table.cell(chosen, column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: assignment.path.clone(),
                     source_row: chosen,
@@ -242,7 +298,7 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
         }
         return Err(Box::new(ExecutionError::MultipleValues {
             path: assignment.path.clone(),
-            identifier: identifier.clone(),
+            identifier: identifier.into(),
             value_count: distinct.len(),
             identity: failure_identity(candidate, &plan.keys, row, budget)?,
         }));

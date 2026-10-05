@@ -151,3 +151,11 @@ order determine which trace entries occur. Other modes deliberately return
 Boolean or unconvertible text, or raise FixtureError on the second call.
 Their expected failure identity, context and handler counts are authored from
 the contracts. Neither execution engine generated expected output or traces.
+
+Six further `collected_*` cases cover equal feeding values, all-missing arguments,
+empty/filtered-empty input, full-range i64, ambiguity after an earlier missing
+argument, and ambiguity after an earlier callback effect. The conflict snapshot
+contains `(1,10,missing), (1,11,missing), (1,12,missing)`; the late-conflict snapshot
+contains `(1,10,20), (2,30,40), (2,31,40)`. These authored inputs require exact
+ambiguity counts 3 and 2, respectively, with no result conversion or extra callback.
+The original thirteen expected cases remain unchanged.
