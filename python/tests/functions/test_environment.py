@@ -127,6 +127,14 @@ def test_a_negative_comparison_decimals_is_invalid(bmi_project, repository) -> N
     bmi_project.edit_environment(
         "    comparison_decimals: 4\n", "    comparison_decimals: -3\n"
     )
+    # The vectors are deliberately broken too: the decimal check must run
+    # before conformance loading, so the diagnostic stays the
+    # comparison_decimals one even when the vectors cannot load.
+    bmi_project.write_vectors(
+        repository.vectors.replace(
+            'contract_version: "1.0.0"', 'contract_version: "2.0.0"'
+        )
+    )
 
     failure = _failure(bmi_project.path, repository.schema)
 
