@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12", "3.14"]
+        python-version: ["3.12"]
     steps:
       # The R020 byte fixtures and R021 link fixtures must survive checkout
       # with their committed line endings and actual symbolic links.

@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-latest]
-        python: ['3.12', '3.14']
+        python: ['3.14']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,8 +35,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          # Rust artifacts are OS-specific only; share the cache across the
-          # Python matrix entries on the same OS.
+          # Rust artifacts are OS-specific only.
           shared-key: native-python-${{ matrix.os }}
       - name: Install build tools
         run: |
