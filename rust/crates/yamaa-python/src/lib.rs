@@ -17,6 +17,21 @@ fn analyze_dependencies(request: &str) -> PyResult<String> {
     })
 }
 
+/// Analyze an bound column dependencies through shared Rust without accessing host data.
+#[pyfunction]
+fn analyze_column_dependencies(request: &str) -> PyResult<String> {
+    use yamaa_adapters::column_dependency_transport::TransportError;
+    yamaa_adapters::column_dependency_transport::analyze_column_dependencies(request).map_err(
+        |error| {
+            if error == TransportError::Internal {
+                pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+            } else {
+                pyo3::exceptions::PyValueError::new_err(error.to_string())
+            }
+        },
+    )
+}
+
 /// Round-trip a versioned scalar envelope through normalized core values.
 #[pyfunction]
 fn scalar_round_trip(request: &str) -> PyResult<String> {
@@ -167,6 +182,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_dependencies, module)?)?;
+    module.add_function(wrap_pyfunction!(analyze_column_dependencies, module)?)?;
     module.add_function(wrap_pyfunction!(
         function_callback::invoke_function,
         module

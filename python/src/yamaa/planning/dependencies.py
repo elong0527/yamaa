@@ -15,3 +15,27 @@ class DependencyAnalysis:
 DependencyAnalyzer = Callable[
     [Sequence[str], Mapping[str, Collection[str]]], DependencyAnalysis
 ]
+
+
+@dataclass(frozen=True)
+class ColumnDependencyDiagnostic:
+    """Core-selected rule and authored path kind, before host path attachment."""
+
+    condition: str
+    requirement: str
+    location: str
+    columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ColumnDependencyAnalysis:
+    """Column schedule and ordered dependency-rule failures from the shared compiler."""
+
+    order: tuple[str, ...]
+    diagnostics: tuple[ColumnDependencyDiagnostic, ...]
+
+
+ColumnDependencyAnalyzer = Callable[
+    [Sequence[str], Mapping[str, Collection[str]], Sequence[str], bool],
+    ColumnDependencyAnalysis,
+]

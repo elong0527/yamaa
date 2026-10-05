@@ -90,6 +90,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv" dependency_analysis.tsv
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/column_dependencies.tsv" column_dependencies.tsv
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
@@ -196,6 +197,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dataset_callbacks.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dependencies.R" dependencies.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dependencies.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/column_dependencies.R" column_dependencies.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript column_dependencies.R
       - name: Preserve source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

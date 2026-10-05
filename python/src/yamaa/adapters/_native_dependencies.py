@@ -2,7 +2,13 @@
 
 import json
 
-from yamaa.planning.dependencies import DependencyAnalysis, DependencyAnalyzer
+from yamaa.planning.dependencies import (
+    ColumnDependencyAnalysis,
+    ColumnDependencyAnalyzer,
+    ColumnDependencyDiagnostic,
+    DependencyAnalysis,
+    DependencyAnalyzer,
+)
 
 
 class NativeDependencyLimitError(RuntimeError):
@@ -50,6 +56,55 @@ def bind_dependency_analyzer(native) -> DependencyAnalyzer:
             if outcome["cycle"] is None
             else tuple(names[index] for index in outcome["cycle"]),
             order=tuple(names[index] for index in outcome["order"]),
+        )
+
+    return analyze
+
+
+def bind_column_dependency_analyzer(native) -> ColumnDependencyAnalyzer:
+    """Capture the column rule service before activation and data-provider effects."""
+    invoke = getattr(native, "analyze_column_dependencies", None)
+    if not callable(invoke):
+        raise TypeError("native analyze_column_dependencies must be callable")
+
+    def analyze(names, dependencies, keys, has_rows):
+        """Translate bound names and returned metadata without deciding language rules."""
+        names = tuple(names)
+        positions = {name: index for index, name in enumerate(names)}
+        request = {
+            "protocol": "column-dependencies/1",
+            "dependencies": [
+                [
+                    positions[dependency]
+                    for dependency in dependencies[name]
+                    if dependency in positions
+                ]
+                if name in dependencies
+                else None
+                for name in names
+            ],
+            "keys": [positions[key] for key in keys],
+            "has_rows": has_rows,
+        }
+        response = json.loads(invoke(json.dumps(request, separators=(",", ":"))))
+        if response["protocol"] != "column-dependencies/1":
+            raise ValueError("unsupported native column dependency response protocol")
+        outcome = response["outcome"]
+        if outcome["status"] == "limit":
+            raise NativeDependencyLimitError(outcome)
+        if outcome["status"] != "complete":
+            raise ValueError("unknown native column dependency status")
+        return ColumnDependencyAnalysis(
+            order=tuple(names[index] for index in outcome["order"]),
+            diagnostics=tuple(
+                ColumnDependencyDiagnostic(
+                    condition=item["condition"],
+                    requirement=item["requirement"],
+                    location=item["location"],
+                    columns=tuple(names[index] for index in item["columns"]),
+                )
+                for item in outcome["diagnostics"]
+            ),
         )
 
     return analyze

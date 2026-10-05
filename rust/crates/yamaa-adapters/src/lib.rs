@@ -1,6 +1,7 @@
 //! Infrastructure adapters. The bootstrap resource is embedded at build time.
 #![forbid(unsafe_code)]
 
+pub mod column_dependency_transport;
 pub mod dataset_profile;
 pub mod dataset_transport;
 pub mod dependency_transport;

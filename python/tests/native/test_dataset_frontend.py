@@ -49,7 +49,79 @@ def _native_module(**members):
             }
         )
 
-    return SimpleNamespace(analyze_dependencies=analyze, **members)
+    def analyze_columns(request):
+        """Facade double only; installed rule tests use independent expected diagnostics."""
+        payload = json.loads(request)
+        graph = payload["dependencies"]
+        active = {index for index, edges in enumerate(graph) if edges is not None}
+        outcome = json.loads(
+            analyze(
+                json.dumps(
+                    {
+                        "dependencies": [
+                            [edge for edge in edges or () if edge in active]
+                            for edges in graph
+                        ]
+                    }
+                )
+            )
+        )["outcome"]
+        diagnostics = []
+
+        def emit(kind, requirement, location, columns):
+            """Encode the wire shape used by unrelated facade tests."""
+            diagnostics.append(
+                {
+                    "condition": kind,
+                    "requirement": requirement,
+                    "location": location,
+                    "columns": columns,
+                }
+            )
+
+        cycle = outcome["cycle"] or []
+        if cycle:
+            emit("dependency_cycle", "REQ-0072", "operation", cycle)
+        keys = payload["keys"]
+        for column, edges in enumerate(graph):
+            if column not in cycle:
+                for dependency in edges or ():
+                    if dependency not in keys and dependency >= column:
+                        emit(
+                            "forward_reference",
+                            "REQ-0071",
+                            "operation",
+                            [column, dependency],
+                        )
+        if not payload["has_rows"]:
+            for key in keys:
+                if graph[key] is None:
+                    emit("key_dependency", "REQ-0074", "declaration", [key])
+                else:
+                    for dependency in graph[key]:
+                        if dependency not in keys:
+                            emit(
+                                "key_dependency",
+                                "REQ-0074",
+                                "expression",
+                                [key, dependency],
+                            )
+        return json.dumps(
+            {
+                "protocol": "column-dependencies/1",
+                "outcome": {
+                    "status": "complete",
+                    "order": [n for n in outcome["order"] if n in active],
+                    "diagnostics": diagnostics,
+                },
+            }
+        )
+
+    return SimpleNamespace(
+        analyze_dependencies=analyze,
+        analyze_column_dependencies=analyze_columns,
+        **members,
+    )
 
 
 @pytest.fixture
@@ -59,20 +131,28 @@ def specification():
 
 
 @pytest.mark.parametrize("analyzer", ["absent", None, False])
+@pytest.mark.parametrize(
+    "service, operation",
+    [
+        ("analyze_dependencies", "native_dependency_analysis"),
+        ("analyze_column_dependencies", "native_column_dependency_analysis"),
+    ],
+)
 def test_missing_dependency_service_is_unsupported_before_io(
-    specification, monkeypatch, analyzer
+    specification, monkeypatch, analyzer, service, operation
 ):
     """A separately installed older wheel cannot abort a run or start source effects."""
-    native = SimpleNamespace(execute_dataset=lambda *_: pytest.fail("execution"))
+    native = _native_module(execute_dataset=lambda *_: pytest.fail("execution"))
+    delattr(native, service)
     if analyzer != "absent":
-        native.analyze_dependencies = analyzer
+        setattr(native, service, analyzer)
     monkeypatch.setitem(sys.modules, "yamaa_native", native)
     result = execute_with_source_provider(
         specification, lambda _: pytest.fail("source read")
     )
     assert isinstance(result.result, ExecutionUnsupported)
     assert [(f.operation, f.spec_path) for f in result.result.features] == [
-        ("native_dependency_analysis", "$")
+        (operation, "$")
     ]
     assert result.result.handler_counts == ()
     assert result.verifications == ()
