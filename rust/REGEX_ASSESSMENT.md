@@ -100,6 +100,10 @@ groups, reversed lookbehind capture order, flat 3,000-scalar patterns, nested
 assertions, checked width overflow, budget exhaustion and successful retry.
 Native CI runs these checks and preserves the unchanged Python discrepancy report.
 The report cannot waive a failing Rust expectation or qualify reference parity.
+Braced code-point escapes also obey REQ-0825's scalar-expansion boundary:
+all 2,048 surrogate code points are rejected in atoms and character classes,
+while neighboring, unassigned and maximum scalar values remain valid. This
+repository normalization is checked independently of raw Node Unicode syntax.
 
 A supplemental development comparison covers 477 patterns and 16,695 observations
 against Node Unicode mode. Reproduce it with an installed Node executable:

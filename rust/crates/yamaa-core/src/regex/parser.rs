@@ -522,6 +522,11 @@ impl Parser<'_> {
                         return Err(self.invalid("empty code point escape"));
                     }
                     self.require('}')?;
+                    // REQ-0825 expands braced escapes into REQ-0022 scalar values.
+                    // Surrogate code points cannot cross that normalization boundary.
+                    if char::from_u32(value).is_none() {
+                        return Err(self.invalid("code point escape is not a Unicode scalar"));
+                    }
                     value
                 } else {
                     let mut value = self.hex(4)?;

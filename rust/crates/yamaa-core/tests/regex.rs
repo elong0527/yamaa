@@ -358,3 +358,28 @@ fn independent_subject_and_storage_ceilings() {
         })
     );
 }
+
+/// REQ-0825 expands braced escapes to REQ-0022 scalars, excluding surrogates.
+#[test]
+fn braced_code_point_expansion_requires_a_scalar() {
+    for value in 0xd800..=0xdfff {
+        for source in [format!(r"\u{{{value:X}}}"), format!(r"[\u{{{value:x}}}]")] {
+            assert!(
+                matches!(
+                    Pattern::compile(&source, CompileLimits::default()),
+                    Err(CompileError::Invalid { .. })
+                ),
+                "{source}"
+            );
+        }
+    }
+    // The neighboring scalars, unassigned scalars and U+10FFFF stay valid.
+    for value in [0xd7ff, 0xe000, 0x378, 0x10ffff] {
+        let source = format!(r"^\u{{{value:X}}}$");
+        let subject = char::from_u32(value).unwrap().to_string();
+        assert_eq!(
+            captures(&source, &subject),
+            Some(vec![Some(subject.as_str())])
+        );
+    }
+}
