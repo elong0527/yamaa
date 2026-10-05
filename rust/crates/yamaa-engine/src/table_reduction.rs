@@ -1,9 +1,9 @@
-//! Bounded access to a selected relation, followed by an ordered numeric fold.
+//! Bounded selected-relation access for counts and ordered numeric folds.
 
 use alloc::vec::Vec;
 use yamaa_core::{
     numeric::Number,
-    reduction::{reduce_numeric, NumericReducer, ReductionError},
+    reduction::{count_records, count_values, reduce_numeric, NumericReducer, ReductionError},
     table::{CellError, TableAccess},
 };
 
@@ -49,14 +49,47 @@ pub fn reduce_column<T: TableAccess + ?Sized>(
     reducer: NumericReducer,
     expression: &str,
 ) -> Result<Number, TableReductionError<T::Error>> {
+    validate_selection(table, Some(column), rows, max_rows)?;
+    let values = collect_column(table, column, rows)?;
+    reduce_numeric(&values, reducer, expression).map_err(TableReductionError::Reduction)
+}
+
+/// Count selected records or present field values without imposing a numeric type.
+/// Record counts access no cells. Field counts collect all selected cells first,
+/// preserving opaque port failures and source order before counting present values.
+pub fn count_selected<T: TableAccess + ?Sized>(
+    table: &T,
+    column: Option<usize>,
+    rows: &[usize],
+    max_rows: usize,
+) -> Result<Number, TableReductionError<T::Error>> {
+    validate_selection(table, column, rows, max_rows)?;
+    match column {
+        None => count_records(rows.len()).map_err(TableReductionError::Reduction),
+        Some(column) => {
+            let values = collect_column(table, column, rows)?;
+            count_values(&values).map_err(TableReductionError::Reduction)
+        }
+    }
+}
+
+/// Validate limits and selected coordinates before allocation or source cell reads.
+fn validate_selection<T: TableAccess + ?Sized>(
+    table: &T,
+    column: Option<usize>,
+    rows: &[usize],
+    max_rows: usize,
+) -> Result<(), TableReductionError<T::Error>> {
     if rows.len() > max_rows {
         return Err(TableReductionError::RowLimit {
             limit: max_rows,
             required: rows.len(),
         });
     }
-    if column >= table.schema().columns().len() {
-        return Err(TableReductionError::InvalidColumn { column });
+    if let Some(column) = column {
+        if column >= table.schema().columns().len() {
+            return Err(TableReductionError::InvalidColumn { column });
+        }
     }
     let row_count = table.row_count();
     for (position, &row) in rows.iter().enumerate() {
@@ -67,6 +100,15 @@ pub fn reduce_column<T: TableAccess + ?Sized>(
             return Err(TableReductionError::UnorderedSelection { position });
         }
     }
+    Ok(())
+}
+
+/// Collect validated field reads in order before applying a reduction policy.
+fn collect_column<'a, T: TableAccess + ?Sized>(
+    table: &'a T,
+    column: usize,
+    rows: &[usize],
+) -> Result<Vec<yamaa_core::table::ValueRef<'a>>, TableReductionError<T::Error>> {
     let mut values = Vec::new();
     values
         .try_reserve_exact(rows.len())
@@ -78,5 +120,5 @@ pub fn reduce_column<T: TableAccess + ?Sized>(
                 .map_err(|error| TableReductionError::Cell { position, error })?,
         );
     }
-    reduce_numeric(&values, reducer, expression).map_err(TableReductionError::Reduction)
+    Ok(values)
 }

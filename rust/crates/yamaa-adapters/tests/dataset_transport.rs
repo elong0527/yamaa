@@ -34,6 +34,74 @@ fn source(ids: Vec<Option<i64>>, values: Vec<Option<&str>>) -> Vec<u8> {
 fn request() -> Value {
     json!({"protocol":"dataset/1", "source":[{"name":"id","kind":"int"},{"name":"x","kind":"str"}], "output":[{"name":"id","kind":"int"},{"name":"x","kind":"int"}], "templates":[{"mode":{"records":null},"assignments":[]}], "columns":[{"column":0,"path":"columns.id.derivation.source","expression":{"source":0}},{"column":1,"path":"columns.x.derivation.source","expression":{"source":1}}], "keys":[0], "verifications":[{"path":"verifications[0].row_count","check":{"row_count":{"min":"2","max":"2"}}}]})
 }
+
+/// Authored COUNT truth distinguishes record cardinality from present field values.
+#[test]
+fn grouped_counts_preserve_missing_values_and_first_group_order() {
+    let request = json!({
+        "protocol":"dataset/1",
+        "source":[{"name":"id","kind":"int"},{"name":"x","kind":"str"}],
+        "output":[{"name":"id","kind":"int"},{"name":"records","kind":"int"},{"name":"present","kind":"int"}],
+        "templates":[{"mode":{"groups":[0]},"assignments":[
+            {"column":0,"path":"rows[0].derivations.id.source","expression":{"source":0}},
+            {"column":1,"path":"rows[0].derivations.records.aggregate","expression":{"count":{"column":null,"text":"COUNT(SRC.*)"}}},
+            {"column":2,"path":"rows[0].derivations.present.aggregate","expression":{"count":{"column":1,"text":"COUNT(SRC.x)"}}}
+        ]}],
+        "columns":[],"keys":[0],"verifications":[]
+    });
+    let input = source(vec![Some(2), Some(1), Some(2)], vec![None, None, Some("")]);
+    let (table, result) = outcome(&request, &input);
+    assert_eq!(result, json!({"status":"success","verifications":[]}));
+    let snapshot: Value = serde_json::from_str(&table_snapshot(&table.unwrap()).unwrap()).unwrap();
+    assert_eq!(
+        snapshot["rows"],
+        json!([
+            [{"int":"2"},{"int":"2"},{"int":"1"}],
+            [{"int":"1"},{"int":"1"},{"int":"0"}]
+        ])
+    );
+    let (table, result) = outcome(&request, &source(vec![], vec![]));
+    assert_eq!(result, json!({"status":"success","verifications":[]}));
+    let snapshot: Value = serde_json::from_str(&table_snapshot(&table.unwrap()).unwrap()).unwrap();
+    assert_eq!(snapshot["rows"], json!([]));
+}
+
+/// Count shape, coordinates and group scope are admitted before any IPC decoding.
+#[test]
+fn count_admission_rejects_invalid_metadata_before_data() {
+    let mut base = request();
+    base["templates"][0]["mode"] = json!({"groups":[0]});
+    base["columns"][1]["expression"] = json!({"count":{"column":1,"text":"COUNT(SRC.x)"}});
+    assert!(PreparedDataset::parse(&base.to_string()).is_ok());
+    for (count, expected) in [
+        (
+            json!({"column":2,"text":"COUNT(SRC.x)"}),
+            Error::InvalidPlan,
+        ),
+        (json!({"column":1,"text":""}), Error::InvalidRequest),
+        (
+            json!({"column":1,"text":"COUNT(SRC.x)","extra":true}),
+            Error::InvalidRequest,
+        ),
+        (
+            json!({"column":-1,"text":"COUNT(SRC.x)"}),
+            Error::InvalidRequest,
+        ),
+    ] {
+        let mut invalid = base.clone();
+        invalid["columns"][1]["expression"] = json!({"count":count});
+        assert_eq!(
+            execute_dataset(&invalid.to_string(), b"invalid IPC").err(),
+            Some(expected),
+            "{invalid}"
+        );
+    }
+    base["templates"][0]["mode"] = json!({"records":null});
+    assert_eq!(
+        execute_dataset(&base.to_string(), b"invalid IPC").err(),
+        Some(Error::InvalidPlan)
+    );
+}
 /// Inspect the exact bounded JSON outcome returned by the real adapter.
 fn outcome(request: &Value, source: &[u8]) -> (Option<Vec<u8>>, Value) {
     let response = execute_dataset(&request.to_string(), source).unwrap();
@@ -164,6 +232,10 @@ fn fixture(name: &str) -> &'static [u8] {
         "adlb.arrow" => include_bytes!("fixtures/datasets/adlb.arrow"),
         "adlb-empty.arrow" => include_bytes!("fixtures/datasets/adlb-empty.arrow"),
         "integer-sum.arrow" => include_bytes!("fixtures/datasets/integer-sum.arrow"),
+        "grouped-count.arrow" => include_bytes!("fixtures/datasets/grouped-count.arrow"),
+        "grouped-count-empty.arrow" => {
+            include_bytes!("fixtures/datasets/grouped-count-empty.arrow")
+        }
         "key-grain.arrow" => include_bytes!("fixtures/datasets/key-grain.arrow"),
         "key-grain-empty.arrow" => include_bytes!("fixtures/datasets/key-grain-empty.arrow"),
         "key-grain-missing.arrow" => {
@@ -384,7 +456,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection","grouped_count"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.

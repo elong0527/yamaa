@@ -87,6 +87,90 @@ fn limits() -> Limits {
         identity_text_bytes: 10000,
     }
 }
+
+/// COUNT uses its owning group and preserves failures and cumulative work admission.
+#[test]
+fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
+    use yamaa_engine::{dataset::Resource, table_reduction::TableReductionError};
+    let mut source = table(
+        &[("K", ColumnType::Int), ("V", ColumnType::Str)],
+        vec![
+            vec![Value::Int(1), Value::Missing],
+            vec![Value::Int(1), Value::Str("".into())],
+            vec![Value::Int(1), Value::Missing],
+        ],
+    );
+    source.fail = Some((1, 1));
+    let plan = |column| {
+        DatasetPlan::new(
+            source.schema.clone(),
+            schema(&[("K", ColumnType::Int), ("N", ColumnType::Int)]),
+            vec![RowTemplate {
+                mode: RowMode::Groups(vec![0]),
+                filter: None,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(
+                        1,
+                        Expression::Count {
+                            column,
+                            text: "COUNT(SRC.*)".into(),
+                        },
+                    ),
+                ],
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        plan(None)
+            .execute(&source, limits())
+            .unwrap()
+            .dataset
+            .rows(),
+        &[vec![Value::Int(1), Value::Int(3)]]
+    );
+    assert!(source.reads.borrow().iter().all(|(_, column)| *column == 0));
+    for column in [None, Some(1)] {
+        source.reads.borrow_mut().clear();
+        assert_eq!(
+            *plan(column)
+                .execute(
+                    &source,
+                    Limits {
+                        work_cells: 8,
+                        ..limits()
+                    }
+                )
+                .unwrap_err(),
+            ExecutionError::Limit {
+                resource: Resource::WorkCells,
+                limit: 8,
+                required: Some(9),
+            }
+        );
+        assert_eq!(*source.reads.borrow(), [(0, 0), (1, 0), (2, 0), (0, 0)]);
+    }
+    source.reads.borrow_mut().clear();
+    assert_eq!(
+        *plan(Some(1)).execute(&source, limits()).unwrap_err(),
+        ExecutionError::Reduction {
+            path: "columns.C1.derivation".into(),
+            error: TableReductionError::Cell {
+                position: 1,
+                error: CellError::Access("source failure")
+            },
+            identity: None,
+        }
+    );
+    assert_eq!(
+        *source.reads.borrow(),
+        [(0, 0), (1, 0), (2, 0), (0, 0), (0, 1), (1, 1)]
+    );
+}
 /// Attach deterministic declaration provenance to one check.
 fn verification(check: Check) -> Verification {
     Verification {

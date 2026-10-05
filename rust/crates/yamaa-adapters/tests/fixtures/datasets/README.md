@@ -22,6 +22,14 @@ The JSON and TSV forms must remain consistent. These files do not qualify the
 normalized-spec compiler bridge, complete report serialization or publication.
 Absent TSV snapshots may be an empty field (legacy cases) or JSON `null`.
 
+`grouped-count.arrow` contains independently authored rows `(2, missing)`,
+`(1, missing)`, `(2, "")`; its empty counterpart preserves the same schema.
+COUNT preserves first group order: group 2 has two records and one present
+string (empty text is present), while group 1 has one record and zero present
+values. The empty input produces no constructed groups. An additional case
+counts the existing extreme integer input without summing or converting its
+values. Expected counts are authored constants and replay through both hosts.
+
 The row-filter case keeps original ADLB data-row ordinals
 `0,1,2,3,4,5,6,7,9,12,13` (zero-based, excluding the CSV header): record AVAL > 0
 and grouped AVAL > 0.5. The false-filter case has zero rows. Both reuse the
