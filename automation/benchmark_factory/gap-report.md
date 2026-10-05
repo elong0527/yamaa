@@ -133,6 +133,22 @@ benchmark, parametric variants.
    value across visits ("once-measured characteristic" / "first
    observed result" / "latest earlier character result"). Strong
    overlap; merge into one benchmark with variants.
+
+   > REVIEWED 2026-10-05 (benchmark-maintenance run) -- candidate
+   > REJECTED. Contents verified against all three specs: the
+   > overlap is surface-level (all use a look-back across visits),
+   > but each pins a different derivation pattern. `carryforward`
+   > (plan-spine LOCF into AVAL plus the HGTBLFL/HEIGHTBL
+   > baseline-height flag) is the only one joining planned
+   > measurements to collected records on test code and date; the
+   > baseline-height flag has no counterpart in the others.
+   > `first-observed-carry` derives BASEVAL by rank-1 selection
+   > over an observed-only window and carrying it to every later
+   > visit (first-observed-as-baseline semantics), mechanically
+   > different from LOCF's previous-non-missing fill. `prior-result`
+   > operates on character results grouped by subject and series,
+   > deriving PREVAVALC as an audit column. Merging into parametric
+   > variants would lose this coverage; keep all three.
 2. **`adam-advs-locf`** + **`adam-advs-locf-record`** -- "carry the
    last observed value across missing visits" vs "carry one observed
    record to each planned visit". Likely variant-level differences
