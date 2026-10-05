@@ -39,6 +39,7 @@ class StagingTests(unittest.TestCase):
                 "reference_intermediate.tsv",
                 "reference_keys.tsv",
                 "reference_match_values.tsv",
+                "reference_relations.tsv",
             ):
                 self.assertEqual(
                     (destination / "inst" / fixture).read_bytes(),

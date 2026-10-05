@@ -263,6 +263,34 @@ This feature does not move intermediate-field inference or general expression
 validation into Rust, nor establish a current-schema R compiler or full engine
 readiness. Python remains the default and `execution_supported=false`.
 
+## Fieldless relation reads
+
+The `relation_binding` feature adds `bind_relation` with a literal relation
+`name`. The owned catalog returns `kind: relation_binding` and `dataset`, either
+the original declaration index or null. A relation may have no fields. Output
+names and qualified field spellings do not implicitly name a relation; literal
+relation names (including dots and Unicode) are compared exactly. The existing
+reference byte budget, strict query shape, whole-request budget and atomic batch
+failure apply. Eleven authored cases replay through Rust, installed Python and R.
+
+Planning now records a `COUNT(D.*)` relation read when no field, filter or bound
+reference already carries that relation. The star is an authored grammar token,
+never a stored field name. Relation existence is resolved by this shared service;
+key validation and resolved-join recording use the same path as field reducers.
+This restores known-type and unknown-key diagnostics and match-value dependency
+ordering for fieldless reductions. Expression-key aliases such as `key[N]` stay
+in join metadata; graph dependencies contain their actual inner reads instead.
+Grouped input counts still use their enclosing relation without local key pairs.
+
+Both frontends require `relation_binding` before activation/data and refuse a
+previous installation with `native_relation_binding` at `$`. Direct installed
+planning exercises the actual Rust service, query failures propagate without
+Python fallback, and explicit later attempts can retry. This does not enable
+qualified aggregate execution in the bounded native executor: it still refuses
+that scope before source access. Independent installed tests qualify default
+execution's exact authored CSV and both planners' diagnostic/dependency truth.
+Python remains default and `execution_supported=false`.
+
 ## Evidence and remaining boundaries
 
 Twenty-nine independent shared cases pin exact bindings, literal dotted names,

@@ -96,6 +96,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_references.py" installed_references.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_planning.py" installed_aggregate_planning.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv" dependency_analysis.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/column_dependencies.tsv" column_dependencies.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_binding.tsv" reference_binding.tsv
@@ -103,6 +104,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_intermediate.tsv" reference_intermediate.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_keys.tsv" reference_keys.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_match_values.tsv" reference_match_values.tsv
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/reference_relations.tsv" reference_relations.tsv
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-functions" specification-functions
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" specification-adlb
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-window-functions" specification-windows
@@ -121,6 +123,7 @@ jobs:
           python installed_profile.py
           python installed_dependencies.py
           python installed_references.py
+          python installed_aggregate_planning.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
@@ -137,6 +140,7 @@ jobs:
           python installed_profile.py
           python installed_dependencies.py
           python installed_references.py
+          python installed_aggregate_planning.py
       - name: Preserve distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

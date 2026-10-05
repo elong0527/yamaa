@@ -486,6 +486,7 @@ def _execute(specification, source_provider, prepare_functions=None):
         ("intermediate_validation", "native_intermediate_reference_validation"),
         ("key_relations", "native_key_relations"),
         ("match_value_typing", "native_match_value_typing"),
+        ("relation_binding", "native_relation_binding"),
     ):
         if reference_features.get(
             "protocol"

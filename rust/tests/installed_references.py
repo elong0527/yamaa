@@ -734,6 +734,7 @@ class InstalledReferences(unittest.TestCase):
             "reference_intermediate.tsv",
             "reference_keys.tsv",
             "reference_match_values.tsv",
+            "reference_relations.tsv",
         ):
             with (ROOT / fixture).open(encoding="utf-8") as stream:
                 cases.extend(
@@ -1202,6 +1203,7 @@ class InstalledReferences(unittest.TestCase):
                     "intermediate_validation",
                     "key_relations",
                     "match_value_typing",
+                    "relation_binding",
                 ],
             },
         )

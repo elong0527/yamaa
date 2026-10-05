@@ -99,6 +99,13 @@ def bind_reference_compiler(native) -> ReferenceCompilerFactory:
         class Compiler:
             """Per-attempt prepared compiler; returned indices only recover host names."""
 
+            def has_relation(self, name):
+                """Ask the owned catalog about a relation, including an empty field schema."""
+                result = query({"kind": "bind_relation", "name": name})
+                if result["kind"] != "relation_binding":
+                    raise ValueError("unexpected native relation binding result")
+                return result["dataset"] is not None
+
             def match_value_type(self, expression):
                 """Project representation tags, never literal values or host type policy."""
                 operation = expression.operation

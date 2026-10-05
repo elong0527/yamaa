@@ -350,6 +350,8 @@ class _Reference:
     # Lets _validate_aggregate_keys type-check expression results instead of
     # resolving synthetic names.
     join_key_expressions: tuple[MatchValueExpression | None, ...] | None = None
+    # COUNT(D.*) reads a relation rather than a stored field named '*'.
+    relation_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -420,6 +422,7 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
             reference.join_match_values,
             reference.reach,
             reference.same_type_as,
+            reference.relation_only,
         )
         if identity not in seen:
             ordered.append(reference)
@@ -1489,6 +1492,8 @@ def _aggregate_references(
             key_variables = tuple(variables)
             key_expressions = tuple(keyed)
 
+    read_start = len(references)
+
     def relational(name: str, path: str) -> _Reference:
         qualified = "." in name
         return _Reference(
@@ -1542,6 +1547,16 @@ def _aggregate_references(
                         reach="relation",
                     )
                 )
+    # COUNT(D.*) contributes no field identifier, but still reads its relation
+    # and declared key pair. A field/filter/bound reference already carries the
+    # pairing when present; preserve that path and avoid duplicate diagnostics.
+    for dataset in aggregate_star_datasets(ast):
+        if not any(
+            ref.name.partition(".")[0] == dataset for ref in references[read_start:]
+        ):
+            references.append(
+                replace(relational(f"{dataset}.*", expr_path), relation_only=True)
+            )
     return diagnostics
 
 
@@ -1927,6 +1942,22 @@ def _validate_qualified_reference(
     of lookups and source filters directly.
     """
     qualifier = reference.name.split(".", 1)[0]
+    if reference.relation_only:
+        known = (
+            reference_compiler.has_relation(qualifier)
+            if reference_compiler is not None
+            else qualifier in bindings.datasets
+        )
+        if not known:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    reference.path,
+                    {"identifier": reference.name},
+                    requirement="REQ-0103",
+                )
+            )
+        return
     if qualifier in intermediates and qualifier not in drivers:
         intermediate = intermediates[qualifier]
         _validate_intermediate_reference(
@@ -2674,7 +2705,11 @@ def _with_relation_dependencies(
                     diagnostics,
                     reference_compiler=reference_compiler,
                 )
-            extra.extend(reference.join_match_values)
+            expressions = reference.join_key_expressions or ()
+            for index, variable in enumerate(reference.join_match_values):
+                keyed = expressions[index] if index < len(expressions) else None
+                # Synthetic match names identify operands, never graph vertices.
+                extra.extend(keyed.variables if keyed is not None else (variable,))
             pairing = (
                 reference.join_relation,
                 reference.join_match_values,
@@ -2765,6 +2800,8 @@ def _validate_aggregate_keys(
     assert reference.join_key is not None
     assert reference.join_match_values is not None
     dataset = reference.join_relation
+    if reference.relation_only and dataset not in bindings.datasets:
+        return
     fields = _dataset_types(bindings, dataset)
     expressions = reference.join_key_expressions or ()
     for index, (variable, field) in enumerate(

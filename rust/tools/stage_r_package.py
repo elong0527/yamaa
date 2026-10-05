@@ -31,6 +31,7 @@ def stage(destination: Path):
         "reference_intermediate.tsv",
         "reference_keys.tsv",
         "reference_match_values.tsv",
+        "reference_relations.tsv",
     ):
         shutil.copy2(
             WORKSPACE / "crates/yamaa-adapters/tests/fixtures" / fixture,

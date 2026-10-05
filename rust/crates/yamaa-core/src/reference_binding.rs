@@ -190,6 +190,12 @@ impl Catalog {
         })
     }
 
+    /// Resolve a declared relation without inventing a stored field, including empty schemas.
+    pub fn bind_relation(&self, name: &str) -> Result<Option<usize>, Error> {
+        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
+        Ok(self.datasets.get(name).map(|dataset| dataset.index))
+    }
+
     /// Resolve bare outputs or a dataset plus its exact stored suffix (REQ-0103/1265).
     /// A dotted suffix is a field only when literally present; it is never an ODM path.
     pub fn bind(&self, name: &str) -> Result<Option<Binding>, Error> {
