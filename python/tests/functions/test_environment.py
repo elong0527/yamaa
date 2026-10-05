@@ -120,6 +120,23 @@ def test_a_default_of_another_type_is_invalid(bmi_project, repository) -> None:
     assert failure.context["actual"] == "float"
 
 
+def test_a_negative_comparison_decimals_is_invalid(bmi_project, repository) -> None:
+    # REQ-1083 counts decimal places, so a negative value declares a
+    # comparison no `fixed_point` precision can express; the environment
+    # must fail at load (REQ-0664) rather than crash during activation.
+    bmi_project.edit_environment(
+        "    comparison_decimals: 4\n", "    comparison_decimals: -3\n"
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+    assert failure.requirement == "REQ-0695"
+    assert "comparison_decimals" in str(failure.context["reason"])
+    assert failure.context["function"] == "functions.bmi"
+    assert failure.context["actual"] == -3
+
+
 def test_a_missing_default_is_valid_when_the_parameter_accepts_missing(
     bmi_project, repository
 ) -> None:
