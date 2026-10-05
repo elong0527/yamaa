@@ -273,3 +273,66 @@ img.title-logo {
   border-radius: 8px;
   background: #fff;
 }
+
+/* MAP prompt comparison: share the setup once and keep every rule visible. */
+.reveal .map-prompts .map-shared {
+  color: var(--yamaa-ink);
+  font-size: 1.2rem;
+  margin: 0.8rem 0 1rem;
+}
+
+.reveal .map-prompts .map-shared p {
+  line-height: 1.4;
+  margin: 0;
+}
+
+.reveal .map-prompts table {
+  font-size: 1.25rem;
+  line-height: 1.25;
+  margin: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.reveal .map-prompts th,
+.reveal .map-prompts td {
+  padding: 0.6rem 0.65rem;
+  vertical-align: top;
+}
+
+.reveal .map-prompts th {
+  background: var(--yamaa-pale);
+  color: var(--yamaa-ink);
+  border-bottom: 2px solid var(--yamaa-blue);
+}
+
+.reveal .map-prompts th:nth-child(1) { width: 20%; }
+.reveal .map-prompts th:nth-child(2) { width: 36%; }
+.reveal .map-prompts th:nth-child(3) { width: 28%; }
+.reveal .map-prompts th:nth-child(4) { width: 16%; }
+
+.reveal .map-prompts td:first-child {
+  color: var(--yamaa-blue);
+  font-weight: 700;
+}
+
+.reveal .map-prompts td {
+  border-bottom: 1px solid #dce4f0;
+}
+
+.reveal .map-prompts code {
+  font-size: 0.85em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.reveal .map-prompts .map-takeaway {
+  font-size: 1.1rem;
+  margin-top: 1rem;
+  color: var(--yamaa-muted);
+}
+
+.reveal .map-prompts .map-takeaway p {
+  margin: 0;
+  line-height: 1.4;
+}

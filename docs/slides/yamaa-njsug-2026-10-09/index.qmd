@@ -69,14 +69,32 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 Agent: opencode · Model: muse-spark-1.3 , Oct 2026
 :::
 
-## Example: mean arterial pressure — the three prompts
+## Mean arterial pressure: three prompts {#example-mean-arterial-pressure-the-three-prompts .map-prompts}
 
-The MAP formula (2×diastolic + systolic)/3 and the "add only when both contributors exist" rule appear nowhere in the brief prompt.
+::: {.map-shared}
+**Shared by all prompts:** derive `ADVS` from `ADVS_RAW` using CDISC ADaM standards; one record per subject, visit, and parameter.<br>
+**Columns, in order:** `STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE`<br>
+**Files:** read from `/app/input`; write `/app/output/advs.csv`.
+:::
 
-::: {style="font-size: 80%;"}
-::: {.columns}
-::: {.column width="32%"}
-**Full** — passes ✅
+::: {.map-comparison}
+| Rule in the prompt | Full · **passes** | Conventions · **passes** | Brief · **fails** |
+| --- | --- | --- | --- |
+| MAP identifiers | `PARAMCD = "MAP"`<br>`PARAM = "Mean Arterial Pressure (mmHg)"` | Same MAP identifiers | Not stated |
+| Records to add | Keep all collected records. Add one MAP per subject/visit only when both SBP and DBP results exist and are non-missing. | Not stated | Not stated |
+| `AVAL` | Keep collected values.<br>MAP = (2 × DBP + SBP) / 3;<br>do not round. | MAP is not rounded;<br>formula not stated. | Not stated |
+| `DTYPE` | Added MAP: `CALCULATION`.<br>Collected records: blank. | `CALCULATION` or blank;<br>assignment not stated. | Not stated |
+:::
+
+::: {.map-takeaway}
+**Brief omits both the MAP formula and the rule for adding a record.**<br>
+SBP = systolic blood pressure; DBP = diastolic blood pressure.
+:::
+
+::: {.notes}
+The on-screen comparison summarizes the three prompts. Their complete wording is retained below.
+
+### Full — passes
 
 ```text
 Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
@@ -92,10 +110,8 @@ DTYPE is CALCULATION on the added record and has no value on collected records.
 
 Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
 ```
-:::
 
-::: {.column width="32%"}
-**Conventions** — passes ✅
+### Conventions — passes
 
 ```text
 Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
@@ -111,10 +127,8 @@ DTYPE is CALCULATION or has no value.
 
 Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
 ```
-:::
 
-::: {.column width="32%"}
-**Brief** — fails ❌
+### Brief — fails
 
 ```text
 Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
@@ -124,8 +138,7 @@ STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
 Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
 ```
-:::
-:::
+
 :::
 
 ## Goal
