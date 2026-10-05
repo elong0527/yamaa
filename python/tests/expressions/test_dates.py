@@ -207,16 +207,40 @@ def impute(source: object, **extra: object) -> dict[str, object]:
     return {"source": "S", "month": 6, "day": 15, **extra}
 
 
-def test_a_complete_source_is_returned_unchanged_whatever_the_bound_says() -> None:
-    # REQ-0586: it supplied nothing for the bound to move.
+@pytest.mark.parametrize(
+    ("bound", "values"),
+    [
+        ("B", {"S": "2025-01-05", "B": date("2025-03-20")}),
+        ("NOPE", {"S": "2025-01-05"}),
+        ("B", {"S": "2025-01-05", "B": 42}),
+    ],
+    ids=["date-bound", "unresolvable-bound", "mistyped-bound"],
+)
+def test_a_complete_source_is_returned_unchanged_whatever_the_bound_says(
+    bound: str, values: dict[str, object]
+) -> None:
+    # REQ-0586: it supplied nothing for the bound to move. A complete source
+    # never reaches bound resolution (REQ-0587), whatever the bound says.
     value = _value(
         "date_impute",
-        impute(None, not_before="B"),
-        {"S": "2025-01-05", "B": date("2025-03-20")},
+        impute(None, not_before=bound),
+        values,
     )
 
     assert value == date("2025-01-05")
     assert value.collected_precision == "day"
+
+
+def test_an_incomplete_source_still_validates_its_bound() -> None:
+    # The bound is read for an incomplete source, so a broken reference fails.
+    result = _condition(
+        "date_impute",
+        impute(None, not_before="NOPE"),
+        {"S": "2025-01"},
+    )
+
+    assert result.condition.condition == "unknown_field"
+    assert result.condition.context == {"identifier": "NOPE"}
 
 
 def test_a_truncated_source_is_completed_and_keeps_its_collected_precision() -> None:
