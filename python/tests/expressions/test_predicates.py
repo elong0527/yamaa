@@ -355,7 +355,9 @@ def test_a_predicate_integer_literal_beyond_the_host_digit_limit_is_a_structured
     }
 
 
-def test_a_predicate_integer_literal_just_past_int64_reports_an_int_valued_overflow() -> None:
+def test_a_predicate_integer_literal_just_past_int64_reports_an_int_valued_overflow() -> (
+    None
+):
     """A 19-digit literal out of int64 range keeps the fall-through overflow context."""
     result = _evaluate("AVAL = 9223372036854775808", {"AVAL": 1})
 
