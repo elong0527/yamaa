@@ -56,14 +56,15 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 
 ## Evidence: prompt completeness decides success
 
+* Same 133 benchmarks, same agent — only the prompt changed.
+
+::: {style="font-size: 75%;"}
 | Prompt tier | Python | R |
 | --- | --- | --- |
-| Full (every rule stated) | 98.5% (131/133) | 85.7% (114/133) |
-| Conventions (labels and value rules) | 39.8% (53/133) | 36.8% (49/133) |
+| Full (rule stated) | 98.5% (131/133) | 85.7% (114/133) |
+| Conventions (directional) | 39.8% (53/133) | 36.8% (49/133) |
 | Brief (columns only) | 18.0% (24/133) | 18.0% (24/133) |
-
-* Same 133 benchmarks, same agent — only the prompt changed.
-* Task pass rate collapses as prompts lose detail; Python outscores R on full and conventions tiers, and both tie at 18% on brief prompts.
+:::
 
 ::: {style="font-size: 75%;"}
 Agent: opencode · Model: muse-spark-1.3 , Oct 2026
