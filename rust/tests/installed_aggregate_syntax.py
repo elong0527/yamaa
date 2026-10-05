@@ -84,6 +84,13 @@ class AggregateSyntax(unittest.TestCase):
         )
         self.assertEqual(response["outcome"]["ungrouped_identifiers"], ["A"])
 
+    def test_installed_type_information(self):
+        """The source-rebuilt wheel must retain the same public typing surface."""
+        package = Path(yamaa_native.__file__).parent
+        self.assertTrue((package / "py.typed").is_file())
+        stub = (package / "__init__.pyi").read_text(encoding="utf-8")
+        self.assertIn("def analyze_aggregate(request: str) -> str:", stub)
+
     def test_limits_and_no_execution_claim(self):
         """Syntax resources stay separate and parsing does not activate an engine."""
         for text, resource in [

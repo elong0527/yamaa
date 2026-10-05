@@ -62,3 +62,9 @@ hosts. CI runs Python direct-wheel and source-rebuild tests outside the checkout
 and R installed tests from its standalone source archive. These gates qualify
 syntax and transport; shared specification compilation and release qualification
 remain open.
+
+The Python source archive also carries `yamaa_native.pyi` beside its relocated
+`pyproject.toml`. This preserves the public type stub and `py.typed` marker when
+rebuilding a wheel from that archive, as required by maturin's
+[pure Rust typing layout](https://www.maturin.rs/project_layout.html#adding-python-type-information).
+Installed tests check this packaging contract in both distribution forms.
