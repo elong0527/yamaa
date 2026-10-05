@@ -83,6 +83,16 @@ installed project tests retain independent activation and callback trace truth.
 CI repeats installed tests for the wheel and independently rebuilt source archive,
 and tests the R source package outside the checkout.
 
+An installed project-function regression injects a graph-analysis failure after
+activation and source loading. The original failure propagates once, no dataset
+execution or data callbacks occur, and an explicit subsequent attempt reads the
+sources again and matches the original CSV and full callback trace. The activation
+cache retains successful vector qualification, not dataset success, so that retry
+does not repeat the vectors. There is no automatic retry or rollback of activation
+or source-provider effects. A caller using a stateful provider must arrange its
+own recovery before requesting another attempt; concurrent coordination remains
+the cache owner's responsibility.
+
 This is one compiler service, not a complete shared specification compiler.
 YAML/schema loading, normalization, inheritance, name binding, most validation,
 typed dataset lowering and host capability selection remain in Python. Shared
