@@ -10,14 +10,17 @@ import polars as pl
 
 
 def read(name: str) -> pl.DataFrame:
+    """Read a benchmark input CSV with every column as text."""
     return pl.read_csv(f"/app/input/{name}", infer_schema=False)
 
 
 def first_per_subject(records: pl.DataFrame, by: list[str]) -> pl.DataFrame:
+    """Keep the earliest record per subject, breaking ties by sequence."""
     return records.sort(by).unique("USUBJID", keep="first", maintain_order=True)
 
 
 def last_per_subject(records: pl.DataFrame, by: list[str]) -> pl.DataFrame:
+    """Keep the latest record per subject, breaking ties by sequence."""
     return records.sort(by, descending=True).unique(
         "USUBJID", keep="first", maintain_order=True
     )
