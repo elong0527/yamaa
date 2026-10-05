@@ -18,7 +18,7 @@ null for column derivation) and candidates (dataset indices for suggestions).
 Validation returns the first applicable condition in unknown-name, phase, then
 expected-type order. Suggestions choose the lexically earliest matching candidate
 dataset name. Results use zero-based declaration indices; hosts attach names,
-row identity and authored paths. Named-intermediate visibility, join inference
+row identity and authored paths. Intermediate expression traversal, join inference
 and the rest of the language remain outside these metadata services; this is not
 a current-schema compiler.
 
@@ -36,6 +36,20 @@ these queries do not grant data access or execution authority.
 Scope limits are 256 written driver names, 4,096 groups, 65,536 group-name entries
 and 1,048,576 combined UTF-8 context bytes. Duplicate entries count. Query support
 is advertised by reference_capabilities(); existing query forms remain unchanged.
+
+A validate_intermediate query has field and target. Target contains source
+(kind dataset with name, or kind self with fields), derived, readable and
+dependencies name lists. An empty readable list means unrestricted visibility.
+A validate_intermediate_read query has read, with reader, target_name,
+optional/null target, field, donor_dataset and visible names. Findings preserve
+unknown_field before unavailable_dependency (with its zero-based dependency index).
+Reading another SELF target returns only self_phase; self-reads defer to cycle
+analysis and unavailable targets add no finding. The core uses literal names,
+without record access, and hosts retain diagnostic provenance.
+
+Intermediate context limits count all written entries, including duplicates and
+skipped contexts: 65,536 names and 1,048,576 UTF-8 bytes. Limits remain separate
+outcomes. Discover this additive query set via the intermediate_validation feature.
 
 The envelope limit is 1,048,576 UTF-8 bytes. Core policies allow 4,096 output
 columns, 256 datasets, 65,536 stored fields, 1,048,576 catalog-name bytes and

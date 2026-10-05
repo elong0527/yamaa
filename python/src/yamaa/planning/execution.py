@@ -41,6 +41,8 @@ from yamaa.odm import (
 from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
 from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
 from yamaa.planning.references import (
+    IntermediateReadScope,
+    IntermediateScope,
     QualifiedFinding,
     QualifiedScope,
     ReferenceCompiler,
@@ -1913,7 +1915,9 @@ def _validate_qualified_reference(
     qualifier = reference.name.split(".", 1)[0]
     if qualifier in intermediates and qualifier not in drivers:
         intermediate = intermediates[qualifier]
-        _validate_intermediate_reference(reference, intermediate, bindings, diagnostics)
+        _validate_intermediate_reference(
+            reference, intermediate, bindings, diagnostics, reference_compiler
+        )
         driver_references = [
             (name, f"{intermediate.path}.filter", "REQ-0120")
             for name in intermediate.filter_variables
@@ -2202,7 +2206,46 @@ def _validate_column_phase_group_key(
             return
 
 
+def _intermediate_scope(intermediate: PlannedIntermediate) -> IntermediateScope:
+    """Project normalized names into the trusted metadata port without visibility decisions."""
+    return IntermediateScope(
+        dataset=intermediate.dataset,
+        self_fields=intermediate.self_fields,
+        derived=tuple(name for name, _ in intermediate.derived),
+        readable=intermediate.readable_columns,
+        dependencies=intermediate.dependencies,
+    )
+
+
 def _validate_intermediate_reference(
+    reference: _Reference,
+    intermediate: PlannedIntermediate,
+    bindings: BindingPlan,
+    diagnostics: list[ExecutionDiagnostic],
+    reference_compiler: ReferenceCompiler | None = None,
+) -> None:
+    """Select shared field visibility while retaining the default reference implementation."""
+    if reference_compiler is None:
+        _reference_intermediate_visibility(
+            reference, intermediate, bindings, diagnostics
+        )
+        return
+    for finding in reference_compiler.validate_intermediate(
+        reference.name.split(".", 1)[1], _intermediate_scope(intermediate)
+    ):
+        if finding.kind != "unknown_field":
+            raise ValueError("unexpected native intermediate field finding")
+        diagnostics.append(
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name},
+                requirement="REQ-0125",
+            )
+        )
+
+
+def _reference_intermediate_visibility(
     reference: _Reference,
     intermediate: PlannedIntermediate,
     bindings: BindingPlan,
@@ -2802,6 +2845,7 @@ def _plan_lookups(
     unsupported: list[UnsupportedFeature],
     default_columns: frozenset[str],
     dependency_analyzer: DependencyAnalyzer | None = None,
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
@@ -3287,7 +3331,12 @@ def _plan_lookups(
         if intermediate_reads:
             reads[intermediate.id] = tuple(intermediate_reads)
     _validate_intermediate_reads(
-        planned, reads, dataset_fields, diagnostics, dependency_analyzer
+        planned,
+        reads,
+        dataset_fields,
+        diagnostics,
+        dependency_analyzer,
+        reference_compiler,
     )
     return planned
 
@@ -3298,6 +3347,7 @@ def _validate_intermediate_reads(
     dataset_fields: Mapping[str, Mapping[str, ColumnType]],
     diagnostics: list[ExecutionDiagnostic],
     dependency_analyzer: DependencyAnalyzer | None = None,
+    reference_compiler: ReferenceCompiler | None = None,
 ) -> None:
     """Check each REQ-1263 read once every intermediate is planned.
 
@@ -3307,6 +3357,84 @@ def _validate_intermediate_reads(
     `dependency_cycle`. Any diagnostic fails planning, so the reader keeps
     its plan and a column reading it reports nothing further.
     """
+    if reference_compiler is None:
+        _reference_intermediate_reads(planned, reads, dataset_fields, diagnostics)
+    else:
+        for reader, entries in reads.items():
+            for read in entries:
+                target = planned.get(read.target)
+                scope = IntermediateReadScope(
+                    reader=reader,
+                    target_name=read.target,
+                    target=_intermediate_scope(target) if target is not None else None,
+                    field=read.field,
+                    donor_dataset=read.dataset,
+                    visible=tuple(sorted(read.visible)),
+                )
+                for finding in reference_compiler.validate_intermediate_read(scope):
+                    context: dict[str, JsonValue] = {
+                        "intermediate": reader,
+                        "identifier": f"{read.target}.{read.field}",
+                    }
+                    if finding.kind == "self_phase":
+                        condition, requirement = "phase_boundary", "REQ-1263"
+                    elif finding.kind == "unknown_field":
+                        condition, requirement = "unknown_field", "REQ-0125"
+                    elif finding.kind == "unavailable_dependency":
+                        if scope.target is None or finding.dependency is None:
+                            raise ValueError(
+                                "native dependency finding without a target index"
+                            )
+                        condition, requirement = "unknown_field", "REQ-1263"
+                        context["identifier"] = scope.target.dependencies[
+                            finding.dependency
+                        ]
+                        context["read"] = read.target
+                    else:
+                        raise ValueError("unknown native intermediate read finding")
+                    diagnostics.append(
+                        _diagnostic(
+                            condition, read.path, context, requirement=requirement
+                        )
+                    )
+    order = [identifier for identifier in planned if identifier in reads]
+    graph = {
+        reader: {read.target for read in entries} for reader, entries in reads.items()
+    }
+    cycle = (
+        _find_cycle(order, graph)
+        if dependency_analyzer is None
+        else dependency_analyzer(order, graph).cycle
+    )
+    if cycle is not None:
+        members = cycle[:-1]
+        paths = tuple(
+            dict.fromkeys(
+                next(
+                    read.path
+                    for read in reads[member]
+                    if read.target == cycle[position + 1]
+                )
+                for position, member in enumerate(members)
+            )
+        )
+        diagnostics.append(
+            _diagnostic(
+                "dependency_cycle",
+                paths,
+                {"cycle": list(cycle)},
+                requirement="REQ-1263",
+            )
+        )
+
+
+def _reference_intermediate_reads(
+    planned: Mapping[str, PlannedIntermediate],
+    reads: Mapping[str, Sequence[_IntermediateRead]],
+    dataset_fields: Mapping[str, Mapping[str, ColumnType]],
+    diagnostics: list[ExecutionDiagnostic],
+) -> None:
+    """Unchanged donor visibility rules for the default Python reference planner."""
     for reader, entries in reads.items():
         for read in entries:
             if read.target == reader:
@@ -3365,35 +3493,6 @@ def _validate_intermediate_reads(
                         requirement="REQ-1263",
                     )
                 )
-    order = [identifier for identifier in planned if identifier in reads]
-    graph = {
-        reader: {read.target for read in entries} for reader, entries in reads.items()
-    }
-    cycle = (
-        _find_cycle(order, graph)
-        if dependency_analyzer is None
-        else dependency_analyzer(order, graph).cycle
-    )
-    if cycle is not None:
-        members = cycle[:-1]
-        paths = tuple(
-            dict.fromkeys(
-                next(
-                    read.path
-                    for read in reads[member]
-                    if read.target == cycle[position + 1]
-                )
-                for position, member in enumerate(members)
-            )
-        )
-        diagnostics.append(
-            _diagnostic(
-                "dependency_cycle",
-                paths,
-                {"cycle": list(cycle)},
-                requirement="REQ-1263",
-            )
-        )
 
 
 # REQ-1185: the declared result type of each operation an intermediate
@@ -4785,6 +4884,7 @@ def plan_execution(
         unsupported,
         default_columns,
         dependency_analyzer,
+        reference_compiler,
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}

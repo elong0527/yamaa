@@ -28,6 +28,7 @@ def stage(destination: Path):
         "numeric_transport.tsv",
         "reference_binding.tsv",
         "reference_scope.tsv",
+        "reference_intermediate.tsv",
     ):
         shutil.copy2(
             WORKSPACE / "crates/yamaa-adapters/tests/fixtures" / fixture,

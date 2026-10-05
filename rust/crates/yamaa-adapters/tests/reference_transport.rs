@@ -10,6 +10,11 @@ fn shared_truth_and_prepared_catalog_ownership() {
         .lines()
         .skip(1)
         .chain(include_str!("fixtures/reference_scope.tsv").lines().skip(1))
+        .chain(
+            include_str!("fixtures/reference_intermediate.tsv")
+                .lines()
+                .skip(1),
+        )
     {
         let fields: Vec<_> = line.split('\t').collect();
         let expected: Value = serde_json::from_str(fields[2]).unwrap();
@@ -45,6 +50,69 @@ fn request() -> Value {
     json!({"protocol":"reference-analysis/1","catalog":{
         "outputs":[{"name":"A","type":"int"}],"datasets":[]},
         "queries":[{"kind":"bind","name":"A"}]})
+}
+
+/// The wire preserves field-before-dependency order and rejects malformed target contexts.
+#[test]
+fn intermediate_queries_batch_prepared_and_rejection() {
+    let mut data = request();
+    data["catalog"]["datasets"] = json!([{"name":"SRC","fields":[{"name":"K","type":"str"}]}]);
+    let target = json!({"source":{"kind":"dataset","name":"SRC"},"derived":["D"],"readable":[],"dependencies":["DONOR.K","OTHER.K","LATER"]});
+    data["queries"] = json!([
+        {"kind":"validate_intermediate","field":"D","target":target},
+        {"kind":"validate_intermediate","field":"ABSENT","target":target},
+        {"kind":"validate_intermediate_read","read":{"reader":"reader","target_name":"lookup","target":target,"field":"ABSENT","donor_dataset":"DONOR","visible":["K"]}}
+    ]);
+    let expected = json!({"protocol":"reference-analysis/1","outcome":{"status":"complete","results":[
+        {"kind":"intermediate_validation","diagnostics":[]},
+        {"kind":"intermediate_validation","diagnostics":[{"kind":"unknown_field"}]},
+        {"kind":"intermediate_validation","diagnostics":[{"kind":"unknown_field"},{"kind":"unavailable_dependency","dependency":1},{"kind":"unavailable_dependency","dependency":2}]}
+    ]}});
+    assert_eq!(
+        serde_json::from_str::<Value>(&analyze_references(&data.to_string()).unwrap()).unwrap(),
+        expected
+    );
+    let (prepared, _) = compile_reference_catalog(
+        &json!({"protocol":"reference-catalog/1","catalog":data["catalog"]}).to_string(),
+    )
+    .unwrap();
+    let prepared = prepared.unwrap();
+    let query = json!({"protocol":"reference-queries/1","queries":data["queries"]});
+    assert_eq!(
+        serde_json::from_str::<Value>(&prepared.analyze(&query.to_string()).unwrap()).unwrap(),
+        expected
+    );
+    for (pointer, value) in [
+        (
+            "/queries/0/target/source",
+            json!({"kind":"self","name":"SRC"}),
+        ),
+        (
+            "/queries/0/target/source",
+            json!({"kind":"dataset","name":"SRC","fields":[]}),
+        ),
+        ("/queries/0/target/derived", json!([false])),
+        ("/queries/2/read/visible", json!(null)),
+    ] {
+        let mut invalid = query.clone();
+        *invalid.pointer_mut(pointer).unwrap() = value;
+        assert_eq!(
+            prepared.analyze(&invalid.to_string()),
+            Err(TransportError::InvalidEnvelope)
+        );
+    }
+    let mut limit = query.clone();
+    limit["queries"][0]["target"]["readable"] = json!(vec!["K"; 65_537]);
+    let outcome: Value =
+        serde_json::from_str(&prepared.analyze(&limit.to_string()).unwrap()).unwrap();
+    assert_eq!(
+        outcome["outcome"],
+        json!({"status":"limit","resource":"intermediate_entries","limit":"65536","required":"65543"})
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&prepared.analyze(&query.to_string()).unwrap()).unwrap(),
+        expected
+    );
 }
 
 /// Strict closed shapes reject invalid types, duplicate fields and forged protocol extensions.
@@ -185,7 +253,7 @@ fn limits_are_not_language_diagnostics() {
 fn qualified_scope_admission_and_capabilities() {
     assert_eq!(
         yamaa_adapters::reference_transport::capabilities(),
-        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}"#
+        r#"{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}"#
     );
     let mut data = request();
     data["queries"] = json!([{"kind":"validate_qualified", "name":"SRC.N", "expected":null,

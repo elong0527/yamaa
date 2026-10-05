@@ -5,6 +5,7 @@ import json
 from yamaa.models import RuntimeCondition
 from yamaa.odm.bindings import BindingFailure, BoundReference
 from yamaa.planning.references import (
+    IntermediateFinding,
     QualifiedFinding,
     ReferenceCompilerFactory,
     ReferenceFinding,
@@ -95,6 +96,59 @@ def bind_reference_compiler(native) -> ReferenceCompilerFactory:
 
         class Compiler:
             """Per-attempt prepared compiler; returned indices only recover host names."""
+
+            @staticmethod
+            def _intermediate(target):
+                """Encode already selected intermediate metadata without deciding visibility."""
+                if target is None:
+                    return None
+                return {
+                    "source": {"kind": "self", "fields": target.self_fields}
+                    if target.dataset == "SELF"
+                    else {"kind": "dataset", "name": target.dataset},
+                    "derived": target.derived,
+                    "readable": target.readable,
+                    "dependencies": target.dependencies,
+                }
+
+            @staticmethod
+            def _intermediate_findings(result):
+                """Preserve ordered findings and dependency declaration indices."""
+                if result["kind"] != "intermediate_validation":
+                    raise ValueError("unexpected native intermediate reference result")
+                return tuple(
+                    IntermediateFinding(**item) for item in result["diagnostics"]
+                )
+
+            def validate_intermediate(self, field, target):
+                """Send a direct visibility query against the owned catalog."""
+                return self._intermediate_findings(
+                    query(
+                        {
+                            "kind": "validate_intermediate",
+                            "field": field,
+                            "target": self._intermediate(target),
+                        }
+                    )
+                )
+
+            def validate_intermediate_read(self, read):
+                """Send the normalized donor scope, including missing and SELF targets."""
+                return self._intermediate_findings(
+                    query(
+                        {
+                            "kind": "validate_intermediate_read",
+                            "read": {
+                                "reader": read.reader,
+                                "target_name": read.target_name,
+                                "target": self._intermediate(read.target),
+                                "field": read.field,
+                                "donor_dataset": read.donor_dataset,
+                                "visible": read.visible,
+                            },
+                        }
+                    )
+                )
 
             def validate_qualified(self, name, expected, scope):
                 """Serialize selected scope metadata and preserve ordered core findings."""

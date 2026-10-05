@@ -5,6 +5,7 @@
 #' output names, suggestions, phase availability and expected types.
 #' Also checks normalized direct qualified-field driver, scope and grouping
 #' metadata. Discover query support with reference_capabilities().
+#' Intermediate queries validate stored/derived/SELF visibility and donor scope.
 #' No records, callbacks or Python installation are involved.
 #' @param request One unclassed, nonmissing JSON character string without attributes.
 #' @return Owned outcome JSON. Language diagnostics and resource limits are data;
