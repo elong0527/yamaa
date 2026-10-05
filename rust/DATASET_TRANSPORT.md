@@ -13,7 +13,8 @@ canonical IPC bytes, returning `(table_or_none, outcome_json)`. R calls
 and raw IPC, returning `list(table, outcome)`. R uses the existing strict text
 encoding policy and passes raw request bytes for checked UTF-8 decoding in Rust.
 Both adapters invoke the same service synchronously on the calling thread.
-There are no callbacks, retries, fallback or external writes in this protocol.
+The legacy entrypoints provide no callback authority. Explicit callbacks use the
+separate entrypoint below; there are no retries, fallback or implicit external writes.
 
 For multiple inputs, both hosts expose `execute_dataset_sources(request, source,
 secondary)`. `secondary` is an ordered Python list of bytes or R list of raw
@@ -310,7 +311,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
@@ -449,3 +450,59 @@ The later result is unavailable to the earlier row filter. Key-grain plans rejec
 both placements. The normalized Python specification frontend currently lowers
 secondary row reads only into template assignments; this typed-plan capability
 does not expand its admitted specification vocabulary.
+
+## Explicit host functions
+
+Both hosts expose `execute_dataset_functions(request, source, secondary, callbacks)`.
+The callback list is in declaration order and is captured for one synchronous run.
+This is explicit caller authority to invoke those objects, not proof of artifact
+membership or environment activation. The native entrypoints never discover code.
+
+The optional top-level `functions` list contains at most 64 signatures with exactly
+`identity`, `parameters`, `returns` and `may_return_missing`, using the signature
+fields of [function/1](FUNCTION_TRANSPORT.md). A function assignment is:
+
+```json
+{"function":{"slot":0,"arguments":[
+  {"name":"second","input":{"source":2}},
+  {"name":"first","input":{"column":0}}
+]}}
+```
+
+Each supplied argument has exactly `name` and `input`; inputs are `{literal: scalar}`,
+`{source: index}` or `{column: index}`. Argument arrays retain authored order.
+The shared signature rules supply defaults and map declaration-order host names.
+All declared bindings and host names must be admitted before IPC decoding, even
+on empty input or when all rows will be filtered out. Legacy entrypoints reject
+function declarations without bindings before decoding any snapshot. Invalid slots,
+unknown/duplicate arguments, omitted required names and illegal reads are rejected
+at plan admission. Grouped source arguments must be grouping fields; key-grain calls
+may occur only in non-key assignments over completed columns or literals.
+
+The entire request remains bounded to 1 MiB. Each declaration and supplied argument
+list permits at most 256 parameters; names use the function/1 limits. Copying a
+signature into several call sites additionally consumes aggregate limits of 16,384
+parameter entries and 1 MiB of identity/name/default-string bytes. These limits are
+checked before each clone, so small declarations cannot create unbounded expanded
+plans. Normal dataset work/text/output limits still apply. Callback wall time and
+allocations inside arbitrary host code are not bounded by these logical counters.
+
+Calls use the existing Python and R scalar ports, including full-range i64,
+nonfinite/missing handling, temporal precision dropping at host argument encoding,
+original interruption propagation and bounded error details. Python retains the
+GIL; R callbacks stay on the R thread. Changing the caller's callback list during
+a run cannot replace its captured slots. Nested or later runs receive fresh state.
+
+Fatal invocation conditions include `spec_paths`, invocation context, known output
+identity and declared handler counts; no accepted table is returned. Only conversion
+of a successfully validated result can use an unconvertible handler. Boundary,
+resource and internal errors retain their existing transport error classification.
+No failure undoes earlier callback side effects or causes automatic retry.
+
+Thirteen independently authored shared cases in `callbacks.json` / `callbacks.tsv`
+pin complete output observations and traces for both installed hosts. Additional
+tests cover metadata rejection before invalid IPC, expanded-plan limits, panic and
+interruption containment, subsequent-run recovery, captured bindings, signed zero
+and temporal encoding. This capability does not yet lower function expressions
+from normalized specifications or implement production activation; the remaining gates
+in issue #1585 and `execution_supported=false` remain unchanged.

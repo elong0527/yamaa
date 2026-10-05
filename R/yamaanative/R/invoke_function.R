@@ -12,6 +12,17 @@
 #' @export
 invoke_function <- function(request, callback) {
   if (!is.function(callback)) stop("callback must be a function", call. = FALSE)
+  state <- .function_dispatcher(callback)
+  result <- .Call(wrap__invoke_function, .scalar_text_bytes(request), state$dispatch)
+  interrupted <- state$interruption()
+  if (!is.null(interrupted)) stop(interrupted)
+  if (!is.null(result$error)) stop(result$error, call. = FALSE)
+  result$value
+}
+
+#' Build one stable callback dispatcher and retain its original interruption condition.
+.function_dispatcher <- function(callback) {
+  force(callback)
   interrupted <- NULL
   dispatch <- function(encoded) tryCatch({
     args <- lapply(encoded, .scalar_unpack)
@@ -37,10 +48,7 @@ invoke_function <- function(request, callback) {
     interrupted <<- e
     list(3L, NULL, NULL)
   })
-  result <- .Call(wrap__invoke_function, .scalar_text_bytes(request), dispatch)
-  if (!is.null(interrupted)) stop(interrupted)
-  if (!is.null(result$error)) stop(result$error, call. = FALSE)
-  result$value
+  list(dispatch = dispatch, interruption = function() interrupted)
 }
 
 #' Keep failures in secondary condition rendering from replacing the primary error.

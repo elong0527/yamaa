@@ -288,3 +288,14 @@ no output identity, while derivation conditions retain available complete keys.
 Six shared cases cover values, arithmetic/type/overflow/conversion failures and
 empty input. EXP/LN/POWER, local handlers and broader bindings remain outside this
 dataset slice; the separate numeric/1 candidate policy does not enable them here.
+
+
+`host_functions` adds `execute_dataset_functions(request, source, secondary,
+callbacks)` for explicitly supplied functions in declaration order. The adapter
+captures stable callables, validates metadata before IPC decoding, preserves
+callback order and original interruptions, and withholds output after failure.
+The shared scalar port preserves full-range integers and bounds diagnostics.
+See [the dataset protocol](../../rust/DATASET_TRANSPORT.md#explicit-host-functions)
+for limits and independent installed-host fixtures. This raw bridge does not
+provide normalized specification lowering or production artifact activation;
+Python remains the default and `execution_supported` remains false.

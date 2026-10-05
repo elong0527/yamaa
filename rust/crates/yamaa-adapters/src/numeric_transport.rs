@@ -254,8 +254,8 @@ fn type_name(value: ValueType) -> &'static str {
 }
 
 /// Retain native predicate provenance; host reports may project site-specific fields.
-pub(crate) fn predicate(
-    error: yamaa_core::predicate::EvaluationError<yamaa_core::table::CellError<Infallible>>,
+pub(crate) fn predicate<E>(
+    error: yamaa_core::predicate::EvaluationError<yamaa_core::table::CellError<E>>,
 ) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
     use yamaa_core::predicate::{Condition, ErrorKind};
     let ErrorKind::Condition(condition) = error.kind else {

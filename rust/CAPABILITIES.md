@@ -33,6 +33,7 @@ Python only; the explicit ADLB prototype below is not a qualified full backend.
 | Installed Python callbacks: REQ-0676-0686, 0700-0704 | Bounded function/1 request/result adapter composes the shared invocation service; strict admission and unwind/effect tests | Installed wheel/source real synchronous callbacks; all 42 shared invocation cases plus GIL/thread, ownership, reentrancy and exception tests | Installed source callbacks use the shared transport | Environment activation, dataset execution and release gates |
 | Lossless R primitive scalars: REQ-0014, 0006, 0022-0027 | Validated tag/byte codec, shared checked arithmetic and exact numeric comparisons | Existing full-range native callback scalars | Installed int64/UTF-8 carriers, no NA collision/NUL loss, exact conversions and encoding/ownership tests | Connected to R FunctionPort; full workflow/release qualification remains |
 | Installed R callbacks: REQ-0563-0564, 0570, 0676-0686, 0700-0704 | Shared function/1 invocation and checked temporal epoch codec | Installed callback facade preserves known temporal model precision | Real synchronous R callbacks; lossless scalars, explicit UTC, 42 shared cases plus ownership/reentrancy/interrupt/error/limit tests | Environment activation, specification/dataset execution and release gates |
+| Dataset host callbacks: REQ-0570, 0676-0686, 0700-0704 | Typed function assignments, bounded signature expansion and fatal observations with explicit callback authority | Installed typed-plan callbacks, full-range scalars, control-flow and captured bindings | Installed typed-plan callbacks on the R thread, lossless scalars and original interruptions | Normalized-specification function lowering, production activation and full release gates |
 | Python temporal result compatibility: REQ-0563, 0570, 0686, 0702 | Closed owned native temporal result carrier with exact field/calendar/precision admission | Optional non-editable facade bridges known DateValue/DateTimeValue subtypes; installed wheel/source independent truth and reference comparison | Existing Date/UTC POSIXct callback mapping | Full environment/workflow integration and release qualification |
 | Typed single-source dataset application: REQ-0036-0039, 0042, 0044, 0047, 0059-0061, 0074-0075, 0211, 0240, 0381, 0385 | Immutable plan admission; record/group templates and standalone key combinations, direct/collected/literal/SUM/MEAN assignments, conversion, key checks and unique/row-count/assert/implies observations; committed ADLB source/expected replay plus failure/order tests | Installed typed-plan bridge; no specification compilation | Installed typed-plan bridge; no specification compilation | Full verification/report contracts, handlers, remaining operators and workflow/release gates |
 | Bounded typed dataset bridge | dataset/1 composes immutable plan admission, owned Arrow snapshots and checked output; cumulative work/text/identity policies | Installed typed-plan entrypoint; optional Python normalization frontend below | Explicit installed raw-IPC/JSON entrypoint; no specification frontend/default dispatch | Shared Rust compiler, full portable reports/publication, remaining named fixtures and release gates |
@@ -322,7 +323,7 @@ not YAML compilation, installed host dispatch, source discovery or release
 qualification. No capability flag or benchmark execution manifest changes.
 
 A future compiler must reject the entire run before execution if it requires
-unsupported syntax: other handlers, callbacks, broader source selection, regex, other windows, broader joins, other expression operations, column checks,
+unsupported syntax: other handlers, normalized-specification callbacks, broader source selection, regex, other windows, broader joins, other expression operations, column checks,
 warning checks, grouped/filtered/fractional row counts or file publication.
 The temporary typed-plan bridge is tracked by #1585 steps 5 and 7; the full
 Rust specification compiler and the remaining benchmark gates are still open.
@@ -337,8 +338,10 @@ now executes the ADLB specification through this bridge. The shared Rust compile
 remaining named prototypes and all full-workflow/default-cutover gates remain open.
 
 The trusted Rust dataset API also composes prebound host-function calls with
-record/group assignments and completed key-grain outputs. This core-only port
-checks every callback signature before table access and reuses the scalar
-invocation lifecycle; it is not advertised by `dataset/1` or either host frontend.
+record/group assignments and completed key-grain outputs. The explicit Python/R
+`execute_dataset_functions` bridge checks bindings before IPC decoding and reuses
+the same scalar invocation lifecycle. Thirteen shared cases and host boundary tests
+qualify this typed-plan subset; normalized-specification function dispatch and
+production activation remain unsupported.
 See [dataset function composition](DATASET_FUNCTIONS.md) for phase, error and
-resource contracts and the remaining adapter/activation qualification gates.
+resource contracts and the remaining frontend/activation qualification gates.

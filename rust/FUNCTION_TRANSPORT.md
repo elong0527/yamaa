@@ -50,10 +50,10 @@ types, missing short-circuit and result checks as described in
 
 Signature metadata and defaults are admitted in the adapter's shared
 `function_signature` module, separately from supplied argument decoding. This
-keeps the existing `function/1` request shape and rejection order while preparing
-reuse by dataset callback transport. Host-name inspection borrows the admitted
-parameter list in declaration order. This refactor adds no dataset callback
-transport or activation capability.
+keeps the existing `function/1` request shape and rejection order while sharing
+admission with dataset callback transport. Host-name inspection borrows the admitted
+parameter list in declaration order. Neither signature admission nor callable
+identity labels activate project code.
 
 Policy is fixed by the adapter: 1 MiB UTF-8 request, at most 256 parameters and
 256 supplied arguments, and at most 1,024 bytes per identity/name field. Python
@@ -201,4 +201,6 @@ Full environment, workflow, benchmark and release gates in #1585 remain open.
 
 The trusted Rust dataset API now composes this shared invocation lifecycle with
 explicit callback ports; see [dataset function composition](DATASET_FUNCTIONS.md).
-This does not add dataset callbacks to either installed host transport.
+Both hosts now also expose explicit dataset callback composition through
+`execute_dataset_functions`; see [the dataset transport](DATASET_TRANSPORT.md#explicit-host-functions).
+Normalized-specification lowering and production activation remain separate gates.

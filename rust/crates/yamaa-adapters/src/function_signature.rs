@@ -65,8 +65,10 @@ enum WirePresence {
     Required(()),
     Optional(ScalarValue),
 }
-/// Wire signature reused by scalar invocation and future dataset callback admission.
+/// Wire signature reused by scalar invocation and dataset callback admission.
 /// Host identifier syntax and callable activation remain outer adapter gates.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Signature {
     pub identity: Identity,
     pub parameters: Vec<WireParameter>,

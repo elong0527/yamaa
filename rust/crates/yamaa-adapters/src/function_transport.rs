@@ -181,7 +181,7 @@ enum Outcome {
     Condition { diagnostic: Diagnostic },
 }
 #[derive(Serialize)]
-struct Diagnostic {
+pub(crate) struct Diagnostic {
     phase: &'static str,
     condition: &'static str,
     requirement: &'static str,
@@ -189,7 +189,7 @@ struct Diagnostic {
     context: BTreeMap<&'static str, serde_json::Value>,
 }
 /// Render facts already validated by the service; no error string is executable.
-fn diagnostic(failure: InvocationFailure<CallbackError>) -> Result<Diagnostic, Error> {
+pub(crate) fn diagnostic(failure: InvocationFailure<CallbackError>) -> Result<Diagnostic, Error> {
     use serde_json::{json, Value as Json};
     let mut result = Diagnostic {
         phase: failure.phase(),
