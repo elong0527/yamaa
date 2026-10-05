@@ -396,12 +396,6 @@ def test_cut_refuses_a_non_numeric_source() -> None:
         {"source": "AGE", "breaks": [65, 18], "labels": ["a", "b", "c"]},
         {"source": "AGE", "breaks": [18, 18], "labels": ["a", "b", "c"]},
         {"source": "AGE", "breaks": ["18"], "labels": ["a", "b"]},
-        {"source": "AGE", "breaks": [float("nan")], "labels": ["a", "b"]},
-        {
-            "source": "AGE",
-            "breaks": [18, float("nan"), 65],
-            "labels": ["a", "b", "c", "d"],
-        },
     ],
 )
 def test_a_cut_declaration_that_labels_nothing_usable_is_refused(
@@ -411,6 +405,32 @@ def test_a_cut_declaration_that_labels_nothing_usable_is_refused(
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_field_type"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"source": "AGE", "breaks": [float("nan")], "labels": ["a", "b"]},
+        {
+            "source": "AGE",
+            "breaks": [18, float("nan"), 65],
+            "labels": ["a", "b", "c", "d"],
+        },
+    ],
+)
+def test_cut_refuses_nan_breaks_with_condition_details(
+    payload: dict[str, object],
+) -> None:
+    result = _evaluate({"cut": payload}, {"AGE": 30})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+    assert result.condition.context == {
+        "operation": "cut",
+        "expected": "breaks without NaN",
+    }
+    assert result.condition.path_suffix is None
 
 
 def test_cut_accepts_infinite_breaks() -> None:
