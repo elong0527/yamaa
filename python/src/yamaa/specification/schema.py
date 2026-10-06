@@ -31,6 +31,10 @@ class SchemaInterpreter(Protocol):
 
     def normalize_document(self, document: object, root_class: str) -> object: ...
 
+    def normalize_layer(
+        self, document: object
+    ) -> tuple[dict[str, object] | None, list[ValidationDiagnostic]]: ...
+
     def validate_descriptor(
         self, value: object, descriptor: dict[str, Any], path: str, fragment: bool
     ) -> list[ValidationDiagnostic]: ...

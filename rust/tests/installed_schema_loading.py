@@ -34,6 +34,114 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_custom_input_key_coercion_keeps_order_and_validates_replaced_members(self):
+        """Custom scalar identifiers may converge to one normalized text name."""
+        schema = {
+            "version": "1.0",
+            "root_class": [
+                {"schema_version": {"type": "str"}},
+                {"input": {"type": "dict[identifier, dataset_class]"}},
+            ],
+            "dataset_class": [{"path": {"type": "str"}}],
+            "identifier": {"type": ["str", "int"]},
+            "project_path": {"type": "str"},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "schema.yaml").write_text(json.dumps(schema), encoding="ascii")
+            interpreter = native_specification.load_schema_bundle(root).interpreter
+            value, findings = interpreter.normalize_layer(
+                {
+                    "schema_version": "1.0",
+                    "input": {
+                        2: {"path": "first.csv"},
+                        "KEEP": "middle.csv",
+                        "2": {"path": "last.csv"},
+                    },
+                }
+            )
+            self.assertEqual(findings, [])
+            self.assertEqual(list(value["input"]), ["2", "KEEP"])
+            self.assertEqual(
+                value["input"],
+                {
+                    "2": {"path": "last.csv"},
+                    "KEEP": {"path": "middle.csv"},
+                },
+            )
+            value, findings = interpreter.normalize_layer(
+                {
+                    "schema_version": "1.0",
+                    "input": {
+                        2: {"path": False},
+                        "2": {"path": "last.csv"},
+                    },
+                }
+            )
+            self.assertIsNone(value)
+            self.assertEqual(
+                [(d.condition, d.spec_paths) for d in findings],
+                [
+                    ("invalid_field_type", ("input[2].path",)),
+                ],
+            )
+
+    def test_layer_diagnostic_paths_distinguish_indices_from_text_names(self):
+        """Positional and bool/int paths keep brackets; textual names keep dots."""
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        value, findings = bundle.interpreter.normalize_layer(
+            {
+                "schema_version": "1.0",
+                "input": {True: [], 2: [], "X": []},
+                "columns": [{}, {"name": "X", "type": 1}],
+            }
+        )
+        self.assertIsNone(value)
+        self.assertEqual(
+            [d.spec_paths for d in findings],
+            [
+                ("input.key(True)",),
+                ("input[True]",),
+                ("input.key(2)",),
+                ("input[2]",),
+                ("input.X",),
+                ("columns[0].name",),
+                ("columns.X.type",),
+            ],
+        )
+
+    def test_layer_admission_collects_ordered_field_errors_before_normalization(self):
+        """Both authored errors retain field paths in schema order, not write order."""
+        document = {
+            "schema_version": "1.0",
+            "parents": [],
+            "columns": [{"label": 2, "name": "X", "type": 1}],
+        }
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "spec.yaml"
+            path.write_text(json.dumps(document), encoding="ascii")
+            with self.assertRaises(SpecificationError) as caught:
+                resolve_specification(path, bundle)
+            self.assertEqual(
+                [
+                    (d.condition, d.spec_paths, d.context)
+                    for d in caught.exception.diagnostics
+                ],
+                [
+                    (
+                        "invalid_field_type",
+                        ("columns.X.type",),
+                        {"expected": "column_type", "actual": "int"},
+                    ),
+                    (
+                        "invalid_field_type",
+                        ("columns.X.label",),
+                        {"expected": "str", "actual": "int"},
+                    ),
+                ],
+            )
+
     def test_standalone_null_handler_survives_workflow_resolution(self):
         document = self.window_document()
         document["intermediates"] = [
@@ -69,7 +177,11 @@ class InstalledSchemaLoading(unittest.TestCase):
                     path = Path(temporary) / "spec.yaml"
                     path.write_text(
                         json.dumps(
-                            {"schema_version": "1.0", "parents": [], collection: members}
+                            {
+                                "schema_version": "1.0",
+                                "parents": [],
+                                collection: members,
+                            }
                         ),
                         encoding="ascii",
                     )
@@ -99,7 +211,12 @@ class InstalledSchemaLoading(unittest.TestCase):
                     side_effect=AssertionError("host window traversal invoked"),
                 )
             )
-        for name in ("_merge_member", "_compose_value", "_materialize_fragments"):
+        for name in (
+            "_merge_member",
+            "_compose_value",
+            "_materialize_fragments",
+            "_validate_partial_member",
+        ):
             self.stack.enter_context(
                 patch(
                     f"yamaa.schema.inheritance.{name}",

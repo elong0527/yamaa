@@ -116,6 +116,20 @@ class NativeSchemaInterpreter:
         self._root(root_class)
         return self._normalize(document, "normalize_document")
 
+    def normalize_layer(self, document):
+        """Admit a whole contribution before normalization, preserving all findings."""
+        self._root("root_class")
+        result, tree = self._query(document, "normalize_layer")
+        if result["status"] == "invalid":
+            return None, self._diagnostics(result["diagnostics"], tree)
+        if result["status"] != "normalized":
+            raise ValueError("invalid native layer normalization response")
+        output = result["document"]
+        value = decode_nodes(output)[output["root"]]
+        if not isinstance(value, dict):
+            raise TypeError("native layer normalization must return a mapping")
+        return value, []
+
     def expand_windows(self, document, strict):
         """Expand in Rust and retain ordered logical links for host provenance."""
         result, tree = self._query(document, "expand_windows", strict=strict)

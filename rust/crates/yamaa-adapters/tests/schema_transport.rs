@@ -15,6 +15,22 @@ enum V {
 use V::*;
 
 #[test]
+fn installed_hosts_share_independent_layer_admission_truth() {
+    let fixture = include_str!("fixtures/schema_layer_admission.tsv");
+    assert_eq!(fixture.lines().count(), 8);
+    for line in fixture.lines().skip(1) {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(
+            interpret_schema(fields[1]).unwrap(),
+            fields[2],
+            "{}",
+            fields[0]
+        );
+    }
+}
+
+#[test]
 fn installed_hosts_share_independent_layer_composition_truth() {
     let fixture = include_str!("fixtures/schema_composition.tsv");
     assert_eq!(fixture.lines().count(), 7);
@@ -669,6 +685,40 @@ fn composition_batches_share_copy_limits_and_reject_unknown_fields() {
     unknown["extra"] = json!(true);
     assert_eq!(
         compiled.analyze(&json!({"protocol":"schema/1","queries":[unknown]}).to_string()),
+        Err(TransportError::InvalidRequest)
+    );
+}
+
+#[test]
+fn layer_admission_is_closed_and_shares_batch_limits() {
+    let (compiled, _) = compile(schema(vec![field("items", "list[str]")], vec![]));
+    let layer = json!({"operation":"normalize_layer", "document":tree(Map(vec![
+        ("schema_version", Text("1.0")),
+        ("items", List((0..24000).map(|_| Text("X")).collect())),
+    ]))});
+    let results = query(&compiled, vec![layer.clone(), layer.clone(), layer.clone()]);
+    assert_eq!(results["results"][0]["status"], "normalized");
+    assert_eq!(results["results"][1]["status"], "normalized");
+    assert_eq!(
+        results["results"][2],
+        json!({
+            "status":"resource_limit", "phase":"validation", "resource":"work", "limit":4194304
+        })
+    );
+    assert_eq!(
+        query(&compiled, vec![layer.clone()])["results"][0]["status"],
+        "normalized"
+    );
+    let mut extra = layer;
+    extra["fragment"] = json!(true);
+    assert_eq!(
+        compiled.analyze(&json!({"protocol":"schema/1","queries":[extra]}).to_string()),
+        Err(TransportError::InvalidRequest)
+    );
+    assert_eq!(
+        compiled.analyze(
+            &json!({"protocol":"schema/1","queries":[{"operation":"normalize_layer"}]}).to_string()
+        ),
         Err(TransportError::InvalidRequest)
     );
 }

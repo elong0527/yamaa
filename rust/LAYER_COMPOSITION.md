@@ -15,6 +15,33 @@ files, traverse parents, check confinement, invoke callbacks or read tables.
 Malformed normalized collection shapes and duplicate/missing keyed identities
 are contract defects; this query is not a replacement for fragment admission.
 
+`normalize_layer` admits a single authored contribution and supplies the
+normalized fragment needed by composition. It validates the entire contribution
+before normalizing any field. Invalid results contain all ordered findings with
+their authored logical paths and no partial document. Unknown fields retain
+input order; known fields follow schema order; duplicate identities follow the
+corresponding member's findings. Diagnostic value references address the
+original input tree.
+
+Missing immediate fields remain deferred, except for the layer version and
+keyed identities. Supplied non-column values must be complete; nested column
+fragments defer requiredness and defaults. Optional null clear markers survive,
+while null required fields or identities fail with `invalid_clear`. Input path
+shorthand becomes an owned mapping with origins pointing to the authored text.
+When a custom identifier alias admits different scalar input keys that stringify
+to the same name, normalization keeps the first key position and last member
+value. All authored members are validated before selection, including replaced
+members; their errors cannot disappear through replacement.
+Parents receive normal descriptor validation and normalization. Parent graph
+traversal and entry-versus-parent version consistency remain caller duties.
+
+Both installed hosts expose this admission query through `schema/1`; Python's
+opt-in loader delegates once per layer through its captured service. R callers
+can now admit contributions before composition without a Python interpreter.
+This does not supply a complete R filesystem or workflow loader. All admission,
+normalization and composition queries share the batch's logical resource budget;
+failed attempts retain their charges.
+
 Root fields replace whole, except for keyed `input`, `columns`, `rows`,
 `intermediates` and named `windows`. The `parents` field is omitted. Existing
 members retain their first position and newly introduced members append in

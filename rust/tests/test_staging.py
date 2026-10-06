@@ -38,6 +38,7 @@ class StagingTests(unittest.TestCase):
                 "schema_transport.tsv",
                 "schema_windows.tsv",
                 "schema_composition.tsv",
+                "schema_layer_admission.tsv",
                 "yaml_transport.tsv",
                 "regex_transport.tsv",
                 "scalar_transport.tsv",

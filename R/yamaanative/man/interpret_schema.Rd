@@ -13,7 +13,11 @@ member. The expand_windows operation takes a normalized composed document and
 Boolean strict flag, returning independent inline settings and origin/reference
 links. Non-strict expansion precedes host inheritance pruning; strict expansion
 rejects surviving unknown names and removes root definitions. Both modes validate
-unused definitions, and share the batch storage/work quotas. The compose_layers
+unused definitions, and share the batch storage/work quotas. The normalize_layer
+operation admits one authored contribution before any normalization, collecting
+ordered field findings without publishing a partial document. Missing fields
+and column defaults remain deferred; optional null clears and original input
+origins survive. Supplied non-column values must be complete. The compose_layers
 operation consumes admitted normalized layers in contribution order, preserving
 keyed declaration order, column patches, clearing rules and written provenance.
 Column defaults are materialized after composition. Invalid results can include a
