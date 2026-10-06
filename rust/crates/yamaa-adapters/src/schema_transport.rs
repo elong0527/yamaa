@@ -206,7 +206,7 @@ fn compile(bundle: Bundle) -> Result<(Option<CompiledSchema>, Value), TransportE
             document,
         });
     }
-    let schema = match SchemaStructure::admit(
+    let mut schema = match SchemaStructure::admit(
         modules,
         bundle.entry,
         &bundle.root_class,
@@ -215,7 +215,7 @@ fn compile(bundle: Bundle) -> Result<(Option<CompiledSchema>, Value), TransportE
         Ok(schema) => schema,
         Err(error) => return errors::bundle(error).map(|outcome| (None, outcome)),
     };
-    match schema.validate_defaults(&mut ValidationBudget::new(ValidationLimits::default())) {
+    match schema.prepare_defaults(&mut ValidationBudget::new(ValidationLimits::default())) {
         Ok(defaults) if !defaults.is_empty() => {
             return Ok((
                 None,

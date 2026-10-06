@@ -11,6 +11,12 @@ Only successful admission produces a frozen `_Schema` snapshot. Its
 `analyze(request)` method owns all schema data and starts a fresh request budget;
 mutating or releasing the original request cannot change it. R's stateless
 batch path uses the same compiler and evaluator.
+Successful compilation retains default admission on the immutable core schema.
+Normalization queries still validate their written input and charge actual
+normalization work, but do not revalidate unused defaults against the query
+budget. A core structure that has not completed default preparation retains
+the validating normalization path; failed or interrupted preparation cannot
+establish the prepared state.
 
 The default specification loader still uses the Python interpreter. The explicit
 `yamaa.adapters.native_specification.load_specification` path captures the Rust

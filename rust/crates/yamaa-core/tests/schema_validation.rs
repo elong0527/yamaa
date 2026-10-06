@@ -75,6 +75,45 @@ fn bundle(fields: Vec<V>, declarations: Vec<(&'static str, V)>) -> SchemaStructu
 fn budget() -> ValidationBudget {
     ValidationBudget::new(ValidationLimits::default())
 }
+
+#[test]
+fn invalid_or_interrupted_default_preparation_never_bypasses_normalization_admission() {
+    let mut schema = bundle(
+        vec![Map(vec![(
+            "value",
+            Map(vec![("type", Text("str")), ("default", Int("2"))]),
+        )])],
+        vec![],
+    );
+    let input = document(Map(vec![("schema_version", Text("1.0"))]));
+    let mut exhausted = ValidationBudget::new(ValidationLimits {
+        work: 0,
+        ..ValidationLimits::default()
+    });
+    assert_eq!(
+        schema.prepare_defaults(&mut exhausted),
+        Err(ValidationError::Constraint(ConstraintError::Work {
+            limit: 0
+        }))
+    );
+    assert!(matches!(
+        schema.normalize_document(
+            &input,
+            &mut NormalizationBudget::new(NormalizationLimits::default())
+        ),
+        Err(NormalizationError::Defaults(_))
+    ));
+    let findings = schema.prepare_defaults(&mut budget()).unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].diagnostics[0].condition, "invalid_field_type");
+    assert!(matches!(
+        schema.normalize_document(
+            &input,
+            &mut NormalizationBudget::new(NormalizationLimits::default())
+        ),
+        Err(NormalizationError::Defaults(_))
+    ));
+}
 fn validate(
     schema: &SchemaStructure,
     field: &str,

@@ -691,6 +691,9 @@ impl SchemaStructure {
         &self,
         budget: &mut NormalizationBudget,
     ) -> Result<(), NormalizationError> {
+        if self.defaults_validated {
+            return Ok(());
+        }
         let defaults = self.validate_defaults(&mut budget.validation)?;
         if defaults.is_empty() {
             Ok(())

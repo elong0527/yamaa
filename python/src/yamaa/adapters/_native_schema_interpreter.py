@@ -73,9 +73,7 @@ class NativeSchemaInterpreter:
                 elif kind == "input_value":
                     value = values[ref["node"]]
                 elif kind in constraints:
-                    value = self._metadata["descriptors"][ref["descriptor"]][
-                        constraints[kind]
-                    ]
+                    value = self._descriptors[ref["descriptor"]][constraints[kind]]
                 else:
                     raise ValueError("unknown native schema context kind")
                 context[item["name"]] = copy.deepcopy(value)

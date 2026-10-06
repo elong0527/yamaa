@@ -131,8 +131,11 @@ def _extract(pattern: str, subject: str, group: int) -> object:
 def test_full_match_wrapper_cannot_repair_malformed_pattern(subject: str) -> None:
     # An unmatched close/open pair becomes balanced only after interpolation
     # into a noncapturing group. Reject the authored pattern before wrapping.
-    with pytest.raises(RegexError):
+    with pytest.raises(RegexError) as caught:
         full_match("a)|(?:b", subject)
+    assert caught.value.condition == "invalid_regex"
+    assert caught.value.requirement == "REQ-0827"
+    assert caught.value.pattern == "a)|(?:b"
 
 
 @pytest.mark.parametrize("case", CASES, ids=[case["id"] for case in CASES])

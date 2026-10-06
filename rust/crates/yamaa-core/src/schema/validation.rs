@@ -864,6 +864,21 @@ impl SchemaStructure {
             },
         )
     }
+    /// Retain successful default admission for reuse by this immutable schema snapshot.
+    /// Failed findings or exhausted budgets never establish the prepared state.
+    pub fn prepare_defaults(
+        &mut self,
+        budget: &mut ValidationBudget,
+    ) -> Result<Vec<DefaultDiagnostics>, ValidationError> {
+        if self.defaults_validated {
+            return Ok(Vec::new());
+        }
+        let findings = self.validate_defaults(budget)?;
+        if findings.is_empty() {
+            self.defaults_validated = true;
+        }
+        Ok(findings)
+    }
     /// Validate defaults only after structural and named-reference admission succeeded.
     /// InputValue diagnostic contexts refer to the descriptor's origin module document.
     pub fn validate_defaults(

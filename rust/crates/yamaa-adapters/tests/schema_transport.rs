@@ -504,3 +504,39 @@ fn reused_fields_report_original_descriptor_occurrences() {
         "kept from source"
     );
 }
+
+#[test]
+fn prepared_normalization_does_not_spend_query_budgets_readmitting_defaults() {
+    let mut types = (0..1000).map(|_| Text("int")).collect::<Vec<_>>();
+    types.push(Text("str"));
+    let (compiled, metadata) = compile(schema(
+        vec![Map(vec![(
+            "value",
+            Map(vec![("type", List(types)), ("default", Text("accepted"))]),
+        )])],
+        vec![],
+    ));
+    let mut queries = Vec::new();
+    for _ in 0..80 {
+        // The written integer overrides the expensive default, so no failed
+        // default-union alternatives belong to this document's query budget.
+        queries.push(json!({"operation":"normalize_document","document":tree(Map(vec![("schema_version",Text("1.0")),("value",Int("1"))]))}));
+        queries.push(json!({"operation":"normalize_descriptor","descriptor":item_id(&metadata,"schema_version"),"fragment":false,"document":tree(Text("1.0"))}));
+        queries.push(json!({"operation":"normalize_types","types":["str"],"fragment":false,"document":tree(Text("1.0"))}));
+    }
+    let output = query(&compiled, queries);
+    let results = output["results"].as_array().unwrap();
+    assert_eq!(results.len(), 240);
+    for (index, result) in results.iter().enumerate() {
+        assert_eq!(result["status"], "normalized", "query {index}: {result}");
+        let expected = if index % 3 == 0 {
+            tree(Map(vec![
+                ("schema_version", Text("1.0")),
+                ("value", Int("1")),
+            ]))
+        } else {
+            tree(Text("1.0"))
+        };
+        assert_eq!(result["document"], expected);
+    }
+}

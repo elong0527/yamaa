@@ -156,6 +156,8 @@ pub struct SchemaRegistry {
 /// Structural admission and complete-bundle reference resolution; no host effects.
 #[derive(Clone, Debug)]
 pub struct SchemaStructure {
+    /// Set only by successful default preparation; captured declarations cannot be mutated.
+    pub(super) defaults_validated: bool,
     modules: Vec<SchemaModule>,
     version: String,
     root: usize,
@@ -873,6 +875,7 @@ impl SchemaStructure {
             .map(|(index, alias)| (alias.name.clone(), index))
             .collect();
         Ok(Self {
+            defaults_validated: false,
             modules: builder.modules,
             version: version.expect("nonempty closure"),
             root,

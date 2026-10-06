@@ -11,9 +11,14 @@ from unittest.mock import patch
 import yamaa
 import yamaa_native
 from yamaa.adapters import native_specification
+from yamaa.adapters._native_schema_interpreter import NativeSchemaInterpreter
 from yamaa.adapters._native_schema_wire import (
     NativeSchemaLimitError,
     NativeSchemaUnsupportedError,
+    decode_nodes,
+    encode_tree,
+    request,
+    response,
 )
 from yamaa.adapters.native_datasets import execute_with_source_provider
 from yamaa.io import ProjectResources, load_source_tables, render_artifact
@@ -280,6 +285,72 @@ root_class:
             (error.exception.phase, error.exception.resource),
             ("decoded_document", "depth"),
         )
+
+    def test_constraint_diagnostic_bounds_keep_authored_integer_types(self):
+        """Wire decimal bounds render as exact Python integers in diagnostic context."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "schema.yaml").write_text(
+                """version: "1.0"
+root_class:
+  - schema_version: {type: str}
+  - text: {type: str, min_length: 3}
+  - items: {type: list, size: 2}
+""",
+                encoding="ascii",
+            )
+            bundle = native_specification.load_schema_bundle(root)
+            findings = reference.validate_document(
+                {
+                    "schema_version": "1.0",
+                    "text": "a",
+                    "items": [],
+                },
+                bundle,
+                "root_class",
+            )
+            self.assertEqual(
+                [finding.condition for finding in findings],
+                [
+                    "minimum_length",
+                    "invalid_size",
+                ],
+            )
+            self.assertEqual(
+                [finding.context for finding in findings],
+                [
+                    {"minimum": 3},
+                    {"size": 2},
+                ],
+            )
+            self.assertEqual(
+                [finding.spec_paths for finding in findings],
+                [("text",), ("items",)],
+            )
+            self.assertIs(type(findings[0].context["minimum"]), int)
+            self.assertIs(type(findings[1].context["size"]), int)
+
+        # The decoded service supports arbitrary-width integers independently
+        # of the host YAML decoder's numeric range.
+        descriptor = {"type": "str", "min_length": 10**40}
+        tree = encode_tree({"version": "1.0", "root_class": [{"wide": descriptor}]})
+        snapshot, text = yamaa_native._compile_schema(
+            request(
+                {
+                    "schema": {
+                        "modules": [{"name": "schema.yaml", "document": tree}],
+                        "entry": 0,
+                        "root_class": "root_class",
+                    }
+                }
+            )
+        )
+        service = NativeSchemaInterpreter(
+            snapshot, response(text), [decode_nodes(tree)]
+        )
+        finding = service.validate_descriptor("x", descriptor, "wide", False)[0]
+        self.assertEqual(finding.context, {"minimum": 10**40})
+        self.assertIs(type(finding.context["minimum"]), int)
 
 
 if __name__ == "__main__":
