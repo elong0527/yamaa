@@ -114,3 +114,18 @@ object from original YAML with no Python-produced document or plan.
 No default cutover, POWER policy assumption, automatic golden regeneration or
 full-language completion claim follows from this cohort. #1740/#1741/#1742 and
 remaining #1585 release/cutover scope stay active.
+
+## First implementation slice: normalized model admission
+
+`schema/1::validate_model` now exposes core-owned final structural admission and an
+immutable `SpecificationDocument`. It preserves the normalized tree and occurrence
+indices, strict model types/closure, expression cardinality, intermediate unique
+constraints, ordinal spelling, nested metadata shapes and diagnostic order. The
+independent cases and installed reference mutations are component/compile evidence.
+
+The next slice must consume effective defaults in a typed compiler representation,
+carry the captured schema/source provenance through that entry point and connect
+shared source binding/lowering. Submission/value metadata relationships still need
+explicit implementation or Unsupported disposition before study effects. The
+existing Python model call is not disconnected by structural service availability.
+All six unchanged original-YAML cohort runs and the R entry point remain required.

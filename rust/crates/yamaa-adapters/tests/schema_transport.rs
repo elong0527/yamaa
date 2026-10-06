@@ -1,3 +1,19 @@
+#[test]
+fn normalized_model_contracts_match_independent_truth() {
+    let fixture = include_str!("fixtures/schema_model.tsv");
+    assert_eq!(fixture.lines().count(), 9);
+    for line in fixture.lines().skip(1) {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(
+            interpret_schema(fields[1]).unwrap(),
+            fields[2],
+            "{}",
+            fields[0]
+        );
+    }
+}
+
 use serde_json::{json, Value};
 use yamaa_adapters::schema_transport::{
     compile_schema, interpret_schema, CompiledSchema, TransportError,

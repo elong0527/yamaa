@@ -28,6 +28,7 @@ def stage(destination: Path):
         "numeric_syntax.tsv",
         "predicate_syntax.tsv",
         "schema_transport.tsv",
+        "schema_model.tsv",
         "schema_windows.tsv",
         "schema_composition.tsv",
         "schema_layer_admission.tsv",

@@ -155,6 +155,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/inheritance_traversal.tsv" inheritance_traversal.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/inheritance_sources.tsv" inheritance_sources.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv" schema_transport.tsv
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_model.tsv" schema_model.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_windows.tsv" schema_windows.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_composition.tsv" schema_composition.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_layer_admission.tsv" schema_layer_admission.tsv
