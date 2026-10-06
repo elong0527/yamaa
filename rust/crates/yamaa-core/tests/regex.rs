@@ -287,6 +287,38 @@ fn lookbehind_width_analysis_budgets_and_retry() {
     assert!(Pattern::compile(&flat, CompileLimits::default()).is_ok());
 }
 
+/// An unrelated reference must not make a statically fixed assertion need analysis.
+#[test]
+fn fixed_lookbehind_does_not_analyze_unrelated_capture_paths() {
+    let choices = "(?:(a)|b)".repeat(16) + r"(?<=c)\1";
+    for source in [&choices, r"(a{1000})\1{2000}(?<=b)", r"(a)(?<=(?=\1))a"] {
+        assert!(
+            Pattern::compile(source, CompileLimits::default()).is_ok(),
+            "{source}"
+        );
+        assert!(
+            Pattern::compile(
+                source,
+                CompileLimits {
+                    width_work: 0,
+                    width_cells: 0,
+                    ..CompileLimits::default()
+                }
+            )
+            .is_ok(),
+            "{source}"
+        );
+    }
+    // A fixed outer assertion must not hide a dependent nested assertion.
+    assert!(matches!(
+        Pattern::compile(r"(a+)(?<=(?<=\1))b", CompileLimits::default()),
+        Err(CompileError::Invalid {
+            reason: "variable-length lookbehind",
+            ..
+        })
+    ));
+}
+
 /// Integer count truth distinguishes a final capture from a whole repeated group.
 #[test]
 fn lookbehind_width_agrees_with_independent_count_truth() {

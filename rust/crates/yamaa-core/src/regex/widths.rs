@@ -16,22 +16,27 @@ pub(super) fn validate(
     if !has_behind {
         return Ok(());
     }
-    if !nodes
+    let has_reference = nodes
         .iter()
-        .any(|node| matches!(node.kind, Kind::Backreference(_)))
-    {
-        for node in nodes {
-            if let Kind::Look {
-                child,
-                behind: true,
-                ..
-            } = node.kind
-            {
-                if nodes[child].width == Width::Variable {
-                    return Err(variable(node.byte));
-                }
+        .any(|node| matches!(node.kind, Kind::Backreference(_)));
+    let mut dependent = false;
+    for node in nodes {
+        if let Kind::Look {
+            child,
+            behind: true,
+            ..
+        } = node.kind
+        {
+            match nodes[child].width {
+                Width::Fixed(_) => {}
+                Width::Variable if !has_reference => return Err(variable(node.byte)),
+                _ => dependent = true,
             }
         }
+    }
+    // Nested assertions have their own arena entries. An unrelated reference
+    // cannot add analysis cost when every lookbehind is already statically fixed.
+    if !dependent {
         return Ok(());
     }
     let mut analysis = Analysis {

@@ -116,7 +116,8 @@ capture state remain distinct paths. Variable consumed width is `Invalid`;
 analysis exhaustion is a resource refusal. Default independent analysis budgets
 are 1,000,000 cumulative node visits/comparison units and 1,000,000 cumulative
 logical capture/path/observation slots. These bounds apply to the additional
-capture-dependent pass; ordinary parsing retains its existing limits. Logical
+capture-dependent pass; statically fixed lookbehinds skip it even when unrelated
+references occur elsewhere, and ordinary parsing retains its existing limits. Logical
 slots do not bound allocator capacity, caller memory or concurrent allocations.
 A fresh compile can retry with caller-selected budgets.
 
