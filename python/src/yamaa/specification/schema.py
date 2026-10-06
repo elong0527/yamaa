@@ -43,6 +43,10 @@ class SchemaInterpreter(Protocol):
         self, value: object, descriptor: dict[str, Any], fragment: bool
     ) -> object: ...
 
+    def resolve_inheritance_dependencies(
+        self, document: dict[str, object]
+    ) -> dict[str, object]: ...
+
     def expand_windows(
         self, document: dict[str, object], strict: bool
     ) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]: ...

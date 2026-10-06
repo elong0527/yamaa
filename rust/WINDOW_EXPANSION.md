@@ -33,9 +33,10 @@ An `expanded` result contains:
 
 No partial document is published on invalid input or resource refusal. The
 Python adapter stages provenance updates after receiving and decoding a successful
-result; it does not fall back to host expansion on errors. Parent traversal,
-dependency pruning/order and host model validation still need shared
-implementations. This operation consumes the final definitions produced by
+result; it does not fall back to host expansion on errors. Dependency pruning
+and ordering use [shared inheritance resolution](INHERITANCE_DEPENDENCIES.md).
+Parent traversal and host model validation still need shared implementations.
+This operation consumes the final definitions produced by
 [shared layer composition](LAYER_COMPOSITION.md), including REQ-1254 replacement.
 
 ## Policies and qualification

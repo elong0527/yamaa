@@ -53,6 +53,7 @@ request contains only `protocol` and `queries`. The closed operations are:
 | `validate_document` | `document` |
 | `normalize_document` | `document` |
 | `normalize_layer` | `document`: one authored inheritance contribution |
+| `resolve_inheritance_dependencies` | `document`: normalized composed contributions after non-strict window expansion |
 | `compose_layers` | `layers`: ordered decoded documents |
 | `expand_windows` | `document`, Boolean `strict` |
 | `validate_descriptor` | `descriptor`, `document`, `fragment`, `path` |
@@ -86,6 +87,12 @@ Its `composed` result contains `document` and written `provenance` entries
 `{path, layer}`. The host attaches retained file identities by zero-based layer
 index. See [shared layer composition](LAYER_COMPOSITION.md) for scope, ordering,
 diagnostic context and the admission responsibilities that precede this query.
+
+`resolve_inheritance_dependencies` discovers schema-directed references, prunes
+unreachable declarations and stably orders surviving columns. It returns the
+existing normalized document/origin envelope or ordered dependency findings.
+See [shared inheritance dependencies](INHERITANCE_DEPENDENCIES.md) for roots,
+ordering, parser refusals and the final validation that must follow.
 
 ## Decoded documents
 
@@ -132,7 +139,7 @@ fresh occurrence identities and reaches an explicit resource refusal rather
 than silently truncating defaults.
 
 Diagnostics preserve ordered paths, conditions, requirements and context
-entries. Small context values are tagged `text`, `count` or `null`. Larger
+entries. Small context values are tagged `text`, `text_list`, `count` or `null`. Larger
 values stay tagged references: `input_value` names a node in that query's input;
 descriptor constraint references name captured metadata. For invalid defaults,
 input-node references belong to the declaring descriptor's schema module.

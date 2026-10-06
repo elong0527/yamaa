@@ -18,6 +18,7 @@ class SchemaService(unittest.TestCase):
             "schema_windows.tsv",
             "schema_composition.tsv",
             "schema_layer_admission.tsv",
+            "schema_inheritance_dependencies.tsv",
         ):
             with (
                 Path(__file__)
