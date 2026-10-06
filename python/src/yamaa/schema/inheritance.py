@@ -40,6 +40,7 @@ from yamaa.specification.schema import (
     class_fields,
     matching_type,
     normalize_descriptor_value,
+    normalize_specification,
     read_bundle_document,
     split_type_arguments,
     validate_descriptor_value,
@@ -664,6 +665,15 @@ def _merge_layers(
     contributions: Sequence[tuple[Path, dict[str, object]]],
     bundle: SchemaBundle,
 ) -> tuple[dict[str, object], dict[str, SourceOrigin], list[ValidationDiagnostic]]:
+    if bundle.interpreter is not None:
+        resolved, origins = bundle.interpreter.compose_layers(
+            [layer for _, layer in contributions]
+        )
+        provenance = {
+            path: SourceOrigin(file=contributions[layer][0], spec_path=path)
+            for path, layer in origins
+        }
+        return resolved, provenance, []
     resolved: dict[str, object] = {}
     provenance: dict[str, SourceOrigin] = {}
     diagnostics: list[ValidationDiagnostic] = []
@@ -709,19 +719,18 @@ def _merge_layers(
                     logical_path = _join(name, member_id)
                     if member_id not in target:
                         target[member_id] = _replace(
-                            member, logical_path, origin, provenance
+                            {}, logical_path, origin, provenance
                         )
-                    else:
-                        _merge_member(
-                            target[member_id],
-                            member,
-                            class_name,
-                            logical_path,
-                            origin,
-                            bundle,
-                            provenance,
-                            diagnostics,
-                        )
+                    _merge_member(
+                        target[member_id],
+                        member,
+                        class_name,
+                        logical_path,
+                        origin,
+                        bundle,
+                        provenance,
+                        diagnostics,
+                    )
                 continue
 
             target = resolved.setdefault(name, [])
@@ -737,21 +746,42 @@ def _merge_layers(
                 logical_path = _join(name, member_id)
                 if member_id not in positions:
                     positions[member_id] = len(target)
-                    target.append(_replace(member, logical_path, origin, provenance))
-                else:
-                    _merge_member(
-                        target[positions[member_id]],
-                        member,
-                        class_name,
-                        logical_path,
-                        origin,
-                        bundle,
-                        provenance,
-                        diagnostics,
-                        name in _COMPOSING_COLLECTIONS,
-                    )
+                    target.append(_replace({}, logical_path, origin, provenance))
+                _merge_member(
+                    target[positions[member_id]],
+                    member,
+                    class_name,
+                    logical_path,
+                    origin,
+                    bundle,
+                    provenance,
+                    diagnostics,
+                    name in _COMPOSING_COLLECTIONS,
+                )
     _materialize_fragments(resolved, bundle)
     return resolved, provenance, diagnostics
+
+
+def _standalone_provenance(
+    layer: dict[str, object], origin: Path
+) -> dict[str, SourceOrigin]:
+    """Attach host file identities without applying inheritance clear semantics."""
+    provenance: dict[str, SourceOrigin] = {}
+    for name, value in layer.items():
+        collection = _KEYED_COLLECTIONS.get(name)
+        if name == "windows" or (collection and collection[0] == "mapping"):
+            assert isinstance(value, dict)
+            for member_id, member in value.items():
+                _record_provenance(member, _join(name, member_id), origin, provenance)
+        elif collection:
+            assert isinstance(value, list)
+            for member in value:
+                _record_provenance(
+                    member, _join(name, member[collection[1]]), origin, provenance
+                )
+        else:
+            provenance[name] = SourceOrigin(file=origin, spec_path=name)
+    return provenance
 
 
 def _materialize_fragments(resolved: dict[str, object], bundle: SchemaBundle) -> None:
@@ -1434,9 +1464,21 @@ def resolve_specification(
     if not isinstance(raw_entry, dict):
         raise TypeError("validated entry is a mapping")
 
-    resolved, provenance, diagnostics = _merge_layers(contributions, schema_bundle)
-    if diagnostics:
-        raise SpecificationError(diagnostics)
+    if "parents" in raw_entry:
+        resolved, provenance, diagnostics = _merge_layers(contributions, schema_bundle)
+        if diagnostics:
+            raise SpecificationError(diagnostics)
+    else:
+        # The workflow resolver also accepts ordinary documents. Match the public
+        # loader's boundary: a standalone no_match: null is a literal handler,
+        # while an immediate null in inheritance is a clearing marker (REQ-0632).
+        layer = contributions[0][1]
+        diagnostics = validate_specification(layer, schema_bundle)
+        if diagnostics:
+            raise SpecificationError(diagnostics)
+        provenance = _standalone_provenance(layer, entry_path)
+        resolved = normalize_specification(layer, schema_bundle)
+        assert isinstance(resolved, dict)
     from yamaa.schema.windows import expand_named_windows
 
     resolved = expand_named_windows(

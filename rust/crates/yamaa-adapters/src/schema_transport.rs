@@ -77,6 +77,9 @@ struct BatchRequest {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Query {
+    ComposeLayers {
+        layers: Vec<Tree>,
+    },
     ValidateTypes {
         types: Vec<String>,
         document: Tree,
@@ -283,6 +286,43 @@ impl CompiledSchema {
         // Final encoding independently accounts for the envelope and metadata.
         let mut response_size = ResponseSize(0);
         for query in queries {
+            if let Query::ComposeLayers { layers } = query {
+                let mut documents = Vec::with_capacity(layers.len());
+                let mut defect = None;
+                for layer in layers {
+                    match layer.admit()? {
+                        Ok(document) => documents.push(document),
+                        Err(error) => {
+                            defect = Some(errors::document(error)?);
+                            break;
+                        }
+                    }
+                }
+                let outcome = if let Some(defect) = defect {
+                    defect
+                } else {
+                    match self.schema.compose_layers(&documents, &mut budget) {
+                        Ok(composed) => json!({
+                            "status":"composed", "document":Tree::from_core(&composed.document),
+                            "provenance":composed.provenance.iter().map(|origin| json!({
+                                "path":origin.path, "layer":origin.layer,
+                            })).collect::<Vec<_>>(),
+                        }),
+                        Err(error) => {
+                            let mut outcome = errors::normalization(error.error)?;
+                            if let Some(document) = error.context_document {
+                                outcome["context_document"] =
+                                    serde_json::to_value(Tree::from_core(&document))
+                                        .map_err(|_| TransportError::Internal)?;
+                            }
+                            outcome
+                        }
+                    }
+                };
+                response_size.charge(&outcome)?;
+                outcomes.push(outcome);
+                continue;
+            }
             if let Query::ExpandWindows { document, strict } = query {
                 let outcome = match document.admit()? {
                     Ok(input) => match self
@@ -305,7 +345,9 @@ impl CompiledSchema {
                 continue;
             }
             let (tree, operation, descriptor, fragment, path, raw_types) = match query {
-                Query::ExpandWindows { .. } => unreachable!("handled above"),
+                Query::ExpandWindows { .. } | Query::ComposeLayers { .. } => {
+                    unreachable!("handled above")
+                }
                 Query::ValidateDocument { document } => {
                     (document, 0, None, false, String::new(), None)
                 }

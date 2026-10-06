@@ -34,6 +34,55 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_standalone_null_handler_survives_workflow_resolution(self):
+        document = self.window_document()
+        document["intermediates"] = [
+            {"id": "LOOK", "dataset": "SRC", "key": ["ID"], "no_match": None}
+        ]
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "spec.yaml"
+            path.write_text(json.dumps(document), encoding="ascii")
+            resolved = resolve_specification(path, bundle)
+            member = resolved.document["intermediates"][0]
+            self.assertIn("no_match", member)
+            self.assertIsNone(member["no_match"])
+            self.assertEqual(
+                resolved.provenance["intermediates.LOOK.no_match"].file, path.resolve()
+            )
+
+    def test_new_keyed_members_cannot_clear_values_they_never_inherited(self):
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        cases = [
+            (
+                "columns",
+                [{"name": "X", "type": "str", "label": None}],
+                "columns.X.label",
+            ),
+            ("input", {"DS": {"path": "data.csv", "types": None}}, "input.DS.types"),
+            ("rows", [{"id": "R", "filter": None}], "rows.R.filter"),
+            ("intermediates", [{"id": "I", "filter": None}], "intermediates.I.filter"),
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            for collection, members, logical in cases:
+                with self.subTest(collection=collection):
+                    path = Path(temporary) / "spec.yaml"
+                    path.write_text(
+                        json.dumps(
+                            {"schema_version": "1.0", "parents": [], collection: members}
+                        ),
+                        encoding="ascii",
+                    )
+                    with self.assertRaises(SpecificationError) as caught:
+                        resolve_specification(path, bundle)
+                    self.assertEqual(
+                        [
+                            (d.condition, d.spec_paths, d.requirement)
+                            for d in caught.exception.diagnostics
+                        ],
+                        [("invalid_clear", (logical,), "REQ-0660")],
+                    )
+
     def setUp(self):
         self.assertIn("site-packages", str(Path(yamaa.__file__).resolve()))
         self.assertIn("site-packages", str(Path(yamaa_native.__file__).resolve()))
@@ -48,6 +97,13 @@ class InstalledSchemaLoading(unittest.TestCase):
                 patch(
                     f"yamaa.schema.windows.{name}",
                     side_effect=AssertionError("host window traversal invoked"),
+                )
+            )
+        for name in ("_merge_member", "_compose_value", "_materialize_fragments"):
+            self.stack.enter_context(
+                patch(
+                    f"yamaa.schema.inheritance.{name}",
+                    side_effect=AssertionError("host layer composition invoked"),
                 )
             )
         for name in (

@@ -105,8 +105,9 @@ travels with the schema bundle into specification and inherited-parent reads.
 Replacing a module entry point after capture does not alter those reads. A
 retained null inheritance snapshot is validated without rereading the file.
 
-Python retains filesystem authority, inheritance composition, dependency
-discovery and model validation. Named windows use the
+Python retains filesystem authority, parent traversal, dependency discovery and
+model validation. Normalized layers use [shared composition](LAYER_COMPOSITION.md),
+and named windows use the
 [shared expansion service](WINDOW_EXPANSION.md). Its integer-string conversion
 policy is honored explicitly: a value that exceeds the current interpreter
 limit raises `NativeSchemaLimitError` with resource `host_integer_digits`.

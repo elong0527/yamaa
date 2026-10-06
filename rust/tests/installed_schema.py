@@ -13,7 +13,11 @@ import yamaa_native
 class SchemaService(unittest.TestCase):
     def rows(self):
         rows = []
-        for name in ("schema_transport.tsv", "schema_windows.tsv"):
+        for name in (
+            "schema_transport.tsv",
+            "schema_windows.tsv",
+            "schema_composition.tsv",
+        ):
             with (
                 Path(__file__)
                 .with_name(name)
