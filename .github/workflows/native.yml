@@ -134,6 +134,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_planning.py" installed_aggregate_planning.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_syntax.py" installed_aggregate_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_numeric_syntax.py" installed_numeric_syntax.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_regex.py" installed_regex.py
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/regex_transport.tsv" regex_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv" aggregate_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_syntax.tsv" numeric_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv" dependency_analysis.tsv
@@ -165,7 +167,11 @@ jobs:
           python installed_aggregate_planning.py
           python installed_aggregate_syntax.py
           python installed_numeric_syntax.py
+          python installed_regex.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
+      - name: Check regex service on the oldest advertised Python ABI
+        working-directory: ${{ runner.temp }}
+        run: uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -184,6 +190,7 @@ jobs:
           python installed_aggregate_planning.py
           python installed_aggregate_syntax.py
           python installed_numeric_syntax.py
+          python installed_regex.py
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -276,6 +283,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript aggregate_syntax.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/numeric_syntax.R" numeric_syntax.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript numeric_syntax.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/regex.R" regex.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript regex.R
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

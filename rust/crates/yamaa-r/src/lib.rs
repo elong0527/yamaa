@@ -90,6 +90,18 @@ fn analyze_numeric(request: Raw) -> List {
     )
 }
 
+/// Compile or match regex before returning normally to the calling R facade.
+#[extendr]
+fn evaluate_regex(request: Raw) -> List {
+    json_request(
+        request,
+        yamaa_adapters::regex_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::regex_transport::evaluate_regex(text).map_err(|error| error.to_string())
+        },
+    )
+}
+
 /// Parse aggregate syntax and return normally before the R facade raises errors.
 #[extendr]
 fn analyze_aggregate(request: Raw) -> List {
@@ -215,6 +227,7 @@ extendr_module! {
     fn evaluate_numeric;
     fn analyze_aggregate;
     fn analyze_numeric;
+    fn evaluate_regex;
     fn table_round_trip;
     fn table_snapshot;
     fn execute_dataset;
