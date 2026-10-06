@@ -12,6 +12,9 @@ reviews:
       - "main"
   path_filters:
     - "!**/uv.lock"              # generated lock diffs are noise
+  pre_merge_checks:
+    docstrings:
+      mode: "off"                # docstrings where they help, not to a coverage figure; quoted, as bare off is a YAML boolean
   path_instructions:
     - path: "python/**"
       instructions: "Verify the change matches the PR description, tests are added for behavior changes, and no public API signatures break without intent."
