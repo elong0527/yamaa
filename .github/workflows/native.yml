@@ -37,7 +37,9 @@ jobs:
   python:
     name: native-python (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # The preceding Windows qualification took 19m47s, including an isolated
+    # source rebuild. Retain every check while allowing compilation headroom.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +76,7 @@ jobs:
           uv run --project ../python --locked python tools/check_numeric_grammar.py
           uv run --project ../python --locked python tools/check_aggregate_grammar.py
           uv run --project ../python --locked python tools/check_numeric_syntax.py
+          uv run --project ../python --locked python tools/check_predicate_syntax.py
           uv run --project ../python --locked python tools/check_regex.py
           uv run --project ../python --locked python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
           python tools/check_dependencies.py
@@ -135,6 +138,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_aggregate_syntax.py" installed_aggregate_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_numeric_syntax.py" installed_numeric_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_regex.py" installed_regex.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv" predicate_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/regex_transport.tsv" regex_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv" aggregate_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_syntax.tsv" numeric_syntax.tsv
@@ -168,10 +173,13 @@ jobs:
           python installed_aggregate_syntax.py
           python installed_numeric_syntax.py
           python installed_regex.py
+          python installed_predicate_syntax.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
-      - name: Check regex service on the oldest advertised Python ABI
+      - name: Check regex and predicate services on the oldest advertised Python ABI
         working-directory: ${{ runner.temp }}
-        run: uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
+        run: |
+          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
+          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_predicate_syntax.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -191,6 +199,7 @@ jobs:
           python installed_aggregate_syntax.py
           python installed_numeric_syntax.py
           python installed_regex.py
+          python installed_predicate_syntax.py
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -285,6 +294,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript numeric_syntax.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/regex.R" regex.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript regex.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_syntax.R" predicate_syntax.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript predicate_syntax.R
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

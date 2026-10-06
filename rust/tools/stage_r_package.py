@@ -26,6 +26,7 @@ def stage(destination: Path):
     for fixture in (
         "aggregate_syntax.tsv",
         "numeric_syntax.tsv",
+        "predicate_syntax.tsv",
         "regex_transport.tsv",
         "scalar_transport.tsv",
         "numeric_transport.tsv",
