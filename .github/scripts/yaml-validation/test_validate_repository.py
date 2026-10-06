@@ -125,6 +125,7 @@ class TestYamlLoader(unittest.TestCase):
 
 class TestTextSourceBoundary(unittest.TestCase):
     def test_preserves_only_named_third_party_unicode_data_and_notices(self):
+        """Exact notice/data paths are exempt; neighboring project text stays checked."""
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             for relative in (

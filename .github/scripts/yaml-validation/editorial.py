@@ -310,6 +310,7 @@ def is_unicode_fixture_csv(relative: Path):
 
 
 def validate_ascii_sources(root: Path):
+    """Check project source bytes while preserving named Unicode data and notices."""
     errors = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
