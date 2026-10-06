@@ -15,6 +15,22 @@ enum V {
 use V::*;
 
 #[test]
+fn installed_hosts_share_independent_layer_composition_truth() {
+    let fixture = include_str!("fixtures/schema_composition.tsv");
+    assert_eq!(fixture.lines().count(), 7);
+    for line in fixture.lines().skip(1) {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(
+            interpret_schema(fields[1]).unwrap(),
+            fields[2],
+            "{}",
+            fields[0]
+        );
+    }
+}
+
+#[test]
 fn installed_hosts_share_independently_authored_complete_wire_truth() {
     for line in include_str!("fixtures/schema_transport.tsv")
         .lines()
@@ -610,5 +626,49 @@ fn window_queries_require_explicit_boolean_mode_and_share_batch_expansion_budget
     assert_eq!(
         query(&compiled, vec![expand])["results"][0]["status"],
         "expanded"
+    );
+}
+
+#[test]
+fn composition_batches_share_copy_limits_and_reject_unknown_fields() {
+    let schema = schema(vec![field("windows", "dict[str, dict]")], vec![]);
+    let (compiled, _) = compile(schema);
+    let mut nodes = Vec::new();
+    let mut emit = |node: Value| {
+        let id = nodes.len();
+        nodes.push(node);
+        id
+    };
+    let mut definitions = Vec::new();
+    for index in 0..1000 {
+        let key = emit(json!({"kind":"text","value":format!("W{index}")}));
+        let order = emit(json!({"kind":"text","value":"order_by"}));
+        let items = (0..41)
+            .map(|_| emit(json!({"kind":"text","value":"SEQ"})))
+            .collect::<Vec<_>>();
+        let sequence = emit(json!({"kind":"sequence","items":items}));
+        let definition = emit(json!({"kind":"mapping","entries":[[order,sequence]]}));
+        definitions.push((key, definition));
+    }
+    let key = emit(json!({"kind":"text","value":"windows"}));
+    let definitions = emit(json!({"kind":"mapping","entries":definitions}));
+    let root = emit(json!({"kind":"mapping","entries":[[key,definitions]]}));
+    let layer = json!({"nodes":nodes,"root":root});
+    let compose = json!({"operation":"compose_layers","layers":[layer]});
+    let batch = query(&compiled, vec![compose.clone(), compose.clone()]);
+    assert_eq!(batch["results"][0]["status"], "composed");
+    assert_eq!(
+        batch["results"][1],
+        json!({"status":"resource_limit","phase":"normalization","resource":"nodes","limit":131072})
+    );
+    assert_eq!(
+        query(&compiled, vec![compose.clone()])["results"][0]["status"],
+        "composed"
+    );
+    let mut unknown = compose;
+    unknown["extra"] = json!(true);
+    assert_eq!(
+        compiled.analyze(&json!({"protocol":"schema/1","queries":[unknown]}).to_string()),
+        Err(TransportError::InvalidRequest)
     );
 }

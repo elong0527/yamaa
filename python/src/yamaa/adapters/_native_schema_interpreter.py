@@ -137,6 +137,43 @@ class NativeSchemaInterpreter:
             raise ValueError("invalid native window provenance links")
         return value, references
 
+    def compose_layers(self, layers):
+        """Compose retained normalized layers and attach only logical origin links."""
+        result = response(
+            self._analyze(
+                request(
+                    {
+                        "queries": [
+                            {
+                                "operation": "compose_layers",
+                                "layers": [encode_tree(layer) for layer in layers],
+                            }
+                        ]
+                    }
+                )
+            )
+        )
+        if result["status"] != "analyzed" or len(result["results"]) != 1:
+            raise ValueError("invalid native composition response")
+        result = check_outcome(result["results"][0])
+        if result["status"] == "invalid":
+            raise SpecificationError(
+                self._diagnostics(result["diagnostics"], result["context_document"])
+            )
+        if result["status"] != "composed":
+            raise ValueError("invalid native composition outcome")
+        tree = result["document"]
+        value = decode_nodes(tree)[tree["root"]]
+        if not isinstance(value, dict):
+            raise TypeError("native composition must return a mapping")
+        origins = tuple((item["path"], item["layer"]) for item in result["provenance"])
+        if not all(
+            type(path) is str and type(layer) is int and 0 <= layer < len(layers)
+            for path, layer in origins
+        ) or len({path for path, _ in origins}) != len(origins):
+            raise ValueError("invalid native composition provenance")
+        return value, origins
+
     def _descriptor(self, descriptor):
         index = self._descriptor_ids.get(descriptor_key(descriptor))
         if index is not None:

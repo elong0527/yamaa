@@ -43,6 +43,10 @@ class SchemaInterpreter(Protocol):
         self, document: dict[str, object], strict: bool
     ) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]: ...
 
+    def compose_layers(
+        self, layers: list[dict[str, object]]
+    ) -> tuple[dict[str, object], tuple[tuple[str, int], ...]]: ...
+
     def matching_type(
         self, value: object, type_value: object, fragment: bool
     ) -> str | None: ...

@@ -1,9 +1,12 @@
 //! Shared schema interpretation over decoded documents; no YAML or filesystem IO.
 
 mod bundle;
+mod composition;
 mod constraints;
 mod descriptor;
 mod document;
+mod layer_materialization;
+mod layers;
 mod normalization;
 mod path_render;
 mod printable_data;
@@ -16,6 +19,7 @@ pub use bundle::{
     SchemaAlias, SchemaAliasKind, SchemaClass, SchemaField, SchemaModule, SchemaRegistry,
     SchemaRegistryEntry, SchemaShape, SchemaStructure,
 };
+pub use composition::{ComposedValue, CompositionOrigin};
 pub use constraints::{ConstraintBudget, ConstraintError, ConstraintUsage, ConstraintViolation};
 pub use descriptor::{
     Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue, DescriptorLimits,
@@ -24,6 +28,8 @@ pub use descriptor::{
 pub use document::{
     Document, DocumentError, DocumentLimits, DocumentNode, DocumentResource, ScalarKey,
 };
+pub use layer_materialization::LayerCompositionError;
+pub use layers::{ComposedLayers, LayerProvenance};
 pub use normalization::{
     NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
     NormalizedDocument, SchemaOrigin, SchemaSource,
