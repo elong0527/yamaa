@@ -83,7 +83,7 @@ selection is exposed here (explicit base, otherwise the sole source). The Python
 loader still constructs its model; replacing that acceptance gate and consuming
 effective defaults in the shared compiler remain #1739 work.
 
-Eight independently authored wire groups cover 30 cases in Rust and both installed
+Eight independently authored wire groups cover 36 cases in Rust and both installed
 hosts. Installed Python additionally compares mutations of every field across all
 19 non-expression model classes against its reference facade. The independent
 wire replay blocks Python interpreter imports; R needs no Python to run it.

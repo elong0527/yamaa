@@ -221,7 +221,10 @@ jobs:
         run: |
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_predicate_syntax.py
-          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_schema.py
+          # Keep independent schema probes usable with only the native wheel.
+          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_schema.py SchemaService.test_independent_truth_without_python_interpreter SchemaService.test_prepared_snapshot_owns_metadata_and_uses_the_same_results SchemaService.test_host_types_and_closed_transport
+          # The separate reference comparison needs the actual Python facade.
+          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_schema.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_yaml.py
           uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_schema_loading.py
           uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_inheritance.py

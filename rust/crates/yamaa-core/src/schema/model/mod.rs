@@ -119,10 +119,15 @@ impl Run<'_> {
         )?])
     }
     fn key(&mut self, id: usize) -> Result<String, ValidationError> {
-        // Scalar key rendering follows the already shared diagnostic vocabulary.
+        // Model error locations encode bool keys as integer locations, unlike
+        // schema diagnostics. The key remains a bool and is still rejected.
         let node = &self.document.nodes()[id];
         self.budget.work(node.length().unwrap_or(1))?;
-        super::scalar_diagnostic_label(node).ok_or(ValidationError::InvalidDescriptor)
+        match node {
+            N::Boolean(true) => Ok("1".into()),
+            N::Boolean(false) => Ok("0".into()),
+            _ => super::scalar_diagnostic_label(node).ok_or(ValidationError::InvalidDescriptor),
+        }
     }
     fn check(
         &mut self,
