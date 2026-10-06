@@ -26,3 +26,5 @@ pub mod scalar_bytes;
 pub mod aggregate_transport;
 
 pub mod numeric_syntax;
+
+pub mod regex_transport;

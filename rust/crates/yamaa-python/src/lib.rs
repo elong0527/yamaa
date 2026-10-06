@@ -5,6 +5,19 @@ mod reference_catalog;
 mod temporal_result;
 use pyo3::types::PyDict;
 
+/// Compile or match a bounded regex/1 request through the shared Rust grammar.
+#[pyfunction]
+fn evaluate_regex(request: &str) -> PyResult<String> {
+    use yamaa_adapters::regex_transport::TransportError;
+    yamaa_adapters::regex_transport::evaluate_regex(request).map_err(|error| {
+        if error == TransportError::Internal {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        } else {
+            pyo3::exceptions::PyValueError::new_err(error.to_string())
+        }
+    })
+}
+
 /// Parse R010 numeric syntax through shared Rust without binding or execution.
 #[pyfunction]
 fn analyze_numeric(request: &str) -> PyResult<String> {
@@ -239,6 +252,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(evaluate_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_aggregate, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(evaluate_regex, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;
     module.add_function(wrap_pyfunction!(execute_dataset, module)?)?;

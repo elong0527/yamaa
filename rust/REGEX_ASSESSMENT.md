@@ -127,9 +127,10 @@ inside zero-count or negative bodies. This preserves the existing grammar
 restriction rather than using sampled matches to decide validity. Rust tests
 include authored capture, assertion and direction cases, 350 independent integer
 count/alternative admission checks, checked arithmetic, analysis exhaustion and
-successful retry. No host API, dataset capability or full grammar qualification
-is advertised by this internal core slice. The development JSON-lines probe is
-a qualification tool, not an installed transport boundary.
+successful retry. The optional [regex/1 service](REGEX_TRANSPORT.md) now provides
+an installed boundary for compilation, search and full-match observations.
+It does not establish dataset capability or full grammar qualification. The
+development JSON-lines probe remains a separate core qualification tool.
 
 `check_regex.py` requires 2,101 independent observations, including all 43
 existing cases, twelve authored edges, scalar-set membership and integer-count
@@ -158,8 +159,8 @@ but this is not proof of full regex conformance.
 ## Remaining integration and release gates
 
 Complete full compiler/matcher conformance, resolve the reference mismatches
-above, and qualify installed Python and R transport before advertising
-regex support. Predicate `str_contains` validates its regex during parsing, so
+above, and integrate the installed service with consuming operations. Predicate
+`str_contains` validates its regex during parsing, so
 shared predicate compilation needs matching validation/failure order. Compilation
 must finish before host data or callback effects and no mid-run fallback is
 allowed. Regex-backed schema/verification/text consumers, workflow integration,
