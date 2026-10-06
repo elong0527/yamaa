@@ -3,7 +3,7 @@
 The experimental `schema/1` operation `resolve_inheritance_dependencies` consumes
 an admitted, normalized, composed document after non-strict window expansion.
 Rust discovers references, retains reachable declarations and stably orders the
-surviving columns under REQ-0638–0644. Python's opt-in loader delegates to this
+surviving columns under REQ-0638-0644. Python's opt-in loader delegates to this
 operation before strict window expansion and complete specification validation.
 Both installed native hosts expose the same query. Python remains the default;
 `execution_supported` remains false.
