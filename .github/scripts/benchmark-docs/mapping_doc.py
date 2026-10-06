@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Render the human-review "Mapping spec" section of a benchmark dashboard.
+"""Render the "Mapping spec" pane of a benchmark dashboard.
 
-The section is generated from the benchmark's spec.yaml and, when present,
+The pane is generated from the benchmark's spec.yaml and, when present,
 define.yaml as a familiar Excel specification: one row per output column. The
 header layout follows the sponsor's SDTM and ADaM variable sheets, so a
 reviewer reads the derived spec in the same shape they author it. Rendering is
@@ -19,13 +19,11 @@ other non-ASCII glyphs are emitted as HTML character references.
 
 import html
 import re
-from pathlib import Path
 
 # ASCII escape sequences keep this file ASCII-clean for the repository source
 # lint; the dashboard's final encode("ascii", "xmlcharrefreplace") turns them
 # into HTML character references.
 ARROW = "\u2192"
-MAPPING_TABS_JS_PATH = Path(__file__).resolve().parent / "mapping-tabs.js"
 
 # Sentence templates: one plain-language mapping rule per derivation shape.
 #
@@ -1482,44 +1480,9 @@ def render_table(tab_id, headers, rows):
     )
 
 
-def render_mapping_section(spec, define=None):
-    """Full 'Mapping spec' section HTML with tabbed sheet panes."""
-    sheets = mapping_sheets(spec, define)
-    if not sheets:
-        return ""
-    tabs = []
-    panes = []
-    for position, (tab_id, label, headers, rows) in enumerate(sheets):
-        selected = position == 0
-        tabs.append(
-            '<button type="button" role="tab" id="mapping-tab-' + tab_id + '" '
-            'aria-controls="mapping-pane-'
-            + tab_id
-            + '" aria-selected="'
-            + ("true" if selected else "false")
-            + '" tabindex="'
-            + ("0" if selected else "-1")
-            + '" class="mapping-tab">'
-            + html.escape(label)
-            + "</button>"
-        )
-        panes.append(
-            '<div role="tabpanel" id="mapping-pane-' + tab_id + '" '
-            'aria-labelledby="mapping-tab-' + tab_id + '" tabindex="0" '
-            'class="mapping-pane">' + render_table(tab_id, headers, rows) + "</div>"
-        )
-    script = MAPPING_TABS_JS_PATH.read_text(encoding="utf-8")
-    return (
-        '<section id="mapping-spec" class="panel mapping-panel" aria-labelledby="mapping-heading">'
-        '<header class="panel-header"><span class="panel-title">'
-        '<h2 id="mapping-heading">Mapping spec</h2></span>'
-        '<span class="panel-caption">Generated from benchmark YAML for human review; '
-        "do not edit by hand</span></header>"
-        '<div class="mapping-body">'
-        '<div role="tablist" aria-label="Mapping spec sheets" class="mapping-tablist">'
-        + "".join(tabs)
-        + "</div>"
-        + "".join(panes)
-        + "</div></section>"
-        "<script>" + script + "</script>"
-    )
+def render_mapping_sheets(spec, define=None):
+    """The 'Mapping spec' pane's sheets: list of (sheet id, label, table HTML)."""
+    return [
+        (sheet_id, label, render_table(sheet_id, headers, rows))
+        for sheet_id, label, headers, rows in mapping_sheets(spec, define)
+    ]

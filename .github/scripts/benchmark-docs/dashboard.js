@@ -111,13 +111,3 @@ if (subjectSelect.options.length > 1) {
     button.addEventListener("click", () => selectSubject(button.dataset.subject === subjectSelect.value ? "" : button.dataset.subject));
   });
 }
-
-const codeSelect = document.getElementById("code-select");
-if (codeSelect) {
-  const codePanes = Array.from(document.querySelectorAll(".code-pane"));
-  codeSelect.addEventListener("change", () => {
-    codePanes.forEach((pane) => {
-      pane.hidden = pane.id !== codeSelect.value;
-    });
-  });
-}

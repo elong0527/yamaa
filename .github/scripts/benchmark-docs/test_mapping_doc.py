@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for mapping_doc.py: the human-review "Mapping spec" dashboard section."""
+"""Tests for mapping_doc.py: the "Mapping spec" pane of a benchmark dashboard."""
 
 import unittest
 from pathlib import Path
@@ -20,6 +20,11 @@ def load_define(name):
     return yaml.safe_load(
         (BENCHMARKS / name / "define.yaml").read_text(encoding="utf-8")
     )
+
+
+def rendered_tables(spec):
+    """Every sheet's table HTML, joined, for assertions across sheets."""
+    return "".join(table for _, _, table in mapping_doc.render_mapping_sheets(spec))
 
 
 def mapping_sheet(name):
@@ -281,10 +286,8 @@ class AdamMappingTests(unittest.TestCase):
         self.assertIn("ADT on or before TRTSDT using window BASELINE_GROUPS", baseline)
 
     def test_unknown_window_benchmark_still_renders_for_review(self):
-        section = mapping_doc.render_mapping_section(
-            load_spec("negative-unknown-window")
-        )
-        self.assertIn("Row number using window VISITS_ORDER.", section)
+        tables = rendered_tables(load_spec("negative-unknown-window"))
+        self.assertIn("Row number using window VISITS_ORDER.", tables)
 
     def test_headers_follow_the_adam_variable_sheet(self):
         headers, rows = mapping_sheet("adam-adae-death")
@@ -330,25 +333,27 @@ class SheetStructureTests(unittest.TestCase):
     def test_rendering_is_deterministic(self):
         spec = load_spec("sdtm-dm-basic")
         self.assertEqual(
-            mapping_doc.render_mapping_section(spec),
-            mapping_doc.render_mapping_section(spec),
+            mapping_doc.render_mapping_sheets(spec),
+            mapping_doc.render_mapping_sheets(spec),
         )
 
-    def test_section_has_matching_tabs_and_panes(self):
-        spec = load_spec("adam-adlb-bds")
-        section = mapping_doc.render_mapping_section(spec)
-        self.assertIn('id="mapping-spec"', section)
-        self.assertIn('role="tablist"', section)
-        for tab_id in ("mapping", "row-construction", "revision-history"):
-            self.assertIn('id="mapping-tab-' + tab_id + '"', section)
-            self.assertIn('id="mapping-pane-' + tab_id + '"', section)
-            self.assertIn('aria-controls="mapping-pane-' + tab_id + '"', section)
-        self.assertIn('aria-selected="true"', section)
+    def test_each_sheet_renders_its_own_labelled_table(self):
+        sheets = mapping_doc.render_mapping_sheets(load_spec("adam-adlb-bds"))
+        self.assertEqual(
+            [(sheet_id, label) for sheet_id, label, _ in sheets],
+            [
+                ("mapping", "Mapping"),
+                ("row-construction", "Row construction"),
+                ("revision-history", "Revision history"),
+            ],
+        )
+        for sheet_id, _, table in sheets:
+            self.assertIn('aria-label="Mapping spec ' + sheet_id + ' table"', table)
+            self.assertEqual(table.count('<table class="data-table mapping-table">'), 1)
 
-    def test_section_encodes_to_ascii_like_the_dashboard(self):
-        spec = load_spec("sdtm-dm-basic")
-        section = mapping_doc.render_mapping_section(spec)
-        encoded = section.encode("ascii", "xmlcharrefreplace").decode("ascii")
+    def test_sheets_encode_to_ascii_like_the_dashboard(self):
+        tables = rendered_tables(load_spec("sdtm-dm-basic"))
+        encoded = tables.encode("ascii", "xmlcharrefreplace").decode("ascii")
         self.assertIn("&#8594;", encoded)
         self.assertNotIn("&amp;#", encoded)
 

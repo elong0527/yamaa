@@ -9,6 +9,8 @@ on:
     paths:
       - 'benchmarks/**'
       - 'docs/articles/benchmark.md'
+      - 'evaluations/harbor/prompts/**'
+      - 'evaluations/harbor/solutions/**'
       - '.github/scripts/benchmark-docs/**'
       - '.github/workflows/benchmark-docs.yml'
 
