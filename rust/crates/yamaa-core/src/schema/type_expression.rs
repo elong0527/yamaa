@@ -55,6 +55,7 @@ pub enum TypeError {
 pub struct TypeExpression {
     expression: String,
     nodes: Vec<TypeNode>,
+    spans: Vec<Range<usize>>,
     root: usize,
 }
 
@@ -71,6 +72,7 @@ impl TypeExpression {
             expression,
             at: 0,
             nodes: Vec::new(),
+            spans: Vec::new(),
             admitted: 0,
             limits,
         };
@@ -82,6 +84,7 @@ impl TypeExpression {
         Ok(Self {
             expression: expression.into(),
             nodes: parser.nodes,
+            spans: parser.spans,
             root,
         })
     }
@@ -101,6 +104,13 @@ impl TypeExpression {
         self.root
     }
 
+    /// Exact nested spelling without outer whitespace, for schema shorthand dispatch.
+    pub fn node_text(&self, node: usize) -> Option<&str> {
+        self.spans
+            .get(node)
+            .map(|span| &self.expression[span.clone()])
+    }
+
     /// Yield named type occurrences in written order, including repeated names.
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.nodes.iter().filter_map(|node| match node {
@@ -114,6 +124,7 @@ struct Parser<'a> {
     expression: &'a str,
     at: usize,
     nodes: Vec<TypeNode>,
+    spans: Vec<Range<usize>>,
     admitted: usize,
     limits: TypeLimits,
 }
@@ -203,6 +214,7 @@ impl Parser<'_> {
         };
         let index = self.nodes.len();
         self.nodes.push(node);
+        self.spans.push(start..self.at);
         Ok(index)
     }
 }

@@ -52,7 +52,7 @@ impl ConstraintBudget {
         }
     }
     /// Reserve work before scanning a string or comparing a permitted choice.
-    fn charge(&mut self, amount: usize) -> Result<(), ConstraintError> {
+    pub(super) fn charge(&mut self, amount: usize) -> Result<(), ConstraintError> {
         self.work = self
             .work
             .checked_add(amount)

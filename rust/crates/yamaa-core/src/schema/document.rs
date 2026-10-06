@@ -111,6 +111,25 @@ enum Key<'a> {
     Text(&'a str),
 }
 
+fn scalar_key(node: &DocumentNode) -> Option<Key<'_>> {
+    Some(match node {
+        DocumentNode::Null => Key::Null,
+        DocumentNode::Boolean(value) => Key::Number(if *value { "1" } else { "0" }.into()),
+        DocumentNode::Integer(text) => Key::Number(text.clone()),
+        DocumentNode::Float(value) => float_key(*value),
+        DocumentNode::Text(text) => Key::Text(text),
+        _ => return None,
+    })
+}
+
+/// Bundle composition uses exactly the same scalar-key equality as document admission.
+pub(super) fn scalar_keys_equal(a: &DocumentNode, b: &DocumentNode) -> bool {
+    match (scalar_key(a), scalar_key(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
 /// Admit decimal spelling directly, avoiding expensive arbitrary-precision parsing.
 fn canonical_integer(text: &str) -> bool {
     let digits = text.strip_prefix('-').unwrap_or(text);
@@ -236,16 +255,7 @@ impl Document {
                     for &(key, value) in items {
                         child(key)?;
                         child(value)?;
-                        let key = match &nodes[key] {
-                            DocumentNode::Null => Key::Null,
-                            DocumentNode::Boolean(value) => {
-                                Key::Number(if *value { "1" } else { "0" }.into())
-                            }
-                            DocumentNode::Integer(text) => Key::Number(text.clone()),
-                            DocumentNode::Float(value) => float_key(*value),
-                            DocumentNode::Text(text) => Key::Text(text),
-                            _ => return Err(DocumentError::NonScalarKey),
-                        };
+                        let key = scalar_key(&nodes[key]).ok_or(DocumentError::NonScalarKey)?;
                         if !keys.insert(key) {
                             return Err(DocumentError::DuplicateKey);
                         }

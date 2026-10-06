@@ -6,8 +6,11 @@ use yamaa_core::schema::{
 enum V {
     Text(&'static str),
     Bool(bool),
+    Int(&'static str),
+    Float(f64),
     List(Vec<V>),
     Map(Vec<(&'static str, V)>),
+    Pairs(Vec<(V, V)>),
 }
 
 /// Build explicitly authored decoded schema documents without an interpreter oracle.
@@ -20,11 +23,19 @@ fn module(
         let node = match value {
             V::Text(v) => N::Text(v.into()),
             V::Bool(v) => N::Boolean(v),
+            V::Int(v) => N::Integer(v.into()),
+            V::Float(v) => N::Float(v),
             V::List(items) => N::Sequence(items.into_iter().map(|v| push(v, nodes)).collect()),
             V::Map(items) => N::Mapping(
                 items
                     .into_iter()
                     .map(|(key, value)| (push(V::Text(key), nodes), push(value, nodes)))
+                    .collect(),
+            ),
+            V::Pairs(items) => N::Mapping(
+                items
+                    .into_iter()
+                    .map(|(key, value)| (push(key, nodes), push(value, nodes)))
                     .collect(),
             ),
         };
@@ -366,4 +377,62 @@ fn reuse_and_input_budgets_bound_expansion_and_allow_independent_retry() {
         )
         .is_ok());
     }
+}
+
+#[test]
+fn cross_module_registry_duplicates_use_exact_decoded_scalar_key_equality() {
+    for (left, right) in [
+        (V::Bool(true), V::Int("1")),
+        (V::Int("1"), V::Float(1.0)),
+        (V::Float(-0.0), V::Int("0")),
+        (V::Int("9007199254740992"), V::Float(9007199254740992.0)),
+    ] {
+        let root = module(
+            "schema.yaml",
+            vec![
+                ("root_class", V::List(vec![])),
+                ("ops", V::Pairs(vec![(left, descriptor("str"))])),
+            ],
+            &["schema_more.yaml"],
+        );
+        let more = module(
+            "schema_more.yaml",
+            vec![("ops", V::Pairs(vec![(right, descriptor("str"))]))],
+            &[],
+        );
+        assert_eq!(
+            kinds(
+                SchemaStructure::admit(vec![root, more], 0, "root_class", BundleLimits::default())
+                    .unwrap_err()
+            ),
+            [I::DuplicateRegistryEntry("<non-text>".into())]
+        );
+    }
+    let root = module(
+        "schema.yaml",
+        vec![
+            ("root_class", V::List(vec![])),
+            (
+                "ops",
+                V::Pairs(vec![(V::Int("9007199254740993"), descriptor("str"))]),
+            ),
+        ],
+        &["schema_more.yaml"],
+    );
+    let more = module(
+        "schema_more.yaml",
+        vec![(
+            "ops",
+            V::Pairs(vec![(V::Float(9007199254740992.0), descriptor("str"))]),
+        )],
+        &[],
+    );
+    let result = kinds(
+        SchemaStructure::admit(vec![root, more], 0, "root_class", BundleLimits::default())
+            .unwrap_err(),
+    );
+    assert!(!result
+        .iter()
+        .any(|kind| matches!(kind, I::DuplicateRegistryEntry(_))));
+    assert!(result.contains(&I::RegistryEntryName));
 }

@@ -161,6 +161,8 @@ pub struct SchemaStructure {
     aliases: Vec<SchemaAlias>,
     registries: Vec<SchemaRegistry>,
     descriptors: Vec<LocatedDescriptor>,
+    class_indices: BTreeMap<String, usize>,
+    alias_indices: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -678,8 +680,11 @@ impl SchemaStructure {
                         let N::Mapping(items) = builder.node(value) else {
                             unreachable!()
                         };
-                        let items = items.clone();
                         builder.work(items.len())?;
+                        let N::Mapping(items) = builder.node(value) else {
+                            unreachable!()
+                        };
+                        let items = items.clone();
                         for (key, payload) in items {
                             let key = Raw { module, node: key };
                             let payload = Raw {
@@ -687,8 +692,19 @@ impl SchemaStructure {
                                 node: payload,
                             };
                             for &(previous, _) in &raw_registries[index].entries {
-                                builder.work(1)?;
-                                if builder.node(previous) == builder.node(key) {
+                                let bytes = |node: &N| match node {
+                                    N::Text(text) | N::Integer(text) => text.len(),
+                                    N::Float(_) => 2048,
+                                    _ => 1,
+                                };
+                                builder.work(
+                                    bytes(builder.node(previous))
+                                        .saturating_add(bytes(builder.node(key))),
+                                )?;
+                                if super::document::scalar_keys_equal(
+                                    builder.node(previous),
+                                    builder.node(key),
+                                ) {
                                     let label = match builder.node(key) {
                                         N::Text(text) => text.clone(),
                                         _ => "<non-text>".into(),
@@ -848,6 +864,11 @@ impl SchemaStructure {
         if !builder.issues.is_empty() {
             return Err(BundleError::Invalid(builder.issues));
         }
+        let alias_indices = aliases
+            .iter()
+            .enumerate()
+            .map(|(index, alias)| (alias.name.clone(), index))
+            .collect();
         Ok(Self {
             modules: builder.modules,
             version: version.expect("nonempty closure"),
@@ -856,6 +877,8 @@ impl SchemaStructure {
             aliases,
             registries,
             descriptors: builder.descriptors,
+            class_indices: class_names,
+            alias_indices,
         })
     }
 
@@ -886,5 +909,17 @@ impl SchemaStructure {
     /// Inspect descriptor origins before validating defaults or document values.
     pub fn descriptors(&self) -> &[LocatedDescriptor] {
         &self.descriptors
+    }
+    /// Bind class references without repeatedly scanning all declarations.
+    pub fn class_named(&self, name: &str) -> Option<&SchemaClass> {
+        self.class_indices
+            .get(name)
+            .map(|&index| &self.classes[index])
+    }
+    /// Return a stable alias identity for value-specific recursive-reference guards.
+    pub fn alias_named(&self, name: &str) -> Option<(usize, &SchemaAlias)> {
+        self.alias_indices
+            .get(name)
+            .map(|&index| (index, &self.aliases[index]))
     }
 }
