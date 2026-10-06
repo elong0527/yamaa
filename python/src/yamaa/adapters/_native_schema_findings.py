@@ -54,7 +54,7 @@ def _reason(finding, modules, module_names):
         return f"{path}: {reason}"
     if code in _MESSAGES:
         reason = _MESSAGES[code]
-        return reason if path == "$" else f"{path}: {reason}"
+        return reason if path == "$" or code == "includes_list" else f"{path}: {reason}"
     if code == "version_mismatch":
         return f"version {issue['actual']!r} does not match {issue['expected']!r}"
     if code == "unsafe_include":
@@ -68,7 +68,7 @@ def _reason(finding, modules, module_names):
     if code in ("unknown_declaration", "duplicate_declaration"):
         return f"{code.replace('_', ' ')} {issue['name']!r}"
     if code == "duplicate_registry_entry":
-        return f"duplicate registry entry {issue['name']}"
+        return f"duplicate registry entry {path}.{issue['name']}"
     if code == "unknown_fields_from":
         return f"unknown fields_from class {issue['name']!r}"
     if code == "fields_from_cycle":
@@ -84,8 +84,14 @@ def _reason(finding, modules, module_names):
 
 def admission_error(outcome, entrypoint, modules, module_names):
     """Retain the shared finding alongside the application's schema error envelope."""
+    source_path = entrypoint
     if outcome["status"] == "invalid_schema":
         reason = "; ".join(_reason(f, modules, module_names) for f in outcome["issues"])
+        origins = {finding["module"] for finding in outcome["issues"]}
+        # A single-module failure names its source; a cross-module aggregate
+        # names the bundle entry and retains every origin in native_outcome.
+        if len(origins) == 1:
+            source_path = entrypoint.with_name(module_names[origins.pop()])
     elif outcome["status"] == "invalid_defaults":
         descriptors = outcome["schema"]["descriptors"]
         reasons = []
@@ -96,6 +102,6 @@ def admission_error(outcome, entrypoint, modules, module_names):
         reason = "; ".join(reasons)
     else:
         raise ValueError("invalid native schema admission response")
-    error = _schema_failure(entrypoint, reason)
+    error = _schema_failure(source_path, reason)
     error.native_outcome = outcome
     return error

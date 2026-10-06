@@ -286,6 +286,56 @@ root_class:
             ("decoded_document", "depth"),
         )
 
+    def test_admission_messages_identify_includes_and_registry_entries_once(self):
+        """Real shared admission findings retain their specific user-facing locations."""
+        cases = [
+            (
+                'version: "1.0"\nincludes: nope\nroot_class: []\n',
+                "includes must be a list",
+                "schema.yaml",
+                "includes",
+                {"code": "includes_list"},
+            ),
+            (
+                """version: "1.0"
+includes: [schema_other.yaml]
+root_class: []
+ops:
+  one: {type: str}
+""",
+                "duplicate registry entry ops.one",
+                "schema_other.yaml",
+                "ops",
+                {"code": "duplicate_registry_entry", "name": "one"},
+            ),
+        ]
+        for source, reason, module_name, path, issue in cases:
+            with (
+                self.subTest(reason=reason),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory).resolve()
+                (root / "schema.yaml").write_text(source, encoding="ascii")
+                (root / "schema_other.yaml").write_text(
+                    'version: "1.0"\nops:\n  one: {type: str}\n',
+                    encoding="ascii",
+                )
+                with self.assertRaises(SpecificationError) as caught:
+                    native_specification.load_schema_bundle(root)
+                error = caught.exception
+                self.assertEqual(len(error.diagnostics), 1)
+                self.assertEqual(
+                    error.diagnostics[0].condition, "invalid_schema_bundle"
+                )
+                self.assertEqual(error.diagnostics[0].spec_paths, ("$",))
+                self.assertEqual(
+                    error.diagnostics[0].context,
+                    {"path": str(root / module_name), "reason": reason},
+                )
+                finding = error.native_outcome["issues"][0]
+                self.assertEqual(finding["path"], path)
+                self.assertEqual(finding["issue"], issue)
+
     def test_constraint_diagnostic_bounds_keep_authored_integer_types(self):
         """Wire decimal bounds render as exact Python integers in diagnostic context."""
         with tempfile.TemporaryDirectory() as directory:
