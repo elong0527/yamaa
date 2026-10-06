@@ -72,7 +72,7 @@ load_truth <- function(name) read.delim(system.file(name, package = "yamaanative
   fileEncoding = "UTF-8", check.names = FALSE)
 truth <- load_truth("inheritance_traversal.tsv")
 sources <- load_truth("inheritance_sources.tsv")
-stopifnot(nrow(truth) == 7L)
+stopifnot(nrow(truth) == 8L)
 for (i in seq_len(nrow(truth))) {
   expected_sources <- sources[sources$case == truth$case[i], , drop = FALSE]
   calls <- character()
@@ -88,4 +88,4 @@ for (i in seq_len(nrow(truth))) {
   stopifnot(identical(result, truth$expected[i]),
             identical(calls, expected_sources$request))
 }
-cat("Seven complete inheritance outcomes and source traces passed\n")
+cat("Eight complete inheritance outcomes and source traces passed\n")

@@ -275,5 +275,36 @@ fn shared_independent_graph_truth_and_source_traces() {
         assert_eq!(result, *expected, "{name}: complete outcome");
         count += 1;
     }
-    assert_eq!(count, 7);
+    assert_eq!(count, 8);
+}
+
+#[test]
+fn missing_parent_version_retains_both_file_identities_and_authored_context() {
+    let missing = json!({"nodes":[{"kind":"text","value":"parents"},{"kind":"sequence","items":[]},{"kind":"mapping","entries":[[0,1]]}],"root":2});
+    let mut calls = 0;
+    let result = traverse(
+        &schema(),
+        &request(layer("1.0", &["a", "unread"])),
+        |_, _| -> Result<_, ()> {
+            calls += 1;
+            Ok(if calls == 1 {
+                reply(json!({"status":"resolved","identity":"/a","display_path":"/a"}))
+            } else {
+                assert_eq!(calls, 2);
+                reply(json!({"status":"document","document":missing}))
+            })
+        },
+    )
+    .unwrap();
+    assert_eq!(calls, 2);
+    assert_eq!(
+        outcome(result),
+        json!({
+            "status":"invalid","source":"/a","entry":"/entry","context_document":missing,
+            "diagnostics":[{"condition":"schema_version_mismatch","path":"schema_version","requirement":"REQ-0656","context":[
+                {"name":"expected","value":{"kind":"text","value":"1.0"}},
+                {"name":"actual","value":{"kind":"null"}}
+            ]}]
+        })
+    );
 }

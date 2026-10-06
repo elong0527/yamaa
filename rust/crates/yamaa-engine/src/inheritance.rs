@@ -169,6 +169,7 @@ pub enum Error<E> {
     },
     Layer {
         source: String,
+        entry: String,
         input: Document,
         error: NormalizationError,
     },
@@ -235,11 +236,13 @@ fn admit<E>(
     let normalized = match schema.normalize_layer(&input, normalization) {
         Ok(value) => value.document,
         Err(error) => {
+            budget.text(entry)?;
             return Err(Error::Layer {
                 source: source.identity,
+                entry: entry.into(),
                 input,
                 error,
-            })
+            });
         }
     };
     budget.charge(Resource::Work, normalized.nodes().len())?;

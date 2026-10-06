@@ -60,7 +60,7 @@ class Boundary(unittest.TestCase):
             cases = list(csv.DictReader(stream, delimiter="\t"))
         with (root / "inheritance_sources.tsv").open(encoding="ascii") as stream:
             sources = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(cases), 7)
+        self.assertEqual(len(cases), 8)
         for case in cases:
             for prepared in (False, True):
                 with self.subTest(case=case["case"], prepared=prepared):

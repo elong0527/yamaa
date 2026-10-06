@@ -63,3 +63,151 @@ def test_path_rebasing_uses_captured_canonical_directories_without_more_io(
     monkeypatch.setattr(Path, "resolve", unexpected_resolve)
     assert _rebase_path("input/../data.csv", layer, entry) == "../shared/data.csv"
     assert _rebase_path("unchanged.csv", entry, entry) == "unchanged.csv"
+
+
+@pytest.mark.parametrize(
+    (
+        "entry_document",
+        "parent_document",
+        "condition",
+        "path",
+        "requirement",
+        "context",
+        "source",
+        "include_entry",
+    ),
+    [
+        (
+            {"schema_version": "0.0", "parents": []},
+            None,
+            "schema_version_mismatch",
+            "schema_version",
+            "REQ-0245",
+            {"expected": "1.0", "actual": "0.0"},
+            "entry",
+            True,
+        ),
+        (
+            {"parents": []},
+            None,
+            "schema_version_mismatch",
+            "schema_version",
+            "REQ-0656",
+            {"expected": "1.0", "actual": None},
+            "entry",
+            True,
+        ),
+        (
+            {"schema_version": "1.0", "parents": "parent.yaml"},
+            {"schema_version": "0.0"},
+            "schema_version_mismatch",
+            "parents",
+            "REQ-0656",
+            {"entry_version": "1.0", "parent_version": "0.0"},
+            "parent",
+            True,
+        ),
+        (
+            {"schema_version": "1.0", "parents": "parent.yaml"},
+            {"parents": []},
+            "schema_version_mismatch",
+            "schema_version",
+            "REQ-0656",
+            {"expected": "1.0", "actual": None},
+            "parent",
+            True,
+        ),
+        (
+            {"schema_version": "1.0", "parents": "parent.yaml"},
+            {"schema_version": "1.0", "parents": "https://example.test/base.yaml"},
+            "invalid_parent_path",
+            "parents",
+            "REQ-0653",
+            {"reason": "remote_reference", "parent": "https://example.test/base.yaml"},
+            "parent",
+            False,
+        ),
+        (
+            {"schema_version": "1.0", "parents": "missing.yaml"},
+            None,
+            "parent_not_found",
+            "parents",
+            "REQ-0654",
+            {"path": "missing.yaml"},
+            "entry",
+            False,
+        ),
+        (
+            {"schema_version": "1.0", "parents": "parent.yaml"},
+            {"schema_version": "1.0", "unexpected": "value"},
+            "unknown_field",
+            "unexpected",
+            "REQ-0658",
+            {"field": "unexpected", "class": "root_class"},
+            "parent",
+            True,
+        ),
+    ],
+)
+def test_traversal_failures_retain_implicated_file_identities(
+    tmp_path,
+    entry_document,
+    parent_document,
+    condition,
+    path,
+    requirement,
+    context,
+    source,
+    include_entry,
+):
+    """REQ-0653/0654/0656 identify the declaring/invalid layer and entry where relevant."""
+    import json
+
+    root = tmp_path.resolve()
+    entry, parent = root / "entry.yaml", root / "parent.yaml"
+    entry.write_text(json.dumps(entry_document), encoding="ascii")
+    if parent_document is not None:
+        parent.write_text(json.dumps(parent_document), encoding="ascii")
+    expected = {**context, "source": str(entry if source == "entry" else parent)}
+    if include_entry:
+        expected["entry"] = str(entry)
+    with pytest.raises(SpecificationError) as caught:
+        resolve_specification(entry, load_schema_bundle(SCHEMA_ROOT))
+    assert [d.model_dump(mode="json") for d in caught.value.diagnostics] == [
+        {
+            "phase": "validation",
+            "condition": condition,
+            "spec_paths": [path],
+            "requirement": requirement,
+            "context": expected,
+        }
+    ]
+
+
+def test_parent_read_failure_retains_declaring_file_and_requested_path(
+    tmp_path, monkeypatch
+):
+    """A read failure after canonicalization keeps both source and path (REQ-0654)."""
+    from yamaa.schema import inheritance
+
+    root = tmp_path.resolve()
+    entry, parent = root / "entry.yaml", root / "parent.yaml"
+    entry.write_text('schema_version: "1.0"\nparents: parent.yaml\n', encoding="ascii")
+    parent.write_text('schema_version: "1.0"\n', encoding="ascii")
+    original = inheritance.read_bundle_document
+    reads = []
+
+    def read(path, bundle):
+        reads.append(path)
+        if path == parent:
+            raise OSError("unreadable parent")
+        return original(path, bundle)
+
+    monkeypatch.setattr(inheritance, "read_bundle_document", read)
+    with pytest.raises(SpecificationError) as caught:
+        resolve_specification(entry, load_schema_bundle(SCHEMA_ROOT))
+    assert caught.value.diagnostics[0].context == {
+        "source": str(entry),
+        "path": str(parent),
+    }
+    assert reads == [entry, parent]

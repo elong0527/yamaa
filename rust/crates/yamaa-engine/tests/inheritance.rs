@@ -211,6 +211,7 @@ fn layer_findings_precede_version_mismatch_and_all_parent_effects() {
     let mut port = Port::default();
     let Error::Layer {
         source,
+        entry,
         input: _,
         error: NormalizationError::Invalid(findings),
     } = run(input, &mut port).unwrap_err()
@@ -218,6 +219,7 @@ fn layer_findings_precede_version_mismatch_and_all_parent_effects() {
         panic!("expected structural findings")
     };
     assert_eq!(source, "entry");
+    assert_eq!(entry, "entry");
     assert_eq!(findings[0].condition, "unknown_field");
     assert!(port.calls.is_empty());
 }

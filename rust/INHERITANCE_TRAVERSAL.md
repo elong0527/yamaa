@@ -71,12 +71,16 @@ are not rolled back. Reentrant calls use independent graph state and budgets.
 ## Diagnostics, limits and adapters
 
 Language failures use the existing ordered schema diagnostic envelope. Child
-admission failures retain `source` and `context_document` so diagnostic value
+admission failures retain `source`, `entry` and `context_document` so diagnostic value
 references address that child's authored input. Cycles carry the ordered
 canonical `cycle` context. Version findings retain entry/source identities and
 role-specific expected/actual version context. Unavailable-source diagnostics
 retain the written parent before resolution or the display path after resolution.
-Custom admitted schemas whose control fields cannot drive traversal return
+The Python exception bridge copies the outcome's `source`, `entry` and `parent`
+identities into each diagnostic context; it retains all existing value and
+version context, including a null actual version for a missing declaration.
+The reference loader reports the same identities. Custom admitted schemas whose
+control fields cannot drive traversal return
 `unsupported`; there is no fallback to another graph implementation.
 
 Each request has an 8 MiB initial request cap, 8 MiB cumulative callback-reply cap
@@ -104,7 +108,7 @@ validation remains an explicit integration boundary.
 
 ## Qualification and remaining work
 
-Seven complete outcomes and source traces in `inheritance_traversal.tsv` and
+Eight complete outcomes and source traces in `inheritance_traversal.tsv` and
 `inheritance_sources.tsv` are independently authored and replayed unchanged by
 Rust and both installed hosts. Focused engine/transport tests also specify aliases,
 cycles, complete layer admission, version/failure precedence and resource limits.
