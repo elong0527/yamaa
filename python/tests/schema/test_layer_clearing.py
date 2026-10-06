@@ -29,6 +29,7 @@ SCHEMA_ROOT = Path(__file__).parents[3] / "yaml"
 def test_new_member_cannot_clear_an_optional_field_without_an_inherited_value(
     collection, members, logical, tmp_path
 ):
+    """Exercise the reference merger only; installed tests cover the native service."""
     bundle = load_schema_bundle(SCHEMA_ROOT)
     layer, diagnostics = _validate_layer(
         {"schema_version": "1.0", collection: members}, bundle
