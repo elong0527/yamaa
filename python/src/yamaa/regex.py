@@ -38,6 +38,15 @@ _WHITESPACE_IN_CLASS: Final = (
     "\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029"
     "\\u202f\\u205f\\u3000\\ufeff"
 )
+# Inside a character class `\S` is spelled as the positive complement of the
+# REQ-0823 set: the host library has no nested sets, so `[^...]` cannot be
+# written inside `[...]`. The ranges below are exactly the scalars the set
+# leaves out (verified exhaustively over U+0000..U+10FFFF).
+_WHITESPACE_COMPLEMENT_IN_CLASS: Final = (
+    "\\x00-\\x08\\x0e-\\x1f\\x21-\\x9f\\xa1-\\u167f\\u1681-\\u1fff"
+    "\\u200b-\\u2027\\u202a-\\u202e\\u2030-\\u205e\\u2060-\\u2fff"
+    "\\u3001-\\ufefe\\uff00-\\U0010ffff"
+)
 # REQ-0824: `.` matches every scalar except these four line terminators.
 _DOT_REPLACEMENT: Final = "[^\\r\\n\\u2028\\u2029]"
 
@@ -266,11 +275,16 @@ def _normalize(pattern: str) -> str:
                         _WHITESPACE_IN_CLASS if in_class else _WHITESPACE_CLASS
                     )
                     last_atom = True
-                elif escaped == "S" and not in_class:
-                    output.append(_WHITESPACE_NEGATION)
-                    last_atom = True
                 elif escaped == "S":
-                    output.append("\\S")
+                    # REQ-0823 pins `\S` to the negation of the ECMA-262 set
+                    # everywhere: inside a class the host's `\S` would keep
+                    # the narrower ASCII meaning, so the complement is
+                    # spelled out instead of passed through.
+                    output.append(
+                        _WHITESPACE_NEGATION
+                        if not in_class
+                        else _WHITESPACE_COMPLEMENT_IN_CLASS
+                    )
                     last_atom = True
                 elif escaped in "bB":
                     if in_class and escaped == "B":
