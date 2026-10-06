@@ -86,9 +86,19 @@ capacity or process-wide memory. Allocator failure, caller-owned input allocatio
 concurrent calls and total process memory are outside this policy. Resource
 refusals remain separate from invalid syntax and ordinary no-match.
 
-Unicode or escaped capture-group identifiers and lookbehind widths depending
-on backreferences currently return an explicit `Unsupported` compilation outcome.
-They are not declared invalid patterns. These remain requirements for complete
+Unicode and escaped capture-group identifiers use pinned Unicode 18.0.0
+ID_Start/ID_Continue tables, with ECMA's explicit dollar, underscore and join
+control additions. Fixed-width and braced Unicode escapes decode to the same
+name identity; no Unicode normalization or host identifier classification is
+used. Duplicate decoded names remain invalid and forward named references still
+resolve after parsing. Source diagnostics retain original byte coordinates.
+Safe range lookups introduce no dependency or unsafe code. The original licensed
+UCD source is retained; reproduction and exhaustive scalar-membership tests
+are described in [the data provenance](crates/yamaa-core/unicode/README.md).
+
+Lookbehind widths depending on backreferences still return an explicit
+`Unsupported` compilation outcome. They are not declared invalid patterns.
+This remains a requirement for complete
 R022 support; no host API, dataset capability or full grammar qualification is
 advertised by this internal core slice. The development JSON-lines probe is a
 qualification tool, not an installed transport boundary.

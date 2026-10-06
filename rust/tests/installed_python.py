@@ -3,12 +3,23 @@
 import csv
 import json
 import unittest
+from importlib.metadata import distribution
 from pathlib import Path
 
 import yamaa_native
 
 
 class InstallationTests(unittest.TestCase):
+    def test_unicode_data_notice_is_installed(self):
+        """The notice accompanies both direct and independently rebuilt wheels."""
+        package = distribution("yamaa-native")
+        notices = [p for p in package.files if p.name == "LICENSE-UNICODE.txt"]
+        self.assertEqual(len(notices), 1)
+        notice = package.locate_file(notices[0]).read_text(encoding="utf-8")
+        self.assertTrue(notice.startswith("UNICODE LICENSE V3"))
+        self.assertIn("Permission is hereby granted, free of charge", notice)
+        self.assertIn("authorization of the copyright holder.", notice)
+
     def test_capabilities_and_embedded_resource(self):
         self.assertEqual(
             yamaa_native.engine_info(),

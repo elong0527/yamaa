@@ -281,6 +281,14 @@ ASCII_SOURCE_SUFFIXES = {
     ".yml",
 }
 ASCII_SOURCE_NAMES = {"DESCRIPTION", "NAMESPACE"}
+# Preserve authoritative third-party data/notices byte for byte, including their
+# Unicode copyright text. This is a closed list, not a general vendor exemption.
+UNICODE_DATA_AND_NOTICES = {
+    "rust/crates/yamaa-core/unicode/18.0.0/DerivedCoreProperties.txt",
+    "rust/crates/yamaa-core/unicode/LICENSE.txt",
+    "rust/crates/yamaa-python/LICENSE-UNICODE.txt",
+    "R/yamaanative/inst/LICENSE-UNICODE.txt",
+}
 ASCII_SOURCE_IGNORED_PARTS = {
     ".git",
     ".pytest_cache",
@@ -302,6 +310,7 @@ def is_unicode_fixture_csv(relative: Path):
 
 
 def validate_ascii_sources(root: Path):
+    """Check project source bytes while preserving named Unicode data and notices."""
     errors = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
@@ -310,6 +319,8 @@ def validate_ascii_sources(root: Path):
         if any(part in ASCII_SOURCE_IGNORED_PARTS for part in relative.parts):
             continue
         if is_unicode_fixture_csv(relative):
+            continue
+        if relative.as_posix() in UNICODE_DATA_AND_NOTICES:
             continue
         if (
             path.suffix.lower() not in ASCII_SOURCE_SUFFIXES

@@ -1,2 +1,7 @@
 # Embedded resource bytes are part of the installation probe on every platform.
 crates/yamaa-adapters/resources/* text eol=lf
+# Reproduction compares pinned Unicode data, generated ranges and notices as bytes.
+crates/yamaa-core/unicode/**/*.txt text eol=lf
+crates/yamaa-core/unicode/LICENSE.txt text eol=lf
+crates/yamaa-core/src/regex/identifier_data.rs text eol=lf
+crates/yamaa-python/LICENSE-UNICODE.txt text eol=lf

@@ -420,33 +420,50 @@ impl Parser<'_> {
         };
         self.push(kind, byte, width, first..self.groups + 1)
     }
-    /// Admit ASCII group names; defer Unicode identifier tables as an explicit gap.
+    /// Decode exact name identity with ID properties, without Unicode normalization.
     fn name(&mut self) -> Result<String, CompileError> {
-        let begin = self.byte();
-        let mut first = true;
+        let mut name = String::new();
         while let Some(c) = self.peek() {
             if c == '>' {
                 break;
             }
-            if !c.is_ascii() || c == '\\' {
-                return Err(CompileError::Unsupported {
-                    byte: self.byte(),
-                    feature: "Unicode or escaped capture-group identifiers",
+            let byte = self.byte();
+            self.at += 1;
+            let c = if c == '\\' {
+                if self.peek() != Some('u') {
+                    return Err(CompileError::Invalid {
+                        byte,
+                        reason: "invalid group name escape",
+                    });
+                }
+                let Escape::Scalar(value) = self.escape(false)? else {
+                    unreachable!("Unicode escape produces a code point")
+                };
+                char::from_u32(value).ok_or(CompileError::Invalid {
+                    byte,
+                    reason: "invalid group name",
+                })?
+            } else {
+                c
+            };
+            if !(if name.is_empty() {
+                identifiers::start(c)
+            } else {
+                identifiers::part(c)
+            }) {
+                return Err(CompileError::Invalid {
+                    byte,
+                    reason: "invalid group name",
                 });
             }
-            if !(c.is_ascii_alphabetic() || c == '_' || c == '$' || (!first && c.is_ascii_digit()))
-            {
-                return Err(self.invalid("invalid group name"));
-            }
-            first = false;
-            self.at += 1;
+            // Decoding cannot grow beyond the already admitted source byte budget.
+            name.push(c);
         }
-        if first {
+        if name.is_empty() {
             return Err(self.invalid("empty group name"));
         }
-        let end = self.byte();
         self.require('>')?;
-        Ok(String::from(&self.source[begin..end]))
+        Ok(name)
     }
     /// Parse scalar ranges and complemented sets, including empty character classes.
     fn class(&mut self) -> Result<Kind, CompileError> {
