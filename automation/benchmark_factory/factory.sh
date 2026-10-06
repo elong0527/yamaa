@@ -108,9 +108,12 @@ f = f"{name}/README.md"
 text = open(f).read()
 pattern = re.compile(r"R0[0-9][0-9]|output\.columns|handler|verification")
 contract = text.split("\n## How to fix\n", 1)[0]
-# Badge lines are navigation, not data description: exempt them.
+# Badge markup is navigation, not data description: strip it, then scan any
+# prose left on the line. Badge-only lines are exempt; prose mixed with a
+# badge is still part of the data contract.
+badge = re.compile(r"\[!\[.*?\]\(.*?\)\]\(.*?\)")
 hits = [f"{i}: {l}" for i, l in enumerate(contract.splitlines(), 1)
-        if not l.startswith("[![") and pattern.search(l)]
+        if pattern.search(badge.sub("", l).strip())]
 if hits:
     print("schema vocabulary in data contract:")
     print("\n".join(hits))
