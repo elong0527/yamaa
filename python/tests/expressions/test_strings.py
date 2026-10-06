@@ -265,9 +265,9 @@ def test_negated_class_contained_backslash_s_accepts_contract_whitespace(
 
 
 @pytest.mark.parametrize("pattern", [r"\S", r"[\S]"])
-@pytest.mark.parametrize("subject", ["a", "é", "\u0085"])
+@pytest.mark.parametrize("subject", ["a", "\u00e9", "\u0085"])
 def test_backslash_s_accepts_non_whitespace_scalars(pattern: str, subject: str) -> None:
-    # `é` is a non-ASCII non-whitespace scalar; U+0085 is the scalar some
+    # `\u00e9` is a non-ASCII non-whitespace scalar; U+0085 is the scalar some
     # host libraries wrongly call whitespace, but REQ-0823 excludes it,
     # so it stays a `\S` match.
     assert full_match(pattern, subject) is True
