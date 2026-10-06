@@ -1,8 +1,12 @@
 library(yamaanative)
 # The same independently authored complete JSON truth is replayed by both hosts.
-truth <- read.delim(system.file("schema_transport.tsv", package = "yamaanative"),
-  sep = "\t", quote = "", comment.char = "", colClasses = "character",
-  fileEncoding = "UTF-8", check.names = FALSE)
+truth <- do.call(rbind, lapply(c("schema_transport.tsv", "schema_windows.tsv"), function(name) {
+  cases <- read.delim(system.file(name, package = "yamaanative"),
+    sep = "\t", quote = "", comment.char = "", colClasses = "character",
+    fileEncoding = "UTF-8", check.names = FALSE)
+  stopifnot(nrow(cases) == 6L)
+  cases
+}))
 for (i in seq_len(nrow(truth))) {
   for (attempt in 1:2) {
     stopifnot(identical(interpret_schema(truth$request[i]), truth$expected[i]))

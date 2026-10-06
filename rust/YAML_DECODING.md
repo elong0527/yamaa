@@ -106,7 +106,8 @@ Replacing a module entry point after capture does not alter those reads. A
 retained null inheritance snapshot is validated without rereading the file.
 
 Python retains filesystem authority, inheritance composition, dependency
-discovery, window expansion and model validation. Its integer-string conversion
+discovery and model validation. Named windows use the
+[shared expansion service](WINDOW_EXPANSION.md). Its integer-string conversion
 policy is honored explicitly: a value that exceeds the current interpreter
 limit raises `NativeSchemaLimitError` with resource `host_integer_digits`.
 The adapter does not change interpreter-wide limits. R's raw service retains

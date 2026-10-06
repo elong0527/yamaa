@@ -31,6 +31,24 @@ fn installed_hosts_share_independently_authored_complete_wire_truth() {
     }
 }
 
+#[test]
+fn installed_hosts_share_independent_named_window_truth() {
+    assert_eq!(
+        include_str!("fixtures/schema_windows.tsv").lines().count(),
+        7
+    );
+    for line in include_str!("fixtures/schema_windows.tsv").lines().skip(1) {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(
+            interpret_schema(fields[1]).unwrap(),
+            fields[2],
+            "{}",
+            fields[0]
+        );
+    }
+}
+
 fn tree(value: V) -> Value {
     fn push(value: V, nodes: &mut Vec<Value>) -> usize {
         let node = match value {
@@ -539,4 +557,58 @@ fn prepared_normalization_does_not_spend_query_budgets_readmitting_defaults() {
         };
         assert_eq!(result["document"], expected);
     }
+}
+
+#[test]
+fn window_queries_require_explicit_boolean_mode_and_share_batch_expansion_budgets() {
+    let (compiled, _) = compile(schema(
+        vec![
+            field("windows", "dict[str, dict]"),
+            field("refs", "list[window_selection]"),
+        ],
+        vec![("window_selection", descriptor("str"))],
+    ));
+    for extra in [
+        json!({}),
+        json!({"strict":"true"}),
+        json!({"strict":true,"fallback":true}),
+    ] {
+        let mut item = json!({"operation":"expand_windows","document":tree(Map(vec![]))});
+        item.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        assert_eq!(
+            compiled.analyze(&json!({"protocol":"schema/1","queries":[item]}).to_string()),
+            Err(TransportError::InvalidRequest)
+        );
+    }
+    let source = tree(Map(vec![
+        (
+            "windows",
+            Map(vec![(
+                "W",
+                Map(vec![(
+                    "order_by",
+                    List((0..41).map(|_| Text("SEQ")).collect()),
+                )]),
+            )]),
+        ),
+        ("refs", List((0..1000).map(|_| Text("W")).collect())),
+    ]));
+    let expand = json!({"operation":"expand_windows","document":source,"strict":true});
+    let result = query(
+        &compiled,
+        vec![expand.clone(), expand.clone(), expand.clone()],
+    );
+    assert_eq!(result["results"][0]["status"], "expanded");
+    assert_eq!(result["results"][1]["status"], "expanded");
+    assert_eq!(result["results"][2]["status"], "resource_limit");
+    assert_eq!(
+        result["results"][2],
+        json!({"status":"resource_limit","phase":"normalization","resource":"nodes","limit":131072})
+    );
+    assert_eq!(
+        query(&compiled, vec![expand])["results"][0]["status"],
+        "expanded"
+    );
 }

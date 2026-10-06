@@ -116,6 +116,27 @@ class NativeSchemaInterpreter:
         self._root(root_class)
         return self._normalize(document, "normalize_document")
 
+    def expand_windows(self, document, strict):
+        """Expand in Rust and retain ordered logical links for host provenance."""
+        result, tree = self._query(document, "expand_windows", strict=strict)
+        if result["status"] == "invalid":
+            raise SpecificationError(self._diagnostics(result["diagnostics"], tree))
+        if result["status"] != "expanded":
+            raise ValueError("invalid native window expansion response")
+        output = result["document"]
+        value = decode_nodes(output)[output["root"]]
+        if not isinstance(value, dict):
+            raise TypeError("native window expansion must return a mapping")
+        references = tuple(
+            (reference["path"], reference["definition"])
+            for reference in result["references"]
+        )
+        if not all(
+            type(path) is str and type(name) is str for path, name in references
+        ):
+            raise ValueError("invalid native window provenance links")
+        return value, references
+
     def _descriptor(self, descriptor):
         index = self._descriptor_ids.get(descriptor_key(descriptor))
         if index is not None:

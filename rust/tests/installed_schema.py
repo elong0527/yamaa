@@ -12,16 +12,27 @@ import yamaa_native
 
 class SchemaService(unittest.TestCase):
     def rows(self):
-        with Path(__file__).with_name("schema_transport.tsv").open(
-            encoding="utf-8", newline=""
-        ) as stream:
-            return list(csv.DictReader(stream, delimiter="\t"))
+        rows = []
+        for name in ("schema_transport.tsv", "schema_windows.tsv"):
+            with (
+                Path(__file__)
+                .with_name(name)
+                .open(encoding="utf-8", newline="") as stream
+            ):
+                cases = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(len(cases), 6)
+            rows.extend(cases)
+        return rows
 
     def test_independent_truth_without_python_interpreter(self):
         original_import = builtins.__import__
 
         def reject_interpreter(name, *args, **kwargs):
-            if name == "yamaa" or name.startswith("yamaa.") or name in {"yaml", "yaml12"}:
+            if (
+                name == "yamaa"
+                or name.startswith("yamaa.")
+                or name in {"yaml", "yaml12"}
+            ):
                 raise AssertionError("host schema interpreter import")
             return original_import(name, *args, **kwargs)
 
@@ -30,15 +41,18 @@ class SchemaService(unittest.TestCase):
             for row in rows:
                 for attempt in range(2):
                     with self.subTest(case=row["id"], attempt=attempt):
-                        self.assertEqual(yamaa_native.interpret_schema(row["request"]), row["expected"])
+                        self.assertEqual(
+                            yamaa_native.interpret_schema(row["request"]),
+                            row["expected"],
+                        )
 
     def test_prepared_snapshot_owns_metadata_and_uses_the_same_results(self):
         for row in self.rows():
             request = json.loads(row["request"])
             expected = json.loads(row["expected"])["outcome"]
-            snapshot, response = yamaa_native._compile_schema(json.dumps({
-                "protocol": "schema/1", "schema": request["schema"]
-            }))
+            snapshot, response = yamaa_native._compile_schema(
+                json.dumps({"protocol": "schema/1", "schema": request["schema"]})
+            )
             request["schema"].clear()
             compiled = json.loads(response)["outcome"]
             if expected["status"] == "invalid_schema":
@@ -46,9 +60,16 @@ class SchemaService(unittest.TestCase):
                 self.assertEqual(compiled, expected)
                 continue
             self.assertEqual(compiled, expected["schema"])
-            self.assertEqual(json.loads(snapshot.analyze(json.dumps({
-                "protocol": "schema/1", "queries": request["queries"]
-            })))["outcome"], {"status": "analyzed", "results": expected["results"]})
+            self.assertEqual(
+                json.loads(
+                    snapshot.analyze(
+                        json.dumps(
+                            {"protocol": "schema/1", "queries": request["queries"]}
+                        )
+                    )
+                )["outcome"],
+                {"status": "analyzed", "results": expected["results"]},
+            )
             with self.assertRaises(AttributeError):
                 snapshot.schema = None
 
@@ -57,7 +78,11 @@ class SchemaService(unittest.TestCase):
             for request in [None, 1, True, b"{}", [], {}]:
                 with self.assertRaises(TypeError):
                     function(request)
-            for request in ["{}", " " * 8388609, '{"protocol":"schema/1","protocol":"schema/1"}']:
+            for request in [
+                "{}",
+                " " * 8388609,
+                '{"protocol":"schema/1","protocol":"schema/1"}',
+            ]:
                 with self.assertRaises(ValueError):
                     function(request)
         request = json.loads(self.rows()[0]["request"])

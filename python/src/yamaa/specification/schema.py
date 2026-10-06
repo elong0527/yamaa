@@ -39,6 +39,10 @@ class SchemaInterpreter(Protocol):
         self, value: object, descriptor: dict[str, Any], fragment: bool
     ) -> object: ...
 
+    def expand_windows(
+        self, document: dict[str, object], strict: bool
+    ) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]: ...
+
     def matching_type(
         self, value: object, type_value: object, fragment: bool
     ) -> str | None: ...

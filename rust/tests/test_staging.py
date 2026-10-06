@@ -35,6 +35,7 @@ class StagingTests(unittest.TestCase):
                 "aggregate_syntax.tsv",
                 "numeric_syntax.tsv",
                 "schema_transport.tsv",
+                "schema_windows.tsv",
                 "scalar_transport.tsv",
                 "numeric_transport.tsv",
                 "reference_binding.tsv",
