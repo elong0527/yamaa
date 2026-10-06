@@ -34,6 +34,38 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_layer_admission_collects_ordered_field_errors_before_normalization(self):
+        """Both authored errors retain field paths in schema order, not write order."""
+        document = {
+            "schema_version": "1.0",
+            "parents": [],
+            "columns": [{"label": 2, "name": "X", "type": 1}],
+        }
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "spec.yaml"
+            path.write_text(json.dumps(document), encoding="ascii")
+            with self.assertRaises(SpecificationError) as caught:
+                resolve_specification(path, bundle)
+            self.assertEqual(
+                [
+                    (d.condition, d.spec_paths, d.context)
+                    for d in caught.exception.diagnostics
+                ],
+                [
+                    (
+                        "invalid_field_type",
+                        ("columns.X.type",),
+                        {"expected": "column_type", "actual": "int"},
+                    ),
+                    (
+                        "invalid_field_type",
+                        ("columns.X.label",),
+                        {"expected": "str", "actual": "int"},
+                    ),
+                ],
+            )
+
     def test_standalone_null_handler_survives_workflow_resolution(self):
         document = self.window_document()
         document["intermediates"] = [
@@ -69,7 +101,11 @@ class InstalledSchemaLoading(unittest.TestCase):
                     path = Path(temporary) / "spec.yaml"
                     path.write_text(
                         json.dumps(
-                            {"schema_version": "1.0", "parents": [], collection: members}
+                            {
+                                "schema_version": "1.0",
+                                "parents": [],
+                                collection: members,
+                            }
                         ),
                         encoding="ascii",
                     )
@@ -99,7 +135,12 @@ class InstalledSchemaLoading(unittest.TestCase):
                     side_effect=AssertionError("host window traversal invoked"),
                 )
             )
-        for name in ("_merge_member", "_compose_value", "_materialize_fragments"):
+        for name in (
+            "_merge_member",
+            "_compose_value",
+            "_materialize_fragments",
+            "_validate_partial_member",
+        ):
             self.stack.enter_context(
                 patch(
                     f"yamaa.schema.inheritance.{name}",

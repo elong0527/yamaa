@@ -292,6 +292,8 @@ def _validate_layer(
     document: object,
     bundle: SchemaBundle,
 ) -> tuple[dict[str, object] | None, list[ValidationDiagnostic]]:
+    if bundle.interpreter is not None:
+        return bundle.interpreter.normalize_layer(document)
     if not isinstance(document, dict) or not document:
         return None, [
             _diagnostic(

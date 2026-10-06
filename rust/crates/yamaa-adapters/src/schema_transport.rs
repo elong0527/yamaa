@@ -102,6 +102,9 @@ enum Query {
     NormalizeDocument {
         document: Tree,
     },
+    NormalizeLayer {
+        document: Tree,
+    },
     ExpandWindows {
         document: Tree,
         strict: bool,
@@ -354,6 +357,9 @@ impl CompiledSchema {
                 Query::NormalizeDocument { document } => {
                     (document, 1, None, false, String::new(), None)
                 }
+                Query::NormalizeLayer { document } => {
+                    (document, 8, None, false, String::new(), None)
+                }
                 Query::ValidateDescriptor {
                     descriptor,
                     document,
@@ -496,6 +502,10 @@ impl CompiledSchema {
                 ) {
                     Ok(member) => json!({"status":"matched","member":member}),
                     Err(error) => errors::validation(error)?,
+                },
+                8 => match self.schema.normalize_layer(&input, &mut budget) {
+                    Ok(document) => normalized(document),
+                    Err(error) => errors::normalization(error)?,
                 },
                 _ => unreachable!(),
             };

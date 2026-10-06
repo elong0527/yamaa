@@ -52,6 +52,7 @@ request contains only `protocol` and `queries`. The closed operations are:
 | --- | --- |
 | `validate_document` | `document` |
 | `normalize_document` | `document` |
+| `normalize_layer` | `document`: one authored inheritance contribution |
 | `compose_layers` | `layers`: ordered decoded documents |
 | `expand_windows` | `document`, Boolean `strict` |
 | `validate_descriptor` | `descriptor`, `document`, `fragment`, `path` |
@@ -150,7 +151,7 @@ Validation work, attempted diagnostic allocations and normalization storage
 accumulate across queries; unsuccessful union attempts do not refund them.
 These are logical policies, not a process-memory or cancellation guarantee.
 
-Eighteen complete wire fixtures (six each for schema, windows and composition) are authored
+Twenty-four complete wire fixtures (six each for schema, windows, composition and layer admission) are authored
 independently and replayed through
 Rust and the installed Python/R packages. Core tests cover recursive aliases,
 version and diagnostic priority, constraints, fragments, union selection,

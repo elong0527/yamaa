@@ -5,6 +5,7 @@ mod composition;
 mod constraints;
 mod descriptor;
 mod document;
+mod layer_admission;
 mod layer_materialization;
 mod layers;
 mod normalization;
