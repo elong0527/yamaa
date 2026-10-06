@@ -12,7 +12,9 @@ unique identifiers. Regex literals are admitted by the shared Rust regex core.}
 \details{The request is limited to 1,048,576 UTF-8 bytes. Parser policies are
 65,536 expression bytes, 8,192 tokens, 4,096 arena nodes and depth 64.
 Whole-input tokenization precedes syntax and regex admission. Per-pattern regex
-compilation policies apply separately. Resource refusals are not grammar errors.
+compilation policies apply to each literal. All literals in one predicate also
+share capture-dependent width-analysis ceilings of 1,000,000 work units and
+1,000,000 logical storage cells. Resource refusals are not grammar errors.
 Invalid regex literals report invalid_predicate under REQ-1244; invalid ESCAPE
 literals report REQ-0191. The committed grammar's invalid_predicate result for
 rejected temporal literals is retained, including typed temporal context; its
