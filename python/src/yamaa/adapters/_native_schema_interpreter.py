@@ -10,6 +10,7 @@ from yamaa.adapters._native_schema_wire import (
     check_outcome,
     decode_nodes,
     encode_tree,
+    limit,
     request,
     response,
 )
@@ -26,6 +27,7 @@ class NativeSchemaInterpreter:
 
     def __init__(self, snapshot, metadata, modules):
         self._analyze = snapshot.analyze
+        self._traverse = getattr(snapshot, "traverse_inheritance", None)
         self._metadata = copy.deepcopy(metadata)
         self._descriptors = [
             copy.deepcopy(modules[d["module"]][d["source_node"]])
@@ -129,6 +131,85 @@ class NativeSchemaInterpreter:
         if not isinstance(value, dict):
             raise TypeError("native layer normalization must return a mapping")
         return value, []
+
+    def traverse_inheritance(self, entry, document, canonicalize, read_source):
+        """Run graph semantics in Rust with explicitly captured filesystem ports."""
+        if self._traverse is None:
+            raise NativeSchemaUnsupportedError({"feature": "inheritance_traversal"})
+        self._root("root_class")
+        tree = encode_tree(document)
+
+        def dispatch(message, maximum):
+            message = json.loads(message)
+            if message.get("protocol") != "inheritance/1":
+                raise ValueError("invalid native inheritance source protocol")
+            operation = message.get("operation")
+            if operation == "canonicalize" and set(message) == {
+                "protocol",
+                "operation",
+                "declaring",
+                "path",
+            }:
+                try:
+                    source = canonicalize(message["declaring"], message["path"])
+                except OSError:
+                    source = None
+                reply = (
+                    {"status": "unavailable"}
+                    if source is None
+                    else {
+                        "status": "resolved",
+                        "identity": source[0],
+                        "display_path": source[1],
+                    }
+                )
+            elif operation == "read" and set(message) == {
+                "protocol",
+                "operation",
+                "identity",
+                "display_path",
+            }:
+                try:
+                    value = read_source(message["identity"])
+                except OSError:
+                    reply = {"status": "unavailable"}
+                else:
+                    reply = {"status": "document", "document": encode_tree(value)}
+            else:
+                raise ValueError("invalid native inheritance source operation")
+            encoded = request({"protocol": "inheritance/1", "outcome": reply})
+            if len(encoded) > maximum:
+                limit("inheritance", "source_reply_bytes", 8_388_608)
+            return encoded
+
+        result = response(
+            self._traverse(
+                request(
+                    {
+                        "protocol": "inheritance/1",
+                        "entry": {"identity": entry, "display_path": entry},
+                        "document": tree,
+                    }
+                ),
+                dispatch,
+            ),
+            protocol="inheritance/1",
+        )
+        if result["status"] == "invalid":
+            raise SpecificationError(
+                self._diagnostics(
+                    result["diagnostics"], result.get("context_document", tree)
+                )
+            )
+        if result["status"] != "traversed":
+            raise ValueError("invalid native inheritance traversal response")
+        layers = []
+        for layer in result["layers"]:
+            value = decode_nodes(layer["document"])[layer["document"]["root"]]
+            if not isinstance(value, dict):
+                raise TypeError("native inheritance layer must be a mapping")
+            layers.append((layer["identity"], value))
+        return layers
 
     def resolve_inheritance_dependencies(self, document):
         """Prune unreachable declarations and stably order surviving columns in Rust."""

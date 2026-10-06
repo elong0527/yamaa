@@ -284,6 +284,10 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(analyze_predicate, module)?)?;
     module.add_function(wrap_pyfunction!(schema_service::_compile_schema, module)?)?;
     module.add_function(wrap_pyfunction!(schema_service::interpret_schema, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        schema_service::traverse_inheritance,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(decode_yaml, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_regex, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;

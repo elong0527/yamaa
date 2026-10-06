@@ -34,6 +34,129 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_shared_traversal_deduplicates_filesystem_symlink_identity(self):
+        from yamaa.schema import inheritance
+
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        original = inheritance.read_bundle_document
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            parent = root / "base.yaml"
+            parent.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "domain": "OUT",
+                        "keys": ["ID"],
+                        "input": {"DM": "data.csv"},
+                        "base": "DM",
+                        "output": {"path": "out.csv", "columns": ["ID"]},
+                        "columns": [
+                            {"name": "ID", "type": "str", "derivation": "DM.ID"}
+                        ],
+                    }
+                ),
+                encoding="ascii",
+            )
+            (root / "alias.yaml").symlink_to(parent)
+            entry = root / "entry.yaml"
+            entry.write_text(
+                'schema_version: "1.0"\nparents: [base.yaml, alias.yaml]\n',
+                encoding="ascii",
+            )
+            reads = []
+
+            def read(path, captured):
+                reads.append(Path(path))
+                return original(path, captured)
+
+            with patch(
+                "yamaa.schema.inheritance.read_bundle_document", side_effect=read
+            ):
+                result = resolve_specification(entry, bundle)
+            self.assertEqual(reads, [entry, parent])
+            self.assertEqual(result.layers, (parent, entry))
+            self.assertEqual(result.provenance["input.DM.path"].file, parent)
+            self.assertEqual(result.layer_paths["input.DM.path"].written, "data.csv")
+
+    def test_shared_traversal_reports_complete_canonical_cycles_without_rereads(self):
+        """REQ-0655 keeps non-entry cycles and source access order in installed Rust."""
+        from yamaa.schema import inheritance
+
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        original = inheritance.read_bundle_document
+        for repeated in ("entry.yaml", "a.yaml"):
+            with (
+                self.subTest(repeated=repeated),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory).resolve()
+                (root / "nested").mkdir()
+                for name, parent in (
+                    ("entry.yaml", "a.yaml"),
+                    ("a.yaml", "b.yaml"),
+                    ("b.yaml", f"nested/../{repeated}"),
+                ):
+                    (root / name).write_text(
+                        f'schema_version: "1.0"\nparents: {parent}\n', encoding="ascii"
+                    )
+                reads = []
+
+                def read(path, captured, recorded=reads):
+                    self.assertIs(captured, bundle)
+                    recorded.append(Path(path))
+                    return original(path, captured)
+
+                with (
+                    patch(
+                        "yamaa.schema.inheritance.read_bundle_document",
+                        side_effect=read,
+                    ),
+                    self.assertRaises(SpecificationError) as caught,
+                ):
+                    resolve_specification(root / "entry.yaml", bundle)
+                diagnostic = caught.exception.diagnostics[0]
+                self.assertEqual(diagnostic.condition, "inheritance_cycle")
+                names = (
+                    ["entry.yaml", "a.yaml", "b.yaml", "entry.yaml"]
+                    if repeated == "entry.yaml"
+                    else ["a.yaml", "b.yaml", "a.yaml"]
+                )
+                self.assertEqual(
+                    diagnostic.context["cycle"], [str(root / n) for n in names]
+                )
+                self.assertEqual(
+                    reads, [root / n for n in ("entry.yaml", "a.yaml", "b.yaml")]
+                )
+
+    def test_shared_traversal_validates_entry_before_missing_parent_access(self):
+        """All layer defects precede version checks and further source effects."""
+        from yamaa.schema import inheritance
+
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        original = inheritance.read_bundle_document
+        with tempfile.TemporaryDirectory() as directory:
+            entry = Path(directory).resolve() / "entry.yaml"
+            entry.write_text(
+                'schema_version: "0.0"\nparents: missing.yaml\nunknown: value\n',
+                encoding="ascii",
+            )
+            reads = []
+
+            def read(path, captured):
+                reads.append(Path(path))
+                return original(path, captured)
+
+            with (
+                patch(
+                    "yamaa.schema.inheritance.read_bundle_document", side_effect=read
+                ),
+                self.assertRaises(SpecificationError) as caught,
+            ):
+                resolve_specification(entry, bundle)
+            self.assertEqual(caught.exception.diagnostics[0].condition, "unknown_field")
+            self.assertEqual(reads, [entry])
+
     def test_count_relation_survives_pruning_with_explicit_execution_refusal(self):
         """Pruning keeps COUNT(D.*); unqualified runtime scope refuses before IO."""
         document = {
@@ -263,6 +386,8 @@ class InstalledSchemaLoading(unittest.TestCase):
             "_compose_value",
             "_materialize_fragments",
             "_validate_partial_member",
+            "_validate_layer",
+            "_is_nonlocal_parent",
             "_references",
             "_language_references",
             "_prune",

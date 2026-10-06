@@ -1,6 +1,7 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
 mod function_callback;
+mod inheritance_callback;
 mod scalars;
 
 /// Validate raw request bytes before any Rust string is constructed. R character
@@ -269,6 +270,7 @@ extendr_module! {
     mod yamaanative;
     use scalars;
     use function_callback;
+    use inheritance_callback;
     fn engine_info;
     fn analyze_dependencies;
     fn analyze_references;

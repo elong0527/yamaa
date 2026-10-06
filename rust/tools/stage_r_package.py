@@ -32,6 +32,8 @@ def stage(destination: Path):
         "schema_composition.tsv",
         "schema_layer_admission.tsv",
         "schema_inheritance_dependencies.tsv",
+        "inheritance_traversal.tsv",
+        "inheritance_sources.tsv",
         "yaml_transport.tsv",
         "regex_transport.tsv",
         "scalar_transport.tsv",

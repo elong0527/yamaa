@@ -492,15 +492,16 @@ API do not invoke a host schema interpreter. Python's explicit
 admission, document normalization, [layer admission and composition](LAYER_COMPOSITION.md),
 [shared named-window expansion](WINDOW_EXPANSION.md), and
 [inheritance dependency resolution](INHERITANCE_DEPENDENCIES.md), while
-retaining host parent traversal and modeling. Full current-schema R workflow
+using [shared parent traversal](INHERITANCE_TRAVERSAL.md) with explicit host source
+ports and retaining final host modeling. Full current-schema R workflow
 integration and release qualification remain open; no backend default or
 execution-readiness flag changes.
 
 The [shared YAML decoder](YAML_DECODING.md) provides byte-oriented `yaml/1`
 entry points in both installed hosts. The optional Python loader captures it
 before IO and uses it for schema, entry and inherited sources. Exact integer
-identity and Unicode diagnostics survive the source boundary; host filesystem,
-parent-graph and model responsibilities remain explicit.
+identity and Unicode diagnostics survive the source boundary; host filesystem
+authority and final model responsibilities remain explicit.
 
 Shared [inheritance dependency resolution](INHERITANCE_DEPENDENCIES.md) now backs
 opt-in Python pruning and ordering and the installed R schema query. This does
