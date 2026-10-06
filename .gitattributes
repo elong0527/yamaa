@@ -1,2 +1,6 @@
 # Preserve the installed third-party notice bytes on every platform.
 R/yamaanative/inst/LICENSE-UNICODE.txt text eol=lf
+# Keep the generated schema Unicode table's byte-exact reproduction portable.
+rust/crates/yamaa-core/src/schema/printable_data.rs text eol=lf
+# Preserve the authored artifact bytes used by installed schema loading checks.
+benchmarks/adam-advs-bmi/expected/advs.csv text eol=lf

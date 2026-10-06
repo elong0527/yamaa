@@ -34,6 +34,7 @@ class StagingTests(unittest.TestCase):
             for fixture in (
                 "aggregate_syntax.tsv",
                 "numeric_syntax.tsv",
+                "schema_transport.tsv",
                 "scalar_transport.tsv",
                 "numeric_transport.tsv",
                 "reference_binding.tsv",

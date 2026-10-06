@@ -6,7 +6,7 @@ import copy
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import JsonValue
 
@@ -21,6 +21,28 @@ DefinitionKind = Literal["class", "alias", "registry"]
 ActiveTypes = frozenset[tuple[int, str]]
 
 
+class SchemaInterpreter(Protocol):
+    """Captured interpretation service for an explicitly selected schema backend."""
+
+    def validate_document(
+        self, document: object, root_class: str
+    ) -> list[ValidationDiagnostic]: ...
+
+    def normalize_document(self, document: object, root_class: str) -> object: ...
+
+    def validate_descriptor(
+        self, value: object, descriptor: dict[str, Any], path: str, fragment: bool
+    ) -> list[ValidationDiagnostic]: ...
+
+    def normalize_descriptor(
+        self, value: object, descriptor: dict[str, Any], fragment: bool
+    ) -> object: ...
+
+    def matching_type(
+        self, value: object, type_value: object, fragment: bool
+    ) -> str | None: ...
+
+
 @dataclass(frozen=True)
 class SchemaBundle:
     version: str
@@ -28,6 +50,7 @@ class SchemaBundle:
     classes: dict[str, list[dict[str, dict[str, Any]]]]
     aliases: dict[str, dict[str, Any]]
     registries: dict[str, dict[str, Any]]
+    interpreter: SchemaInterpreter | None = None
 
 
 def _diagnostic(
@@ -342,7 +365,7 @@ def _descriptor_issues(
             issues.append(f"{path}: pattern must be a string")
         else:
             try:
-                compile_pattern(f"^(?:{pattern})$")
+                compile_pattern(pattern)
             except RegexError as error:
                 issues.append(f"{path}: invalid pattern {pattern!r}: {error.reason}")
 
@@ -909,6 +932,8 @@ def validate_document(
     root_class: str,
 ) -> list[ValidationDiagnostic]:
     """Validate a raw document against one named class of the bundle."""
+    if bundle.interpreter is not None:
+        return bundle.interpreter.validate_document(document, root_class)
     if not isinstance(document, dict) or not document:
         return [_invalid_type("$", root_class, document)]
     version = document.get("schema_version")
@@ -1178,6 +1203,8 @@ def normalize_document(
     root_class: str,
 ) -> object:
     """Materialize defaults and R006 shorthands for one named class."""
+    if bundle.interpreter is not None:
+        return bundle.interpreter.normalize_document(document, root_class)
     return _normalize_single(document, root_class, bundle, frozenset())
 
 
@@ -1210,6 +1237,8 @@ def validate_descriptor_value(
     to read a layer's ``columns`` member field as a patch of the value it
     composes onto.  Every other check still applies to what the layer wrote.
     """
+    if bundle.interpreter is not None:
+        return bundle.interpreter.validate_descriptor(value, descriptor, path, fragment)
     return _validate_descriptor(value, descriptor, bundle, path, frozenset(), fragment)
 
 
@@ -1226,6 +1255,8 @@ def normalize_descriptor_value(
     patch carries only what its layer wrote and cannot silently replace an
     inherited value with this schema's default.
     """
+    if bundle.interpreter is not None:
+        return bundle.interpreter.normalize_descriptor(value, descriptor, fragment)
     return _normalize_descriptor(value, descriptor, bundle, frozenset(), fragment)
 
 
@@ -1237,6 +1268,8 @@ def matching_type(
     fragment: bool = False,
 ) -> str | None:
     """Return the first schema union member a value satisfies."""
+    if bundle.interpreter is not None:
+        return bundle.interpreter.matching_type(value, type_value, fragment)
     return next(
         (
             member

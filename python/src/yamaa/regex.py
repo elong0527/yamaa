@@ -486,6 +486,9 @@ def compile_pattern(pattern: str) -> re.Pattern[str]:
 
 def full_match(pattern: str, subject: str) -> bool:
     """Return whether an R006 `pattern` descriptor accepts the whole value."""
+    # Validate the authored grammar before the noncapturing wrapper can balance
+    # an unmatched parenthesis and alter the meaning of its outer alternation.
+    compile_pattern(pattern)
     try:
         translated = f"^(?:{_normalize(pattern)})\\Z"
     except re.error as error:  # pragma: no cover - _normalize raises first

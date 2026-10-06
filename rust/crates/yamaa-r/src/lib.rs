@@ -10,9 +10,23 @@ fn json_request(
     limit_error: String,
     run: impl FnOnce(&str) -> std::result::Result<String, String>,
 ) -> List {
+    bounded_json_request(
+        request,
+        yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES,
+        limit_error,
+        run,
+    )
+}
+
+fn bounded_json_request(
+    request: Raw,
+    limit: usize,
+    limit_error: String,
+    run: impl FnOnce(&str) -> std::result::Result<String, String>,
+) -> List {
     // Both installed JSON transports share this byte limit. Enforce it before
     // scanning UTF-8, and preserve each transport's existing limit diagnostic.
-    if request.len() > yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES {
+    if request.len() > limit {
         return list!(value = NULL, error = limit_error);
     }
     match std::str::from_utf8(request.as_slice()) {
@@ -98,6 +112,20 @@ fn analyze_predicate(request: Raw) -> List {
         yamaa_adapters::predicate_syntax::TransportError::RequestLimit.to_string(),
         |text| {
             yamaa_adapters::predicate_syntax::analyze_predicate(text)
+                .map_err(|error| error.to_string())
+        },
+    )
+}
+
+/// Interpret decoded schema snapshots without YAML, filesystem or host callback authority.
+#[extendr]
+fn interpret_schema(request: Raw) -> List {
+    bounded_json_request(
+        request,
+        yamaa_adapters::schema_transport::MAX_REQUEST_BYTES,
+        yamaa_adapters::schema_transport::TransportError::RequestLimit.to_string(),
+        |text| {
+            yamaa_adapters::schema_transport::interpret_schema(text)
                 .map_err(|error| error.to_string())
         },
     )
@@ -241,6 +269,7 @@ extendr_module! {
     fn analyze_aggregate;
     fn analyze_numeric;
     fn analyze_predicate;
+    fn interpret_schema;
     fn evaluate_regex;
     fn table_round_trip;
     fn table_snapshot;

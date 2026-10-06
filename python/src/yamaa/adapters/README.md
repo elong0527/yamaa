@@ -94,3 +94,14 @@ The explicit optional [native dataset frontend](NATIVE_DATASETS.md) runs the adm
 single-source normalized specification subset through Rust. It retains the ordinary
 result and report types while keeping source/artifact IO as temporary host ports.
 It does not change backend defaults or enable workflow execution.
+
+`native_specification.load_specification(entry_path, schema_root)` explicitly
+loads a specification through an installed shared Rust schema snapshot. Rust
+owns schema admission, constraints, defaults, shorthand and type queries used
+by inheritance and windows. Python still owns YAML decoding, filesystem access,
+composition, dependency discovery, window expansion and model validation.
+The ordinary `yamaa.specification.load_specification` remains the default.
+Resource and unsupported outcomes propagate without falling back to Python
+interpretation. See `rust/SCHEMA_TRANSPORT.md` for policies, installed checks
+and compatibility limits; this optional path does not establish full engine
+readiness.

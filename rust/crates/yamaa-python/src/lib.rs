@@ -2,6 +2,7 @@
 use pyo3::prelude::*;
 mod function_callback;
 mod reference_catalog;
+mod schema_service;
 mod temporal_result;
 use pyo3::types::PyDict;
 
@@ -235,6 +236,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
     module.add_class::<reference_catalog::ReferenceCatalog>()?;
+    module.add_class::<schema_service::Schema>()?;
     module.add_function(wrap_pyfunction!(
         reference_catalog::reference_capabilities,
         module
@@ -266,6 +268,8 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(analyze_aggregate, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_predicate, module)?)?;
+    module.add_function(wrap_pyfunction!(schema_service::_compile_schema, module)?)?;
+    module.add_function(wrap_pyfunction!(schema_service::interpret_schema, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_regex, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;

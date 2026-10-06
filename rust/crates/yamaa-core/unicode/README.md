@@ -28,3 +28,18 @@ The generated tables have no runtime dependency, allocation or unsafe code.
 The original data and notice accompany the Rust source; notice copies accompany
 Python wheel/source distributions and installed R packages. The generator
 maintains those required copies from the canonical notice.
+
+The in-progress shared schema service also derives printable diagnostic-label
+intervals from this source using `rust/tools/generate_schema_printable.py`.
+They contain general categories L, M, N, P and S plus ASCII space, read from
+the category annotations on Grapheme_Base and Grapheme_Extend. A separate
+exhaustive Rust test checks the lookup against the authoritative annotations.
+This affects representation of strings inside malformed compound name/id path
+labels, not schema value comparison, normalization or regex admission.
+
+Diagnostic display compatibility is not yet qualified across host Unicode
+versions. A supplemental comparison with Python's Unicode 16.0.0 found 17,810
+scalars printable in these Unicode 18.0.0 tables but unprintable in that host;
+none differed in the opposite direction. This is an explicit open compatibility
+item before the schema service is advertised. The comparison does not define
+expected truth or alter the Python default backend.
