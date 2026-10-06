@@ -293,3 +293,40 @@ def test_cli_enforces_the_committed_qualification_level(suite, tmp_path):
     )
     assert main(arguments) == 1
     assert "required qualification" in (tmp_path / "inventory.json").read_text()
+
+
+@pytest.mark.parametrize("backend", ["python", "rust"])
+def test_diagnostic_free_failure_is_retained_as_broken_evidence(
+    suite, tmp_path, backend
+):
+    """A malformed negative report fails without preventing a complete inventory."""
+    examples, reference = suite
+    batches = [reference]
+    if backend == "rust":
+        batches.append(native_copy(suite, tmp_path))
+    directory = Path(batches[-1].reports_dir)
+    report_path = directory / f"negative-zero-division.python.{backend}.json"
+    payload = json.loads(report_path.read_text())
+    payload["diagnostics"] = []
+    report_path.write_text(json.dumps(payload))
+    arguments = ["--examples-root", str(examples), "--source-revision", "revision-a"]
+    for index, batch in enumerate(batches):
+        path = tmp_path / f"batch-{index}.json"
+        path.write_text(batch.model_dump_json())
+        arguments.extend(["--batch", str(path)])
+    output = tmp_path / "inventory.json"
+    arguments.extend(["--output", str(output)])
+    assert main(arguments) == 1
+    inventory = json.loads(output.read_text())
+    assert len(inventory["coverage"]) == 6
+    row = next(
+        row
+        for row in inventory["coverage"]
+        if (
+            row["example"] == "negative-zero-division"
+            and row["runtime"] == "python"
+            and row["backend"] == backend
+        )
+    )
+    assert row["result"] == "infrastructure_failure"
+    assert "requires at least one diagnostic" in row["error"]

@@ -166,6 +166,8 @@ def qualify(
             # Dedicated report directories contain only ExampleReport envelopes.
             try:
                 report = read_report(path)
+                if report.outcome == "failure" and not report.diagnostics:
+                    raise ValueError("failure report requires at least one diagnostic")
                 identity = report.example, report.runtime, report.backend
                 expected_name = ".".join(identity) + ".json"
                 if path.name != expected_name or identity[1:] != key:
