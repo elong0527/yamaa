@@ -50,9 +50,13 @@ one-to-one: several input records may contribute values to the same output
 row.
 
 ```yaml
+schema_version: "1.0"
 domain: ADSL
 input:
   DM: source/dm.csv
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
 keys: [STUDYID, USUBJID]
 columns:
   - name: STUDYID
