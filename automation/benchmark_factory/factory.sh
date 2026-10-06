@@ -108,8 +108,9 @@ f = f"{name}/README.md"
 text = open(f).read()
 pattern = re.compile(r"R0[0-9][0-9]|output\.columns|handler|verification")
 contract = text.split("\n## How to fix\n", 1)[0]
+# Badge lines are navigation, not data description: exempt them.
 hits = [f"{i}: {l}" for i, l in enumerate(contract.splitlines(), 1)
-        if pattern.search(l)]
+        if not l.startswith("[![") and pattern.search(l)]
 if hits:
     print("schema vocabulary in data contract:")
     print("\n".join(hits))
