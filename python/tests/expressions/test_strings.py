@@ -237,6 +237,46 @@ def test_a_group_outside_the_pattern_fails_validation(group: int) -> None:
     assert result.condition.context["group_count"] == 1
 
 
+# REQ-0823: `\S` is the negation of the ECMA-262 whitespace set everywhere,
+# not the host library's narrower ASCII `\S`. These scalars are contract
+# whitespace but look like non-whitespace to a host `re` under `re.ASCII`.
+_CONTRACT_WHITESPACE = (" ", "\t", "\u00a0", "\u1680", "\u2028", "\u3000")
+
+
+@pytest.mark.parametrize("whitespace", _CONTRACT_WHITESPACE)
+def test_bare_backslash_s_rejects_contract_whitespace(whitespace: str) -> None:
+    assert full_match(r"\S", whitespace) is False
+
+
+@pytest.mark.parametrize("whitespace", _CONTRACT_WHITESPACE)
+def test_class_contained_backslash_s_rejects_contract_whitespace(
+    whitespace: str,
+) -> None:
+    # Inside a class the complement is spelled out (the host library has no
+    # nested sets), so it must agree with the bare `\S` everywhere.
+    assert full_match(r"[\S]", whitespace) is False
+
+
+@pytest.mark.parametrize("whitespace", _CONTRACT_WHITESPACE)
+def test_negated_class_contained_backslash_s_accepts_contract_whitespace(
+    whitespace: str,
+) -> None:
+    assert full_match(r"[^\S]", whitespace) is True
+
+
+@pytest.mark.parametrize("pattern", [r"\S", r"[\S]"])
+@pytest.mark.parametrize("subject", ["a", "é", "\u0085"])
+def test_backslash_s_accepts_non_whitespace_scalars(pattern: str, subject: str) -> None:
+    # `é` is a non-ASCII non-whitespace scalar; U+0085 is the scalar some
+    # host libraries wrongly call whitespace, but REQ-0823 excludes it,
+    # so it stays a `\S` match.
+    assert full_match(pattern, subject) is True
+
+
+def test_negated_class_contained_backslash_s_rejects_non_whitespace() -> None:
+    assert full_match(r"[^\S]", "a") is False
+
+
 @pytest.mark.parametrize(
     ("to", "value", "expected"),
     [
