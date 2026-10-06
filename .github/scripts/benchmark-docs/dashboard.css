@@ -188,6 +188,8 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   .dashboard { padding: 12px 12px 0; }
   .prose { padding: 14px 18px; }
   .split-hint { display: none; }
+  .review-ask { flex-direction: column; gap: 8px; padding: 12px 14px; }
+  .panel-header, .panel-title { flex-wrap: wrap; row-gap: 6px; }
   .comparison-bar { gap: 8px; flex-wrap: wrap; }
   .subject-control { gap: 6px; }
   .subject-control label { font-size: 12px; }
@@ -214,7 +216,15 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 }
 
 /* The review ask, and the chips that mark what it covers */
-.review-ask { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 11px 18px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 8px; font-size: 15px; line-height: 1.5; }
+.review-ask { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; padding: 12px 18px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 8px; font-size: 15px; line-height: 1.5; }
+.review-ask > .review-chip { margin-top: 2px; }
+.review-ask-body { min-width: 0; }
+.review-ask-body p { margin: 0; }
+.review-ask-body ol { margin: 6px 0; padding-left: 22px; }
+.review-ask-body li { margin: 3px 0; padding-left: 2px; }
+.review-ask-body li a { color: var(--ink); text-decoration: none; }
+.review-ask-body li a:hover { color: var(--brand); text-decoration: underline; }
+.review-ask-note { color: var(--muted); font-size: 14px; }
 .review-chip { flex-shrink: 0; border-radius: 999px; padding: 2px 10px; background: var(--brand); color: #fff; font-size: 12px; font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
 .section-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 

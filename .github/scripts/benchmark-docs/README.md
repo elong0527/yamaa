@@ -22,8 +22,12 @@ dashboards` workflow proves it across two time zones and hash seeds. The
 generator only displays expected artifacts, it never executes yamaa; comments
 are giscus threads keyed by directory name, with the category ID in `GISCUS`.
 
-A page asks reviewers one thing: given the summary, do the inputs and the
-expected output make sense? Those carry an "Under review" chip. Everything
+A page asks clinical trial statisticians and programmers to challenge the
+benchmark itself: is the task in the summary one a real study would need, and
+does it follow CDISC; do the inputs look like collected trial data; would
+independent QC programming reproduce the expected output? The summary, the
+inputs, and the expected output carry an "Under review" chip, and every source
+file has an Edit button for proposing a fix. Everything
 else sits in one tab row under the datasets: Comments first, then the
 assessment materials that are not under review -- the mapping spec generated
 from the YAML, the agent prompt tiers, the yamaa code, and the solution written

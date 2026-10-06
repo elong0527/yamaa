@@ -40,6 +40,9 @@ PROMPT_TIERS = (
     ("brief", "Brief", "the opening, columns, and paths only"),
 )
 SOLUTION_FILES = ("result.R", "result.py")
+# The review ask names the README's standard when it is one of these; other
+# README standards (CDISC, TEST) read as "CDISC standards".
+REVIEW_STANDARDS = ("SDTM", "ADaM")
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
 # outlive any deployment. Each benchmark maps to one discussion whose title is
@@ -896,19 +899,77 @@ def render_benchmark(benchmark, previous=None, next=None):
             metrics.append((len(outputs), "expected files", ""))
             output_caption = "Expected artifacts"
 
-    # The one question a reviewer answers; everything in the tabs beside
+    # What reviewers are asked to challenge, the task included: the summary,
+    # the inputs, and the expected result. Everything in the tabs beside
     # Comments is background for assessment.
-    question = (
-        'Given the summary, should these <a href="#inputs">inputs</a> be rejected '
-        'with the <a href="#expected-failure">expected failure</a>?'
-        if is_failure
-        else 'Given the summary, do the <a href="#inputs">inputs</a> and the '
-        '<a href="#outputs">expected output</a> make sense?'
-    )
+    if is_failure:
+        questions = (
+            (
+                "#readme",
+                "Task",
+                (
+                    "Is this a specification error a study team could realistically "
+                    "make, and should the build stop on it rather than continue?"
+                ),
+            ),
+            (
+                "#inputs",
+                "Inputs",
+                "Do they trigger the failure for the reason the summary gives?",
+            ),
+            (
+                "#expected-failure",
+                "Expected failure",
+                (
+                    "Is this the right error, raised at the right point, and would it "
+                    "tell the programmer what to fix?"
+                ),
+            ),
+        )
+    else:
+        standard = taxonomy[0] if taxonomy else None
+        standard = (
+            f"CDISC {standard}" if standard in REVIEW_STANDARDS else "CDISC standards"
+        )
+        questions = (
+            (
+                "#readme",
+                "Task",
+                (
+                    "Would a real study need this derivation, specified this way? Does "
+                    f"it follow {standard}: variable names, controlled terms, record "
+                    "structure? Flag any rule that is ambiguous or that a sponsor would "
+                    "handle differently."
+                ),
+            ),
+            (
+                "#inputs",
+                "Inputs",
+                (
+                    "Do they look like data collected in a real trial, and do they "
+                    "include the situations you would expect to meet in one?"
+                ),
+            ),
+            (
+                "#outputs",
+                "Expected output",
+                (
+                    "Would independent QC programming reproduce every value from these "
+                    "inputs and rules?"
+                ),
+            ),
+        )
     review_ask = (
-        f"{question} Say so in "
-        '<a href="#comments">Comments</a>. The other tabs beside Comments are '
-        "background for assessment and are not under review."
+        "<p>As a clinical trial statistician or programmer, challenge anything in "
+        'this benchmark: describe a problem in <a href="#comments">Comments</a>, '
+        "or propose a fix with the <strong>Edit</strong> button on any source "
+        "file.</p><ol>"
+        + "".join(
+            f'<li><a href="{anchor}"><strong>{label}:</strong></a> {question}</li>'
+            for anchor, label, question in questions
+        )
+        + '</ol><p class="review-ask-note">The other tabs beside Comments are '
+        "background for assessment, not under review.</p>"
     )
 
     def metric_cell(count, label, cls):

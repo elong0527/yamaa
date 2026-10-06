@@ -9,6 +9,7 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
+from urllib.parse import unquote
 
 
 HERE = Path(__file__).resolve().parent
@@ -369,24 +370,92 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertNotIn("<select", single)
 
-    def test_review_ask_names_what_is_under_review(self):
-        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+    def test_review_ask_challenges_the_task_inputs_and_result(self):
+        def ask(name):
+            page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")
+            return page, page.split('<div class="review-ask-body">', 1)[1].split(
+                "</div>", 1
+            )[0]
+
+        page, positive = ask(BENCHMARK.name)
+        self.assertIn("As a clinical trial statistician or programmer", positive)
         self.assertIn(
-            'Given the summary, do the <a href="#inputs">inputs</a> and the '
-            '<a href="#outputs">expected output</a> make sense?',
+            'describe a problem in <a href="#comments">Comments</a>', positive
+        )
+        self.assertIn("<strong>Edit</strong> button on any source file", positive)
+        self.assertEqual(
+            re.findall(
+                r'<li><a href="([^"]+)"><strong>([^<]+):</strong></a>', positive
+            ),
+            [
+                ("#readme", "Task"),
+                ("#inputs", "Inputs"),
+                ("#outputs", "Expected output"),
+            ],
+        )
+        self.assertIn("Would a real study need this derivation", positive)
+        self.assertIn("Does it follow CDISC ADaM: variable names", positive)
+        self.assertIn(
+            "Would independent QC programming reproduce every value", positive
+        )
+        self.assertIn("background for assessment, not under review", positive)
+        # The summary is challenged too, so it carries the chip with the data.
+        self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 3)
+        self.assertIn(
+            'Edit</a><span class="review-chip">Under review</span></span>'
+            '<span class="panel-caption">What this benchmark means</span>',
             page,
         )
-        self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 2)
-        self.assertIn('<a href="#comments">Comments</a>', page)
-        negative = generate.render_benchmark(
-            generate.BENCHMARKS / "negative-ambiguous-type"
-        ).decode("ascii")
+        self.assertIn("Does it follow CDISC SDTM:", ask("sdtm-dm-basic")[1])
+        # A README that names no SDTM or ADaM standard reads as CDISC standards.
         self.assertIn(
-            'should these <a href="#inputs">inputs</a> be rejected with the '
-            '<a href="#expected-failure">expected failure</a>?',
-            negative,
+            "Does it follow CDISC standards:", ask("sdtm-cm-whodrug-coding")[1]
         )
-        self.assertIn('id="expected-failure"', negative)
+        _, negative = ask("negative-ambiguous-type")
+        self.assertEqual(
+            re.findall(
+                r'<li><a href="([^"]+)"><strong>([^<]+):</strong></a>', negative
+            ),
+            [
+                ("#readme", "Task"),
+                ("#inputs", "Inputs"),
+                ("#expected-failure", "Expected failure"),
+            ],
+        )
+        self.assertIn("should the build stop on it rather than continue?", negative)
+        self.assertNotIn("CDISC", negative)
+
+    def test_every_source_shown_has_an_edit_link_to_a_file_that_exists(self):
+        """The review ask points at the Edit buttons, so no source may lack one."""
+        prefix = generate.REPOSITORY + "/edit/main/"
+        for benchmark in sorted(generate.BENCHMARKS.iterdir()):
+            if not (
+                generate.benchmark_has_spec(benchmark)
+                and (benchmark / "README.md").is_file()
+            ):
+                continue
+            page = generate.render_benchmark(benchmark).decode("ascii")
+            headings = re.findall(
+                r'<div class="file-heading[^"]*">(.*?)</div>', page, re.DOTALL
+            )
+            headings += [
+                header
+                for header in re.findall(
+                    r'<header class="panel-header">(.*?)</header>', page, re.DOTALL
+                )
+                if 'id="readme-heading"' in header
+                or 'id="expected-failure-heading"' in header
+            ]
+            self.assertGreater(len(headings), 2, benchmark.name)
+            for heading in headings:
+                with self.subTest(benchmark=benchmark.name, heading=heading[:80]):
+                    links = re.findall(
+                        r'<a class="edit-button" href="([^"]+)">Edit</a>', heading
+                    )
+                    self.assertEqual(len(links), 1)
+                    self.assertTrue(links[0].startswith(prefix), links[0])
+                    target = generate.ROOT / unquote(links[0][len(prefix) :])
+                    self.assertTrue(target.is_file(), links[0])
 
     def test_comments_lead_the_tabs_and_the_rest_are_not_under_review(self):
         content = DashboardContent(generate.render_benchmark(BENCHMARK).decode("ascii"))
