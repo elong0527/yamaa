@@ -585,7 +585,7 @@ def test_a_derived_key_matches_like_a_stored_column() -> None:
 
 
 def test_a_blank_derivation_yields_missing_and_does_not_match() -> None:
-    # REQ-1185/REQ-1186: blank text parses to missing, and missing never
+    # REQ-1185/REQ-0131: blank text parses to missing, and missing never
     # equals a key, so the U2 record is a miss rather than an error.
     outcome = IntermediateSelector([derived_plan()], {"SUPPLB": supp()}).select(
         "SUP_EP", {"STUDYID": "S1", "USUBJID": "U2", "LBSEQ": 1}

@@ -154,7 +154,7 @@ def test_a_source_below_the_declared_minimum_precision_stays_missing() -> None:
 
 
 def test_an_imputed_date_still_answers_the_comparisons_it_reaches() -> None:
-    # REQ-0575: an imputed start still decides whether an event is treatment
+    # REQ-0574: an imputed start still decides whether an event is treatment
     # emergent, and precision does not stop it.
     rows = {row["AETERM"]: row for row in _partial_dates()}
 
