@@ -237,7 +237,13 @@ def execute_with_project_functions(
     )
 
 
-def _execute(specification, source_provider, prepare_functions=None):
+def _execute(
+    specification,
+    source_provider,
+    prepare_functions=None,
+    *,
+    observe_verifications=None,
+):
     """Capture and admit a whole run before activating callbacks or reading data."""
     # Frozen Pydantic models still contain mutable lists/dictionaries. Retain
     # the admitted run independently of caller/provider mutations during IO.
@@ -700,6 +706,9 @@ def _execute(specification, source_provider, prepare_functions=None):
             raise ValueError("native dataset response has inconsistent check outcomes")
     else:
         raise ValueError("unknown native dataset response status")
+    if observe_verifications is not None:
+        # Preserve completed checks before host log/artifact materialization can fail.
+        observe_verifications(records)
     if declaration_error is not None and (
         status == "success"
         or (status == "failure" and outcome["phase"] == "verification")

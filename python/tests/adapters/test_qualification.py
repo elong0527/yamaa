@@ -7,8 +7,20 @@ from pathlib import Path
 import pytest
 
 from yamaa import __version__
-from yamaa.adapters.conformance import execute_example, read_report, write_report
-from yamaa.adapters.qualification import Batch, load_inventory, main, qualify
+from yamaa.adapters.conformance import (
+    ComparisonFinding,
+    execute_example,
+    read_report,
+    write_report,
+)
+from yamaa.adapters.qualification import (
+    Batch,
+    KnownGap,
+    MissingRoute,
+    load_inventory,
+    main,
+    qualify,
+)
 
 ROOT = Path(__file__).parents[3]
 
@@ -330,3 +342,121 @@ def test_diagnostic_free_failure_is_retained_as_broken_evidence(
     )
     assert row["result"] == "infrastructure_failure"
     assert "requires at least one diagnostic" in row["error"]
+
+
+@pytest.fixture
+def known_gap(suite, tmp_path):
+    """An independently stated table-observation mismatch in synthetic evidence."""
+    native = native_copy(suite, tmp_path)
+    path = Path(native.reports_dir) / "schema-lookup.python.rust.json"
+    payload = json.loads(path.read_text())
+    assert len(payload["tables"]) == 4  # three sources and the derived output
+    payload["tables"] = []
+    path.write_text(json.dumps(payload))
+    gap = KnownGap(
+        example="schema-lookup",
+        runtime="python",
+        backend="rust",
+        level="reference_assisted_run",
+        blocker="missing_table_observations",
+        issue="#1738",
+        findings=(
+            ComparisonFinding(
+                kind="report.tables.count",
+                detail="different lengths",
+                expected=4,
+                actual=0,
+            ),
+        ),
+    )
+    return native, gap, path
+
+
+def test_known_gap_is_a_visible_mismatch_and_cannot_satisfy_qualification(
+    suite, known_gap
+):
+    examples, reference = suite
+    native, gap, _ = known_gap
+    assert qualify(examples, "revision-a", (reference, native)).errors
+    inventory = qualify(examples, "revision-a", (reference, native), known_gaps=(gap,))
+    assert not inventory.errors
+    row = next(
+        row for row in rows(inventory, "python", "rust") if row.example == gap.example
+    )
+    assert row.result == "semantic_mismatch"
+    assert row.blockers == ("#1738:missing_table_observations",)
+    assert row.findings == gap.findings
+    required = ((gap.example, gap.runtime, gap.backend, gap.level),)
+    assert qualify(
+        examples,
+        "revision-a",
+        (reference, native),
+        known_gaps=(gap,),
+        required=required,
+    ).errors
+
+
+@pytest.mark.parametrize("mutation", ["changed", "unsupported", "fixed", "missing"])
+def test_any_change_to_a_known_gap_requires_disposition(suite, known_gap, mutation):
+    examples, reference = suite
+    native, gap, path = known_gap
+    payload = json.loads(path.read_text())
+    if mutation == "missing":
+        path.unlink()
+    else:
+        if mutation == "changed":
+            payload["artifacts"][0]["content"] += "wrong\n"
+        elif mutation == "unsupported":
+            payload["outcome"] = "unsupported"
+        else:
+            original = json.loads(
+                (
+                    Path(reference.reports_dir) / "schema-lookup.python.python.json"
+                ).read_text()
+            )
+            payload["tables"] = original["tables"]
+        path.write_text(json.dumps(payload))
+    inventory = qualify(examples, "revision-a", (reference, native), known_gaps=(gap,))
+    assert any(
+        "known gap changed or disappeared" in error for error in inventory.errors
+    )
+
+
+def test_reference_failures_cannot_be_declared_native_gaps(known_gap):
+    _, gap, _ = known_gap
+    payload = gap.model_dump(mode="json")
+    payload.update(backend="python", level="reference_run")
+    with pytest.raises(ValueError):
+        KnownGap.model_validate_json(json.dumps(payload))
+
+
+def test_duplicate_gaps_are_rejected(suite, known_gap):
+    examples, reference = suite
+    native, gap, _ = known_gap
+    with pytest.raises(ValueError, match="duplicate known gap"):
+        qualify(examples, "revision-a", (reference, native), known_gaps=(gap, gap))
+
+
+def test_missing_entrypoint_is_explicit_without_fabricating_execution(suite):
+    examples, reference = suite
+    missing = MissingRoute(
+        runtime="r", backend="rust", blocker="r_yaml_entrypoint_missing", issue="#1739"
+    )
+    inventory = qualify(examples, "revision-a", (reference,), missing_routes=(missing,))
+    assert not inventory.errors
+    for row in rows(inventory, "r", "rust"):
+        assert row.result == "not_exercised"
+        assert row.level is None and row.report is None
+        assert row.blockers == ("#1739:r_yaml_entrypoint_missing",)
+    with pytest.raises(ValueError, match="duplicate or contradictory"):
+        qualify(examples, "revision-a", (reference,), missing_routes=(missing, missing))
+
+
+def test_a_supplied_native_batch_cannot_also_claim_a_missing_route(suite, tmp_path):
+    examples, reference = suite
+    native = native_copy(suite, tmp_path)
+    missing = MissingRoute(
+        runtime="python", backend="rust", blocker="missing", issue="#1738"
+    )
+    with pytest.raises(ValueError, match="duplicate or contradictory"):
+        qualify(examples, "revision-a", (reference, native), missing_routes=(missing,))

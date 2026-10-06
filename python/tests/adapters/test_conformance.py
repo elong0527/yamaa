@@ -611,6 +611,7 @@ class TestUnsupportedAndMissingPrerequisites:
             tables=(),
             verifications=(),
             callbacks=(),
+            source_reads=(),
             example=NEGATIVE,
             outcome=outcome,
         )

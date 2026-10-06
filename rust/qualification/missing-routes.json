@@ -1,0 +1,8 @@
+[
+  {
+    "runtime": "r",
+    "backend": "rust",
+    "blocker": "r_yaml_entrypoint_missing",
+    "issue": "#1739"
+  }
+]
