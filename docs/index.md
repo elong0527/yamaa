@@ -52,7 +52,7 @@ deterministic, validated builds while preserving metadata lineage.
 
 ## Example
 
-A complete specification in 20 lines:
+A complete specification in 24 lines:
 
 ```yaml
 schema_version: "1.0"
