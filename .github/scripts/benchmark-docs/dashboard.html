@@ -25,12 +25,14 @@
     </div>
   </header>
   <main class="dashboard" aria-label="Benchmark dashboard">
+    <div class="review-ask" role="note"><span class="review-chip">Review ask</span><span>$review_ask</span></div>
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><span class="panel-title"><h2 id="readme-heading">Summary</h2>$lifecycle_badge<a class="edit-button" href="$readme_edit_url">Edit</a></span><span class="panel-caption">What this benchmark means</span></header>
       <div class="source-path"><code>README.md</code></div>
       <div class="$prose_class" aria-label="README content">$readme</div>
     </section>
     $failure_section
+    <div class="review-workspace">
     <div class="comparison-bar">
       <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-controls="specification" aria-expanded="true" hidden><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="2.5" width="15" height="13" rx="2" stroke="currentColor"/><path d="M6.5 3v12" stroke="currentColor"/></svg><span>Hide yamaa spec</span></button>
       <div class="subject-control" hidden>
@@ -50,25 +52,38 @@
       <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="740" aria-valuenow="740" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
       <div class="datasets">
         <section id="inputs" aria-labelledby="inputs-heading">
-          <header class="section-header"><h2 id="inputs-heading">Inputs</h2><span class="panel-caption">$input_caption</span></header>
+          <header class="section-header"><span class="section-title"><h2 id="inputs-heading">Inputs</h2><span class="review-chip">Under review</span></span><span class="panel-caption">$input_caption</span></header>
           $input_files
         </section>
         <section id="outputs" aria-labelledby="outputs-heading">
-          <header class="section-header"><h2 id="outputs-heading">$datasets_heading</h2><span class="panel-caption">$output_caption</span></header>
+          <header class="section-header"><span class="section-title"><h2 id="outputs-heading">$datasets_heading</h2><span class="review-chip">Under review</span></span><span class="panel-caption">$output_caption</span></header>
           $output_files
           <div class="data-legend"><span><i class="derived-swatch" aria-hidden="true"></i> Shaded columns are derived</span><span>&mdash; = missing value</span></div>
         </section>
       </div>
     </div>
-    $mapping_section
-    $code_panel
-    <section id="comments" class="panel comments-panel" aria-labelledby="comments-heading">
-      <header class="panel-header"><h2 id="comments-heading">Comments</h2><span class="panel-caption">Signed in with GitHub; saved in <a href="$discussions_url">repository Discussions</a></span></header>
-      <div class="comments-body">
-        <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="$giscus_theme" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
-        <noscript><p>Comments need JavaScript. Read or join the discussion in <a href="$discussions_url">GitHub Discussions</a>.</p></noscript>
+    </div>
+    <section id="discussion" class="panel discussion-panel" aria-labelledby="discussion-heading">
+      <header class="panel-header"><h2 id="discussion-heading">Comments and assessment materials</h2><label class="split-toggle" hidden><input type="checkbox" id="split-toggle" role="switch"><span class="switch-track" aria-hidden="true"></span>Side by side<span class="split-hint">up to 3</span></label></header>
+      <div class="discussion-body">
+        <div class="tab-row" role="tablist" aria-label="Comments and assessment materials" hidden>
+          <button type="button" role="tab" id="tab-comments" aria-controls="comments" aria-selected="true" class="material-tab review-tab">Comments</button>
+          <span class="tab-divider" aria-hidden="true"></span><span class="tab-group-label" id="not-under-review">Not under review</span>
+          $material_tabs
+        </div>
+        <div class="pane-grid">
+          <div role="tabpanel" id="comments" class="material-pane" aria-labelledby="tab-comments">
+            <div class="material-toolbar"><h3 class="material-title">Comments</h3><p class="material-provenance">Signed in with GitHub; saved in <a href="$discussions_url">repository Discussions</a></p></div>
+            <div class="comments-body">
+              <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="$giscus_theme" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
+              <noscript><p>Comments need JavaScript. Read or join the discussion in <a href="$discussions_url">GitHub Discussions</a>.</p></noscript>
+            </div>
+          </div>
+          $material_panes
+        </div>
       </div>
     </section>
+    <script>$panel_script</script>
   </main>
   <footer class="page-footer"><span>$benchmark_name</span><nav class="benchmark-nav" aria-label="More benchmarks"><span>$prev_link</span><a href="index.html">All benchmarks</a><span>$next_link</span></nav></footer>
   <script>$script</script>

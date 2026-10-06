@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
+from unittest import mock
 
 
 HERE = Path(__file__).resolve().parent
@@ -15,6 +16,7 @@ module_spec = importlib.util.spec_from_file_location("generate", HERE / "generat
 generate = importlib.util.module_from_spec(module_spec)
 module_spec.loader.exec_module(generate)
 BENCHMARK = generate.BENCHMARKS / "adam-adae-death"
+SOLUTIONS = generate.HARBOR / "solutions" / BENCHMARK.name
 
 
 class DashboardContent(HTMLParser):
@@ -34,8 +36,8 @@ class DashboardContent(HTMLParser):
         attrs = dict(attrs)
         if tag in {"section", "aside"}:
             self.sections.append(attrs.get("id"))
-            if attrs.get("id") == "mapping-spec":
-                self.in_mapping = True
+        if tag == "table" and "mapping-table" in attrs.get("class", "").split():
+            self.in_mapping = True
         if tag == "td" and not self.in_mapping:
             self.cells.append(attrs["data-value"])
         if tag == "a" and "download" in attrs:
@@ -54,7 +56,7 @@ class DashboardContent(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "span" and self.code_depth:
             self.code_depth -= 1
-        if tag == "section" and self.in_mapping:
+        if tag == "table":
             self.in_mapping = False
 
     def handle_data(self, data):
@@ -66,11 +68,11 @@ class DashboardTests(unittest.TestCase):
     def test_mapping_uses_define_document_beside_the_benchmark(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-metadata"
         page = generate.render_benchmark(benchmark).decode("ascii")
-        mapping = page.split('<section id="mapping-spec"', 1)[1].split("</section>", 1)[
-            0
-        ]
+        mapping = page.split('id="mapping-spec"', 1)[1].split('role="tabpanel"', 1)[0]
         self.assertIn(">Country Codes (ISO 3166, version 2020)</td>", mapping)
-        self.assertIn('id="mapping-tab-codelists"', mapping)
+        self.assertIn(
+            '<option value="mapping-sheet-codelists">Codelists</option>', mapping
+        )
         self.assertIn(">Demographics</td>", mapping)
         self.assertIn(">C16576</td>", mapping)
 
@@ -86,26 +88,27 @@ class DashboardTests(unittest.TestCase):
         spec_lines = (BENCHMARK / "spec.yaml").read_text().splitlines()
         run_lines = (BENCHMARK / "run.py").read_text().splitlines()
         run_r_lines = (BENCHMARK / "run.R").read_text().splitlines()
-        self.assertEqual(content.code, spec_lines + run_r_lines + run_lines)
+        solution_lines = [
+            line
+            for name in ("result.R", "result.py")
+            for line in (SOLUTIONS / name).read_text().splitlines()
+        ]
+        self.assertEqual(
+            content.code, spec_lines + run_r_lines + run_lines + solution_lines
+        )
         self.assertEqual(
             content.sections,
-            [
-                "readme",
-                "specification",
-                "inputs",
-                "outputs",
-                "mapping-spec",
-                "code",
-                "comments",
-            ],
+            ["readme", "specification", "inputs", "outputs", "discussion"],
         )
         self.assertEqual(content.downloads, [])
         self.assertEqual(
             [tab["id"] for tab in content.tabs],
             [
-                "mapping-tab-mapping",
-                "mapping-tab-codelists",
-                "mapping-tab-revision-history",
+                "tab-comments",
+                "tab-mapping-spec",
+                "tab-prompt",
+                "tab-code",
+                "tab-solution",
             ],
         )
         self.assertEqual(
@@ -341,20 +344,114 @@ class DashboardTests(unittest.TestCase):
         plain = generate.render_benchmark(codeless).decode("ascii")
         self.assertNotIn('id="code"', plain)
 
-    def test_code_panel_switches_between_files(self):
-        with tempfile.TemporaryDirectory() as directory:
-            folder = Path(directory)
-            first = folder / "analysis.py"
-            first.write_text("print('one')\n", encoding="utf-8")
-            second = folder / "figure.R"
-            second.write_text("x <- 1\n", encoding="utf-8")
-            panel = generate.render_code_panel([first, second])
-        self.assertIn('id="code-select"', panel)
-        self.assertIn(
-            '<option value="code-pane-analysis-py" selected>analysis.py</option>', panel
+    def test_material_pane_offers_a_picker_only_between_documents(self):
+        documents = [
+            (
+                "analysis.py",
+                "code-pane-analysis-py",
+                '<div id="code-pane-analysis-py"></div>',
+            ),
+            ("figure.R", "code-pane-figure-r", '<div id="code-pane-figure-r"></div>'),
+        ]
+        pane = generate.render_material_pane(
+            "code", "yamaa code", "Runs the specification", "File", documents
         )
-        self.assertIn('<option value="code-pane-figure-r">figure.R</option>', panel)
-        self.assertIn('id="code-pane-figure-r" data-filename="figure.R" hidden>', panel)
+        self.assertIn('<div role="tabpanel" id="code" class="material-pane"', pane)
+        self.assertIn('<select id="code-select" data-documents>', pane)
+        self.assertIn(
+            '<option value="code-pane-analysis-py">analysis.py</option>', pane
+        )
+        self.assertIn('<option value="code-pane-figure-r">figure.R</option>', pane)
+        # Without the script every document shows, so none starts hidden.
+        self.assertNotIn("hidden", pane)
+        single = generate.render_material_pane(
+            "code", "yamaa code", "Runs the specification", "File", documents[:1]
+        )
+        self.assertNotIn("<select", single)
+
+    def test_review_ask_names_what_is_under_review(self):
+        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        self.assertIn(
+            'Given the summary, do the <a href="#inputs">inputs</a> and the '
+            '<a href="#outputs">expected output</a> make sense?',
+            page,
+        )
+        self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 2)
+        self.assertIn('<a href="#comments">Comments</a>', page)
+        negative = generate.render_benchmark(
+            generate.BENCHMARKS / "negative-ambiguous-type"
+        ).decode("ascii")
+        self.assertIn(
+            'should these <a href="#inputs">inputs</a> be rejected with the '
+            '<a href="#expected-failure">expected failure</a>?',
+            negative,
+        )
+        self.assertIn('id="expected-failure"', negative)
+
+    def test_comments_lead_the_tabs_and_the_rest_are_not_under_review(self):
+        content = DashboardContent(generate.render_benchmark(BENCHMARK).decode("ascii"))
+        comments, *materials = content.tabs
+        self.assertEqual(comments["aria-controls"], "comments")
+        self.assertEqual(comments["aria-selected"], "true")
+        self.assertIn("review-tab", comments["class"].split())
+        for tab in materials:
+            self.assertEqual(tab["aria-selected"], "false")
+            self.assertEqual(tab["aria-describedby"], "not-under-review")
+            self.assertIn("reference-tab", tab["class"].split())
+
+    def test_prompts_and_solutions_come_from_the_agent_evaluation(self):
+        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        prompts = generate.HARBOR / "prompts" / BENCHMARK.name
+        self.assertIn(
+            '<option value="prompt-pane-full">Full &#8212; every rule an expected cell depends on</option>',
+            page,
+        )
+        for tier in ("full", "conventions", "brief"):
+            self.assertIn(f'id="prompt-pane-{tier}"', page)
+            self.assertIn(
+                '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
+                f'evaluations/harbor/prompts/adam-adae-death/{tier}.md">Edit</a>',
+                page,
+            )
+        self.assertIn(
+            "DTHFL is Y or has no value.", (prompts / "conventions.md").read_text()
+        )
+        self.assertIn("<p>DTHFL is Y or has no value.</p>", page)
+        for name in ("result.R", "result.py"):
+            self.assertIn(f'data-filename="solutions/adam-adae-death/{name}"', page)
+            self.assertIn(
+                '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
+                f'evaluations/harbor/solutions/adam-adae-death/{name}">Edit</a>',
+                page,
+            )
+
+    def test_prompt_text_is_read_from_the_harbor_folder_by_benchmark_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            harbor = Path(directory)
+            folder = harbor / "prompts" / BENCHMARK.name
+            folder.mkdir(parents=True)
+            (folder / "full.md").write_text(
+                "Build <ADAE> & keep *every* row.\n", encoding="utf-8"
+            )
+            with mock.patch.object(generate, "HARBOR", harbor):
+                page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        self.assertIn("<p>Build &lt;ADAE&gt; &amp; keep <em>every</em> row.</p>", page)
+        # One tier: no picker. No solutions folder: no solution tab.
+        self.assertNotIn('id="prompt-select"', page)
+        self.assertNotIn('id="tab-solution"', page)
+
+    def test_materials_a_benchmark_lacks_have_no_tab(self):
+        def tab_ids(name):
+            page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")
+            return [tab["id"] for tab in DashboardContent(page).tabs]
+
+        self.assertEqual(
+            tab_ids("negative-ambiguous-type"), ["tab-comments", "tab-mapping-spec"]
+        )
+        self.assertEqual(
+            tab_ids("adam-adsl-age-quality"),
+            ["tab-comments", "tab-mapping-spec", "tab-prompt", "tab-code"],
+        )
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
         benchmark = generate.BENCHMARKS / "schema-inheritance"
@@ -426,7 +523,17 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertEqual(
             re.findall(r'data-filename="([^"]+)"', page),
-            ["spec_dm.yaml", "spec_suppdm.yaml", "run.R", "run.py"],
+            [
+                "spec_dm.yaml",
+                "spec_suppdm.yaml",
+                "prompts/sdtm-dm-race-ethnicity/full.md",
+                "prompts/sdtm-dm-race-ethnicity/conventions.md",
+                "prompts/sdtm-dm-race-ethnicity/brief.md",
+                "run.R",
+                "run.py",
+                "solutions/sdtm-dm-race-ethnicity/result.R",
+                "solutions/sdtm-dm-race-ethnicity/result.py",
+            ],
         )
         self.assertIn('<span class="panel-caption">2 spec files</span>', page)
         # RACE is a DM column: only the producer's columns can label it.

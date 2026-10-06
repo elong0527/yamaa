@@ -143,10 +143,6 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .schema-section.has-spec-picker .spec-pane .file-heading { display: none; }
 .code-toolbar { display: flex; min-height: 48px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .code-toolbar select { width: 100%; }
-.code-panel { margin-top: 22px; }
-.code-picker { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
-.code-picker label { color: var(--muted); white-space: nowrap; }
-.code-pane .code-scroll { max-height: 420px; }
 .code-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 12px 0 18px; background: #f7fafd; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #c0cedd transparent; }
 .code-scroll pre { margin: 0; font-size: 14px; line-height: 1.65; tab-size: 2; }
 .code-line { display: block; width: max-content; min-width: 100%; padding-right: 18px; }
@@ -160,8 +156,7 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .yaml-literal { color: #995213; }
 .code-line.is-target { background: #dce9f6; }
 .plain-file { margin: 0; padding: 10px 18px 18px; overflow: auto; font-size: 14px; line-height: 1.6; }
-.comments-panel { margin-top: 22px; }
-.comments-body { padding: 16px 22px 8px; }
+.comments-body { padding: 4px 0 8px; }
 .comments-body noscript p { margin: 0 0 8px; }
 .page-footer { padding: 16px 28px; color: #66768a; font-size: 12px; gap: 10px; }
 .benchmark-nav { display: flex; align-items: center; gap: 12px; }
@@ -192,7 +187,7 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   h1 { font-size: 25px; }
   .dashboard { padding: 12px 12px 0; }
   .prose { padding: 14px 18px; }
-  .comments-body { padding: 12px 12px 4px; }
+  .split-hint { display: none; }
   .comparison-bar { gap: 8px; flex-wrap: wrap; }
   .subject-control { gap: 6px; }
   .subject-control label { font-size: 12px; }
@@ -205,7 +200,11 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   .brand-row { background: none; color: var(--ink); }
   .brand, .brand-location, .source-link, .gallery-link { color: var(--ink); }
   .dashboard { padding: 0; }
-  .comparison-bar, .code-toolbar, .panel-resizer, .page-footer, .comments-panel { display: none !important; }
+  .review-ask, .comparison-bar, .code-toolbar, .panel-resizer, .page-footer, .split-toggle, .tab-row, .material-picker, #comments { display: none !important; }
+  /* Paper has no tabs: print every material and every document in it. */
+  .discussion-panel .material-pane:not(#comments)[hidden], .discussion-panel .material-document[hidden] { display: block !important; }
+  .discussion-panel .material-title { position: static !important; width: auto !important; height: auto !important; clip-path: none !important; }
+  .discussion-panel .code-scroll, .discussion-panel .mapping-scroll { max-height: none !important; }
   .workbench { display: block; }
   .schema-section, .schema-section[hidden] { position: static; display: block !important; height: auto; margin: 16px 0; }
   .schema-panel { display: block; }
@@ -214,15 +213,53 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   .datasets { gap: 16px; }
 }
 
-/* Derived Excel Specification review section */
-.mapping-panel { margin: 26px 0 22px; }
-.mapping-body { padding: 6px 18px 18px; }
-.mapping-tablist { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 4px; }
-.mapping-tab { appearance: none; border: 1px solid var(--line); background: #f3f7fb; color: #24384d; border-radius: 6px; padding: 8px 14px; font-size: 14px; font-weight: 550; cursor: pointer; }
-.mapping-tab:hover { border-color: var(--brand); color: var(--brand); }
-.mapping-tab[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
-.mapping-pane { padding-top: 10px; }
-.mapping-pane[hidden] { display: none; }
+/* The review ask, and the chips that mark what it covers */
+.review-ask { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 11px 18px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 8px; font-size: 15px; line-height: 1.5; }
+.review-chip { flex-shrink: 0; border-radius: 999px; padding: 2px 10px; background: var(--brand); color: #fff; font-size: 12px; font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
+.section-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* Comments and the assessment materials: one tab row, optionally side by side */
+.discussion-panel { margin: 26px 0 22px; }
+.discussion-panel .panel-header { flex-wrap: wrap; }
+.discussion-body { padding: 6px 18px 18px; }
+.tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 0 4px; }
+.material-tab { appearance: none; border: 1px solid var(--line); background: #f3f7fb; color: #24384d; border-radius: 6px; padding: 8px 14px; font-size: 14px; font-weight: 550; cursor: pointer; }
+.material-tab:hover { border-color: var(--brand); color: var(--brand); }
+.review-tab[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+/* Muted rather than brand blue: nothing behind these tabs is under review. */
+.reference-tab[aria-selected="true"] { background: var(--muted); border-color: var(--muted); color: #fff; }
+.is-split .material-tab[aria-selected="true"]::before { content: "\2713\00a0"; }
+.tab-divider { width: 1px; height: 26px; margin: 0 6px; background: var(--line); }
+.tab-group-label { margin-right: 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.split-toggle { position: relative; display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.split-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.switch-track { position: relative; width: 32px; height: 18px; border-radius: 999px; background: #c3d2e0; transition: background .15s; }
+.switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.split-toggle input:checked + .switch-track { background: var(--brand); }
+.split-toggle input:checked + .switch-track::after { transform: translateX(14px); }
+.split-toggle input:focus-visible + .switch-track { outline: 3px solid #227bce; outline-offset: 2px; }
+.split-hint { color: var(--muted); font-size: 12px; }
+.pane-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.is-split .pane-grid { grid-template-columns: repeat(var(--open-panes, 1), minmax(0, 1fr)); padding-top: 10px; }
+.material-pane { min-width: 0; }
+.is-split .material-pane { padding: 0 12px 12px; border: 1px solid var(--line); border-radius: 6px; }
+.material-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; }
+.material-title { margin: 0; font-size: 15px; font-weight: 650; }
+/* One pane at a time: its selected tab already names it, so the title is
+   kept for screen readers only. */
+.is-tabbed:not(.is-split) .material-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.material-picker { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; color: var(--muted); font-size: 14px; }
+.material-picker select { min-width: 0; color: var(--ink); }
+.material-provenance { margin: 0 0 0 auto; color: var(--muted); font-size: 13px; }
+.is-split .material-provenance { flex-basis: 100%; margin-left: 0; }
+.material-document + .material-document { margin-top: 14px; }
+.material-file { overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
+.material-file .code-scroll { max-height: 420px; }
+.prompt-prose { max-width: none; columns: 1; font-size: 15px; }
+.is-split #comments .comments-body { max-height: 75vh; overflow: auto; }
 .mapping-scroll { max-height: 560px; }
 .mapping-table td { white-space: normal; vertical-align: top; height: auto; }
 .mapping-table td:first-child, .mapping-table th:first-child { white-space: nowrap; }
+@media (max-width: 1000px) {
+  .is-split .pane-grid { grid-template-columns: minmax(0, 1fr); }
+}

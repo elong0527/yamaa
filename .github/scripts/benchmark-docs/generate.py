@@ -29,6 +29,17 @@ DESTINATION = ROOT / "docs/benchmark"
 # `exclude_docs` in mkdocs.yml keeps it out of the built site; the generated
 # docs/benchmark/index.md is the page readers see.
 OVERVIEW = ROOT / "docs/articles/benchmark.md"
+# The agent evaluation keeps each benchmark's prompts and its reference
+# solutions written without yamaa, keyed by benchmark directory name. The
+# dashboard shows them as assessment materials beside the comments.
+HARBOR = ROOT / "evaluations/harbor"
+# Most rules first, as evaluations/harbor/prompts/README.md defines the tiers.
+PROMPT_TIERS = (
+    ("full", "Full", "every rule an expected cell depends on"),
+    ("conventions", "Conventions", "the sponsor's conventions only"),
+    ("brief", "Brief", "the opening, columns, and paths only"),
+)
+SOLUTION_FILES = ("result.R", "result.py")
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
 # outlive any deployment. Each benchmark maps to one discussion whose title is
@@ -588,46 +599,188 @@ def benchmark_code_files(benchmark):
     )
 
 
-def render_code_panel(files, edit_base=None):
-    panes, options = [], []
-    for path in files:
-        slug = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-")
-        lines = path.read_text(encoding="utf-8").splitlines()
-        code_lines = "".join(
-            f'<span class="code-line" id="code-{slug}-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
-            f'<span class="code-source">{escape(line)}</span></span>'
-            for number, line in enumerate(lines, 1)
-        )
-        active = "" if path == files[0] else " hidden"
-        edit = (
-            f'<a class="edit-button" href="{edit_base}/{quote(path.name)}">Edit</a>'
-            if edit_base
-            else ""
-        )
-        panes.append(
-            f'<div class="code-pane" id="code-pane-{slug}" data-filename="{escape(path.name)}"{active}>'
-            f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(path.name)}</h3>{edit}</span>'
-            f'<span class="file-count">{len(lines)} lines</span></div>'
-            f'<div class="code-scroll" tabindex="0" aria-label="{escape(path.name)}"><pre><code>{code_lines}</code></pre></div></div>'
-        )
-        selected = " selected" if path == files[0] else ""
-        options.append(
-            f'<option value="code-pane-{slug}"{selected}>{escape(path.name)}</option>'
-        )
-    picker = ""
-    if len(files) > 1:
-        picker = (
-            '<div class="code-picker"><label for="code-select">Choose code file</label>'
-            f'<select id="code-select">{"".join(options)}</select></div>'
-        )
-    caption = f"{len(files)} code file" + ("" if len(files) == 1 else "s")
+def slugify(text):
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def render_file_document(document_id, title, line_count, body, edit_url=None):
+    edit = f'<a class="edit-button" href="{edit_url}">Edit</a>' if edit_url else ""
     return (
-        '<section id="code" class="panel code-panel" aria-labelledby="code-heading">\n'
-        f'      <header class="panel-header"><h2 id="code-heading">Code</h2><span class="panel-caption">{caption}</span></header>\n'
-        f"      {picker}\n"
-        f"      {''.join(panes)}\n"
-        "    </section>"
+        f'<div class="material-document material-file" id="{document_id}" data-filename="{escape(title)}">'
+        f'<div class="file-heading"><span class="file-title"><h4 class="filename">{escape(title)}</h4>{edit}</span>'
+        f'<span class="file-count">{plural(line_count, "line")}</span></div>{body}</div>'
     )
+
+
+def render_code_document(path, slug, title, edit_url=None):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    code_lines = "".join(
+        f'<span class="code-line" id="code-{slug}-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
+        f'<span class="code-source">{escape(line)}</span></span>'
+        for number, line in enumerate(lines, 1)
+    )
+    body = (
+        f'<div class="code-scroll" tabindex="0" aria-label="{escape(title)}">'
+        f"<pre><code>{code_lines}</code></pre></div>"
+    )
+    return render_file_document(f"code-pane-{slug}", title, len(lines), body, edit_url)
+
+
+def render_prompt_document(path, tier, title, edit_url):
+    """A prompt reads as the request it is; the Edit link opens the raw file."""
+    text = path.read_text(encoding="utf-8")
+    body = MarkdownIt("commonmark", {"html": False}).render(text)
+    return render_file_document(
+        f"prompt-pane-{tier}",
+        title,
+        len(text.splitlines()),
+        f'<div class="prose prompt-prose">{body}</div>',
+        edit_url,
+    )
+
+
+def render_material_pane(key, title, provenance, picker_label, documents):
+    """One tab's pane: a toolbar naming where it comes from over its documents.
+
+    `documents` is a list of (picker label, document id, document HTML); a
+    picker appears when there is more than one to choose from.
+    """
+    picker = ""
+    if len(documents) > 1:
+        options = "".join(
+            f'<option value="{document_id}">{escape(label)}</option>'
+            for label, document_id, _ in documents
+        )
+        picker = (
+            f'<label class="material-picker"><span>{escape(picker_label)}</span>'
+            f'<select id="{key}-select" data-documents>{options}</select></label>'
+        )
+    return (
+        f'<div role="tabpanel" id="{key}" class="material-pane" aria-labelledby="tab-{key}">'
+        f'<div class="material-toolbar"><h3 class="material-title">{escape(title)}</h3>{picker}'
+        f'<p class="material-provenance">{provenance}</p></div>'
+        + "".join(document for _, _, document in documents)
+        + "</div>"
+    )
+
+
+def render_materials(benchmark, spec, define, code_files, edit_base):
+    """Tabs and panes for the assessment materials shown beside Comments.
+
+    None of them is under review: the mapping spec is generated from the YAML,
+    the yamaa code only runs it, and the prompts and the solutions written
+    without yamaa exist to run and score agent evaluations. A material a
+    benchmark lacks has no tab.
+    """
+    materials = []
+    sheets = mapping_doc.render_mapping_sheets(spec, define)
+    if sheets:
+        materials.append(
+            (
+                "mapping-spec",
+                "Mapping spec",
+                "Generated from the benchmark YAML; do not edit by hand",
+                "Sheet",
+                [
+                    (
+                        label,
+                        f"mapping-sheet-{sheet_id}",
+                        f'<div class="material-document" id="mapping-sheet-{sheet_id}">{table}</div>',
+                    )
+                    for sheet_id, label, table in sheets
+                ],
+            )
+        )
+    name = quote(benchmark.name)
+    prompts = HARBOR / "prompts" / benchmark.name
+    tiers = [tier for tier in PROMPT_TIERS if (prompts / f"{tier[0]}.md").is_file()]
+    if tiers:
+        materials.append(
+            (
+                "prompt",
+                "Agent prompt",
+                (
+                    "The request an agent receives with the input files; each "
+                    f'<a href="{REPOSITORY}/blob/main/evaluations/harbor/prompts/README.md">tier</a> '
+                    "states no more than the one above"
+                ),
+                "Tier",
+                [
+                    (
+                        f"{label} \u2014 {keeps}",
+                        f"prompt-pane-{tier}",
+                        render_prompt_document(
+                            prompts / f"{tier}.md",
+                            tier,
+                            f"prompts/{benchmark.name}/{tier}.md",
+                            f"{REPOSITORY}/edit/main/evaluations/harbor/prompts/{name}/{tier}.md",
+                        ),
+                    )
+                    for tier, label, keeps in tiers
+                ],
+            )
+        )
+    if code_files:
+        materials.append(
+            (
+                "code",
+                "yamaa code",
+                "Runs the yamaa specification; its result must match the expected output",
+                "File",
+                [
+                    (
+                        path.name,
+                        f"code-pane-{slugify(path.name)}",
+                        render_code_document(
+                            path,
+                            slugify(path.name),
+                            path.name,
+                            f"{edit_base}/{quote(path.name)}" if edit_base else None,
+                        ),
+                    )
+                    for path in code_files
+                ],
+            )
+        )
+    solutions = HARBOR / "solutions" / benchmark.name
+    solution_files = [
+        solutions / filename
+        for filename in SOLUTION_FILES
+        if (solutions / filename).is_file()
+    ]
+    if solution_files:
+        materials.append(
+            (
+                "solution",
+                "Solution without yamaa",
+                (
+                    "Written from the full prompt and the inputs alone; CI checks it "
+                    "reproduces the expected output"
+                ),
+                "File",
+                [
+                    (
+                        path.name,
+                        f"code-pane-solution-{slugify(path.name)}",
+                        render_code_document(
+                            path,
+                            "solution-" + slugify(path.name),
+                            f"solutions/{benchmark.name}/{path.name}",
+                            f"{REPOSITORY}/edit/main/evaluations/harbor/solutions/{name}/{quote(path.name)}",
+                        ),
+                    )
+                    for path in solution_files
+                ],
+            )
+        )
+    tabs = "".join(
+        f'<button type="button" role="tab" id="tab-{key}" aria-controls="{key}" '
+        'aria-selected="false" aria-describedby="not-under-review" '
+        f'class="material-tab reference-tab">{escape(title)}</button>'
+        for key, title, _, _, _ in materials
+    )
+    panes = "".join(render_material_pane(*material) for material in materials)
+    return tabs, panes
 
 
 def render_benchmark(benchmark, previous=None, next=None):
@@ -743,6 +896,21 @@ def render_benchmark(benchmark, previous=None, next=None):
             metrics.append((len(outputs), "expected files", ""))
             output_caption = "Expected artifacts"
 
+    # The one question a reviewer answers; everything in the tabs beside
+    # Comments is background for assessment.
+    question = (
+        'Given the summary, should these <a href="#inputs">inputs</a> be rejected '
+        'with the <a href="#expected-failure">expected failure</a>?'
+        if is_failure
+        else 'Given the summary, do the <a href="#inputs">inputs</a> and the '
+        '<a href="#outputs">expected output</a> make sense?'
+    )
+    review_ask = (
+        f"{question} Say so in "
+        '<a href="#comments">Comments</a>. The other tabs beside Comments are '
+        "background for assessment and are not under review."
+    )
+
     def metric_cell(count, label, cls):
         klass = f' class="{cls}"' if cls else ""
         return f"<div{klass}><dt>{label}</dt><dd>{count}</dd></div>"
@@ -789,14 +957,15 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_code = "".join(panes)
         spec_file_header = ""
     code_files = benchmark_code_files(benchmark)
-    code_panel = render_code_panel(code_files, edit_base) if code_files else ""
     define_path = benchmark / "define.yaml"
     define = (
         yaml.safe_load(define_path.read_text(encoding="utf-8"))
         if define_path.is_file()
         else None
     )
-    mapping_section = mapping_doc.render_mapping_section(spec, define)
+    material_tabs, material_panes = render_materials(
+        benchmark, spec, define, code_files, edit_base
+    )
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         benchmark_name=escape(benchmark.name),
@@ -824,8 +993,10 @@ def render_benchmark(benchmark, previous=None, next=None):
         output_caption=output_caption,
         spec_caption=spec_caption,
         spec_code=spec_code,
-        code_panel=code_panel,
-        mapping_section=mapping_section,
+        review_ask=review_ask,
+        material_tabs=material_tabs,
+        material_panes=material_panes,
+        panel_script=(HERE / "panel-tabs.js").read_text(encoding="utf-8"),
         giscus_repo=escape(GISCUS["repo"]),
         giscus_repo_id=escape(GISCUS["repo_id"]),
         giscus_category=escape(GISCUS["category"]),
