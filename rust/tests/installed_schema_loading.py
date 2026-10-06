@@ -34,6 +34,30 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_layer_diagnostic_paths_distinguish_indices_from_text_names(self):
+        """Positional and bool/int paths keep brackets; textual names keep dots."""
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        value, findings = bundle.interpreter.normalize_layer(
+            {
+                "schema_version": "1.0",
+                "input": {True: [], 2: [], "X": []},
+                "columns": [{}, {"name": "X", "type": 1}],
+            }
+        )
+        self.assertIsNone(value)
+        self.assertEqual(
+            [d.spec_paths for d in findings],
+            [
+                ("input.key(True)",),
+                ("input[True]",),
+                ("input.key(2)",),
+                ("input[2]",),
+                ("input.X",),
+                ("columns[0].name",),
+                ("columns.X.type",),
+            ],
+        )
+
     def test_layer_admission_collects_ordered_field_errors_before_normalization(self):
         """Both authored errors retain field paths in schema order, not write order."""
         document = {

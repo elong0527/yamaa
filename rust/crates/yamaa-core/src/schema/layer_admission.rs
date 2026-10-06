@@ -89,6 +89,26 @@ impl Run<'_, '_> {
         })
     }
 
+    fn indexed(&mut self, path: &str, label: &str) -> Result<String, NormalizationError> {
+        let size = path.len().saturating_add(label.len()).saturating_add(2);
+        self.budget.work(size)?;
+        self.budget.validation.text(size)?;
+        Ok(format!("{path}[{label}]"))
+    }
+
+    fn member_path(
+        &mut self,
+        path: &str,
+        key: usize,
+        label: &str,
+    ) -> Result<String, NormalizationError> {
+        if matches!(self.input.nodes()[key], N::Integer(_) | N::Boolean(_)) {
+            self.indexed(path, label)
+        } else {
+            self.join(path, label)
+        }
+    }
+
     fn finding(
         &mut self,
         path: &str,
@@ -148,7 +168,13 @@ impl Run<'_, '_> {
                 .work(fields.len().saturating_mul(name.len().saturating_add(1)))?;
             if !matches!(&self.input.nodes()[key], N::Text(text) if fields.iter().any(|f| f.name == *text))
             {
-                let logical = self.join(path, &name)?;
+                // Root unknown fields use their plain spelling; nested integer/bool
+                // names follow the host's bracketed path convention.
+                let logical = if path.is_empty() {
+                    self.join(path, &name)?
+                } else {
+                    self.member_path(path, key, &name)?
+                };
                 self.finding(
                     &logical,
                     "unknown_field",
@@ -278,7 +304,11 @@ impl Run<'_, '_> {
                     Some(id) => self.label(id)?,
                     None => format!("{index}"),
                 };
-                let logical = self.join(path, &label)?;
+                let logical = if id.is_some() {
+                    self.join(path, &label)?
+                } else {
+                    self.indexed(path, &label)?
+                };
                 self.member(member, kind, &logical)?;
                 if let Some(id) = id {
                     let mut duplicate = false;
@@ -307,7 +337,7 @@ impl Run<'_, '_> {
             };
             for &(key, member) in entries {
                 let label = self.label(key)?;
-                let logical = self.join(path, &label)?;
+                let logical = self.member_path(path, key, &label)?;
                 let key_path = self.join(path, &format!("key({label})"))?;
                 self.validate_type("identifier", key, &key_path)?;
                 if matches!(self.input.nodes()[member], N::Text(_)) {

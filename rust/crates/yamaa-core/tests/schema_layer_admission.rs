@@ -12,6 +12,7 @@ enum V {
     Null,
     List(Vec<V>),
     Map(Vec<(&'static str, V)>),
+    Pairs(Vec<(V, V)>),
 }
 use V::{Bool, Int, List, Map, Null, Text};
 
@@ -27,6 +28,12 @@ fn document(value: V) -> Document {
                 items
                     .into_iter()
                     .map(|(k, v)| (push(Text(k), nodes), push(v, nodes)))
+                    .collect(),
+            ),
+            V::Pairs(items) => N::Mapping(
+                items
+                    .into_iter()
+                    .map(|(k, v)| (push(k, nodes), push(v, nodes)))
                     .collect(),
             ),
         };
@@ -228,8 +235,8 @@ fn version_unknown_identity_and_duplicate_errors_keep_phase_order() {
         [
             ("schema_version", "schema_version_mismatch"),
             ("unknown", "unknown_field"),
-            ("columns.0.name", "missing_required_field"),
-            ("columns.0.extra", "unknown_field"),
+            ("columns[0].name", "missing_required_field"),
+            ("columns[0].extra", "unknown_field"),
             ("columns.X.label", "invalid_field_type"),
             ("columns.X.name", "duplicate_identifier"),
         ]
@@ -273,7 +280,7 @@ fn layer_shape_errors_use_python_type_labels() {
         ),
         (
             layer(vec![("columns", List(vec![Int("7")]))]),
-            "columns.0",
+            "columns[0]",
             "column_class",
             "int",
         ),
@@ -307,13 +314,13 @@ fn required_and_identity_nulls_are_invalid_clears() {
         findings,
         [
             finding(
-                "columns.0.name",
+                "columns[0].name",
                 "invalid_clear",
                 "REQ-0660",
                 vec![("field", text("name"))]
             ),
             finding(
-                "columns.0.type",
+                "columns[0].type",
                 "invalid_clear",
                 "REQ-0660",
                 vec![("field", text("type"))]
@@ -536,5 +543,50 @@ fn empty_collections_and_input_shorthand_do_not_require_unused_member_classes() 
                 Map(vec![("SRC", Map(vec![("path", Text("data.csv"))]))]),
             ),
         ]),
+    );
+}
+
+#[test]
+fn paths_distinguish_positional_numeric_boolean_and_textual_members() {
+    let input = document(V::Pairs(vec![
+        (Text("schema_version"), Text("1.0")),
+        (Bool(true), Null),
+        (
+            Text("input"),
+            V::Pairs(vec![
+                (Bool(true), List(vec![])),
+                (Int("2"), List(vec![])),
+                (Text("2"), List(vec![])),
+                (Null, List(vec![])),
+            ]),
+        ),
+        (
+            Text("columns"),
+            List(vec![
+                Map(vec![]),
+                V::Pairs(vec![
+                    (Text("name"), Text("2")),
+                    (Bool(false), Null),
+                    (Int("3"), Null),
+                ]),
+            ]),
+        ),
+    ]));
+    let findings = diagnostics(input);
+    assert_eq!(
+        paths(&findings),
+        [
+            ("True", "unknown_field"),
+            ("input.key(True)", "invalid_field_type"),
+            ("input[True]", "invalid_field_type"),
+            ("input.key(2)", "invalid_field_type"),
+            ("input[2]", "invalid_field_type"),
+            ("input.2", "invalid_field_type"),
+            ("input.key(None)", "invalid_field_type"),
+            ("input.None", "invalid_field_type"),
+            ("columns[0].name", "missing_required_field"),
+            ("columns.2[False]", "unknown_field"),
+            ("columns.2[3]", "unknown_field"),
+        ]
     );
 }
