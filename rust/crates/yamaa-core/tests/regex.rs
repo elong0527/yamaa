@@ -75,6 +75,301 @@ fn lookaround_order_and_isolation() {
     );
 }
 
+/// Width admission follows capture participation and reverse evaluation order.
+#[test]
+fn lookbehind_backreference_width_uses_capture_state() {
+    for (source, subject, expected) in [
+        (r"^(a)(?<=\1)b$", "ab", vec![Some("ab"), Some("a")]),
+        (r"^(?<x>a)(?<=\k<x>)b$", "ab", vec![Some("ab"), Some("a")]),
+        (r"(?<=\1(a))b", "aab", vec![Some("b"), Some("a")]),
+        (r"(?<=(a)\1)b", "ab", vec![Some("b"), Some("a")]),
+        (r"^(?<=\1)(a*)$", "aaa", vec![Some("aaa"), Some("aaa")]),
+        (r"^()(?:a)(?<=\1+)b$", "ab", vec![Some("ab"), Some("")]),
+        (r"^(?=(a))a(?<=\1)b$", "ab", vec![Some("ab"), Some("a")]),
+        (r"^(?!(a))(?<=\1)b$", "b", vec![Some("b"), None]),
+    ] {
+        assert_eq!(captures(source, subject), Some(expected), "{source}");
+    }
+    // Alternative capture states must stay correlated: either pair totals three.
+    assert_eq!(
+        captures(r"^(?:(a)(bc)|(ab)(c))(?<=\1\2\3\4)d$", "abcd"),
+        Some(vec![Some("abcd"), Some("a"), Some("bc"), None, None])
+    );
+}
+
+/// Prior variable/optional captures can make an otherwise plain reference vary.
+#[test]
+fn lookbehind_backreference_width_rejects_proven_variation() {
+    for source in [
+        r"(a+)(?<=\1)b",
+        r"(a)?(?<=\1)b",
+        r"(?:a|(b))(?<=\1)c",
+        r"(a)(?<=\1+)b",
+    ] {
+        assert!(
+            matches!(
+                Pattern::compile(source, CompileLimits::default()),
+                Err(CompileError::Invalid {
+                    reason: "variable-length lookbehind",
+                    ..
+                })
+            ),
+            "{source}"
+        );
+    }
+}
+
+/// Final repeat captures belong to one cleared iteration, in either direction.
+#[test]
+fn lookbehind_width_preserves_repeat_capture_lifecycle() {
+    for (source, subject, expected) in [
+        (
+            r"^(?:(a)|(b)){2}(?<=\1\2)c$",
+            "abc",
+            vec![Some("abc"), None, Some("b")],
+        ),
+        (r"^(?:(a)(?<=\1)){2}b$", "aab", vec![Some("aab"), Some("a")]),
+        (r"(?<=(?:\1(a)){2})b", "aaaab", vec![Some("b"), Some("a")]),
+        (r"(?<=(?:(a)\1){2})b", "aab", vec![Some("b"), Some("a")]),
+        (
+            r"^((?:a|b){2})(?<=\1)c$",
+            "abc",
+            vec![Some("abc"), Some("ab")],
+        ),
+        (r"^(a){1,3}(?<=\1)b$", "aaab", vec![Some("aaab"), Some("a")]),
+        (r"^(){0,3}(?<=\1)b$", "b", vec![Some("b"), None]),
+        (r"^(){2,3}(?<=\1)b$", "b", vec![Some("b"), Some("")]),
+        (r"^(a){0}(?<=\1)b$", "b", vec![Some("b"), None]),
+    ] {
+        assert_eq!(captures(source, subject), Some(expected), "{source}");
+    }
+    for source in [
+        r"(a|bb){2}(?<=\1)c",
+        r"((?:a|bb){2})(?<=\1)c",
+        r"(a){0,2}(?<=\1)b",
+        r"(a?){1,2}(?<=\1)b",
+        r"(?<=(?:\1(a)){1,2})b",
+    ] {
+        assert!(
+            matches!(
+                Pattern::compile(source, CompileLimits::default()),
+                Err(CompileError::Invalid {
+                    reason: "variable-length lookbehind",
+                    ..
+                })
+            ),
+            "{source}"
+        );
+    }
+}
+
+/// References can compensate unequal literal alternatives in reverse traversal.
+#[test]
+fn lookbehind_width_preserves_reverse_alternative_correlation() {
+    let source = r"(?<=\1\2(?:(a)bb|(aa)))c";
+    assert_eq!(
+        captures(source, "aabbc"),
+        Some(vec![Some("c"), Some("a"), None])
+    );
+    assert_eq!(
+        captures(source, "aaaac"),
+        Some(vec![Some("c"), None, Some("aa")])
+    );
+    assert_eq!(captures(source, "aaac"), None);
+    // A reference outside its own open capture is unset until that capture closes.
+    assert_eq!(
+        captures(r"^(\1a)(?<=\1)b$", "ab"),
+        Some(vec![Some("ab"), Some("a")])
+    );
+    assert_eq!(
+        captures(r"^(\2a)(\1b)(?<=\1\2)c$", "aabc"),
+        Some(vec![Some("aabc"), Some("a"), Some("ab")])
+    );
+}
+
+/// Assertion state commits only on positive assertions; syntax checks remain structural.
+#[test]
+fn lookbehind_width_validates_nested_and_unexecuted_assertions() {
+    assert_eq!(
+        captures(r"^(a)(?<!(?<=\1)b)c$", "ac"),
+        Some(vec![Some("ac"), Some("a")])
+    );
+    assert_eq!(
+        captures(r"^(?!(a+))(?<=\1)b$", "b"),
+        Some(vec![Some("b"), None])
+    );
+    assert_eq!(
+        captures(r"^(?=(a))(?<=(?=\1))a$", "a"),
+        Some(vec![Some("a"), Some("a")])
+    );
+    for source in [
+        r"(?:(?<=a+)){0}(a)\1",
+        r"(?!(?<=a+))(a)\1",
+        r"(?<=(?=a+)(?<=b+))(a)\1",
+        r"(?=(a+))(?<=\1)b",
+        r"(?:(a+)(?<=\1)){0}",
+    ] {
+        assert!(
+            matches!(
+                Pattern::compile(source, CompileLimits::default()),
+                Err(CompileError::Invalid {
+                    reason: "variable-length lookbehind",
+                    ..
+                })
+            ),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        Pattern::compile("\u{e9}(a+)(?<=\\1)b", CompileLimits::default()).unwrap_err(),
+        CompileError::Invalid {
+            byte: 6,
+            reason: "variable-length lookbehind"
+        }
+    );
+}
+
+/// Exponential capture choices stop at caller budgets, and a fresh compile can retry.
+#[test]
+fn lookbehind_width_analysis_budgets_and_retry() {
+    let source = r"(a)(?<=\1)b";
+    for (limits, expected) in [
+        (
+            CompileLimits {
+                width_work: 0,
+                ..CompileLimits::default()
+            },
+            Resource::WidthWork,
+        ),
+        (
+            CompileLimits {
+                width_cells: 0,
+                ..CompileLimits::default()
+            },
+            Resource::WidthCells,
+        ),
+    ] {
+        assert!(matches!(Pattern::compile(source, limits),
+            Err(CompileError::Limit { resource, limit: 0 }) if resource == expected));
+        assert!(Pattern::compile(source, CompileLimits::default()).is_ok());
+    }
+    let choices = "(?:(a)|b)".repeat(16) + r"(?<=\1)";
+    for (limits, expected) in [
+        (
+            CompileLimits {
+                width_work: 1000,
+                ..CompileLimits::default()
+            },
+            Resource::WidthWork,
+        ),
+        (
+            CompileLimits {
+                width_cells: 1000,
+                ..CompileLimits::default()
+            },
+            Resource::WidthCells,
+        ),
+    ] {
+        assert!(matches!(Pattern::compile(&choices, limits),
+            Err(CompileError::Limit { resource, limit: 1000 }) if resource == expected));
+    }
+    // Symbolic count handling must not unroll a million repetitions.
+    assert!(Pattern::compile(r"(a){1000000}(?<=\1)", CompileLimits::default()).is_ok());
+    assert!(Pattern::compile(r"(a)(?<=\1{1000000})", CompileLimits::default()).is_ok());
+    assert!(matches!(
+        Pattern::compile(r"(aa)(?<=\1{1000000})", CompileLimits::default()),
+        Err(CompileError::Limit {
+            resource: Resource::Width,
+            ..
+        })
+    ));
+    let flat = "a".repeat(3000) + r"(a)(?<=\1)";
+    assert!(Pattern::compile(&flat, CompileLimits::default()).is_ok());
+}
+
+/// An unrelated reference must not make a statically fixed assertion need analysis.
+#[test]
+fn fixed_lookbehind_does_not_analyze_unrelated_capture_paths() {
+    let choices = "(?:(a)|b)".repeat(16) + r"(?<=c)\1";
+    for source in [&choices, r"(a{1000})\1{2000}(?<=b)", r"(a)(?<=(?=\1))a"] {
+        assert!(
+            Pattern::compile(source, CompileLimits::default()).is_ok(),
+            "{source}"
+        );
+        assert!(
+            Pattern::compile(
+                source,
+                CompileLimits {
+                    width_work: 0,
+                    width_cells: 0,
+                    ..CompileLimits::default()
+                }
+            )
+            .is_ok(),
+            "{source}"
+        );
+    }
+    // A fixed outer assertion must not hide a dependent nested assertion.
+    assert!(matches!(
+        Pattern::compile(r"(a+)(?<=(?<=\1))b", CompileLimits::default()),
+        Err(CompileError::Invalid {
+            reason: "variable-length lookbehind",
+            ..
+        })
+    ));
+}
+
+/// Integer count truth distinguishes a final capture from a whole repeated group.
+#[test]
+fn lookbehind_width_agrees_with_independent_count_truth() {
+    let assert_fixed = |source: &str, fixed: bool| {
+        let compiled = Pattern::compile(source, CompileLimits::default());
+        if fixed {
+            assert!(compiled.is_ok(), "{source}: {compiled:?}");
+        } else {
+            assert!(
+                matches!(
+                    compiled,
+                    Err(CompileError::Invalid {
+                        reason: "variable-length lookbehind",
+                        ..
+                    })
+                ),
+                "{source}: {compiled:?}"
+            );
+        }
+    };
+    for width in 0..5 {
+        for min in 0..5 {
+            for max in min..5 {
+                assert_fixed(
+                    &format!(r"(a{{{width}}}){{{min},{max}}}(?<=\1)"),
+                    width == 0 || min > 0 || max == 0,
+                );
+                assert_fixed(
+                    &format!(r"((?:a{{{width}}}){{{min},{max}}})(?<=\1)"),
+                    width == 0 || min == max,
+                );
+            }
+        }
+    }
+    for left in 0..5 {
+        for right in 0..5 {
+            for count in 0..4 {
+                let fixed = count == 0 || left == right;
+                assert_fixed(
+                    &format!(r"(?:(a{{{left}}})|(a{{{right}}})){{{count}}}(?<=\1\2)"),
+                    fixed,
+                );
+                assert_fixed(
+                    &format!(r"(?<=(?:\1\2(?:(a{{{left}}})|(a{{{right}}}))){{{count}}})x"),
+                    fixed,
+                );
+            }
+        }
+    }
+}
+
 /// Scalar classes have the repository's exact whitespace/ASCII rules in both polarities.
 #[test]
 fn unicode_classes_and_escape_grammar() {
@@ -109,7 +404,7 @@ fn unicode_classes_and_escape_grammar() {
 
 /// Invalid grammar never becomes ordinary no-match or a silently selected host dialect.
 #[test]
-fn invalid_patterns_and_explicit_remaining_features() {
+fn invalid_patterns() {
     for text in [
         r"\01",
         r"\a",
@@ -141,11 +436,6 @@ fn invalid_patterns_and_explicit_remaining_features() {
             "{text}"
         );
     }
-    // Backreference-dependent widths remain a declared capability gap.
-    assert!(matches!(
-        Pattern::compile(r"(a)(?<=\1)b", CompileLimits::default()),
-        Err(CompileError::Unsupported { .. })
-    ));
 }
 
 /// Names use decoded ID properties, not host identifiers, XID or normalization.
@@ -495,10 +785,7 @@ fn lookbehind_width_distinguishes_variable_from_backreference_dependent() {
     // A backreference can be empty, so repetition alone does not prove variability.
     for source in [r"(a)(?<=\1)b", r"()(?<=\1+)b", r"()(?<=\1{1,2})b"] {
         assert!(
-            matches!(
-                Pattern::compile(source, CompileLimits::default()),
-                Err(CompileError::Unsupported { .. })
-            ),
+            Pattern::compile(source, CompileLimits::default()).is_ok(),
             "{source}"
         );
     }

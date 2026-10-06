@@ -41,30 +41,7 @@ pub(super) fn compile(source: &str, limits: CompileLimits) -> Result<Pattern, Co
             *reference = Reference::Number(number);
         }
     }
-    for node in &parser.nodes {
-        if let Kind::Look {
-            child,
-            behind: true,
-            ..
-        } = node.kind
-        {
-            match parser.nodes[child].width {
-                Width::Fixed(_) => {}
-                Width::Backref { .. } => {
-                    return Err(CompileError::Unsupported {
-                        byte: node.byte,
-                        feature: "lookbehind width depending on a backreference",
-                    });
-                }
-                Width::Variable => {
-                    return Err(CompileError::Invalid {
-                        byte: node.byte,
-                        reason: "variable-length lookbehind",
-                    });
-                }
-            }
-        }
-    }
+    widths::validate(&parser.nodes, root, parser.groups, limits)?;
     Ok(Pattern {
         nodes: parser.nodes,
         root,
