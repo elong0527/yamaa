@@ -146,7 +146,7 @@ def _declaration_diagnostics(
                     "validation",
                     "invalid_field_type",
                     "output.decimals",
-                    "REQ-0761",
+                    "REQ-0744",
                     {"expected": "a non-negative integer", "actual": output.decimals},
                 )
             )
@@ -188,7 +188,7 @@ def _declaration_diagnostics(
 
     for position, name in enumerate(keys):
         if name in declared and name not in seen:
-            # REQ-0207: a key identifies rows in the artifact, so an internal
+            # REQ-0220: a key identifies rows in the artifact, so an internal
             # column cannot be one even though it is derived like any other.
             diagnostics.append(
                 _diagnostic(

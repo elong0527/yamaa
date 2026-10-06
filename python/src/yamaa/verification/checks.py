@@ -526,10 +526,10 @@ def check_keys(
 ) -> tuple[VerificationFailure, ...]:
     """Validate output identity once every column's lifecycle is complete."""
     if not keys:
-        raise DeclarationError("keys", "REQ-0235", "keys names at least one column")
+        raise DeclarationError("keys", "REQ-0220", "keys names at least one column")
     if len(set(keys)) != len(keys):
-        raise DeclarationError("keys", "REQ-0235", "a key column is repeated")
-    _require_columns(table, keys, "keys", "REQ-0235")
+        raise DeclarationError("keys", "REQ-0220", "a key column is repeated")
+    _require_columns(table, keys, "keys", "REQ-0220")
 
     columns = {name: _values(table, name) for name in keys}
     key_maps = _key_maps(table, keys)
@@ -597,7 +597,7 @@ def check_dataset(
         if lookup_columns or lookup_rows is not None:
             _lookup_bindings(table, lookup_columns, lookup_rows)
         return ()
-    _require_columns(table, keys, "keys", "REQ-0235")
+    _require_columns(table, keys, "keys", "REQ-0220")
     lookup_types, lookup_rows = _lookup_bindings(table, lookup_columns, lookup_rows)
     identifiers: dict[str, str] = {}
     failures: list[VerificationFailure] = []
