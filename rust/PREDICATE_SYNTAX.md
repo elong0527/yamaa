@@ -33,7 +33,11 @@ association. Operand and call positions count original Unicode scalar offsets.
 
 An `invalid` outcome carries `invalid_predicate`, its owning requirement, a
 zero-based `position` with both UTF-8 `byte` and Unicode scalar `character`
-offsets, and typed `context`. Invalid portable regex literals belong to
+offsets, typed `context`, and a production-owned `message` without a location suffix.
+The `unexpected character` message uses the supplied position to identify the
+offending scalar; a host may render that scalar using its own display convention.
+The optional Python frontend appends the existing `at character N` suffix without
+reparsing a failed expression. Invalid portable regex literals belong to
 REQ-1244. Their outer position is the opening quote in the predicate, and
 `context.pattern_byte` is the byte offset in the decoded regex literal. No
 incorrect offset into the original doubled-quote spelling is fabricated.
@@ -99,10 +103,11 @@ and both installed hosts check this outcome and fresh-request recovery. Core
 tests also check cumulative storage limits, independent per-pattern ceilings,
 consumed prefixes after grammar failure, overflow and the static fast path.
 
-The Python specification frontend still uses its existing predicate parser.
-Replacing every planning/lowering path with this service and adding native
-`str_contains` evaluation are the next integration gate. Regex matching must
-charge cumulative dataset budgets across rows and verification declarations;
-per-call limits alone are insufficient there. The typed predicate evaluator,
-full shared specification compiler, all consumer semantics, workflow/R APIs,
-release qualification and separate POWER/EXP/LN policy remain required.
+The optional native Python frontend captures this service before activation or
+source IO and routes admission, dependency/reference planning, and lowering
+through that run-local port. The default Python backend retains its original
+parser. A bounded cache belongs to the captured run, not to global host state.
+The [typed evaluator](PREDICATES.md) compiles literal patterns before data access
+and charges matching across predicate nodes and whole dataset attempts.
+The full shared specification compiler, complete workflow/R APIs, release
+qualification and separate POWER/EXP/LN policy remain required.

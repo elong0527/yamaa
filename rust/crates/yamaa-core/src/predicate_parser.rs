@@ -7,7 +7,7 @@ use crate::{
     regex,
     temporal::{Date, DateTime, TemporalError},
 };
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
+use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
 
 /// Temporal literal spelling is retained independently of its parsed civil value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +52,8 @@ pub enum ParseError {
     Grammar {
         position: SourcePosition,
         failure: GrammarFailure,
+        /// Production-owned explanation; hosts add the scalar source location.
+        message: String,
     },
     Limit {
         position: SourcePosition,
@@ -174,7 +176,7 @@ pub fn parse_predicate(text: &str, limits: ParseLimits) -> Result<ParsedPredicat
     };
     let root = parser.disjunction(1)?;
     if parser.token().kind != TokenKind::End {
-        return Err(parser.invalid());
+        return Err(parser.invalid("unexpected trailing token"));
     }
     let mut seen = BTreeSet::new();
     let identifiers = parser
@@ -207,10 +209,16 @@ fn position(text: &str, byte: usize) -> SourcePosition {
     }
 }
 /// Construct a language rejection without rewriting source text.
-fn grammar(text: &str, byte: usize, failure: GrammarFailure) -> ParseError {
+fn grammar(
+    text: &str,
+    byte: usize,
+    failure: GrammarFailure,
+    message: impl Into<String>,
+) -> ParseError {
     ParseError::Grammar {
         position: position(text, byte),
         failure,
+        message: message.into(),
     }
 }
 /// Resource refusal carries the original site and the effective policy ceiling.
@@ -268,7 +276,12 @@ fn tokenize(text: &str, limits: ParseLimits) -> Result<Vec<Token>, ParseError> {
             at += 1;
             loop {
                 if at == bytes.len() {
-                    return Err(grammar(text, start, GrammarFailure::InvalidExpression));
+                    return Err(grammar(
+                        text,
+                        start,
+                        GrammarFailure::InvalidExpression,
+                        "unterminated string literal",
+                    ));
                 }
                 if bytes[at] == b'\'' {
                     at += 1;
@@ -323,7 +336,12 @@ fn tokenize(text: &str, limits: ParseLimits) -> Result<Vec<Token>, ParseError> {
             if bytes.get(at) == Some(&b'.') {
                 at += 1;
                 if !bytes.get(at).is_some_and(|&c| name_start(c)) {
-                    return Err(grammar(text, start, GrammarFailure::InvalidExpression));
+                    return Err(grammar(
+                        text,
+                        start,
+                        GrammarFailure::InvalidExpression,
+                        "invalid qualified identifier",
+                    ));
                 }
                 at += 1;
                 while bytes.get(at).is_some_and(|&c| name_continue(c)) {
@@ -353,7 +371,14 @@ fn tokenize(text: &str, limits: ParseLimits) -> Result<Vec<Token>, ParseError> {
                 } else {
                     Comparison::Greater
                 }),
-                _ => return Err(grammar(text, start, GrammarFailure::InvalidExpression)),
+                _ => {
+                    return Err(grammar(
+                        text,
+                        start,
+                        GrammarFailure::InvalidExpression,
+                        "unexpected character",
+                    ))
+                }
             }
         };
         tokens.push(Token {
@@ -382,11 +407,12 @@ impl Parser<'_> {
         self.tokens[self.cursor]
     }
     /// Reject at the current original token, including the end-of-input boundary.
-    fn invalid(&self) -> ParseError {
+    fn invalid(&self, message: &'static str) -> ParseError {
         grammar(
             self.text,
             self.token().span.start,
             GrammarFailure::InvalidExpression,
+            message,
         )
     }
     /// Read one non-EOF token whose production has already been selected.
@@ -411,9 +437,9 @@ impl Parser<'_> {
         }
     }
     /// Require the exact punctuation/string production without coercion.
-    fn require(&mut self, kind: TokenKind) -> Result<Token, ParseError> {
+    fn require(&mut self, kind: TokenKind, message: &'static str) -> Result<Token, ParseError> {
         if self.token().kind != kind {
-            return Err(self.invalid());
+            return Err(self.invalid(message));
         }
         Ok(self.advance())
     }
@@ -509,7 +535,7 @@ impl Parser<'_> {
         if self.token().kind == TokenKind::Symbol(b'(') {
             self.advance();
             let child = self.disjunction(depth + 1)?;
-            self.require(TokenKind::Symbol(b')'))?;
+            self.require(TokenKind::Symbol(b')'), "expected ')' to close predicate")?;
             return self.push(ParsedKind::Group(child), start, &[child]);
         }
         for (name, value) in [("TRUE", true), ("FALSE", false)] {
@@ -539,19 +565,19 @@ impl Parser<'_> {
         if self.take("IS") {
             let negated = self.take("NOT");
             if !self.take("NULL") {
-                return Err(self.invalid());
+                return Err(self.invalid("expected NULL after IS"));
             }
             return self.push(ParsedKind::IsNull { value, negated }, start, &[value]);
         }
         let negated = self.take("NOT");
         if self.take("IN") {
-            self.require(TokenKind::Symbol(b'('))?;
+            self.require(TokenKind::Symbol(b'('), "expected '(' after IN")?;
             let mut items = alloc::vec![self.operand()?];
             while self.token().kind == TokenKind::Symbol(b',') {
                 self.advance();
                 items.push(self.operand()?);
             }
-            self.require(TokenKind::Symbol(b')'))?;
+            self.require(TokenKind::Symbol(b')'), "expected ')' after IN operands")?;
             let children: Vec<_> = core::iter::once(value)
                 .chain(items.iter().copied())
                 .collect();
@@ -568,7 +594,7 @@ impl Parser<'_> {
         if self.take("BETWEEN") {
             let lower = self.operand()?;
             if !self.take("AND") {
-                return Err(self.invalid());
+                return Err(self.invalid("expected AND in BETWEEN predicate"));
             }
             let upper = self.operand()?;
             return self.push(
@@ -585,7 +611,7 @@ impl Parser<'_> {
         if self.take("LIKE") {
             let pattern = self.operand()?;
             let escape = if self.take("ESCAPE") {
-                let token = self.require(TokenKind::String)?;
+                let token = self.require(TokenKind::String, "ESCAPE requires a string literal")?;
                 let value = self.string(token);
                 let mut chars = value.chars();
                 let character = chars.next();
@@ -594,6 +620,7 @@ impl Parser<'_> {
                         self.text,
                         token.span.start,
                         GrammarFailure::InvalidEscape,
+                        "ESCAPE requires exactly one code point",
                     ));
                 }
                 character
@@ -612,6 +639,7 @@ impl Parser<'_> {
                         self.text,
                         self.nodes[pattern].span.start,
                         GrammarFailure::InvalidEscape,
+                        "LIKE pattern has a dangling escape",
                     ));
                 }
             }
@@ -626,7 +654,11 @@ impl Parser<'_> {
                 &[value, pattern],
             );
         }
-        Err(self.invalid())
+        Err(self.invalid(if negated {
+            "NOT must precede IN, BETWEEN, or LIKE"
+        } else {
+            "operand must be followed by a Boolean operator"
+        }))
     }
     /// Only doubled quotes are decoded; backslashes and Unicode scalars stay exact.
     fn string(&self, token: Token) -> String {
@@ -657,7 +689,13 @@ impl Parser<'_> {
                     self.advance();
                     TemporalKind::DateTime
                 };
-                let literal = self.require(TokenKind::String)?;
+                let literal = self.require(
+                    TokenKind::String,
+                    match kind {
+                        TemporalKind::Date => "DATE requires a string literal",
+                        TemporalKind::DateTime => "DATETIME requires a string literal",
+                    },
+                )?;
                 let value = self.string(literal);
                 let parsed = match kind {
                     TemporalKind::Date => value.parse::<Date>().map(|_| ()),
@@ -668,6 +706,10 @@ impl Parser<'_> {
                         self.text,
                         literal.span.start,
                         GrammarFailure::InvalidTemporal { kind, error },
+                        match kind {
+                            TemporalKind::Date => "invalid date literal",
+                            TemporalKind::DateTime => "invalid datetime literal",
+                        },
                     )
                 })?;
                 ParsedKind::Temporal { kind, value }
@@ -680,23 +722,26 @@ impl Parser<'_> {
                 .iter()
                 .any(|name| self.keyword(name))
                 {
-                    return Err(self.invalid());
+                    return Err(self.invalid("expected operand"));
                 }
                 self.advance();
                 ParsedKind::Identifier
             }
-            _ => return Err(self.invalid()),
+            _ => return Err(self.invalid("expected operand")),
         };
         self.push(kind, start, &[])
     }
     /// Validate the literal using R022 before requiring the call's closing token.
     fn contains(&mut self) -> Result<usize, ParseError> {
         let start = self.advance().span.start;
-        self.require(TokenKind::Symbol(b'('))?;
+        self.require(TokenKind::Symbol(b'('), "expected '(' after str_contains")?;
         let source = self.operand()?;
-        self.require(TokenKind::Symbol(b','))?;
+        self.require(
+            TokenKind::Symbol(b','),
+            "expected ',' between str_contains source and pattern",
+        )?;
         if self.token().kind != TokenKind::String {
-            return Err(self.invalid());
+            return Err(self.invalid("str_contains pattern must be a string literal"));
         }
         let pattern = self.operand()?;
         let ParsedKind::String(text) = &self.nodes[pattern].kind else {
@@ -713,6 +758,7 @@ impl Parser<'_> {
                 self.text,
                 site,
                 GrammarFailure::InvalidRegex { byte, reason },
+                format!("invalid regex in str_contains pattern: {reason}"),
             ),
             regex::CompileError::Limit { resource, limit } => ParseError::RegexLimit {
                 position: position(self.text, site),
@@ -725,7 +771,10 @@ impl Parser<'_> {
                 feature,
             },
         })?;
-        self.require(TokenKind::Symbol(b')'))?;
+        self.require(
+            TokenKind::Symbol(b')'),
+            "expected ')' to close str_contains",
+        )?;
         self.push(
             ParsedKind::Contains { source, pattern },
             start,

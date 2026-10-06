@@ -805,6 +805,7 @@ fn shared_budgets_accumulate_across_plans_and_owning_work() {
         resolutions: 4,
         text_bytes: 5,
         like_work: 100,
+        regex: Default::default(),
     });
     budget.work(2).unwrap();
     budget.text(1).unwrap();
@@ -821,7 +822,8 @@ fn shared_budgets_accumulate_across_plans_and_owning_work() {
             work: 8,
             resolutions: 4,
             text_bytes: 5,
-            like_work: 0
+            like_work: 0,
+            regex: Default::default(),
         }
     );
     let failure = p.evaluate_with_budget(&mut port, &mut budget).unwrap_err();
@@ -868,6 +870,7 @@ fn borrowed_text_checks_shared_limit_before_copy_and_next_resolution() {
         resolutions: 100,
         text_bytes: 499,
         like_work: 100,
+        regex: Default::default(),
     });
     let error = p.evaluate_with_budget(&mut port, &mut budget).unwrap_err();
     assert!(matches!(error.kind,ErrorKind::Limit(e) if e.resource==Resource::TextBytes));

@@ -508,6 +508,34 @@ def _native_module(**members):
             }
         return json.dumps({"protocol": "numeric-syntax/1", "outcome": outcome})
 
+    def analyze_predicate(request):
+        """Facade-only syntax double; installed tests forbid the reference parser."""
+        from yamaa.expressions import PredicateError
+        from yamaa.planning.predicate_syntax import analyze_predicate as analyze_syntax
+
+        text = json.loads(request)["expression"]
+        try:
+            syntax = analyze_syntax(text)
+        except PredicateError as error:
+            outcome = {
+                "status": "invalid",
+                "message": str(error).rsplit(" at character ", 1)[0],
+                "condition": error.condition,
+                "requirement": error.requirement,
+                "context": {},
+                "position": {
+                    "character": error.position,
+                    "byte": len(text[: error.position].encode()),
+                },
+            }
+        else:
+            outcome = {
+                "status": "parsed",
+                "ast": syntax.ast,
+                "identifiers": syntax.identifiers,
+            }
+        return json.dumps({"protocol": "predicate-syntax/1", "outcome": outcome})
+
     return SimpleNamespace(
         reference_capabilities=lambda: json.dumps(
             {
@@ -523,6 +551,7 @@ def _native_module(**members):
         ),
         analyze_aggregate=analyze_aggregate,
         analyze_numeric=analyze_numeric,
+        analyze_predicate=analyze_predicate,
         analyze_dependencies=analyze,
         analyze_column_dependencies=analyze_columns,
         _compile_reference_catalog=compile_references,
@@ -533,7 +562,26 @@ def _native_module(**members):
 @pytest.fixture(autouse=True)
 def native_syntax_double(monkeypatch):
     """Facade tests need no native installation; installed suites qualify Rust ownership."""
-    monkeypatch.setitem(sys.modules, "yamaa_native", _native_module())
+    monkeypatch.setitem(
+        sys.modules,
+        "yamaa_native",
+        _native_module(
+            execute_dataset=lambda *_: pytest.fail("unadmitted execution"),
+            dataset_capabilities=lambda: json.dumps(
+                {
+                    "protocol": "dataset/1",
+                    "features": [
+                        "row_filter",
+                        "predicate_checks",
+                        "root_filter",
+                        "key_grain",
+                        "window_numbering",
+                        "window_filter",
+                    ],
+                }
+            ),
+        ),
+    )
 
 
 @pytest.fixture
@@ -569,6 +617,7 @@ def test_older_reference_features_refuse_intermediate_queries_before_io(
 @pytest.mark.parametrize(
     "service, operation",
     [
+        ("analyze_predicate", "native_predicate_syntax"),
         ("analyze_dependencies", "native_dependency_analysis"),
         ("analyze_column_dependencies", "native_column_dependency_analysis"),
         ("_compile_reference_catalog", "native_reference_binding"),
@@ -673,7 +722,7 @@ def test_unsupported_run_never_reads_sources(specification, feature):
             declaration.pop("unconvertible", None)
     if feature == "root_regex":
         doc["filter"] = "str_contains(LB.LBTESTCD, 'COMP')"
-        doc["rows"] = None  # root regex remains outside the admitted predicate subset
+        doc["rows"] = None  # The older artifact lacks regex execution capability.
         for column in doc["columns"]:
             if "derivation" not in column:
                 column["derivation"] = {"value": {"literal": None}}
@@ -958,7 +1007,7 @@ def test_unsupported_predicate_checks_never_read_sources(
     )
     assert isinstance(result.result, ExecutionUnsupported)
     assert result.result.features[0].operation in {
-        "predicate_regex",
+        "native_predicate_regex",
         "predicate_wide_integer_literal",
     }
 
@@ -1176,7 +1225,7 @@ def test_numbering_unsupported_scope_precedes_provider(tmp_path, feature):
     result = execute_with_source_provider(spec, lambda _: effects.append("provider"))
     assert result.result.status == "unsupported"
     expected = {
-        "regex": "predicate_regex",
+        "regex": "native_predicate_regex",
         "qualified": "window_source",
         "rows": "window_scope",
         "key": "window_key",

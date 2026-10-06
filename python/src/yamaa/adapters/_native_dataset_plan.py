@@ -11,7 +11,6 @@ from yamaa.expressions import (
     AggregateError,
     NumericError,
     PredicateError,
-    parse_predicate,
     predicate_identifiers,
 )
 from yamaa.models import INT64_MAX, INT64_MIN
@@ -25,6 +24,7 @@ from yamaa.planning import (
 )
 from yamaa.planning.aggregate_syntax import analyze_aggregate
 from yamaa.planning.numeric_syntax import analyze_numeric
+from yamaa.planning.predicate_syntax import analyze_predicate
 
 NUMBERING = frozenset({"row_number", "rank"})
 WINDOW_VALUES = frozenset({"row_value", "previous_non_missing", "locf"})
@@ -60,6 +60,7 @@ def admit(
     allow_functions=False,
     aggregate_analyzer=None,
     numeric_analyzer=None,
+    predicate_analyzer=None,
 ):
     """Reject the entire unsupported vocabulary before requesting source tables.
 
@@ -70,8 +71,28 @@ def admit(
         aggregate_analyzer = analyze_aggregate
     if numeric_analyzer is None:
         numeric_analyzer = analyze_numeric
+    if predicate_analyzer is None:
+        predicate_analyzer = analyze_predicate
     diagnostics = []
     unsupported = []
+    regex_paths = []
+
+    def admit_predicate(text, path, *, predicate_analyzer):
+        """Retain exact sites requiring regex execution while admitting all syntax."""
+        ast = _native_predicate_plan.admit(
+            text, path, predicate_analyzer=predicate_analyzer
+        )
+        pending = [ast]
+        while pending:
+            node = pending.pop()
+            if isinstance(node, dict):
+                if node.get("kind") == "call" and path not in regex_paths:
+                    regex_paths.append(path)
+                pending.extend(node.values())
+            elif isinstance(node, list):
+                pending.extend(node)
+        return ast
+
     filters = []
     try:
         preflight_execution(
@@ -81,6 +102,7 @@ def admit(
             else OPERATIONS,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
     except ExecutionPlanningError as error:
         diagnostics.extend(error.diagnostics)
@@ -147,7 +169,9 @@ def admit(
             reject("intermediate_absence_literal", f"{path}.no_match")
         if item.filter is not None:
             try:
-                ast = _native_predicate_plan.admit(item.filter, f"{path}.filter")
+                ast = admit_predicate(
+                    item.filter, f"{path}.filter", predicate_analyzer=predicate_analyzer
+                )
                 if any(
                     "." not in name or name.split(".", 1)[0] != item.dataset
                     for name in predicate_identifiers(ast)
@@ -159,7 +183,9 @@ def admit(
                 unsupported.extend(error.features)
     if specification.filter is not None:
         try:
-            ast = _native_predicate_plan.admit(specification.filter, "filter")
+            ast = admit_predicate(
+                specification.filter, "filter", predicate_analyzer=predicate_analyzer
+            )
             for name in predicate_identifiers(ast):
                 if (
                     len(specification.input) > 1
@@ -346,8 +372,10 @@ def admit(
                             )
                         )
                     else:
-                        ast = _native_predicate_plan.admit(
-                            payload["filter"], f"{path}.filter"
+                        ast = admit_predicate(
+                            payload["filter"],
+                            f"{path}.filter",
+                            predicate_analyzer=predicate_analyzer,
                         )
                         dataset = variable.split(".", 1)[0]
                         for name in predicate_identifiers(ast):
@@ -415,8 +443,10 @@ def admit(
                 )
                 if window.get("filter") is not None:
                     try:
-                        ast = _native_predicate_plan.admit(
-                            window["filter"], f"{path}.window.filter"
+                        ast = admit_predicate(
+                            window["filter"],
+                            f"{path}.window.filter",
+                            predicate_analyzer=predicate_analyzer,
                         )
                         names.extend(predicate_identifiers(ast))
                     except ExecutionPlanningError as error:
@@ -509,7 +539,9 @@ def admit(
         if row.filter is not None:
             try:
                 path = f"rows[{index}].filter"
-                ast = _native_predicate_plan.admit(row.filter, path)
+                ast = admit_predicate(
+                    row.filter, path, predicate_analyzer=predicate_analyzer
+                )
                 filters.append((row, path, ast))
                 if row.group_by is None and any(
                     "." in name and name.split(".", 1)[0] != primary
@@ -578,7 +610,9 @@ def admit(
                 if not isinstance(text, str):
                     continue
                 try:
-                    _native_predicate_plan.admit(text, f"{path}.{field}")
+                    admit_predicate(
+                        text, f"{path}.{field}", predicate_analyzer=predicate_analyzer
+                    )
                 except ExecutionPlanningError:
                     # A declaration error belongs after keys and earlier checks.
                     # Lowering retains it as a pending error, never evaluates it.
@@ -603,6 +637,8 @@ def admit(
     if diagnostics:
         raise ExecutionPlanningError(diagnostics)
 
+    return tuple(regex_paths)
+
 
 def literal(value):
     """Encode admitted scalar literals without completed-result conversion."""
@@ -625,6 +661,7 @@ def lower(
     functions=None,
     aggregate_analyzer=None,
     numeric_analyzer=None,
+    predicate_analyzer=None,
 ):
     """Lower validated dependency order and bindings, never evaluate expressions."""
     spec = plan.specification
@@ -860,7 +897,11 @@ def lower(
             if isinstance(value, dict) and value.get("filter") is not None:
                 text = value["filter"]
                 expression["collect"]["filter"] = _native_predicate_plan.lower(
-                    parse_predicate(text),
+                    (
+                        analyze_predicate
+                        if predicate_analyzer is None
+                        else predicate_analyzer
+                    )(text).ast,
                     text,
                     derived.operation_path,
                     reference,
@@ -932,7 +973,11 @@ def lower(
             if window.get("filter") is not None:
                 text = window["filter"]
                 expression[tag]["filter"] = _native_predicate_plan.lower(
-                    parse_predicate(text),
+                    (
+                        analyze_predicate
+                        if predicate_analyzer is None
+                        else predicate_analyzer
+                    )(text).ast,
                     text,
                     derived.operation_path,
                     reference,
@@ -983,7 +1028,9 @@ def lower(
                     "value": literal(item.declaration.unconvertible),
                 },
             )
-    verifications, declaration_error = checks(spec, outputs)
+    verifications, declaration_error = checks(
+        spec, outputs, predicate_analyzer=predicate_analyzer
+    )
     return {
         "protocol": "dataset/1",
         **(
@@ -1071,7 +1118,7 @@ def lower(
     }, declaration_error
 
 
-def checks(specification, outputs):
+def checks(specification, outputs, *, predicate_analyzer=None):
     """Lower the valid check prefix and retain the first runtime declaration error.
 
     The reference evaluates declarations in order. An invalid later declaration
@@ -1145,7 +1192,11 @@ def checks(specification, outputs):
                         predicate_path, "REQ-0397", "a predicate must be text"
                     )
                 try:
-                    ast = parse_predicate(text)
+                    ast = (
+                        analyze_predicate
+                        if predicate_analyzer is None
+                        else predicate_analyzer
+                    )(text).ast
                 except PredicateError as error:
                     return invalid(
                         predicate_path,

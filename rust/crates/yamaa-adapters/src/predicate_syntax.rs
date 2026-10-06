@@ -55,13 +55,13 @@ pub fn analyze_predicate(request: &str) -> Result<String, TransportError> {
         if request.protocol!=PROTOCOL { return Err(TransportError::UnsupportedProtocol); }
         let outcome=match parse_predicate(&request.expression,ParseLimits::default()) {
             Ok(parsed)=>json!({"status":"parsed","ast":ast(&parsed,parsed.root()),"identifiers":parsed.identifiers().collect::<Vec<_>>()}),
-            Err(ParseError::Grammar{position,failure})=> {
+            Err(ParseError::Grammar{position,failure,message})=> {
                 let context=match &failure {
                     GrammarFailure::InvalidExpression | GrammarFailure::InvalidEscape=>json!({}),
                     GrammarFailure::InvalidRegex{byte,reason}=>json!({"pattern_byte":byte,"reason":reason}),
                     GrammarFailure::InvalidTemporal{kind,error}=>json!({"literal_type":temporal_name(*kind),"temporal_error":match error {TemporalError::InvalidForm=>"invalid_form",TemporalError::InvalidDate=>"invalid_date",TemporalError::InvalidTime=>"invalid_time"}}),
                 };
-                json!({"status":"invalid","condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context})
+                json!({"status":"invalid","message":message,"condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context})
             }
             Err(ParseError::Limit{position,resource,limit})=>json!({"status":"resource_limit","phase":"parse","resource":match resource {ParseResource::Bytes=>"bytes",ParseResource::Tokens=>"tokens",ParseResource::Nodes=>"nodes",ParseResource::Depth=>"depth"},"limit":limit,"position":{"byte":position.byte,"character":position.character}}),
             Err(ParseError::RegexLimit{position,resource,limit})=>json!({"status":"resource_limit","phase":"regex_compile","resource":regex_resource(resource),"limit":limit,"position":{"byte":position.byte,"character":position.character}}),

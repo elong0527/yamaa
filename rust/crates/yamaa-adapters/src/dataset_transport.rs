@@ -30,7 +30,7 @@ mod functions;
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
 pub fn capabilities() -> &'static str {
-    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection","grouped_count"]}"#
+    r#"{"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection","grouped_count","predicate_regex"]}"#
 }
 
 /// Bound host argument collections before copying any source buffers.
@@ -1145,6 +1145,9 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
                 Resource::PredicateResolutions => "predicate_resolutions",
                 Resource::PredicateTextBytes => "predicate_text_bytes",
                 Resource::PredicateLikeWork => "predicate_like_work",
+                Resource::PredicateRegexSubjectBytes => "predicate_regex_subject_bytes",
+                Resource::PredicateRegexWork => "predicate_regex_work",
+                Resource::PredicateRegexStateCells => "predicate_regex_state_cells",
                 Resource::ScalarTextBytes => "scalar_text_bytes",
                 Resource::OutputTextBytes => "output_text_bytes",
                 Resource::IdentityCells => "identity_cells",

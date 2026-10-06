@@ -456,7 +456,7 @@ fn typed_filters_keep_only_true_rows() {
     );
     assert_eq!(
         serde_json::from_str::<Value>(yamaa_adapters::dataset_transport::capabilities()).unwrap(),
-        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection","grouped_count"]})
+        json!({"protocol":"dataset/1","features":["row_filter","predicate_checks","key_grain","window_numbering","window_filter","window_values","window_baseline","root_filter","source_filter","source_selection","multi_source","named_intermediate","numeric_compute","unconvertible","row_source_lookup","host_functions","function_source_collection","grouped_count","predicate_regex"]})
     );
 }
 /// Complete predicate and binding admission wins over invalid IPC decoding.
@@ -963,4 +963,117 @@ fn row_source_lookup_admission_precedes_snapshot_decoding() {
         ),
         Err(Error::RequestLimit)
     ));
+}
+
+/// Typed callers receive precise boundary refusal before malformed source IPC is decoded.
+#[test]
+fn contains_compilation_and_closed_shape_precede_source_decoding() {
+    let mut req = request();
+    req["verifications"] = json!([]);
+    req["templates"][0]["filter"] = json!({
+        "path":"rows[0].filter", "text":"str_contains(x, 'a')", "root":0,
+        "nodes":[{"contains":{"value":{"identifier":"x"},"pattern":"a"}}],
+        "bindings":[{"name":"x","read":{"source":1}}]
+    });
+    for (pattern, expected) in [
+        ("[", Error::InvalidPlan),
+        ("a{1000001}", Error::RequestLimit),
+    ] {
+        req["templates"][0]["filter"]["nodes"][0]["contains"]["pattern"] = json!(pattern);
+        assert_eq!(
+            execute_dataset(&req.to_string(), b"invalid IPC")
+                .err()
+                .unwrap(),
+            expected
+        );
+    }
+    req["templates"][0]["filter"]["nodes"][0]["contains"]["pattern"] = json!({"identifier":"x"});
+    assert_eq!(
+        execute_dataset(&req.to_string(), b"invalid IPC")
+            .err()
+            .unwrap(),
+        Error::InvalidRequest
+    );
+    req["templates"][0]["filter"]["nodes"][0]["contains"]["pattern"] = json!("a");
+    req["templates"][0]["filter"]["nodes"][0]["contains"]["flags"] = json!("i");
+    assert_eq!(
+        execute_dataset(&req.to_string(), b"invalid IPC")
+            .err()
+            .unwrap(),
+        Error::InvalidRequest
+    );
+}
+
+/// Search semantics and type failures survive the typed bridge without accepted partial output.
+#[test]
+fn contains_typed_search_missing_and_type_diagnostic() {
+    let mut req = request();
+    req["verifications"] = json!([]);
+    req["output"][1]["kind"] = json!("str");
+    req["templates"][0]["filter"] = json!({
+        "path":"rows[0].filter", "text":"str_contains(x, 'a')", "root":0,
+        "nodes":[{"contains":{"value":{"identifier":"x"},"pattern":"a"}}],
+        "bindings":[{"name":"x","read":{"source":1}}]
+    });
+    let input = source(
+        vec![Some(1), Some(2), Some(3), Some(4)],
+        vec![Some("cat"), None, Some("bat"), Some("dog")],
+    );
+    let (bytes, result) = outcome(&req, &input);
+    assert_eq!(result, json!({"status":"success","verifications":[]}));
+    let snapshot: Value = serde_json::from_str(&table_snapshot(&bytes.unwrap()).unwrap()).unwrap();
+    assert_eq!(
+        snapshot["rows"],
+        json!([[{"int":"1"},{"str":"cat"}],[{"int":"3"},{"str":"bat"}]])
+    );
+    req["templates"][0]["filter"]["bindings"][0]["read"] = json!({"source":0});
+    let (bytes, result) = outcome(&req, &input);
+    assert!(bytes.is_none());
+    assert_eq!(result["status"], "condition");
+    assert_eq!(result["diagnostic"]["condition"], "incompatible_input_type");
+    assert_eq!(result["diagnostic"]["requirement"], "REQ-1244");
+    assert_eq!(
+        result["diagnostic"]["context"],
+        json!({"actual":{"str":"int"},"expected":{"str":"str"}})
+    );
+    assert_eq!(
+        result["diagnostic"]["spec_paths"],
+        json!(["rows[0].filter"])
+    );
+}
+
+/// Both host packages and Rust consume the same hand-authored consumer observations.
+#[test]
+fn authored_contains_consumer_observations() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/datasets");
+    for line in include_str!("fixtures/datasets/predicate_execution.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 6);
+        let source = std::fs::read(root.join(fields[1])).unwrap();
+        let result = if fields[2] == "-" {
+            execute_dataset(fields[3], &source)
+        } else {
+            let secondary = std::fs::read(root.join(fields[2])).unwrap();
+            yamaa_adapters::dataset_transport::execute_dataset_sources(
+                fields[3],
+                &source,
+                &[secondary.as_slice()],
+            )
+        }
+        .unwrap();
+        assert_eq!(result.outcome, fields[4], "{}", fields[0]);
+        if fields[5] == "null" {
+            assert!(result.table.is_none());
+        } else {
+            assert_eq!(
+                table_snapshot(&result.table.unwrap()).unwrap(),
+                fields[5],
+                "{}",
+                fields[0]
+            );
+        }
+    }
 }

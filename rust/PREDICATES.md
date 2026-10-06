@@ -1,7 +1,8 @@
 # Typed predicate evaluation
 
 `yamaa_core::predicate::Plan` evaluates an explicitly constructed, normalized
-predicate arena without host, storage-framework, parser or regex dependencies. It is an
+predicate arena without host or storage-framework dependencies. Portable regex compilation and
+matching use the shared core. It is an
 internal building block for filters and checks, not a specification entrypoint.
 Python remains the default, and native installations still report
 `execution_supported=false`.
@@ -9,7 +10,8 @@ Python remains the default, and native installations still report
 ## Semantics
 
 The implemented nodes are Boolean constants, NOT, AND, OR, six comparisons,
-IS NULL/IS NOT NULL, IN/NOT IN, BETWEEN/NOT BETWEEN and LIKE/NOT LIKE. Operands
+IS NULL/IS NOT NULL, IN/NOT IN, BETWEEN/NOT BETWEEN, LIKE/NOT LIKE, and literal-pattern `Contains`
+(the typed form of `str_contains`). Operands
 are normalized core values or deferred identifiers. Three-valued truth follows
 [REQ-0159 and REQ-0171](../rules/operations/predicates.md). Missing comparison
 operands produce unknown before type compatibility is checked. Boolean runtime
@@ -35,6 +37,13 @@ Unicode scalar (including newline), and backslash has no default escape meaning.
 An explicit escape is one Rust `char`; a dangling dynamic escape returns
 `invalid_predicate` under REQ-0191. Matching uses bounded dynamic programming,
 with storage proportional to the pattern, and no host regex dialect.
+
+`Contains` searches anywhere, returns unknown for missing subjects (also under
+NOT), and reports a present non-string under REQ-1244. It resolves the subject
+once. Every literal, including unreachable arena entries, is compiled during
+plan admission. All literals in one plan share the regex compiler's width-work
+and logical-storage budgets, while each retains its ordinary compiler limits.
+The immutable plan owns compiled patterns; evaluation never compiles a pattern.
 
 An absent binding returns `unknown_field` under REQ-0189. A resolver's own error
 moves through unchanged and needs no Clone implementation. Predicate conditions
@@ -67,6 +76,17 @@ Dataset filters and checks share that budget across all templates, candidates,
 declaration representatives and output rows. Resource
 refusals remain separate from language conditions and unknown/false truth.
 
+Regex matching charges two scopes before work/allocation: all Contains visits
+in one predicate evaluation and all predicate visits in the dataset attempt.
+The local defaults are 1,048,576 subject bytes, 1,000,000 work units and 1,000,000
+logical state cells. The dataset/1 bridge gives matching separate cumulative
+ceilings of 16 MiB subject bytes and 4,194,304 work units/state cells, shared
+across templates, rows, source selections, windows, donors and checks. These
+regex counters are independent of ordinary predicate/table work and text
+counters. Charges survive no-match results and failed attempts; only a new
+attempt receives fresh counters. Refusals retain the resource and original
+scope limit, and cannot become false/unknown or an invalid-predicate diagnostic.
+
 These policies do not bound allocations made by the caller while constructing
 input, time or memory inside a resolver, allocator failure, total work across
 repeated runs, or all process memory. No plan constructor or failed run rolls
@@ -78,6 +98,12 @@ ownership and cancellation guarantees.
 Twenty independently authored fixture cases are replayed by the typed Rust
 evaluator and the Python parser/evaluator. They pin result/condition identity and
 resolution order; expected values are not regenerated from either implementation.
+Eight new typed consumer fixtures cover row/root/source/window/donor filters,
+NOT with missing data, assert/implies checks, and eager non-string failure.
+Both installed hosts replay exact outcome/snapshot JSON from these authored
+inputs; the optional Python frontend separately pins CSVs and callback traces
+with reference predicate parsing/evaluation disabled.
+
 Rust tests additionally exercise the complete truth tables, all comparisons,
 large integers, temporal precision, missing/type precedence, opaque errors,
 structural expansion, text/work limits and recovery. An independent recursive
@@ -87,16 +113,17 @@ The separate [shared predicate syntax service](PREDICATE_SYNTAX.md) admits R004
 syntax and regex literals without enabling evaluation. The caller of this typed
 evaluator must still validate grammar and
 literal representations before constructing the plan, including static ESCAPE
-errors and literal overflow/temporal diagnostics. The typed interface cannot
-represent a portable-regex call; valid `str_contains` must remain explicitly
-unsupported at future admission until regex contract 2.0.0 is implemented and
-qualified. The shared parser/compiler, ordered source selection,
-lookup/window/BMI integration and full Python/R specification execution remain open
-gates. Root/row-template/source filters and assert/implies checks compose this evaluator through the
-[dataset/1 bridge](DATASET_TRANSPORT.md), with complete phase-aware binding before
-source IPC decoding. Installed Python and R replay the shared typed filter cases;
-the optional Python frontend uses the existing parser as a temporary syntax port
-and never calls the reference predicate evaluator on native data or declaration
-representatives. Check declarations validate nonmissing type representatives
+errors and literal overflow/temporal diagnostics. The typed interface accepts a closed Contains node with one scalar subject and
+one literal pattern string. Invalid patterns are invalid typed plans at this
+boundary; compiler resource refusals remain request limits. The syntax service
+provides language diagnostics before typed lowering.
+The shared parser/compiler, complete source selection and full Python/R
+specification execution remain release gates. Root/row-template/source filters,
+named donor/window filters and assert/implies checks compose this evaluator
+through the [dataset/1 bridge](DATASET_TRANSPORT.md), with phase-aware binding
+before source IPC decoding. Both installed hosts replay authored typed consumer
+truth. The optional Python frontend uses the captured Rust syntax service and
+never calls the reference predicate evaluator on data or declaration samples.
+Check declarations validate nonmissing type representatives
 before actual rows, preserving eager evaluation and the completed check ledger
 when a later predicate raises a semantic condition.

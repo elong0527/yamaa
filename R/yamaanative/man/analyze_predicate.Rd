@@ -15,11 +15,14 @@ Whole-input tokenization precedes syntax and regex admission. Per-pattern regex
 compilation policies apply to each literal. All literals in one predicate also
 share capture-dependent width-analysis ceilings of 1,000,000 work units and
 1,000,000 logical storage cells. Resource refusals are not grammar errors.
+Grammar outcomes also carry a production-owned message without a location suffix.
+For unexpected characters the original position identifies the offending scalar.
 Invalid regex literals report invalid_predicate under REQ-1244; invalid ESCAPE
 literals report REQ-0191. The committed grammar's invalid_predicate result for
 rejected temporal literals is retained, including typed temporal context; its
-inconsistency with REQ-0192 remains unresolved. This service does not enable
-regex predicate execution or replace the specification frontend.}
+inconsistency with REQ-0192 remains unresolved. This syntax service itself does not evaluate data. The separately advertised
+predicate_regex dataset capability executes admitted typed predicates. A full
+R specification compiler remains outside this API.}
 \examples{
 analyze_predicate('{"protocol":"predicate-syntax/1","expression":"A IS NULL"}')
 }

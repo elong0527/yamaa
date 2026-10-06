@@ -321,7 +321,10 @@ Scalar occurrences are `{literal: scalar}` or `{identifier: name}`. Node forms a
 - `{is_null: {value, negated}}` and `{in: {value, items, negated}}`;
 - `{between: {value, lower, upper, negated}}`;
 - `{like: {value, pattern, escape, negated}}`, with null/omitted escape or one
-  Unicode scalar. An empty IN list is invalid.
+  Unicode scalar. An empty IN list is invalid;
+- `{contains: {value, pattern}}`, with a scalar subject and literal pattern string.
+  Every literal compiles before IPC decoding, including unreachable nodes. Invalid
+  regex is an invalid typed plan; compiler resource refusal is a request limit.
 
 [Predicate semantics](PREDICATES.md) define eager occurrence order, promoted mixed
 numeric comparison and Unicode LIKE. Text is diagnostic provenance; this bridge
@@ -330,7 +333,7 @@ and retain their original path, requirement and structural operand route, withou
 inventing output-key identity at the filter site.
 
 Both host packages expose `dataset_capabilities()` as JSON text with
-`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions", "function_source_collection", "grouped_count"]`. These additive capabilities are
+`protocol: "dataset/1"` and `features: ["row_filter", "predicate_checks", "key_grain", "window_numbering", "window_filter", "window_values", "window_baseline", "root_filter", "source_filter", "source_selection", "multi_source", "named_intermediate", "numeric_compute", "unconvertible", "row_source_lookup", "host_functions", "function_source_collection", "grouped_count", "predicate_regex"]`. These additive capabilities are
 separate from the unchanged full-backend readiness flag. The Python specification
 frontend requires the corresponding feature before calling the source provider.
 Older typed requests remain compatible when they omit these features.
@@ -388,6 +391,7 @@ full workflow cancellation and asynchronous execution remain qualification gates
 | Predicate nodes / bindings / IN items | 4,096 each |
 | Predicate expression text / depth | 65,536 UTF-8 bytes / 64 |
 | Cumulative predicate resolutions / LIKE work | 4,194,304 each |
+| Cumulative regex subject bytes / work / state cells | 16 MiB / 4,194,304 / 4,194,304 |
 | Retained output text | 1 MiB |
 | Retained identity cells / identity text | 65,536 / 1 MiB |
 
@@ -399,9 +403,13 @@ copying keys and accumulate across checks and runtime failure context. Counters
 reset per execution. Predicate node/scalar work shares the ordinary work counter,
 and predicate text shares cumulative scalar text accounting. Predicate-check
 representatives and actual rows consume these same cumulative budgets. Resolutions and LIKE
-work have separate cumulative counters; each predicate also retains its smaller
+work have separate cumulative counters. Regex matching has its own subject, work
+and logical-state counters across nodes, templates, rows and declarations;
+each predicate also retains its smaller
 per-evaluation limits from PREDICATES.md. Refusals identify `predicate_work`,
-`predicate_resolutions`, `predicate_text_bytes` or `predicate_like_work`; required
+`predicate_resolutions`, `predicate_text_bytes`, `predicate_like_work`,
+`predicate_regex_subject_bytes`, `predicate_regex_work` or
+`predicate_regex_state_cells`; required
 counts are unavailable (`null`). Discarded candidates release retained output
 text but never refund consumed work or operand text. Output row/cell capacity
 bounds candidates before record/group template filters, not only final surviving

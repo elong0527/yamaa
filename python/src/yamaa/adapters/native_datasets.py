@@ -33,6 +33,7 @@ from yamaa.adapters._native_dependencies import (
     bind_dependency_analyzer,
 )
 from yamaa.adapters._native_numeric_syntax import bind_numeric_analyzer
+from yamaa.adapters._native_predicate_syntax import bind_predicate_analyzer
 from yamaa.adapters._native_project_functions import (
     NATIVE_ACTIVATION_CACHE,
     NativeActivationCache,
@@ -243,6 +244,7 @@ def _execute(specification, source_provider, prepare_functions=None):
     specification = specification.model_copy(deep=True)
     aggregate_analyzer = None
     numeric_analyzer = None
+    predicate_analyzer = None
 
     def analyze_aggregate(text):
         """Capture syntax on first use while preserving source-independent admission."""
@@ -262,13 +264,36 @@ def _execute(specification, source_provider, prepare_functions=None):
             numeric_analyzer = bind_numeric_analyzer(yamaa_native)
         return numeric_analyzer(text)
 
+    def capture_predicate_analyzer():
+        """Refuse an older syntax service before any activation or source effects."""
+        nonlocal predicate_analyzer
+        if predicate_analyzer is None:
+            import yamaa_native
+
+            if not callable(getattr(yamaa_native, "analyze_predicate", None)):
+                raise UnsupportedPlanningError(
+                    [
+                        UnsupportedFeature(
+                            operation="native_predicate_syntax", spec_path="$"
+                        )
+                    ]
+                )
+            predicate_analyzer = bind_predicate_analyzer(yamaa_native)
+        return predicate_analyzer
+
+    def analyze_predicate(text):
+        """Use the captured Rust parser throughout admission, planning and lowering."""
+        return capture_predicate_analyzer()(text)
+
     try:
-        admit(
+        predicate_regex_paths = admit(
             specification,
             allow_functions=prepare_functions is not None,
             aggregate_analyzer=analyze_aggregate,
             numeric_analyzer=analyze_numeric,
+            predicate_analyzer=analyze_predicate,
         )
+        capture_predicate_analyzer()
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
     except UnsupportedPlanningError as error:
@@ -462,6 +487,13 @@ def _execute(specification, source_provider, prepare_functions=None):
         and isinstance(column.derivation.value.root["source"], dict)
         and column.derivation.value.root["source"].get("order_by") is not None
     )
+    required.extend(
+        (
+            "predicate_regex",
+            UnsupportedFeature(operation="native_predicate_regex", spec_path=path),
+        )
+        for path in predicate_regex_paths
+    )
     if specification.intermediates:
         required.append(
             (
@@ -591,6 +623,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             reference_compiler_factory=reference_compiler_factory,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
     except ExecutionPlanningError as error:
         return _failure(error.diagnostics)
@@ -614,6 +647,7 @@ def _execute(specification, source_provider, prepare_functions=None):
             functions=functions,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
     except UnsupportedPlanningError as error:
         return NativeDatasetRun(

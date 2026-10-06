@@ -63,6 +63,10 @@ enum Comparison {
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Node {
+    Contains {
+        value: Scalar,
+        pattern: String,
+    },
     Boolean(bool),
     Not(usize),
     And([usize; 2]),
@@ -125,6 +129,10 @@ impl Node {
     /// Preserve every caller-authored occurrence without folding or data access.
     fn core(self) -> Result<core::Node, Error> {
         Ok(match self {
+            Self::Contains { value, pattern } => core::Node::Contains {
+                value: value.core()?,
+                pattern,
+            },
             Self::Boolean(value) => core::Node::Boolean(value),
             Self::Not(child) => core::Node::Not(child),
             Self::And([a, b]) => core::Node::And(a, b),
@@ -235,7 +243,11 @@ impl Predicate {
             core::Limits::default(),
         )
         .map_err(|error| match error {
-            core::PlanError::Limit(_) => Error::RequestLimit,
+            core::PlanError::Limit(_)
+            | core::PlanError::Regex {
+                error: yamaa_core::regex::CompileError::Limit { .. },
+                ..
+            } => Error::RequestLimit,
             _ => Error::InvalidPlan,
         })?;
         engine::BoundPredicate::new(plan, bindings).map_err(|_| Error::InvalidPlan)

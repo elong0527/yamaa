@@ -11,7 +11,7 @@ precede its implementation are recorded in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).
 
 The bounded typed predicate evaluator, its independent truth/trace tests and
-remaining parser/dataset integration are described in [PREDICATES.md](PREDICATES.md).
+parser/dataset integration are described in [PREDICATES.md](PREDICATES.md).
 
 Opt-in dataset stage instrumentation and the installed, fresh-process measurement
 procedure are described in [PHASE_MEASUREMENTS.md](PHASE_MEASUREMENTS.md).
