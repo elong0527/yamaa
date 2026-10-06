@@ -9,14 +9,6 @@ import random
 import subprocess
 from pathlib import Path
 
-from yamaa.expressions.predicates import (
-    PredicateError,
-    parse_predicate,
-    predicate_identifiers,
-)
-
-import yaml
-
 WORKSPACE = Path(__file__).resolve().parents[1]
 
 
@@ -116,8 +108,46 @@ def samples():
     return result
 
 
+def probe(sources):
+    """Replay UTF-8 JSON through Rust using only Python's standard library."""
+    run = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--offline",
+            "--quiet",
+            "-p",
+            "yamaa-adapters",
+            "--example",
+            "predicate_syntax_probe",
+        ],
+        cwd=WORKSPACE,
+        input="".join(
+            json.dumps({"protocol": "predicate-syntax/1", "expression": text}) + "\n"
+            for text in sources
+        ),
+        text=True,
+        encoding="utf-8",
+        errors="strict",
+        capture_output=True,
+        check=True,
+    )
+    # JSON-lines frames use LF only; U+0085/U+2028/U+2029 may occur inside JSON strings.
+    responses = [json.loads(line) for line in run.stdout.split("\n") if line]
+    assert len(responses) == len(sources)
+    return responses
+
+
 def main():
     """Check independent contract truth first, then exact common-reference syntax."""
+    from yamaa.expressions.predicates import (
+        PredicateError,
+        parse_predicate,
+        predicate_identifiers,
+    )
+
+    import yaml
+
     grammar = yaml.safe_load(
         (WORKSPACE.parent / "yaml/grammar/predicate.yaml").read_text(encoding="utf-8")
     )
@@ -147,30 +177,7 @@ def main():
             {"text": text, "parse": "accept", "shape": expected, "identifiers": names}
         )
     sources = [case["text"] for case in cases] + samples()
-    run = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "--offline",
-            "--quiet",
-            "-p",
-            "yamaa-adapters",
-            "--example",
-            "predicate_syntax_probe",
-        ],
-        cwd=WORKSPACE,
-        input="".join(
-            json.dumps({"protocol": "predicate-syntax/1", "expression": text}) + "\n"
-            for text in sources
-        ),
-        text=True,
-        encoding="utf-8",
-        errors="strict",
-        capture_output=True,
-        check=True,
-    )
-    responses = [json.loads(line) for line in run.stdout.splitlines()]
-    assert len(responses) == len(sources)
+    responses = probe(sources)
     for case, response in zip(cases, responses, strict=False):
         actual = response["outcome"]
         assert actual["status"] == (
