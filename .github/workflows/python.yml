@@ -93,6 +93,48 @@ jobs:
           ]))
           PY
 
+      - name: Inventory backend qualification
+        if: always()
+        run: |
+          uv run --project python --no-sync python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from yamaa import __version__
+          from yamaa.adapters.qualification import Batch, main
+
+          revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          directory = Path(os.environ["RUNNER_TEMP"]) / "qualification"
+          directory.mkdir(parents=True, exist_ok=True)
+          batch = Batch(
+              runtime="python", backend="python", level="reference_run",
+              source_revision=revision, host_package_version=__version__,
+              artifact_reference=(
+                  f"github-actions:{os.environ['GITHUB_RUN_ID']}/attempt-{os.environ['GITHUB_RUN_ATTEMPT']}/"
+                  f"{os.environ['RUNNER_OS']}/installed-yamaa-{__version__}"
+              ),
+              evidence=(
+                  f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+                  f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+              ),
+              reports_dir=str(Path(os.environ["RUNNER_TEMP"]) / "conformance" / "reports"),
+          )
+          batch_path = directory / "reference-batch.json"
+          batch_path.write_text(batch.model_dump_json(indent=2) + "\n", encoding="utf-8")
+          raise SystemExit(main([
+              "--source-revision", revision, "--batch", str(batch_path),
+              "--output", str(directory / "coverage.json"),
+          ]))
+          PY
+
+      - name: Upload qualification inventory
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: qualification-${{ matrix.os }}-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/qualification
+          if-no-files-found: error
+
       - name: Upload conformance reports
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
