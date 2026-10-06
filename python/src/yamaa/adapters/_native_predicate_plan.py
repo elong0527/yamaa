@@ -1,6 +1,6 @@
 """Temporary syntax-to-typed-predicate lowering; all data evaluation remains native."""
 
-from yamaa.expressions import PredicateError, parse_predicate, predicate_identifiers
+from yamaa.expressions import PredicateError, predicate_identifiers
 from yamaa.models import INT64_MAX, INT64_MIN, DateTimeValue, DateValue
 from yamaa.planning import (
     ExecutionDiagnostic,
@@ -8,12 +8,15 @@ from yamaa.planning import (
     UnsupportedFeature,
     UnsupportedPlanningError,
 )
+from yamaa.planning.predicate_syntax import analyze_predicate
 
 
-def admit(text, path):
+def admit(text, path, *, predicate_analyzer=None):
     """Parse the whole predicate and refuse unsupported representations before IO."""
     try:
-        ast = parse_predicate(text)
+        ast = (analyze_predicate if predicate_analyzer is None else predicate_analyzer)(
+            text
+        ).ast
     except PredicateError as error:
         raise ExecutionPlanningError(
             [
@@ -22,7 +25,11 @@ def admit(text, path):
                     condition="invalid_predicate",
                     spec_paths=(path,),
                     requirement=error.requirement,
-                    context={"predicate": text, "position": error.position},
+                    context={
+                        "predicate": text,
+                        "position": error.position,
+                        **getattr(error, "native_context", {}),
+                    },
                 )
             ]
         ) from error
@@ -39,8 +46,10 @@ def admit(text, path):
                 0xD800 <= ord(c) <= 0xDFFF for c in (node.get("escape") or "")
             ):
                 feature = "predicate_non_scalar_text"
-            if node.get("kind") == "call":
-                feature = "predicate_regex"
+            if node.get("kind") == "call" and any(
+                0xD800 <= ord(c) <= 0xDFFF for c in node["pattern"]
+            ):
+                feature = "predicate_non_scalar_text"
             if node.get("kind") == "literal":
                 if node["type"] == "int":
                     digits = node["value"].lstrip("+-").lstrip("0") or "0"
@@ -140,7 +149,14 @@ def lower(ast, text, path, reference, encode_scalar):
     def predicate(node):
         """Append children before parents while retaining the original operator."""
         kind = node["kind"]
-        if kind == "boolean":
+        if kind == "call":
+            encoded = {
+                "contains": {
+                    "value": scalar(node["source"]),
+                    "pattern": node["pattern"],
+                }
+            }
+        elif kind == "boolean":
             encoded = {"boolean": node["value"]}
         elif kind == "not":
             encoded = {"not": predicate(node["value"])}

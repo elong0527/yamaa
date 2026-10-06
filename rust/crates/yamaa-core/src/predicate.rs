@@ -7,6 +7,7 @@
 use alloc::{string::String, vec, vec::Vec};
 use core::cmp::Ordering;
 
+use crate::regex;
 use crate::table::ValueRef;
 use crate::value::{compare_present, Selection, Value, ValueType};
 
@@ -74,9 +75,13 @@ pub enum Scalar {
 }
 
 /// Child indexes refer to earlier arena entries. Scalar occurrences are not cached.
-/// This typed subset deliberately has no portable-regex call variant yet.
+/// Literal regular expressions are compiled during admission, before resolution.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node {
+    Contains {
+        value: Scalar,
+        pattern: String,
+    },
     Boolean(bool),
     Not(usize),
     And(usize, usize),
@@ -118,6 +123,8 @@ pub struct Limits {
     pub resolutions: usize,
     pub text_bytes: usize,
     pub like_work: usize,
+    /// Cumulative matching across every Contains occurrence in this evaluation.
+    pub regex: regex::MatchLimits,
 }
 
 impl Default for Limits {
@@ -130,6 +137,7 @@ impl Default for Limits {
             resolutions: 4096,
             text_bytes: 1_048_576,
             like_work: 1_048_576,
+            regex: regex::MatchLimits::default(),
         }
     }
 }
@@ -142,6 +150,9 @@ pub enum Resource {
     Resolutions,
     TextBytes,
     LikeWork,
+    RegexSubjectBytes,
+    RegexWork,
+    RegexStateCells,
 }
 
 /// Resource refusal is never predicate false, unknown or a language diagnostic.
@@ -157,6 +168,10 @@ pub enum PlanError {
     InvalidChild,
     EmptyIdentifier,
     EmptyMembership,
+    Regex {
+        node: usize,
+        error: regex::CompileError,
+    },
     Limit(LimitError),
 }
 
@@ -190,6 +205,7 @@ pub struct Usage {
     pub resolutions: usize,
     pub text_bytes: usize,
     pub like_work: usize,
+    pub regex: regex::MatchUsage,
 }
 
 impl From<Limits> for Usage {
@@ -200,6 +216,11 @@ impl From<Limits> for Usage {
             resolutions: limits.resolutions,
             text_bytes: limits.text_bytes,
             like_work: limits.like_work,
+            regex: regex::MatchUsage {
+                subject_bytes: limits.regex.subject_bytes,
+                work: limits.regex.work,
+                state_cells: limits.regex.state_cells,
+            },
         }
     }
 }
@@ -210,6 +231,7 @@ impl From<Limits> for Usage {
 pub struct Budget {
     limits: Usage,
     used: Usage,
+    regex: regex::MatchBudget,
 }
 
 impl Budget {
@@ -218,12 +240,20 @@ impl Budget {
         Self {
             limits,
             used: Usage::default(),
+            regex: regex::MatchBudget::new(regex::MatchLimits {
+                subject_bytes: limits.regex.subject_bytes,
+                work: limits.regex.work,
+                state_cells: limits.regex.state_cells,
+            }),
         }
     }
 
     /// Observe consumed work even after a language, resolver or resource failure.
     pub fn used(&self) -> Usage {
-        self.used
+        Usage {
+            regex: self.regex.used(),
+            ..self.used
+        }
     }
 
     /// Share ordinary application visits with predicate node/scalar visits.
@@ -264,6 +294,9 @@ impl Budget {
                 resource,
             ),
             Resource::Nodes | Resource::Depth => unreachable!("structural admission is separate"),
+            Resource::RegexSubjectBytes | Resource::RegexWork | Resource::RegexStateCells => {
+                unreachable!("matching charges both regex budgets directly")
+            }
         }
     }
 }
@@ -300,6 +333,7 @@ pub enum Condition {
     UnknownField { identifier: String },
     IncompatiblePair { left: ValueType, right: ValueType },
     ExpectedText { actual: ValueType },
+    ContainsExpectedText { actual: ValueType },
     DanglingEscape,
 }
 
@@ -313,7 +347,9 @@ impl Condition {
     pub fn condition(&self) -> &'static str {
         match self {
             Self::UnknownField { .. } => "unknown_field",
-            Self::IncompatiblePair { .. } | Self::ExpectedText { .. } => "incompatible_input_type",
+            Self::IncompatiblePair { .. }
+            | Self::ExpectedText { .. }
+            | Self::ContainsExpectedText { .. } => "incompatible_input_type",
             Self::DanglingEscape => "invalid_predicate",
         }
     }
@@ -324,6 +360,7 @@ impl Condition {
             Self::UnknownField { .. } => "REQ-0189",
             Self::IncompatiblePair { .. } | Self::ExpectedText { .. } => "REQ-0190",
             Self::DanglingEscape => "REQ-0191",
+            Self::ContainsExpectedText { .. } => "REQ-1244",
         }
     }
 }
@@ -355,6 +392,7 @@ struct Cost {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plan {
     nodes: Vec<Node>,
+    compiled_patterns: Vec<Option<regex::Pattern>>,
     root: usize,
     spec_path: String,
     expression: String,
@@ -407,7 +445,11 @@ impl Plan {
             .map_err(PlanError::Limit)?;
         }
         let mut costs: Vec<Cost> = Vec::with_capacity(nodes.len());
-        for node in &nodes {
+        let mut compiled_patterns = Vec::with_capacity(nodes.len());
+        let compile_limits = regex::CompileLimits::default();
+        let mut compile_budget = regex::CompileBudget::new(compile_limits);
+        for (index, node) in nodes.iter().enumerate() {
+            let mut compiled_pattern = None;
             let mut cost = Cost {
                 depth: 1,
                 work: 1,
@@ -417,6 +459,24 @@ impl Plan {
             let mut scalars = Vec::new();
             let mut membership: &[Scalar] = &[];
             match node {
+                Node::Contains { value, pattern } => {
+                    scalars.push(value);
+                    charge(
+                        &mut text,
+                        pattern.len(),
+                        limits.text_bytes,
+                        Resource::TextBytes,
+                    )
+                    .map_err(PlanError::Limit)?;
+                    compiled_pattern = Some(
+                        regex::Pattern::compile_with_budget(
+                            pattern,
+                            compile_limits,
+                            &mut compile_budget,
+                        )
+                        .map_err(|error| PlanError::Regex { node: index, error })?,
+                    );
+                }
                 Node::Boolean(_) => {}
                 Node::Not(child) => children.push(*child),
                 Node::And(left, right) | Node::Or(left, right) => children.extend([*left, *right]),
@@ -486,9 +546,11 @@ impl Plan {
                 }));
             }
             costs.push(cost);
+            compiled_patterns.push(compiled_pattern);
         }
         Ok(Self {
             nodes,
+            compiled_patterns,
             root,
             spec_path,
             expression,
@@ -538,7 +600,7 @@ impl Plan {
                     add(left);
                     add(right);
                 }
-                Node::IsNull { value, .. } => add(value),
+                Node::IsNull { value, .. } | Node::Contains { value, .. } => add(value),
                 Node::In { value, items, .. } => {
                     add(value);
                     for item in items {
@@ -665,6 +727,45 @@ impl Plan {
             .consume(Resource::Work, 1)
             .map_err(|e| self.error(ErrorKind::Limit(e), route))?;
         let result = match &self.nodes[index] {
+            Node::Contains { value, .. } => {
+                let value = self.scalar(value, Route::Value, resolver, route, budget)?;
+                match value {
+                    Value::Missing => Ok(Truth::Unknown),
+                    Value::Str(value) => {
+                        let pattern = self.compiled_patterns[index]
+                            .as_ref()
+                            .expect("admitted pattern");
+                        let matched = pattern
+                            .search_in_budgets(
+                                &value,
+                                &mut budget.local.regex,
+                                &mut budget.shared.regex,
+                            )
+                            .map_err(|error| {
+                                self.error(
+                                    ErrorKind::Limit(LimitError {
+                                        resource: match error.resource {
+                                            regex::Resource::SubjectBytes => {
+                                                Resource::RegexSubjectBytes
+                                            }
+                                            regex::Resource::Work => Resource::RegexWork,
+                                            regex::Resource::StateCells => {
+                                                Resource::RegexStateCells
+                                            }
+                                            _ => unreachable!("pattern was compiled at admission"),
+                                        },
+                                        limit: error.limit,
+                                    }),
+                                    route,
+                                )
+                            })?;
+                        Ok(Truth::from_bool(matched.is_some()))
+                    }
+                    other => Err(Condition::ContainsExpectedText {
+                        actual: other.value_type().expect("missing handled above"),
+                    }),
+                }
+            }
             Node::Boolean(value) => return Ok(Truth::from_bool(*value)),
             Node::Not(child) => {
                 return self

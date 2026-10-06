@@ -15,7 +15,6 @@ from yamaa.expressions import (
     PredicateAst,
     PredicateError,
     TemplateError,
-    parse_predicate,
     parse_template_cached,
     predicate_identifiers,
     source_operand,
@@ -36,6 +35,7 @@ from yamaa.odm.items import ODM_SCHEMA_FIELDS, odm_read_sites
 from yamaa.planning.aggregate_syntax import AggregateAnalyzer, analyze_aggregate
 from yamaa.planning.dependencies import ColumnDependencyAnalyzer, DependencyAnalyzer
 from yamaa.planning.numeric_syntax import NumericAnalyzer, analyze_numeric
+from yamaa.planning.predicate_syntax import PredicateAnalyzer, analyze_predicate
 from yamaa.planning.references import (
     ComparableType,
     IntermediateReadScope,
@@ -470,6 +470,7 @@ def _expression_info(
     dataset_fields: Mapping[str, Collection[str]] | None = None,
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> _ExpressionInfo:
     operation = expression.operation
     operation_path = f"{path}.{operation}"
@@ -498,6 +499,7 @@ def _expression_info(
             dataset_fields=dataset_fields,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
         references.extend(info.references)
         unsupported.extend(info.unsupported)
@@ -515,6 +517,7 @@ def _expression_info(
                     f"{operation_path}.filter",
                     references,
                     scope,
+                    predicate_analyzer=predicate_analyzer,
                 )
             )
     elif operation in _TYPED_SOURCES and isinstance(payload, Mapping):
@@ -537,11 +540,19 @@ def _expression_info(
                     f"{operation_path}.source.filter",
                     references,
                     scope,
+                    predicate_analyzer=predicate_analyzer,
                 )
             )
     elif operation in WINDOW_OPERATIONS and isinstance(payload, Mapping):
         diagnostics.extend(
-            _window_references(operation, payload, operation_path, references, scope)
+            _window_references(
+                operation,
+                payload,
+                operation_path,
+                references,
+                scope,
+                predicate_analyzer=predicate_analyzer,
+            )
         )
     elif operation in _TEMPORAL_VARIABLES and isinstance(payload, Mapping):
         references.extend(
@@ -604,6 +615,7 @@ def _expression_info(
                         f"{source_path}.filter",
                         references,
                         scope,
+                        predicate_analyzer=predicate_analyzer,
                     )
                 )
     elif operation == "compute" and isinstance(payload, Mapping):
@@ -627,6 +639,7 @@ def _expression_info(
                 unsupported,
                 aggregate_analyzer=aggregate_analyzer,
                 numeric_analyzer=numeric_analyzer,
+                predicate_analyzer=predicate_analyzer,
             )
         )
     elif operation == "str_template":
@@ -656,7 +669,12 @@ def _expression_info(
                 continue
             when = item.get("when")
             if isinstance(when, str):
-                ast = _parse_predicate_at(when, f"{item_path}.when", diagnostics)
+                ast = _parse_predicate_at(
+                    when,
+                    f"{item_path}.when",
+                    diagnostics,
+                    predicate_analyzer=predicate_analyzer,
+                )
                 if ast is not None:
                     references.extend(
                         _Reference(
@@ -674,7 +692,12 @@ def _expression_info(
         condition = payload if isinstance(payload, str) else payload.get("condition")
         condition_path = f"{operation_path}.condition"
         if isinstance(condition, str):
-            ast = _parse_predicate_at(condition, condition_path, diagnostics)
+            ast = _parse_predicate_at(
+                condition,
+                condition_path,
+                diagnostics,
+                predicate_analyzer=predicate_analyzer,
+            )
             if ast is not None:
                 references.extend(
                     _Reference(
@@ -763,6 +786,7 @@ def _filtered_source_references(
     filter_path: str,
     references: list[_Reference],
     scope: _Scope,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> list[ExecutionDiagnostic]:
     """Collect what a source `filter` reads, which is its own right side.
 
@@ -794,7 +818,9 @@ def _filtered_source_references(
                 requirement="REQ-0148",
             )
         ]
-    ast = _parse_predicate_at(selector, filter_path, diagnostics)
+    ast = _parse_predicate_at(
+        selector, filter_path, diagnostics, predicate_analyzer=predicate_analyzer
+    )
     if ast is None:
         return diagnostics
     for name in predicate_identifiers(ast):
@@ -947,6 +973,7 @@ def _window_references(
     operation_path: str,
     references: list[_Reference],
     scope: _Scope,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> list[ExecutionDiagnostic]:
     """Collect what one window reads, and reject the contexts R007 refuses.
 
@@ -1009,7 +1036,9 @@ def _window_references(
     predicate = window.get("filter")
     if isinstance(predicate, str):
         filter_path = f"{operation_path}.window.filter"
-        ast = _parse_predicate_at(predicate, filter_path, diagnostics)
+        ast = _parse_predicate_at(
+            predicate, filter_path, diagnostics, predicate_analyzer=predicate_analyzer
+        )
         if ast is not None:
             references.extend(
                 _Reference(name, filter_path) for name in predicate_identifiers(ast)
@@ -1061,6 +1090,7 @@ _DERIVE_WINDOW_OPERATIONS: tuple[str, ...] = (
 def _derive_reference_names(
     derivation: object,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> list[str]:
     """Collect every variable name a derive binding derivation reads.
 
@@ -1082,7 +1112,9 @@ def _derive_reference_names(
         if not isinstance(text, str):
             return
         try:
-            ast = parse_predicate(text)
+            ast = (
+                analyze_predicate if predicate_analyzer is None else predicate_analyzer
+            )(text).ast
         except PredicateError:
             # The predicate's own validation reports the error; the scan
             # only collects names from predicates that parse.
@@ -1247,6 +1279,7 @@ def _aggregate_references(
     unsupported: list[UnsupportedFeature],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> list[ExecutionDiagnostic]:
     """Read one R013 reduction and report the context R007 does not permit."""
     if isinstance(payload, str):
@@ -1351,7 +1384,9 @@ def _aggregate_references(
             seen.add(name)
             binding_names.append(name)
             for ref in _derive_reference_names(
-                binding.get("derivation"), numeric_analyzer=numeric_analyzer
+                binding.get("derivation"),
+                numeric_analyzer=numeric_analyzer,
+                predicate_analyzer=predicate_analyzer,
             ):
                 head, dot, _ = ref.partition(".")
                 if dot:
@@ -1372,7 +1407,10 @@ def _aggregate_references(
         filter_declared = payload.get("filter")
         if isinstance(filter_declared, str):
             probe_filter = _parse_predicate_at(
-                filter_declared, f"{operation_path}.filter", []
+                filter_declared,
+                f"{operation_path}.filter",
+                [],
+                predicate_analyzer=predicate_analyzer,
             )
             if probe_filter is not None:
                 for ref in predicate_identifiers(probe_filter):
@@ -1500,6 +1538,7 @@ def _aggregate_references(
                     scope=scope,
                     aggregate_analyzer=aggregate_analyzer,
                     numeric_analyzer=numeric_analyzer,
+                    predicate_analyzer=predicate_analyzer,
                 )
                 planned = MatchValueExpression(
                     column=key,
@@ -1547,7 +1586,9 @@ def _aggregate_references(
     predicate = payload.get("filter")
     if isinstance(predicate, str):
         filter_path = f"{operation_path}.filter"
-        ast_filter = _parse_predicate_at(predicate, filter_path, diagnostics)
+        ast_filter = _parse_predicate_at(
+            predicate, filter_path, diagnostics, predicate_analyzer=predicate_analyzer
+        )
         if ast_filter is not None:
             references.extend(
                 relational(name, filter_path)
@@ -1732,15 +1773,22 @@ def _parse_predicate_at(
     text: str,
     path: str,
     diagnostics: list[ExecutionDiagnostic],
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> PredicateAst | None:
     try:
-        return parse_predicate(text)
+        return (
+            analyze_predicate if predicate_analyzer is None else predicate_analyzer
+        )(text).ast
     except PredicateError as error:
         diagnostics.append(
             _diagnostic(
                 "invalid_predicate",
                 path,
-                {"predicate": text, "position": error.position},
+                {
+                    "predicate": text,
+                    "position": error.position,
+                    **getattr(error, "native_context", {}),
+                },
                 requirement=error.requirement,
             )
         )
@@ -1754,6 +1802,7 @@ def _fill_omitted_lookup_keys(
     infer: Callable[[str, str], tuple[str, ...] | None],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> tuple[HandledExpression, frozenset[str]]:
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
@@ -1819,7 +1868,9 @@ def _fill_omitted_lookup_keys(
                 for binding in derive_declared:
                     if isinstance(binding, Mapping):
                         for name in _derive_reference_names(
-                            binding.get("derivation"), numeric_analyzer=numeric_analyzer
+                            binding.get("derivation"),
+                            numeric_analyzer=numeric_analyzer,
+                            predicate_analyzer=predicate_analyzer,
                         ):
                             if "." in name:
                                 head = name.split(".", 1)[0]
@@ -1883,6 +1934,7 @@ def _plan_derivation(
     dataset_fields: Mapping[str, Collection[str]] | None = None,
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...], frozenset[str]]:
     value_path = expression_path(path, declaration)
     inferred_paths: frozenset[str] = frozenset()
@@ -1895,6 +1947,7 @@ def _plan_derivation(
             lambda dataset, path: infer_keys(dataset, path, deferred),
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
     info = _expression_info(
         declaration.value,
@@ -1904,6 +1957,7 @@ def _plan_derivation(
         dataset_fields=dataset_fields,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
     references = list(info.references)
     unsupported.extend(info.unsupported)
@@ -2993,6 +3047,7 @@ def _plan_lookups(
     reference_compiler: ReferenceCompiler | None = None,
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> dict[str, PlannedIntermediate]:
     """Validate each declared intermediate against its loaded dataset."""
     planned: dict[str, PlannedIntermediate] = {}
@@ -3114,6 +3169,7 @@ def _plan_lookups(
                 dataset_fields=dataset_fields,
                 aggregate_analyzer=aggregate_analyzer,
                 numeric_analyzer=numeric_analyzer,
+                predicate_analyzer=predicate_analyzer,
             )
             keyed = MatchValueExpression(
                 column=field,
@@ -3146,6 +3202,7 @@ def _plan_lookups(
             row_drivers=row_drivers,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
         # REQ-1185: a name whose derivation failed validation is already
         # reported at its derivation path; the key below must not repeat the
@@ -3277,7 +3334,10 @@ def _plan_lookups(
         predicate = None
         if intermediate.filter is not None:
             predicate = _parse_predicate_at(
-                intermediate.filter, f"{path}.filter", diagnostics
+                intermediate.filter,
+                f"{path}.filter",
+                diagnostics,
+                predicate_analyzer=predicate_analyzer,
             )
             if predicate is not None:
                 for identifier in predicate_identifiers(predicate):
@@ -3701,6 +3761,7 @@ def _validate_intermediate_derivations(
     row_drivers: Collection[str | None] = (),
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> dict[str, HandledExpression]:
     """Validate one intermediate's REQ-1185 derivations.
 
@@ -3744,6 +3805,7 @@ def _validate_intermediate_derivations(
             scope=_Scope(column_phase=False),
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
         unsupported.extend(info.unsupported)
         diagnostics.extend(info.diagnostics)
@@ -3993,6 +4055,7 @@ def _coverage_diagnostics(
     supported_operations: Collection[str],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> list[ExecutionDiagnostic]:
     diagnostics: list[ExecutionDiagnostic] = []
     rows = specification.rows or ()
@@ -4009,6 +4072,7 @@ def _coverage_diagnostics(
             supported_operations,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )[1]
         if overridden
         else frozenset()
@@ -4319,7 +4383,9 @@ def _sidecar_declarations(
     return diagnostics
 
 
-def _odm_read_diagnostics(specification: Specification) -> list[ExecutionDiagnostic]:
+def _odm_read_diagnostics(
+    specification: Specification, predicate_analyzer: PredicateAnalyzer | None = None
+) -> list[ExecutionDiagnostic]:
     """Check every `odm` read against the rows it can be read for.
 
     REQ-1270 gives an `odm` read a scope only in a row built from its ODM
@@ -4373,7 +4439,12 @@ def _odm_read_diagnostics(specification: Specification) -> list[ExecutionDiagnos
         if site.read.filter is None:
             continue
         filter_path = f"{site.path}.filter"
-        ast = _parse_predicate_at(site.read.filter, filter_path, diagnostics)
+        ast = _parse_predicate_at(
+            site.read.filter,
+            filter_path,
+            diagnostics,
+            predicate_analyzer=predicate_analyzer,
+        )
         if ast is None:
             continue
         for name in predicate_identifiers(ast):
@@ -4395,6 +4466,7 @@ def _preflight_findings(
     supported_operations: Collection[str],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> tuple[list[ExecutionDiagnostic], list[UnsupportedFeature]]:
     """Find source-independent failures before any dataset is ingested."""
     diagnostics = (
@@ -4405,6 +4477,7 @@ def _preflight_findings(
             supported_operations,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
     )
     unsupported: list[UnsupportedFeature] = []
@@ -4425,7 +4498,9 @@ def _preflight_findings(
     diagnostics.extend(_lookup_declarations(specification))
     diagnostics.extend(_sidecar_declarations(specification))
     if not specification.parents:
-        diagnostics.extend(_odm_read_diagnostics(specification))
+        diagnostics.extend(
+            _odm_read_diagnostics(specification, predicate_analyzer=predicate_analyzer)
+        )
         declared_columns = {column.name for column in specification.columns}
         for index, key in enumerate(specification.keys):
             if key not in declared_columns:
@@ -4493,6 +4568,7 @@ def _preflight_findings(
                     scope=scope,
                     aggregate_analyzer=aggregate_analyzer,
                     numeric_analyzer=numeric_analyzer,
+                    predicate_analyzer=predicate_analyzer,
                 ).unsupported
             )
 
@@ -4513,6 +4589,7 @@ def _preflight_findings(
                 scope=column_scope,
                 aggregate_analyzer=aggregate_analyzer,
                 numeric_analyzer=numeric_analyzer,
+                predicate_analyzer=predicate_analyzer,
             ).unsupported
         )
 
@@ -4525,6 +4602,7 @@ def preflight_execution(
     supported_operations: Collection[str] = INITIAL_OPERATIONS,
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> None:
     """Reject source-independent failures before a source provider is called."""
     diagnostics, unsupported = _preflight_findings(
@@ -4532,6 +4610,7 @@ def preflight_execution(
         supported_operations,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
     if diagnostics:
         raise ExecutionPlanningError(diagnostics)
@@ -4549,6 +4628,7 @@ def _column_level_reads(
     supported_operations: Collection[str],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> tuple[dict[str, frozenset[str]], frozenset[str]]:
     """Return each column-level derivation's bare reads and the non-row-local names.
 
@@ -4576,6 +4656,7 @@ def _column_level_reads(
             scope=_Scope(intermediates=intermediates),
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
         if any(
             feature.operation in _DATASET_LEVEL_OPERATIONS
@@ -4605,6 +4686,7 @@ def _row_phase_default_columns(
     dataset_fields: Mapping[str, Mapping[str, ColumnType]],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> frozenset[str]:
     """Column names whose column-level derivations are row-phase defaults.
 
@@ -4627,6 +4709,7 @@ def _row_phase_default_columns(
         supported_operations,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
     candidates = reads.keys() - blocked
     if not candidates:
@@ -4651,6 +4734,7 @@ def _row_phase_default_columns(
             scope=scope,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         ).references
 
     def donor_reads(found: Sequence[_Reference]) -> set[str]:
@@ -4686,6 +4770,7 @@ def _row_phase_default_columns(
                     supported_operations,
                     aggregate_analyzer=aggregate_analyzer,
                     numeric_analyzer=numeric_analyzer,
+                    predicate_analyzer=predicate_analyzer,
                 )
                 names.extend(reference.name for reference in info.references)
         if intermediate.between is not None:
@@ -4727,7 +4812,11 @@ def _row_phase_default_columns(
             # lookup state for an ungrouped one. A lookup read also promotes
             # the column-level values it matches on into the row phase.
             try:
-                filter_ast = parse_predicate(row.filter)
+                filter_ast = (
+                    analyze_predicate
+                    if predicate_analyzer is None
+                    else predicate_analyzer
+                )(row.filter).ast
             except PredicateError:
                 pass
             else:
@@ -4779,7 +4868,13 @@ def _row_phase_default_columns(
         if intermediate.filter is not None:
             try:
                 names.extend(
-                    predicate_identifiers(parse_predicate(intermediate.filter))
+                    predicate_identifiers(
+                        (
+                            analyze_predicate
+                            if predicate_analyzer is None
+                            else predicate_analyzer
+                        )(intermediate.filter).ast
+                    )
                 )
             except PredicateError:
                 pass
@@ -4909,6 +5004,7 @@ def _bind_intermediate_drivers(
     supported_operations: Collection[str],
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> BindingPlan:
     """Expose source-only intermediate records as typed row drivers."""
     declared = {item.id: item for item in specification.intermediates or ()}
@@ -4932,7 +5028,13 @@ def _bind_intermediate_drivers(
             prohibited.append("dataset")
         if item.filter is not None:
             try:
-                filter_names = predicate_identifiers(parse_predicate(item.filter))
+                filter_names = predicate_identifiers(
+                    (
+                        analyze_predicate
+                        if predicate_analyzer is None
+                        else predicate_analyzer
+                    )(item.filter).ast
+                )
             except PredicateError:
                 filter_names = ()
             if any(name.partition(".")[0] != item.dataset for name in filter_names):
@@ -4945,6 +5047,7 @@ def _bind_intermediate_drivers(
                 scope=_Scope(column_phase=False),
                 aggregate_analyzer=aggregate_analyzer,
                 numeric_analyzer=numeric_analyzer,
+                predicate_analyzer=predicate_analyzer,
             )
             if any(
                 ref.name.partition(".")[0] in specification.input
@@ -5014,6 +5117,7 @@ def plan_execution(
     reference_compiler_factory: ReferenceCompilerFactory | None = None,
     aggregate_analyzer: AggregateAnalyzer | None = None,
     numeric_analyzer: NumericAnalyzer | None = None,
+    predicate_analyzer: PredicateAnalyzer | None = None,
 ) -> ExecutionPlan:
     """Validate and plan the initial record-driven execution subset.
 
@@ -5030,6 +5134,7 @@ def plan_execution(
         supported_operations,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
     declared_sources = tuple(specification.input)
     supplied_sources = tuple(sources)
@@ -5067,6 +5172,7 @@ def plan_execution(
         supported_operations,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
 
     column_order = [column.name for column in specification.columns]
@@ -5093,6 +5199,7 @@ def plan_execution(
         dataset_fields,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
     default_derivations = {
         column.name: column.derivation
@@ -5130,6 +5237,7 @@ def plan_execution(
         reference_compiler,
         aggregate_analyzer=aggregate_analyzer,
         numeric_analyzer=numeric_analyzer,
+        predicate_analyzer=predicate_analyzer,
     )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
@@ -5144,7 +5252,10 @@ def plan_execution(
             filter_ast = None
             if specification.filter is not None:
                 filter_ast = _parse_predicate_at(
-                    specification.filter, "filter", diagnostics
+                    specification.filter,
+                    "filter",
+                    diagnostics,
+                    predicate_analyzer=predicate_analyzer,
                 )
             if filter_ast is not None:
                 for identifier in predicate_identifiers(filter_ast):
@@ -5190,7 +5301,12 @@ def plan_execution(
             grouped = row.group_by is not None
             filter_path = f"rows[{index}].filter" if row.filter is not None else None
             filter_ast = (
-                _parse_predicate_at(row.filter, filter_path, diagnostics)
+                _parse_predicate_at(
+                    row.filter,
+                    filter_path,
+                    diagnostics,
+                    predicate_analyzer=predicate_analyzer,
+                )
                 if row.filter is not None and filter_path is not None
                 else None
             )
@@ -5250,6 +5366,7 @@ def plan_execution(
                     dataset_fields=dataset_fields,
                     aggregate_analyzer=aggregate_analyzer,
                     numeric_analyzer=numeric_analyzer,
+                    predicate_analyzer=predicate_analyzer,
                 )
                 annotated = _resolve_implicit_joins(
                     references,
@@ -5578,6 +5695,7 @@ def plan_execution(
             dataset_fields=dataset_fields,
             aggregate_analyzer=aggregate_analyzer,
             numeric_analyzer=numeric_analyzer,
+            predicate_analyzer=predicate_analyzer,
         )
         annotated = _resolve_implicit_joins(
             references,

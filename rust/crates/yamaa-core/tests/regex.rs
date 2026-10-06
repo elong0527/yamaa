@@ -1,4 +1,139 @@
-use yamaa_core::regex::{CompileError, CompileLimits, MatchError, MatchLimits, Pattern, Resource};
+use yamaa_core::regex::{
+    CompileError, CompileLimits, MatchBudget, MatchError, MatchLimits, Pattern, Resource,
+};
+
+/// Successful matches cannot repeatedly reset the surrounding work/storage scope.
+#[test]
+fn cumulative_match_work_storage_and_fresh_retry() {
+    let compiled = pattern("a+");
+    let limits = MatchLimits::default();
+    let mut measured = MatchBudget::new(limits);
+    assert_eq!(
+        compiled
+            .search_with_budget("aaaa", limits, &mut measured)
+            .unwrap()
+            .unwrap()
+            .groups,
+        [Some("aaaa")]
+    );
+    let cost = measured.used();
+    assert!(cost.work > 0 && cost.state_cells > 0);
+    for resource in [Resource::Work, Resource::StateCells] {
+        let mut shared_limits = limits;
+        let ceiling = if resource == Resource::Work {
+            shared_limits.work = 2 * cost.work - 1;
+            shared_limits.work
+        } else {
+            shared_limits.state_cells = 2 * cost.state_cells - 1;
+            shared_limits.state_cells
+        };
+        let mut shared = MatchBudget::new(shared_limits);
+        assert!(compiled
+            .search_with_budget("aaaa", limits, &mut shared)
+            .unwrap()
+            .is_some());
+        assert_eq!(
+            compiled
+                .search_with_budget("aaaa", limits, &mut shared)
+                .unwrap_err(),
+            MatchError {
+                resource,
+                limit: ceiling
+            }
+        );
+        let used = shared.used();
+        assert!(used.work >= cost.work && used.state_cells >= cost.state_cells);
+        assert!(used.work <= shared_limits.work && used.state_cells <= shared_limits.state_cells);
+        let mut retry = MatchBudget::new(limits);
+        assert!(compiled
+            .search_with_budget("aaaa", limits, &mut retry)
+            .unwrap()
+            .is_some());
+        assert_eq!(retry.used(), cost);
+    }
+}
+
+/// Subject quotas use UTF-8 bytes across both modes; local limits and no-match stay distinct.
+#[test]
+fn cumulative_subject_bytes_and_failure_prefixes() {
+    let compiled = pattern(".");
+    let limits = MatchLimits::default();
+    let mut shared = MatchBudget::new(MatchLimits {
+        subject_bytes: 7,
+        ..limits
+    });
+    assert_eq!(
+        compiled
+            .search_with_budget("😀", limits, &mut shared)
+            .unwrap()
+            .unwrap()
+            .groups,
+        [Some("😀")]
+    );
+    let before = shared.used();
+    assert_eq!(before.subject_bytes, 4);
+    assert_eq!(
+        compiled
+            .full_match_with_budget("😀", limits, &mut shared)
+            .unwrap_err(),
+        MatchError {
+            resource: Resource::SubjectBytes,
+            limit: 7
+        }
+    );
+    assert_eq!(shared.used(), before);
+    assert_eq!(
+        compiled
+            .search_with_budget(
+                "x",
+                MatchLimits {
+                    subject_bytes: 0,
+                    ..limits
+                },
+                &mut shared
+            )
+            .unwrap_err(),
+        MatchError {
+            resource: Resource::SubjectBytes,
+            limit: 0
+        }
+    );
+    assert_eq!(shared.used(), before);
+    let mut fresh = MatchBudget::new(MatchLimits {
+        subject_bytes: 8,
+        ..limits
+    });
+    assert!(compiled
+        .search_with_budget("😀", limits, &mut fresh)
+        .unwrap()
+        .is_some());
+    assert!(compiled
+        .full_match_with_budget("😀", limits, &mut fresh)
+        .unwrap()
+        .is_some());
+    assert_eq!(fresh.used().subject_bytes, 8);
+
+    let mut failed = MatchBudget::new(MatchLimits { work: 0, ..limits });
+    assert_eq!(
+        compiled
+            .search_with_budget("x", limits, &mut failed)
+            .unwrap_err(),
+        MatchError {
+            resource: Resource::Work,
+            limit: 0
+        }
+    );
+    assert_eq!(failed.used().subject_bytes, 1);
+    assert_eq!(failed.used().work, 0);
+    assert!(failed.used().state_cells > 0);
+    let mut fresh = MatchBudget::new(limits);
+    assert!(pattern("a")
+        .search_with_budget("b", limits, &mut fresh)
+        .unwrap()
+        .is_none());
+    assert!(fresh.used().work > 0);
+    assert_eq!(fresh.used().subject_bytes, 1);
+}
 
 /// Compile a test pattern under production defaults.
 fn pattern(text: &str) -> Pattern {

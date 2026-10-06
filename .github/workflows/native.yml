@@ -139,6 +139,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_numeric_syntax.py" installed_numeric_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_regex.py" installed_regex.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv" predicate_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/regex_transport.tsv" regex_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv" aggregate_syntax.tsv
@@ -174,6 +175,7 @@ jobs:
           python installed_numeric_syntax.py
           python installed_regex.py
           python installed_predicate_syntax.py
+          python installed_predicate_execution.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Check regex and predicate services on the oldest advertised Python ABI
         working-directory: ${{ runner.temp }}
@@ -200,6 +202,7 @@ jobs:
           python installed_numeric_syntax.py
           python installed_regex.py
           python installed_predicate_syntax.py
+          python installed_predicate_execution.py
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -296,6 +299,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript regex.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_syntax.R" predicate_syntax.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript predicate_syntax.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_execution.R" predicate_execution.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript predicate_execution.R
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

@@ -221,6 +221,9 @@ pub enum Resource {
     PredicateResolutions,
     PredicateTextBytes,
     PredicateLikeWork,
+    PredicateRegexSubjectBytes,
+    PredicateRegexWork,
+    PredicateRegexStateCells,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -803,6 +806,9 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
         P::Resolutions => Resource::PredicateResolutions,
         P::TextBytes => Resource::PredicateTextBytes,
         P::LikeWork => Resource::PredicateLikeWork,
+        P::RegexSubjectBytes => Resource::PredicateRegexSubjectBytes,
+        P::RegexWork => Resource::PredicateRegexWork,
+        P::RegexStateCells => Resource::PredicateRegexStateCells,
         P::Nodes | P::Depth => unreachable!("predicate structure was admitted before execution"),
     };
     ExecutionError::Limit {

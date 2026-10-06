@@ -74,7 +74,7 @@ pub enum CompileError {
 /// Per-call budgets span every candidate position, backtrack and lookaround.
 /// These are independent ceilings, not a guarantee that every admitted input
 /// fits the remaining work/storage budgets. Callers may raise them separately.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MatchLimits {
     /// Input byte ceiling checked before scalar indexing or matching.
     pub subject_bytes: usize,
@@ -107,7 +107,7 @@ pub struct Match<'s> {
     pub groups: Vec<Option<&'s str>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum SetItem {
     Range(u32, u32),
     Digit(bool),
@@ -144,12 +144,12 @@ fn whitespace(c: char) -> bool {
     )
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Reference {
     Number(usize),
     Name(String),
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Kind {
     Literal(u32),
     Dot,
@@ -190,7 +190,7 @@ enum Width {
     Variable,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Node {
     kind: Kind,
     byte: usize,
@@ -199,7 +199,7 @@ struct Node {
 }
 
 /// Immutable postorder arena. Compilation never resolves fields or calls a host.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pattern {
     nodes: Vec<Node>,
     root: usize,
@@ -229,7 +229,7 @@ impl Pattern {
         subject: &'s str,
         limits: MatchLimits,
     ) -> Result<Option<Match<'s>>, MatchError> {
-        self.execute(subject, limits, false)
+        self.search_with_budget(subject, limits, &mut MatchBudget::new(limits))
     }
     /// Anchor the entire pattern, preserving alternatives that fail the final anchor.
     pub fn full_match<'s>(
@@ -237,26 +237,46 @@ impl Pattern {
         subject: &'s str,
         limits: MatchLimits,
     ) -> Result<Option<Match<'s>>, MatchError> {
-        self.execute(subject, limits, true)
+        self.full_match_with_budget(subject, limits, &mut MatchBudget::new(limits))
     }
-    /// Allocate bounded scalar coordinates and share budgets across candidate starts.
-    fn execute<'s>(
+    /// Search under fresh per-call ceilings and a caller-owned cumulative scope.
+    /// Failed attempts retain consumed work; only the caller starts a new scope.
+    pub fn search_with_budget<'s>(
         &self,
         subject: &'s str,
         limits: MatchLimits,
-        full: bool,
+        shared: &mut MatchBudget,
     ) -> Result<Option<Match<'s>>, MatchError> {
-        if subject.len() > limits.subject_bytes {
-            return Err(MatchError {
-                resource: Resource::SubjectBytes,
-                limit: limits.subject_bytes,
-            });
-        }
-        let mut budget = Budget {
-            limits,
-            work: 0,
-            cells: 0,
-        };
+        self.search_in_budgets(subject, &mut MatchBudget::new(limits), shared)
+    }
+    /// Full-match alternatives share both per-call and cumulative accounting.
+    pub fn full_match_with_budget<'s>(
+        &self,
+        subject: &'s str,
+        limits: MatchLimits,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.execute(subject, true, &mut MatchBudget::new(limits), shared)
+    }
+    /// A predicate reuses its local scope across all calls and its shared dataset scope.
+    pub(crate) fn search_in_budgets<'s>(
+        &self,
+        subject: &'s str,
+        local: &mut MatchBudget,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.execute(subject, false, local, shared)
+    }
+    /// Charge both scopes before scalar indexing, matching or allocation.
+    fn execute<'s>(
+        &self,
+        subject: &'s str,
+        full: bool,
+        local: &mut MatchBudget,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        let mut budget = Budget { local, shared };
+        budget.consume(Resource::SubjectBytes, subject.len())?;
         // Count before allocating scalar storage or its byte-boundary map.
         let size = subject.chars().count();
         budget.cells(
@@ -298,7 +318,7 @@ impl Pattern {
         initial: State,
         backwards: bool,
         require_end: bool,
-        budget: &mut Budget,
+        budget: &mut Budget<'_>,
     ) -> Result<Option<State>, MatchError> {
         budget.cells(1)?;
         let mut alternatives = vec![initial];
@@ -518,45 +538,76 @@ struct State {
 }
 impl State {
     /// Charge task/capture copies before allocating a backtracking snapshot.
-    fn copy(&self, budget: &mut Budget) -> Result<Self, MatchError> {
+    fn copy(&self, budget: &mut Budget<'_>) -> Result<Self, MatchError> {
         budget.cells(self.tasks.len().saturating_add(self.captures.len()))?;
         Ok(self.clone())
     }
     /// Charge every logical continuation slot before extending the task stack.
-    fn push(&mut self, task: Task, budget: &mut Budget) -> Result<(), MatchError> {
+    fn push(&mut self, task: Task, budget: &mut Budget<'_>) -> Result<(), MatchError> {
         budget.cells(1)?;
         self.tasks.push(task);
         Ok(())
     }
 }
-struct Budget {
-    limits: MatchLimits,
-    work: usize,
-    cells: usize,
+/// Logical consumption across match attempts, including failed attempts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MatchUsage {
+    pub subject_bytes: usize,
+    pub work: usize,
+    pub state_cells: usize,
 }
-impl Budget {
-    /// Charge cumulative interpretation and scalar-comparison work.
-    fn work(&mut self, n: usize) -> Result<(), MatchError> {
-        self.work = self
-            .work
-            .checked_add(n)
-            .filter(|v| *v <= self.limits.work)
-            .ok_or(MatchError {
-                resource: Resource::Work,
-                limit: self.limits.work,
-            })?;
+
+/// Caller-owned cumulative matching scope; no matcher resets or refunds it.
+/// Logical cells exclude allocator overhead and process-wide memory accounting.
+#[derive(Debug)]
+pub struct MatchBudget {
+    limits: MatchLimits,
+    used: MatchUsage,
+}
+impl MatchBudget {
+    /// Create an explicitly fresh scope with independently selected resource ceilings.
+    pub fn new(limits: MatchLimits) -> Self {
+        Self {
+            limits,
+            used: MatchUsage::default(),
+        }
+    }
+    /// Observe successful charge prefixes even after a failed attempt.
+    pub fn used(&self) -> MatchUsage {
+        self.used
+    }
+    /// Refuse overflow and quota exhaustion before changing the selected counter.
+    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), MatchError> {
+        let (used, limit) = match resource {
+            Resource::SubjectBytes => (&mut self.used.subject_bytes, self.limits.subject_bytes),
+            Resource::Work => (&mut self.used.work, self.limits.work),
+            Resource::StateCells => (&mut self.used.state_cells, self.limits.state_cells),
+            _ => unreachable!("compilation resources have separate accounting"),
+        };
+        *used = used
+            .checked_add(amount)
+            .filter(|&next| next <= limit)
+            .ok_or(MatchError { resource, limit })?;
         Ok(())
     }
-    /// Charge cumulative logical storage with overflow-safe arithmetic.
+}
+
+struct Budget<'a> {
+    local: &'a mut MatchBudget,
+    shared: &'a mut MatchBudget,
+}
+impl Budget<'_> {
+    /// Both scopes must admit a charge before its operation is performed.
+    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), MatchError> {
+        self.local.consume(resource, amount)?;
+        self.shared.consume(resource, amount)
+    }
+    /// Charge interpretation and scalar-comparison work across every attempt.
+    fn work(&mut self, n: usize) -> Result<(), MatchError> {
+        self.consume(Resource::Work, n)
+    }
+    /// Charge logical storage before copying or allocating matcher state.
     fn cells(&mut self, n: usize) -> Result<(), MatchError> {
-        self.cells = self
-            .cells
-            .checked_add(n)
-            .filter(|v| *v <= self.limits.state_cells)
-            .ok_or(MatchError {
-                resource: Resource::StateCells,
-                limit: self.limits.state_cells,
-            })?;
-        Ok(())
+        self.consume(Resource::StateCells, n)
     }
 }

@@ -270,7 +270,7 @@ pub(crate) fn predicate<E>(
             context.insert("left_type".into(), text(type_name(*left)));
             context.insert("right_type".into(), text(type_name(*right)));
         }
-        Condition::ExpectedText { actual } => {
+        Condition::ExpectedText { actual } | Condition::ContainsExpectedText { actual } => {
             context.insert("expected".into(), text("str"));
             context.insert("actual".into(), text(type_name(*actual)));
         }

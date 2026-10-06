@@ -24,6 +24,11 @@ impl Budget {
                 resolutions: limits.work_cells,
                 text_bytes: limits.scalar_text_bytes,
                 like_work: limits.work_cells,
+                regex: yamaa_core::regex::MatchUsage {
+                    subject_bytes: limits.scalar_text_bytes,
+                    work: limits.work_cells,
+                    state_cells: limits.work_cells,
+                },
             }),
         }
     }

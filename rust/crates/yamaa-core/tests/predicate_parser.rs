@@ -178,8 +178,9 @@ fn portable_regex_literals_are_checked_before_closing_token() {
         ));
     }
     let text = "str_contains('\u{1f600}', '('";
-    let Err(ParseError::Grammar { position, failure }) =
-        parse_predicate(text, ParseLimits::default())
+    let Err(ParseError::Grammar {
+        position, failure, ..
+    }) = parse_predicate(text, ParseLimits::default())
     else {
         panic!()
     };
@@ -324,4 +325,59 @@ fn repeated_regex_compilation_shares_request_budget() {
         })
     ));
     parse_predicate(&call, ParseLimits::default()).unwrap();
+}
+
+/// Reasons belong to Rust productions, so host planning never reparses a failed input.
+#[test]
+fn grammar_messages_preserve_production_reason() {
+    for (text, expected) in [
+        ("", "expected operand"),
+        ("A >", "expected operand"),
+        ("A = TRUE", "expected operand"),
+        ("TRUE FALSE", "unexpected trailing token"),
+        ("A = 'open", "unterminated string literal"),
+        ("A. = 1", "invalid qualified identifier"),
+        ("A @", "unexpected character"),
+        ("A \u{200b}", "unexpected character"),
+        ("(TRUE", "expected ')' to close predicate"),
+        ("A IS 1", "expected NULL after IS"),
+        ("A IN 1", "expected '(' after IN"),
+        ("A IN (1 2)", "expected ')' after IN operands"),
+        ("A BETWEEN 1 OR 2", "expected AND in BETWEEN predicate"),
+        ("A LIKE 'x' ESCAPE 1", "ESCAPE requires a string literal"),
+        (
+            "A LIKE 'x' ESCAPE ''",
+            "ESCAPE requires exactly one code point",
+        ),
+        (
+            "A LIKE 'x!' ESCAPE '!'",
+            "LIKE pattern has a dangling escape",
+        ),
+        ("A NOT = 1", "NOT must precede IN, BETWEEN, or LIKE"),
+        ("A", "operand must be followed by a Boolean operator"),
+        ("A = DATE 1", "DATE requires a string literal"),
+        ("A = DATETIME 1", "DATETIME requires a string literal"),
+        ("A = DATE '2025-02-30'", "invalid date literal"),
+        ("A = DATETIME 'bad'", "invalid datetime literal"),
+        (
+            "str_contains(A)",
+            "expected ',' between str_contains source and pattern",
+        ),
+        (
+            "str_contains(A, B)",
+            "str_contains pattern must be a string literal",
+        ),
+        ("str_contains(A, 'a'", "expected ')' to close str_contains"),
+        (
+            "str_contains(A, '[')",
+            "invalid regex in str_contains pattern: unclosed character class",
+        ),
+    ] {
+        let Err(ParseError::Grammar { message, .. }) =
+            parse_predicate(text, ParseLimits::default())
+        else {
+            panic!("expected a grammar failure for {text}")
+        };
+        assert_eq!(message, expected, "{text}");
+    }
 }

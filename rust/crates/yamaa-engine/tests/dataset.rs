@@ -6278,3 +6278,131 @@ mod dataset_functions {
         assert!(calls.calls.is_empty());
     }
 }
+
+/// Regex work survives row/template boundaries; rejected attempts never refund counters.
+#[test]
+fn contains_limits_span_rows_templates_and_fresh_dataset_runs() {
+    use yamaa_core::regex::{CompileLimits, MatchBudget, MatchLimits, Pattern};
+    use yamaa_engine::dataset::Resource;
+    let subject = "a".repeat(100);
+    let pattern = Pattern::compile("z", CompileLimits::default()).unwrap();
+    let mut measured = MatchBudget::new(MatchLimits::default());
+    assert!(pattern
+        .search_with_budget(&subject, MatchLimits::default(), &mut measured)
+        .unwrap()
+        .is_none());
+    let usage = measured.used();
+    let ceiling = 2 * usage.work.max(usage.state_cells) - 1;
+    for (rows, templates) in [(2, 1), (1, 2)] {
+        let source = table(
+            &[("id", ColumnType::Str)],
+            vec![vec![Value::Str(subject.clone())]; rows],
+        );
+        let template = RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![],
+            filter: Some(filter(
+                Node::Contains {
+                    value: Scalar::Identifier("x".into()),
+                    pattern: "z".into(),
+                },
+                vec![binding("x", Read::Source(0))],
+            )),
+        };
+        let plan = DatasetPlan::new(
+            source.schema.clone(),
+            source.schema.clone(),
+            vec![template; templates],
+            vec![assign(0, Expression::Source(0))],
+            vec![0],
+            vec![],
+        )
+        .unwrap();
+        let error = plan
+            .execute(
+                &source,
+                Limits {
+                    work_cells: ceiling,
+                    ..limits()
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(*error, ExecutionError::Limit { resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells, limit, .. } if limit == ceiling)
+        );
+        assert_eq!(source.reads.borrow().len(), 2);
+        assert!(plan
+            .execute(&source, limits())
+            .unwrap()
+            .dataset
+            .rows()
+            .is_empty());
+    }
+}
+
+/// Empty-output declaration checks share matching quotas across predicate plans.
+#[test]
+fn contains_declaration_checks_do_not_reset_match_budgets() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(&[("id", ColumnType::Int)], vec![]);
+    let checks: Vec<_> = (0..2)
+        .map(|index| {
+            verification(Check::Assert(check_predicate(
+                Node::Contains {
+                    value: Scalar::Literal(Value::Str("a".repeat(100))),
+                    pattern: "z".into(),
+                },
+                vec![],
+                &format!("verifications[{index}].assert.expr"),
+            )))
+        })
+        .collect();
+    let single = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![assign(0, Expression::Source(0))],
+        vec![checks[0].clone()],
+    );
+    assert_eq!(
+        single
+            .execute(
+                &source,
+                Limits {
+                    work_cells: 1000,
+                    ..limits()
+                }
+            )
+            .unwrap()
+            .verifications
+            .len(),
+        1
+    );
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        vec![assign(0, Expression::Source(0))],
+        checks,
+    );
+    // Each literal search fits alone, while both exhaust this dataset-wide state quota.
+    let error = plan
+        .execute(
+            &source,
+            Limits {
+                work_cells: 1000,
+                ..limits()
+            },
+        )
+        .unwrap_err();
+    assert!(matches!(
+        *error,
+        ExecutionError::Limit {
+            resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells,
+            limit: 1000,
+            ..
+        }
+    ));
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().verifications.len(),
+        2
+    );
+}

@@ -21,7 +21,7 @@ stopifnot(identical(analyze_predicate(request),
 request <- paste0('{"protocol":"predicate-syntax/1","expression":"',
   "'", intToUtf8(0x1f600), "' = @", '"}')
 stopifnot(identical(analyze_predicate(request),
-  '{"outcome":{"condition":"invalid_predicate","context":{},"position":{"byte":9,"character":6},"requirement":"REQ-0188","status":"invalid"},"protocol":"predicate-syntax/1"}'))
+  '{"outcome":{"condition":"invalid_predicate","context":{},"message":"unexpected character","position":{"byte":9,"character":6},"requirement":"REQ-0188","status":"invalid"},"protocol":"predicate-syntax/1"}'))
 stopifnot(identical(analyze_predicate(truth$request[1]), truth$expected[1]))
 stopifnot(identical(engine_info()$execution_supported, FALSE))
 
