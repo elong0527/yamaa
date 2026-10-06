@@ -102,6 +102,24 @@ impl ValidationBudget {
             .charge(amount)
             .map_err(ValidationError::Constraint)
     }
+    pub(super) fn text(&mut self, amount: usize) -> Result<(), ValidationError> {
+        self.text = self
+            .text
+            .checked_add(amount)
+            .filter(|n| *n <= self.limits.diagnostic_text_bytes)
+            .ok_or(ValidationError::DiagnosticText {
+                limit: self.limits.diagnostic_text_bytes,
+            })?;
+        Ok(())
+    }
+    pub(super) fn depth(&self, depth: usize) -> Result<(), ValidationError> {
+        let limit = self.limits.depth.min(128);
+        if depth > limit {
+            Err(ValidationError::Depth { limit })
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Normalization selects only validated members and retains the caller's alias guards.
@@ -165,70 +183,9 @@ struct Run<'a, 'b> {
     active: Vec<(usize, usize)>,
 }
 
-/// Python-compatible finite float spelling for diagnostic mapping keys, not value conversion.
-fn float_key(value: f64) -> String {
-    if value == 0.0 {
-        return if value.is_sign_negative() {
-            "-0.0"
-        } else {
-            "0.0"
-        }
-        .into();
-    }
-    let mut buffer = ryu::Buffer::new();
-    let text = buffer.format_finite(value.abs());
-    let (coefficient, exponent) = text.split_once('e').map_or((text, 0), |(a, b)| {
-        (a, b.parse::<i32>().expect("finite exponent"))
-    });
-    let point = coefficient.find('.').unwrap_or(coefficient.len()) as i32;
-    let digits: String = coefficient.chars().filter(|&c| c != '.').collect();
-    let leading = digits.bytes().take_while(|&b| b == b'0').count();
-    let power = point + exponent - leading as i32 - 1;
-    let digits = digits[leading..].trim_end_matches('0');
-    let mut result = if value.is_sign_negative() {
-        String::from("-")
-    } else {
-        String::new()
-    };
-    if (-4..16).contains(&power) {
-        let point = power + 1;
-        if point <= 0 {
-            result.push_str("0.");
-            for _ in 0..-point {
-                result.push('0');
-            }
-            result.push_str(digits);
-        } else if point as usize >= digits.len() {
-            result.push_str(digits);
-            for _ in digits.len()..point as usize {
-                result.push('0');
-            }
-            result.push_str(".0");
-        } else {
-            let point = point as usize;
-            result.push_str(&digits[..point]);
-            result.push('.');
-            result.push_str(&digits[point..]);
-        }
-    } else {
-        result.push_str(&digits[..1]);
-        if digits.len() > 1 {
-            result.push('.');
-            result.push_str(&digits[1..]);
-        }
-        result.push('e');
-        result.push(if power < 0 { '-' } else { '+' });
-        result.push_str(&format!("{:02}", power.abs()));
-    }
-    result
-}
-
 impl Run<'_, '_> {
     fn step(&mut self, site: Site<'_>) -> Result<(), ValidationError> {
-        let limit = self.budget.limits.depth.min(128);
-        if site.depth > limit {
-            return Err(ValidationError::Depth { limit });
-        }
+        self.budget.depth(site.depth)?;
         self.budget.work(1)
     }
     fn text(value: impl Into<String>) -> SchemaContext {
@@ -307,19 +264,10 @@ impl Run<'_, '_> {
         Ok(self.input.field(value, name))
     }
     fn key(&mut self, node: usize) -> Result<(String, bool), ValidationError> {
-        let value = &self.input.nodes()[node];
-        self.budget.work(match value {
-            N::Text(s) | N::Integer(s) => s.len(),
-            _ => 1,
-        })?;
-        Ok(match value {
-            N::Text(s) => (s.clone(), false),
-            N::Integer(s) => (s.clone(), true),
-            N::Boolean(v) => (if *v { "True" } else { "False" }.into(), true),
-            N::Null => ("None".into(), false),
-            N::Float(v) => (float_key(*v), false),
-            _ => return Err(ValidationError::InvalidDescriptor),
-        })
+        Ok((
+            super::path_render::label(self.input, node, self.budget)?,
+            matches!(self.input.nodes()[node], N::Integer(_) | N::Boolean(_)),
+        ))
     }
     fn joined(&mut self, path: &str, member: &str, index: bool) -> Result<String, ValidationError> {
         self.budget
@@ -723,6 +671,33 @@ impl Run<'_, '_> {
 }
 
 impl SchemaStructure {
+    /// Return the first matching written type for an admitted descriptor, without expansion.
+    pub fn matching_member<'a>(
+        &'a self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        budget: &mut ValidationBudget,
+    ) -> Result<Option<&'a str>, ValidationError> {
+        if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
+            return Err(ValidationError::InvalidDescriptor);
+        }
+        for member in self.descriptors()[descriptor].descriptor.members() {
+            if matches_member(
+                self,
+                input,
+                (member, member.root()),
+                value,
+                fragment,
+                &[],
+                budget,
+            )? {
+                return Ok(member.node_text(member.root()));
+            }
+        }
+        Ok(None)
+    }
     /// Validate a raw document, checking its version before every other authored field.
     pub fn validate_document(
         &self,

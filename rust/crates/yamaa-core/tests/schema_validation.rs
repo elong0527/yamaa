@@ -282,7 +282,7 @@ fn constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_succ
             ]),
         )],
     );
-    let result = validate(&schema, "kind", Text("é"), false);
+    let result = validate(&schema, "kind", Text("\u{e9}"), false);
     assert_eq!(
         findings(&result),
         [
@@ -1010,5 +1010,119 @@ fn shorthand_checks_the_written_member_without_reinterpreting_generated_fields()
     );
     assert!(
         matches!(result, Err(NormalizationError::Invalid(ref findings)) if findings[0].condition == "value_not_permitted")
+    );
+}
+
+#[test]
+fn malformed_compound_names_and_ids_remain_ordered_validation_findings() {
+    let schema = bundle(
+        vec![field("items", "list[record]")],
+        vec![(
+            "record",
+            List(vec![field("name", "str"), field("id", "int")]),
+        )],
+    );
+    let result = validate(
+        &schema,
+        "items",
+        List(vec![
+            Map(vec![(
+                "name",
+                List(vec![Text("DM"), Int("2"), Bool(true), Null, Float(-0.0)]),
+            )]),
+            Map(vec![(
+                "id",
+                Map(vec![("inner", List(vec![Text("value")]))]),
+            )]),
+            Map(vec![("name", List(vec![])), ("id", Int("10"))]),
+        ]),
+        false,
+    );
+    assert_eq!(
+        findings(&result),
+        [
+            (
+                "items.['DM', 2, True, None, -0.0].name",
+                "invalid_field_type"
+            ),
+            ("items.{'inner': ['value']}.id", "invalid_field_type"),
+            ("items.[].name", "invalid_field_type"),
+        ]
+    );
+    assert_eq!(
+        result[0].context,
+        [
+            ("expected", C::Text("str".into())),
+            ("actual", C::Text("sequence".into()))
+        ]
+    );
+}
+
+#[test]
+fn compound_path_quotes_escape_only_the_required_characters_without_normalization() {
+    let schema = bundle(
+        vec![field("items", "list[record]")],
+        vec![("record", List(vec![field("name", "str")]))],
+    );
+    let result = validate(
+        &schema,
+        "items",
+        List(vec![Map(vec![(
+            "name",
+            List(vec![
+                Text("single'quote"),
+                Text("both'\"quotes"),
+                Text("\\\n\r\t\0"),
+                Text("\u{e9} e\u{301} \u{1f600}"),
+                Text("\u{a0}\u{2028}\u{202e}\u{e000}\u{0378}\u{10ffff}"),
+            ]),
+        )])]),
+        false,
+    );
+    assert_eq!(findings(&result), [(
+        "items.[\"single'quote\", 'both\\'\"quotes', '\\\\\\n\\r\\t\\x00', '\u{e9} e\u{301} \u{1f600}', '\\xa0\\u2028\\u202e\\ue000\\u0378\\U0010ffff'].name",
+        "invalid_field_type",
+    )]);
+}
+
+#[test]
+fn compound_path_allocation_is_charged_before_large_invalid_labels_are_built() {
+    let schema = bundle(
+        vec![field("items", "list[record]")],
+        vec![("record", List(vec![field("name", "str")]))],
+    );
+    let input = document(List(vec![Map(vec![(
+        "name",
+        List(vec![Text("oversized-label")]),
+    )])]));
+    let descriptor = schema.root_class().fields[1].descriptor;
+    let limits = ValidationLimits {
+        diagnostic_text_bytes: 5,
+        ..Default::default()
+    };
+    assert_eq!(
+        schema.validate_descriptor(
+            descriptor,
+            &input,
+            input.root(),
+            "items",
+            false,
+            &mut ValidationBudget::new(limits)
+        ),
+        Err(ValidationError::DiagnosticText { limit: 5 })
+    );
+    assert_eq!(
+        schema
+            .validate_descriptor(
+                descriptor,
+                &input,
+                input.root(),
+                "items",
+                false,
+                &mut budget()
+            )
+            .unwrap()[0]
+            .condition,
+        "invalid_field_type"
     );
 }

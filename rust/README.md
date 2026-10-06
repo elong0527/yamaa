@@ -483,3 +483,10 @@ with validated raw-byte native transport, checked shared arithmetic, exact host
 conversions and NUL-preserving text access. Installed callbacks use those scalars
 plus Date and explicitly UTC POSIXct, with bounded condition details, exact
 result admission, ownership, cancellation and reentrancy tests.
+
+The experimental [decoded schema service](SCHEMA_TRANSPORT.md) now interprets
+shared schema bundles, document values, defaults and shorthand through the same
+core in both installed hosts. Its prepared Python snapshot and stateless R batch
+API do not invoke a host schema interpreter. Normal specification loading and
+current-schema R workflow integration remain open; no backend default or
+execution-readiness flag changes.

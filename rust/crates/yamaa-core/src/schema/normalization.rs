@@ -96,6 +96,10 @@ impl NormalizationBudget {
     pub fn work_used(&self) -> usize {
         self.validation.work_used()
     }
+    /// Mixed validation/normalization batches retain one request's validation accounting.
+    pub fn validation_scope(&mut self) -> &mut ValidationBudget {
+        &mut self.validation
+    }
     fn work(&mut self, amount: usize) -> Result<(), NormalizationError> {
         self.validation.work(amount).map_err(Into::into)
     }

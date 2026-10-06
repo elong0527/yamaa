@@ -1,0 +1,23 @@
+\name{interpret_schema}
+\alias{interpret_schema}
+\title{Interpret an experimental decoded schema snapshot through shared Rust}
+\usage{interpret_schema(request)}
+\arguments{\item{request}{One unclassed, nonmissing JSON character string without attributes.}}
+\value{Owned outcome JSON. Malformed transport raises an R error after the
+native call returns. Schema findings, unsupported shapes and resource refusals
+remain explicit data outcomes.}
+\description{Processes schema/1 decoded modules and a query batch through the
+shared Rust schema interpreter. The service validates documents and descriptors,
+normalizes declared defaults and shorthand, and reports the first matching type
+member. No Python interpreter, host callbacks or source-data reads are involved.}
+\details{The request limit is 8,388,608 UTF-8 bytes, the response limit is
+16,777,216 bytes and at most 256 queries share one validation/normalization
+budget. Integer nodes carry canonical decimal strings; JSON numbers cannot
+substitute for them. Floating nodes carry 16 lowercase
+hexadecimal binary64 bits and must be finite; decimal numbers cannot replace
+those bits. Module loading, safe include resolution and YAML 1.2
+decoding remain caller responsibilities. This experimental service is not a
+complete R specification/workflow API and does not grant execution support.
+Compound diagnostic labels use pinned Unicode 18.0.0 printability; compatibility
+with older host Unicode versions remains under qualification. Normalization
+that would create a non-scalar mapping key is explicitly unsupported.}

@@ -5,6 +5,8 @@ mod constraints;
 mod descriptor;
 mod document;
 mod normalization;
+mod path_render;
+mod printable_data;
 mod type_expression;
 mod validation;
 
@@ -23,6 +25,7 @@ pub use normalization::{
     NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
     NormalizedDocument, SchemaOrigin, SchemaSource,
 };
+pub use path_render::DIAGNOSTIC_UNICODE_VERSION;
 pub use type_expression::{TypeError, TypeExpression, TypeLimits, TypeNode, TypeResource};
 pub use validation::{
     DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
