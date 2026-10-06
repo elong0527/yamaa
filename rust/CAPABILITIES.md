@@ -384,3 +384,13 @@ The complete grammar parses independently of numerical policy: POWER/EXP/LN
 remain unsupported in the default native frontend. Context/type rules, predicate
 syntax and full shared specification compilation remain open. Python remains
 default and `execution_supported=false`.
+
+## Predicate syntax service
+
+The optional `predicate-syntax/1` service parses the closed R004 grammar through
+shared Rust, including portable regex literal validation. Python and R expose
+`analyze_predicate`; neither host parser is involved. This is syntax admission,
+not dataset predicate execution or specification frontend integration. See
+[PREDICATE_SYNTAX.md](PREDICATE_SYNTAX.md) for limits, evidence and the explicit
+ESCAPE/temporal diagnostic differences. Python remains default and
+`execution_supported=false`.

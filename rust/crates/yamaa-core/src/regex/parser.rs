@@ -3,7 +3,11 @@ use super::*;
 use alloc::collections::BTreeMap;
 
 /// Build an arena, resolve all backreferences, then qualify fixed-width lookbehind.
-pub(super) fn compile(source: &str, limits: CompileLimits) -> Result<Pattern, CompileError> {
+pub(super) fn compile(
+    source: &str,
+    limits: CompileLimits,
+    shared: &mut CompileBudget,
+) -> Result<Pattern, CompileError> {
     if source.len() > limits.bytes {
         return Err(CompileError::Limit {
             resource: Resource::PatternBytes,
@@ -41,7 +45,7 @@ pub(super) fn compile(source: &str, limits: CompileLimits) -> Result<Pattern, Co
             *reference = Reference::Number(number);
         }
     }
-    widths::validate(&parser.nodes, root, parser.groups, limits)?;
+    widths::validate(&parser.nodes, root, parser.groups, limits, shared)?;
     Ok(Pattern {
         nodes: parser.nodes,
         root,

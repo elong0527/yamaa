@@ -31,6 +31,19 @@ fn analyze_numeric(request: &str) -> PyResult<String> {
     })
 }
 
+/// Parse R004 predicate syntax through shared Rust without binding or execution.
+#[pyfunction]
+fn analyze_predicate(request: &str) -> PyResult<String> {
+    use yamaa_adapters::predicate_syntax::TransportError;
+    yamaa_adapters::predicate_syntax::analyze_predicate(request).map_err(|error| {
+        if error == TransportError::Internal {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        } else {
+            pyo3::exceptions::PyValueError::new_err(error.to_string())
+        }
+    })
+}
+
 /// Parse R013 aggregate syntax through shared Rust without binding or execution.
 #[pyfunction]
 fn analyze_aggregate(request: &str) -> PyResult<String> {
@@ -252,6 +265,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(evaluate_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_aggregate, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(analyze_predicate, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_regex, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;

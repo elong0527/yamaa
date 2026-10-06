@@ -17,6 +17,7 @@ pub mod numeric;
 pub mod numeric_compiler;
 pub mod numeric_parser;
 pub mod predicate;
+pub mod predicate_parser;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod temporal;

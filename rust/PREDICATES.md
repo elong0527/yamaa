@@ -83,7 +83,9 @@ large integers, temporal precision, missing/type precedence, opaque errors,
 structural expansion, text/work limits and recovery. An independent recursive
 matcher checks 7,225 short LIKE combinations against the dynamic program.
 
-This is not predicate syntax compilation. The caller must validate grammar and
+The separate [shared predicate syntax service](PREDICATE_SYNTAX.md) admits R004
+syntax and regex literals without enabling evaluation. The caller of this typed
+evaluator must still validate grammar and
 literal representations before constructing the plan, including static ESCAPE
 errors and literal overflow/temporal diagnostics. The typed interface cannot
 represent a portable-regex call; valid `str_contains` must remain explicitly
