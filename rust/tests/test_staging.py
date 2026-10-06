@@ -34,9 +34,12 @@ class StagingTests(unittest.TestCase):
             for fixture in (
                 "aggregate_syntax.tsv",
                 "numeric_syntax.tsv",
+                "predicate_syntax.tsv",
                 "schema_transport.tsv",
                 "schema_windows.tsv",
                 "schema_composition.tsv",
+                "yaml_transport.tsv",
+                "regex_transport.tsv",
                 "scalar_transport.tsv",
                 "numeric_transport.tsv",
                 "reference_binding.tsv",
@@ -69,6 +72,20 @@ class StagingTests(unittest.TestCase):
                 (
                     staging.WORKSPACE
                     / "crates/yamaa-engine/tests/fixtures/function_invocation.tsv"
+                ).read_bytes(),
+            )
+            self.assertEqual(
+                (destination / "inst/dependency_analysis.tsv").read_bytes(),
+                (
+                    staging.WORKSPACE
+                    / "crates/yamaa-core/tests/fixtures/dependency_analysis.tsv"
+                ).read_bytes(),
+            )
+            self.assertEqual(
+                (destination / "inst/column_dependencies.tsv").read_bytes(),
+                (
+                    staging.WORKSPACE
+                    / "crates/yamaa-core/tests/fixtures/column_dependencies.tsv"
                 ).read_bytes(),
             )
 
