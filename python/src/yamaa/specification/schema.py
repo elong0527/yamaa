@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -45,12 +46,22 @@ class SchemaInterpreter(Protocol):
 
 @dataclass(frozen=True)
 class SchemaBundle:
+    """Captured schema interpretation and optional source reader for one load."""
+
     version: str
     path: Path
     classes: dict[str, list[dict[str, dict[str, Any]]]]
     aliases: dict[str, dict[str, Any]]
     registries: dict[str, dict[str, Any]]
     interpreter: SchemaInterpreter | None = None
+    document_reader: Callable[[Path], object] | None = None
+
+
+def read_bundle_document(path: Path, bundle: SchemaBundle) -> object:
+    """Use the source service captured with this bundle for every inherited file."""
+    if bundle.document_reader is not None:
+        return bundle.document_reader(path)
+    return read_yaml_document(path)
 
 
 def _diagnostic(

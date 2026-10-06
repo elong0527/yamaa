@@ -20,6 +20,35 @@ fn decoded_tree_preserves_order_width_and_unicode_scalar_lengths() {
 }
 
 #[test]
+fn source_adapters_share_scalar_identity_and_diagnostic_labels() {
+    use yamaa_core::schema::scalar_diagnostic_label;
+    let integer = N::Integer("9007199254740993".into());
+    let rounded = N::Float(9007199254740992.0);
+    assert!(integer.scalar_key() != rounded.scalar_key());
+    assert!(N::Boolean(true).scalar_key() == N::Float(1.0).scalar_key());
+    for invalid in [
+        N::Integer("01".into()),
+        N::Float(f64::NAN),
+        N::Sequence(vec![]),
+    ] {
+        assert!(invalid.scalar_key().is_none());
+    }
+    assert_eq!(
+        scalar_diagnostic_label(&integer).as_deref(),
+        Some("9007199254740993")
+    );
+    assert_eq!(
+        scalar_diagnostic_label(&N::Float(-0.0)).as_deref(),
+        Some("-0.0")
+    );
+    assert_eq!(
+        scalar_diagnostic_label(&N::Float(1e20)).as_deref(),
+        Some("1e+20")
+    );
+    assert!(scalar_diagnostic_label(&N::Float(f64::INFINITY)).is_none());
+}
+
+#[test]
 fn malformed_arenas_do_not_enter_schema_interpretation() {
     for (nodes, root, error) in [
         (vec![], 0, DocumentError::InvalidRoot),

@@ -20,6 +20,7 @@ from yamaa.adapters._native_schema_wire import (
     request,
     response,
 )
+from yamaa.adapters._native_yaml import NativeYamlReader
 from yamaa.adapters.native_datasets import execute_with_source_provider
 from yamaa.io import ProjectResources, load_source_tables, render_artifact
 from yamaa.schema import resolve_specification
@@ -103,6 +104,79 @@ class InstalledSchemaLoading(unittest.TestCase):
                     (case / "expected" / artifact).read_bytes(),
                 )
 
+    def test_schema_entry_and_all_inherited_sources_use_shared_yaml(self):
+        case = ROOT / "specification-inheritance"
+        expected = read_yaml_document(case / "expected/spec_resolved.yaml")
+        paths = []
+        original_read = NativeYamlReader.read_document
+
+        def read(reader, path):
+            paths.append(path.name)
+            return original_read(reader, path)
+
+        with (
+            patch(
+                "yamaa.specification._yaml.read_yaml_bytes",
+                side_effect=AssertionError("host YAML decoder invoked"),
+            ),
+            patch.object(NativeYamlReader, "read_document", new=read),
+        ):
+            bundle = native_specification.load_schema_bundle(SCHEMA)
+            # Replacing the module entry point after capture must not affect
+            # any later entry/parent read through this bundle.
+            with patch.object(
+                yamaa_native, "decode_yaml", side_effect=AssertionError("recapture")
+            ):
+                resolved = resolve_specification(case / "spec_study.yaml", bundle)
+        self.assertEqual(resolved.document, expected)
+        self.assertEqual(
+            paths,
+            ["spec_study.yaml", "spec_organization.yaml", "spec_compound.yaml"],
+        )
+
+    def test_native_yaml_errors_and_host_policy_preserve_paths_and_fail_closed(self):
+        import sys
+
+        reader = NativeYamlReader(yamaa_native)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "parent.yaml"
+            path.write_bytes(b'x: "\\uD800"\n')
+            with self.assertRaises(SpecificationError) as caught:
+                reader.read_document(path)
+            finding = caught.exception.diagnostics[0]
+            self.assertEqual(finding.condition, "invalid_text")
+            self.assertEqual(finding.spec_paths, ("$.x",))
+            self.assertEqual(finding.context, {"code_point": "U+D800", "offset": 0})
+            path.write_bytes(b"x: \xff\n")
+            with self.assertRaises(SpecificationError) as caught:
+                reader.read_document(path)
+            self.assertEqual(
+                caught.exception.diagnostics[0].context,
+                {"path": str(path), "line": 1, "column": 4},
+            )
+            path.write_bytes(b"9" * 4097)
+            with self.assertRaises(NativeSchemaLimitError) as caught:
+                reader.read_document(path)
+            self.assertEqual(
+                (caught.exception.resource, caught.exception.limit),
+                ("numeric_digits", 4096),
+            )
+            previous = sys.get_int_max_str_digits()
+            try:
+                sys.set_int_max_str_digits(640)
+                path.write_bytes(b"9" * 641)
+                with self.assertRaises(NativeSchemaLimitError) as caught:
+                    reader.read_document(path)
+                self.assertEqual(caught.exception.resource, "host_integer_digits")
+                self.assertEqual(sys.get_int_max_str_digits(), 640)
+            finally:
+                sys.set_int_max_str_digits(previous)
+            path.write_bytes(b"{9223372036854775808: a, 9223372036854775809: b}")
+            self.assertEqual(
+                reader.read_document(path),
+                {9223372036854775808: "a", 9223372036854775809: "b"},
+            )
+
     def test_version_precedence_and_constraint_context_are_preserved(self):
         bundle = native_specification.load_schema_bundle(SCHEMA)
         diagnostics = reference.validate_document(
@@ -133,16 +207,20 @@ class InstalledSchemaLoading(unittest.TestCase):
         )
 
     def test_service_capture_precedes_yaml_io_and_metadata_is_independent(self):
-        native = SimpleNamespace(_compile_schema=yamaa_native._compile_schema)
-        original_read = native_specification.read_yaml_bytes
+        native = SimpleNamespace(
+            _compile_schema=yamaa_native._compile_schema,
+            decode_yaml=yamaa_native.decode_yaml,
+        )
+        original_open = Path.open
         effects = []
 
-        def read(raw, path):
+        def read(path, *args, **kwargs):
             effects.append(path.name)
             native._compile_schema = lambda _: self.fail("service replaced after IO")
-            return original_read(raw, path)
+            native.decode_yaml = lambda _: self.fail("decoder replaced after IO")
+            return original_open(path, *args, **kwargs)
 
-        with patch.object(native_specification, "read_yaml_bytes", side_effect=read):
+        with patch.object(Path, "open", new=read):
             bundle = native_specification.load_schema_bundle(SCHEMA, native=native)
         self.assertGreater(len(effects), 1)
         descriptor = copy.deepcopy(reference.class_fields(bundle, "root_class")["keys"])
@@ -241,16 +319,20 @@ root_class:
                         encoding="ascii",
                     )
                     effects = []
-                    original_read = native_specification.read_yaml_bytes
+                    original_open = Path.open
 
-                    def read(raw, path, effects=effects, original_read=original_read):
+                    def read(
+                        path,
+                        *args,
+                        effects=effects,
+                        original_open=original_open,
+                        **kwargs,
+                    ):
                         effects.append(path.name)
-                        return original_read(raw, path)
+                        return original_open(path, *args, **kwargs)
 
                     with (
-                        patch.object(
-                            native_specification, "read_yaml_bytes", side_effect=read
-                        ),
+                        patch.object(Path, "open", new=read),
                         self.assertRaises(SpecificationError),
                     ):
                         native_specification.load_specification(

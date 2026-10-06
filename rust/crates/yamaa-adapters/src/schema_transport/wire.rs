@@ -6,7 +6,7 @@ use yamaa_core::schema::{Document, DocumentError, DocumentLimits, DocumentNode a
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub(super) enum Node {
+pub(crate) enum Node {
     Null {},
     Boolean { value: bool },
     Integer { value: String },
@@ -18,7 +18,7 @@ pub(super) enum Node {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Tree {
+pub(crate) struct Tree {
     pub nodes: Vec<Node>,
     pub root: usize,
 }

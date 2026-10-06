@@ -6,6 +6,18 @@ use alloc::{format, string::String};
 /// Pins label representation independently of a host's Unicode release.
 pub const DIAGNOSTIC_UNICODE_VERSION: &str = "18.0.0";
 
+/// Share scalar labels with source diagnostics, before a complete document has
+/// been admitted. This is diagnostic spelling, not runtime value conversion.
+pub fn scalar_diagnostic_label(node: &N) -> Option<String> {
+    Some(match node {
+        N::Text(text) | N::Integer(text) => text.clone(),
+        N::Boolean(value) => if *value { "True" } else { "False" }.into(),
+        N::Null => "None".into(),
+        N::Float(value) if value.is_finite() => float_key(*value),
+        _ => return None,
+    })
+}
+
 fn printable(c: char) -> bool {
     let value = c as u32;
     super::printable_data::PRINTABLE

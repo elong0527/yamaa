@@ -111,6 +111,24 @@ enum Key<'a> {
     Text(&'a str),
 }
 
+/// Ordered scalar-key identity shared by decoded-document and source admission.
+/// The representation is private so adapters cannot invent a different numeric
+/// equality rule. Strings are borrowed; no content hashing is involved.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScalarKey<'a>(Key<'a>);
+
+impl DocumentNode {
+    /// Return a key for an admitted scalar; containers have no scalar identity.
+    pub fn scalar_key(&self) -> Option<ScalarKey<'_>> {
+        match self {
+            Self::Float(value) if !value.is_finite() => return None,
+            Self::Integer(text) if !canonical_integer(text) => return None,
+            _ => {}
+        }
+        scalar_key(self).map(ScalarKey)
+    }
+}
+
 fn scalar_key(node: &DocumentNode) -> Option<Key<'_>> {
     Some(match node {
         DocumentNode::Null => Key::Null,

@@ -36,6 +36,7 @@ class DependencyTests(unittest.TestCase):
                     "flatbuffers",
                     "pyo3",
                     "extendr-api",
+                    "saphyr-parser",
                 ):
                     with self.subTest(crate=crate, kind=kind, dependency=dependency):
                         metadata = self.metadata()

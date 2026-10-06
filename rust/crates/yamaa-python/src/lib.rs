@@ -6,6 +6,20 @@ mod schema_service;
 mod temporal_result;
 use pyo3::types::PyDict;
 
+/// Decode an owned ASCII YAML snapshot through shared Rust; return lossless
+/// yaml/1 JSON without importing a Python YAML or schema implementation.
+#[pyfunction]
+fn decode_yaml(source: &Bound<'_, pyo3::types::PyBytes>) -> PyResult<String> {
+    use yamaa_adapters::yaml_transport::TransportError;
+    yamaa_adapters::yaml_transport::decode_yaml_bytes(source.as_bytes()).map_err(|error| {
+        if error == TransportError::Internal {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        } else {
+            pyo3::exceptions::PyValueError::new_err(error.to_string())
+        }
+    })
+}
+
 /// Compile or match a bounded regex/1 request through the shared Rust grammar.
 #[pyfunction]
 fn evaluate_regex(request: &str) -> PyResult<String> {
@@ -270,6 +284,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(analyze_predicate, module)?)?;
     module.add_function(wrap_pyfunction!(schema_service::_compile_schema, module)?)?;
     module.add_function(wrap_pyfunction!(schema_service::interpret_schema, module)?)?;
+    module.add_function(wrap_pyfunction!(decode_yaml, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate_regex, module)?)?;
     module.add_function(wrap_pyfunction!(table_round_trip, module)?)?;
     module.add_function(wrap_pyfunction!(table_snapshot, module)?)?;

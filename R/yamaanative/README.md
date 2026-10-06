@@ -1,5 +1,11 @@
 # Optional native installation probe
 
+`decode_yaml(raw_source)` exposes the experimental shared
+[YAML byte decoder](../../rust/YAML_DECODING.md). It returns an ordered
+schema-compatible document arena with exact integer strings and float bits,
+or source diagnostics and explicit resource refusals. It does not use R's
+YAML/numeric conversion or provide a complete current-schema workflow frontend.
+
 This is a source template. Stage the shared Rust workspace before building:
 
 ```sh

@@ -20,12 +20,14 @@ pub use descriptor::{
     Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue, DescriptorLimits,
     DescriptorReport, DescriptorResource, DescriptorUsage,
 };
-pub use document::{Document, DocumentError, DocumentLimits, DocumentNode, DocumentResource};
+pub use document::{
+    Document, DocumentError, DocumentLimits, DocumentNode, DocumentResource, ScalarKey,
+};
 pub use normalization::{
     NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
     NormalizedDocument, SchemaOrigin, SchemaSource,
 };
-pub use path_render::DIAGNOSTIC_UNICODE_VERSION;
+pub use path_render::{scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION};
 pub use type_expression::{TypeError, TypeExpression, TypeLimits, TypeNode, TypeResource};
 pub use validation::{
     DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
