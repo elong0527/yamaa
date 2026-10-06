@@ -31,8 +31,10 @@ It compares independent expected artifacts and complete reference observations.
 Missing native reports are `not_exercised`, never inferred passes. R currently
 lacks the complete original-YAML entry point targeted by
 [#1739](https://github.com/elong0527/yamaa/issues/1739); `missing-routes.json`
-records that blocker explicitly. Supplemental component/compile-contract
-reconciliation remains #1738 work and is not folded into the benchmark count.
+records that blocker explicitly. The [supplemental contract inventory](SUPPLEMENTAL.md)
+reconciles component/compile contracts and installed probes separately from the
+benchmark count. The [M2 prerequisite map](planning/m2-prerequisites.md) identifies
+the shared compilation work remaining for the fixed six-case cohort.
 
 The current committed candidate set contains 76 Python-assisted native passes:
 16 positive and 60 negative fixtures. Some negatives fail in Python frontend
