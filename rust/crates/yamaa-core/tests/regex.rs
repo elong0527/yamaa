@@ -383,3 +383,49 @@ fn braced_code_point_expansion_requires_a_scalar() {
         );
     }
 }
+
+/// Known variable consumption stays invalid even when a backreference is also present.
+#[test]
+fn lookbehind_width_distinguishes_variable_from_backreference_dependent() {
+    for source in [
+        r"(a)(?<=a+\1)b",
+        r"(a)(?<=\1a+)b",
+        r"(a)(?<=a+|\1)b",
+        r"(a)(?<=\1|a+)b",
+        r"(a)(?<=a|\1|bb)b",
+        r"(a)(?<=(?=\1)a+)b",
+        r"(a)(?<=(?:a+\1){2})b",
+        r"(a)(?<=(?:b\1)+)c",
+    ] {
+        assert!(
+            matches!(
+                Pattern::compile(source, CompileLimits::default()),
+                Err(CompileError::Invalid { .. })
+            ),
+            "{source}"
+        );
+    }
+    // A backreference can be empty, so repetition alone does not prove variability.
+    for source in [r"(a)(?<=\1)b", r"()(?<=\1+)b", r"()(?<=\1{1,2})b"] {
+        assert!(
+            matches!(
+                Pattern::compile(source, CompileLimits::default()),
+                Err(CompileError::Unsupported { .. })
+            ),
+            "{source}"
+        );
+    }
+    // Zero repetitions and zero-width assertions do not consume their descendants.
+    assert_eq!(
+        captures(r"(a)(?<=(?:a+\1){0})b", "ab"),
+        Some(vec![Some("ab"), Some("a")])
+    );
+    assert_eq!(
+        captures(r"(?<=((?=a))*?)a", "a"),
+        Some(vec![Some("a"), None])
+    );
+    assert_eq!(
+        captures(r"(a)(?<=(?=\1))a", "aa"),
+        Some(vec![Some("aa"), Some("a")])
+    );
+}

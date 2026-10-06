@@ -162,12 +162,22 @@ enum Kind {
     },
     Backreference(Reference),
 }
+/// Keep proven variability separate from the unresolved width of a backreference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Width {
+    Fixed(usize),
+    /// Known terms may prove nonempty consumption independently of the reference.
+    Backref {
+        nonempty: bool,
+    },
+    Variable,
+}
+
 #[derive(Clone, Debug)]
 struct Node {
     kind: Kind,
     byte: usize,
-    width: Option<usize>,
-    backreference: bool,
+    width: Width,
     captures: core::ops::Range<usize>,
 }
 

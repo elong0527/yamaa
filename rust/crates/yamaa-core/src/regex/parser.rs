@@ -48,17 +48,20 @@ pub(super) fn compile(source: &str, limits: CompileLimits) -> Result<Pattern, Co
             ..
         } = node.kind
         {
-            if parser.nodes[child].width.is_none() {
-                if parser.nodes[child].backreference {
+            match parser.nodes[child].width {
+                Width::Fixed(_) => {}
+                Width::Backref { .. } => {
                     return Err(CompileError::Unsupported {
                         byte: node.byte,
                         feature: "lookbehind width depending on a backreference",
                     });
                 }
-                return Err(CompileError::Invalid {
-                    byte: node.byte,
-                    reason: "variable-length lookbehind",
-                });
+                Width::Variable => {
+                    return Err(CompileError::Invalid {
+                        byte: node.byte,
+                        reason: "variable-length lookbehind",
+                    });
+                }
             }
         }
     }
@@ -128,14 +131,13 @@ impl Parser<'_> {
         &mut self,
         kind: Kind,
         byte: usize,
-        width: Option<usize>,
-        backreference: bool,
+        width: Width,
         captures: core::ops::Range<usize>,
     ) -> Result<usize, CompileError> {
         if self.nodes.len() >= self.limits.nodes {
             return Err(self.limit(Resource::Nodes, self.limits.nodes));
         }
-        if width.is_some_and(|width| width > self.limits.width) {
+        if matches!(width, Width::Fixed(value) if value > self.limits.width) {
             return Err(self.limit(Resource::Width, self.limits.width));
         }
         let id = self.nodes.len();
@@ -143,7 +145,6 @@ impl Parser<'_> {
             kind,
             byte,
             width,
-            backreference,
             captures,
         });
         Ok(id)
@@ -159,15 +160,35 @@ impl Parser<'_> {
         if children.len() == 1 {
             return Ok(children[0]);
         }
-        let width = self.nodes[children[0]]
-            .width
-            .filter(|w| children.iter().all(|&id| self.nodes[id].width == Some(*w)));
-        let backreference = children.iter().any(|&id| self.nodes[id].backreference);
+        let mut fixed = None;
+        let mut nonempty = true;
+        let mut backref = false;
+        let mut variable = false;
+        for &id in &children {
+            match self.nodes[id].width {
+                Width::Fixed(value) => {
+                    variable |= fixed.is_some_and(|known| known != value);
+                    fixed = Some(value);
+                    nonempty &= value > 0;
+                }
+                Width::Backref { nonempty: value } => {
+                    backref = true;
+                    nonempty &= value;
+                }
+                Width::Variable => variable = true,
+            }
+        }
+        let width = if variable {
+            Width::Variable
+        } else if backref {
+            Width::Backref { nonempty }
+        } else {
+            Width::Fixed(fixed.expect("nonempty alternatives contain a fixed width"))
+        };
         self.push(
             Kind::Alternative(children),
             byte,
             width,
-            backreference,
             first..self.groups + 1,
         )
     }
@@ -182,22 +203,27 @@ impl Parser<'_> {
         if children.len() == 1 {
             return Ok(children[0]);
         }
-        let mut width = Some(0usize);
+        let mut width = Width::Fixed(0);
         for &id in &children {
             width = match (width, self.nodes[id].width) {
-                (Some(a), Some(b)) => Some(
+                (Width::Variable, _) | (_, Width::Variable) => Width::Variable,
+                (Width::Fixed(a), Width::Fixed(b)) => Width::Fixed(
                     a.checked_add(b)
                         .ok_or_else(|| self.limit(Resource::Width, self.limits.width))?,
                 ),
-                _ => None,
+                (Width::Backref { nonempty }, Width::Fixed(value))
+                | (Width::Fixed(value), Width::Backref { nonempty }) => Width::Backref {
+                    nonempty: nonempty || value > 0,
+                },
+                (Width::Backref { nonempty: a }, Width::Backref { nonempty: b }) => {
+                    Width::Backref { nonempty: a || b }
+                }
             };
         }
-        let backreference = children.iter().any(|&id| self.nodes[id].backreference);
         self.push(
             Kind::Sequence(children),
             byte,
             width,
-            backreference,
             first..self.groups + 1,
         )
     }
@@ -250,15 +276,23 @@ impl Parser<'_> {
         }
         let greedy = !self.take('?');
         let width = match (self.nodes[child].width, max) {
-            (_, Some(0)) | (Some(0), _) => Some(0),
-            (Some(width), Some(max)) if max == min => Some(
+            (_, Some(0)) | (Width::Fixed(0), _) => Width::Fixed(0),
+            (Width::Fixed(width), Some(max)) if max == min => Width::Fixed(
                 width
                     .checked_mul(min)
                     .ok_or_else(|| self.limit(Resource::Width, self.limits.width))?,
             ),
-            _ => None,
+            (Width::Backref { nonempty }, max) => {
+                // Variable repetition of a definitely consuming child is variable.
+                // An unresolved reference may instead be empty; retain that gap.
+                if nonempty && max != Some(min) {
+                    Width::Variable
+                } else {
+                    Width::Backref { nonempty }
+                }
+            }
+            _ => Width::Variable,
         };
-        let backreference = self.nodes[child].backreference;
         self.push(
             Kind::Repeat {
                 child,
@@ -268,7 +302,6 @@ impl Parser<'_> {
             },
             byte,
             width,
-            backreference,
             first..self.groups + 1,
         )
     }
@@ -296,21 +329,24 @@ impl Parser<'_> {
         self.at += 1;
         let (kind, width) = match c {
             '(' => return self.group(depth, byte, first),
-            '[' => (self.class()?, Some(1)),
-            '.' => (Kind::Dot, Some(1)),
-            '^' => (Kind::Start, Some(0)),
-            '$' => (Kind::End, Some(0)),
+            '[' => (self.class()?, Width::Fixed(1)),
+            '.' => (Kind::Dot, Width::Fixed(1)),
+            '^' => (Kind::Start, Width::Fixed(0)),
+            '$' => (Kind::End, Width::Fixed(0)),
             '\\' => match self.escape(false)? {
-                Escape::Scalar(c) => (Kind::Literal(c), Some(1)),
+                Escape::Scalar(c) => (Kind::Literal(c), Width::Fixed(1)),
                 Escape::Set(item) => (
                     Kind::Class {
                         items: vec![item],
                         negative: false,
                     },
-                    Some(1),
+                    Width::Fixed(1),
                 ),
-                Escape::Boundary(positive) => (Kind::Boundary(positive), Some(0)),
-                Escape::Reference(reference) => (Kind::Backreference(reference), None),
+                Escape::Boundary(positive) => (Kind::Boundary(positive), Width::Fixed(0)),
+                Escape::Reference(reference) => (
+                    Kind::Backreference(reference),
+                    Width::Backref { nonempty: false },
+                ),
             },
             '*' | '+' | '?' | '{' | '}' | ']' | ')' | '|' => {
                 return Err(CompileError::Invalid {
@@ -318,10 +354,9 @@ impl Parser<'_> {
                     reason: "unexpected syntax character",
                 })
             }
-            c => (Kind::Literal(c as u32), Some(1)),
+            c => (Kind::Literal(c as u32), Width::Fixed(1)),
         };
-        let backreference = matches!(kind, Kind::Backreference(_));
-        self.push(kind, byte, width, backreference, first..first)
+        self.push(kind, byte, width, first..first)
     }
     /// Number captures at their opening delimiter and cap recursive group nesting.
     fn group(&mut self, depth: usize, byte: usize, first: usize) -> Result<usize, CompileError> {
@@ -371,7 +406,6 @@ impl Parser<'_> {
         };
         let child = self.disjunction(depth + 1)?;
         self.require(')')?;
-        let backreference = self.nodes[child].backreference;
         let (kind, width) = if let Some((behind, positive)) = look {
             (
                 Kind::Look {
@@ -379,12 +413,12 @@ impl Parser<'_> {
                     behind,
                     positive,
                 },
-                Some(0),
+                Width::Fixed(0),
             )
         } else {
             (Kind::Group { child, number }, self.nodes[child].width)
         };
-        self.push(kind, byte, width, backreference, first..self.groups + 1)
+        self.push(kind, byte, width, first..self.groups + 1)
     }
     /// Admit ASCII group names; defer Unicode identifier tables as an explicit gap.
     fn name(&mut self) -> Result<String, CompileError> {

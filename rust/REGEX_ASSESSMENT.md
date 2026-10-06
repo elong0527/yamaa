@@ -93,6 +93,14 @@ R022 support; no host API, dataset capability or full grammar qualification is
 advertised by this internal core slice. The development JSON-lines probe is a
 qualification tool, not an installed transport boundary.
 
+Lookbehind validation distinguishes a fixed width, a proven variable width and
+a width that depends on a backreference. Known variability wins in sequences
+and alternatives even if a reference is also present. Zero-count repeats and
+zero-width assertions remain fixed; repeating an unresolved reference alone
+does not prove variability because that reference could be empty. The compiler
+also tracks whether known terms make a reference-dependent expression nonempty,
+so varying repetition of that expression is correctly rejected as variable.
+
 `check_regex.py` requires 2,101 independent observations, including all 43
 existing cases, twelve authored edges, scalar-set membership and integer-count
 truth. Rust tests additionally cover capture/ordering behavior, empty repeated
