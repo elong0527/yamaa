@@ -606,6 +606,24 @@ def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
                 str((directory / member).resolve())
                 for member in ("spec.yaml", "layers/parent.yaml", "spec.yaml")
             ]
+            expected["context"]["source"] = str(
+                (directory / "layers/parent.yaml").resolve()
+            )
+        elif name == "negative-version-mismatch":
+            expected["context"].update(
+                source=str((EXAMPLES / name / "layers/parent.yaml").resolve()),
+                entry=str((EXAMPLES / name / "spec.yaml").resolve()),
+            )
+        elif name == "negative-remote-parent":
+            expected["context"].update(
+                source=str((EXAMPLES / name / "spec.yaml").resolve()),
+                parent="https://example.test/organization.yaml",
+            )
+        elif name == "negative-property-clear":
+            expected["context"].update(
+                source=str((EXAMPLES / name / "spec.yaml").resolve()),
+                entry=str((EXAMPLES / name / "spec.yaml").resolve()),
+            )
         assert actual == expected
 
 

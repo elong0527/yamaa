@@ -34,6 +34,118 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_shared_traversal_preserves_implicated_file_context(self):
+        """REQ-0653/0654/0656 source identities survive the installed Python boundary."""
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            entry, parent = root / "entry.yaml", root / "parent.yaml"
+            entry.write_text(
+                'schema_version: "1.0"\nparents: parent.yaml\n', encoding="ascii"
+            )
+            for document, condition, path, requirement, context in (
+                (
+                    {"schema_version": "0.0"},
+                    "schema_version_mismatch",
+                    "parents",
+                    "REQ-0656",
+                    {
+                        "entry_version": "1.0",
+                        "parent_version": "0.0",
+                        "source": str(parent),
+                        "entry": str(entry),
+                    },
+                ),
+                (
+                    {"parents": []},
+                    "schema_version_mismatch",
+                    "schema_version",
+                    "REQ-0656",
+                    {
+                        "expected": "1.0",
+                        "actual": None,
+                        "source": str(parent),
+                        "entry": str(entry),
+                    },
+                ),
+                (
+                    {
+                        "schema_version": "1.0",
+                        "parents": "https://example.test/base.yaml",
+                    },
+                    "invalid_parent_path",
+                    "parents",
+                    "REQ-0653",
+                    {
+                        "reason": "remote_reference",
+                        "source": str(parent),
+                        "parent": "https://example.test/base.yaml",
+                    },
+                ),
+                (
+                    {"schema_version": "1.0", "parents": "missing.yaml"},
+                    "parent_not_found",
+                    "parents",
+                    "REQ-0654",
+                    {"path": "missing.yaml", "source": str(parent)},
+                ),
+                (
+                    {"schema_version": "1.0", "unexpected": "value"},
+                    "unknown_field",
+                    "unexpected",
+                    "REQ-0658",
+                    {
+                        "field": "unexpected",
+                        "class": "root_class",
+                        "source": str(parent),
+                        "entry": str(entry),
+                    },
+                ),
+            ):
+                with self.subTest(document=document):
+                    parent.write_text(json.dumps(document), encoding="ascii")
+                    with self.assertRaises(SpecificationError) as caught:
+                        resolve_specification(entry, bundle)
+                    self.assertEqual(
+                        [
+                            d.model_dump(mode="json")
+                            for d in caught.exception.diagnostics
+                        ],
+                        [
+                            {
+                                "phase": "validation",
+                                "condition": condition,
+                                "spec_paths": [path],
+                                "requirement": requirement,
+                                "context": context,
+                            }
+                        ],
+                    )
+
+            from yamaa.schema import inheritance
+
+            original = inheritance.read_bundle_document
+            reads = []
+
+            def read(path, captured):
+                reads.append(path)
+                if path == parent:
+                    raise OSError("unreadable parent")
+                return original(path, captured)
+
+            with (
+                patch(
+                    "yamaa.schema.inheritance.read_bundle_document", side_effect=read
+                ),
+                self.assertRaises(SpecificationError) as caught,
+            ):
+                resolve_specification(entry, bundle)
+            self.assertEqual(
+                caught.exception.diagnostics[0].context,
+                {"path": str(parent), "source": str(entry)},
+            )
+            self.assertEqual(reads, [entry, parent])
+
     def test_shared_traversal_deduplicates_filesystem_symlink_identity(self):
         from yamaa.schema import inheritance
 
@@ -302,12 +414,22 @@ class InstalledSchemaLoading(unittest.TestCase):
                     (
                         "invalid_field_type",
                         ("columns.X.type",),
-                        {"expected": "column_type", "actual": "int"},
+                        {
+                            "expected": "column_type",
+                            "actual": "int",
+                            "source": str(path.resolve()),
+                            "entry": str(path.resolve()),
+                        },
                     ),
                     (
                         "invalid_field_type",
                         ("columns.X.label",),
-                        {"expected": "str", "actual": "int"},
+                        {
+                            "expected": "str",
+                            "actual": "int",
+                            "source": str(path.resolve()),
+                            "entry": str(path.resolve()),
+                        },
                     ),
                 ],
             )

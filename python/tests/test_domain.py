@@ -69,7 +69,8 @@ def test_save_uses_the_requested_extension_without_changing_output(
 
 
 def test_invalid_specification_is_available_through_issues() -> None:
-    pilot = yamaa_domain(EXAMPLES / "negative-ambiguous-type/spec.yaml")
+    path = EXAMPLES / "negative-ambiguous-type/spec.yaml"
+    pilot = yamaa_domain(path)
 
     assert pilot.spec is None
     assert pilot.inputs == {}
@@ -79,8 +80,15 @@ def test_invalid_specification_is_available_through_issues() -> None:
         "phase": "validation",
         "condition": "value_not_permitted",
         "spec_paths": ["columns.AVAL.type"],
-        "context": (
-            '{"permitted":["str","int","float","date","datetime"],"value":"number"}'
+        "context": json.dumps(
+            {
+                "entry": str(path.resolve()),
+                "permitted": ["str", "int", "float", "date", "datetime"],
+                "source": str(path.resolve()),
+                "value": "number",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
         ),
     }
 

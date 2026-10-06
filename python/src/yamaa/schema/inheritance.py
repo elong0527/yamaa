@@ -1379,6 +1379,7 @@ def resolve_specification(
                                 else "parent_chain_returns_to_active_layer"
                             ),
                             "cycle": [str(member) for member in cycle],
+                            "source": str(active[-1]),
                         },
                     )
                 ]
@@ -1400,13 +1401,29 @@ def resolve_specification(
                         "parent_not_found",
                         "parents",
                         "REQ-0654",
-                        {"path": str(path)},
+                        {
+                            "path": str(path),
+                            "source": str(active[-1] if active else entry_path),
+                        },
                     )
                 ]
             ) from error
         normalized, diagnostics = _validate_layer(raw, schema_bundle)
         if diagnostics or normalized is None:
-            raise SpecificationError(diagnostics)
+            raise SpecificationError(
+                [
+                    diagnostic.model_copy(
+                        update={
+                            "context": {
+                                **diagnostic.context,
+                                "source": str(canonical),
+                                "entry": str(entry_path),
+                            }
+                        }
+                    )
+                    for diagnostic in diagnostics
+                ]
+            )
         version = normalized.get("schema_version")
         if canonical == entry_path:
             entry_version = version
@@ -1417,7 +1434,12 @@ def resolve_specification(
                             "schema_version_mismatch",
                             "schema_version",
                             "REQ-0245",
-                            {"expected": schema_bundle.version, "actual": version},
+                            {
+                                "expected": schema_bundle.version,
+                                "actual": version,
+                                "source": str(canonical),
+                                "entry": str(entry_path),
+                            },
                         )
                     ]
                 )
@@ -1433,6 +1455,8 @@ def resolve_specification(
                         {
                             "entry_version": entry_version,
                             "parent_version": version,
+                            "source": str(canonical),
+                            "entry": str(entry_path),
                         },
                     )
                 ]
@@ -1446,7 +1470,11 @@ def resolve_specification(
                             "invalid_parent_path",
                             "parents",
                             "REQ-0653",
-                            {"reason": "remote_reference"},
+                            {
+                                "reason": "remote_reference",
+                                "source": str(canonical),
+                                "parent": parent,
+                            },
                         )
                     ]
                 )
@@ -1460,7 +1488,7 @@ def resolve_specification(
                             "parent_not_found",
                             "parents",
                             "REQ-0654",
-                            {"path": parent},
+                            {"path": parent, "source": str(canonical)},
                         )
                     ]
                 )

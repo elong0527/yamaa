@@ -54,7 +54,7 @@ class NativeSchemaInterpreter:
             raise ValueError("invalid native schema query response")
         return check_outcome(result["results"][0]), tree
 
-    def _diagnostics(self, findings, tree):
+    def _diagnostics(self, findings, tree, *, source_context=None):
         values = decode_nodes(tree)
         result = []
         constraints = {
@@ -79,6 +79,7 @@ class NativeSchemaInterpreter:
                 else:
                     raise ValueError("unknown native schema context kind")
                 context[item["name"]] = copy.deepcopy(value)
+            context.update(source_context or {})
             result.append(
                 ValidationDiagnostic(
                     condition=finding["condition"],
@@ -198,7 +199,13 @@ class NativeSchemaInterpreter:
         if result["status"] == "invalid":
             raise SpecificationError(
                 self._diagnostics(
-                    result["diagnostics"], result.get("context_document", tree)
+                    result["diagnostics"],
+                    result.get("context_document", tree),
+                    source_context={
+                        name: result[name]
+                        for name in ("source", "entry", "parent")
+                        if name in result
+                    },
                 )
             )
         if result["status"] != "traversed":

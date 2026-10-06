@@ -518,12 +518,15 @@ class TestExpectedArtifactsAreOutOfReach:
     def test_a_negative_run_without_its_contract_reports_the_same_failure(
         self, tmp_path: Path
     ) -> None:
-        complete = copy_example(NEGATIVE, tmp_path / "with")
-        stripped = copy_example(NEGATIVE, tmp_path / "without")
-        shutil.rmtree(stripped / "expected")
-
-        with_contract = run(complete, tmp_path / "with")
-        without_contract = run(stripped, tmp_path / "without")
+        # Keep the source identity fixed: diagnostics now retain the canonical
+        # declaring file, so separate copies correctly produce different paths.
+        example = copy_example(NEGATIVE, tmp_path)
+        with_contract = run(example, tmp_path / "with")
+        identity = str((example / "spec.yaml").resolve())
+        assert with_contract.diagnostics[0].context["source"] == identity
+        assert with_contract.diagnostics[0].context["entry"] == identity
+        shutil.rmtree(example / "expected")
+        without_contract = run(example, tmp_path / "without")
 
         assert without_contract == with_contract
         assert without_contract.outcome == "failure"

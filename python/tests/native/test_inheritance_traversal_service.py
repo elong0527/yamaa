@@ -192,3 +192,42 @@ def test_unexpected_native_source_operation_has_no_filesystem_authority():
         interpreter.traverse_inheritance("/entry", {}, canonicalize, read)
     canonicalize.assert_not_called()
     read.assert_not_called()
+
+
+def test_graph_outcome_identities_survive_the_exception_boundary():
+    interpreter, _ = service(
+        lambda *_: result(
+            {
+                "status": "invalid",
+                "source": "/parent",
+                "entry": "/entry",
+                "parent": "written-parent.yaml",
+                "diagnostics": [
+                    {
+                        "condition": "schema_version_mismatch",
+                        "path": "parents",
+                        "requirement": "REQ-0656",
+                        "context": [
+                            {
+                                "name": "entry_version",
+                                "value": {"kind": "text", "value": "1.0"},
+                            },
+                            {
+                                "name": "parent_version",
+                                "value": {"kind": "text", "value": "0.0"},
+                            },
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    with pytest.raises(SpecificationError) as caught:
+        interpreter.traverse_inheritance("/entry", {}, Mock(), Mock())
+    assert caught.value.diagnostics[0].context == {
+        "entry_version": "1.0",
+        "parent_version": "0.0",
+        "source": "/parent",
+        "entry": "/entry",
+        "parent": "written-parent.yaml",
+    }

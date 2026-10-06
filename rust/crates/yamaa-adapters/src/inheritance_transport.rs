@@ -224,11 +224,13 @@ fn outcome<E>(error: graph::Error<PortError<E>>) -> Result<Value, Failure<E>> {
         }
         graph::Error::Layer {
             source,
+            entry,
             input,
             error,
         } => {
             let mut value = errors::normalization(error).map_err(|_| TransportError::Internal)?;
             value["source"] = json!(source);
+            value["entry"] = json!(entry);
             value["context_document"] = json!(Tree::from_core(&input));
             value
         }
