@@ -333,12 +333,13 @@ def test_loads_row_count_fraction_bound(tmp_path: Path) -> None:
     }
 
 
-def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
+@pytest.mark.parametrize("pattern", ["[", "a)|(?:b"])
+def test_reports_invalid_schema_patterns(tmp_path: Path, pattern: str) -> None:
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
         "pattern: '^[A-Za-z_][A-Za-z0-9_]*$'",
-        "pattern: '['",
+        f"pattern: '{pattern}'",
     )
 
     with pytest.raises(SpecificationError) as caught:
@@ -346,7 +347,7 @@ def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
 
     diagnostic = caught.value.diagnostics[0]
     assert diagnostic.condition == "invalid_schema_bundle"
-    assert "invalid pattern '['" in diagnostic.context["reason"]
+    assert f"invalid pattern {pattern!r}" in diagnostic.context["reason"]
 
 
 @pytest.mark.parametrize(

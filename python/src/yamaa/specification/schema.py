@@ -342,7 +342,7 @@ def _descriptor_issues(
             issues.append(f"{path}: pattern must be a string")
         else:
             try:
-                compile_pattern(f"^(?:{pattern})$")
+                compile_pattern(pattern)
             except RegexError as error:
                 issues.append(f"{path}: invalid pattern {pattern!r}: {error.reason}")
 
