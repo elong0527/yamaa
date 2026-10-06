@@ -5,6 +5,7 @@ use alloc::{string::String, vec, vec::Vec};
 mod identifier_data;
 mod identifiers;
 mod parser;
+mod widths;
 
 /// Pinned ID_Start / ID_Continue data used for capture-group name admission.
 pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
@@ -22,6 +23,10 @@ pub struct CompileLimits {
     pub repetition: usize,
     /// Maximum statically fixed consumed width; no repetition is expanded.
     pub width: usize,
+    /// Cumulative visits/comparisons for capture-dependent lookbehind admission.
+    pub width_work: usize,
+    /// Cumulative logical capture/path slots allocated during width analysis.
+    pub width_cells: usize,
 }
 impl Default for CompileLimits {
     /// Conservative defaults are compiler/matcher policies, not language limits.
@@ -33,6 +38,8 @@ impl Default for CompileLimits {
             depth: 64,
             repetition: 1_000_000,
             width: 1_048_576,
+            width_work: 1_000_000,
+            width_cells: 1_000_000,
         }
     }
 }
@@ -46,6 +53,8 @@ pub enum Resource {
     Depth,
     Repetition,
     Width,
+    WidthWork,
+    WidthCells,
     SubjectBytes,
     Work,
     StateCells,

@@ -69,8 +69,10 @@ Default compilation budgets are 65,536 pattern bytes, 4,096 arena nodes,
 256 groups, depth 64, repetition counts up to 1,000,000 and statically fixed
 width up to 1,048,576 scalars. Width arithmetic is checked without expanding
 repetitions. Callers select budgets, but nesting has an unconditional ceiling
-of 64. Flat concatenations and repetition use explicit tasks rather than native
-recursion; only bounded group parsing and nested assertions recurse.
+of 64. Matching uses explicit tasks for flat concatenations and repetition;
+only bounded group parsing and nested assertions recurse. Capture-dependent
+width analysis traverses flat sequences iteratively and recurses only through
+grammar-bounded nesting.
 
 Each match has a fresh budget shared by every search position, backtrack and
 assertion. Default independent ceilings are 1,048,576 subject bytes, 1,000,000
@@ -96,20 +98,37 @@ Safe range lookups introduce no dependency or unsafe code. The original licensed
 UCD source is retained; reproduction and exhaustive scalar-membership tests
 are described in [the data provenance](crates/yamaa-core/unicode/README.md).
 
-Lookbehind widths depending on backreferences still return an explicit
-`Unsupported` compilation outcome. They are not declared invalid patterns.
-This remains a requirement for complete
-R022 support; no host API, dataset capability or full grammar qualification is
-advertised by this internal core slice. The development JSON-lines probe is a
-qualification tool, not an installed transport boundary.
+Backreference-dependent lookbehind is admitted by a bounded structural width
+analysis after reference identities are resolved. The pass follows capture
+state in matching order, including reverse lookbehind evaluation, positive
+assertion capture commits, negative assertion isolation, and repeat clearing.
+Unentered and empty captures both contribute zero reference width; the matcher
+continues to distinguish their result values. Alternative capture vectors stay
+separate, so a constant combined width is not lost when individual captures
+vary between branches. For example, `(?<=\1\2(?:(a)bb|(aa)))c` consumes four
+scalars on either alternative even though their literal lengths differ.
 
-Lookbehind validation distinguishes a fixed width, a proven variable width and
-a width that depends on a backreference. Known variability wins in sequences
-and alternatives even if a reference is also present. Zero-count repeats and
-zero-width assertions remain fixed; repeating an unresolved reference alone
-does not prove variability because that reference could be empty. The compiler
-also tracks whether known terms make a reference-dependent expression nonempty,
-so varying repetition of that expression is correctly rejected as variable.
+Repetition is analyzed symbolically: descendant captures are cleared before
+one representative iteration, earlier iteration widths are combined by checked
+count arithmetic, and final captures come from the last iteration. Optional
+iterations must consume; required empty iterations and the zero-iteration
+capture state remain distinct paths. Variable consumed width is `Invalid`;
+analysis exhaustion is a resource refusal. Default independent analysis budgets
+are 1,000,000 cumulative node visits/comparison units and 1,000,000 cumulative
+logical capture/path/observation slots. These bounds apply to the additional
+capture-dependent pass; ordinary parsing retains its existing limits. Logical
+slots do not bound allocator capacity, caller memory or concurrent allocations.
+A fresh compile can retry with caller-selected budgets.
+
+Width admission remains structural: it does not execute a subject, prove
+literal/assertion satisfiability, or exempt nested variable-width assertions
+inside zero-count or negative bodies. This preserves the existing grammar
+restriction rather than using sampled matches to decide validity. Rust tests
+include authored capture, assertion and direction cases, 350 independent integer
+count/alternative admission checks, checked arithmetic, analysis exhaustion and
+successful retry. No host API, dataset capability or full grammar qualification
+is advertised by this internal core slice. The development JSON-lines probe is
+a qualification tool, not an installed transport boundary.
 
 `check_regex.py` requires 2,101 independent observations, including all 43
 existing cases, twelve authored edges, scalar-set membership and integer-count
@@ -123,7 +142,7 @@ all 2,048 surrogate code points are rejected in atoms and character classes,
 while neighboring, unassigned and maximum scalar values remain valid. This
 repository normalization is checked independently of raw Node Unicode syntax.
 
-A supplemental development comparison covers 477 patterns and 16,695 observations
+A supplemental development comparison covers 496 patterns and 18,848 observations
 against Node Unicode mode. Reproduce it with an installed Node executable:
 
 ```sh
@@ -137,8 +156,8 @@ but this is not proof of full regex conformance.
 
 ## Remaining integration and release gates
 
-Complete the declared unsupported compiler cases, resolve the reference
-mismatches above, and qualify installed Python and R transport before advertising
+Complete full compiler/matcher conformance, resolve the reference mismatches
+above, and qualify installed Python and R transport before advertising
 regex support. Predicate `str_contains` validates its regex during parsing, so
 shared predicate compilation needs matching validation/failure order. Compilation
 must finish before host data or callback effects and no mid-run fallback is
