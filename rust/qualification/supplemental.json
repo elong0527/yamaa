@@ -1,0 +1,849 @@
+{
+  "version": "1",
+  "contracts": [
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv",
+      "family": "aggregate",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/aggregate_syntax.R",
+        "rust/crates/yamaa-adapters/tests/aggregate_transport.rs",
+        "rust/tests/installed_aggregate_syntax.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/callbacks.json",
+      "family": "functions",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/dataset_callbacks.rs",
+        "rust/tests/installed_datasets.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/callbacks.tsv",
+      "family": "functions",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/dataset_callbacks.R",
+        "rust/tests/installed_datasets.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/expected.json",
+      "family": "datasets",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/dataset_transport.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/expected.tsv",
+      "family": "datasets",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/datasets.R",
+        "rust/tests/installed_datasets.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/predicate_execution.tsv",
+      "family": "predicate",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/predicate_execution.R",
+        "rust/crates/yamaa-adapters/tests/dataset_transport.rs",
+        "rust/tests/installed_predicate_execution.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/inheritance_sources.tsv",
+      "family": "inheritance",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/inheritance.R",
+        "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
+        "rust/tests/installed_inheritance.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/inheritance_traversal.tsv",
+      "family": "inheritance",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/inheritance.R",
+        "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
+        "rust/tests/installed_inheritance.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/numeric_syntax.tsv",
+      "family": "numeric",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/numeric_syntax.R",
+        "rust/crates/yamaa-adapters/tests/numeric_syntax.rs",
+        "rust/tests/installed_numeric_syntax.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/installation.R",
+        "python/tests/native/test_numeric_transport_vectors.py",
+        "rust/crates/yamaa-adapters/tests/numeric_transport.rs",
+        "rust/tests/installed_python.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv",
+      "family": "predicate",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/predicate_syntax.R",
+        "rust/crates/yamaa-adapters/tests/predicate_syntax.rs",
+        "rust/tests/installed_predicate_syntax.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_binding.tsv",
+      "family": "reference",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/references.R",
+        "rust/crates/yamaa-adapters/tests/reference_transport.rs",
+        "rust/tests/installed_references.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_intermediate.tsv",
+      "family": "reference",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/references.R",
+        "rust/crates/yamaa-adapters/tests/reference_transport.rs",
+        "rust/tests/installed_references.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_keys.tsv",
+      "family": "reference",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/references.R",
+        "rust/crates/yamaa-adapters/tests/reference_transport.rs",
+        "rust/tests/installed_references.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_match_values.tsv",
+      "family": "reference",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/references.R",
+        "rust/crates/yamaa-adapters/tests/reference_transport.rs",
+        "rust/tests/installed_references.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_relations.tsv",
+      "family": "reference",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/references.R",
+        "rust/crates/yamaa-adapters/tests/reference_transport.rs",
+        "rust/tests/installed_aggregate_planning.py",
+        "rust/tests/installed_references.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_scope.tsv",
+      "family": "reference",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/references.R",
+        "rust/crates/yamaa-adapters/tests/reference_transport.rs",
+        "rust/tests/installed_references.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/regex_contract.tsv",
+      "family": "regex",
+      "level": "component",
+      "consumers": [
+        "rust/tools/assess_regex_reference.py",
+        "rust/tools/check_regex.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/regex_transport.tsv",
+      "family": "regex",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/regex.R",
+        "rust/crates/yamaa-adapters/tests/regex_transport.rs",
+        "rust/tests/installed_regex.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv",
+      "family": "scalar",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/installation.R",
+        "rust/crates/yamaa-adapters/tests/scalar_transport.rs",
+        "rust/tests/installed_python.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_composition.tsv",
+      "family": "schema",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/schema.R",
+        "rust/crates/yamaa-adapters/tests/schema_transport.rs",
+        "rust/tests/installed_schema.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_inheritance_dependencies.tsv",
+      "family": "schema",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/schema.R",
+        "rust/crates/yamaa-adapters/tests/schema_transport.rs",
+        "rust/tests/installed_schema.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_layer_admission.tsv",
+      "family": "schema",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/schema.R",
+        "rust/crates/yamaa-adapters/tests/schema_transport.rs",
+        "rust/tests/installed_schema.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv",
+      "family": "schema",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/schema.R",
+        "rust/crates/yamaa-adapters/tests/schema_transport.rs",
+        "rust/tests/installed_schema.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_windows.tsv",
+      "family": "schema",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/schema.R",
+        "rust/crates/yamaa-adapters/tests/schema_transport.rs",
+        "rust/tests/installed_schema.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/expected.json",
+      "family": "tables",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/table_transport.rs",
+        "rust/tests/installed_python.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/expected.tsv",
+      "family": "tables",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/installation.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv",
+      "family": "yaml",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/yaml.R",
+        "rust/crates/yamaa-adapters/src/yaml_transport.rs",
+        "rust/tests/installed_yaml.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_vectors.py",
+        "rust/crates/yamaa-core/tests/arithmetic.rs",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/column_dependencies.tsv",
+      "family": "dependencies",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/column_dependencies.R",
+        "rust/crates/yamaa-adapters/tests/column_dependency_transport.rs",
+        "rust/crates/yamaa-core/tests/column_dependencies.rs",
+        "rust/tests/installed_dependencies.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/conversion.tsv",
+      "family": "types",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_conversion_vectors.py",
+        "rust/crates/yamaa-core/tests/conversion.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/dependency_analysis.tsv",
+      "family": "dependencies",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/dependencies.R",
+        "python/tests/planning/test_dependencies.py",
+        "rust/crates/yamaa-adapters/tests/dependency_transport.rs",
+        "rust/crates/yamaa-core/tests/dependency_analysis.rs",
+        "rust/tests/installed_dependencies.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/evaluation.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_literals.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_numeric_literal_vectors.py",
+        "rust/crates/yamaa-core/tests/numeric_compiler.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_rounding.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/expressions/test_rounding_reference.py",
+        "python/tests/native/test_core_evaluation_vectors.py",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_selection.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_sqrt.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
+        "rust/crates/yamaa-core/tests/evaluation.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv",
+      "family": "predicate",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_predicate_reference.py",
+        "rust/crates/yamaa-core/tests/predicate.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-core/tests/fixtures/reduction.tsv",
+      "family": "aggregates",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_reduction_contract.py",
+        "rust/crates/yamaa-core/tests/reduction.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv",
+      "family": "functions",
+      "level": "component",
+      "consumers": [
+        "R/yamaanative/tests/functions.R",
+        "python/tests/native/test_function_invocation_vectors.py",
+        "rust/crates/yamaa-engine/tests/function_invocation.rs",
+        "rust/tests/installed_functions.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-engine/tests/fixtures/numeric_lifecycle.tsv",
+      "family": "numeric",
+      "level": "component",
+      "consumers": [
+        "python/tests/native/test_numeric_lifecycle_vectors.py",
+        "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs"
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "r/aggregate_syntax",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/aggregate_syntax.R",
+      "staged_path": "aggregate_syntax.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/column_dependencies",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/column_dependencies.R",
+      "staged_path": "column_dependencies.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/dataset_callbacks",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/dataset_callbacks.R",
+      "staged_path": "dataset_callbacks.R",
+      "level": "component"
+    },
+    {
+      "id": "r/datasets",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/datasets.R",
+      "staged_path": "datasets.R",
+      "level": "component"
+    },
+    {
+      "id": "r/dependencies",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/dependencies.R",
+      "staged_path": "dependencies.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/functions",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/functions.R",
+      "staged_path": "functions.R",
+      "level": "component"
+    },
+    {
+      "id": "r/inheritance",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/inheritance.R",
+      "staged_path": "inheritance.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/installation",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/installation.R",
+      "staged_path": "installation.R",
+      "level": "component"
+    },
+    {
+      "id": "r/numeric_syntax",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/numeric_syntax.R",
+      "staged_path": "numeric_syntax.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/predicate_execution",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/predicate_execution.R",
+      "staged_path": "predicate_execution.R",
+      "level": "component"
+    },
+    {
+      "id": "r/predicate_syntax",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/predicate_syntax.R",
+      "staged_path": "predicate_syntax.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/references",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/references.R",
+      "staged_path": "references.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/regex",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/regex.R",
+      "staged_path": "regex.R",
+      "level": "component"
+    },
+    {
+      "id": "r/scalars",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/scalars.R",
+      "staged_path": "scalars.R",
+      "level": "component"
+    },
+    {
+      "id": "r/schema",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/schema.R",
+      "staged_path": "schema.R",
+      "level": "compile"
+    },
+    {
+      "id": "r/yaml",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/yaml.R",
+      "staged_path": "yaml.R",
+      "level": "compile"
+    },
+    {
+      "id": "python/aggregate_planning",
+      "runtime": "python",
+      "path": "rust/tests/installed_aggregate_planning.py",
+      "staged_path": "installed_aggregate_planning.py",
+      "level": "component"
+    },
+    {
+      "id": "python/aggregate_syntax",
+      "runtime": "python",
+      "path": "rust/tests/installed_aggregate_syntax.py",
+      "staged_path": "installed_aggregate_syntax.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/conformance",
+      "runtime": "python",
+      "path": "rust/tests/installed_conformance.py",
+      "staged_path": "conformance-suite/installed_conformance.py",
+      "level": "component"
+    },
+    {
+      "id": "python/datasets",
+      "runtime": "python",
+      "path": "rust/tests/installed_datasets.py",
+      "staged_path": "installed_datasets.py",
+      "level": "component"
+    },
+    {
+      "id": "python/dependencies",
+      "runtime": "python",
+      "path": "rust/tests/installed_dependencies.py",
+      "staged_path": "installed_dependencies.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/functions",
+      "runtime": "python",
+      "path": "rust/tests/installed_functions.py",
+      "staged_path": "installed_functions.py",
+      "level": "component"
+    },
+    {
+      "id": "python/inheritance",
+      "runtime": "python",
+      "path": "rust/tests/installed_inheritance.py",
+      "staged_path": "installed_inheritance.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/numeric_syntax",
+      "runtime": "python",
+      "path": "rust/tests/installed_numeric_syntax.py",
+      "staged_path": "installed_numeric_syntax.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/predicate_execution",
+      "runtime": "python",
+      "path": "rust/tests/installed_predicate_execution.py",
+      "staged_path": "installed_predicate_execution.py",
+      "level": "component"
+    },
+    {
+      "id": "python/predicate_syntax",
+      "runtime": "python",
+      "path": "rust/tests/installed_predicate_syntax.py",
+      "staged_path": "installed_predicate_syntax.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/profile",
+      "runtime": "python",
+      "path": "rust/tests/installed_profile.py",
+      "staged_path": "installed_profile.py",
+      "level": "component"
+    },
+    {
+      "id": "python/project_functions",
+      "runtime": "python",
+      "path": "rust/tests/installed_project_functions.py",
+      "staged_path": "installed_project_functions.py",
+      "level": "component"
+    },
+    {
+      "id": "python/python",
+      "runtime": "python",
+      "path": "rust/tests/installed_python.py",
+      "staged_path": "installed_python.py",
+      "level": "component"
+    },
+    {
+      "id": "python/references",
+      "runtime": "python",
+      "path": "rust/tests/installed_references.py",
+      "staged_path": "installed_references.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/regex",
+      "runtime": "python",
+      "path": "rust/tests/installed_regex.py",
+      "staged_path": "installed_regex.py",
+      "level": "component"
+    },
+    {
+      "id": "python/schema",
+      "runtime": "python",
+      "path": "rust/tests/installed_schema.py",
+      "staged_path": "installed_schema.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/schema_loading",
+      "runtime": "python",
+      "path": "rust/tests/installed_schema_loading.py",
+      "staged_path": "installed_schema_loading.py",
+      "level": "compile"
+    },
+    {
+      "id": "python/specification",
+      "runtime": "python",
+      "path": "rust/tests/installed_specification.py",
+      "staged_path": "installed_specification.py",
+      "level": "component"
+    },
+    {
+      "id": "python/tables",
+      "runtime": "python",
+      "path": "rust/tests/installed_tables.py",
+      "staged_path": "installed_tables.py",
+      "level": "component"
+    },
+    {
+      "id": "python/temporal_results",
+      "runtime": "python",
+      "path": "rust/tests/installed_temporal_results.py",
+      "staged_path": "installed_temporal_results.py",
+      "level": "component"
+    },
+    {
+      "id": "python/yaml",
+      "runtime": "python",
+      "path": "rust/tests/installed_yaml.py",
+      "staged_path": "installed_yaml.py",
+      "level": "compile"
+    }
+  ],
+  "support_files": [
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/README.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/adlb-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/adlb-plan.json",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/adlb.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/baseline-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/baseline-tie.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/baseline.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/callbacks-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/callbacks-extreme.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/callbacks-groups.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/callbacks.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/cb-conflict.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/cb-late.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/grouped-count-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/grouped-count.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/integer-sum.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/key-grain-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/key-grain-missing.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/key-grain.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/lookup-bad.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/lookup-duplicate.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/lookup-left-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/lookup-left.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/lookup-right-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/lookup-right.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/numbering-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/numbering.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/predicate-input.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/root-filter-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/root-filter.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/row-lookup-duplicate.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/row-lookup-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/row-lookup-left.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/row-lookup-missing.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/row-lookup-right.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/source-filter-empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/source-filter.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/empty.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/mixed.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/schema_only.arrow",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/zero_columns.arrow",
+      "role": "input"
+    }
+  ]
+}

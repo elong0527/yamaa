@@ -199,27 +199,6 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/rust/qualification" conformance-suite/gates
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_conformance.py" conformance-suite/installed_conformance.py
           cp "${GITHUB_WORKSPACE}/rust/tools/qualify_native.py" conformance-suite/qualify_native.py
-          python installed_python.py
-          python installed_tables.py
-          python installed_functions.py
-          python installed_temporal_results.py
-          python installed_datasets.py
-          python installed_specification.py
-          python installed_project_functions.py
-          python installed_profile.py
-          python installed_dependencies.py
-          python installed_references.py
-          python installed_aggregate_planning.py
-          python installed_aggregate_syntax.py
-          python installed_numeric_syntax.py
-          python installed_regex.py
-          python installed_predicate_syntax.py
-          python installed_predicate_execution.py
-          python installed_schema.py
-          python installed_yaml.py
-          python installed_schema_loading.py
-          python installed_inheritance.py
-          python -I conformance-suite/installed_conformance.py
           python -I conformance-suite/qualify_native.py \
             --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
             --gates conformance-suite/gates --output qualification/wheel \
@@ -227,6 +206,13 @@ jobs:
             --reference-artifacts reference-dist --native-artifacts native-dist \
             --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}" \
             --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
+            --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
+            --output qualification/wheel/supplemental --runtime python --staged-root "${RUNNER_TEMP}" \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form wheel \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}/$(basename native-dist/*.whl)" \
+            --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}/$(basename reference-dist/*.whl)" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Check regex and predicate services on the oldest advertised Python ABI
@@ -243,27 +229,6 @@ jobs:
         run: |
           python -m pip uninstall -y yamaa-native
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz
-          python installed_python.py
-          python installed_tables.py
-          python installed_functions.py
-          python installed_temporal_results.py
-          python installed_datasets.py
-          python installed_specification.py
-          python installed_project_functions.py
-          python installed_profile.py
-          python installed_dependencies.py
-          python installed_references.py
-          python installed_aggregate_planning.py
-          python installed_aggregate_syntax.py
-          python installed_numeric_syntax.py
-          python installed_regex.py
-          python installed_predicate_syntax.py
-          python installed_predicate_execution.py
-          python installed_schema.py
-          python installed_yaml.py
-          python installed_schema_loading.py
-          python installed_inheritance.py
-          python -I conformance-suite/installed_conformance.py
           python -I conformance-suite/qualify_native.py \
             --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
             --gates conformance-suite/gates --output qualification/source \
@@ -271,6 +236,13 @@ jobs:
             --reference-artifacts reference-dist --native-artifacts native-dist \
             --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}" \
             --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
+            --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
+            --output qualification/source/supplemental --runtime python --staged-root "${RUNNER_TEMP}" \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}/$(basename native-dist/*.tar.gz)" \
+            --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}/$(basename reference-dist/*.whl)" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Preserve native qualification reports
         if: always()
@@ -358,37 +330,34 @@ jobs:
           R CMD build --no-build-vignettes --no-manual native-stage/yamaanative
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaanative_0.1.0.tar.gz
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/installation.R" installation.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/scalars.R" scalars.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript scalars.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/functions.R" functions.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript functions.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/datasets.R" datasets.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript datasets.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dataset_callbacks.R" dataset_callbacks.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dataset_callbacks.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dependencies.R" dependencies.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript dependencies.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/column_dependencies.R" column_dependencies.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript column_dependencies.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/references.R" references.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript references.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/aggregate_syntax.R" aggregate_syntax.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript aggregate_syntax.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/numeric_syntax.R" numeric_syntax.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript numeric_syntax.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/regex.R" regex.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript regex.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_syntax.R" predicate_syntax.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript predicate_syntax.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_execution.R" predicate_execution.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript predicate_execution.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/schema.R" schema.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript schema.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/inheritance.R" inheritance.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript inheritance.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/yaml.R" yaml.R
-          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript yaml.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
+            --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
+            --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
+            --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaanative_0.1.0.tar.gz" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Preserve R supplemental qualification
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-qualification-${{ matrix.os }}
+          path: ${{ runner.temp }}/qualification
+          if-no-files-found: error
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

@@ -1,6 +1,6 @@
 # Native benchmark qualification gates
 
-These files gate the complete Python-assisted native route for
+The benchmark gate files below cover the complete Python-assisted native route for
 [#1738](https://github.com/elong0527/yamaa/issues/1738). They do not change the
 reference execution manifest, expected artifacts, compiler ownership or general
 native readiness.
@@ -13,6 +13,11 @@ native readiness.
   Any changed or disappearing difference requires explicit disposition.
 - `missing-routes.json` identifies R's missing original-YAML entry point under
   #1739. No R execution is fabricated to fill that gap.
+
+`supplemental.json` separately reconciles component/compile contract files and
+installed Python/R probe suites. Its runner retains actual suite logs and results;
+these do not enter the complete-run benchmark count. See the
+[supplemental evidence contract](../SUPPLEMENTAL.md).
 
 The initial set was selected by executing every fixture through the original
 YAML, unchanged inputs and independent expected artifacts, then comparing all
