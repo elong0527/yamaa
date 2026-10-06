@@ -13,6 +13,7 @@ from yamaa.specification.diagnostics import (
 )
 from yamaa.specification.models import LoadedSpecification, Specification
 from yamaa.specification.schema import (
+    SchemaBundle,
     load_schema_bundle,
     normalize_specification,
     validate_specification,
@@ -30,9 +31,16 @@ def load_specification(
     schema_root: str | Path,
 ) -> LoadedSpecification:
     """Read, validate, normalize, and model one yamaa specification."""
+    return load_specification_with_bundle(entry_path, load_schema_bundle(schema_root))
+
+
+def load_specification_with_bundle(
+    entry_path: str | Path,
+    bundle: SchemaBundle,
+) -> LoadedSpecification:
+    """Use one captured schema service throughout loading, inheritance and windows."""
     written_path = Path(entry_path)
     origin_path = written_path.resolve()
-    bundle = load_schema_bundle(schema_root)
     document = read_yaml_document(origin_path)
     if isinstance(document, dict) and "parents" in document:
         # Imported lazily so the schema interpreter remains usable on its own.

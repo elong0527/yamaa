@@ -142,6 +142,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema_loading.py" installed_schema_loading.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv" schema_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv" predicate_syntax.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/regex_transport.tsv" regex_transport.tsv
@@ -161,6 +162,9 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-lookup" specification-lookup
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-advs-bmi" specification-advs-bmi
           cp -R "${GITHUB_WORKSPACE}/yaml" specification-yaml
+          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inheritance" specification-inheritance
+          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-column-composition" specification-column-composition
+          cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inherited-output" specification-inherited-output
           cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/datasets" datasets
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv" function_invocation.tsv
           python installed_python.py
@@ -180,6 +184,7 @@ jobs:
           python installed_predicate_syntax.py
           python installed_predicate_execution.py
           python installed_schema.py
+          python installed_schema_loading.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Check regex and predicate services on the oldest advertised Python ABI
         working-directory: ${{ runner.temp }}
@@ -187,6 +192,7 @@ jobs:
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_predicate_syntax.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_schema.py
+          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_schema_loading.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -209,6 +215,7 @@ jobs:
           python installed_predicate_syntax.py
           python installed_predicate_execution.py
           python installed_schema.py
+          python installed_schema_loading.py
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

@@ -365,3 +365,142 @@ fn fragment_defaults_and_unsupported_normalized_keys_have_explicit_outcomes() {
         json!({"status":"unsupported","feature":"normalized_mapping_key"})
     );
 }
+
+#[test]
+fn projected_types_bind_aliases_and_preserve_fragments_and_ordered_union_selection() {
+    let (compiled, _) = compile(schema(
+        vec![],
+        vec![
+            (
+                "identifier",
+                Map(vec![("type", Text("str")), ("pattern", Text("[A-Z]+"))]),
+            ),
+            (
+                "record",
+                List(vec![
+                    Map(vec![(
+                        "name",
+                        Map(vec![("type", Text("identifier")), ("required", Bool(true))]),
+                    )]),
+                    Map(vec![(
+                        "enabled",
+                        Map(vec![("type", Text("bool")), ("default", Bool(true))]),
+                    )]),
+                ]),
+            ),
+        ],
+    ));
+    let results = query(&compiled, vec![
+        json!({"operation":"matching_types","types":[],"fragment":true,"document":tree(Text("DM"))}),
+        json!({"operation":"matching_types","types":["identifier","str"],"fragment":false,"document":tree(Text("dm"))}),
+        json!({"operation":"validate_types","types":["identifier"],"path":"parents[0]","fragment":false,"document":tree(Text("dm"))}),
+        json!({"operation":"normalize_types","types":["str","list[str]"],"fragment":false,"document":tree(Text("DM"))}),
+        json!({"operation":"normalize_types","types":["record"],"fragment":true,"document":tree(Map(vec![]))}),
+        json!({"operation":"normalize_types","types":["identifier","record"],"fragment":false,"document":tree(Text("DM"))}),
+        json!({"operation":"matching_types","types":["dict[str, list[identifier]]"],"fragment":false,"document":tree(Map(vec![("domains",List(vec![Text("DM")]))]))}),
+        json!({"operation":"validate_types","types":["record"],"path":"columns","fragment":false,"document":tree(Map(vec![]))}),
+    ])["results"].clone();
+    assert_eq!(results[0], json!({"status":"matched","member":null}));
+    assert_eq!(results[1], json!({"status":"matched","member":"str"}));
+    assert_eq!(results[2]["status"], "invalid");
+    assert_eq!(results[2]["diagnostics"][0]["path"], "parents[0]");
+    assert_eq!(results[3]["document"], tree(List(vec![Text("DM")])));
+    assert_eq!(results[4]["document"], tree(Map(vec![])));
+    // Arena node order is topological, not necessarily key-before-value. Read
+    // the authored expected fields through their edges, including a default.
+    let normalized = &results[5]["document"];
+    let nodes = &normalized["nodes"];
+    let entries = &nodes[normalized["root"].as_u64().unwrap() as usize]["entries"];
+    for (entry, (key, value)) in entries
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip([("name", json!("DM")), ("enabled", json!(true))])
+    {
+        assert_eq!(nodes[entry[0].as_u64().unwrap() as usize]["value"], key);
+        assert_eq!(nodes[entry[1].as_u64().unwrap() as usize]["value"], value);
+    }
+    assert_eq!(entries.as_array().unwrap().len(), 2);
+    assert_eq!(
+        results[6],
+        json!({"status":"matched","member":"dict[str, list[identifier]]"})
+    );
+    assert_eq!(results[7]["status"], "invalid");
+    assert_eq!(results[7]["diagnostics"][0]["path"], "columns.name");
+}
+
+#[test]
+fn projected_type_binding_rejects_unknown_names_and_retains_resource_failure_categories() {
+    let (compiled, _) = compile(schema(vec![], vec![]));
+    for types in [
+        json!(["str", "unknown"]),
+        json!(["list[unknown]"]),
+        json!(["dict[str]"]),
+    ] {
+        let request = json!({"protocol":"schema/1","queries":[{"operation":"matching_types","types":types,"fragment":false,"document":tree(Text("DM"))}]}).to_string();
+        assert_eq!(
+            compiled.analyze(&request),
+            Err(TransportError::InvalidQuery)
+        );
+    }
+    let result = query(
+        &compiled,
+        vec![
+            json!({"operation":"matching_types","types":["x".repeat(65537)],"fragment":false,"document":tree(Null)}),
+        ],
+    );
+    assert_eq!(
+        result["results"][0],
+        json!({"status":"resource_limit","phase":"type","resource":"bytes","limit":65536})
+    );
+    let mut types = vec!["int"; 1000];
+    types.push("str");
+    let one = json!({"operation":"matching_types","types":types,"fragment":false,"document":tree(Text("DM"))});
+    let result = query(&compiled, vec![one.clone(); 80]);
+    assert_eq!(result["results"][0]["member"], "str");
+    assert!(result["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|r| r["status"] == "resource_limit" && r["resource"] == "diagnostics"));
+    assert_eq!(query(&compiled, vec![one])["results"][0]["member"], "str");
+}
+
+#[test]
+fn reused_fields_report_original_descriptor_occurrences() {
+    let source = schema(
+        vec![Map(vec![("fields_from", Text("base"))])],
+        vec![(
+            "base",
+            List(vec![Map(vec![(
+                "item",
+                Map(vec![
+                    ("type", Text("str")),
+                    ("description", Text("kept from source")),
+                ]),
+            )])]),
+        )],
+    );
+    let (_, metadata) = compile(source.clone());
+    let descriptors = metadata["descriptors"].as_array().unwrap();
+    let reused = descriptors
+        .iter()
+        .find(|d| d["path"] == "root_class.item")
+        .unwrap();
+    let original = descriptors
+        .iter()
+        .find(|d| d["path"] == "base.item")
+        .unwrap();
+    assert_eq!(reused["source_node"], original["source_node"]);
+    let nodes = &source["modules"][0]["document"]["nodes"];
+    let descriptor = &nodes[reused["source_node"].as_u64().unwrap() as usize];
+    let entry = &descriptor["entries"][1];
+    assert_eq!(
+        nodes[entry[0].as_u64().unwrap() as usize]["value"],
+        "description"
+    );
+    assert_eq!(
+        nodes[entry[1].as_u64().unwrap() as usize]["value"],
+        "kept from source"
+    );
+}

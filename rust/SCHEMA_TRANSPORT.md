@@ -12,10 +12,13 @@ Only successful admission produces a frozen `_Schema` snapshot. Its
 mutating or releasing the original request cannot change it. R's stateless
 batch path uses the same compiler and evaluator.
 
-Normal specification loading still uses the Python interpreter. Connecting
-this service to captured YAML loading, inheritance/window consumers and current
-R specification workflows remains required. Python remains the default and
-`execution_supported` remains false.
+The default specification loader still uses the Python interpreter. The explicit
+`yamaa.adapters.native_specification.load_specification` path captures the Rust
+service before YAML IO and uses it throughout schema admission, validation,
+normalization, inheritance fragments and window type selection. The host keeps
+YAML decoding, filesystem authority, composition, dependency discovery, window
+expansion and model validation. Current R specification workflows still need
+integration. Python remains the default and `execution_supported` remains false.
 
 ## Requests
 
@@ -44,11 +47,20 @@ request contains only `protocol` and `queries`. The closed operations are:
 | `validate_descriptor` | `descriptor`, `document`, `fragment`, `path` |
 | `normalize_descriptor` | `descriptor`, `document`, `fragment` |
 | `matching_member` | `descriptor`, `document`, `fragment` |
+| `validate_types` | `types`, `document`, `fragment`, `path` |
+| `normalize_types` | `types`, `document`, `fragment` |
+| `matching_types` | `types`, `document`, `fragment` |
 
 Descriptor identifiers come from the compilation response. A descriptor query
 interprets the root of its supplied decoded document. `matching_member` selects
 the first matching written type without applying shorthand. Fragments suppress
 requiredness and default materialization at every depth; other checks remain.
+The projected `types` operations bind an ordered array of type expressions to
+the captured schema. Rust parses and resolves every name before interpreting
+values. An empty selection is useful after inheritance/window cycle filtering
+and `matching_types` returns a null member. Parsing and attempted branches share
+the batch's validation budget; unknown names and malformed syntax are query
+errors, while parser resource refusals retain their policy category.
 
 ## Decoded documents
 
@@ -80,7 +92,8 @@ without depending on a host JSON parser's decimal conversion.
 Responses contain `protocol` and `outcome`. Compilation returns `compiled`
 metadata, `invalid_schema` issues, `invalid_defaults`, `resource_limit` or
 `unsupported`. Metadata includes class fields, aliases, registries, descriptor
-constraints, default-node origins and `diagnostic_unicode_version`. Failed
+constraints, original descriptor `source_node` occurrences (including reused
+fields), default-node origins and `diagnostic_unicode_version`. Failed
 default admission includes metadata so its descriptor references are resolvable;
 it never returns a prepared handle.
 
@@ -110,7 +123,7 @@ Validation work, attempted diagnostic allocations and normalization storage
 accumulate across queries; unsuccessful union attempts do not refund them.
 These are logical policies, not a process-memory or cancellation guarantee.
 
-Five complete wire fixtures are authored independently and replayed through
+Six complete wire fixtures are authored independently and replayed through
 Rust and the installed Python/R packages. Core tests cover recursive aliases,
 version and diagnostic priority, constraints, fragments, union selection,
 default provenance and both specified shorthand shapes. Supplemental local
@@ -118,6 +131,19 @@ observations over all 310 committed benchmark specifications and 14 schema
 modules matched the Python reference in both installed hosts: 296 normalized
 documents and 14 ordered diagnostic results. This does not qualify execution,
 inheritance resolution, every possible schema or the full release gates.
+
+`installed_schema_loading.py` additionally disables the reference schema
+interpreter while loading installed Python packages: three inheritance and
+composition cases compare to committed resolved documents, and three loaded
+specifications execute through Rust to unchanged expected CSV bytes. These
+bounded workflow checks do not qualify all schemas or replace the full release
+gates. The optional Python bridge rejects uncaptured constraint-bearing
+descriptors and mismatched compiled root classes explicitly, without fallback.
+It accepts type-only projections used by inheritance and windows. The host
+closure reader caps source bytes at 8 MiB, confines include basenames, rejects
+symlink entry points/includes and preserves the existing YAML restrictions.
+Structured admission findings remain attached to schema errors; exhaustive
+malformed-schema prose compatibility still requires qualification.
 
 Two explicit compatibility items remain open:
 

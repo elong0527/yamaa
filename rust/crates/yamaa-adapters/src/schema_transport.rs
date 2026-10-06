@@ -77,6 +77,22 @@ struct BatchRequest {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Query {
+    ValidateTypes {
+        types: Vec<String>,
+        document: Tree,
+        fragment: bool,
+        path: String,
+    },
+    NormalizeTypes {
+        types: Vec<String>,
+        document: Tree,
+        fragment: bool,
+    },
+    MatchingTypes {
+        types: Vec<String>,
+        document: Tree,
+        fragment: bool,
+    },
     ValidateDocument {
         document: Tree,
     },
@@ -263,29 +279,65 @@ impl CompiledSchema {
         // Final encoding independently accounts for the envelope and metadata.
         let mut response_size = ResponseSize(0);
         for query in queries {
-            let (tree, operation, descriptor, fragment, path) = match query {
-                Query::ValidateDocument { document } => (document, 0, None, false, String::new()),
-                Query::NormalizeDocument { document } => (document, 1, None, false, String::new()),
+            let (tree, operation, descriptor, fragment, path, raw_types) = match query {
+                Query::ValidateDocument { document } => {
+                    (document, 0, None, false, String::new(), None)
+                }
+                Query::NormalizeDocument { document } => {
+                    (document, 1, None, false, String::new(), None)
+                }
                 Query::ValidateDescriptor {
                     descriptor,
                     document,
                     fragment,
                     path,
-                } => (document, 2, Some(descriptor), fragment, path),
+                } => (document, 2, Some(descriptor), fragment, path, None),
                 Query::NormalizeDescriptor {
                     descriptor,
                     document,
                     fragment,
-                } => (document, 3, Some(descriptor), fragment, String::new()),
+                } => (document, 3, Some(descriptor), fragment, String::new(), None),
                 Query::MatchingMember {
                     descriptor,
                     document,
                     fragment,
-                } => (document, 4, Some(descriptor), fragment, String::new()),
+                } => (document, 4, Some(descriptor), fragment, String::new(), None),
+                Query::ValidateTypes {
+                    types,
+                    document,
+                    fragment,
+                    path,
+                } => (document, 5, None, fragment, path, Some(types)),
+                Query::NormalizeTypes {
+                    types,
+                    document,
+                    fragment,
+                } => (document, 6, None, fragment, String::new(), Some(types)),
+                Query::MatchingTypes {
+                    types,
+                    document,
+                    fragment,
+                } => (document, 7, None, fragment, String::new(), Some(types)),
             };
             if descriptor.is_some_and(|d| d >= self.schema.descriptors().len()) {
                 return Err(TransportError::InvalidQuery);
             }
+            let types = if let Some(types) = raw_types {
+                match self
+                    .schema
+                    .parse_query_types(&types, budget.validation_scope())
+                {
+                    Ok(types) => types,
+                    Err(error) => {
+                        let outcome = errors::validation(error)?;
+                        response_size.charge(&outcome)?;
+                        outcomes.push(outcome);
+                        continue;
+                    }
+                }
+            } else {
+                Vec::new()
+            };
             let input = match tree.admit()? {
                 Ok(document) => document,
                 Err(error) => {
@@ -344,6 +396,39 @@ impl CompiledSchema {
                     Ok(member) => json!({"status":"matched","member":member}),
                     Err(error) => errors::validation(error)?,
                 },
+                5 => match self.schema.validate_types(
+                    &types,
+                    &input,
+                    input.root(),
+                    &path,
+                    fragment,
+                    budget.validation_scope(),
+                ) {
+                    Ok(findings) => {
+                        json!({"status":if findings.is_empty() {"valid"} else {"invalid"},"diagnostics":diagnostics(&findings)})
+                    }
+                    Err(error) => errors::validation(error)?,
+                },
+                6 => match self.schema.normalize_types(
+                    &types,
+                    &input,
+                    input.root(),
+                    fragment,
+                    &mut budget,
+                ) {
+                    Ok(document) => normalized(document),
+                    Err(error) => errors::normalization(error)?,
+                },
+                7 => match self.schema.matching_types(
+                    &types,
+                    &input,
+                    input.root(),
+                    fragment,
+                    budget.validation_scope(),
+                ) {
+                    Ok(member) => json!({"status":"matched","member":member}),
+                    Err(error) => errors::validation(error)?,
+                },
                 _ => unreachable!(),
             };
             response_size.charge(&outcome)?;
@@ -373,7 +458,7 @@ fn metadata(schema: &SchemaStructure) -> Value {
         "registries":schema.registries().iter().map(|registry| json!({"name":registry.name,"entries":registry.entries.iter().map(|entry|json!({"name":entry.name,"shape":shape(&entry.shape)})).collect::<Vec<_>>()})).collect::<Vec<_>>(),
         "descriptors":schema.descriptors().iter().map(|located| {
             let d = &located.descriptor;
-            json!({"module":located.module,"path":located.path,"type":d.members().iter().map(|m|m.node_text(m.root()).unwrap()).collect::<Vec<_>>(),"required":d.required(),"default_node":d.default_node(),"values":d.permitted(),"pattern":d.pattern().map(|(text,_)|text),"min_length":d.minimum(),"size":d.size()})
+            json!({"module":located.module,"source_node":located.source_node,"path":located.path,"type":d.members().iter().map(|m|m.node_text(m.root()).unwrap()).collect::<Vec<_>>(),"required":d.required(),"default_node":d.default_node(),"values":d.permitted(),"pattern":d.pattern().map(|(text,_)|text),"min_length":d.minimum(),"size":d.size()})
         }).collect::<Vec<_>>()})
 }
 fn diagnostics(findings: &[SchemaDiagnostic]) -> Vec<Value> {

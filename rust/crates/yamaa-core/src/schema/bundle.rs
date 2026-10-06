@@ -112,6 +112,8 @@ pub enum BundleError {
 #[derive(Clone, Debug)]
 pub struct LocatedDescriptor {
     pub module: usize,
+    /// Original decoded descriptor occurrence, including after fields_from expansion.
+    pub source_node: usize,
     pub path: String,
     pub descriptor: Descriptor,
 }
@@ -297,6 +299,7 @@ impl Builder {
             let index = self.descriptors.len();
             self.descriptors.push(LocatedDescriptor {
                 module: raw.module,
+                source_node: raw.node,
                 path: path.into(),
                 descriptor,
             });

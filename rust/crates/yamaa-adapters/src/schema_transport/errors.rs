@@ -45,6 +45,21 @@ pub(super) fn document(error: DocumentError) -> Result<Value, TransportError> {
 }
 pub(super) fn validation(error: ValidationError) -> Result<Value, TransportError> {
     Ok(match error {
+        ValidationError::Type(TypeError::Invalid { .. }) => {
+            return Err(TransportError::InvalidQuery)
+        }
+        ValidationError::Type(TypeError::Limit {
+            resource,
+            limit: maximum,
+        }) => limit(
+            "type",
+            match resource {
+                TypeResource::Bytes => "bytes",
+                TypeResource::Nodes => "nodes",
+                TypeResource::Depth => "depth",
+            },
+            maximum,
+        ),
         ValidationError::InvalidDescriptor => return Err(TransportError::InvalidQuery),
         ValidationError::Depth { limit: maximum } => limit("validation", "depth", maximum),
         ValidationError::Diagnostics { limit: maximum } => {

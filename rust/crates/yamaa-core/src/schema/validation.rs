@@ -2,7 +2,8 @@
 
 use super::{
     ConstraintBudget, ConstraintError, ConstraintViolation, Document, DocumentNode as N,
-    SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
+    SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression,
+    TypeLimits, TypeNode,
 };
 use crate::regex::MatchLimits;
 use alloc::{
@@ -65,6 +66,7 @@ impl Default for ValidationLimits {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValidationError {
+    Type(TypeError),
     Constraint(ConstraintError),
     Depth { limit: usize },
     Diagnostics { limit: usize },
@@ -671,6 +673,90 @@ impl Run<'_, '_> {
 }
 
 impl SchemaStructure {
+    /// Bind caller-selected type expressions to this closed snapshot before reading values.
+    pub fn parse_query_types(
+        &self,
+        types: &[String],
+        budget: &mut ValidationBudget,
+    ) -> Result<Vec<TypeExpression>, ValidationError> {
+        budget.work(types.len())?;
+        let mut result = Vec::new();
+        for text in types {
+            budget.work(text.len().saturating_add(1))?;
+            let parsed = TypeExpression::parse(text, TypeLimits::default())
+                .map_err(ValidationError::Type)?;
+            budget.work(parsed.nodes().len())?;
+            for name in parsed.names() {
+                budget.work(name.len())?;
+                if !matches!(
+                    name,
+                    "str" | "int" | "float" | "bool" | "null" | "list" | "dict"
+                ) && self.class_named(name).is_none()
+                    && self.alias_named(name).is_none()
+                {
+                    return Err(ValidationError::InvalidDescriptor);
+                }
+            }
+            result.push(parsed);
+        }
+        Ok(result)
+    }
+    /// Validate a projected type union without inventing an extra schema declaration.
+    pub fn validate_types(
+        &self,
+        types: &[TypeExpression],
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+        budget: &mut ValidationBudget,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        if value >= input.nodes().len() {
+            return Err(ValidationError::InvalidDescriptor);
+        }
+        Run {
+            schema: self,
+            input,
+            budget,
+            active: Vec::new(),
+        }
+        .union(
+            types,
+            Site {
+                value,
+                path,
+                depth: 0,
+                fragment,
+            },
+        )
+    }
+    /// Select a projected union member, including an empty union after cycle filtering.
+    pub fn matching_types<'a>(
+        &self,
+        types: &'a [TypeExpression],
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        budget: &mut ValidationBudget,
+    ) -> Result<Option<&'a str>, ValidationError> {
+        if value >= input.nodes().len() {
+            return Err(ValidationError::InvalidDescriptor);
+        }
+        for member in types {
+            if matches_member(
+                self,
+                input,
+                (member, member.root()),
+                value,
+                fragment,
+                &[],
+                budget,
+            )? {
+                return Ok(member.node_text(member.root()));
+            }
+        }
+        Ok(None)
+    }
     /// Return the first matching written type for an admitted descriptor, without expansion.
     pub fn matching_member<'a>(
         &'a self,

@@ -646,6 +646,47 @@ impl Run<'_, '_> {
 }
 
 impl SchemaStructure {
+    /// Normalize a validated projected type union used by schema-shaped consumers.
+    pub fn normalize_types(
+        &self,
+        types: &[TypeExpression],
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        budget: &mut NormalizationBudget,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalization_defaults(budget)?;
+        let findings = self.validate_types(
+            types,
+            input,
+            value,
+            "<normalization>",
+            fragment,
+            &mut budget.validation,
+        )?;
+        if !findings.is_empty() {
+            return Err(NormalizationError::Invalid(findings));
+        }
+        budget.work(types.len())?;
+        let site = Site {
+            input,
+            value,
+            provenance: Provenance::Direct(SchemaSource::Input),
+            scope: 0,
+            depth: 0,
+            fragment,
+        };
+        let mut run = Run {
+            schema: self,
+            budget,
+            nodes: Vec::new(),
+            origins: Vec::new(),
+            active: Vec::new(),
+            next_scope: 0,
+        };
+        let root = run.members(&types.iter().map(Member::root).collect::<Vec<_>>(), site)?;
+        run.finish(root)
+    }
     fn normalization_defaults(
         &self,
         budget: &mut NormalizationBudget,

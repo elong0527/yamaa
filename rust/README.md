@@ -487,6 +487,9 @@ result admission, ownership, cancellation and reentrancy tests.
 The experimental [decoded schema service](SCHEMA_TRANSPORT.md) now interprets
 shared schema bundles, document values, defaults and shorthand through the same
 core in both installed hosts. Its prepared Python snapshot and stateless R batch
-API do not invoke a host schema interpreter. Normal specification loading and
-current-schema R workflow integration remain open; no backend default or
+API do not invoke a host schema interpreter. Python's explicit
+`yamaa.adapters.native_specification` loader uses the shared service for schema
+admission, document normalization and inheritance/window type queries while
+retaining host composition and modeling. Full current-schema R workflow
+integration and release qualification remain open; no backend default or
 execution-readiness flag changes.
