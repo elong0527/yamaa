@@ -141,15 +141,102 @@ fn invalid_patterns_and_explicit_remaining_features() {
             "{text}"
         );
     }
-    // These are declared capability gaps, not invalid patterns in the language.
-    assert!(matches!(
-        Pattern::compile(r"(?<\u0061>x)", CompileLimits::default()),
-        Err(CompileError::Unsupported { .. })
-    ));
+    // Backreference-dependent widths remain a declared capability gap.
     assert!(matches!(
         Pattern::compile(r"(a)(?<=\1)b", CompileLimits::default()),
         Err(CompileError::Unsupported { .. })
     ));
+}
+
+/// Names use decoded ID properties, not host identifiers, XID or normalization.
+#[test]
+fn unicode_group_names_preserve_decoded_identity() {
+    for name in [
+        "x",
+        "$",
+        "_",
+        "\u{e9}",
+        "\u{37a}",
+        "\u{1d400}",
+        "a\u{301}",
+        "a\u{200c}\u{200d}",
+        "a\u{30fb}\u{ff65}",
+        "a0",
+    ] {
+        let escaped: String = name
+            .chars()
+            .map(|c| format!(r"\u{{{:X}}}", c as u32))
+            .collect();
+        for (definition, reference) in [(name, escaped.as_str()), (escaped.as_str(), name)] {
+            assert_eq!(
+                captures(&format!(r"^(?<{definition}>a)\k<{reference}>$"), "aa"),
+                Some(vec![Some("aa"), Some("a")])
+            );
+            assert_eq!(
+                captures(&format!(r"^\k<{reference}>(?<{definition}>a)$"), "a"),
+                Some(vec![Some("a"), Some("a")])
+            );
+        }
+    }
+    assert_eq!(
+        captures(r"^(?<\uD835\uDC00>a)\k<\u{1D400}>$", "aa"),
+        Some(vec![Some("aa"), Some("a")])
+    );
+    assert_eq!(
+        captures(
+            "^(?<\u{e9}>a)(?<e\u{301}>b)\\k<\u{e9}>\\k<e\u{301}>$",
+            "abab"
+        ),
+        Some(vec![Some("abab"), Some("a"), Some("b")])
+    );
+}
+
+/// Invalid name scalars and escapes own syntax errors at their source positions.
+#[test]
+fn unicode_group_names_reject_invalid_positions_and_aliases() {
+    for name in [
+        "",
+        "0x",
+        "\u{301}a",
+        "\u{200c}",
+        "\u{1f600}",
+        "a-",
+        r"\x61",
+        r"\cA",
+        r"\uD800",
+        r"\uDC00",
+        r"\u{D800}",
+        r"\u{110000}",
+        r"\u{}",
+        r"\u12",
+        r"\u0030x",
+    ] {
+        for source in [format!("(?<{name}>a)"), format!(r"\k<{name}>(?<x>a)")] {
+            assert!(
+                matches!(
+                    Pattern::compile(&source, CompileLimits::default()),
+                    Err(CompileError::Invalid { .. })
+                ),
+                "{source}"
+            );
+        }
+    }
+    for source in [r"(?<x>a)(?<\u0078>b)", "(?<\u{e9}>a)(?<\\u00E9>b)"] {
+        assert!(matches!(
+            Pattern::compile(source, CompileLimits::default()),
+            Err(CompileError::Invalid {
+                reason: "duplicate group name",
+                ..
+            })
+        ));
+    }
+    assert_eq!(
+        Pattern::compile("(?<\u{e9}\\u0030->a)", CompileLimits::default()).unwrap_err(),
+        CompileError::Invalid {
+            byte: 11,
+            reason: "invalid group name"
+        }
+    );
 }
 
 /// Compilation and matching enforce independent budgets; failure cannot poison the next run.

@@ -1,4 +1,13 @@
 library(yamaanative)
+unicode_notice <- readLines(
+  system.file("LICENSE-UNICODE.txt", package = "yamaanative", mustWork = TRUE),
+  encoding = "UTF-8", warn = FALSE
+)
+stopifnot(
+  identical(unicode_notice[[1L]], "UNICODE LICENSE V3"),
+  any(grepl("Permission is hereby granted, free of charge", unicode_notice, fixed = TRUE)),
+  any(grepl("authorization of the copyright holder.", unicode_notice, fixed = TRUE))
+)
 info <- engine_info()
 stopifnot(
   identical(info$core_version, "0.1.0"),

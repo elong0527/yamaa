@@ -1,0 +1,2 @@
+# Preserve the installed third-party notice bytes on every platform.
+R/yamaanative/inst/LICENSE-UNICODE.txt text eol=lf

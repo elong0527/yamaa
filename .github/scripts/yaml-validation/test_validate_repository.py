@@ -124,6 +124,29 @@ class TestYamlLoader(unittest.TestCase):
 
 
 class TestTextSourceBoundary(unittest.TestCase):
+    def test_preserves_only_named_third_party_unicode_data_and_notices(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for relative in (
+                'rust/crates/yamaa-core/unicode/18.0.0/DerivedCoreProperties.txt',
+                'rust/crates/yamaa-core/unicode/LICENSE.txt',
+                'rust/crates/yamaa-python/LICENSE-UNICODE.txt',
+                'R/yamaanative/inst/LICENSE-UNICODE.txt',
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(chr(0x00A9), encoding='utf-8')
+            for relative in (
+                'LICENSE-UNICODE.txt',
+                'rust/crates/yamaa-core/unicode/notes.md',
+            ):
+                (root / relative).write_text(chr(0x00A9), encoding='utf-8')
+            errors = VALIDATOR.validate_ascii_sources(root)
+        self.assertEqual(errors, [
+            'ERROR: LICENSE-UNICODE.txt:1:1: non_ascii_source byte 0xC2',
+            'ERROR: rust/crates/yamaa-core/unicode/notes.md:1:1: non_ascii_source byte 0xC2',
+        ])
+
     def test_rejects_non_ascii_source_but_allows_unicode_csv_data(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

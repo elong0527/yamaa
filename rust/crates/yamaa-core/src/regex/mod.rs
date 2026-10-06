@@ -2,7 +2,12 @@
 //! No native binding or dataset capability is enabled by this internal core.
 
 use alloc::{string::String, vec, vec::Vec};
+mod identifier_data;
+mod identifiers;
 mod parser;
+
+/// Pinned ID_Start / ID_Continue data used for capture-group name admission.
+pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
 
 /// The repository's portable pattern contract, not a host library dialect.
 pub const CONTRACT_VERSION: &str = "2.0.0";
