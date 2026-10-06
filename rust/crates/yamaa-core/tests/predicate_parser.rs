@@ -303,3 +303,25 @@ fn resource_limits_and_fresh_retry() {
     let p = parse_predicate(&format!("A IN ({})", vec!["1"; 1000].join(",")), defaults).unwrap();
     assert_eq!(p.nodes().len(), 1002);
 }
+
+/// One request cannot multiply capture-path analysis by repeating admitted patterns.
+#[test]
+fn repeated_regex_compilation_shares_request_budget() {
+    let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
+    let call = format!("str_contains(A, '{pattern}')");
+    parse_predicate(&call, ParseLimits::default()).unwrap();
+    let mut expression = call.clone();
+    for _ in 0..9 {
+        expression = format!("({expression} OR {expression})");
+    }
+    assert!(expression.len() < ParseLimits::default().bytes);
+    assert!(matches!(
+        parse_predicate(&expression, ParseLimits::default()),
+        Err(ParseError::RegexLimit {
+            resource: regex::Resource::WidthWork,
+            limit: 1_000_000,
+            ..
+        })
+    ));
+    parse_predicate(&call, ParseLimits::default()).unwrap();
+}

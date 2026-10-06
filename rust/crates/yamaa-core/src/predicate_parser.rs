@@ -159,8 +159,9 @@ impl ParsedPredicate {
 }
 
 /// Compile the complete predicate before any data can be resolved.
-/// Whole-input lexing precedes syntax/regex validation. Per-pattern regex policies
-/// apply independently; parser byte/token/node policies bound their multiplicity.
+/// Whole-input lexing precedes syntax/regex validation. Regex width-analysis work
+/// and logical allocations share a request budget; each pattern also retains its
+/// own limits. Parser byte/token/node policies bound total source and structure.
 pub fn parse_predicate(text: &str, limits: ParseLimits) -> Result<ParsedPredicate, ParseError> {
     let tokens = tokenize(text, limits)?;
     let mut parser = Parser {
@@ -168,6 +169,7 @@ pub fn parse_predicate(text: &str, limits: ParseLimits) -> Result<ParsedPredicat
         tokens,
         cursor: 0,
         nodes: Vec::new(),
+        regex_budget: regex::CompileBudget::new(regex::CompileLimits::default()),
         limits,
     };
     let root = parser.disjunction(1)?;
@@ -371,6 +373,7 @@ struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: usize,
     nodes: Vec<ParsedNode>,
+    regex_budget: regex::CompileBudget,
     limits: ParseLimits,
 }
 impl Parser<'_> {
@@ -700,27 +703,28 @@ impl Parser<'_> {
             unreachable!()
         };
         let site = self.nodes[pattern].span.start;
-        regex::Pattern::compile(text, regex::CompileLimits::default()).map_err(
-            |error| match error {
-                regex::CompileError::Invalid { byte, reason } => grammar(
-                    self.text,
-                    site,
-                    GrammarFailure::InvalidRegex { byte, reason },
-                ),
-                regex::CompileError::Limit { resource, limit } => ParseError::RegexLimit {
-                    position: position(self.text, site),
-                    resource,
-                    limit,
-                },
-                regex::CompileError::Unsupported { byte, feature } => {
-                    ParseError::UnsupportedRegex {
-                        position: position(self.text, site),
-                        byte,
-                        feature,
-                    }
-                }
+        regex::Pattern::compile_with_budget(
+            text,
+            regex::CompileLimits::default(),
+            &mut self.regex_budget,
+        )
+        .map_err(|error| match error {
+            regex::CompileError::Invalid { byte, reason } => grammar(
+                self.text,
+                site,
+                GrammarFailure::InvalidRegex { byte, reason },
+            ),
+            regex::CompileError::Limit { resource, limit } => ParseError::RegexLimit {
+                position: position(self.text, site),
+                resource,
+                limit,
             },
-        )?;
+            regex::CompileError::Unsupported { byte, feature } => ParseError::UnsupportedRegex {
+                position: position(self.text, site),
+                byte,
+                feature,
+            },
+        })?;
         self.require(TokenKind::Symbol(b')'))?;
         self.push(
             ParsedKind::Contains { source, pattern },

@@ -24,3 +24,18 @@ stopifnot(identical(analyze_predicate(request),
   '{"outcome":{"condition":"invalid_predicate","context":{},"position":{"byte":9,"character":6},"requirement":"REQ-0188","status":"invalid"},"protocol":"predicate-syntax/1"}'))
 stopifnot(identical(analyze_predicate(truth$request[1]), truth$expected[1]))
 stopifnot(identical(engine_info()$execution_supported, FALSE))
+
+# Repeated legal literals cannot reset capture-path analysis quotas in one request.
+pattern <- paste0("(a)", strrep("(a|aa)", 8L), "(?<=\\1)")
+call <- paste0("str_contains(A, '", pattern, "')")
+expression <- call
+for (i in seq_len(9L)) expression <- paste0("(", expression, " OR ", expression, ")")
+stopifnot(nchar(expression, type = "bytes") == 42490L)
+request_for <- function(text) paste0(
+  '{"protocol":"predicate-syntax/1","expression":"',
+  gsub("\\", "\\\\", text, fixed = TRUE), '"}')
+stopifnot(grepl('"status":"parsed"', analyze_predicate(request_for(call)), fixed = TRUE))
+refusal <- analyze_predicate(request_for(expression))
+stopifnot(grepl('"limit":1000000,"phase":"regex_compile"', refusal, fixed = TRUE))
+stopifnot(grepl('"resource":"width_work","status":"resource_limit"', refusal, fixed = TRUE))
+stopifnot(grepl('"status":"parsed"', analyze_predicate(request_for(call)), fixed = TRUE))

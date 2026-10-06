@@ -57,9 +57,13 @@ Default parse policies are 65,536 expression bytes, 8,192 tokens excluding EOF,
 4,096 nodes including groups/operands, and depth 64. Depth also bounds recursive
 parsing and output construction, including repeated NOT and flat Boolean chains.
 The flat arena has no recursive ownership chain. Regex compile policies apply
-independently to each pattern; byte/token/node limits bound the number and total
-source size of those calls. This is not an aggregate regex work quota across
-patterns, requests or concurrent callers. AST construction and serialization are
+to each pattern. In addition, all literals in one predicate share capture-dependent
+width-analysis ceilings of 1,000,000 work units and 1,000,000 logical storage cells.
+Charges precede analysis/allocation and failed compilations retain consumed work;
+the resource outcome points to the literal that exhausted the request quota.
+Byte/token/node limits bound total pattern source and parser structure. These
+quotas are request-local, not shared across requests or concurrent callers.
+AST construction and serialization are
 bounded by the admitted tree and source size; there is no independent streaming
 response-byte policy. Host allocation before entry, allocator capacity/failure,
 process-wide memory and cancellation are outside these logical policies.
@@ -87,6 +91,13 @@ checks and 1,083 supplemental reference observations. Reference comparisons are
 additional evidence, not the expected truth. Known portable regex acceptance
 cases rejected by Python are authored independently and do not use Python as the
 admission oracle.
+
+A regression repeats a legal capture-dependent pattern 512 times in a balanced
+42,490-byte expression that fits the parser limits. It exhausted no per-pattern
+quota before the fix; it now refuses at the cumulative width-work ceiling. Rust
+and both installed hosts check this outcome and fresh-request recovery. Core
+tests also check cumulative storage limits, independent per-pattern ceilings,
+consumed prefixes after grammar failure, overflow and the static fast path.
 
 The Python specification frontend still uses its existing predicate parser.
 Replacing every planning/lowering path with this service and adding native

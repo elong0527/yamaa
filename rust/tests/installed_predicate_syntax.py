@@ -113,6 +113,25 @@ class PredicateSyntax(unittest.TestCase):
             self.assertEqual(analyze(text)["status"], "parsed")
         self.assertIs(yamaa_native.engine_info()["execution_supported"], False)
 
+    def test_repeated_regex_compilation_is_request_bounded(self):
+        """Repeated legal literals share analysis quotas, and a new request starts fresh."""
+        pattern = "(a)" + "(a|aa)" * 8 + r"(?<=\1)"
+        call = f"str_contains(A, '{pattern}')"
+        expression = call
+        for _ in range(9):
+            expression = f"({expression} OR {expression})"
+        self.assertEqual(len(expression), 42490)
+        self.assertEqual(analyze(call)["status"], "parsed")
+        result = analyze(expression)
+        self.assertEqual(
+            (result["status"], result["phase"], result["resource"], result["limit"]),
+            ("resource_limit", "regex_compile", "width_work", 1000000),
+        )
+        position = result["position"]
+        self.assertEqual(position["byte"], position["character"])
+        self.assertTrue(expression[position["byte"] :].startswith("'" + pattern))
+        self.assertEqual(analyze(call)["status"], "parsed")
+
 
 if __name__ == "__main__":
     unittest.main()

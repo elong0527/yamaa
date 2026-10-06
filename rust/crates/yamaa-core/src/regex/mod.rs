@@ -7,6 +7,9 @@ mod identifiers;
 mod parser;
 mod widths;
 
+// Request-owned accounting for capture-dependent compilation across literals.
+pub(crate) use widths::Budget as CompileBudget;
+
 /// Pinned ID_Start / ID_Continue data used for capture-group name admission.
 pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
 
@@ -205,7 +208,16 @@ pub struct Pattern {
 impl Pattern {
     /// Parse the closed grammar before any subject is read.
     pub fn compile(source: &str, limits: CompileLimits) -> Result<Self, CompileError> {
-        parser::compile(source, limits)
+        Self::compile_with_budget(source, limits, &mut CompileBudget::new(limits))
+    }
+    /// Share capture-path compilation work/storage across literals in one request.
+    /// Per-pattern ceilings still apply; failed work retains its consumed prefix.
+    pub(crate) fn compile_with_budget(
+        source: &str,
+        limits: CompileLimits,
+        shared: &mut CompileBudget,
+    ) -> Result<Self, CompileError> {
+        parser::compile(source, limits, shared)
     }
     /// Count numbered captures; the whole match is group zero in returned results.
     pub fn group_count(&self) -> usize {
