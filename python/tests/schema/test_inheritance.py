@@ -598,6 +598,14 @@ def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
         expected = yaml.safe_load(
             (EXAMPLES / name / "expected/error.yaml").read_text(encoding="ascii")
         )
+        if name == "negative-cyclic-parent":
+            # REQ-0655 also requires checkout-specific canonical paths. Keep the
+            # portable fixture intact and independently specify the complete cycle.
+            directory = EXAMPLES / name
+            expected["context"]["cycle"] = [
+                str((directory / member).resolve())
+                for member in ("spec.yaml", "layers/parent.yaml", "spec.yaml")
+            ]
         assert actual == expected
 
 

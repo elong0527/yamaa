@@ -33,10 +33,11 @@ to the same name, normalization keeps the first key position and last member
 value. All authored members are validated before selection, including replaced
 members; their errors cannot disappear through replacement.
 Parents receive normal descriptor validation and normalization. Parent graph
-traversal and entry-versus-parent version consistency remain caller duties.
+traversal and entry-versus-parent version consistency belong to the separate
+[shared traversal service](INHERITANCE_TRAVERSAL.md), before composition.
 
 Both installed hosts expose this admission query through `schema/1`; Python's
-opt-in loader delegates once per layer through its captured service. R callers
+opt-in loader admits layers inside shared traversal through its captured service. R callers
 can now admit contributions before composition without a Python interpreter.
 This does not supply a complete R filesystem or workflow loader. All admission,
 normalization and composition queries share the batch's logical resource budget;
@@ -108,8 +109,7 @@ Supplemental comparison over 310 current benchmark specifications observed 295
 loaded documents and 15 matching invalid results, with no discrepancies. That
 comparison supplies additional evidence, not independent expected truth.
 
-Parent-graph orchestration, full current
-schema R workflows, unsupported execution scopes and issue #1585 release gates
+Full current-schema R workflows, unsupported execution scopes and issue #1585 release gates
 remain open. This slice neither establishes full engine readiness nor qualifies
 the separate POWER/EXP/LN numerical policy.
 

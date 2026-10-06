@@ -1,5 +1,5 @@
 //! Owned schema service over bounded decoded-tree requests, without YAML or filesystem IO.
-mod errors;
+pub(crate) mod errors;
 pub(crate) mod wire;
 
 use serde::{de::DeserializeOwned, Deserialize};
@@ -132,7 +132,7 @@ enum Query {
 
 /// An admitted immutable snapshot; no request buffers or host objects survive compilation.
 pub struct CompiledSchema {
-    schema: SchemaStructure,
+    pub(crate) schema: SchemaStructure,
 }
 
 fn decode<T: DeserializeOwned>(request: &str) -> Result<T, TransportError> {

@@ -149,8 +149,10 @@ def _rebase_path(value: str, layer: Path, entry: Path) -> str:
     """
     if _rooted_project_path(value):
         return value
-    layer_directory = layer.parent.resolve()
-    entry_directory = entry.parent.resolve()
+    # Both files already have canonical identities captured by traversal.
+    # Reopening directory resolution here could change authority after a read.
+    layer_directory = layer.parent
+    entry_directory = entry.parent
     if layer_directory == entry_directory:
         return value
     target = os.path.normpath(os.path.join(layer_directory, value))
@@ -1363,13 +1365,21 @@ def resolve_specification(
         nonlocal entry_version
         canonical = path.resolve()
         if canonical in active:
+            cycle = [*active[active.index(canonical) :], canonical]
             raise SpecificationError(
                 [
                     _diagnostic(
                         "inheritance_cycle",
                         "parents",
                         "REQ-0655",
-                        {"reason": "parent_chain_returns_to_entry"},
+                        {
+                            "reason": (
+                                "parent_chain_returns_to_entry"
+                                if canonical == entry_path
+                                else "parent_chain_returns_to_active_layer"
+                            ),
+                            "cycle": [str(member) for member in cycle],
+                        },
                     )
                 ]
             )
@@ -1466,7 +1476,29 @@ def resolve_specification(
         if entry_document is not None
         else read_bundle_document(entry_path, schema_bundle)
     )
-    visit(entry_path, raw_entry)
+    if schema_bundle.interpreter is None:
+        visit(entry_path, raw_entry)
+    else:
+
+        def canonicalize(declaring: str, written: str) -> tuple[str, str] | None:
+            candidate = Path(written)
+            if not candidate.is_absolute():
+                candidate = Path(declaring).parent / candidate
+            if not candidate.is_file():
+                return None
+            return str(candidate.resolve()), str(candidate)
+
+        layers = schema_bundle.interpreter.traverse_inheritance(
+            str(entry_path),
+            raw_entry,
+            canonicalize,
+            lambda identity: read_bundle_document(Path(identity), schema_bundle),
+        )
+        for identity, normalized in layers:
+            canonical = Path(identity)
+            written_paths.update(_layer_input_paths(normalized, canonical))
+            _rebase_layer_paths(normalized, canonical, entry_path)
+            contributions.append((canonical, normalized))
     if not isinstance(raw_entry, dict):
         raise TypeError("validated entry is a mapping")
 

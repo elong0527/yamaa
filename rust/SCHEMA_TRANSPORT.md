@@ -21,9 +21,12 @@ establish the prepared state.
 The default specification loader still uses the Python interpreter. The explicit
 `yamaa.adapters.native_specification.load_specification` path captures the Rust
 services before YAML IO and uses them throughout schema admission, validation,
-normalization, inherited-layer composition and named-window expansion. The host keeps
-filesystem authority, parent traversal, dependency discovery and model validation. Current R specification workflows still need
-integration. Python remains the default and `execution_supported` remains false.
+normalization, inherited-layer composition, named-window expansion and inheritance
+dependency discovery. The separate [inheritance traversal service](INHERITANCE_TRAVERSAL.md)
+uses explicit source callbacks; `schema/1` queries retain no IO authority. The host
+keeps filesystem authority and final model validation. Current R specification
+workflows still need integration. Python remains the default and
+`execution_supported` remains false.
 The [shared YAML service](YAML_DECODING.md) supplies decoded source trees for
 the optional loader, including inherited sources, and is available in both hosts.
 

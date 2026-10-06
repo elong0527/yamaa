@@ -30,7 +30,7 @@ fn document_resource(resource: DocumentResource) -> &'static str {
         DocumentResource::Depth => "depth",
     }
 }
-pub(super) fn document(error: DocumentError) -> Result<Value, TransportError> {
+pub(crate) fn document(error: DocumentError) -> Result<Value, TransportError> {
     match error {
         DocumentError::Limit {
             resource,
@@ -76,7 +76,7 @@ pub(super) fn validation(error: ValidationError) -> Result<Value, TransportError
         }
     })
 }
-pub(super) fn normalization(error: NormalizationError) -> Result<Value, TransportError> {
+pub(crate) fn normalization(error: NormalizationError) -> Result<Value, TransportError> {
     Ok(match error {
         NormalizationError::Validation(error) => return validation(error),
         NormalizationError::Invalid(findings) => {

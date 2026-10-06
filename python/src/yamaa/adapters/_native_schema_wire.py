@@ -56,12 +56,12 @@ def request(value: object) -> str:
     return "".join(chunks)
 
 
-def response(text: str):
+def response(text: str, *, protocol: str = "schema/1"):
     """Decode the captured service's closed response envelope."""
     if len(text) > 16_777_216 or len(text.encode("utf-8")) > 16_777_216:
         limit("transport", "response_bytes", 16_777_216)
     envelope = json.loads(text)
-    if envelope["protocol"] != "schema/1":
+    if envelope["protocol"] != protocol:
         raise ValueError("unsupported native schema response protocol")
     return check_outcome(envelope["outcome"])
 

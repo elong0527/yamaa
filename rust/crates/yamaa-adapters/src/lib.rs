@@ -7,6 +7,7 @@ pub mod dataset_transport;
 pub mod dependency_transport;
 mod function_signature;
 pub mod function_transport;
+pub mod inheritance_transport;
 pub mod numeric_transport;
 mod predicate_transport;
 pub mod reference_transport;

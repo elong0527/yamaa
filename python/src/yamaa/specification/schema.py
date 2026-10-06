@@ -43,6 +43,14 @@ class SchemaInterpreter(Protocol):
         self, value: object, descriptor: dict[str, Any], fragment: bool
     ) -> object: ...
 
+    def traverse_inheritance(
+        self,
+        entry: str,
+        document: object,
+        canonicalize: Callable[[str, str], tuple[str, str] | None],
+        read_source: Callable[[str], object],
+    ) -> list[tuple[str, dict[str, object]]]: ...
+
     def resolve_inheritance_dependencies(
         self, document: dict[str, object]
     ) -> dict[str, object]: ...

@@ -69,7 +69,8 @@ disabled. Qualified key-matched aggregate execution remains unsupported by the
 current native executor and is refused before the provider runs. This compiler
 change does not advertise that executor capability.
 
-Parent traversal, filesystem authority and role-specific version checks remain
-host responsibilities. Full current-schema R workflow loading/execution, separate
+[Shared traversal](INHERITANCE_TRAVERSAL.md) owns parent ordering, deduplication,
+cycles and role-specific version checks; filesystem authority stays with explicit
+host ports. Full current-schema R workflow loading/execution, separate
 POWER/EXP/LN policy, remaining execution scopes, deployment containment and issue
 #1585's complete release/default-cutover gates remain open.
