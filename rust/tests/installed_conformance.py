@@ -126,6 +126,24 @@ class NativeConformance(unittest.TestCase):
         self.assertTrue(report.source_reads)
         self.assertFalse(report.artifacts)
 
+    def test_completed_verifications_survive_materialization_failure(self):
+        completed = self.run_example("adam-adlb-ordered-sum")
+        self.assertEqual(completed.outcome, "success")
+        self.assertEqual(len(completed.verifications), 2)
+        for site in ("_output_table", "build_verification_log", "build_artifact"):
+            with (
+                self.subTest(site=site),
+                patch(
+                    f"yamaa.adapters.native_datasets.{site}",
+                    side_effect=RuntimeError("materialization failed"),
+                ),
+            ):
+                failed = self.run_example("adam-adlb-ordered-sum", tag=site)
+                self.assertEqual(failed.outcome, "error")
+                self.assertEqual(failed.verifications, completed.verifications)
+                self.assertTrue(failed.source_reads)
+                self.assertFalse(failed.artifacts)
+
     def test_reference_infrastructure_failure_keeps_source_prefix(self):
         with patch(
             "yamaa.adapters.conformance._published",

@@ -142,9 +142,9 @@ def execute_native_example(name, entry, schema_root, destination):
             specification,
             provide,
             prepare_functions if environment_root is not None else None,
+            observe_verifications=observer.record_verifications,
         )
         result = run.result
-        observer.record_verifications(run.verifications)
         diagnostics = tuple(
             _observe_diagnostic(item) for item in getattr(result, "diagnostics", ())
         )

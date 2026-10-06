@@ -78,11 +78,12 @@ finding fails CI until its disposition is reviewed. Reference failures and
 infrastructure failures cannot be exempted. This keeps unfinished migration
 scope visible without turning a known gap into qualified behavior.
 
-Five negative fixtures currently produce the correct diagnostic before the
-reference engine reads its sources: `negative-formula-flag`,
-`negative-row-aggregate`, `negative-row-no-prior`,
-`negative-source-missing-field` and `negative-source-trivial-filter`. Their source
-capture and source-table counts differ. Those traces are retained unchanged;
+For five negative fixtures, the reference route reads one source before reporting
+the diagnostic; native validation reports the same diagnostic before source
+capture: `negative-formula-flag`, `negative-row-aggregate`,
+`negative-row-no-prior`, `negative-source-missing-field` and
+`negative-source-trivial-filter`. Their source capture and source-table counts
+differ. Those traces are retained unchanged;
 #1585 still owns resolving the compatibility difference. Improving one requires
 removing its exact gap and adding its passing route to `required.json`.
 
