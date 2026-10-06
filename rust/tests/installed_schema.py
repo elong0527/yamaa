@@ -140,7 +140,8 @@ class SchemaService(unittest.TestCase):
             },
         }
         model = Specification.model_validate(document, strict=True)
-        base = model.model_dump(by_alias=True)
+        base = model.model_dump(by_alias=True, exclude_unset=True)
+        Specification.model_validate(base, strict=True)
         models = []
 
         def collect(value, path=()):
