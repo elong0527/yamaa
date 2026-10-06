@@ -36,6 +36,7 @@ tasks:
   - adam-adex-cumulative-dose-conventions-python
   - adam-adex-dose-reduction-conventions-python
   - adam-adex-uncollected-conventions-python
+  - adam-adfa-fever-conventions-python
   - adam-adlb-bds-conventions-python
   - adam-adlb-closest-visit-conventions-python
   - adam-adlb-end-of-treatment-conventions-python
@@ -114,7 +115,6 @@ tasks:
   - sdtm-ex-from-ec-conventions-python
   - sdtm-ex-intervals-conventions-python
   - sdtm-fa-event-findings-conventions-python
-  - sdtm-fa-fever-conventions-python
   - sdtm-fa-odm-multitest-conventions-python
   - sdtm-fa-reactogenicity-diary-conventions-python
   - sdtm-lb-character-results-conventions-python

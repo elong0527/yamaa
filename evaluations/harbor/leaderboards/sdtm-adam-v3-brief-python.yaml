@@ -36,6 +36,7 @@ tasks:
   - adam-adex-cumulative-dose-brief-python
   - adam-adex-dose-reduction-brief-python
   - adam-adex-uncollected-brief-python
+  - adam-adfa-fever-brief-python
   - adam-adlb-bds-brief-python
   - adam-adlb-closest-visit-brief-python
   - adam-adlb-end-of-treatment-brief-python
@@ -114,7 +115,6 @@ tasks:
   - sdtm-ex-from-ec-brief-python
   - sdtm-ex-intervals-brief-python
   - sdtm-fa-event-findings-brief-python
-  - sdtm-fa-fever-brief-python
   - sdtm-fa-odm-multitest-brief-python
   - sdtm-fa-reactogenicity-diary-brief-python
   - sdtm-lb-character-results-brief-python

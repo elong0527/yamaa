@@ -34,6 +34,7 @@ tasks:
   - adam-adex-cumulative-dose-r
   - adam-adex-dose-reduction-r
   - adam-adex-uncollected-r
+  - adam-adfa-fever-r
   - adam-adlb-bds-r
   - adam-adlb-closest-visit-r
   - adam-adlb-end-of-treatment-r
@@ -112,7 +113,6 @@ tasks:
   - sdtm-ex-from-ec-r
   - sdtm-ex-intervals-r
   - sdtm-fa-event-findings-r
-  - sdtm-fa-fever-r
   - sdtm-fa-odm-multitest-r
   - sdtm-fa-reactogenicity-diary-r
   - sdtm-lb-character-results-r
