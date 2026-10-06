@@ -78,7 +78,15 @@ def test_study_callbacks_exclude_vectors_and_missing_short_circuits(reports):
 
 @pytest.mark.parametrize(
     "mutation",
-    ["callback_count", "callback_order", "value", "type", "row_order", "missing"],
+    [
+        "callback_count",
+        "callback_order",
+        "value",
+        "type",
+        "row_order",
+        "missing",
+        "source_reads",
+    ],
 )
 def test_observation_drift_fails_even_when_artifacts_are_identical(reports, mutation):
     reference = reports["adam-adsl-bmi"]
@@ -86,6 +94,8 @@ def test_observation_drift_fails_even_when_artifacts_are_identical(reports, muta
     def mutate(payload):
         if mutation == "callback_count":
             payload["callbacks"].pop()
+        elif mutation == "source_reads":
+            payload["source_reads"].pop()
         elif mutation == "callback_order":
             payload["callbacks"].reverse()
         else:

@@ -79,12 +79,63 @@ class VerificationObservation(Observation):
     failure: dict[str, JsonValue] | None
 
 
+class SourceReadObservation(Observation):
+    """One resource capture request during study ingestion, including cached reads."""
+
+    base_directory: str
+    path: str
+    outcome: Literal["captured", "failure"]
+    condition: str | None
+    snapshots_created: int
+
+
+class ObservedResources:
+    """Delegate the approved resource port, observing capture without new reads."""
+
+    def __init__(self, resources, observer, base_directory):
+        self.resources = resources
+        self.observer = observer
+        self.base_directory = Path(base_directory)
+
+    def __getattr__(self, name):
+        return getattr(self.resources, name)
+
+    def with_base_directory(self, base_directory):
+        return ObservedResources(
+            self.resources.with_base_directory(base_directory),
+            self.observer,
+            base_directory,
+        )
+
+    def capture(self, written_path):
+        before = self.resources.capture_reads
+        outcome, condition = "captured", None
+        try:
+            return self.resources.capture(written_path)
+        except BaseException as error:
+            outcome, condition = "failure", getattr(error, "condition", None)
+            raise
+        finally:
+            self.observer.source_reads.append(
+                SourceReadObservation(
+                    base_directory=self.observer.specification_name(
+                        self.base_directory
+                    ),
+                    path=written_path,
+                    outcome=outcome,
+                    condition=condition,
+                    snapshots_created=self.resources.capture_reads - before,
+                )
+            )
+
+
 class RunObservations:
     """Observe the ordinary hooks and host boundary without changing evaluation."""
 
     def __init__(self, entry: Path):
         self.entry = entry
         self.current = self.specification_name(entry)
+        self.source_reads: list[SourceReadObservation] = []
         self.callbacks: list[CallbackObservation] = []
         self.verifications: list[VerificationObservation] = []
 
@@ -124,7 +175,12 @@ class RunObservations:
         failures = check(*args, records=observed)
         if records is not None:
             records.extend(observed)
-        for record in observed:
+        self.record_verifications(observed)
+        return failures
+
+    def record_verifications(self, records):
+        """Retain complete check evidence supplied by either execution backend."""
+        for record in records:
             failure = record.failure
             details = None
             if failure is not None:
@@ -141,7 +197,6 @@ class RunObservations:
                     failure=details,
                 )
             )
-        return failures
 
     def hooks(self) -> ExecutionHooks:
         def column(table, declaration, keys, *, records=None):

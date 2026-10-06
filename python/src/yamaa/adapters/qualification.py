@@ -70,6 +70,7 @@ class Batch(Record):
     source_revision: str = Field(min_length=1)
     host_package_version: str = Field(min_length=1)
     core_version: str | None = Field(default=None, min_length=1)
+    binding_package_version: str | None = Field(default=None, min_length=1)
     artifact_reference: str = Field(min_length=1)
     evidence: str = Field(min_length=1)
     reports_dir: str = Field(min_length=1)
@@ -100,8 +101,31 @@ class Coverage(Record):
     error: str | None = None
 
 
+class KnownGap(Record):
+    """One unqualified native mismatch, retained exactly until explicitly resolved."""
+
+    example: str = Field(min_length=1)
+    runtime: Host
+    backend: Literal["rust"]
+    level: Literal["reference_assisted_run", "shared_run"]
+    blocker: str = Field(min_length=1)
+    issue: str = Field(pattern=r"^#[1-9][0-9]*$")
+    findings: tuple[ComparisonFinding, ...] = Field(min_length=1)
+
+
+class MissingRoute(Record):
+    """An explicit missing native entry point; no execution is inferred."""
+
+    runtime: Host
+    backend: Literal["rust"]
+    blocker: str = Field(min_length=1)
+    issue: str = Field(pattern=r"^#[1-9][0-9]*$")
+
+
 class Inventory(Record):
-    version: Literal["1.0"] = "1.0"
+    version: Literal["1.1"] = "1.1"
+    known_gaps: tuple[KnownGap, ...]
+    missing_routes: tuple[MissingRoute, ...]
     source_revision: str
     manifest: Manifest
     batches: tuple[Batch, ...]
@@ -135,6 +159,8 @@ def qualify(
     batches: tuple[Batch, ...],
     *,
     required: tuple[tuple[str, Host, Backend, Level], ...] = (),
+    known_gaps: tuple[KnownGap, ...] = (),
+    missing_routes: tuple[MissingRoute, ...] = (),
 ) -> Inventory:
     """Judge reports and enforce explicitly qualified routes without hiding gaps.
 
@@ -191,6 +217,18 @@ def qualify(
                 if path.name.endswith(suffix):
                     broken[(path.name.removesuffix(suffix), *key)] = str(exc)
 
+    absent_routes = {}
+    for route in missing_routes:
+        identity = route.runtime, route.backend
+        if identity in routes or identity in absent_routes:
+            raise ValueError(f"duplicate or contradictory missing route: {identity}")
+        absent_routes[identity] = route
+    gaps = {}
+    for gap in known_gaps:
+        identity = gap.example, gap.runtime, gap.backend, gap.level
+        if identity in gaps:
+            raise ValueError(f"duplicate known gap: {identity}")
+        gaps[identity] = gap
     coverage = []
     for name in sorted(manifest.examples):
         for runtime, backend in TARGETS:
@@ -208,9 +246,13 @@ def qualify(
                     **base, result="infrastructure_failure", error=broken[key]
                 )
             elif key not in reports:
-                item = Coverage(
-                    **base, result="not_exercised", blockers=("report_not_supplied",)
+                route = absent_routes.get((runtime, backend))
+                blocker = (
+                    "report_not_supplied"
+                    if route is None
+                    else f"{route.issue}:{route.blocker}"
                 )
+                item = Coverage(**base, result="not_exercised", blockers=(blocker,))
             else:
                 report, path = reports[key]
                 base["report"] = str(path)
@@ -266,6 +308,23 @@ def qualify(
             coverage.append(item)
 
     index = {(r.example, r.runtime, r.backend, r.level): r for r in coverage}
+    acknowledged = set()
+    for identity, gap in gaps.items():
+        row = index.get(identity)
+        if (
+            row is None
+            or row.result != "semantic_mismatch"
+            or row.findings != gap.findings
+        ):
+            errors.append(
+                f"known gap changed or disappeared; review its disposition: {identity}"
+            )
+        else:
+            acknowledged.add(identity)
+            marked = row.model_copy(
+                update={"blockers": (*row.blockers, f"{gap.issue}:{gap.blocker}")}
+            )
+            coverage[coverage.index(row)] = marked
     for identity in required:
         row = index.get(identity)
         if row is None or row.result != "pass":
@@ -277,7 +336,11 @@ def qualify(
             if row is None or row.result != "pass":
                 errors.append(f"reference baseline missing or regressed: {name}")
     for row in coverage:
-        if row.result in {"semantic_mismatch", "infrastructure_failure"}:
+        identity = row.example, row.runtime, row.backend, row.level
+        if (
+            row.result in {"semantic_mismatch", "infrastructure_failure"}
+            and identity not in acknowledged
+        ):
             errors.append(f"{row.example}/{row.runtime}/{row.backend}: {row.result}")
     counts = {}
     for row in coverage:
@@ -285,6 +348,8 @@ def qualify(
         counts.setdefault(key, Counter())[row.result] += 1
     return Inventory(
         source_revision=source_revision,
+        known_gaps=known_gaps,
+        missing_routes=missing_routes,
         manifest=manifest,
         batches=batches,
         coverage=tuple(coverage),
@@ -306,6 +371,16 @@ def main(argv=None) -> int:
         type=Path,
         help="JSON array of [fixture, host, backend, level] gates",
     )
+    parser.add_argument(
+        "--known-gaps",
+        type=Path,
+        help="Exact unqualified native differences with tracked blockers",
+    )
+    parser.add_argument(
+        "--missing-routes",
+        type=Path,
+        help="Explicit missing native entry-point blockers",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.output.resolve().is_relative_to(args.examples_root.resolve()):
@@ -318,8 +393,27 @@ def main(argv=None) -> int:
             args.required.read_text(), strict=True
         )
     )
+    gaps = (
+        ()
+        if args.known_gaps is None
+        else TypeAdapter(tuple[KnownGap, ...]).validate_json(
+            args.known_gaps.read_text(), strict=True
+        )
+    )
+    missing = (
+        ()
+        if args.missing_routes is None
+        else TypeAdapter(tuple[MissingRoute, ...]).validate_json(
+            args.missing_routes.read_text(), strict=True
+        )
+    )
     inventory = qualify(
-        args.examples_root, args.source_revision, batches, required=required
+        args.examples_root,
+        args.source_revision,
+        batches,
+        required=required,
+        known_gaps=gaps,
+        missing_routes=missing,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(inventory.model_dump_json(indent=2) + "\n", encoding="utf-8")

@@ -46,6 +46,11 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-latest]
         python: ['3.14']
     steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -115,6 +120,7 @@ jobs:
           if-no-files-found: error
       - name: Build wheel and source archive
         run: |
+          echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           maturin build --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist --out "${RUNNER_TEMP}/native-dist"
           uv build --project python --wheel --out-dir "${RUNNER_TEMP}/reference-dist"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
@@ -176,6 +182,12 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inherited-output" specification-inherited-output
           cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/datasets" datasets
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv" function_invocation.tsv
+          mkdir -p conformance-suite
+          cp -R "${GITHUB_WORKSPACE}/benchmarks" conformance-suite/benchmarks
+          cp -R "${GITHUB_WORKSPACE}/yaml" conformance-suite/yaml
+          cp -R "${GITHUB_WORKSPACE}/rust/qualification" conformance-suite/gates
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_conformance.py" conformance-suite/installed_conformance.py
+          cp "${GITHUB_WORKSPACE}/rust/tools/qualify_native.py" conformance-suite/qualify_native.py
           python installed_python.py
           python installed_tables.py
           python installed_functions.py
@@ -196,6 +208,15 @@ jobs:
           python installed_yaml.py
           python installed_schema_loading.py
           python installed_inheritance.py
+          python -I conformance-suite/installed_conformance.py
+          python -I conformance-suite/qualify_native.py \
+            --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
+            --gates conformance-suite/gates --output qualification/wheel \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form wheel \
+            --reference-artifacts reference-dist --native-artifacts native-dist \
+            --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}" \
+            --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Check regex and predicate services on the oldest advertised Python ABI
         working-directory: ${{ runner.temp }}
@@ -231,6 +252,28 @@ jobs:
           python installed_yaml.py
           python installed_schema_loading.py
           python installed_inheritance.py
+          python -I conformance-suite/installed_conformance.py
+          python -I conformance-suite/qualify_native.py \
+            --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
+            --gates conformance-suite/gates --output qualification/source \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source \
+            --reference-artifacts reference-dist --native-artifacts native-dist \
+            --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}" \
+            --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Preserve native qualification reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-qualification-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/qualification
+          if-no-files-found: error
+      - name: Preserve the reference host wheel
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-reference-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/reference-dist
+          if-no-files-found: error
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

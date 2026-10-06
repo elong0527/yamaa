@@ -12,9 +12,10 @@ answer with the value it was supposed to produce. `compare_example` is the
 only half that reads `expected/`, and it reads a finished report rather
 than a live engine.
 
-Reports identify host language separately from engine backend. Version 0.2 adds
-source/prepublication tables, evaluated checks, workflow observations and actual
-study callback traces. Older report envelopes must be regenerated explicitly.
+Reports identify host language separately from engine backend. Version 0.3 adds
+study resource capture traces, including failed and cached captures, to the
+existing source/prepublication tables, checks, workflow and callback observations.
+Older report envelopes must be regenerated explicitly.
 """
 
 from __future__ import annotations
@@ -35,7 +36,9 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from yamaa import __version__
 from yamaa.adapters.observations import (
     CallbackObservation,
+    ObservedResources,
     RunObservations,
+    SourceReadObservation,
     TableObservation,
     VerificationObservation,
 )
@@ -63,7 +66,7 @@ from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.models import Output
 
 # The envelope changed incompatibly: old reports cannot imply empty new observations.
-REPORT_VERSION = "0.2.0-draft"
+REPORT_VERSION = "0.3.0-draft"
 
 RUNTIME: Literal["python"] = "python"
 BACKEND: Literal["python"] = "python"
@@ -141,7 +144,7 @@ class NodeObservation(_FrozenModel):
 class ExampleReport(_FrozenModel):
     """What one runtime observed running one example, and nothing more."""
 
-    report_version: Literal["0.2.0-draft"] = REPORT_VERSION
+    report_version: Literal["0.3.0-draft"] = REPORT_VERSION
     runtime: Literal["python", "r"] = RUNTIME
     backend: Literal["python", "rust"] = BACKEND
     runtime_version: str
@@ -156,6 +159,7 @@ class ExampleReport(_FrozenModel):
     tables: tuple[TableObservation, ...]
     verifications: tuple[VerificationObservation, ...]
     callbacks: tuple[CallbackObservation, ...]
+    source_reads: tuple[SourceReadObservation, ...]
     # Held for whoever reads a broken run. #101 keeps implementation error
     # text out of the portable comparison, so `compare_example` reads the
     # `error` outcome and never this string.
@@ -285,11 +289,12 @@ def _report(name: str, outcome: Outcome, **observations: object) -> ExampleRepor
         "tables": (),
         "verifications": (),
         "callbacks": (),
+        "source_reads": (),
         **observations,
     }
     return ExampleReport(
         runtime_version=platform.python_version(),
-        engine_version=__version__,
+        engine_version=complete.pop("engine_version", __version__),
         example=name,
         outcome=outcome,
         **complete,
@@ -344,6 +349,7 @@ def _execute(
     entry: Path,
     schema_root: Path,
     destination: Path,
+    observer: RunObservations | None = None,
 ) -> ExampleReport:
     try:
         prepared = prepare_workflow(entry, schema_root=schema_root)
@@ -374,10 +380,10 @@ def _execute(
             diagnostics=tuple(_observe_diagnostic(item) for item in error.diagnostics),
         )
 
-    observer = RunObservations(entry)
+    observer = observer or RunObservations(entry)
     execution = execute_workflow(
         workflow,
-        resources,
+        ObservedResources(resources, observer, entry.parent),
         dispatcher=None if activated is None else observer.dispatcher(activated),
         hooks=observer.hooks(),
         event=observer.event,
@@ -409,6 +415,7 @@ def _execute(
         "tables": observer.tables(execution),
         "verifications": tuple(observer.verifications),
         "callbacks": tuple(observer.callbacks),
+        "source_reads": tuple(observer.source_reads),
     }
     result = execution.result
     handler_counts = tuple(
@@ -533,6 +540,7 @@ def execute_example(
     *,
     schema_root: str | Path,
     output_dir: str | Path,
+    backend: Literal["python", "rust"] = "python",
 ) -> ExampleReport:
     """Run one example and report what the engine observed doing it.
 
@@ -545,14 +553,27 @@ def execute_example(
     example, so a run cannot overwrite the fixture it is being judged
     against.
     """
+    if backend not in {"python", "rust"}:
+        raise ConformanceError("backend must be python or rust")
     example_path = Path(example).resolve()
     entry = entry_specification(example_path)
 
     destination = _isolated_destination(Path(output_dir), example_path)
     destination.mkdir(parents=True, exist_ok=True)
+    observer = RunObservations(entry)
     try:
+        if backend == "rust":
+            from yamaa.adapters.native_conformance import execute_native_example
+
+            return execute_native_example(
+                example_path.name, entry, Path(schema_root).resolve(), destination
+            )
         return _execute(
-            example_path.name, entry, Path(schema_root).resolve(), destination
+            example_path.name,
+            entry,
+            Path(schema_root).resolve(),
+            destination,
+            observer=observer,
         )
     except ConformanceError:
         raise
@@ -563,6 +584,11 @@ def execute_example(
         return _report(
             example_path.name,
             "error",
+            backend=backend,
+            engine_version=__version__ if backend == "python" else "unavailable",
+            callbacks=tuple(observer.callbacks),
+            verifications=tuple(observer.verifications),
+            source_reads=tuple(observer.source_reads),
             error=f"{type(failure).__name__}: {failure}",
         )
 
@@ -967,6 +993,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument("examples", nargs="+", help="example directory names")
+    parser.add_argument("--backend", choices=("python", "rust"), default="python")
     parser.add_argument(
         "--run-dir",
         required=True,
@@ -1023,6 +1050,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             example,
             schema_root=schema_root,
             output_dir=args.run_dir / "artifacts" / name,
+            backend=args.backend,
         )
         path = write_report(report, report_dir)
         verdict = None if args.no_compare else compare_example(report, example)

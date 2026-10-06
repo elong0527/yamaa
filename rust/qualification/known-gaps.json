@@ -1,0 +1,112 @@
+[
+  {
+    "example": "negative-formula-flag",
+    "runtime": "python",
+    "backend": "rust",
+    "level": "reference_assisted_run",
+    "blocker": "native_validation_before_source_reads",
+    "issue": "#1585",
+    "findings": [
+      {
+        "kind": "report.source_reads.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      },
+      {
+        "kind": "report.tables.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      }
+    ]
+  },
+  {
+    "example": "negative-row-aggregate",
+    "runtime": "python",
+    "backend": "rust",
+    "level": "reference_assisted_run",
+    "blocker": "native_validation_before_source_reads",
+    "issue": "#1585",
+    "findings": [
+      {
+        "kind": "report.source_reads.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      },
+      {
+        "kind": "report.tables.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      }
+    ]
+  },
+  {
+    "example": "negative-row-no-prior",
+    "runtime": "python",
+    "backend": "rust",
+    "level": "reference_assisted_run",
+    "blocker": "native_validation_before_source_reads",
+    "issue": "#1585",
+    "findings": [
+      {
+        "kind": "report.source_reads.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      },
+      {
+        "kind": "report.tables.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      }
+    ]
+  },
+  {
+    "example": "negative-source-missing-field",
+    "runtime": "python",
+    "backend": "rust",
+    "level": "reference_assisted_run",
+    "blocker": "native_validation_before_source_reads",
+    "issue": "#1585",
+    "findings": [
+      {
+        "kind": "report.source_reads.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      },
+      {
+        "kind": "report.tables.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      }
+    ]
+  },
+  {
+    "example": "negative-source-trivial-filter",
+    "runtime": "python",
+    "backend": "rust",
+    "level": "reference_assisted_run",
+    "blocker": "native_validation_before_source_reads",
+    "issue": "#1585",
+    "findings": [
+      {
+        "kind": "report.source_reads.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      },
+      {
+        "kind": "report.tables.count",
+        "detail": "different lengths",
+        "expected": 1,
+        "actual": 0
+      }
+    ]
+  }
+]
