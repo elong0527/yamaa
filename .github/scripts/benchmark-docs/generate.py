@@ -223,6 +223,15 @@ def render_readme(text, source_url):
     if tokens and tokens[0].type == "heading_open" and tokens[0].tag == "h1":
         title = tokens[1].content
         tokens = tokens[3:]
+    return title, render_markdown_tokens(markdown, tokens, source_url)
+
+
+def render_markdown_tokens(markdown, tokens, source_url):
+    """Render parsed Markdown with its links resolved against `source_url`.
+
+    Relative links and images point at the source folder on GitHub, and images
+    show as links, so a page never fetches anything when opened from disk.
+    """
     for token in tokens:
         for child in token.children or []:
             attribute = (
@@ -244,7 +253,7 @@ def render_readme(text, source_url):
             if child.type == "image":
                 child.type = "html_inline"
                 child.content = f'<a href="{escape(child.attrGet("src"))}">{escape(child.content or "Image")}</a>'
-    return title, markdown.renderer.render(tokens, markdown.options, {})
+    return markdown.renderer.render(tokens, markdown.options, {})
 
 
 def subject_key(record):
@@ -603,10 +612,12 @@ def benchmark_code_files(benchmark):
 
 
 def slugify(text):
+    """An HTML id fragment: lower case, other characters run together as one hyphen."""
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
 def render_file_document(document_id, title, line_count, body, edit_url=None):
+    """One file in a material pane: its name, Edit link, and line count over its body."""
     edit = f'<a class="edit-button" href="{edit_url}">Edit</a>' if edit_url else ""
     return (
         f'<div class="material-document material-file" id="{document_id}" data-filename="{escape(title)}">'
@@ -616,6 +627,7 @@ def render_file_document(document_id, title, line_count, body, edit_url=None):
 
 
 def render_code_document(path, slug, title, edit_url=None):
+    """A code file with numbered lines, each one linkable as #code-<slug>-line-<n>."""
     lines = path.read_text(encoding="utf-8").splitlines()
     code_lines = "".join(
         f'<span class="code-line" id="code-{slug}-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
@@ -629,10 +641,15 @@ def render_code_document(path, slug, title, edit_url=None):
     return render_file_document(f"code-pane-{slug}", title, len(lines), body, edit_url)
 
 
-def render_prompt_document(path, tier, title, edit_url):
-    """A prompt reads as the request it is; the Edit link opens the raw file."""
+def render_prompt_document(path, tier, title, edit_url, source_url):
+    """A prompt reads as the request it is; the Edit link opens the raw file.
+
+    It renders under the README's rules: no raw HTML, links resolved against
+    the prompt's folder, and images shown as links.
+    """
     text = path.read_text(encoding="utf-8")
-    body = MarkdownIt("commonmark", {"html": False}).render(text)
+    markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
+    body = render_markdown_tokens(markdown, markdown.parse(text), source_url)
     return render_file_document(
         f"prompt-pane-{tier}",
         title,
@@ -717,6 +734,7 @@ def render_materials(benchmark, spec, define, code_files, edit_base):
                             tier,
                             f"prompts/{benchmark.name}/{tier}.md",
                             f"{REPOSITORY}/edit/main/evaluations/harbor/prompts/{name}/{tier}.md",
+                            f"{REPOSITORY}/blob/main/evaluations/harbor/prompts/{name}",
                         ),
                     )
                     for tier, label, keeps in tiers
@@ -787,6 +805,7 @@ def render_materials(benchmark, spec, define, code_files, edit_base):
 
 
 def render_benchmark(benchmark, previous=None, next=None):
+    """One benchmark's self-contained dashboard page, as ASCII bytes."""
     source_url = REPOSITORY + "/blob/main/benchmarks/" + quote(benchmark.name)
     edit_base = REPOSITORY + "/edit/main/benchmarks/" + quote(benchmark.name)
     readme_edit_url = edit_base + "/README.md"

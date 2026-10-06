@@ -29,6 +29,7 @@
   tablist.hidden = false;
   toggle.closest("label").hidden = false;
 
+  // Mirror `open` onto the tabs, the panes, and the side-by-side layout.
   function render() {
     const split = toggle.checked;
     tablist.setAttribute("aria-multiselectable", String(split));
@@ -42,6 +43,8 @@
     });
   }
 
+  // One pane at a time: show this one. Side by side: toggle it, keeping at
+  // least one open and dropping the oldest past the limit.
   function choose(tab) {
     if (!toggle.checked) open = [tab];
     else if (open.includes(tab)) {

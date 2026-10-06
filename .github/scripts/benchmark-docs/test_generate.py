@@ -509,6 +509,28 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn('id="prompt-select"', page)
         self.assertNotIn('id="tab-solution"', page)
 
+    def test_prompt_links_follow_the_readme_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            harbor = Path(directory)
+            folder = harbor / "prompts" / BENCHMARK.name
+            folder.mkdir(parents=True)
+            (folder / "full.md").write_text(
+                "See [the notes](notes.md), ![a chart](https://example.org/c.png),"
+                " and [CDISC](https://www.cdisc.org).\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(generate, "HARBOR", harbor):
+                page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        prompt = page.split('id="prompt-pane-full"', 1)[1].split("</div></div>", 1)[0]
+        source = generate.REPOSITORY + "/blob/main/evaluations/harbor/prompts/"
+        self.assertIn(
+            f'<a href="{source}adam-adae-death/notes.md">the notes</a>', prompt
+        )
+        # An image would make the page fetch it; it shows as a link instead.
+        self.assertIn('<a href="https://example.org/c.png">a chart</a>', prompt)
+        self.assertNotIn("<img", prompt)
+        self.assertIn('<a href="https://www.cdisc.org">CDISC</a>', prompt)
+
     def test_materials_a_benchmark_lacks_have_no_tab(self):
         def tab_ids(name):
             page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")

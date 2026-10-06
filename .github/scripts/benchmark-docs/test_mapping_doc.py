@@ -23,6 +23,7 @@ def load_define(name):
 
 
 def rendered_tables(spec):
+    """Every sheet's table HTML, joined, for assertions across sheets."""
     return "".join(table for _, _, table in mapping_doc.render_mapping_sheets(spec))
 
 
