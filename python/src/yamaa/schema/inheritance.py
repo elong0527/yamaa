@@ -33,7 +33,6 @@ from yamaa.expressions.strings import (
     parse_template_cached,
     template_identifiers,
 )
-from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError, ValidationDiagnostic
 from yamaa.specification.models import Specification
 from yamaa.specification.schema import (
@@ -41,6 +40,7 @@ from yamaa.specification.schema import (
     class_fields,
     matching_type,
     normalize_descriptor_value,
+    read_bundle_document,
     split_type_arguments,
     validate_descriptor_value,
     validate_specification,
@@ -1321,8 +1321,9 @@ def resolve_specification(
     written_paths: dict[tuple[Path, str], str] = {}
     active: list[Path] = []
     entry_version: object | None = None
+    unread = object()
 
-    def visit(path: Path, supplied: object | None = None) -> None:
+    def visit(path: Path, supplied: object = unread) -> None:
         nonlocal entry_version
         canonical = path.resolve()
         if canonical in active:
@@ -1339,7 +1340,11 @@ def resolve_specification(
         if canonical in completed:
             return
         try:
-            raw = supplied if supplied is not None else read_yaml_document(canonical)
+            raw = (
+                supplied
+                if supplied is not unread
+                else read_bundle_document(canonical, schema_bundle)
+            )
         except (OSError, SpecificationError) as error:
             if isinstance(error, SpecificationError):
                 raise
@@ -1421,7 +1426,9 @@ def resolve_specification(
         contributions.append((canonical, normalized))
 
     raw_entry = (
-        entry_document if entry_document is not None else read_yaml_document(entry_path)
+        entry_document
+        if entry_document is not None
+        else read_bundle_document(entry_path, schema_bundle)
     )
     visit(entry_path, raw_entry)
     if not isinstance(raw_entry, dict):

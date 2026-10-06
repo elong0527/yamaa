@@ -20,11 +20,13 @@ establish the prepared state.
 
 The default specification loader still uses the Python interpreter. The explicit
 `yamaa.adapters.native_specification.load_specification` path captures the Rust
-service before YAML IO and uses it throughout schema admission, validation,
+services before YAML IO and uses them throughout schema admission, validation,
 normalization, inheritance fragments and window type selection. The host keeps
-YAML decoding, filesystem authority, composition, dependency discovery, window
+filesystem authority, composition, dependency discovery, window
 expansion and model validation. Current R specification workflows still need
 integration. Python remains the default and `execution_supported` remains false.
+The [shared YAML service](YAML_DECODING.md) supplies decoded source trees for
+the optional loader, including inherited sources, and is available in both hosts.
 
 ## Requests
 
@@ -40,8 +42,9 @@ Compilation requires `schema`, containing:
 
 The complete transitive include closure must be provided. Rust checks declared
 include names, closure, cycles, versions, declarations, references, field reuse
-and descriptors. The host remains responsible for filesystem confinement,
-symlink authority, duplicate YAML keys, alias rejection and YAML 1.2 decoding.
+and descriptors. The host remains responsible for filesystem confinement and
+symlink authority. The separate shared YAML service enforces source decoding,
+duplicate keys and prohibited YAML constructs before this decoded-tree boundary.
 
 The stateless entry point additionally requires `queries`. A prepared snapshot's
 request contains only `protocol` and `queries`. The closed operations are:

@@ -28,6 +28,7 @@ def stage(destination: Path):
         "numeric_syntax.tsv",
         "predicate_syntax.tsv",
         "schema_transport.tsv",
+        "yaml_transport.tsv",
         "regex_transport.tsv",
         "scalar_transport.tsv",
         "numeric_transport.tsv",

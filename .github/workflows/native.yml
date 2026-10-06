@@ -142,6 +142,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_yaml.py" installed_yaml.py
+          cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv" yaml_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema_loading.py" installed_schema_loading.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv" schema_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv" predicate_syntax.tsv
@@ -184,6 +186,7 @@ jobs:
           python installed_predicate_syntax.py
           python installed_predicate_execution.py
           python installed_schema.py
+          python installed_yaml.py
           python installed_schema_loading.py
           python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Check regex and predicate services on the oldest advertised Python ABI
@@ -192,6 +195,7 @@ jobs:
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_predicate_syntax.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_schema.py
+          uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_yaml.py
           uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_schema_loading.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
@@ -215,6 +219,7 @@ jobs:
           python installed_predicate_syntax.py
           python installed_predicate_execution.py
           python installed_schema.py
+          python installed_yaml.py
           python installed_schema_loading.py
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -316,6 +321,8 @@ jobs:
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript predicate_execution.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/schema.R" schema.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript schema.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/yaml.R" yaml.R
+          R_LIBS="${RUNNER_TEMP}/native-r-library" Rscript yaml.R
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

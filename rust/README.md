@@ -493,3 +493,9 @@ admission, document normalization and inheritance/window type queries while
 retaining host composition and modeling. Full current-schema R workflow
 integration and release qualification remain open; no backend default or
 execution-readiness flag changes.
+
+The [shared YAML decoder](YAML_DECODING.md) provides byte-oriented `yaml/1`
+entry points in both installed hosts. The optional Python loader captures it
+before IO and uses it for schema, entry and inherited sources. Exact integer
+identity and Unicode diagnostics survive the source boundary; host filesystem,
+composition and model responsibilities remain explicit.

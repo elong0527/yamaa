@@ -131,6 +131,16 @@ fn interpret_schema(request: Raw) -> List {
     )
 }
 
+/// Decode raw source directly; return normally before the R facade raises any
+/// transport error. No R character/numeric conversion participates in decoding.
+#[extendr]
+fn decode_yaml(source: Raw) -> List {
+    match yamaa_adapters::yaml_transport::decode_yaml_bytes(source.as_slice()) {
+        Ok(value) => list!(value = value, error = NULL),
+        Err(error) => list!(value = NULL, error = error.to_string()),
+    }
+}
+
 /// Compile or match regex before returning normally to the calling R facade.
 #[extendr]
 fn evaluate_regex(request: Raw) -> List {
@@ -270,6 +280,7 @@ extendr_module! {
     fn analyze_numeric;
     fn analyze_predicate;
     fn interpret_schema;
+    fn decode_yaml;
     fn evaluate_regex;
     fn table_round_trip;
     fn table_snapshot;

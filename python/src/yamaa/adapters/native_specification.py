@@ -1,7 +1,7 @@
 """Explicit shared-Rust schema loading with the existing host specification pipeline.
 
-The Python public loader remains the default. This adapter owns filesystem/YAML
-IO and modeling; the captured native snapshot owns schema interpretation.
+The Python public loader remains the default. This adapter owns filesystem IO
+and modeling; captured native services own YAML and schema interpretation.
 """
 
 from __future__ import annotations
@@ -12,13 +12,11 @@ from pathlib import Path
 from yamaa.adapters._native_schema_findings import admission_error
 from yamaa.adapters._native_schema_interpreter import NativeSchemaInterpreter
 from yamaa.adapters._native_schema_wire import (
-    decode_nodes,
-    encode_tree,
     limit,
     request,
     response,
 )
-from yamaa.specification._yaml import read_yaml_bytes
+from yamaa.adapters._native_yaml import MAX_SOURCE_BYTES, NativeYamlReader
 from yamaa.specification.loader import load_specification_with_bundle
 from yamaa.specification.schema import SchemaBundle, _schema_failure
 
@@ -38,6 +36,7 @@ def load_schema_bundle(
     compile_schema = getattr(native, "_compile_schema", None)
     if not callable(compile_schema):
         raise TypeError("native _compile_schema must be callable")
+    reader = NativeYamlReader(native)
     root = Path(schema_root).resolve()
     entrypoint = root / entry_name
     if entry_name != "schema.yaml" and not _SAFE_INCLUDE.fullmatch(entry_name):
@@ -65,14 +64,15 @@ def load_schema_bundle(
                 current, f"unsafe include {current.name!r}"
             ) from error
         with current.open("rb") as stream:
-            raw = stream.read(8_388_609 - source_bytes)
+            raw = stream.read(MAX_SOURCE_BYTES + 1 - source_bytes)
         source_bytes += len(raw)
-        if source_bytes > 8_388_608:
-            limit("yaml_source", "bytes", 8_388_608)
-        document = read_yaml_bytes(raw, current)
-        tree = encode_tree(document)
+        if source_bytes > MAX_SOURCE_BYTES:
+            limit("yaml_source", "source_bytes", MAX_SOURCE_BYTES)
+        tree = reader.decode_tree(raw, current)
+        values = reader.values(tree)
+        document = values[tree["root"]]
         modules.append({"name": current.name, "document": tree})
-        decoded.append(decode_nodes(tree))
+        decoded.append(values)
         if isinstance(document, dict) and isinstance(document.get("includes"), list):
             # Only discover safe source names here. Rust admits include syntax,
             # cycles, versions, declarations and the complete closure.
@@ -106,6 +106,7 @@ def load_schema_bundle(
         aliases=aliases,
         registries=registries,
         interpreter=interpreter,
+        document_reader=reader.read_document,
     )
 
 

@@ -1,6 +1,6 @@
 //! Owned schema service over bounded decoded-tree requests, without YAML or filesystem IO.
 mod errors;
-mod wire;
+pub(crate) mod wire;
 
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};

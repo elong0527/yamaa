@@ -6,7 +6,6 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import (
     SpecificationError,
     ValidationDiagnostic,
@@ -16,6 +15,7 @@ from yamaa.specification.schema import (
     SchemaBundle,
     load_schema_bundle,
     normalize_specification,
+    read_bundle_document,
     validate_specification,
 )
 from yamaa.specification.submission import validate_submission_metadata
@@ -41,7 +41,7 @@ def load_specification_with_bundle(
     """Use one captured schema service throughout loading, inheritance and windows."""
     written_path = Path(entry_path)
     origin_path = written_path.resolve()
-    document = read_yaml_document(origin_path)
+    document = read_bundle_document(origin_path, bundle)
     if isinstance(document, dict) and "parents" in document:
         # Imported lazily so the schema interpreter remains usable on its own.
         from yamaa.schema.inheritance import resolve_specification
