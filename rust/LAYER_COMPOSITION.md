@@ -28,6 +28,10 @@ keyed identities. Supplied non-column values must be complete; nested column
 fragments defer requiredness and defaults. Optional null clear markers survive,
 while null required fields or identities fail with `invalid_clear`. Input path
 shorthand becomes an owned mapping with origins pointing to the authored text.
+When a custom identifier alias admits different scalar input keys that stringify
+to the same name, normalization keeps the first key position and last member
+value. All authored members are validated before selection, including replaced
+members; their errors cannot disappear through replacement.
 Parents receive normal descriptor validation and normalization. Parent graph
 traversal and entry-versus-parent version consistency remain caller duties.
 

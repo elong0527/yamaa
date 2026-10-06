@@ -34,6 +34,58 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_custom_input_key_coercion_keeps_order_and_validates_replaced_members(self):
+        """Custom scalar identifiers may converge to one normalized text name."""
+        schema = {
+            "version": "1.0",
+            "root_class": [
+                {"schema_version": {"type": "str"}},
+                {"input": {"type": "dict[identifier, dataset_class]"}},
+            ],
+            "dataset_class": [{"path": {"type": "str"}}],
+            "identifier": {"type": ["str", "int"]},
+            "project_path": {"type": "str"},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "schema.yaml").write_text(json.dumps(schema), encoding="ascii")
+            interpreter = native_specification.load_schema_bundle(root).interpreter
+            value, findings = interpreter.normalize_layer(
+                {
+                    "schema_version": "1.0",
+                    "input": {
+                        2: {"path": "first.csv"},
+                        "KEEP": "middle.csv",
+                        "2": {"path": "last.csv"},
+                    },
+                }
+            )
+            self.assertEqual(findings, [])
+            self.assertEqual(list(value["input"]), ["2", "KEEP"])
+            self.assertEqual(
+                value["input"],
+                {
+                    "2": {"path": "last.csv"},
+                    "KEEP": {"path": "middle.csv"},
+                },
+            )
+            value, findings = interpreter.normalize_layer(
+                {
+                    "schema_version": "1.0",
+                    "input": {
+                        2: {"path": False},
+                        "2": {"path": "last.csv"},
+                    },
+                }
+            )
+            self.assertIsNone(value)
+            self.assertEqual(
+                [(d.condition, d.spec_paths) for d in findings],
+                [
+                    ("invalid_field_type", ("input[2].path",)),
+                ],
+            )
+
     def test_layer_diagnostic_paths_distinguish_indices_from_text_names(self):
         """Positional and bool/int paths keep brackets; textual names keep dots."""
         bundle = native_specification.load_schema_bundle(SCHEMA)

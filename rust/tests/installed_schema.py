@@ -25,7 +25,9 @@ class SchemaService(unittest.TestCase):
                 .open(encoding="utf-8", newline="") as stream
             ):
                 cases = list(csv.DictReader(stream, delimiter="\t"))
-            self.assertEqual(len(cases), 6)
+            self.assertEqual(
+                len(cases), 7 if name == "schema_layer_admission.tsv" else 6
+            )
             rows.extend(cases)
         return rows
 

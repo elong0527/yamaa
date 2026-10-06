@@ -52,6 +52,10 @@ fn field(name: &'static str, kind: &'static str, required: bool) -> V {
     )])
 }
 fn schema() -> SchemaStructure {
+    schema_with_identifier(Text("str"))
+}
+
+fn schema_with_identifier(identifier_type: V) -> SchemaStructure {
     SchemaStructure::admit(
         vec![SchemaModule {
             name: "schema.yaml".into(),
@@ -70,7 +74,7 @@ fn schema() -> SchemaStructure {
                         field("output", "str", true),
                     ]),
                 ),
-                ("identifier", Map(vec![("type", Text("str"))])),
+                ("identifier", Map(vec![("type", identifier_type)])),
                 ("project_path", Map(vec![("type", Text("str"))])),
                 ("column_type", Map(vec![("type", Text("str"))])),
                 (
@@ -589,4 +593,68 @@ fn paths_distinguish_positional_numeric_boolean_and_textual_members() {
             ("columns.2[3]", "unknown_field"),
         ]
     );
+}
+
+#[test]
+fn stringified_input_collisions_keep_first_position_and_last_value_with_origins() {
+    let schema = schema_with_identifier(List(vec![
+        Text("str"),
+        Text("int"),
+        Text("bool"),
+        Text("null"),
+    ]));
+    let input = layer(vec![(
+        "input",
+        V::Pairs(vec![
+            (Int("2"), Map(vec![("path", Text("first.csv"))])),
+            (Text("KEEP"), Map(vec![("path", Text("middle.csv"))])),
+            (Text("2"), Map(vec![("path", Text("last.csv"))])),
+            (Bool(true), Text("first-bool.csv")),
+            (Text("True"), Text("last-bool.csv")),
+            (Null, Text("first-null.csv")),
+            (Text("None"), Text("last-null.csv")),
+        ]),
+    )]);
+    let output = schema.normalize_layer(&input, &mut budget()).unwrap();
+    assert_document(
+        &output.document,
+        &layer(vec![(
+            "input",
+            Map(vec![
+                ("2", Map(vec![("path", Text("last.csv"))])),
+                ("KEEP", Map(vec![("path", Text("middle.csv"))])),
+                ("True", Map(vec![("path", Text("last-bool.csv"))])),
+                ("None", Map(vec![("path", Text("last-null.csv"))])),
+            ]),
+        )]),
+    );
+    let input_members = get(&input, input.root(), "input");
+    let N::Mapping(entries) = &input.nodes()[input_members] else {
+        panic!("input map")
+    };
+    let output_members = get(&output.document, output.document.root(), "input");
+    let N::Mapping(result) = &output.document.nodes()[output_members] else {
+        panic!("output map")
+    };
+    assert_eq!(output.origins[result[0].0].node, entries[0].0);
+    assert!(output.origins[result[0].0].generated);
+    assert_eq!(output.origins[result[0].1].node, entries[2].1);
+    assert!(!output.origins[result[0].1].generated);
+}
+
+#[test]
+fn overwritten_input_members_are_still_validated_before_key_selection() {
+    let schema = schema_with_identifier(List(vec![Text("str"), Text("int")]));
+    let input = layer(vec![(
+        "input",
+        V::Pairs(vec![
+            (Int("2"), Map(vec![("path", Bool(false))])),
+            (Text("2"), Map(vec![("path", Text("last.csv"))])),
+        ]),
+    )]);
+    let Err(NormalizationError::Invalid(findings)) = schema.normalize_layer(&input, &mut budget())
+    else {
+        panic!("shadowed invalid member must fail")
+    };
+    assert_eq!(paths(&findings), [("input[2].path", "invalid_field_type")]);
 }

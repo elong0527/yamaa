@@ -151,7 +151,8 @@ Validation work, attempted diagnostic allocations and normalization storage
 accumulate across queries; unsuccessful union attempts do not refund them.
 These are logical policies, not a process-memory or cancellation guarantee.
 
-Twenty-four complete wire fixtures (six each for schema, windows, composition and layer admission) are authored
+Twenty-five complete wire fixtures (six each for schema, windows and composition,
+plus seven for layer admission) are authored
 independently and replayed through
 Rust and the installed Python/R packages. Core tests cover recursive aliases,
 version and diagnostic priority, constraints, fragments, union selection,

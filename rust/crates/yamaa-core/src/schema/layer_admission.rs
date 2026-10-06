@@ -5,7 +5,7 @@ use super::{
     NormalizationResource, NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaField,
     SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 #[derive(Clone, Copy)]
 struct Collection {
@@ -67,11 +67,15 @@ impl Run<'_, '_> {
         Ok(None)
     }
 
-    fn label(&mut self, node: usize) -> Result<String, NormalizationError> {
-        let size = match &self.input.nodes()[node] {
+    fn label_bytes(&self, node: usize) -> usize {
+        match &self.input.nodes()[node] {
             N::Text(text) | N::Integer(text) => text.len(),
             _ => 64,
-        };
+        }
+    }
+
+    fn label(&mut self, node: usize) -> Result<String, NormalizationError> {
+        let size = self.label_bytes(node);
         self.budget.work(size.saturating_add(1))?;
         self.budget.validation.text(size)?;
         scalar_diagnostic_label(&self.input.nodes()[node])
@@ -510,9 +514,36 @@ impl Run<'_, '_> {
             let N::Mapping(entries) = &self.input.nodes()[node] else {
                 unreachable!()
             };
+            // A custom identifier alias can admit e.g. 2 and "2". The host
+            // stringifies input keys: keep the first position/key occurrence
+            // and last member value. Select before copying so discarded values
+            // never leave unreachable nodes in the owned output arena. Every
+            // authored value has already been validated by the preceding pass.
             self.budget.reserve(0, entries.len().saturating_mul(2))?;
-            let mut output = Vec::with_capacity(entries.len());
+            let mut selected: Vec<(usize, usize)> = Vec::with_capacity(entries.len());
+            let mut positions: BTreeMap<String, usize> = BTreeMap::new();
             for &(key, member) in entries {
+                let bytes = self.label_bytes(key);
+                self.budget.reserve(bytes, 2)?;
+                // Bound string comparisons in lookup and insertion, including
+                // the number of possible entries before either allocation.
+                let comparisons = (usize::BITS - entries.len().leading_zeros()) as usize;
+                self.budget.work(
+                    bytes
+                        .saturating_add(1)
+                        .saturating_mul(comparisons.saturating_mul(32)),
+                )?;
+                let label = self.label(key)?;
+                if let Some(&position) = positions.get(&label) {
+                    selected[position].1 = member;
+                } else {
+                    positions.insert(label, selected.len());
+                    selected.push((key, member));
+                }
+            }
+            self.budget.reserve(0, entries.len().saturating_mul(2))?;
+            let mut output = Vec::with_capacity(selected.len());
+            for (key, member) in selected {
                 let key = if matches!(self.input.nodes()[key], N::Text(_)) {
                     self.scalar(key)?
                 } else {
