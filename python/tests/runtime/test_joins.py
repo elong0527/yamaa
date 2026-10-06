@@ -98,7 +98,7 @@ def test_a_shared_subject_id_in_another_study_never_combines() -> None:
 
 
 def test_a_record_with_a_missing_key_cannot_match() -> None:
-    # REQ-0123: an uncollected identifier is not an identity two rows share.
+    # REQ-0131: an uncollected identifier is not an identity two rows share.
     index = relation(
         "EX",
         [("USUBJID", "str"), ("EXTRT", "str")],

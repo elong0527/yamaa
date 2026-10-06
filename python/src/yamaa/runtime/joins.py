@@ -214,7 +214,7 @@ class RelationIndex:
     ) -> tuple[IndexedRecord, ...]:
         """Return the records equal on every field, in record order.
 
-        REQ-0123 keeps a right record with a missing key out of every match,
+        REQ-0131 keeps a right record with a missing key out of every match,
         and a left row carrying a missing key reaches nothing for the same
         reason: an uncollected identifier is not an identity two rows share.
         """

@@ -127,7 +127,7 @@ def test_a_negative_display_precision_is_refused() -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "invalid_field_type"
-    assert diagnostic.requirement == "REQ-0761"
+    assert diagnostic.requirement == "REQ-0744"
 
 
 def test_a_column_stored_outside_its_declared_host_type_is_unwritable() -> None:
