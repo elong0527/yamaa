@@ -36,6 +36,7 @@ tasks:
   - adam-adex-cumulative-dose-brief-r
   - adam-adex-dose-reduction-brief-r
   - adam-adex-uncollected-brief-r
+  - adam-adfa-fever-brief-r
   - adam-adlb-bds-brief-r
   - adam-adlb-closest-visit-brief-r
   - adam-adlb-end-of-treatment-brief-r
@@ -114,7 +115,6 @@ tasks:
   - sdtm-ex-from-ec-brief-r
   - sdtm-ex-intervals-brief-r
   - sdtm-fa-event-findings-brief-r
-  - sdtm-fa-fever-brief-r
   - sdtm-fa-odm-multitest-brief-r
   - sdtm-fa-reactogenicity-diary-brief-r
   - sdtm-lb-character-results-brief-r

@@ -84,6 +84,9 @@ examples:
   adam-adex-uncollected:
     status: executable
     runtimes: ['python']
+  adam-adfa-fever:
+    status: executable
+    runtimes: ['python']
   adam-adlb-end-of-treatment:
     status: executable
     runtimes: ['python']
@@ -769,9 +772,6 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-fa-event-findings:
-    status: executable
-    runtimes: ['python']
-  sdtm-fa-fever:
     status: executable
     runtimes: ['python']
   sdtm-fa-odm-multitest:
