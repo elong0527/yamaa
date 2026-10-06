@@ -500,3 +500,7 @@ entry points in both installed hosts. The optional Python loader captures it
 before IO and uses it for schema, entry and inherited sources. Exact integer
 identity and Unicode diagnostics survive the source boundary; host filesystem,
 parent-graph and model responsibilities remain explicit.
+
+Shared [inheritance dependency resolution](INHERITANCE_DEPENDENCIES.md) now backs
+opt-in Python pruning and ordering and the installed R schema query. This does
+not enable qualified key-matched aggregate execution or complete R workflows.

@@ -105,6 +105,9 @@ enum Query {
     NormalizeLayer {
         document: Tree,
     },
+    ResolveInheritanceDependencies {
+        document: Tree,
+    },
     ExpandWindows {
         document: Tree,
         strict: bool,
@@ -360,6 +363,9 @@ impl CompiledSchema {
                 Query::NormalizeLayer { document } => {
                     (document, 8, None, false, String::new(), None)
                 }
+                Query::ResolveInheritanceDependencies { document } => {
+                    (document, 9, None, false, String::new(), None)
+                }
                 Query::ValidateDescriptor {
                     descriptor,
                     document,
@@ -506,6 +512,13 @@ impl CompiledSchema {
                 8 => match self.schema.normalize_layer(&input, &mut budget) {
                     Ok(document) => normalized(document),
                     Err(error) => errors::normalization(error)?,
+                },
+                9 => match self
+                    .schema
+                    .resolve_inheritance_dependencies(&input, &mut budget)
+                {
+                    Ok(document) => normalized(document),
+                    Err(error) => errors::inheritance_dependencies(error)?,
                 },
                 _ => unreachable!(),
             };

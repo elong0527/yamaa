@@ -114,6 +114,17 @@ impl ValidationBudget {
             })?;
         Ok(())
     }
+    /// Reserve an owned pass-specific finding under the same request quota.
+    pub(super) fn reserve_diagnostic(&mut self, bytes: usize) -> Result<(), ValidationError> {
+        self.diagnostics = self
+            .diagnostics
+            .checked_add(1)
+            .filter(|n| *n <= self.limits.diagnostics)
+            .ok_or(ValidationError::Diagnostics {
+                limit: self.limits.diagnostics,
+            })?;
+        self.text(bytes)
+    }
     /// Charge and construct one portable finding for shared schema passes.
     pub(super) fn diagnostic(
         &mut self,
@@ -122,13 +133,7 @@ impl ValidationBudget {
         requirement: Option<&'static str>,
         context: Vec<(&'static str, SchemaContext)>,
     ) -> Result<SchemaDiagnostic, ValidationError> {
-        self.diagnostics = self
-            .diagnostics
-            .checked_add(1)
-            .filter(|n| *n <= self.limits.diagnostics)
-            .ok_or(ValidationError::Diagnostics {
-                limit: self.limits.diagnostics,
-            })?;
+        self.reserve_diagnostic(0)?;
         let size = context
             .iter()
             .try_fold(path.len(), |total, (key, value)| {

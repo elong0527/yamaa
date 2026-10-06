@@ -66,7 +66,7 @@ class NativeSchemaInterpreter:
             for item in finding["context"]:
                 ref = item["value"]
                 kind = ref["kind"]
-                if kind in ("text", "count"):
+                if kind in ("text", "count", "text_list"):
                     value = ref["value"]
                 elif kind == "null":
                     value = None
@@ -129,6 +129,14 @@ class NativeSchemaInterpreter:
         if not isinstance(value, dict):
             raise TypeError("native layer normalization must return a mapping")
         return value, []
+
+    def resolve_inheritance_dependencies(self, document):
+        """Prune unreachable declarations and stably order surviving columns in Rust."""
+        self._root("root_class")
+        value = self._normalize(document, "resolve_inheritance_dependencies")
+        if not isinstance(value, dict):
+            raise TypeError("native inheritance resolution must return a mapping")
+        return value
 
     def expand_windows(self, document, strict):
         """Expand in Rust and retain ordered logical links for host provenance."""

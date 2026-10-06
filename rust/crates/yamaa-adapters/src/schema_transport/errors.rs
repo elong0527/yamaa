@@ -235,3 +235,68 @@ fn descriptor_issue(issue: DescriptorIssue) -> Value {
         ValuesTextSequence => json!({"code":"values_text_sequence"}),
     }
 }
+
+/// Dependency discovery never turns a resource refusal into a missing edge.
+pub(super) fn inheritance_dependencies(
+    error: InheritanceDependencyError,
+) -> Result<Value, TransportError> {
+    use yamaa_core::{aggregate_parser as a, numeric_parser as n, predicate_parser as p};
+    use InheritanceDependencyError as E;
+    use InheritanceReferenceError as R;
+    fn syntax_limit(phase: &str, resource: n::ParseResource, maximum: usize) -> Value {
+        limit(
+            phase,
+            match resource {
+                n::ParseResource::Bytes => "bytes",
+                n::ParseResource::Tokens => "tokens",
+                n::ParseResource::Nodes => "nodes",
+                n::ParseResource::Depth => "depth",
+            },
+            maximum,
+        )
+    }
+    Ok(match error {
+        E::Normalization(error) | E::Reference(R::Normalization(error)) => {
+            return normalization(error)
+        }
+        E::Invalid(issues) => {
+            json!({"status":"invalid","diagnostics":issues.into_iter().map(|issue| match issue {
+            InheritanceDependencyIssue::Unknown {column,dependency} => json!({
+                "path":format!("columns.{column}.derivation"), "condition":"unknown_reference", "requirement":"REQ-0070",
+                "context":[{"name":"column","value":{"kind":"text","value":column}}, {"name":"dependency","value":{"kind":"text","value":dependency}}],
+            }),
+            InheritanceDependencyIssue::Cycle {columns} => json!({
+                "path":"columns", "condition":"dependency_cycle", "requirement":"REQ-0072",
+                "context":[{"name":"cycle","value":{"kind":"text_list","value":columns}}],
+            }),
+        }).collect::<Vec<_>>()})
+        }
+        E::Reference(R::Numeric(n::ParseError::Limit {
+            resource, limit, ..
+        })) => syntax_limit("inheritance_numeric", resource, limit),
+        E::Reference(R::Aggregate(a::ParseError::Limit {
+            resource, limit, ..
+        })) => syntax_limit("inheritance_aggregate", resource, limit),
+        E::Reference(R::Predicate(p::ParseError::Limit {
+            resource, limit, ..
+        })) => syntax_limit("inheritance_predicate", resource, limit),
+        E::Reference(R::Predicate(p::ParseError::RegexLimit {
+            resource,
+            limit: maximum,
+            ..
+        })) => limit(
+            "inheritance_predicate_regex",
+            regex_resource(resource),
+            maximum,
+        ),
+        E::Reference(R::Predicate(p::ParseError::UnsupportedRegex {
+            feature,
+            byte,
+            position,
+        })) => {
+            json!({"status":"unsupported","phase":"inheritance_predicate_regex","feature":feature,"pattern_byte":byte,"position":{"byte":position.byte,"character":position.character}})
+        }
+        // Grammar failures deliberately contribute no edges, then survive for final validation.
+        E::Reference(_) => return Err(TransportError::Internal),
+    })
+}

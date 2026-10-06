@@ -108,7 +108,10 @@ Supplemental comparison over 310 current benchmark specifications observed 295
 loaded documents and 15 matching invalid results, with no discrepancies. That
 comparison supplies additional evidence, not independent expected truth.
 
-Parent-graph orchestration, shared dependency discovery/pruning, full current
+Parent-graph orchestration, full current
 schema R workflows, unsupported execution scopes and issue #1585 release gates
 remain open. This slice neither establishes full engine readiness nor qualifies
 the separate POWER/EXP/LN numerical policy.
+
+Shared [dependency resolution](INHERITANCE_DEPENDENCIES.md) now follows composition
+and non-strict window expansion, before strict expansion and final validation.

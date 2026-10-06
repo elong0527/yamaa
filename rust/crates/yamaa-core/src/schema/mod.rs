@@ -5,6 +5,8 @@ mod composition;
 mod constraints;
 mod descriptor;
 mod document;
+mod inheritance_dependencies;
+mod inheritance_references;
 mod layer_admission;
 mod layer_materialization;
 mod layers;
@@ -28,6 +30,10 @@ pub use descriptor::{
 };
 pub use document::{
     Document, DocumentError, DocumentLimits, DocumentNode, DocumentResource, ScalarKey,
+};
+pub use inheritance_dependencies::{InheritanceDependencyError, InheritanceDependencyIssue};
+pub use inheritance_references::{
+    InheritanceReference, InheritanceReferenceError, InheritanceReferenceKind,
 };
 pub use layer_materialization::LayerCompositionError;
 pub use layers::{ComposedLayers, LayerProvenance};

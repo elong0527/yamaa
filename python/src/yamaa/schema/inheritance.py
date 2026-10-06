@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 from yamaa.expressions.aggregate import (
     AggregateError,
     aggregate_identifiers,
+    aggregate_star_datasets,
     parse_aggregate_cached,
 )
 from yamaa.expressions.numeric import (
@@ -838,7 +839,10 @@ def _language_references(value: object, type_name: str) -> set[tuple[str, str]]:
             return set()
     elif type_name == "aggregate_expression":
         try:
-            names = set(aggregate_identifiers(parse_aggregate_cached(value)))
+            parsed = parse_aggregate_cached(value)
+            names = set(aggregate_identifiers(parsed))
+            # COUNT(D.*) reads a relation without naming a field (REQ-0639).
+            names.update(f"{name}.*" for name in aggregate_star_datasets(parsed))
         except AggregateError:
             return set()
     elif type_name == "string_template":
@@ -1487,10 +1491,15 @@ def resolve_specification(
         resolved, schema_bundle, strict=False, provenance=provenance
     )
     if "parents" in raw_entry:
-        resolved = _prune(resolved, schema_bundle)
-        resolved, diagnostics = _order_columns(resolved, schema_bundle)
-        if diagnostics:
-            raise SpecificationError(diagnostics)
+        if schema_bundle.interpreter is not None:
+            resolved = schema_bundle.interpreter.resolve_inheritance_dependencies(
+                resolved
+            )
+        else:
+            resolved = _prune(resolved, schema_bundle)
+            resolved, diagnostics = _order_columns(resolved, schema_bundle)
+            if diagnostics:
+                raise SpecificationError(diagnostics)
     resolved = expand_named_windows(resolved, schema_bundle)
     resolved = _schema_order(resolved, schema_bundle)
     diagnostics = validate_specification(resolved, schema_bundle)

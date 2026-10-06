@@ -34,6 +34,53 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def test_count_relation_survives_pruning_with_explicit_execution_refusal(self):
+        """Pruning keeps COUNT(D.*); unqualified runtime scope refuses before IO."""
+        document = {
+            "schema_version": "1.0",
+            "parents": [],
+            "domain": "OUT",
+            "keys": ["ID"],
+            "input": {"DM": "dm.csv", "EX": "ex.csv", "DEAD": "never-read.csv"},
+            "base": "DM",
+            "output": {"path": "out.csv", "columns": ["ID", "N"]},
+            "columns": [
+                {"name": "ID", "type": "str", "derivation": "DM.ID"},
+                {
+                    "name": "N",
+                    "type": "int",
+                    "derivation": {"aggregate": {"expr": "COUNT(EX.*)"}},
+                },
+                {
+                    "name": "UNUSED",
+                    "type": "int",
+                    "derivation": {"aggregate": {"expr": "COUNT(DEAD.*)"}},
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "spec.yaml").write_text(json.dumps(document), encoding="ascii")
+            (root / "dm.csv").write_text("ID\na\nb\n", encoding="ascii")
+            (root / "ex.csv").write_text("ID\na\na\nb\n", encoding="ascii")
+            loaded = native_specification.load_specification(root / "spec.yaml", SCHEMA)
+            self.assertEqual(list(loaded.specification.input), ["DM", "EX"])
+            calls = []
+
+            def provider(declarations):
+                calls.append("read")
+                return load_source_tables(declarations, ProjectResources(root))
+
+            actual = execute_with_source_provider(loaded.specification, provider)
+            # Qualified key-matched aggregates remain an explicit executor limitation.
+            # The reference test independently verifies the expected a=2, b=1 counts.
+            self.assertEqual(calls, [])
+            self.assertEqual(actual.result.status, "unsupported")
+            self.assertEqual(
+                [(f.operation, f.spec_path) for f in actual.result.features],
+                [("aggregate_scope_or_expression", "columns.N.derivation.aggregate")],
+            )
+
     def test_custom_input_key_coercion_keeps_order_and_validates_replaced_members(self):
         """Custom scalar identifiers may converge to one normalized text name."""
         schema = {
@@ -216,6 +263,10 @@ class InstalledSchemaLoading(unittest.TestCase):
             "_compose_value",
             "_materialize_fragments",
             "_validate_partial_member",
+            "_references",
+            "_language_references",
+            "_prune",
+            "_order_columns",
         ):
             self.stack.enter_context(
                 patch(

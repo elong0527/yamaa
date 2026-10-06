@@ -15,6 +15,22 @@ enum V {
 use V::*;
 
 #[test]
+fn installed_hosts_share_independent_inheritance_dependency_truth() {
+    let fixture = include_str!("fixtures/schema_inheritance_dependencies.tsv");
+    assert_eq!(fixture.lines().count(), 7);
+    for line in fixture.lines().skip(1) {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(
+            interpret_schema(fields[1]).unwrap(),
+            fields[2],
+            "{}",
+            fields[0]
+        );
+    }
+}
+
+#[test]
 fn installed_hosts_share_independent_layer_admission_truth() {
     let fixture = include_str!("fixtures/schema_layer_admission.tsv");
     assert_eq!(fixture.lines().count(), 8);
@@ -720,5 +736,119 @@ fn layer_admission_is_closed_and_shares_batch_limits() {
             &json!({"protocol":"schema/1","queries":[{"operation":"normalize_layer"}]}).to_string()
         ),
         Err(TransportError::InvalidRequest)
+    );
+}
+
+#[test]
+fn inheritance_dependency_query_owns_ordered_results_and_semantic_findings() {
+    let (compiled, _) = compile(schema(
+        vec![
+            field("columns", "list[column_class]"),
+            field("output", "output_class"),
+        ],
+        vec![
+            (
+                "column_class",
+                List(vec![
+                    field("name", "str"),
+                    field("derivation", "derivation"),
+                ]),
+            ),
+            ("output_class", List(vec![field("columns", "list[str]")])),
+            ("derivation", descriptor("variable")),
+            ("variable", descriptor("str")),
+        ],
+    ));
+    let root = |columns: Vec<V>| {
+        Map(vec![
+            ("output", Map(vec![("columns", List(vec![Text("X")]))])),
+            ("columns", List(columns)),
+        ])
+    };
+    let column =
+        |name, dependency| Map(vec![("name", Text(name)), ("derivation", Text(dependency))]);
+    let input = tree(root(vec![
+        column("X", "A"),
+        Map(vec![("name", Text("A"))]),
+        column("DEAD", "NO_SUCH_COLUMN"),
+    ]));
+    let ordered = tree(root(vec![Map(vec![("name", Text("A"))]), column("X", "A")]));
+    let result = query(
+        &compiled,
+        vec![json!({"operation":"resolve_inheritance_dependencies","document":input})],
+    );
+    assert_eq!(result["results"][0]["status"], "normalized");
+    assert_eq!(result["results"][0]["document"], ordered);
+    let unknown = query(
+        &compiled,
+        vec![
+            json!({"operation":"resolve_inheritance_dependencies","document":tree(root(vec![column("X","MISSING")]))}),
+        ],
+    );
+    assert_eq!(
+        unknown["results"][0],
+        json!({"status":"invalid","diagnostics":[{
+            "path":"columns.X.derivation","condition":"unknown_reference","requirement":"REQ-0070",
+            "context":[{"name":"column","value":{"kind":"text","value":"X"}},{"name":"dependency","value":{"kind":"text","value":"MISSING"}}],
+        }]})
+    );
+    let cycle = query(
+        &compiled,
+        vec![
+            json!({"operation":"resolve_inheritance_dependencies","document":tree(root(vec![column("X","A"),column("A","X")]))}),
+        ],
+    );
+    assert_eq!(
+        cycle["results"][0],
+        json!({"status":"invalid","diagnostics":[{
+            "path":"columns","condition":"dependency_cycle","requirement":"REQ-0072",
+            "context":[{"name":"cycle","value":{"kind":"text_list","value":["X","A"]}}],
+        }]})
+    );
+    assert_eq!(compiled.analyze(&json!({"protocol":"schema/1","queries":[{"operation":"resolve_inheritance_dependencies","document":input,"fragment":true}]}).to_string()).unwrap_err(),TransportError::InvalidRequest);
+}
+
+#[test]
+fn inheritance_expression_resource_refusal_is_not_a_successful_empty_graph() {
+    let (compiled, _) = compile(schema(
+        vec![
+            field("columns", "list[column_class]"),
+            field("output", "output_class"),
+        ],
+        vec![
+            (
+                "column_class",
+                List(vec![
+                    field("name", "str"),
+                    field("derivation", "derivation"),
+                ]),
+            ),
+            ("output_class", List(vec![field("columns", "list[str]")])),
+            ("derivation", descriptor("numeric_expression")),
+            ("numeric_expression", descriptor("str")),
+        ],
+    ));
+    let mut document = tree(Map(vec![
+        ("output", Map(vec![("columns", List(vec![Text("X")]))])),
+        (
+            "columns",
+            List(vec![Map(vec![
+                ("name", Text("X")),
+                ("derivation", Text("PLACEHOLDER")),
+            ])]),
+        ),
+    ]));
+    for node in document["nodes"].as_array_mut().unwrap() {
+        if node["value"] == "PLACEHOLDER" {
+            node["value"] = json!(format!("{}X{}", "(".repeat(70), ")".repeat(70)));
+        }
+    }
+    let result = query(
+        &compiled,
+        vec![json!({"operation":"resolve_inheritance_dependencies","document":document})],
+    );
+    assert_eq!(
+        result["results"][0],
+        json!({"status":"resource_limit","phase":"inheritance_numeric","resource":"depth","limit":64})
     );
 }

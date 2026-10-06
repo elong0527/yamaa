@@ -11,7 +11,7 @@ shared Rust schema interpreter. The service validates documents and descriptors,
 normalizes declared defaults and shorthand, and reports the first matching type
 member. The expand_windows operation takes a normalized composed document and
 Boolean strict flag, returning independent inline settings and origin/reference
-links. Non-strict expansion precedes host inheritance pruning; strict expansion
+links. Non-strict expansion precedes inheritance pruning; strict expansion
 rejects surviving unknown names and removes root definitions. Both modes validate
 unused definitions, and share the batch storage/work quotas. The normalize_layer
 operation admits one authored contribution before any normalization, collecting
@@ -22,8 +22,10 @@ operation consumes admitted normalized layers in contribution order, preserving
 keyed declaration order, column patches, clearing rules and written provenance.
 Column defaults are materialized after composition. Invalid results can include a
 context_document whose node indices are used only to render diagnostic values;
-it is not an accepted specification. Parent traversal, path rebasing, pruning and
-complete validation remain caller responsibilities. No Python interpreter, host
+it is not an accepted specification. The resolve_inheritance_dependencies
+operation follows semantic roots, removes dead declarations and stably orders
+surviving columns. Its cycle context preserves an ordered text_list. Parent
+traversal, path rebasing and complete validation remain caller responsibilities. No Python interpreter, host
 callbacks or source-data reads are involved.}
 \details{The request limit is 8,388,608 UTF-8 bytes, the response limit is
 16,777,216 bytes and at most 256 queries share one validation/normalization
