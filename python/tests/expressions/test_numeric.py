@@ -214,6 +214,25 @@ def test_the_four_argument_level_functions_answer_missing_themselves(
 
 
 @pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("NULLIF(9007199254740993, 9007199254740992)", 9007199254740993),
+        ("NULLIF(9007199254740993, 9007199254740993)", MISSING),
+        ("NULLIF(-9007199254740993, -9007199254740992)", -9007199254740993),
+    ],
+)
+def test_nullif_compares_large_integers_exactly(text: str, expected: object) -> None:
+    # _numbers_equal promises exact integer-pair comparison: beyond 2**53 a
+    # binary64 promotion would fuse neighbors (float(2**53 + 1) == float(2**53)),
+    # so the int branch must be taken. Found by mutation testing.
+    actual = _value(text)
+    if expected is MISSING:
+        assert actual is MISSING
+    else:
+        assert actual == expected
+
+
+@pytest.mark.parametrize(
     ("text", "values", "condition", "requirement"),
     [
         ("1 / 0", {}, "division_by_zero", "REQ-0430"),
