@@ -1,6 +1,7 @@
 """Installed shared schema loading, inheritance and execution against authored truth."""
 
 import copy
+import json
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -38,6 +39,18 @@ class InstalledSchemaLoading(unittest.TestCase):
         self.assertIn("site-packages", str(Path(yamaa_native.__file__).resolve()))
         self.stack = self.enterContext(ExitStack())
         for name in (
+            "class_fields",
+            "matching_type",
+            "split_type_arguments",
+            "validate_descriptor_value",
+        ):
+            self.stack.enter_context(
+                patch(
+                    f"yamaa.schema.windows.{name}",
+                    side_effect=AssertionError("host window traversal invoked"),
+                )
+            )
+        for name in (
             "load_schema_bundle",
             "_validate_schema_bundle",
             "_expand_class_fields",
@@ -57,6 +70,188 @@ class InstalledSchemaLoading(unittest.TestCase):
                     ),
                 )
             )
+
+    @staticmethod
+    def window_document():
+        """Authored scope fixture; expected rows are specified separately below."""
+        return {
+            "schema_version": "1.0",
+            "domain": "OUT",
+            "base": "SRC",
+            "keys": ["ID"],
+            "input": {
+                "SRC": {"path": "input.csv", "types": {"SEQ": "int", "VAL": "int"}}
+            },
+            "output": {"path": "out.csv", "columns": ["ID", "PREV"]},
+            "windows": {"VISITS": {"group_by": ["G"], "order_by": ["SEQ"]}},
+            "columns": [
+                {"name": name, "type": kind, "label": name, "derivation": f"SRC.{name}"}
+                for name, kind in [
+                    ("ID", "str"),
+                    ("G", "str"),
+                    ("SEQ", "int"),
+                    ("VAL", "int"),
+                ]
+            ]
+            + [
+                {
+                    "name": "PREV",
+                    "type": "int",
+                    "label": "Previous value",
+                    "derivation": {
+                        "row_value": {"source": "VAL", "offset": -1, "window": "VISITS"}
+                    },
+                }
+            ],
+        }
+
+    @staticmethod
+    def write_window_document(directory, value, name="spec.yaml"):
+        """JSON is authored ASCII YAML; no host YAML encoder participates."""
+        path = directory / name
+        path.write_text(json.dumps(value), encoding="ascii")
+        (directory / "input.csv").write_bytes(
+            b"ID,G,SEQ,VAL\n01,a,1,10\n02,a,2,20\n03,b,1,30\n04,b,2,40\n"
+        )
+        return path
+
+    def test_shared_window_composition_preserves_definition_provenance_and_csv(self):
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            parent = self.window_document()
+            parent["windows"]["UNUSED"] = {"group_by": ["NOT_A_COLUMN"]}
+            parent_path = self.write_window_document(directory, parent, "parent.yaml")
+            child = {
+                "schema_version": "1.0",
+                "parents": "parent.yaml",
+                "windows": {
+                    "VISITS": {"order_by": [{"variable": "SEQ", "direction": "desc"}]}
+                },
+            }
+            path = self.write_window_document(directory, child)
+            resolved = resolve_specification(path, bundle)
+            self.assertNotIn("windows", resolved.document)
+            self.assertNotIn(
+                "G", [column["name"] for column in resolved.document["columns"]]
+            )
+            column = next(
+                c for c in resolved.document["columns"] if c["name"] == "PREV"
+            )
+            self.assertEqual(
+                column["derivation"]["value"]["row_value"]["window"],
+                {
+                    "order_by": [
+                        {"variable": "SEQ", "direction": "desc", "nulls": "last"}
+                    ]
+                },
+            )
+            prefix = "columns.PREV.derivation.value.row_value.window"
+            self.assertEqual(resolved.provenance[prefix].file, parent_path.resolve())
+            self.assertEqual(
+                resolved.provenance[prefix + ".order_by"].file, path.resolve()
+            )
+            self.assertEqual(
+                resolved.provenance[prefix + ".order_by"].spec_path,
+                "windows.VISITS.order_by",
+            )
+            actual = execute_with_source_provider(
+                resolved.specification,
+                lambda declarations: load_source_tables(
+                    declarations, ProjectResources(directory)
+                ),
+            )
+            self.assertEqual(actual.result.status, "success")
+            self.assertEqual(
+                render_artifact(actual.result.artifact),
+                b"ID,PREV\n01,40\n02,\n03,10\n04,20\n",
+            )
+
+    def test_shared_window_unknowns_follow_pruning_and_keep_use_site(self):
+        bundle = native_specification.load_schema_bundle(SCHEMA)
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            parent = self.window_document()
+            parent["columns"][-1]["derivation"]["row_value"]["window"] = "UNKNOWN"
+            self.write_window_document(directory, parent, "parent.yaml")
+            child = {
+                "schema_version": "1.0",
+                "parents": "parent.yaml",
+                "output": {"path": "out.csv", "columns": ["ID"]},
+            }
+            path = self.write_window_document(directory, child)
+            resolved = resolve_specification(path, bundle)
+            self.assertEqual([c.name for c in resolved.specification.columns], ["ID"])
+            child.pop("output")
+            self.write_window_document(directory, child)
+            with self.assertRaises(SpecificationError) as caught:
+                resolve_specification(path, bundle)
+            finding = caught.exception.diagnostics[0]
+            self.assertEqual(
+                (
+                    finding.condition,
+                    finding.requirement,
+                    finding.spec_paths,
+                    finding.context,
+                ),
+                (
+                    "unknown_window",
+                    "REQ-1253",
+                    ("columns.PREV.derivation.row_value.window",),
+                    {"window": "UNKNOWN"},
+                ),
+            )
+
+    def test_shared_window_loading_keeps_template_scope_and_explicit_runtime_refusal(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            document = self.window_document()
+            document["windows"]["VISITS"] = {"order_by": ["SEQ"]}
+            derivations = {
+                column["name"]: column.pop("derivation")
+                for column in document["columns"]
+            }
+            document["rows"] = [
+                {
+                    "id": group,
+                    "dataset": "SRC",
+                    "filter": f"SRC.G = '{group}'",
+                    "derivations": copy.deepcopy(derivations),
+                }
+                for group in ("a", "b")
+            ]
+            path = self.write_window_document(directory, document)
+            loaded = native_specification.load_specification(path, SCHEMA)
+            from yamaa.runtime import execute_with_source_provider as reference_execute
+
+            # The independent CSV establishes the loaded caller scopes. Native
+            # row-template window execution is a separate, still-open capability.
+            reference_result = reference_execute(
+                loaded.specification,
+                lambda declarations: load_source_tables(
+                    declarations, ProjectResources(directory)
+                ),
+            )
+            self.assertEqual(reference_result.status, "success")
+            self.assertEqual(
+                render_artifact(reference_result.artifact),
+                b"ID,PREV\n01,\n02,10\n03,\n04,30\n",
+            )
+            calls = []
+            refused = execute_with_source_provider(
+                loaded.specification, lambda declarations: calls.append("read")
+            )
+            self.assertEqual(refused.result.status, "unsupported")
+            self.assertEqual(
+                [(f.operation, f.spec_path) for f in refused.result.features],
+                [
+                    ("window_scope", "rows[0].derivations.PREV.row_value"),
+                    ("window_scope", "rows[1].derivations.PREV.row_value"),
+                ],
+            )
+            self.assertEqual(calls, [])
 
     def test_inheritance_and_column_composition_match_committed_resolved_artifacts(
         self,

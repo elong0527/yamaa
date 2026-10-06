@@ -489,7 +489,8 @@ shared schema bundles, document values, defaults and shorthand through the same
 core in both installed hosts. Its prepared Python snapshot and stateless R batch
 API do not invoke a host schema interpreter. Python's explicit
 `yamaa.adapters.native_specification` loader uses the shared service for schema
-admission, document normalization and inheritance/window type queries while
+admission, document normalization, inheritance type queries and
+[shared named-window expansion](WINDOW_EXPANSION.md) while
 retaining host composition and modeling. Full current-schema R workflow
 integration and release qualification remain open; no backend default or
 execution-readiness flag changes.

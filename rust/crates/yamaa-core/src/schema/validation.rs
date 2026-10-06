@@ -114,6 +114,52 @@ impl ValidationBudget {
             })?;
         Ok(())
     }
+    /// Charge and construct one portable finding for shared schema passes.
+    pub(super) fn diagnostic(
+        &mut self,
+        path: &str,
+        condition: &'static str,
+        requirement: Option<&'static str>,
+        context: Vec<(&'static str, SchemaContext)>,
+    ) -> Result<SchemaDiagnostic, ValidationError> {
+        self.diagnostics = self
+            .diagnostics
+            .checked_add(1)
+            .filter(|n| *n <= self.limits.diagnostics)
+            .ok_or(ValidationError::Diagnostics {
+                limit: self.limits.diagnostics,
+            })?;
+        let size = context
+            .iter()
+            .try_fold(path.len(), |total, (key, value)| {
+                total.checked_add(key.len()).and_then(|n| {
+                    n.checked_add(match value {
+                        SchemaContext::Text(s) => s.len(),
+                        _ => 0,
+                    })
+                })
+            })
+            .ok_or(ValidationError::DiagnosticText {
+                limit: self.limits.diagnostic_text_bytes,
+            })?;
+        self.text = self
+            .text
+            .checked_add(size)
+            .filter(|n| *n <= self.limits.diagnostic_text_bytes)
+            .ok_or(ValidationError::DiagnosticText {
+                limit: self.limits.diagnostic_text_bytes,
+            })?;
+        Ok(SchemaDiagnostic {
+            path: if path.is_empty() {
+                "$".into()
+            } else {
+                path.into()
+            },
+            condition,
+            requirement,
+            context,
+        })
+    }
     pub(super) fn depth(&self, depth: usize) -> Result<(), ValidationError> {
         let limit = self.limits.depth.min(128);
         if depth > limit {
@@ -200,46 +246,10 @@ impl Run<'_, '_> {
         requirement: Option<&'static str>,
         context: Vec<(&'static str, SchemaContext)>,
     ) -> Result<SchemaDiagnostic, ValidationError> {
-        self.budget.diagnostics = self
-            .budget
-            .diagnostics
-            .checked_add(1)
-            .filter(|n| *n <= self.budget.limits.diagnostics)
-            .ok_or(ValidationError::Diagnostics {
-                limit: self.budget.limits.diagnostics,
-            })?;
-        let size = context
-            .iter()
-            .try_fold(site.path.len(), |total, (key, value)| {
-                total.checked_add(key.len()).and_then(|n| {
-                    n.checked_add(match value {
-                        SchemaContext::Text(s) => s.len(),
-                        _ => 0,
-                    })
-                })
-            })
-            .ok_or(ValidationError::DiagnosticText {
-                limit: self.budget.limits.diagnostic_text_bytes,
-            })?;
-        self.budget.text = self
-            .budget
-            .text
-            .checked_add(size)
-            .filter(|n| *n <= self.budget.limits.diagnostic_text_bytes)
-            .ok_or(ValidationError::DiagnosticText {
-                limit: self.budget.limits.diagnostic_text_bytes,
-            })?;
-        Ok(SchemaDiagnostic {
-            path: if site.path.is_empty() {
-                "$".into()
-            } else {
-                site.path.into()
-            },
-            condition,
-            requirement,
-            context,
-        })
+        self.budget
+            .diagnostic(site.path, condition, requirement, context)
     }
+
     fn invalid(
         &mut self,
         site: Site<'_>,

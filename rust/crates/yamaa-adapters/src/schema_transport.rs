@@ -99,6 +99,10 @@ enum Query {
     NormalizeDocument {
         document: Tree,
     },
+    ExpandWindows {
+        document: Tree,
+        strict: bool,
+    },
     ValidateDescriptor {
         descriptor: usize,
         document: Tree,
@@ -279,7 +283,29 @@ impl CompiledSchema {
         // Final encoding independently accounts for the envelope and metadata.
         let mut response_size = ResponseSize(0);
         for query in queries {
+            if let Query::ExpandWindows { document, strict } = query {
+                let outcome = match document.admit()? {
+                    Ok(input) => match self
+                        .schema
+                        .expand_named_windows(&input, strict, &mut budget)
+                    {
+                        Ok(expanded) => json!({
+                            "status":"expanded", "document":Tree::from_core(&expanded.document),
+                            "origins":expanded.origins,
+                            "references":expanded.references.iter().map(|reference| json!({
+                                "path":reference.path, "definition":reference.definition,
+                            })).collect::<Vec<_>>(),
+                        }),
+                        Err(error) => errors::normalization(error)?,
+                    },
+                    Err(error) => errors::document(error)?,
+                };
+                response_size.charge(&outcome)?;
+                outcomes.push(outcome);
+                continue;
+            }
             let (tree, operation, descriptor, fragment, path, raw_types) = match query {
+                Query::ExpandWindows { .. } => unreachable!("handled above"),
                 Query::ValidateDocument { document } => {
                     (document, 0, None, false, String::new(), None)
                 }

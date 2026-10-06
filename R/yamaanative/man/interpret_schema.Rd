@@ -9,7 +9,11 @@ remain explicit data outcomes.}
 \description{Processes schema/1 decoded modules and a query batch through the
 shared Rust schema interpreter. The service validates documents and descriptors,
 normalizes declared defaults and shorthand, and reports the first matching type
-member. No Python interpreter, host callbacks or source-data reads are involved.}
+member. The expand_windows operation takes a normalized composed document and
+Boolean strict flag, returning independent inline settings and origin/reference
+links. Non-strict expansion precedes host inheritance pruning; strict expansion
+rejects surviving unknown names and removes root definitions. Both modes validate
+unused definitions, and share the batch storage/work quotas. No Python interpreter, host callbacks or source-data reads are involved.}
 \details{The request limit is 8,388,608 UTF-8 bytes, the response limit is
 16,777,216 bytes and at most 256 queries share one validation/normalization
 budget. Integer nodes carry canonical decimal strings; JSON numbers cannot

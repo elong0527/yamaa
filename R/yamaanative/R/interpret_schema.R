@@ -2,6 +2,8 @@
 #'
 #' Accepts schema/1 JSON with decoded modules and a query batch. Schema defects,
 #' validation findings, unsupported shapes and policy refusals are data outcomes.
+#' Named-window expansion preserves independent copies and use/definition origins;
+#' strict mode rejects surviving unknown names after host inheritance pruning.
 #' YAML decoding and filesystem access are caller responsibilities. This service
 #' does not enable workflow execution or change the default engine.
 #' @param request One unclassed, nonmissing JSON character string without attributes.

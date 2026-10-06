@@ -74,8 +74,8 @@ impl From<ValidationError> for NormalizationError {
 
 /// Reuse across related fragment/document operations; failed attempts keep their charges.
 pub struct NormalizationBudget {
-    limits: NormalizationLimits,
-    validation: ValidationBudget,
+    pub(super) limits: NormalizationLimits,
+    pub(super) validation: ValidationBudget,
     nodes: usize,
     bytes: usize,
     edges: usize,
@@ -100,7 +100,7 @@ impl NormalizationBudget {
     pub fn validation_scope(&mut self) -> &mut ValidationBudget {
         &mut self.validation
     }
-    fn work(&mut self, amount: usize) -> Result<(), NormalizationError> {
+    pub(super) fn work(&mut self, amount: usize) -> Result<(), NormalizationError> {
         self.validation.work(amount).map_err(Into::into)
     }
     fn charge(
@@ -115,7 +115,7 @@ impl NormalizationBudget {
             .ok_or(NormalizationError::Limit { resource, limit })?;
         Ok(())
     }
-    fn reserve(&mut self, bytes: usize, edges: usize) -> Result<(), NormalizationError> {
+    pub(super) fn reserve(&mut self, bytes: usize, edges: usize) -> Result<(), NormalizationError> {
         Self::charge(
             &mut self.nodes,
             1,

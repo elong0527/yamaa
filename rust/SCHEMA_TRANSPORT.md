@@ -21,9 +21,8 @@ establish the prepared state.
 The default specification loader still uses the Python interpreter. The explicit
 `yamaa.adapters.native_specification.load_specification` path captures the Rust
 services before YAML IO and uses them throughout schema admission, validation,
-normalization, inheritance fragments and window type selection. The host keeps
-filesystem authority, composition, dependency discovery, window
-expansion and model validation. Current R specification workflows still need
+normalization, inheritance fragments and named-window expansion. The host keeps
+filesystem authority, composition, dependency discovery and model validation. Current R specification workflows still need
 integration. Python remains the default and `execution_supported` remains false.
 The [shared YAML service](YAML_DECODING.md) supplies decoded source trees for
 the optional loader, including inherited sources, and is available in both hosts.
@@ -53,6 +52,7 @@ request contains only `protocol` and `queries`. The closed operations are:
 | --- | --- |
 | `validate_document` | `document` |
 | `normalize_document` | `document` |
+| `expand_windows` | `document`, Boolean `strict` |
 | `validate_descriptor` | `descriptor`, `document`, `fragment`, `path` |
 | `normalize_descriptor` | `descriptor`, `document`, `fragment` |
 | `matching_member` | `descriptor`, `document`, `fragment` |
@@ -70,6 +70,12 @@ values. An empty selection is useful after inheritance/window cycle filtering
 and `matching_types` returns a null member. Parsing and attempted branches share
 the batch's validation budget; unknown names and malformed syntax are query
 errors, while parser resource refusals retain their policy category.
+
+`expand_windows` consumes a normalized composed document and returns independent
+inline settings. Non-strict mode precedes inherited-declaration pruning; strict
+mode reports surviving unknown names and removes root definitions. Both validate
+unused definitions. See [shared window expansion](WINDOW_EXPANSION.md) for the
+provenance contract, ordering, budgets and remaining execution limitations.
 
 ## Decoded documents
 
@@ -108,7 +114,7 @@ it never returns a prepared handle.
 
 A query batch returns `analyzed` with ordered `results`. Stateless responses
 also include the captured `schema` metadata. Each result is `valid`, `invalid`,
-`normalized`, `matched`, `resource_limit` or `unsupported`. A normalized result
+`normalized`, `expanded`, `matched`, `resource_limit` or `unsupported`. A normalized result
 contains a decoded `document` and a parallel `origins` array. Each origin names
 an input occurrence or a module/default descriptor occurrence and records
 whether shorthand generated the node. Recursive default materialization creates
@@ -132,7 +138,8 @@ Validation work, attempted diagnostic allocations and normalization storage
 accumulate across queries; unsuccessful union attempts do not refund them.
 These are logical policies, not a process-memory or cancellation guarantee.
 
-Six complete wire fixtures are authored independently and replayed through
+Twelve complete wire fixtures (six schema and six window cases) are authored
+independently and replayed through
 Rust and the installed Python/R packages. Core tests cover recursive aliases,
 version and diagnostic priority, constraints, fragments, union selection,
 default provenance and both specified shorthand shapes. Supplemental local

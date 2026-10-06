@@ -9,6 +9,7 @@ mod path_render;
 mod printable_data;
 mod type_expression;
 mod validation;
+mod windows;
 
 pub use bundle::{
     BundleError, BundleIssue, BundleIssueKind, BundleLimits, BundleResource, LocatedDescriptor,
@@ -33,3 +34,5 @@ pub use validation::{
     DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
     ValidationLimits,
 };
+
+pub use windows::{ExpandedWindows, WindowReference};

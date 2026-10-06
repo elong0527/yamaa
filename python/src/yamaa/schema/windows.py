@@ -30,6 +30,20 @@ def expand_named_windows(
     Definitions are removed only by the strict pass. The schema walk avoids
     interpreting application data or metadata as references.
     """
+    if bundle.interpreter is not None:
+        result, references = bundle.interpreter.expand_windows(document, strict)
+        if provenance is not None:
+            # Filesystem/layer identities stay in the host; Rust supplies only
+            # semantic links. Stage changes before publishing any provenance.
+            updates = dict(provenance)
+            for logical, definition in references:
+                prefix = f"windows.{definition}"
+                for source_path, origin in list(updates.items()):
+                    if source_path.startswith(f"{prefix}."):
+                        updates[logical + source_path[len(prefix) :]] = origin
+            provenance.update(updates)
+        return result
+
     result = copy.deepcopy(document)
     definitions = result.get("windows", {})
     if "windows" in result:
