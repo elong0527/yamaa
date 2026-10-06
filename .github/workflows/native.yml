@@ -183,7 +183,18 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/datasets" datasets
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-engine/tests/fixtures/function_invocation.tsv" function_invocation.tsv
           mkdir -p conformance-suite
-          cp -R "${GITHUB_WORKSPACE}/benchmarks" conformance-suite/benchmarks
+          # Use native symlink creation: MSYS cp failed on the path-validation
+          # fixture on Windows. Preserve link text instead of dereferencing it.
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+          shutil.copytree(
+              Path(os.environ["GITHUB_WORKSPACE"]) / "benchmarks",
+              Path("conformance-suite/benchmarks"),
+              symlinks=True,
+          )
+          PY
           cp -R "${GITHUB_WORKSPACE}/yaml" conformance-suite/yaml
           cp -R "${GITHUB_WORKSPACE}/rust/qualification" conformance-suite/gates
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_conformance.py" conformance-suite/installed_conformance.py
