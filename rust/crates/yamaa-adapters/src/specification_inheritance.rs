@@ -132,6 +132,18 @@ impl CapturedSchema {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
+        let raw = self
+            .decode_entry(&source)
+            .map_err(InheritanceError::Entry)?;
+        self.prepare_inherited_decoded(source, display_path, raw, port)
+    }
+    pub(super) fn prepare_inherited_decoded<P: InheritancePort>(
+        self: &Arc<Self>,
+        source: Source,
+        display_path: String,
+        raw: DecodedYaml,
+        port: &mut P,
+    ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
         let remaining_bytes = self
             .limits
             .captured_bytes
@@ -142,12 +154,6 @@ impl CapturedSchema {
             .identity_bytes
             .checked_sub(source.identity.len())
             .ok_or(InheritanceError::Entry(Error::Limit("identity_bytes")))?;
-        let raw = decode_yaml(&source.bytes, self.limits.decode).map_err(|error| {
-            InheritanceError::Entry(Error::Decode {
-                identity: source.identity.clone(),
-                error,
-            })
-        })?;
         let mut decoder = Decoder {
             host: port,
             limits: self.limits,

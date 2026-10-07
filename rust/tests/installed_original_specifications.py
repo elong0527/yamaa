@@ -56,15 +56,16 @@ def inheritance_callbacks(case):
 def prepare(name):
     case = ROOT / "cases" / name
     path = case / specification_name(name)
+    callbacks, state = inheritance_callbacks(case)
+    prepared = yamaa_native._prepare_document(
+        str(path.resolve()), path.read_bytes(), *callbacks
+    )
     if name == "schema-inheritance":
-        callbacks, state = inheritance_callbacks(case)
-        prepared = yamaa_native._prepare_inherited_specification(
-            modules(), 0, str(path.resolve()), path.read_bytes(), *callbacks
-        )
         assert state["reads"] == ["spec_organization.yaml", "spec_compound.yaml"]
         assert state["resolutions"] == ["spec_organization.yaml", "spec_compound.yaml", "spec_organization.yaml"]
-        return prepared
-    return yamaa_native._prepare_specification(modules(), 0, path.name, path.read_bytes())
+    else:
+        assert state["reads"] == state["resolutions"] == []
+    return prepared
 
 
 class OriginalSpecifications(unittest.TestCase):
@@ -79,6 +80,28 @@ class OriginalSpecifications(unittest.TestCase):
         guard = patch("builtins.__import__", side_effect=reject)
         guard.start()
         self.addCleanup(guard.stop)
+
+    def test_shipped_schema_ignores_ambient_files_and_rejects_versions_before_ports(self):
+        path = ROOT / "cases/adam-adlb-ordered-sum/spec.yaml"
+        raw = path.read_bytes()
+        def no_parent(*_):
+            self.fail("standalone or invalid version reached parent authority")
+        previous = Path.cwd()
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                os.chdir(directory)
+                Path("schema.yaml").write_bytes(b"not: the shipped schema\n")
+                prepared = yamaa_native._prepare_document("spec.yaml", raw, no_parent, no_parent, no_parent)
+                self.assertEqual(prepared.source(), ("LB", "input/lb.csv"))
+                wrong = raw.replace(b'"1.0"', b'"99.0"', 1)
+                self.assertNotEqual(wrong, raw)
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("spec.yaml", wrong, no_parent, no_parent, no_parent)
+                self.assertEqual(json.loads(str(caught.exception))["outcome"], {
+                    "status": "rejected", "stage": "capture", "code": "normalization",
+                })
+            finally:
+                os.chdir(previous)
 
     def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
         with (ROOT / "inheritance-replay.tsv").open(newline="", encoding="ascii") as stream:
@@ -111,8 +134,8 @@ class OriginalSpecifications(unittest.TestCase):
                     return content or None
 
                 with self.assertRaises(ValueError) as caught:
-                    yamaa_native._prepare_inherited_specification(
-                        modules(), 0, case[0]["entry"], case[0]["entry_yaml"].encode(),
+                    yamaa_native._prepare_document(
+                        case[0]["entry"], case[0]["entry_yaml"].encode(),
                         canonicalize, capture, lambda *_: self.fail("failed traversal reached rebasing")
                     )
                 self.assertEqual(json.loads(str(caught.exception)), json.loads(case[0]["expected"]))
@@ -135,8 +158,8 @@ class OriginalSpecifications(unittest.TestCase):
 
                     callbacks[operation] = fail
                     with self.assertRaises(kind) as caught:
-                        yamaa_native._prepare_inherited_specification(
-                            modules(), 0, str(path.resolve()), path.read_bytes(), *callbacks
+                        yamaa_native._prepare_document(
+                            str(path.resolve()), path.read_bytes(), *callbacks
                         )
                     self.assertIs(caught.exception, failure)
                     self.assertEqual(len(calls), 1)

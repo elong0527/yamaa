@@ -117,17 +117,26 @@ impl CapturedSchema {
     /// Structural preparation only: no source data, executable plan or effects.
     /// Presence of `parents`, including null, must use the inheritance lifecycle.
     pub fn prepare_standalone(self: &Arc<Self>, source: Source) -> Result<PreparedDocument, Error> {
+        let raw = self.decode_entry(&source)?;
+        self.prepare_standalone_decoded(source, raw)
+    }
+    fn decode_entry(&self, source: &Source) -> Result<DecodedYaml, Error> {
         if source.bytes.len() > self.limits.captured_bytes {
             return Err(Error::Limit("captured_bytes"));
         }
         if source.identity.len() > self.limits.identity_bytes {
             return Err(Error::Limit("identity_bytes"));
         }
-        let raw =
-            decode_yaml(&source.bytes, self.limits.decode).map_err(|error| Error::Decode {
-                identity: source.identity.clone(),
-                error,
-            })?;
+        decode_yaml(&source.bytes, self.limits.decode).map_err(|error| Error::Decode {
+            identity: source.identity.clone(),
+            error,
+        })
+    }
+    fn prepare_standalone_decoded(
+        self: &Arc<Self>,
+        source: Source,
+        raw: DecodedYaml,
+    ) -> Result<PreparedDocument, Error> {
         if raw.document.field(raw.document.root(), "parents").is_some() {
             return Err(Error::InheritanceRequired);
         }
@@ -159,6 +168,25 @@ impl CapturedSchema {
             },
             parents: Vec::new(),
         })
+    }
+
+    /// Select the shared preparation lifecycle from one decoded raw entry.
+    /// Hosts never inspect YAML or retry standalone errors as inheritance.
+    pub fn prepare_document<P: InheritancePort>(
+        self: &Arc<Self>,
+        source: Source,
+        display_path: String,
+        port: &mut P,
+    ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
+        let raw = self
+            .decode_entry(&source)
+            .map_err(InheritanceError::Entry)?;
+        if raw.document.field(raw.document.root(), "parents").is_some() {
+            self.prepare_inherited_decoded(source, display_path, raw, port)
+        } else {
+            self.prepare_standalone_decoded(source, raw)
+                .map_err(InheritanceError::Entry)
+        }
     }
 }
 

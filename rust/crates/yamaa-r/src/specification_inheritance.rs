@@ -140,4 +140,27 @@ fn prepare_inherited_specification(
         store_document(document)
     })
 }
-extendr_module! {mod specification_inheritance; fn prepare_inherited_specification;}
+#[extendr]
+fn prepare_document(identity: Raw, source: Raw, dispatch: Function) -> List {
+    boundary(|| {
+        let limits = yamaa_adapters::specification_source::Limits::default();
+        if identity.len() > limits.identity_bytes || source.len() > limits.captured_bytes {
+            return Err("invalid or over-limit specification source".into());
+        }
+        let identity = std::str::from_utf8(identity.as_slice())
+            .map_err(|_| "invalid UTF-8 specification identity")?;
+        let document = yamaa_adapters::shipped_schema::prepare(
+            yamaa_adapters::specification_source::Source {
+                identity: identity.into(),
+                bytes: source.as_slice().to_vec(),
+            },
+            identity.into(),
+            &mut Port(dispatch),
+        )
+        .map_err(|error| match inheritance_failure(error) {
+            Ok(message) | Err(message) => message,
+        })?;
+        store_document(document)
+    })
+}
+extendr_module! {mod specification_inheritance; fn prepare_inherited_specification; fn prepare_document;}

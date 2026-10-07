@@ -249,6 +249,10 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 #[pymodule]
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(
+        specification_inheritance::_prepare_document,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_function(wrap_pyfunction!(engine_info, module)?)?;
     module.add_class::<reference_catalog::ReferenceCatalog>()?;
