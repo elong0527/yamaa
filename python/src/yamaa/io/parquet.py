@@ -195,6 +195,10 @@ def parse_parquet(content: bytes) -> TypedTable:
     columns = _source_columns(table, stored_schema)
     _validate_temporal_values(table, columns)
     try:
+        # Parquet decoding can retain invalid UTF-8 in Arrow string buffers.
+        # Reject it before Polars can expose a value that panics on access,
+        # while preserving the preceding field and temporal diagnostics.
+        table.validate(full=True)
         frame = pl.from_arrow(table, rechunk=True)
         if not isinstance(frame, pl.DataFrame):
             raise TypeError("a Parquet table must produce a Polars DataFrame")
