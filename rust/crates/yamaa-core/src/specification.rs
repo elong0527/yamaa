@@ -219,6 +219,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Literal(crate::value::Value),
     Window(alloc::boxed::Box<windows::Declaration>),
     Source(String),
     Compute(CompiledNumeric),
@@ -230,6 +231,7 @@ enum Operation {
 }
 #[derive(Clone, Debug)]
 struct Declaration {
+    handler: Option<crate::conversion::LiteralHandler>,
     path: String,
     operation: Operation,
 }
@@ -246,6 +248,46 @@ pub struct PreparedSpecification {
     declarations: Vec<Declaration>,
     rows: Option<rows::Rows>,
     verifications: verifications::Verifications,
+}
+
+/// Preserve omitted versus explicit-null recovery at every declaration.
+fn literal_handler(
+    d: &Document,
+    id: usize,
+    prefix: &str,
+) -> Result<Option<crate::conversion::LiteralHandler>, PrepareError> {
+    d.field(id, "unconvertible")
+        .map(|id| {
+            let spec_path = format!("{prefix}.unconvertible");
+            Ok(crate::conversion::LiteralHandler {
+                value: literal(d, id, &spec_path)?,
+                spec_path,
+            })
+        })
+        .transpose()
+}
+
+/// Read an admitted scalar leaf once; rows and columns share the same boundary.
+fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, PrepareError> {
+    use crate::value::Value;
+    Ok(match &d.nodes()[id] {
+        N::Null => Value::Missing,
+        N::Text(value) => Value::Str(value.clone()),
+        N::Boolean(value) => Value::Bool(*value),
+        N::Float(value) => Value::float(*value),
+        N::Integer(value) => Value::Int(value.parse().map_err(|_| {
+            PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: "wide_integer_literal".into(),
+                path: path.into(),
+            }])
+        })?),
+        _ => {
+            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: "literal".into(),
+                path: path.into(),
+            }]))
+        }
+    })
 }
 
 fn text(d: &Document, id: usize) -> Result<&str, PrepareError> {
@@ -821,13 +863,7 @@ impl PreparedSpecification {
                 .field(id, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .ok_or(PrepareError::Internal)?;
-            if d.field(derivation, "unconvertible").is_some() {
-                reject(
-                    &mut extra,
-                    "unconvertible",
-                    format!("{prefix}.derivation.unconvertible"),
-                );
-            }
+            let handler = literal_handler(d, derivation, &format!("{prefix}.derivation"))?;
             let ops = mapping(d, field(d, derivation, "value")?)?;
             let &[(op, payload)] = ops else {
                 return Err(PrepareError::Internal);
@@ -835,6 +871,7 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
+                "literal" => Some(Operation::Literal(literal(d, payload, &path)?)),
                 "source" => {
                     // The expression payload is admitted by captured schema, not the model.
                     for &(name, _) in mapping(d, payload)? {
@@ -893,7 +930,11 @@ impl PreparedSpecification {
                 }
             };
             if let Some(operation) = operation {
-                declarations.push(Declaration { path, operation });
+                declarations.push(Declaration {
+                    handler,
+                    path,
+                    operation,
+                });
             }
         }
         if !extra.is_empty() {
@@ -1081,6 +1122,7 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Window(window) => window
                     .bind(&catalog, &mut edges, &mut findings)?
                     .map(Expression::Window),
@@ -1234,6 +1276,21 @@ impl PreparedSpecification {
             self.keys.clone(),
             self.verifications.checks.clone(),
         )
+        .and_then(|plan| {
+            plan.with_conversion_handlers(
+                self.declarations
+                    .iter()
+                    .filter_map(|declaration| {
+                        declaration.handler.as_ref().map(|handler| {
+                            crate::dataset::ConversionHandler {
+                                assignment_path: declaration.path.clone(),
+                                handler: handler.clone(),
+                            }
+                        })
+                    })
+                    .collect(),
+            )
+        })
         .map_err(BindError::InvalidPlan)
     }
 }

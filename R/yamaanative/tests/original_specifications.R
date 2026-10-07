@@ -480,5 +480,52 @@ cat("core binding complete independent failed reports and retained save gates pa
 failed_report_truth("csv-profile-diagnostics.tsv","csv",13L)
 cat("core CSV profile complete independent failed reports and retained save gates passed\n")
 
+scalar_report_truth <- function(fixture,prefix,cases) {
+  truth <- read.delim(file.path(root,fixture),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
+  stopifnot(nrow(truth)==cases)
+  for(i in seq_len(nrow(truth))) {
+    handle <- prepare_entry("spec.yaml",charToRaw(truth$source[[i]]),no_port,no_port,no_port)
+    reads <- character(); saves <- 0L
+    capture <- function(dataset,path,maximum) {
+      stopifnot(dataset=="SRC",path=="source.csv",maximum>=5L)
+      reads <<- c(reads,path)
+      list(charToRaw("ID\n1\n"),TRUE)
+    }
+    result <- build(handle,capture,paste0(prefix,"-",truth$case[[i]]),"spec.yaml")
+    rm(handle);gc()
+    expected <- gsub('"runtime":"python"','"runtime":"r"',truth$expected[[i]],fixed=TRUE)
+    expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
+    expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',engine_info()$core_version,'"'),expected,fixed=TRUE)
+    unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
+    stopifnot(identical(build_observations(result),unsaved))
+    hex <- truth$output_hex[[i]]
+    if(nzchar(hex)) {
+      exact <- as.raw(strtoi(substring(hex,seq.int(1L,nchar(hex),2L),seq.int(2L,nchar(hex),2L)),16L))
+      stopifnot(!is.null(build_output(result)))
+      for(j in seq_len(2L)) {
+        report <- build_save(result,function(path,content) {
+          stopifnot(path=="result.csv",identical(content,exact));saves <<- saves+1L;TRUE
+        })
+        stopifnot(identical(report,expected))
+      }
+      stopifnot(saves==2L)
+    } else {
+      stopifnot(is.null(build_output(result)))
+      for(j in seq_len(2L)) {
+        failure <- tryCatch(build_save(result,function(...) stop("failed literal build published")),error=identity)
+        stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"))
+      }
+      stopifnot(saves==0L)
+    }
+    stopifnot(identical(build_observations(result),unsaved),identical(reads,"source.csv"))
+  }
+}
+scalar_report_truth("column-literals.tsv","literal",4L)
+cat("original column literals complete independent reports and exact CSV passed\n")
+scalar_report_truth("original-conversion-handlers.tsv","handler",5L)
+cat("original conversion handlers complete independent reports and exact CSV passed\n")
+scalar_report_truth("original-row-conversion-handlers.tsv","row-handler",8L)
+cat("original row conversion handlers complete independent reports and exact CSV passed\n")
+
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

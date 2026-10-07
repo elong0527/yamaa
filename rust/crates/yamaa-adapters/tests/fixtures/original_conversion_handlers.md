@@ -1,0 +1,5 @@
+# Original column conversion handler truth
+
+Five independently authored documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete reports pin Boolean recovery, explicit null replacement, an unused invalid replacement, missing input without firing, and failed replacement conversion. Exact CSV and every handler count, including zero, are retained. Runtime/backend identities use the established native replay convention; no existing expectation is regenerated.
+
+Ordinary-column wrappers compile handlers into the existing core `ConversionHandler` and engine recovery service. Handlers add no expression dependencies and are converted only when reached. Row-template wrappers share the same admitted scalar handlers; their independent cases and effective-default counter ordering are documented in `original_row_conversion_handlers.md`. Other handler families remain Unsupported. Rust and both installed hosts drop the prepared specification, retain complete observations and replay explicit saves without recapture; failures cannot publish. R replay remains inside its no-Python PATH block.

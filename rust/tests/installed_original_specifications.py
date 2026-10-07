@@ -281,6 +281,55 @@ class OriginalSpecifications(unittest.TestCase):
     def test_core_csv_profile_preserves_independent_complete_failed_reports(self):
         self._assert_independent_failed_reports("csv-profile-diagnostics.tsv", "csv", 13, 13)
 
+    def test_original_column_literals_preserve_reference_reports_and_exact_csv(self):
+        self._assert_independent_scalar_reports("column-literals.tsv", "literal", 4)
+
+    def test_original_conversion_handlers_preserve_reference_reports_and_exact_csv(self):
+        self._assert_independent_scalar_reports("original-conversion-handlers.tsv", "handler", 5)
+
+    def test_original_row_conversion_handlers_complete_reports_and_exact_csv(self):
+        self._assert_independent_scalar_reports("original-row-conversion-handlers.tsv", "row-handler", 8)
+
+    def _assert_independent_scalar_reports(self, fixture, prefix, cases):
+        def no_parent(*_):
+            self.fail("standalone literal document reached inheritance authority")
+        with (ROOT / fixture).open(encoding="utf-8") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), cases)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                reads, saves = [], []
+                def capture(dataset, path, maximum):
+                    self.assertEqual((dataset, path), ("SRC", "source.csv"))
+                    self.assertGreaterEqual(maximum, 5)
+                    reads.append(path)
+                    return b"ID\n1\n", True
+                spec = yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_parent, no_parent, no_parent)
+                result = spec.build(capture, ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", "."))
+                del spec
+                gc.collect()
+                expected = json.loads(record["expected"])
+                unsaved = dict(expected, artifacts=[])
+                self.assertEqual(json.loads(result.observations()), unsaved)
+                content = bytes.fromhex(record["output_hex"])
+                if content:
+                    self.assertIsNotNone(result.output())
+                    def publish(path, actual):
+                        self.assertEqual(path, "result.csv")
+                        self.assertEqual(actual, content)
+                        saves.append(actual)
+                    for _ in range(2):
+                        self.assertEqual(json.loads(result.save(publish)), expected)
+                    self.assertEqual(len(saves), 2)
+                else:
+                    self.assertIsNone(result.output())
+                    for _ in range(2):
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(lambda *_: self.fail("failed literal build published"))
+                    self.assertEqual(saves, [])
+                self.assertEqual(json.loads(result.observations()), unsaved)
+                self.assertEqual(reads, ["source.csv"])
+
     def _assert_independent_failed_reports(self, fixture, prefix, cases, findings, content=b"ID\n1\n"):
         def no_parent(*_):
             self.fail("standalone document reached an inheritance port")

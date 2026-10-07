@@ -52,8 +52,9 @@ Dataset admission tests now run directly in core. Core compiler tests prepare
 and bind a normalized document without linking the engine, including deferred
 division by zero, formula syntax findings and unsupported source formats.
 
-This foundation does not complete #1752. Source/inheritance provenance, broader
-compiler coverage and the full six-document cohort remain required. Adapters still assemble some
+This foundation does not complete #1752. Complete source/inheritance provenance, broader compiler coverage and the public
+six-document frontend remain required. Private installed entry points already
+exercise all six original documents. Adapters still assemble some
 typed probe plans; #1754 retires those semantic responsibilities as domain APIs
 replace the probes. No public API cutover, benchmark inventory promotion or
 numerical-policy change is included here.
@@ -81,3 +82,24 @@ callback errors/interruptions and cached source capture. The existing conformanc
 frontend still needs routing through this owned lifecycle before inventory promotion.
 Non-governed descriptive metadata can reach compilation; reserved metadata keys
 remain explicitly unsupported pending submission validation integration.
+
+Scalar literal leaves now share one core reader across row and column declarations.
+Ordinary columns lower directly to the existing immutable `Expression::Literal`,
+with no host plan assembly or preparation-time conversion. The engine retains
+column conversion, full diagnostic context, completed observations and explicit
+save behavior. Independent complete reports pin successful publication bytes and
+three conversion failures; arbitrary-width integers remain Unsupported before
+source effects.
+
+Ordinary-column `unconvertible` wrappers now add core `ConversionHandler` values
+to the same immutable plan, preserving declaration order and distinct assignment
+and handler paths. Existing engine recovery owns triggering, replacement
+conversion and positive/zero ledger counts. Explicit null is retained as a
+present handler; an omitted handler remains absent. No host assembles these plans
+or selects recovery behavior.
+
+Row wrappers use the same scalar-handler admission as ordinary columns. The row
+compiler binds only effective declarations, in row order before ordinary columns;
+repeated inherited defaults share a single handler and counter. Completely
+overridden defaults are admitted structurally but do not register unused handlers.
+Eight independent complete-report cases pin those rules without engine changes.

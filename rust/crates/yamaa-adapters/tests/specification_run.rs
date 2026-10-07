@@ -3086,3 +3086,118 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
         }
     }
 }
+
+#[test]
+fn original_column_literals_match_complete_reference_reports_and_csv() {
+    independent_scalar_reports(include_str!("fixtures/column_literals.tsv"), "literal", 4);
+}
+
+#[test]
+fn original_conversion_handlers_match_complete_reference_reports_and_csv() {
+    independent_scalar_reports(
+        include_str!("fixtures/original_conversion_handlers.tsv"),
+        "handler",
+        5,
+    );
+}
+
+#[test]
+fn original_row_conversion_handlers_match_complete_reference_reports_and_csv() {
+    independent_scalar_reports(
+        include_str!("fixtures/original_row_conversion_handlers.tsv"),
+        "row-handler",
+        8,
+    );
+}
+
+fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize) {
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Port {
+        reads: usize,
+        saves: usize,
+        expected: Vec<u8>,
+    }
+    impl SourcePort for Port {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
+            assert!(maximum >= 5);
+            self.reads += 1;
+            Ok(Arc::from(&b"ID\n1\n"[..]))
+        }
+    }
+    impl ArtifactPort for Port {
+        type Error = ();
+        fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
+            assert!(!self.expected.is_empty(), "failed literal build published");
+            assert_eq!(path, "result.csv");
+            assert_eq!(content, self.expected);
+            self.saves += 1;
+            Ok(())
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut cases = 0;
+    for row in fixture.lines().skip(1) {
+        let fields = row.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 4);
+        let bytes = (0..fields[3].len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&fields[3][i..i + 2], 16).unwrap())
+            .collect();
+        let mut port = Port {
+            reads: 0,
+            saves: 0,
+            expected: bytes,
+        };
+        let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
+        let attempt = run.execute_with_port(&mut port);
+        let example = format!("{prefix}-{}", fields[0]);
+        let result = specification_report::build_result(
+            &run,
+            &attempt,
+            Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: &example,
+                specification: "spec.yaml",
+                base_directory: ".",
+            },
+        )
+        .unwrap();
+        drop(run);
+        drop(attempt);
+        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        let mut unsaved = expected.clone();
+        unsaved["artifacts"] = serde_json::json!([]);
+        assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+        if port.expected.is_empty() {
+            assert!(result.output().is_none());
+            for _ in 0..2 {
+                assert!(matches!(
+                    result.save(&mut port),
+                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                ));
+            }
+            assert_eq!(port.saves, 0);
+        } else {
+            assert!(result.output().is_some());
+            for _ in 0..2 {
+                assert_eq!(result.save(&mut port).unwrap(), &expected);
+            }
+            assert_eq!(port.saves, 2);
+        }
+        assert_eq!(result.observations(), unsaved);
+        assert_eq!(port.reads, 1);
+        cases += 1;
+    }
+    assert_eq!(cases, expected_cases);
+}

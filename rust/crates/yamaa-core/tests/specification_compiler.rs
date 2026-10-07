@@ -12,6 +12,7 @@ use yamaa_core::{
 };
 
 enum Tree<'a> {
+    Scalar(N),
     Text(&'a str),
     Map(Vec<(&'a str, Tree<'a>)>),
     List(Vec<Tree<'a>>),
@@ -19,6 +20,7 @@ enum Tree<'a> {
 impl Tree<'_> {
     fn append(self, nodes: &mut Vec<N>) -> usize {
         let node = match self {
+            Self::Scalar(node) => node,
             Self::Text(value) => N::Text(value.into()),
             Self::List(values) => {
                 N::Sequence(values.into_iter().map(|v| v.append(nodes)).collect())
@@ -37,6 +39,34 @@ impl Tree<'_> {
 }
 
 fn document(expression: &str, input_path: &str) -> SpecificationDocument {
+    operation_document(
+        "compute",
+        Tree::Map(vec![("expr", Tree::Text(expression))]),
+        input_path,
+    )
+}
+fn operation_document(
+    operation: &str,
+    payload: Tree<'_>,
+    input_path: &str,
+) -> SpecificationDocument {
+    operation_document_with_handler(operation, payload, input_path, None)
+}
+fn operation_document_with_handler(
+    operation: &str,
+    payload: Tree<'_>,
+    input_path: &str,
+    handler: Option<N>,
+) -> SpecificationDocument {
+    operation_document_with_rows(operation, payload, input_path, handler, None)
+}
+fn operation_document_with_rows(
+    operation: &str,
+    payload: Tree<'_>,
+    input_path: &str,
+    handler: Option<N>,
+    rows: Option<Tree<'_>>,
+) -> SpecificationDocument {
     use Tree::*;
     let column = |name, op, field, value| {
         Map(vec![
@@ -51,7 +81,11 @@ fn document(expression: &str, input_path: &str) -> SpecificationDocument {
             ),
         ])
     };
-    let tree = Map(vec![
+    let mut wrapper = vec![("value", Map(vec![(operation, payload)]))];
+    if let Some(value) = handler {
+        wrapper.push(("unconvertible", Scalar(value)));
+    }
+    let mut fields = vec![
         ("schema_version", Text("1.0")),
         ("domain", Text("TEST")),
         (
@@ -63,7 +97,11 @@ fn document(expression: &str, input_path: &str) -> SpecificationDocument {
             "columns",
             List(vec![
                 column("ID", "source", "variable", "SRC.ID"),
-                column("VALUE", "compute", "expr", expression),
+                Map(vec![
+                    ("name", Text("VALUE")),
+                    ("type", Text("int")),
+                    ("derivation", Map(wrapper)),
+                ]),
             ]),
         ),
         (
@@ -73,7 +111,11 @@ fn document(expression: &str, input_path: &str) -> SpecificationDocument {
                 ("columns", List(vec![Text("ID"), Text("VALUE")])),
             ]),
         ),
-    ]);
+    ];
+    if let Some(rows) = rows {
+        fields.push(("rows", rows));
+    }
+    let tree = Map(fields);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
     let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
@@ -344,4 +386,191 @@ fn directly_admitted_windows_preserve_defaults_and_explicit_options() {
             }
         }
     }
+}
+
+fn literal_document(node: N) -> SpecificationDocument {
+    operation_document("literal", Tree::Scalar(node), "input.csv")
+}
+
+#[test]
+fn scalar_column_leaves_use_the_common_compiled_literal_expression() {
+    use yamaa_core::value::Value;
+    for (node, value) in [
+        (N::Null, Value::Missing),
+        (
+            N::Text("λ,\"quoted\"".into()),
+            Value::Str("λ,\"quoted\"".into()),
+        ),
+        (N::Boolean(true), Value::Bool(true)),
+        (N::Float(1.5), Value::float(1.5)),
+        (
+            N::Integer("9223372036854775807".into()),
+            Value::Int(i64::MAX),
+        ),
+        (
+            N::Integer("-9223372036854775808".into()),
+            Value::Int(i64::MIN),
+        ),
+    ] {
+        let prepared = PreparedSpecification::prepare(&literal_document(node)).unwrap();
+        let plan = prepared.bind(&source()).unwrap();
+        assert_eq!(plan.columns()[0].expression, Expression::Literal(value));
+        assert_eq!(plan.columns()[0].path, "columns.VALUE.derivation.literal");
+        assert_eq!(plan.output().columns()[1].kind, ColumnType::Int);
+        assert_eq!(plan.keys(), [0]);
+    }
+}
+
+#[test]
+fn unrepresented_literal_integers_remain_unsupported_before_binding() {
+    let Err(PrepareError::Unsupported(features)) =
+        PreparedSpecification::prepare(&literal_document(N::Integer("9223372036854775808".into())))
+    else {
+        panic!("wide integer must not narrow")
+    };
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0].operation, "wide_integer_literal");
+    assert_eq!(features[0].path, "columns.VALUE.derivation.literal");
+}
+
+#[test]
+fn column_recovery_compiles_present_null_and_text_handlers_without_dependencies() {
+    use yamaa_core::value::Value;
+    for (node, value) in [
+        (N::Null, Value::Missing),
+        (N::Integer("7".into()), Value::Int(7)),
+        (
+            N::Text("NOT.A.REFERENCE".into()),
+            Value::Str("NOT.A.REFERENCE".into()),
+        ),
+    ] {
+        let document = operation_document_with_handler(
+            "literal",
+            Tree::Scalar(N::Boolean(true)),
+            "input.csv",
+            Some(node),
+        );
+        let prepared = PreparedSpecification::prepare(&document).unwrap();
+        let plan = prepared.bind(&source()).unwrap();
+        let handlers = plan.conversion_handlers();
+        assert_eq!(handlers.len(), 1);
+        assert_eq!(
+            handlers[0].assignment_path,
+            "columns.VALUE.derivation.literal"
+        );
+        assert_eq!(
+            handlers[0].handler.spec_path,
+            "columns.VALUE.derivation.unconvertible"
+        );
+        assert_eq!(handlers[0].handler.value, value);
+        assert_eq!(
+            plan.conversion_handler("columns.VALUE.derivation.literal"),
+            Some(&handlers[0].handler)
+        );
+        assert_eq!(
+            plan.columns()[0].expression,
+            Expression::Literal(Value::Bool(true))
+        );
+        assert_eq!(plan.keys(), [0]);
+    }
+    let prepared = PreparedSpecification::prepare(&literal_document(N::Null)).unwrap();
+    assert!(prepared
+        .bind(&source())
+        .unwrap()
+        .conversion_handlers()
+        .is_empty());
+}
+
+#[test]
+fn wide_recovery_literal_remains_unsupported_before_source_binding() {
+    let document = operation_document_with_handler(
+        "literal",
+        Tree::Scalar(N::Boolean(true)),
+        "input.csv",
+        Some(N::Integer("9223372036854775808".into())),
+    );
+    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document) else {
+        panic!("wide handler must not narrow")
+    };
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0].operation, "wide_integer_literal");
+    assert_eq!(features[0].path, "columns.VALUE.derivation.unconvertible");
+}
+
+fn recovery_rows(value: N, count: usize) -> Tree<'static> {
+    use Tree::*;
+    let mut rows = vec![Map(vec![
+        ("id", Text("override")),
+        (
+            "derivations",
+            Map(vec![(
+                "VALUE",
+                Map(vec![
+                    ("value", Map(vec![("literal", Scalar(N::Boolean(true)))])),
+                    ("unconvertible", Scalar(value)),
+                ]),
+            )]),
+        ),
+    ])];
+    for id in ["default-one", "default-two"].into_iter().take(count - 1) {
+        rows.push(Map(vec![("id", Text(id)), ("derivations", Map(vec![]))]));
+    }
+    List(rows)
+}
+
+#[test]
+fn row_recovery_binds_only_effective_handlers_in_row_order_and_shares_defaults() {
+    use yamaa_core::value::Value;
+    for count in [1, 3] {
+        let document = operation_document_with_rows(
+            "literal",
+            Tree::Scalar(N::Boolean(true)),
+            "input.csv",
+            Some(N::Null),
+            Some(recovery_rows(N::Integer("7".into()), count)),
+        );
+        let plan = PreparedSpecification::prepare(&document)
+            .unwrap()
+            .bind(&source())
+            .unwrap();
+        let handlers = plan.conversion_handlers();
+        assert_eq!(handlers.len(), if count == 1 { 1 } else { 2 });
+        assert_eq!(
+            handlers[0].assignment_path,
+            "rows[0].derivations.VALUE.literal"
+        );
+        assert_eq!(
+            handlers[0].handler.spec_path,
+            "rows[0].derivations.VALUE.unconvertible"
+        );
+        assert_eq!(handlers[0].handler.value, Value::Int(7));
+        if count == 3 {
+            assert_eq!(handlers[1].handler.value, Value::Missing);
+            assert_eq!(
+                handlers[1].handler.spec_path,
+                "columns.VALUE.derivation.unconvertible"
+            );
+            assert_eq!(
+                plan.templates()[1].assignments[0].path,
+                plan.templates()[2].assignments[0].path
+            );
+        }
+    }
+}
+
+#[test]
+fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
+    let document = operation_document_with_rows(
+        "literal",
+        Tree::Scalar(N::Boolean(true)),
+        "input.csv",
+        None,
+        Some(recovery_rows(N::Integer("9223372036854775808".into()), 1)),
+    );
+    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document) else {
+        panic!("wide row handler must not narrow")
+    };
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0].operation, "wide_integer_literal");
+    assert_eq!(features[0].path, "rows[0].derivations.VALUE.unconvertible");
 }
