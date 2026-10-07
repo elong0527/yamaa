@@ -50,6 +50,14 @@ fn operation_document(
     payload: Tree<'_>,
     input_path: &str,
 ) -> SpecificationDocument {
+    operation_document_with_handler(operation, payload, input_path, None)
+}
+fn operation_document_with_handler(
+    operation: &str,
+    payload: Tree<'_>,
+    input_path: &str,
+    handler: Option<N>,
+) -> SpecificationDocument {
     use Tree::*;
     let column = |name, op, field, value| {
         Map(vec![
@@ -64,6 +72,10 @@ fn operation_document(
             ),
         ])
     };
+    let mut wrapper = vec![("value", Map(vec![(operation, payload)]))];
+    if let Some(value) = handler {
+        wrapper.push(("unconvertible", Scalar(value)));
+    }
     let tree = Map(vec![
         ("schema_version", Text("1.0")),
         ("domain", Text("TEST")),
@@ -79,10 +91,7 @@ fn operation_document(
                 Map(vec![
                     ("name", Text("VALUE")),
                     ("type", Text("int")),
-                    (
-                        "derivation",
-                        Map(vec![("value", Map(vec![(operation, payload)]))]),
-                    ),
+                    ("derivation", Map(wrapper)),
                 ]),
             ]),
         ),
@@ -409,4 +418,68 @@ fn unrepresented_literal_integers_remain_unsupported_before_binding() {
     assert_eq!(features.len(), 1);
     assert_eq!(features[0].operation, "wide_integer_literal");
     assert_eq!(features[0].path, "columns.VALUE.derivation.literal");
+}
+
+#[test]
+fn column_recovery_compiles_present_null_and_text_handlers_without_dependencies() {
+    use yamaa_core::value::Value;
+    for (node, value) in [
+        (N::Null, Value::Missing),
+        (N::Integer("7".into()), Value::Int(7)),
+        (
+            N::Text("NOT.A.REFERENCE".into()),
+            Value::Str("NOT.A.REFERENCE".into()),
+        ),
+    ] {
+        let document = operation_document_with_handler(
+            "literal",
+            Tree::Scalar(N::Boolean(true)),
+            "input.csv",
+            Some(node),
+        );
+        let prepared = PreparedSpecification::prepare(&document).unwrap();
+        let plan = prepared.bind(&source()).unwrap();
+        let handlers = plan.conversion_handlers();
+        assert_eq!(handlers.len(), 1);
+        assert_eq!(
+            handlers[0].assignment_path,
+            "columns.VALUE.derivation.literal"
+        );
+        assert_eq!(
+            handlers[0].handler.spec_path,
+            "columns.VALUE.derivation.unconvertible"
+        );
+        assert_eq!(handlers[0].handler.value, value);
+        assert_eq!(
+            plan.conversion_handler("columns.VALUE.derivation.literal"),
+            Some(&handlers[0].handler)
+        );
+        assert_eq!(
+            plan.columns()[0].expression,
+            Expression::Literal(Value::Bool(true))
+        );
+        assert_eq!(plan.keys(), [0]);
+    }
+    let prepared = PreparedSpecification::prepare(&literal_document(N::Null)).unwrap();
+    assert!(prepared
+        .bind(&source())
+        .unwrap()
+        .conversion_handlers()
+        .is_empty());
+}
+
+#[test]
+fn wide_recovery_literal_remains_unsupported_before_source_binding() {
+    let document = operation_document_with_handler(
+        "literal",
+        Tree::Scalar(N::Boolean(true)),
+        "input.csv",
+        Some(N::Integer("9223372036854775808".into())),
+    );
+    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document) else {
+        panic!("wide handler must not narrow")
+    };
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0].operation, "wide_integer_literal");
+    assert_eq!(features[0].path, "columns.VALUE.derivation.unconvertible");
 }

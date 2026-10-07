@@ -13,7 +13,8 @@ templates with source/literal derivations and ordered SUM. The six original
 cohort documents pass private installed entry points in both hosts, including
 lookup, full output windows and inherited preparation. Non-output helper columns
 remain in the internal dataset. Source ordinals, row-output dependencies,
-governed submission metadata, handlers and broader expressions remain explicit
+governed submission metadata, row-template handlers, other local handlers and
+broader expressions remain explicit
 Unsupported outcomes before study reads. Transcendental math remains unsupported;
 this slice makes no #1740 numerical-policy choice.
 
@@ -23,7 +24,7 @@ existing column boundary, preserving bool/type errors, full i64 values, temporal
 conversion, missing and present empty text. Four independent complete reports pin
 successful exact CSV and three conversion failures through retained build/save
 results. Arbitrary-width integers remain Unsupported before source effects;
-recursive expressions and conversion handlers are not added here.
+recursive expressions and row-template conversion handlers remain Unsupported.
 
 Preparation scans unsupported vocabulary before study capture. Typed CSV admission
 then precedes formula diagnostics and source-schema binding. Numeric execution
@@ -114,3 +115,11 @@ host frontend and the fixed-cohort qualification inventory. All six original
 #1739 cases, inherited path/version/cycle failures, wheel/source/R platform checks,
 production source verification/publication and disconnection of migrated
 Python bridge branches remain required. #1739 and parent #1585 stay open.
+
+Ordinary-column result wrappers now compile an explicit `unconvertible` literal
+into the existing core conversion handler, with its own authored path. Omission
+and explicit null remain distinct. Replacements add no dependencies and run only
+when conversion fails; missing inputs bypass recovery. Five complete independent
+reports pin positive/zero handler counts, exact successful CSV and failed
+replacement conversion with retained observations. Row-template and other
+handler families remain Unsupported.

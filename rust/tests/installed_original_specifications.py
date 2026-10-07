@@ -282,11 +282,17 @@ class OriginalSpecifications(unittest.TestCase):
         self._assert_independent_failed_reports("csv-profile-diagnostics.tsv", "csv", 13, 13)
 
     def test_original_column_literals_preserve_reference_reports_and_exact_csv(self):
+        self._assert_independent_scalar_reports("column-literals.tsv", "literal", 4)
+
+    def test_original_conversion_handlers_preserve_reference_reports_and_exact_csv(self):
+        self._assert_independent_scalar_reports("original-conversion-handlers.tsv", "handler", 5)
+
+    def _assert_independent_scalar_reports(self, fixture, prefix, cases):
         def no_parent(*_):
             self.fail("standalone literal document reached inheritance authority")
-        with (ROOT / "column-literals.tsv").open(encoding="utf-8") as stream:
+        with (ROOT / fixture).open(encoding="utf-8") as stream:
             records = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(records), 4)
+        self.assertEqual(len(records), cases)
         for record in records:
             with self.subTest(case=record["case"]):
                 reads, saves = [], []
@@ -296,7 +302,7 @@ class OriginalSpecifications(unittest.TestCase):
                     reads.append(path)
                     return b"ID\n1\n", True
                 spec = yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_parent, no_parent, no_parent)
-                result = spec.build(capture, ("fixture-runtime", "fixture-engine", "literal-" + record["case"], "spec.yaml", "."))
+                result = spec.build(capture, ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", "."))
                 del spec
                 gc.collect()
                 expected = json.loads(record["expected"])

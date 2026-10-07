@@ -90,3 +90,10 @@ column conversion, full diagnostic context, completed observations and explicit
 save behavior. Independent complete reports pin successful publication bytes and
 three conversion failures; arbitrary-width integers remain Unsupported before
 source effects.
+
+Ordinary-column `unconvertible` wrappers now add core `ConversionHandler` values
+to the same immutable plan, preserving declaration order and distinct assignment
+and handler paths. Existing engine recovery owns triggering, replacement
+conversion and positive/zero ledger counts. Explicit null is retained as a
+present handler; an omitted handler remains absent. No host assembles these plans
+or selects recovery behavior.
