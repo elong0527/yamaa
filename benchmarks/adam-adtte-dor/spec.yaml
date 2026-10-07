@@ -239,14 +239,14 @@ verifications:
   - all_or_none:
       id: traceability-source-is-complete
       columns: [SRCDOM, SRCVAR]
-  - implies:
+  - assert:
       id: record-level-source-carries-a-sequence-number
       when: "SRCDOM <> 'ADSL'"
-      then: "SRCSEQ IS NOT NULL"
-  - implies:
+      require: "SRCSEQ IS NOT NULL"
+  - assert:
       id: censored-record-states-why
       when: "CNSR = 1"
-      then: "CNSDTDSC IS NOT NULL"
+      require: "CNSDTDSC IS NOT NULL"
   - assert:
       id: response-duration-is-at-least-one-day
-      expr: "AVAL >= 1"
+      require: "AVAL >= 1"

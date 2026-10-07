@@ -128,15 +128,15 @@ verifications:
   - all_or_none:
       id: collected-record-carries-sequence-and-value
       columns: [VSSEQ, AVALCOL]
-  - implies:
+  - assert:
       id: height-record-supplies-subject-height
       when: "PARAMCD = 'HEIGHT' AND HGTBLFL = 'Y'"
-      then: "AVALCOL = HEIGHTBL"
-  - implies:
+      require: "AVALCOL = HEIGHTBL"
+  - assert:
       id: uncollected-filled-value-comes-from-predecessor
       when: "VSSEQ IS NULL AND AVAL IS NOT NULL"
-      then: "AVAL = AVALPREV"
-  - implies:
+      require: "AVAL = AVALPREV"
+  - assert:
       id: no-predecessor-leaves-uncollected-value-missing
       when: "VSSEQ IS NULL AND AVALPREV IS NULL"
-      then: "AVAL IS NULL"
+      require: "AVAL IS NULL"

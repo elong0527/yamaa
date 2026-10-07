@@ -100,7 +100,7 @@ verifications:
   - row_count:
       min: 12
       max: 12
-  - implies:
+  - assert:
       id: worst-severity-flag-requires-graded-treatment-emergent-event
       when: "AWSEVFL = 'Y'"
-      then: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
+      require: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"

@@ -166,11 +166,11 @@ verifications:
   - row_count:
       min: 31
       max: 31
-  - implies:
+  - assert:
       id: derived-mean-carries-no-replicate-number
       when: "VSDRVFL = 'Y'"
-      then: "VSREPNUM IS NULL AND VSSTRESN IS NOT NULL"
-  - implies:
+      require: "VSREPNUM IS NULL AND VSSTRESN IS NOT NULL"
+  - assert:
       id: reading-carries-its-replicate-number
       when: "VSDRVFL IS NULL"
-      then: "VSREPNUM IS NOT NULL"
+      require: "VSREPNUM IS NOT NULL"

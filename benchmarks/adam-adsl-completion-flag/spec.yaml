@@ -62,7 +62,7 @@ verifications:
   - row_count:
       min: 8
       max: 8
-  - implies:
+  - assert:
       id: completer-received-treatment
       when: "COMPLFL = 'Y'"
-      then: "TRTSDT IS NOT NULL"
+      require: "TRTSDT IS NOT NULL"

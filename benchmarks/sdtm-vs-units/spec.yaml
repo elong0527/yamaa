@@ -161,13 +161,13 @@ verifications:
   - all_or_none:
       id: standardized-result-completeness
       columns: [VSSTRESN, VSSTRESC, VSSTRESU]
-  - implies:
+  - assert:
       id: unconverted-result-is-unchanged
       when: "VSORRESU = VSSTRESU"
-      then: "VSSTRESC = VSORRES"
-  - implies:
+      require: "VSSTRESC = VSORRES"
+  - assert:
       id: unit-checked-against-test
       when: "VSORRES IS NOT NULL"
-      then: "(VSTESTCD = 'HEIGHT' AND VSORRESU = 'cm') OR (VSTESTCD = 'WEIGHT'
-        AND (VSORRESU = 'kg' OR VSORRESU = 'LB'))
+      require: "(VSTESTCD = 'HEIGHT' AND VSORRESU = 'cm')
+        OR (VSTESTCD = 'WEIGHT' AND (VSORRESU = 'kg' OR VSORRESU = 'LB'))
         OR (VSTESTCD = 'TEMP' AND (VSORRESU = 'C' OR VSORRESU = 'F'))"

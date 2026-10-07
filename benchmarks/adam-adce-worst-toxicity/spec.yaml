@@ -94,10 +94,10 @@ verifications:
   - row_count:
       min: 11
       max: 11
-  - implies:
+  - assert:
       id: worst-grade-flag-requires-a-graded-event
       when: "AOCCFL = 'Y'"
-      then: "ASEV IS NOT NULL"
+      require: "ASEV IS NOT NULL"
   - row_count:
       id: worst-grade-flag-is-unique-within-subject
       group_by: [STUDYID, USUBJID]

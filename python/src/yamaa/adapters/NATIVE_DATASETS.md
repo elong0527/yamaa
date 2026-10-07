@@ -35,7 +35,7 @@ this interface's input contract.
 The frontend rejects unimplemented syntax across the whole normalized specification
 before requesting sources. It checks aggregate grammar rather than mistaking
 malformed syntax for a valid unimplemented expression. The native entrypoint must
-exist before the provider runs. Row-filter, assert/implies and key-grain requests also require the native
+exist before the provider runs. Row-filter, assert and key-grain requests also require the native
 `dataset_capabilities()` advertisement before provider effects. Missing or
 incompatible requested capability returns `ExecutionUnsupported`. Source-independent
 filter scope/phase errors are also checked before IO, including grouped source
@@ -203,18 +203,18 @@ route. Out-of-i64 predicate literals and non-scalar Unicode text are explicitly
 unsupported before source IO. Valid regex calls remain unsupported.
 
 Rust owns output-key checks and error-severity `unique`, whole-artifact integer
-`row_count`, `assert` and `implies` checks. Predicate checks use completed output
+`row_count` and `assert` checks. Predicate checks use completed output
 columns and the same admitted predicate families as filters. Rust validates
 nonmissing type representatives even for empty output, then evaluates actual
-rows; both implication sides evaluate eagerly. Check IDs are retained as report metadata. A later invalid
+rows; an `assert` with `when` evaluates both predicates eagerly. Check IDs are retained as report metadata. A later invalid
 verification declaration stops the checks at that position, preserving earlier
 records and overriding their data failures; derivation and key failures still take
 precedence. The temporary compiler passes only that valid check prefix to Rust and
-retains the pending declaration diagnostic. If an implication's `then` has a
+retains the pending declaration diagnostic. If a guarded `assert`'s `require` has a
 syntax/name error, a native declaration-only checkpoint first validates `when`
 without producing a record or evaluating actual rows. Thus an earlier `when`
 type error wins, while a data-dependent `when` error cannot precede an invalid
-`then` declaration. It never evaluates predicates or rechecks native data in Python.
+`require` declaration. It never evaluates predicates or rechecks native data in Python.
 Public diagnostic keys use the existing five-key sample, while private records
 retain complete identities and exact counts. Requested verification logs survive
 semantic failure, and no failed frontend result exposes an accepted artifact.
@@ -292,7 +292,7 @@ private keys and report bytes. During native execution, reference evaluator and
 check functions are replaced with failing sentinels. Tests also cover validation
 precedence/partial logs, temporal extrema/nulls, empty templates, known missing keys,
 source ordinals, all admitted predicate AST families, eager filter failures,
-fixed filtered ADLB CSV rows, assertion/implication truth and eager errors,
+fixed filtered ADLB CSV rows, assertion and guarded-assertion truth and eager errors,
 empty-output declaration validation, inherited defaults, projection/order/decimals, resource failure and
 recovery. Source-independent tests prove unsupported features do not call providers.
 

@@ -94,12 +94,12 @@ verifications:
       max: 6
   - assert:
       id: intervals-have-ordered-bounds
-      expr: "EXSTDTC IS NOT NULL AND EXENDTC IS NOT NULL
+      require: "EXSTDTC IS NOT NULL AND EXENDTC IS NOT NULL
         AND EXSTDTC <= EXENDTC"
   - assert:
       id: every-interval-has-dose-and-unit
-      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
-  - implies:
+      require: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+  - assert:
       id: interruption-carries-zero-dose
       when: "EXADJ = 'DOSE INTERRUPTED'"
-      then: "EXDOSE = 0"
+      require: "EXDOSE = 0"

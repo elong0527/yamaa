@@ -94,4 +94,4 @@ verifications:
   # already carries a MAP record.
   - assert:
       id: no-pre-existing-target
-      expr: "NOT (PARAMCD = 'MAP' AND DTYPE IS NULL)"
+      require: "NOT (PARAMCD = 'MAP' AND DTYPE IS NULL)"

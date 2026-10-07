@@ -73,7 +73,7 @@ verifications:
   - row_count:
       min: 13
       max: 13
-  - implies:
+  - assert:
       id: on-treatment-medication-has-treatment-start
       when: "ONTRTFL = 'Y'"
-      then: "TRTSDT IS NOT NULL"
+      require: "TRTSDT IS NOT NULL"

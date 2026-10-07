@@ -247,11 +247,11 @@ verifications:
   - all_or_none:
       id: standardized-result-completeness
       columns: [VSSTRESN, VSSTRESC, VSSTRESU]
-  - implies:
+  - assert:
       id: not-done-record-has-no-result
       when: "VSSTAT = 'NOT DONE'"
-      then: "VSORRES IS NULL AND VSSTRESN IS NULL"
-  - implies:
+      require: "VSORRES IS NULL AND VSSTRESN IS NULL"
+  - assert:
       id: collected-result-is-not-flagged
       when: "VSORRES IS NOT NULL"
-      then: "VSSTAT IS NULL"
+      require: "VSSTAT IS NULL"

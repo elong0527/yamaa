@@ -107,7 +107,7 @@ verifications:
   - row_count:
       min: 7
       max: 7
-  - implies:
+  - assert:
       id: analysis-population-requires-both-flags
       when: "POPFL = 'Y'"
-      then: "SAFFL = 'Y' AND ITTFL = 'Y'"
+      require: "SAFFL = 'Y' AND ITTFL = 'Y'"

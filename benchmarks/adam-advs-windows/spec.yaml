@@ -202,31 +202,31 @@ verifications:
   - all_or_none:
       id: analysis-visit-completeness
       columns: [AVISIT, AVISITN]
-  - implies:
+  - assert:
       id: analysis-record-has-analysis-visit
       when: "ANL01FL = 'Y'"
-      then: "AVISIT IS NOT NULL AND ADY IS NOT NULL"
-  - implies:
+      require: "AVISIT IS NOT NULL AND ADY IS NOT NULL"
+  - assert:
       id: baseline-window-is-study-day-one
       when: "AVISIT = 'BASELINE'"
-      then: "ADY = 1 OR EXPECTED_ORDER IS NOT NULL"
+      require: "ADY = 1 OR EXPECTED_ORDER IS NOT NULL"
   # An expected record carries a planned window (never the open-ended
   # post-treatment one), has no date, day, or value, and never takes the
   # analysis flag.
-  - implies:
+  - assert:
       id: expected-record-has-planned-window
       when: "EXPECTED_ORDER IS NOT NULL"
-      then: "AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
-  - implies:
+      require: "AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
+  - assert:
       id: expected-record-is-empty
       when: "EXPECTED_ORDER IS NOT NULL"
-      then: "ADT IS NULL AND ADY IS NULL AND AVAL IS NULL"
-  - implies:
+      require: "ADT IS NULL AND ADY IS NULL AND AVAL IS NULL"
+  - assert:
       id: expected-record-never-flagged
       when: "EXPECTED_ORDER IS NOT NULL"
-      then: "ANL01FL IS NULL"
+      require: "ANL01FL IS NULL"
   # Every collected measurement has a value.
-  - implies:
+  - assert:
       id: collected-record-has-value
       when: "EXPECTED_ORDER IS NULL"
-      then: "AVAL IS NOT NULL"
+      require: "AVAL IS NOT NULL"

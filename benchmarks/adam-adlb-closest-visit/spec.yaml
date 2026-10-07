@@ -107,7 +107,7 @@ verifications:
   - all_or_none:
       id: window-derivation-completeness
       columns: [AVISIT, AWTARGET, ADIST]
-  - implies:
+  - assert:
       id: analysis-record-is-inside-window
       when: "ANL01FL = 'Y'"
-      then: "ADY BETWEEN 8 AND 22"
+      require: "ADY BETWEEN 8 AND 22"

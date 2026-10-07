@@ -143,18 +143,21 @@ not by regular-expression matching.
   output row, either every listed value must be missing or every listed value
   must be non-missing.
 
-<a id="req-0383"></a>
-
-**REQ-0383.** `implies` evaluates `when` and `then` for every output row.
-  When `when` is `TRUE`, `then` must be `TRUE`; a `FALSE` or `UNKNOWN` result
-  from `then` fails. When `when` is `FALSE` or `UNKNOWN`, the row passes.
-  The rule does not apply.
-
 <a id="req-0384"></a>
 
-**REQ-0384.** `assert` evaluates `expr` for every output row. Every
-  result must be `TRUE`; `FALSE` and `UNKNOWN` fail. This verification covers
-  row-wise rules that lack a more specific verification type.
+**REQ-0384.** `assert` evaluates `require` for every output row. Every
+  result must be `TRUE`; `FALSE` and `UNKNOWN` fail, except on a row its
+  `when` exempts under [REQ-0383](verification.md#req-0383). This verification
+  covers row-wise rules that lack a more specific verification type.
+
+<a id="req-0383"></a>
+
+**REQ-0383.** An `assert` may declare `when`, which limits the rows its
+  `require` must hold for. It then evaluates `when` and `require` for every
+  output row. When `when` is `TRUE`, `require` must be `TRUE`; a `FALSE` or
+  `UNKNOWN` result from `require` fails. When `when` is `FALSE` or `UNKNOWN`,
+  the row passes. The rule does not apply. `when` selects rows here as it
+  selects groups for `row_count` under [REQ-1154](verification.md#req-1154).
 
 <a id="req-0385"></a>
 
@@ -504,8 +507,8 @@ the bounds are in the declaration at that path.
 
 <a id="req-0405"></a>
 
-**REQ-0405.** An unknown column in `unique`, `all_or_none`, `implies`,
-  `assert`, or `row_count.group_by`: fail.
+**REQ-0405.** An unknown column in `unique`, `all_or_none`, `assert`, or
+  `row_count.group_by`: fail.
 
 <a id="req-0406"></a>
 

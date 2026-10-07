@@ -182,19 +182,19 @@ Typed function assignments are described under [Explicit host functions](#explic
 the optional Python project frontend supports the bounded subset documented
 in [Native datasets](../python/src/yamaa/adapters/NATIVE_DATASETS.md#optional-project-functions).
 
-Predicate checks are `{assert: predicate}` or `{implies: {when: predicate,
-then: predicate}}`, using the predicate representation below. Bindings may read
-only completed output columns. Assertions fail on false or unknown; implications
-fail when `when` is true and `then` is not true. Both sides are evaluated eagerly
-per row. Each declaration first evaluates nonmissing representatives of all output
-types, even for an empty dataset, with `when` validated before `then`. This detects
+Predicate checks are `{assert: {require: predicate}}`, optionally with
+`when: predicate`, using the predicate representation below. Bindings may read
+only completed output columns. A row fails when `require` is false or unknown and
+`when`, if present, is true. Both predicates are evaluated eagerly per row. Each
+declaration first evaluates nonmissing representatives of all output types, even
+for an empty dataset, with `when` validated before `require`. This detects
 invalid predicate types before checking any actual rows. Checks run in declaration
 order after all derivation, conversion and output-key checks.
 
 The temporary compiler can also emit `{predicate_declaration: predicate}` as a
 declaration-only checkpoint. It validates the representatives without evaluating
 actual rows or emitting a verification record. This preserves a `when` type error
-ahead of a pending `then` syntax/name error retained by the host compiler; it is
+ahead of a pending `require` syntax/name error retained by the host compiler; it is
 not an additional public verification operation.
 
 ## Standalone key combinations
@@ -435,7 +435,7 @@ empty input, temporal literals, integer overflow, and explicit true/false/unknow
 row filters. Filter truth selects fixed row ordinals from the committed ADLB values. Rust, installed Python and
 installed R replay the same observations; R needs neither Arrow nor a JSON package.
 Predicate-check fixtures cover missing-value assertion identities, an eager
-implication error after completed checks, and invalid types on empty output.
+guarded-assert `require` error after completed checks, and invalid types on empty output.
 Key-grain fixtures independently pin converted identity/order, missing source
 readings, empty output, raw-value conflicts before conversion and a valid key
 shaped like the former Python missing-record token.

@@ -110,11 +110,11 @@ verifications:
   - all_or_none:
       id: actual-arm-completeness
       columns: [ACTARMCD, ACTARM]
-  - implies:
+  - assert:
       id: unplanned-treatment-leaves-actual-arm-blank
       when: "ACTARMUD IS NOT NULL"
-      then: "ACTARMCD IS NULL"
-  - implies:
+      require: "ACTARMCD IS NULL"
+  - assert:
       id: null-arm-reason-marks-a-null-arm
       when: "ARMNRS IS NOT NULL"
-      then: "ARMCD IS NULL OR ACTARMCD IS NULL"
+      require: "ARMCD IS NULL OR ACTARMCD IS NULL"

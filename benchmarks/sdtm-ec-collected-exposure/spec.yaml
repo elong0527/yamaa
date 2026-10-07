@@ -109,16 +109,16 @@ verifications:
       max: 10
   - assert:
       id: occurrence-flags-valid
-      expr: "ECOCCUR IN ('Y', 'N')"
-  - implies:
+      require: "ECOCCUR IN ('Y', 'N')"
+  - assert:
       id: missed-day-has-no-dose
       when: "ECOCCUR = 'N'"
-      then: "ECDOSE IS NULL"
-  - implies:
+      require: "ECDOSE IS NULL"
+  - assert:
       id: missed-day-carries-reason
       when: "ECOCCUR = 'N'"
-      then: "ECREASND IS NOT NULL"
-  - implies:
+      require: "ECREASND IS NOT NULL"
+  - assert:
       id: taken-day-has-dose
       when: "ECOCCUR = 'Y'"
-      then: "ECDOSE IS NOT NULL"
+      require: "ECDOSE IS NOT NULL"

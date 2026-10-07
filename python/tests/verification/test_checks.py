@@ -282,7 +282,7 @@ def test_a_collected_empty_string_is_a_value_rather_than_a_missing_one() -> None
     )
 
 
-def test_implies_and_assert_report_their_business_rule_identity() -> None:
+def test_guarded_and_plain_asserts_report_their_business_rule_identity() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("CMNT", "str"), ("CMNTFL", "str")],
         [
@@ -296,10 +296,10 @@ def test_implies_and_assert_report_their_business_rule_identity() -> None:
         [
             Expression(
                 root={
-                    "implies": {
+                    "assert": {
                         "id": "flag-follows-collection",
                         "when": "CMNTFL = 'N'",
-                        "then": "CMNT IS NULL",
+                        "require": "CMNT IS NULL",
                     }
                 }
             ),
@@ -307,7 +307,7 @@ def test_implies_and_assert_report_their_business_rule_identity() -> None:
                 root={
                     "assert": {
                         "id": "flag-is-yes-or-no",
-                        "expr": "CMNTFL IN ('Y')",
+                        "require": "CMNTFL IN ('Y')",
                     }
                 }
             ),
@@ -316,13 +316,44 @@ def test_implies_and_assert_report_their_business_rule_identity() -> None:
     )
 
     assert [failure.condition for failure in failures] == [
-        "implication_failed",
+        "assert_failed",
         "assert_failed",
     ]
+    assert failures[0].spec_paths == ("verifications[0].assert",)
     assert failures[0].context["verification_id"] == "flag-follows-collection"
     assert failures[0].context["keys"] == [{"STUDYID": "CTX", "USUBJID": "CTX-02"}]
     assert failures[1].context["verification_id"] == "flag-is-yes-or-no"
     assert failures[1].spec_paths == ("verifications[1].assert",)
+
+
+def test_assert_when_exempts_false_and_unknown_rows() -> None:
+    # REQ-0383: only a TRUE `when` binds a row; `require` must then be TRUE,
+    # so a FALSE or UNKNOWN `require` fails while a FALSE or UNKNOWN `when`
+    # exempts the row whatever `require` gives.
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("GATE", "str"), ("VAL", "int")],
+        [
+            ["S", "S-01", "Y", 1],
+            ["S", "S-02", "Y", 0],
+            ["S", "S-03", "Y", None],
+            ["S", "S-04", "N", 0],
+            ["S", "S-05", None, 0],
+        ],
+    )
+
+    failures = check_dataset(
+        completed,
+        [Expression(root={"assert": {"when": "GATE = 'Y'", "require": "VAL > 0"}})],
+        KEYS,
+    )
+
+    assert [failure.condition for failure in failures] == ["assert_failed"]
+    assert failures[0].requirement == "REQ-0384"
+    assert failures[0].spec_paths == ("verifications[0].assert",)
+    assert failures[0].context["keys"] == [
+        {"STUDYID": "S", "USUBJID": "S-02"},
+        {"STUDYID": "S", "USUBJID": "S-03"},
+    ]
 
 
 def test_grouped_row_count_keeps_a_group_whose_filter_admits_no_row() -> None:
@@ -659,7 +690,7 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
 def test_a_predicate_naming_an_absent_column_is_refused_on_an_empty_artifact() -> None:
     empty = table([("STUDYID", "str"), ("USUBJID", "str")], [])
     declaration = Expression(
-        root={"assert": {"id": "names-a-ghost", "expr": "ABSENT = 1"}}
+        root={"assert": {"id": "names-a-ghost", "require": "ABSENT = 1"}}
     )
 
     with pytest.raises(DeclarationError) as raised:
@@ -671,7 +702,7 @@ def test_a_predicate_naming_an_absent_column_is_refused_on_an_empty_artifact() -
 
 def test_duplicate_verification_identifiers_are_refused() -> None:
     completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
-    declaration = {"assert": {"id": "one-rule", "expr": "USUBJID IS NOT NULL"}}
+    declaration = {"assert": {"id": "one-rule", "require": "USUBJID IS NOT NULL"}}
 
     with pytest.raises(DeclarationError) as raised:
         check_dataset(
@@ -746,9 +777,9 @@ def test_every_dataset_check_can_use_its_path_without_an_id() -> None:
         Expression(root={"unique": ["USUBJID"]}),
         Expression(root={"all_or_none": {"columns": ["STUDYID", "USUBJID"]}}),
         Expression(
-            root={"implies": {"when": "STUDYID = 'S'", "then": "USUBJID = 'S-1'"}}
+            root={"assert": {"when": "STUDYID = 'S'", "require": "USUBJID = 'S-1'"}}
         ),
-        Expression(root={"assert": {"expr": "USUBJID IS NOT NULL"}}),
+        Expression(root={"assert": {"require": "USUBJID IS NOT NULL"}}),
         Expression(root={"row_count": {"group_by": ["STUDYID"], "min": 1}}),
     ]
     records: list[VerificationRecord] = []
@@ -770,10 +801,10 @@ def test_an_unevaluable_predicate_fails_instead_of_satisfying_a_verification() -
             [
                 Expression(
                     root={
-                        "implies": {
+                        "assert": {
                             "id": "compares-text-with-a-number",
                             "when": "STUDYID = 1",
-                            "then": "AGE > 0",
+                            "require": "AGE > 0",
                         }
                     }
                 )
@@ -785,7 +816,7 @@ def test_an_unevaluable_predicate_fails_instead_of_satisfying_a_verification() -
 
 
 @pytest.mark.parametrize("rows", [[], [["S", "S-1", -1, "M"]]])
-def test_implication_validates_its_consequent_without_short_circuiting(
+def test_guarded_assert_validates_require_without_short_circuiting(
     rows: list[list[object]],
 ) -> None:
     completed = table(
@@ -799,10 +830,10 @@ def test_implication_validates_its_consequent_without_short_circuiting(
             [
                 Expression(
                     root={
-                        "implies": {
+                        "assert": {
                             "id": "both-predicates-are-valid",
                             "when": "AGE > 0",
-                            "then": "SEX > 1",
+                            "require": "SEX > 1",
                         }
                     }
                 )
@@ -812,7 +843,7 @@ def test_implication_validates_its_consequent_without_short_circuiting(
 
     assert raised.value.condition == "incompatible_input_type"
     assert raised.value.requirement == "REQ-0190"
-    assert raised.value.spec_path == "verifications[0].implies.then"
+    assert raised.value.spec_path == "verifications[0].assert.require"
 
 
 def test_predicates_receive_typed_resolved_lookup_bindings() -> None:
@@ -824,7 +855,7 @@ def test_predicates_receive_typed_resolved_lookup_bindings() -> None:
         root={
             "assert": {
                 "id": "lookup-date",
-                "expr": "VISIT.ADT >= DATE '2025-01-01'",
+                "require": "VISIT.ADT >= DATE '2025-01-01'",
             }
         }
     )
@@ -926,7 +957,7 @@ def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
                     root={
                         "assert": {
                             "id": "later-invalid-declaration",
-                            "expr": "ABSENT = 1",
+                            "require": "ABSENT = 1",
                         }
                     }
                 )

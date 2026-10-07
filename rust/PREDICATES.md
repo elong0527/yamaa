@@ -99,7 +99,7 @@ Twenty independently authored fixture cases are replayed by the typed Rust
 evaluator and the Python parser/evaluator. They pin result/condition identity and
 resolution order; expected values are not regenerated from either implementation.
 Eight new typed consumer fixtures cover row/root/source/window/donor filters,
-NOT with missing data, assert/implies checks, and eager non-string failure.
+NOT with missing data, assert checks with and without `when`, and eager non-string failure.
 Both installed hosts replay exact outcome/snapshot JSON from these authored
 inputs; the optional Python frontend separately pins CSVs and callback traces
 with reference predicate parsing/evaluation disabled.
@@ -119,7 +119,7 @@ boundary; compiler resource refusals remain request limits. The syntax service
 provides language diagnostics before typed lowering.
 The shared parser/compiler, complete source selection and full Python/R
 specification execution remain release gates. Root/row-template/source filters,
-named donor/window filters and assert/implies checks compose this evaluator
+named donor/window filters and assert checks compose this evaluator
 through the [dataset/1 bridge](DATASET_TRANSPORT.md), with phase-aware binding
 before source IPC decoding. Both installed hosts replay authored typed consumer
 truth. The optional Python frontend uses the captured Rust syntax service and

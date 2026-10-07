@@ -112,7 +112,7 @@ verifications:
   - all_or_none:
       id: second-standardized-query-slot-is-filled-completely
       columns: [SMQ02NAM, SMQ02CD, SMQ02SC]
-  - implies:
+  - assert:
       id: an-uncoded-event-joins-no-query
       when: "AEDECOD IS NULL"
-      then: "SMQ01NAM IS NULL AND SMQ02NAM IS NULL AND CQ01NAM IS NULL"
+      require: "SMQ01NAM IS NULL AND SMQ02NAM IS NULL AND CQ01NAM IS NULL"

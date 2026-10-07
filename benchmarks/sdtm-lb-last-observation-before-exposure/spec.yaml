@@ -118,11 +118,11 @@ verifications:
   - row_count:
       min: 14
       max: 14
-  - implies:
+  - assert:
       id: flagged-record-has-a-result
       when: "LBLOBXFL = 'Y'"
-      then: "LBORRES IS NOT NULL"
-  - implies:
+      require: "LBORRES IS NOT NULL"
+  - assert:
       id: flagged-record-is-done
       when: "LBLOBXFL = 'Y'"
-      then: "LBSTAT IS NULL"
+      require: "LBSTAT IS NULL"

@@ -69,7 +69,7 @@ verifications:
       max: 15
   # With no donor observation all three carried fields stay missing
   # together (the donor filter only matches observations with a result).
-  - implies:
+  - assert:
       id: no-donor-leaves-carried-fields-missing
       when: "AVAL IS NULL"
-      then: "ADT IS NULL AND QSSEQ IS NULL"
+      require: "ADT IS NULL AND QSSEQ IS NULL"

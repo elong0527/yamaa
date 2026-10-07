@@ -287,8 +287,8 @@ verifications:
       max: 6
   - assert:
       id: every-administration-has-dose-and-unit
-      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
-  - implies:
+      require: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+  - assert:
       id: placebo-kit-carries-zero-dose
       when: "EXTRT = 'PLACEBO'"
-      then: "EXDOSE = 0"
+      require: "EXDOSE = 0"

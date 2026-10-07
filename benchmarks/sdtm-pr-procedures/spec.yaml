@@ -199,7 +199,7 @@ verifications:
   - row_count:
       min: 3
       max: 3
-  - implies:
+  - assert:
       id: no-dose-without-occurrence
       when: "PROCCUR = 'N'"
-      then: "PRDOSE IS NULL"
+      require: "PRDOSE IS NULL"

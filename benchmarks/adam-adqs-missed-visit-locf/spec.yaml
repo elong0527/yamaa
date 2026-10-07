@@ -147,12 +147,12 @@ verifications:
       min: 3
       max: 3
   # A record is added only for an efficacy subject at a scheduled visit.
-  - implies:
+  - assert:
       id: carried-record-fills-a-scheduled-visit
       when: "DTYPE = 'LOCF'"
-      then: "EFFFL = 'Y' AND AVISITN IN (8, 16, 24)"
+      require: "EFFFL = 'Y' AND AVISITN IN (8, 16, 24)"
   # Carrying forward never overwrites a collected score.
-  - implies:
+  - assert:
       id: collected-record-keeps-its-score
       when: "DTYPE IS NULL"
-      then: "AVAL = AVALCOL"
+      require: "AVAL = AVALCOL"

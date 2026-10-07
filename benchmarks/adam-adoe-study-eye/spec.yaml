@@ -81,11 +81,11 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: study-eye-record-carries-the-study-laterality
       when: "AFEYE = 'Study Eye'"
-      then: "OELAT = STUDYEYE OR STUDYEYE = 'BILATERAL'"
-  - implies:
+      require: "OELAT = STUDYEYE OR STUDYEYE = 'BILATERAL'"
+  - assert:
       id: both-eyes-record-is-bilateral
       when: "AFEYE = 'Both Eyes'"
-      then: "OELAT = 'BILATERAL'"
+      require: "OELAT = 'BILATERAL'"

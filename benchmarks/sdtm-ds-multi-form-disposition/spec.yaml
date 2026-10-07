@@ -216,7 +216,7 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: milestone-term-equals-decode
       when: "DSCAT = 'PROTOCOL MILESTONE'"
-      then: "DSTERM = DSDECOD"
+      require: "DSTERM = DSDECOD"

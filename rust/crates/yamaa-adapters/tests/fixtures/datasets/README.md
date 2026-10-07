@@ -37,7 +37,7 @@ unchanged committed values and schema, with no verification declarations and
 explicitly authored successful outcomes. Neither case recomputes expected sums.
 
 Predicate checks add three authored outcomes: `AVAL IS NOT NULL` fails at original
-data-row ordinals `8,10,11,16`; a false antecedent still evaluates a consequent
+data-row ordinals `8,10,11,16`; a false `when` still evaluates a `require`
 whose dynamic LIKE pattern ends in the explicit escape; and empty output still
 detects an incompatible float/text comparison. The latter two retain the two
 completed check records preceding the invalid predicate. These are independent

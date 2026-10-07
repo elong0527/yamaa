@@ -14,7 +14,7 @@ status: normative
 
 **REQ-0158.** The `predicate` primitive is Boolean-valued. It is used by row,
 aggregate, window, record-lookup, and multiple-match filters; by `case`;
-and by the `assert` and `implies` verifications.
+and by the `assert` verification.
 
 <a id="req-0159"></a>
 

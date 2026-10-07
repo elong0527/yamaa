@@ -197,15 +197,15 @@ verifications:
   - row_count:
       min: 8
       max: 8
-  - implies:
+  - assert:
       id: missed-assessment-has-no-response
       when: "RSSTAT = 'NOT DONE'"
-      then: "RSSTRESC IS NULL"
-  - implies:
+      require: "RSSTRESC IS NULL"
+  - assert:
       id: partial-response-meets-threshold
       when: "RSSTRESC = 'PR'"
-      then: "PCHG <= -30"
-  - implies:
+      require: "PCHG <= -30"
+  - assert:
       id: progressive-disease-meets-threshold
       when: "RSSTRESC = 'PD'"
-      then: "PCHG >= 20"
+      require: "PCHG >= 20"

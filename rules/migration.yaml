@@ -1454,7 +1454,7 @@ requirements:
   REQ-0380: {"file": "execution/verification.md", "sources": ["R009-14"]}
   REQ-0381: {"file": "execution/verification.md", "sources": ["R009-15"]}
   REQ-0382: {"file": "execution/verification.md", "sources": ["R009-16"]}
-  REQ-0383: {"file": "execution/verification.md", "sources": ["R009-17"]}
+  REQ-0383: {"file": "execution/verification.md", "sources": ["R009-17", "schema_verification.yaml:dataset_verifications.assert.when.description"]}
   REQ-0384: {"file": "execution/verification.md", "sources": ["R009-18"]}
   REQ-0385: {"file": "execution/verification.md", "sources": ["R009-19"]}
   REQ-0386: {"file": "execution/verification.md", "sources": ["R009-20"]}
@@ -2710,6 +2710,7 @@ provenance_addenda:
   - {"source": "schema.yaml:row_catalog_type.description", "text": "See REQ-1249 in rules/execution/rows.md.", "owner": "execution/rows", "group": "row_catalog_type", "target": "REQ-1249"}
   - {"source": "cdisc:adam-conformance-rules-5.0:code-decode-bijection", "text": "ADaM conformance rules 92/93, 95/96, 77, 109/110, and 410 require code/decode pairs such as TRTP/TRTPN to stand in a one-to-one mapping within each parameter.", "owner": "execution/verification", "group": "dataset_verifications", "target": "REQ-1153"}
   - {"source": "schema_verification.yaml:dataset_verifications.row_count.when.description", "text": "Predicate over one completed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt.", "owner": "execution/verification", "group": "dataset_verifications.row_count", "target": "REQ-1154"}
+  - {"source": "schema_verification.yaml:dataset_verifications.assert.when.description", "text": "Predicate over one completed output row. A row is checked only when the predicate is TRUE; a FALSE or UNKNOWN result exempts the row.", "owner": "execution/verification", "group": "dataset_verifications.assert", "target": "REQ-0383"}
   - {"source": "cdisc:adam-conformance-rules-5.0:usubjid-membership", "text": "ADaM conformance rule 53 requires every USUBJID in an ADaM dataset to appear in SDTM DM.", "owner": "execution/verification", "group": "dataset_verifications", "target": "REQ-1155"}
   - {"source": "schema_metadata.yaml:submission_column_class.inventory_vocabulary.description", "text": "Declares that every non-missing value of the column must equal the name of a dataset the study document declares; the admitted values are the study's dataset inventory.", "owner": "submission/terminology", "group": "submission_column_class", "target": "REQ-1156"}
   - {"source": "cdisc:adam-conformance-rules-5.0:copy-fidelity", "text": "ADaM conformance rule 2 requires a variable copied unchanged from SDTM to keep its label, attributes, and values.", "owner": "submission/metadata", "group": "submission_origin_class", "target": "REQ-1157"}

@@ -902,7 +902,7 @@ impl Executor<'_> {
                         records,
                     }));
                 }
-                Check::Assert(_) | Check::Implies { .. } | Check::PredicateDeclaration(_) => {
+                Check::Assert { .. } | Check::PredicateDeclaration(_) => {
                     let Some(record) = crate::dataset_verification::predicate_check(
                         verification,
                         &dataset,

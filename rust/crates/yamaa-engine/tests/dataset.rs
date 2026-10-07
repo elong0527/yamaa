@@ -1915,7 +1915,7 @@ fn check_predicate(node: Node, bindings: Vec<Binding>, path: &str) -> Filter {
     )
     .unwrap()
 }
-/// Assertions fail on false and unknown; implications fail only for true -> nontrue.
+/// Asserts fail on false and unknown; with `when` they fail only for true -> nontrue.
 #[test]
 fn predicate_checks_follow_truth_tables_and_keep_every_record() {
     let source = table(
@@ -1936,11 +1936,10 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
             &source,
             source.schema.clone(),
             vec![assign(0, Expression::Source(0))],
-            vec![verification(Check::Assert(check_predicate(
-                node.clone(),
-                vec![],
-                "verifications[0].assert.expr",
-            )))],
+            vec![verification(Check::Assert {
+                when: None,
+                require: check_predicate(node.clone(), vec![], "verifications[0].assert.require"),
+            })],
         );
         let result = plan.execute(&source, limits());
         if index == 0 {
@@ -1964,22 +1963,22 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
         }
     }
     for (a, when) in truths.iter().enumerate() {
-        for (b, then) in truths.iter().enumerate() {
+        for (b, require) in truths.iter().enumerate() {
             let plan = record_plan(
                 &source,
                 source.schema.clone(),
                 vec![assign(0, Expression::Source(0))],
                 vec![
-                    verification(Check::Implies {
-                        when: check_predicate(
+                    verification(Check::Assert {
+                        when: Some(check_predicate(
                             when.clone(),
                             vec![],
-                            "verifications[0].implies.when",
-                        ),
-                        then: check_predicate(
-                            then.clone(),
+                            "verifications[0].assert.when",
+                        )),
+                        require: check_predicate(
+                            require.clone(),
                             vec![],
-                            "verifications[0].implies.then",
+                            "verifications[0].assert.require",
                         ),
                     }),
                     verification(Check::RowCount {
@@ -1991,11 +1990,11 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
             let result = plan.execute(&source, limits());
             if a == 0 && b != 0 {
                 let ExecutionError::VerificationFailures(records) = *result.unwrap_err() else {
-                    panic!("implication data failure")
+                    panic!("guarded assert data failure")
                 };
                 assert_eq!(records.len(), 2);
-                assert_eq!(records[0].condition, "implication_failed");
-                assert_eq!(records[0].requirement, "REQ-0383");
+                assert_eq!(records[0].condition, "assert_failed");
+                assert_eq!(records[0].requirement, "REQ-0384");
                 assert_eq!(records[0].failed_count, 2);
                 assert_eq!(records[1].failed_count, 0);
             } else {
@@ -2016,7 +2015,7 @@ fn predicate_declaration_validation_is_sequential_on_empty_output() {
                 right: Scalar::Literal(Value::Str("bad".into())),
             },
             vec![binding("id", Read::Column(0))],
-            "verifications[1].implies.then",
+            "verifications[1].assert.require",
         );
         let plan = record_plan(
             &source,
@@ -2027,13 +2026,13 @@ fn predicate_declaration_validation_is_sequential_on_empty_output() {
                     min: Some(2),
                     max: None,
                 }),
-                verification(Check::Implies {
-                    when: check_predicate(
+                verification(Check::Assert {
+                    when: Some(check_predicate(
                         Node::Boolean(false),
                         vec![],
-                        "verifications[1].implies.when",
-                    ),
-                    then: invalid,
+                        "verifications[1].assert.when",
+                    )),
+                    require: invalid,
                 }),
                 verification(Check::RowCount {
                     min: Some(0),
@@ -2046,7 +2045,7 @@ fn predicate_declaration_validation_is_sequential_on_empty_output() {
         else {
             panic!("predicate declaration failure")
         };
-        assert_eq!(error.spec_path, "verifications[1].implies.then");
+        assert_eq!(error.spec_path, "verifications[1].assert.require");
         assert!(matches!(
             error.kind,
             predicate::ErrorKind::Condition(predicate::Condition::IncompatiblePair { .. })
@@ -2056,9 +2055,9 @@ fn predicate_declaration_validation_is_sequential_on_empty_output() {
         assert_eq!(records[0].output_rows, count);
     }
 }
-/// A false implication antecedent never masks a later dynamic pattern failure.
+/// A false `when` never masks a later dynamic `require` pattern failure.
 #[test]
-fn implication_evaluates_dynamic_consequent_and_keeps_prefix() {
+fn assert_when_evaluates_dynamic_require_and_keeps_prefix() {
     let source = table(
         &[("id", ColumnType::Int), ("p", ColumnType::Str)],
         vec![
@@ -2066,7 +2065,7 @@ fn implication_evaluates_dynamic_consequent_and_keeps_prefix() {
             vec![Value::Int(2), Value::Str("tail!".into())],
         ],
     );
-    let then = check_predicate(
+    let require = check_predicate(
         Node::Like {
             value: Scalar::Literal(Value::Str("text".into())),
             pattern: Scalar::Identifier("p".into()),
@@ -2074,7 +2073,7 @@ fn implication_evaluates_dynamic_consequent_and_keeps_prefix() {
             negated: false,
         },
         vec![binding("p", Read::Column(1))],
-        "verifications[1].implies.then",
+        "verifications[1].assert.require",
     );
     let plan = record_plan(
         &source,
@@ -2088,20 +2087,20 @@ fn implication_evaluates_dynamic_consequent_and_keeps_prefix() {
                 min: Some(2),
                 max: Some(2),
             }),
-            verification(Check::Implies {
-                when: check_predicate(
+            verification(Check::Assert {
+                when: Some(check_predicate(
                     Node::Boolean(false),
                     vec![],
-                    "verifications[1].implies.when",
-                ),
-                then,
+                    "verifications[1].assert.when",
+                )),
+                require,
             }),
         ],
     );
     let ExecutionError::VerificationPredicate { error, records } =
         *plan.execute(&source, limits()).unwrap_err()
     else {
-        panic!("dynamic consequent failure")
+        panic!("dynamic require failure")
     };
     assert_eq!(
         error.kind,
@@ -2129,7 +2128,10 @@ fn predicate_checks_admit_only_completed_output_bindings() {
             }],
             vec![assign(0, Expression::Source(0))],
             vec![0],
-            vec![verification(Check::Assert(positive(read)))],
+            vec![verification(Check::Assert {
+                when: None,
+                require: positive(read),
+            })],
         );
         assert_eq!(plan, Err(PlanError::Predicate(error)));
     }
@@ -2151,7 +2153,7 @@ fn predicate_declaration_checkpoint_does_not_evaluate_rows() {
             negated: false,
         },
         vec![binding("p", Read::Column(1))],
-        "verifications[1].implies.when",
+        "verifications[1].assert.when",
     );
     let plan = record_plan(
         &source,
@@ -2183,16 +2185,22 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         source.schema.clone(),
         vec![assign(0, Expression::Source(0))],
         vec![
-            verification(Check::Assert(check_predicate(
-                Node::Boolean(true),
-                vec![],
-                "verifications[0].assert.expr",
-            ))),
-            verification(Check::Assert(check_predicate(
-                Node::Boolean(true),
-                vec![],
-                "verifications[1].assert.expr",
-            ))),
+            verification(Check::Assert {
+                when: None,
+                require: check_predicate(
+                    Node::Boolean(true),
+                    vec![],
+                    "verifications[0].assert.require",
+                ),
+            }),
+            verification(Check::Assert {
+                when: None,
+                require: check_predicate(
+                    Node::Boolean(true),
+                    vec![],
+                    "verifications[1].assert.require",
+                ),
+            }),
         ],
     );
     assert!(matches!(
@@ -2219,14 +2227,17 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
         &source,
         source.schema.clone(),
         vec![assign(0, Expression::Source(0))],
-        vec![verification(Check::Assert(check_predicate(
-            Node::IsNull {
-                value: Scalar::Identifier("id".into()),
-                negated: true,
-            },
-            vec![binding("id", Read::Column(0))],
-            "verifications[0].assert.expr",
-        )))],
+        vec![verification(Check::Assert {
+            when: None,
+            require: check_predicate(
+                Node::IsNull {
+                    value: Scalar::Identifier("id".into()),
+                    negated: true,
+                },
+                vec![binding("id", Read::Column(0))],
+                "verifications[0].assert.require",
+            ),
+        })],
     );
     assert!(matches!(
         *plan
@@ -6186,14 +6197,17 @@ fn contains_declaration_checks_do_not_reset_match_budgets() {
     let source = table(&[("id", ColumnType::Int)], vec![]);
     let checks: Vec<_> = (0..2)
         .map(|index| {
-            verification(Check::Assert(check_predicate(
-                Node::Contains {
-                    value: Scalar::Literal(Value::Str("a".repeat(100))),
-                    pattern: "z".into(),
-                },
-                vec![],
-                &format!("verifications[{index}].assert.expr"),
-            )))
+            verification(Check::Assert {
+                when: None,
+                require: check_predicate(
+                    Node::Contains {
+                        value: Scalar::Literal(Value::Str("a".repeat(100))),
+                        pattern: "z".into(),
+                    },
+                    vec![],
+                    &format!("verifications[{index}].assert.require"),
+                ),
+            })
         })
         .collect();
     let single = record_plan(

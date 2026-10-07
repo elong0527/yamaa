@@ -70,11 +70,11 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - implies:
+  - assert:
       id: approved-correction-is-applied
       when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
-      then: "ASEV = 'SEVERE' AND ASEVN = 3"
-  - implies:
+      require: "ASEV = 'SEVERE' AND ASEVN = 3"
+  - assert:
       id: approved-correction-on-missing-is-applied
       when: "USUBJID = 'CATH-01-003' AND AESEQ = 1"
-      then: "ASEV = 'SEVERE' AND ASEVN = 3"
+      require: "ASEV = 'SEVERE' AND ASEVN = 3"

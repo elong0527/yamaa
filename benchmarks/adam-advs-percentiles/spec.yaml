@@ -106,7 +106,7 @@ verifications:
   - row_count:
       min: 8
       max: 8
-  - implies:
+  - assert:
       id: percentile-requires-a-growth-reference
       when: "AVAL IS NOT NULL"
-      then: "ZNUM IS NOT NULL"
+      require: "ZNUM IS NOT NULL"

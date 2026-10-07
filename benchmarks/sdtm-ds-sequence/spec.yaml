@@ -82,11 +82,11 @@ verifications:
   - row_count:
       min: 7
       max: 7
-  - implies:
+  - assert:
       id: randomized-record-is-a-milestone
       when: "DSDECOD = 'RANDOMIZED'"
-      then: "DSCAT = 'PROTOCOL MILESTONE'"
-  - implies:
+      require: "DSCAT = 'PROTOCOL MILESTONE'"
+  - assert:
       id: completion-record-is-a-disposition-event
       when: "DSDECOD = 'COMPLETED'"
-      then: "DSCAT = 'DISPOSITION EVENT'"
+      require: "DSCAT = 'DISPOSITION EVENT'"

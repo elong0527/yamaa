@@ -157,10 +157,10 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: missing-date-means-missing-epoch
       when: "VSDTC IS NULL"
-      then: "EPOCH IS NULL"
+      require: "EPOCH IS NULL"
 
 submission:
   label: Vital Signs

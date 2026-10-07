@@ -199,27 +199,27 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - implies:
+  - assert:
       id: partial-start-keeps-no-study-day
       when: "AESTDTC IS NOT NULL AND AESTPR <> 'D'"
-      then: "AESTDY IS NULL"
-  - implies:
+      require: "AESTDY IS NULL"
+  - assert:
       id: partial-end-keeps-no-study-day
       when: "AEENDTC IS NOT NULL AND AEENPR <> 'D'"
-      then: "AEENDY IS NULL"
-  - implies:
+      require: "AEENDY IS NULL"
+  - assert:
       id: complete-start-with-reference-has-study-day
       when: "AESTPR = 'D' AND RFSTDTC IS NOT NULL"
-      then: "AESTDY IS NOT NULL"
-  - implies:
+      require: "AESTDY IS NOT NULL"
+  - assert:
       id: complete-end-with-reference-has-study-day
       when: "AEENPR = 'D' AND RFSTDTC IS NOT NULL"
-      then: "AEENDY IS NOT NULL"
-  - implies:
+      require: "AEENDY IS NOT NULL"
+  - assert:
       id: study-day-has-no-day-zero
       when: "AESTDY IS NOT NULL"
-      then: "AESTDY <> 0"
-  - implies:
+      require: "AESTDY <> 0"
+  - assert:
       id: end-study-day-has-no-day-zero
       when: "AEENDY IS NOT NULL"
-      then: "AEENDY <> 0"
+      require: "AEENDY <> 0"

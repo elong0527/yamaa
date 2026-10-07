@@ -96,15 +96,15 @@ verifications:
   - all_or_none:
       id: age-unit-completeness
       columns: [AGE, AGEU]
-  - implies:
+  - assert:
       id: complete-birth-date-gives-age
       when: "BRTH_PREC = 'D'"
-      then: "AGE IS NOT NULL"
-  - implies:
+      require: "AGE IS NOT NULL"
+  - assert:
       id: partial-birth-date-gives-no-age
       when: "BRTH_PREC IN ('M', 'Y') OR BRTHDTC IS NULL"
-      then: "AGE IS NULL"
-  - implies:
+      require: "AGE IS NULL"
+  - assert:
       id: age-is-not-negative
       when: "AGE IS NOT NULL"
-      then: "AGE >= 0"
+      require: "AGE >= 0"

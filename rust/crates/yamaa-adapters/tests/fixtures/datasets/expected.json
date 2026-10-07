@@ -3449,27 +3449,29 @@
           "path": "verifications[2].assert",
           "check": {
             "assert": {
-              "path": "verifications[2].assert.expr",
-              "text": "AVAL IS NOT NULL",
-              "nodes": [
-                {
-                  "is_null": {
-                    "value": {
-                      "identifier": "AVAL"
-                    },
-                    "negated": true
+              "require": {
+                "path": "verifications[2].assert.require",
+                "text": "AVAL IS NOT NULL",
+                "nodes": [
+                  {
+                    "is_null": {
+                      "value": {
+                        "identifier": "AVAL"
+                      },
+                      "negated": true
+                    }
                   }
-                }
-              ],
-              "root": 0,
-              "bindings": [
-                {
-                  "name": "AVAL",
-                  "read": {
-                    "column": 5
+                ],
+                "root": 0,
+                "bindings": [
+                  {
+                    "name": "AVAL",
+                    "read": {
+                      "column": 5
+                    }
                   }
-                }
-              ]
+                ]
+              }
             }
           }
         }
@@ -3583,7 +3585,7 @@
     "snapshot": null
   },
   {
-    "case": "implies_eager_dynamic_error",
+    "case": "assert_when_eager_dynamic_error",
     "input": "adlb.arrow",
     "request": {
       "protocol": "dataset/1",
@@ -3786,11 +3788,11 @@
           }
         },
         {
-          "path": "verifications[2].implies",
+          "path": "verifications[2].assert",
           "check": {
-            "implies": {
+            "assert": {
               "when": {
-                "path": "verifications[2].implies.when",
+                "path": "verifications[2].assert.when",
                 "text": "FALSE",
                 "nodes": [
                   {
@@ -3800,8 +3802,8 @@
                 "root": 0,
                 "bindings": []
               },
-              "then": {
-                "path": "verifications[2].implies.then",
+              "require": {
+                "path": "verifications[2].assert.require",
                 "text": "'x' LIKE PARAMCD ESCAPE '1'",
                 "nodes": [
                   {
@@ -3843,7 +3845,7 @@
           "condition": "invalid_predicate",
           "requirement": "REQ-0191",
           "spec_paths": [
-            "verifications[2].implies.then"
+            "verifications[2].assert.require"
           ],
           "context": {
             "reason": {
@@ -4084,32 +4086,34 @@
           "path": "verifications[2].assert",
           "check": {
             "assert": {
-              "path": "verifications[2].assert.expr",
-              "text": "AVAL = 'bad'",
-              "nodes": [
-                {
-                  "compare": {
-                    "operator": "eq",
-                    "left": {
-                      "identifier": "AVAL"
-                    },
-                    "right": {
-                      "literal": {
-                        "str": "bad"
+              "require": {
+                "path": "verifications[2].assert.require",
+                "text": "AVAL = 'bad'",
+                "nodes": [
+                  {
+                    "compare": {
+                      "operator": "eq",
+                      "left": {
+                        "identifier": "AVAL"
+                      },
+                      "right": {
+                        "literal": {
+                          "str": "bad"
+                        }
                       }
                     }
                   }
-                }
-              ],
-              "root": 0,
-              "bindings": [
-                {
-                  "name": "AVAL",
-                  "read": {
-                    "column": 5
+                ],
+                "root": 0,
+                "bindings": [
+                  {
+                    "name": "AVAL",
+                    "read": {
+                      "column": 5
+                    }
                   }
-                }
-              ]
+                ]
+              }
             }
           }
         }
@@ -4124,7 +4128,7 @@
           "condition": "incompatible_input_type",
           "requirement": "REQ-0190",
           "spec_paths": [
-            "verifications[2].assert.expr"
+            "verifications[2].assert.require"
           ],
           "context": {
             "left_type": {

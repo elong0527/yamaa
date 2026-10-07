@@ -128,7 +128,7 @@ verifications:
   - all_or_none:
       id: an-assigned-window-carries-its-order-and-target
       columns: [AVISIT, AVISITN, AWTARGET]
-  - implies:
+  - assert:
       id: analysis-record-has-an-analysis-window
       when: "ANL01FL = 'Y'"
-      then: "AVISIT IS NOT NULL AND ADY IS NOT NULL"
+      require: "AVISIT IS NOT NULL AND ADY IS NOT NULL"

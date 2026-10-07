@@ -133,11 +133,11 @@ verifications:
   - row_count:
       min: 16
       max: 16
-  - implies:
+  - assert:
       id: analysis-flag-marks-the-worst-response-of-its-date
       when: "ANL01FL = 'Y'"
-      then: "AVAL = WORSTAVAL"
-  - implies:
+      require: "AVAL = WORSTAVAL"
+  - assert:
       id: assessment-is-not-before-treatment-start
       when: "ADT IS NOT NULL"
-      then: "ADY >= 1"
+      require: "ADY >= 1"

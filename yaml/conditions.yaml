@@ -43,7 +43,6 @@ conditions:
   forward_reference: {phases: [validation]}
   function_call_failed: {phases: [derivation, validation]}
   function_contract_mismatch: {phases: [validation]}
-  implication_failed: {phases: [verification]}
   incomparable_range_types: {phases: [validation]}
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}

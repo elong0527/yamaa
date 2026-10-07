@@ -54,7 +54,7 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - implies:
+  - assert:
       id: recorded-dose-implies-a-record
       when: "NDOSVAL > 0"
-      then: "NDOSREC >= NDOSVAL"
+      require: "NDOSREC >= NDOSVAL"

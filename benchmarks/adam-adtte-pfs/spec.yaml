@@ -258,4 +258,4 @@ verifications:
       columns: [SRCDOM, SRCVAR, SRCSEQ]
   - assert:
       id: endpoint-is-not-before-randomization
-      expr: "ADT >= STARTDT"
+      require: "ADT >= STARTDT"

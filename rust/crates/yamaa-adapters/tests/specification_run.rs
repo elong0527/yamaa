@@ -1412,7 +1412,7 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
     assert_eq!(actual["diagnostics"][0]["condition"], "missing_key");
     // Even a later unsupported operation prevents all source requests; it is
     // not hidden behind an earlier language declaration finding.
-    let unsupported = format!("{written}  - assert: {{expr: 'TRUE'}}\n");
+    let unsupported = format!("{written}  - assert: {{require: 'TRUE'}}\n");
     assert!(matches!(
         PreparedRun::prepare(prepare(&schema, unsupported.as_bytes())),
         Err(yamaa_adapters::specification_run::Error::Prepare(

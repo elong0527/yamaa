@@ -100,15 +100,15 @@ verifications:
   - row_count:
       min: 4
       max: 4
-  - implies:
+  - assert:
       id: serious-event-names-a-criterion
       when: "AESER = 'Y'"
-      then: >-
+      require: >-
         AESDTH = 'Y' OR AESLIFE = 'Y' OR AESHOSP = 'Y'
         OR AESDISAB = 'Y' OR AESCONG = 'Y' OR AESMIE = 'Y'
-  - implies:
+  - assert:
       id: a-serious-criterion-marks-the-event-serious
       when: >-
         AESDTH = 'Y' OR AESLIFE = 'Y' OR AESHOSP = 'Y'
         OR AESDISAB = 'Y' OR AESCONG = 'Y' OR AESMIE = 'Y'
-      then: "AESER = 'Y'"
+      require: "AESER = 'Y'"

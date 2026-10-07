@@ -80,15 +80,15 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: fatal-event-carries-its-own-cause
       when: "AESEQ = DTHAESEQ"
-      then: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
-  - implies:
+      require: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
+  - assert:
       id: no-cause-without-a-fatal-event
       when: "DTHCAUS IS NOT NULL"
-      then: "DTHDT IS NOT NULL"
-  - implies:
+      require: "DTHDT IS NOT NULL"
+  - assert:
       id: death-date-marks-the-subject
       when: "DTHDT IS NOT NULL"
-      then: "DTHFL = 'Y'"
+      require: "DTHFL = 'Y'"

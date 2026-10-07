@@ -231,15 +231,15 @@ verifications:
   - row_count:
       min: 30
       max: 30
-  - implies:
+  - assert:
       id: total-score-stays-within-the-answer-range
       when: "QSTESTCD = 'PHQ9T'"
-      then: "QSSTRESN BETWEEN 0 AND 27"
-  - implies:
+      require: "QSSTRESN BETWEEN 0 AND 27"
+  - assert:
       id: not-done-records-carry-no-result
       when: "QSSTAT = 'NOT DONE'"
-      then: "QSORRES IS NULL AND QSSTRESC IS NULL AND QSSTRESN IS NULL"
-  - implies:
+      require: "QSORRES IS NULL AND QSSTRESC IS NULL AND QSSTRESN IS NULL"
+  - assert:
       id: derived-records-carry-no-original-result
       when: "QSDRVFL = 'Y'"
-      then: "QSORRES IS NULL"
+      require: "QSORRES IS NULL"

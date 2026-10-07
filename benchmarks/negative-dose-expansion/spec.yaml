@@ -103,4 +103,4 @@ verifications:
   # were built.
   - assert:
       id: a-record-is-expanded-into-every-administration-it-holds
-      expr: "NDOSMAX = NDOSE"
+      require: "NDOSMAX = NDOSE"

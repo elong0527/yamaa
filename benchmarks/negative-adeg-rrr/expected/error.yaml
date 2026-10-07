@@ -1,8 +1,8 @@
 phase: verification
-condition: implication_failed
+condition: assert_failed
 spec_paths:
-  - verifications[2].implies
-requirement: REQ-0383
+  - verifications[2].assert
+requirement: REQ-0384
 context:
   verification_id: reject-pre-existing-rrr
   failure_count: 1

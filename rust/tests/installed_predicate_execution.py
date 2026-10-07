@@ -117,9 +117,9 @@ def specification(site="row", text=None):
     elif site == "checks":
         arguments["verifications"] = [
             r.Expression(
-                root={"assert": {"expr": "S IS NULL OR str_contains(S, 'a|dog')"}}
+                root={"assert": {"require": "S IS NULL OR str_contains(S, 'a|dog')"}}
             ),
-            r.Expression(root={"implies": {"when": text, "then": "K < 4"}}),
+            r.Expression(root={"assert": {"when": text, "require": "K < 4"}}),
         ]
     return r.Specification(
         schema_version="1.0",

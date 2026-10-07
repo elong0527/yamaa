@@ -109,11 +109,11 @@ verifications:
   - all_or_none:
       id: period-two-completeness
       columns: [TR02SDT, TRT02A]
-  - implies:
+  - assert:
       id: period-two-follows-period-one
       when: "TR02SDT IS NOT NULL"
-      then: "TR02SDT > TR01EDT"
-  - implies:
+      require: "TR02SDT > TR01EDT"
+  - assert:
       id: crossover-changes-treatment
       when: "TRT02A IS NOT NULL"
-      then: "TRT02A <> TRT01A"
+      require: "TRT02A <> TRT01A"
