@@ -228,6 +228,17 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_model.tsv",
+      "family": "schema",
+      "level": "compile",
+      "consumers": [
+        "R/yamaanative/tests/schema.R",
+        "rust/crates/yamaa-adapters/tests/schema_transport.rs",
+        "rust/tests/installed_schema.py",
+        "python/tests/native/test_model_contracts.py"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_transport.tsv",
       "family": "schema",
       "level": "compile",

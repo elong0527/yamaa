@@ -10,6 +10,7 @@ mod inheritance_references;
 mod layer_admission;
 mod layer_materialization;
 mod layers;
+mod model;
 mod normalization;
 mod path_render;
 mod printable_data;
@@ -37,6 +38,7 @@ pub use inheritance_references::{
 };
 pub use layer_materialization::LayerCompositionError;
 pub use layers::{ComposedLayers, LayerProvenance};
+pub use model::SpecificationDocument;
 pub use normalization::{
     NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
     NormalizedDocument, SchemaOrigin, SchemaSource,

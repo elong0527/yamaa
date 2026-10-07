@@ -9,7 +9,7 @@ use wire::Tree;
 use yamaa_core::schema::{
     BundleLimits, NormalizationBudget, NormalizationLimits, NormalizedDocument, SchemaAliasKind,
     SchemaContext, SchemaDiagnostic, SchemaModule, SchemaShape, SchemaSource, SchemaStructure,
-    ValidationBudget, ValidationLimits, DIAGNOSTIC_UNICODE_VERSION,
+    SpecificationDocument, ValidationBudget, ValidationLimits, DIAGNOSTIC_UNICODE_VERSION,
 };
 
 pub const MAX_REQUEST_BYTES: usize = 8_388_608;
@@ -97,6 +97,9 @@ enum Query {
         fragment: bool,
     },
     ValidateDocument {
+        document: Tree,
+    },
+    ValidateModel {
         document: Tree,
     },
     NormalizeDocument {
@@ -354,6 +357,9 @@ impl CompiledSchema {
                 Query::ExpandWindows { .. } | Query::ComposeLayers { .. } => {
                     unreachable!("handled above")
                 }
+                Query::ValidateModel { document } => {
+                    (document, 10, None, false, String::new(), None)
+                }
                 Query::ValidateDocument { document } => {
                     (document, 0, None, false, String::new(), None)
                 }
@@ -428,6 +434,15 @@ impl CompiledSchema {
                 }
             };
             let outcome = match operation {
+                10 => match SpecificationDocument::admit(input, budget.validation_scope()) {
+                    Ok(Ok(model)) => {
+                        json!({"status":"model_valid", "default_driver":model.default_driver()})
+                    }
+                    Ok(Err(findings)) => {
+                        json!({"status":"invalid", "diagnostics":diagnostics(&findings)})
+                    }
+                    Err(error) => errors::validation(error)?,
+                },
                 0 | 2 => {
                     let result = if operation == 0 {
                         self.schema

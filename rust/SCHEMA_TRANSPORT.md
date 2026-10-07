@@ -55,6 +55,7 @@ request contains only `protocol` and `queries`. The closed operations are:
 | --- | --- |
 | `validate_document` | `document` |
 | `normalize_document` | `document` |
+| `validate_model` | `document`: final normalized, window-expanded specification |
 | `normalize_layer` | `document`: one authored inheritance contribution |
 | `resolve_inheritance_dependencies` | `document`: normalized composed contributions after non-strict window expansion |
 | `compose_layers` | `layers`: ordered decoded documents |
@@ -65,6 +66,27 @@ request contains only `protocol` and `queries`. The closed operations are:
 | `validate_types` | `types`, `document`, `fragment`, `path` |
 | `normalize_types` | `types`, `document`, `fragment` |
 | `matching_types` | `types`, `document`, `fragment` |
+
+`validate_model` checks the fixed normalized specification model independently of
+custom authored-schema shorthand. It returns `model_valid` with `default_driver`,
+or ordered `model_contract_mismatch` diagnostics containing `reason`. It validates
+closed fields, strict types/enums, expression cardinality, intermediate uniqueness
+and ordinal names, including nested metadata shapes. It shares the batch validation
+budget; exhausted policies never produce a model-valid result.
+
+The core `SpecificationDocument` owns the admitted tree without rewriting its
+occurrences, so callers can retain matching source/provenance indices. Omitted and
+explicit null fields remain distinguishable. This structural token does not apply
+model defaults to the tree, bind sources, validate submission/value metadata
+relationships, admit executable operators, or qualify a complete run. Only driver
+selection is exposed here (explicit base, otherwise the sole source). The Python
+loader still constructs its model; replacing that acceptance gate and consuming
+effective defaults in the shared compiler remain #1739 work.
+
+Eight independently authored wire groups cover 36 cases in Rust and both installed
+hosts. Installed Python additionally compares mutations of every field across all
+19 non-expression model classes against its reference facade. The independent
+wire replay blocks Python interpreter imports; R needs no Python to run it.
 
 Descriptor identifiers come from the compilation response. A descriptor query
 interprets the root of its supplied decoded document. `matching_member` selects
