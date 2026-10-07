@@ -15,6 +15,13 @@ modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module
 # Both hosts receive already-resolved context from the captured Rust schema.
 prepare_entry <- get(".prepare_document",envir=asNamespace("yamaanative"))
 no_port <- function(...) stop("invalid entry reached source authority")
+preflight_truth <- read.delim(file.path(root,"preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(preflight_truth)==5L)
+for(i in seq_len(nrow(preflight_truth))) {
+  failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(preflight_truth$source[[i]]),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),preflight_truth$expected[[i]]))
+}
+cat("core preflight complete independent findings before ports passed\n")
 for(literal in c("true","123456789012345678901234567890","null")) {
   failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(paste0("schema_version: ",literal)),no_port,no_port,no_port),error=identity)
   expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":null,"spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')

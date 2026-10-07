@@ -47,7 +47,10 @@ impl ConversionError {
 
     /// Return the requirement that owns this conversion failure.
     pub fn requirement(&self) -> &'static str {
-        self.diagnostic_code().definition().requirement
+        self.diagnostic_code()
+            .definition()
+            .requirement
+            .expect("numeric and conversion causes have a normative requirement")
     }
 
     /// Preserve the parsed numeric source type used by the Python reference.

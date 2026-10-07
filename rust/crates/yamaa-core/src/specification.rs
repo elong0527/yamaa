@@ -21,6 +21,8 @@ mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
 pub use lookup_diagnostics::LookupFinding;
+#[path = "specification_preflight_diagnostics.rs"]
+mod preflight_diagnostics;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]

@@ -160,6 +160,7 @@ enum ContextValue {
     Scalar(ScalarValue),
     // This diagnostic-only integer may lie outside the valid runtime i64 range.
     Integer { integer: String },
+    Sequence(Vec<ContextValue>),
 }
 
 type Context = BTreeMap<String, ContextValue>;
@@ -177,7 +178,7 @@ fn text(value: impl Into<String>) -> ContextValue {
 pub(crate) struct Diagnostic {
     phase: &'static str,
     condition: &'static str,
-    requirement: &'static str,
+    requirement: Option<&'static str>,
     spec_paths: Vec<String>,
     context: Context,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -188,10 +189,20 @@ pub(crate) struct Diagnostic {
     position: Option<Position>,
 }
 
+impl From<yamaa_core::diagnostic::ContextValue> for ContextValue {
+    fn from(value: yamaa_core::diagnostic::ContextValue) -> Self {
+        use yamaa_core::diagnostic::ContextValue as C;
+        match value {
+            C::Scalar(value) => scalar(value),
+            C::Integer(integer) => Self::Integer { integer },
+            C::Sequence(values) => Self::Sequence(values.into_iter().map(Into::into).collect()),
+        }
+    }
+}
+
 impl From<yamaa_core::diagnostic::Diagnostic> for Diagnostic {
     /// Translate representation only; core owns vocabulary, context and geometry.
     fn from(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Self {
-        use yamaa_core::diagnostic::ContextValue as CoreValue;
         let definition = diagnostic.definition();
         Self {
             phase: definition.phase,
@@ -201,15 +212,7 @@ impl From<yamaa_core::diagnostic::Diagnostic> for Diagnostic {
             context: diagnostic
                 .context
                 .into_iter()
-                .map(|(key, value)| {
-                    (
-                        key,
-                        match value {
-                            CoreValue::Scalar(value) => scalar(value),
-                            CoreValue::Integer(integer) => ContextValue::Integer { integer },
-                        },
-                    )
-                })
+                .map(|(key, value)| (key, value.into()))
                 .collect(),
             source_span: diagnostic.source_span.map(Into::into),
             operand_route: diagnostic.operand_route,
@@ -310,7 +313,7 @@ pub(crate) fn predicate<E>(
     Ok(Box::new(Diagnostic {
         phase: condition.phase(),
         condition: condition.condition(),
-        requirement: condition.requirement(),
+        requirement: Some(condition.requirement()),
         spec_paths: vec![error.spec_path],
         context,
         source_span: None,
@@ -338,7 +341,7 @@ pub(crate) fn multiple_values(
     Ok(Box::new(Diagnostic {
         phase: "derivation",
         condition: "multiple_values_per_key",
-        requirement: "REQ-0075",
+        requirement: Some("REQ-0075"),
         spec_paths: vec![path],
         context,
         source_span: None,
@@ -371,11 +374,11 @@ pub(crate) fn join_condition(
         } else {
             "unmatched_key"
         },
-        requirement: if count.is_some() {
+        requirement: Some(if count.is_some() {
             "REQ-0127"
         } else {
             "REQ-0124"
-        },
+        }),
         spec_paths: vec![path],
         context,
         source_span: None,
@@ -407,7 +410,7 @@ pub(crate) fn baseline_ambiguity(
     Ok(Box::new(Diagnostic {
         phase: "derivation",
         condition: "ambiguous_baseline",
-        requirement: "REQ-0322",
+        requirement: Some("REQ-0322"),
         spec_paths: vec![path],
         context,
         source_span: None,
@@ -489,7 +492,7 @@ fn compile_outcome(error: CompileError, expression: &str, path: String) -> Outco
                 diagnostic: Box::new(Diagnostic {
                     phase: "validation",
                     condition: failure.condition(),
-                    requirement: failure.requirement(),
+                    requirement: Some(failure.requirement()),
                     spec_paths: vec![format!("{path}.expr")],
                     context,
                     source_span: None,
@@ -656,7 +659,7 @@ pub(crate) fn declaration(
     Box::new(Diagnostic {
         phase: "validation",
         condition,
-        requirement,
+        requirement: Some(requirement),
         spec_paths: vec![path],
         context: [("reason".into(), text(reason))].into_iter().collect(),
         source_span: None,
@@ -676,7 +679,7 @@ pub(crate) fn reduction_type(
     Box::new(Diagnostic {
         phase: "validation",
         condition: "incompatible_input_type",
-        requirement: "REQ-0510",
+        requirement: Some("REQ-0510"),
         spec_paths: vec![path],
         context: [
             ("expr".into(), text(expression)),
