@@ -114,8 +114,8 @@ intermediate variables before reduction. Each binding declares a `name`, a
 aggregate's relation, in declaration order; each derivation reads the
 record's fields and the values bound by earlier bindings. The reducer
 expression names each bound variable by its unqualified `name`. A derive
-binding is not an expression function: text becomes a number only through
-the binding's declared `type` ([REQ-1190](aggregation.md#req-1190)), and a
+binding is not an expression function. Text becomes a number only through
+the binding's declared `type` ([REQ-1190](aggregation.md#req-1190)). A
 date becomes an integer only through an operation such as
 `to_epoch_day` in the binding's own derivation. The aggregate and numeric
 computation grammars never parse text or dates themselves.
@@ -132,9 +132,9 @@ otherwise. A missing value stays missing without attempting conversion.
 <a id="req-1191"></a>
 
 **REQ-1191.** The relation a derived aggregate reduces is the one relation
-its derive bindings and filter name; naming two relations is an error, and a
-reducer expression mixing a bound variable with a qualified identifier is an
-error under [REQ-0468](aggregation.md#req-0468). Qualifiers naming declared
+its derive bindings and filter name. Naming two relations is an error. A
+reducer expression that mixes a bound variable with a qualified identifier is
+an error under [REQ-0468](aggregation.md#req-0468). Qualifiers naming declared
 named intermediates do not count as relations for this rule; a binding may
 read them only under [REQ-1242](aggregation.md#req-1242). `derive` is not
 available on the unqualified output-row reduction or the grouped-input
