@@ -1,4 +1,4 @@
-//! Bounded original-specification compiler prototype: declared CSV sources,
+//! Bounded original-specification compiler prototype: declared typed sources,
 //! implicit key grain, source columns and checked numeric computations.
 //! Admission never reads study data; binding consumes only the captured source schema.
 use crate::{
@@ -112,6 +112,11 @@ pub enum PreflightFinding {
     DomainInputCollision {
         domain: String,
     },
+    RedundantSourceType {
+        dataset: String,
+        field: String,
+        kind: ColumnType,
+    },
 }
 #[derive(Debug)]
 pub enum BindError {
@@ -175,6 +180,36 @@ pub struct SourceDeclaration {
     pub name: String,
     pub path: String,
     pub types: Vec<(String, ColumnType)>,
+    pub profile: SourceProfile,
+    pub empty_string_present: bool,
+}
+/// The closed source profile is selected by the authored path, never its bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceProfile {
+    Csv,
+    Parquet,
+}
+impl SourceProfile {
+    pub fn from_path(path: &str) -> Option<Self> {
+        let name = path.rsplit('/').next()?;
+        let (stem, extension) = name.rsplit_once('.')?;
+        if stem.is_empty() {
+            return None;
+        }
+        if extension.eq_ignore_ascii_case("csv") {
+            Some(Self::Csv)
+        } else if extension.eq_ignore_ascii_case("parquet") {
+            Some(Self::Parquet)
+        } else {
+            None
+        }
+    }
+}
+impl SourceDeclaration {
+    /// Apply the input convention after the storage profile preserves its value.
+    pub fn text_is_missing(&self, value: &str) -> bool {
+        !self.empty_string_present && value.is_empty()
+    }
 }
 #[derive(Clone, Debug)]
 enum Operation {
@@ -601,6 +636,7 @@ impl PreparedSpecification {
             metadata_features(d, column, &format!("columns.{name}"), true, &mut extra)?;
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
+        let mut source_findings = Vec::new();
         if has_rows && inputs.len() != 1 {
             reject(&mut extra, "multiple_source_rows", "rows".into());
         }
@@ -616,14 +652,45 @@ impl PreparedSpecification {
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
             optional_features(d, id, &["schema", "ordinal"], &prefix, &mut extra);
-            if d.field(id, "empty_string")
-                .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
+            let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
+            if profile != Some(SourceProfile::Parquet)
+                && d.field(id, "empty_string")
+                    .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
             {
                 reject(&mut extra, "empty_string", format!("{prefix}.empty_string"));
             }
-            if !text(d, field(d, id, "path")?)?.ends_with(".csv") {
+            if profile.is_none() {
                 reject(&mut extra, "source_format", format!("{prefix}.path"));
             }
+            if profile == Some(SourceProfile::Parquet) {
+                if let Some(types) = d
+                    .field(id, "types")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    let fields = mapping(d, types)?;
+                    if fields.len() > limits.source_fields {
+                        return Err(PrepareError::Limit("source_fields"));
+                    }
+                    for &(field_name, kind) in fields {
+                        let kind = match text(d, kind)? {
+                            "str" => ColumnType::Str,
+                            "int" => ColumnType::Int,
+                            "float" => ColumnType::Float,
+                            "date" => ColumnType::Date,
+                            "datetime" => ColumnType::DateTime,
+                            _ => return Err(PrepareError::Internal),
+                        };
+                        source_findings.push(PreflightFinding::RedundantSourceType {
+                            dataset: text(d, name)?.into(),
+                            field: text(d, field_name)?.into(),
+                            kind,
+                        });
+                    }
+                }
+            }
+        }
+        if !source_findings.is_empty() {
+            return Err(PrepareError::Invalid(source_findings));
         }
         // Unsupported row/intermediate/metadata semantics must never reach the
         // closed no-row lowering representation, even when their shapes are valid.
@@ -660,6 +727,12 @@ impl PreparedSpecification {
                 name: text(d, name)?.into(),
                 types: source_types,
                 path: text(d, field(d, selected, "path")?)?.into(),
+                // Unsupported formats never produce an accepted plan.
+                profile: SourceProfile::from_path(text(d, field(d, selected, "path")?)?)
+                    .unwrap_or(SourceProfile::Csv),
+                empty_string_present: d.field(selected, "empty_string").is_some_and(
+                    |id| matches!(&d.nodes()[id], N::Text(value) if value == "present"),
+                ),
             });
         }
         let output_id = field(d, root, "output")?;

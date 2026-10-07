@@ -123,13 +123,21 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
         matches!(&findings[..], [BindFinding::Numeric { path, expression, .. }] if path == "columns.VALUE.derivation.compute.expr" && expression == "ID +")
     );
     let Err(PrepareError::Unsupported(features)) =
-        PreparedSpecification::prepare(&document("ID + 1", "input.parquet"))
+        PreparedSpecification::prepare(&document("ID + 1", "input.bad"))
     else {
         panic!("unsupported admission")
     };
     assert!(features
         .iter()
         .any(|f| f.operation == "source_format" && f.path == "input.SRC.path"));
+    let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.PARQUET")).unwrap();
+    assert_eq!(
+        prepared.source().profile,
+        yamaa_core::specification::SourceProfile::Parquet
+    );
+    assert!(!prepared.source().empty_string_present);
+    assert!(prepared.source().text_is_missing(""));
+    assert!(!prepared.source().text_is_missing("NA"));
     assert!(matches!(
         PreparedSpecification::prepare_with_limits(
             &document("ID + 1", "input.csv"),
@@ -140,6 +148,75 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
         ),
         Err(PrepareError::Limit("columns"))
     ));
+}
+
+#[test]
+fn parquet_type_field_limit_precedes_allocating_semantic_findings() {
+    let original = document("ID + 1", "source.parquet");
+    let d = original.document();
+    let inputs = d.field(d.root(), "input").unwrap();
+    let source = d.field(inputs, "SRC").unwrap();
+    let mut nodes = d.nodes().to_vec();
+    let types = Tree::Map(vec![
+        ("ID", Tree::Text("int")),
+        ("VALUE", Tree::Text("float")),
+    ])
+    .append(&mut nodes);
+    let name = Tree::Text("types").append(&mut nodes);
+    let N::Mapping(fields) = &mut nodes[source] else {
+        unreachable!()
+    };
+    fields.push((name, types));
+    // Reorder the arena after adding fields, preserving the model's ownership contract.
+    fn copy(input: &[N], id: usize, out: &mut Vec<N>) -> usize {
+        let value = match &input[id] {
+            N::Sequence(items) => {
+                N::Sequence(items.iter().map(|&id| copy(input, id, out)).collect())
+            }
+            N::Mapping(items) => N::Mapping(
+                items
+                    .iter()
+                    .map(|&(k, v)| (copy(input, k, out), copy(input, v, out)))
+                    .collect(),
+            ),
+            value => value.clone(),
+        };
+        let index = out.len();
+        out.push(value);
+        index
+    }
+    let mut ordered = Vec::new();
+    let root = copy(&nodes, d.root(), &mut ordered);
+    let model = SpecificationDocument::admit(
+        Document::new(ordered, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(
+            &model,
+            CompilationLimits {
+                source_fields: 1,
+                ..Default::default()
+            }
+        ),
+        Err(PrepareError::Limit("source_fields"))
+    ));
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare_with_limits(
+        &model,
+        CompilationLimits {
+            source_fields: 2,
+            ..Default::default()
+        },
+    ) else {
+        panic!("at the exact field limit the declarations remain semantic findings");
+    };
+    assert_eq!(findings.len(), 2);
+    assert!(findings.iter().all(|f| matches!(
+        f,
+        yamaa_core::specification::PreflightFinding::RedundantSourceType { .. }
+    )));
 }
 
 fn window_document(filter: &str) -> SpecificationDocument {

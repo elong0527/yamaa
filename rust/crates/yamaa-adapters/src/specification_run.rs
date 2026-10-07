@@ -1,4 +1,4 @@
-//! Original YAML run prototype over captured schema and CSV snapshots. This is
+//! Original YAML run prototype over captured schema and typed snapshots. This is
 //! not a filesystem runner, artifact publisher or qualified host frontend yet.
 use crate::{
     arrow_table::{ArrowTable, TableLimits},
@@ -17,6 +17,7 @@ pub enum Error {
     Prepare(PrepareError),
     Source(TextTableError),
     TypedSource(crate::typed_csv::Error),
+    ParquetSource(crate::parquet_source::Error),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetTransportError),
@@ -63,7 +64,7 @@ impl PreparedRun {
     /// The shared application service decodes, binds and executes held bytes.
     pub fn execute_csv(&self, bytes: &[u8]) -> Result<DatasetResponse, Error> {
         let attempt = catch_unwind(AssertUnwindSafe(|| {
-            application::execute_bytes(self.compiled(), bytes, &mut CsvDecoder, limits())
+            application::execute_bytes(self.compiled(), bytes, &mut SourceDecoder, limits())
         }))
         .map_err(|_| Error::Execution(DatasetTransportError::Internal))?;
         let execution = attempt
@@ -78,7 +79,7 @@ impl PreparedRun {
         let mut attempt = application::CapturedAttempt::new(self.source());
         let guarded = catch_unwind(AssertUnwindSafe(|| {
             self.checked
-                .build_into(port, &mut CsvDecoder, limits(), &mut attempt);
+                .build_into(port, &mut SourceDecoder, limits(), &mut attempt);
         }));
         let result = if guarded.is_err() {
             Err(PortError::Run(Error::Execution(
@@ -153,8 +154,8 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
     }
 }
 
-struct CsvDecoder;
-impl application::SourceDecoder for CsvDecoder {
+struct SourceDecoder;
+impl application::SourceDecoder for SourceDecoder {
     type Error = Error;
     type Table = dataset_transport::Snapshot;
     fn continue_after(&self, error: &Self::Error) -> bool {
@@ -165,6 +166,13 @@ impl application::SourceDecoder for CsvDecoder {
                     crate::typed_csv::Error::UnknownField { .. }
                         | crate::typed_csv::Error::FieldParse { .. }
                 )
+                | Error::ParquetSource(
+                    crate::parquet_source::Error::Malformed
+                        | crate::parquet_source::Error::EmptyName { .. }
+                        | crate::parquet_source::Error::DuplicateName { .. }
+                        | crate::parquet_source::Error::Unsupported { .. }
+                        | crate::parquet_source::Error::Value { .. }
+                )
         )
     }
     fn decode(
@@ -172,6 +180,9 @@ impl application::SourceDecoder for CsvDecoder {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<Self::Table, Self::Error> {
+        if source.profile == yamaa_core::specification::SourceProfile::Parquet {
+            return decode_parquet(source, bytes).map(dataset_transport::Snapshot);
+        }
         crate::typed_csv::parse(
             bytes,
             &source.types,
@@ -190,4 +201,85 @@ impl application::SourceDecoder for CsvDecoder {
             error => Error::TypedSource(error),
         })
     }
+}
+
+fn decode_parquet(source: &SourceDeclaration, bytes: &[u8]) -> Result<ArrowTable, Error> {
+    use crate::parquet_source::{self, CompressionLimits, FramingLimits, MetadataLimits};
+    use arrow_array::{Array, ArrayRef, RecordBatch, StringArray};
+    use std::sync::Arc;
+    use yamaa_core::table::TableAccess;
+    let table_limits = TableLimits {
+        max_rows: 65_536,
+        max_columns: 64,
+        max_batches: 1,
+        max_cells: 262_144,
+    };
+    let table = parquet_source::parse(
+        bytes,
+        parquet_source::Limits {
+            framing: FramingLimits {
+                source_bytes: csv_source::Limits::default().bytes,
+                metadata_bytes: 2 * 1024 * 1024,
+                metadata_nodes: 65_536,
+                header_bytes: 65_536,
+                header_nodes: 65_536,
+                row_groups: 1024,
+                columns: 4096,
+                rows: table_limits.max_rows,
+                cells: table_limits.max_cells,
+                pages: 65_536,
+                page_bytes: 8 * 1024 * 1024,
+                decoded_bytes: 64 * 1024 * 1024,
+            },
+            compression: CompressionLimits {
+                page_bytes: 8 * 1024 * 1024,
+                window_log: 24,
+            },
+            metadata: MetadataLimits {
+                bytes: 2 * 1024 * 1024,
+                tables: 65_536,
+                depth: 64,
+            },
+            expanded_bytes: 64 * 1024 * 1024,
+            retained_bytes: 64 * 1024 * 1024,
+            array_elements: table_limits.max_cells,
+            batches: table_limits.max_batches,
+        },
+        table_limits,
+    )
+    .map_err(Error::ParquetSource)?;
+    // The compiler owns the input policy. Preserve buffers when no empty value
+    // needs a new validity bit; all strings were admitted by the bounded codec.
+    let batches = table
+        .batches()
+        .iter()
+        .map(|batch| {
+            let arrays: Vec<ArrayRef> = batch
+                .columns()
+                .iter()
+                .map(|array| {
+                    let Some(strings) = array.as_any().downcast_ref::<StringArray>() else {
+                        return array.clone();
+                    };
+                    if !strings
+                        .iter()
+                        .flatten()
+                        .any(|text| source.text_is_missing(text))
+                    {
+                        return array.clone();
+                    }
+                    Arc::new(StringArray::from_iter(strings.iter().map(|value| {
+                        value.filter(|value| !source.text_is_missing(value))
+                    }))) as ArrayRef
+                })
+                .collect();
+            RecordBatch::try_new(batch.schema(), arrays).map_err(|error| {
+                Error::Source(TextTableError::Table(
+                    crate::arrow_table::TableError::Arrow(error),
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    ArrowTable::try_new(table.schema().clone(), batches, table_limits)
+        .map_err(|error| Error::Source(TextTableError::Table(error)))
 }

@@ -971,6 +971,218 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/README.md",
       "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/README.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/bad-date.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/boolean.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/brotli-1-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/brotli-1-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/brotli-2-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/brotli-2-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/date64.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/delta.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/duplicate.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/empty-name.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/empty.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/fractional.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/gzip-1-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/gzip-1-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/gzip-2-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/gzip-2-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/lz4-1-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/lz4-1-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/lz4-2-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/lz4-2-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/none-1-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/none-1-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/none-2-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/none-2-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/nonfinite.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/ordered-sum.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/snappy-1-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/snappy-1-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/snappy-2-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/snappy-2-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/text.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-binary.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-decimal.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-fixed-list.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-float32.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-int32.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-list.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-milliseconds.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-struct.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-timezone.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/unsupported-uint64.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/utf8-bool.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/utf8-time.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/utf8.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/zstd-1-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/zstd-1-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/zstd-2-0.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/zstd-2-1.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-duplicate.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-empty.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-map.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-struct.parquet",
+      "role": "input"
     }
   ]
 }

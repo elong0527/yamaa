@@ -557,7 +557,7 @@ class OriginalSpecifications(unittest.TestCase):
         source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()
         for candidate in (
             source.replace(b"100 * (AVAL - BASE) / BASE", b"LN(AVAL)"),
-            source.replace(b"input/lb.csv", b"input/lb.parquet"),
+            source.replace(b"input/lb.csv", b"input/lb.unknown"),
         ):
             with self.subTest(source=candidate):
                 self.assertNotEqual(candidate, source)
@@ -569,6 +569,170 @@ class OriginalSpecifications(unittest.TestCase):
 
 
 class ParquetOriginalOutput(unittest.TestCase):
+    @staticmethod
+    def failed_report(name, diagnostics, paths):
+        return {
+            "artifacts": [], "backend": "rust", "callbacks": [],
+            "diagnostics": diagnostics, "engine_version": "fixture-engine", "error": None,
+            "example": name, "handler_counts": [],
+            "nodes": [{"diagnostics": diagnostics, "handler_counts": [], "outcome": "failure",
+                       "specification": "spec.yaml", "unsupported": []}],
+            "outcome": "failure", "report_version": "0.3.0-draft", "runtime": "python",
+            "runtime_version": "fixture-runtime",
+            "source_reads": [{"base_directory": ".", "path": path, "outcome": "captured",
+                              "condition": None, "snapshots_created": 1} for path in paths],
+            "tables": [], "unsupported": [], "verifications": [],
+        }
+
+    def test_parquet_empty_string_policy_survives_build_and_later_save(self):
+        for policy, expected in (("missing", b'I,S\n1,\n2,X\n'), ("present", b'I,S\n1,""\n2,X\n')):
+            with self.subTest(policy=policy):
+                source = json.dumps({"schema_version": "1.0", "domain": "TEST",
+                    "input": {"SRC": {"path": "input.PARQUET", "empty_string": policy}},
+                    "keys": ["I"], "columns": [
+                        {"name": "I", "type": "int", "derivation": "SRC.I"},
+                        {"name": "S", "type": "str", "derivation": "SRC.S"}],
+                    "output": {"path": "output.csv", "columns": ["I", "S"]}}).encode()
+                def no_port(*_):
+                    self.fail("unexpected source authority")
+                spec = yamaa_native._prepare_document("spec.yaml", source, no_port, no_port, no_port)
+                requests, saved = [], []
+                def capture(dataset, path, maximum):
+                    requests.append((dataset, path))
+                    content = (ROOT / "pq/text.parquet").read_bytes()
+                    self.assertLessEqual(len(content), maximum)
+                    return content, True
+                result = spec.build(capture, ("fixture-runtime", "fixture-engine", policy, "spec.yaml", "."))
+                del spec
+                gc.collect()
+                def publish(path, content):
+                    self.assertEqual(path, "output.csv")
+                    self.assertEqual(content, expected)
+                    saved.append(content)
+                for _ in range(2):
+                    self.assertEqual(json.loads(result.save(publish))["outcome"], "success")
+                self.assertEqual(requests, [("SRC", "input.PARQUET")])
+                self.assertEqual(saved, [expected, expected])
+
+    def test_parquet_semantic_failures_collect_in_source_order(self):
+        source = json.dumps({"schema_version": "1.0", "domain": "TEST", "base": "FIRST",
+            "input": {name: {"path": name + ".parquet"} for name in ("FIRST", "SECOND", "THIRD")},
+            "keys": ["ID"], "columns": [{"name": "ID", "type": "int", "derivation": {"compute": {"expr": "1"}}}],
+            "output": {"path": "output.csv", "columns": ["ID"]}}).encode()
+        def no_port(*_):
+            self.fail("failed build reached source or publication authority")
+        spec = yamaa_native._prepare_document("spec.yaml", source, no_port, no_port, no_port)
+        requests = []
+        def capture(dataset, path, maximum):
+            requests.append((dataset, path))
+            fixture = {"FIRST": "utf8-time", "SECOND": "duplicate", "THIRD": "text"}[dataset]
+            content = (ROOT / "pq" / (fixture + ".parquet")).read_bytes()
+            self.assertLessEqual(len(content), maximum)
+            return content, True
+        result = spec.build(capture, ("fixture-runtime", "fixture-engine", "collection", "spec.yaml", "."))
+        diagnostics = [
+            {"phase": "ingest", "condition": "source_field_value_invalid", "requirement": "REQ-1041",
+             "spec_paths": ["input.FIRST.path"], "context": {"dataset": "FIRST", "path": "FIRST.parquet", "field": "OTHER", "row": 1, "value": 1}},
+            {"phase": "ingest", "condition": "source_field_name_duplicate", "requirement": "REQ-1039",
+             "spec_paths": ["input.SECOND.path"], "context": {"dataset": "SECOND", "path": "SECOND.parquet", "field": "I"}},
+        ]
+        paths = [name + ".parquet" for name in ("FIRST", "SECOND", "THIRD")]
+        self.assertEqual(json.loads(result.observations()), self.failed_report("collection", diagnostics, paths))
+        self.assertIsNone(result.output())
+        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+            result.save(no_port)
+        self.assertEqual(requests, list(zip(("FIRST", "SECOND", "THIRD"), paths)))
+
+    def test_original_ordered_sum_reads_parquet_and_preserves_complete_truth(self):
+        name = "adam-adlb-ordered-sum"
+        case = ROOT / "cases" / name
+        source = (case / "spec.yaml").read_bytes().replace(
+            b"path: input/lb.csv, types: {LBSTRESN: float}", b"path: input/lb.parquet"
+        )
+        expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+        for read in expected["source_reads"]:
+            read["path"] = "input/lb.parquet"
+        unsaved = dict(expected, artifacts=[])
+        original_import = builtins.__import__
+        def reject(module, *args, **kwargs):
+            if module.split(".")[0] in {"yamaa", "pydantic", "yaml", "yaml12", "pyarrow"}:
+                self.fail("host semantics during native Parquet ingestion: " + module)
+            return original_import(module, *args, **kwargs)
+        def no_parent(*_):
+            self.fail("standalone preparation invoked a parent")
+        requests, saved = [], []
+        def capture(dataset, path, maximum):
+            requests.append((dataset, path))
+            content = (ROOT / "pq" / "ordered-sum.parquet").read_bytes()
+            self.assertLessEqual(len(content), maximum)
+            return content, True
+        def publish(path, content):
+            self.assertEqual(path, "adlb.csv")
+            self.assertEqual(content, (case / "expected/adlb.csv").read_bytes())
+            saved.append(content)
+        with patch("builtins.__import__", side_effect=reject):
+            spec = yamaa_native._prepare_document("spec.yaml", source, no_parent, no_parent, no_parent)
+            result = spec.build(capture, ("fixture-runtime", "fixture-engine", name, "spec.yaml", "."))
+            del spec
+            gc.collect()
+            self.assertEqual(json.loads(result.observations()), unsaved)
+            self.assertIsNotNone(result.output())
+            for _ in range(2):
+                self.assertEqual(json.loads(result.save(publish)), expected)
+            self.assertEqual(json.loads(result.observations()), unsaved)
+        self.assertEqual(requests, [("LB", "input/lb.parquet")])
+        self.assertEqual(len(saved), 2)
+
+    def test_parquet_declarations_fail_before_any_host_source_authority(self):
+        source = (ROOT / "cases/adam-adlb-ordered-sum/spec.yaml").read_bytes().replace(b"input/lb.csv", b"input/lb.parquet")
+        def no_port(*_):
+            self.fail("redundant type declaration reached a host port")
+        with self.assertRaises(ValueError) as caught:
+            yamaa_native._prepare_document("spec.yaml", source, no_port, no_port, no_port)
+        self.assertEqual(json.loads(str(caught.exception)), {"protocol":"specification/prototype", "outcome":{"status":"invalid", "diagnostics":[{
+            "phase":"validation", "condition":"redundant_field_type", "requirement":"REQ-0533",
+            "spec_paths":["input.LB.types.LBSTRESN"], "context":{"dataset":"LB", "field":"LBSTRESN", "type":"float"},
+        }]}})
+
+    def test_parquet_ingestion_failures_retain_exact_conditions_and_never_publish(self):
+        source = json.dumps({"schema_version":"1.0", "domain":"TEST", "input":{"SRC":{"path":"input.parquet"}}, "keys":["ID"],
+            "columns":[{"name":"ID", "type":"int", "derivation":{"compute":{"expr":"1"}}}],
+            "output":{"path":"output.csv", "columns":["ID"]}}).encode()
+        def no_port(*_):
+            self.fail("standalone preparation invoked a host port")
+        spec = yamaa_native._prepare_document("spec.yaml", source, no_port, no_port, no_port)
+        for name, condition, requirement, context in (
+            ("utf8", "source_parquet_invalid", "REQ-1038", {}),
+            ("utf8-bool", "source_field_type_unsupported", "REQ-1040", {"field":"OTHER","stored_type":"bool"}),
+            ("utf8-time", "source_field_value_invalid", "REQ-1041", {"field":"OTHER","row":1,"value":1}),
+            ("empty-name", "source_field_name_empty", "REQ-1039", {"field":1}),
+            ("duplicate", "source_field_name_duplicate", "REQ-1039", {"field":"I"}),
+            ("mixed-struct", "source_field_type_unsupported", "REQ-1040", {"field":"S", "stored_type":"struct<left: int64, right: string>"}),
+            ("mixed-map", "source_field_type_unsupported", "REQ-1040", {"field":"M", "stored_type":"map<string, int64 ('M')>"}),
+            ("mixed-empty", "source_field_name_empty", "REQ-1039", {"field":1}),
+            ("mixed-duplicate", "source_field_name_duplicate", "REQ-1039", {"field":"I"}),
+            *(("unsupported-" + name, "source_field_type_unsupported", "REQ-1040",
+               {"field": "FIELD", "stored_type": stored}) for name, stored in (
+                ("int32", "int32"), ("uint64", "uint64"), ("float32", "float"), ("binary", "binary"),
+                ("milliseconds", "timestamp[ms]"), ("timezone", "timestamp[us, tz=UTC]"),
+                ("list", "list<element: int64>"), ("fixed-list", "fixed_size_list<element: int64>[2]"),
+                ("struct", "struct<item: int64>"), ("decimal", "decimal128(10, 2)"))),
+        ):
+            with self.subTest(case=name):
+                requests=[]
+                def capture(dataset, path, maximum):
+                    requests.append((dataset,path))
+                    return (ROOT / "pq" / (name + ".parquet")).read_bytes(), True
+                result=spec.build(capture, ("fixture-runtime", "fixture-engine", name, "spec.yaml", "."))
+                report=json.loads(result.observations())
+                self.assertIsNone(result.output())
+                diagnostics = [{"phase":"ingest", "condition":condition, "requirement":requirement,
+                    "spec_paths":["input.SRC.path"], "context":dict(dataset="SRC",path="input.parquet",**context)}]
+                self.assertEqual(report, self.failed_report(name, diagnostics, ["input.parquet"]))
+                with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                    result.save(no_port)
+                self.assertEqual(requests, [("SRC","input.parquet")])
+
     def test_original_build_saves_parquet_with_independent_logical_readback(self):
         # Only the declared output container changes; inputs and committed truth
         # remain unchanged. No reference module participates in native execution.

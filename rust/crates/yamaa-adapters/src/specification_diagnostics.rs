@@ -229,6 +229,16 @@ fn preparing(error: &PreflightFinding) -> Option<Value> {
             vec![format!("input.{domain}"), "domain".into()],
             json!({"identifier":domain}),
         ),
+        PreflightFinding::RedundantSourceType {
+            dataset,
+            field,
+            kind,
+        } => validation(
+            "redundant_field_type",
+            Some("REQ-0533"),
+            format!("input.{dataset}.types.{field}"),
+            json!({"dataset":dataset,"field":field,"type":type_name(*kind)}),
+        ),
     })
 }
 /// Return semantic findings only. Policy/transport/internal errors deliberately
@@ -244,6 +254,43 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
         }
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
+        Error::ParquetSource(error) => {
+            use crate::parquet_source::Error as P;
+            let source = source?;
+            let (condition, requirement, extra) = match error {
+                P::Malformed => ("source_parquet_invalid", "REQ-1038", json!({})),
+                P::EmptyName { field } => (
+                    "source_field_name_empty",
+                    "REQ-1039",
+                    json!({"field":field}),
+                ),
+                P::DuplicateName { field } => (
+                    "source_field_name_duplicate",
+                    "REQ-1039",
+                    json!({"field":field}),
+                ),
+                P::Unsupported { field, stored_type } => (
+                    "source_field_type_unsupported",
+                    "REQ-1040",
+                    json!({"field":field,"stored_type":stored_type}),
+                ),
+                P::Value { field, row, value } => (
+                    "source_field_value_invalid",
+                    "REQ-1041",
+                    json!({"field":field,"row":row,"value":value}),
+                ),
+                _ => return None,
+            };
+            let mut context = json!({"dataset":source.name,"path":source.path});
+            context.as_object_mut()?.extend(extra.as_object()?.clone());
+            Some(vec![diagnostic(
+                "ingest",
+                condition,
+                Some(requirement),
+                vec![format!("input.{}.path", source.name)],
+                context,
+            )])
+        }
         Error::TypedSource(crate::typed_csv::Error::UnknownField { field }) => {
             let source = source?;
             Some(vec![validation(
@@ -314,6 +361,13 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             })) => ("ingest", "table_limit"),
             Error::Source(_) => ("ingest", "internal"),
             Error::TypedSource(_) => ("ingest", "source_boundary"),
+            Error::ParquetSource(crate::parquet_source::Error::Limit) => {
+                ("ingest", "parquet_limit")
+            }
+            Error::ParquetSource(crate::parquet_source::Error::Unavailable { .. }) => {
+                ("ingest", "parquet_codec_unavailable")
+            }
+            Error::ParquetSource(_) => ("ingest", "parquet_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
             Error::Bind(BindError::SourceCount) => ("bind", "source_count"),

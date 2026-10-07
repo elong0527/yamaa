@@ -2,12 +2,19 @@ CARGO_TARGET_DIR = $(CURDIR)/rust/target
 RUST_LIB = $(CARGO_TARGET_DIR)/release/libyamaa_r.a
 PKG_LIBS = $(RUST_LIB)
 
+# cc-rs otherwise selects the current SDK's minimum version for codec C objects,
+# which can be newer than R's link target. Match Rust's arm64 floor for the static
+# archive only; preserve explicit user settings and R's own C/link configuration.
+ifeq ($(shell uname -s),Darwin)
+RUST_PLATFORM_ENV = MACOSX_DEPLOYMENT_TARGET="$${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+endif
+
 all: $(SHLIB) rust_clean
 
 $(SHLIB): $(RUST_LIB)
 
 $(RUST_LIB): FORCE
-	cd rust && CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" cargo build --release -p yamaa-r
+	cd rust && $(RUST_PLATFORM_ENV) CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" cargo build --release -p yamaa-r
 
 .PHONY: clean rust_clean FORCE
 FORCE:

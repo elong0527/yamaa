@@ -21,4 +21,13 @@ arrow-schema = { version = "=60.0.0", default-features = false }
 arrow-buffer = { version = "=60.0.0", default-features = false }
 arrow-ipc = { version = "=60.0.0", default-features = false }
 flatbuffers = { version = "=25.12.19", default-features = false }
-parquet = { version = "=60.0.0", default-features = false }
+parquet = { version = "=60.0.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backend", "lz4", "zstd"] }
+# Direct page admission bounds decompression before the general source reader.
+# These storage dependencies stay at the adapter boundary.
+bytes = "=1.12.1"
+base64 = "=0.23.1"
+brotli = { version = "=9.0.0", default-features = false, features = ["std"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+lz4_flex = "=0.14.0"
+zstd = { version = "=0.14.0", default-features = false }
+snap = "=1.1.2"
