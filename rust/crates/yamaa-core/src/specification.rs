@@ -260,6 +260,66 @@ fn optional_features(
     }
 }
 
+// Free-form descriptive metadata does not affect execution. Governed metadata
+// keys retain an explicit unsupported boundary until submission validation is
+// connected; accepting these as descriptions would bypass REQ-0910.
+fn metadata_features(
+    d: &Document,
+    id: usize,
+    prefix: &str,
+    column: bool,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<(), PrepareError> {
+    let Some(metadata) = d
+        .field(id, "metadata")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    else {
+        return Ok(());
+    };
+    let reserved: &[&str] = if column {
+        &[
+            "core",
+            "mandatory",
+            "role",
+            "data_type",
+            "length",
+            "significant_digits",
+            "display_format",
+            "codelist",
+            "inventory_vocabulary",
+            "origin",
+            "method",
+            "comment",
+        ]
+    } else {
+        &[
+            "label",
+            "class",
+            "subclass",
+            "structure",
+            "repeating",
+            "reference_data",
+            "domain",
+            "comment",
+        ]
+    };
+    for &(key, _) in mapping(d, metadata)? {
+        let key = text(d, key)?;
+        if reserved.contains(&key) {
+            reject(
+                extra,
+                "reserved_metadata_key",
+                if prefix.is_empty() {
+                    format!("metadata.{key}")
+                } else {
+                    format!("{prefix}.metadata.{key}")
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Preserve the reference preflight order and collect all independent findings.
 fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, PrepareError> {
     let d = spec.document();
@@ -531,10 +591,15 @@ impl PreparedSpecification {
         optional_features(
             d,
             root,
-            &["parents", "filter", "submission", "metadata"],
+            &["parents", "filter", "submission"],
             "",
             &mut extra,
         );
+        metadata_features(d, root, "", false, &mut extra)?;
+        for &column in sequence(d, field(d, root, "columns")?)? {
+            let name = text(d, field(d, column, "name")?)?;
+            metadata_features(d, column, &format!("columns.{name}"), true, &mut extra)?;
+        }
         let inputs = mapping(d, field(d, root, "input")?)?;
         if has_rows && inputs.len() != 1 {
             reject(&mut extra, "multiple_source_rows", "rows".into());
@@ -675,13 +740,7 @@ impl PreparedSpecification {
         let mut declarations = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
-            optional_features(
-                d,
-                id,
-                &["verifications", "submission", "metadata"],
-                &prefix,
-                &mut extra,
-            );
+            optional_features(d, id, &["verifications", "submission"], &prefix, &mut extra);
             let derivation = d
                 .field(id, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))

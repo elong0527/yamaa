@@ -1,6 +1,7 @@
 """Installed original-YAML execution with reference semantic imports forbidden."""
 
 import builtins
+import csv
 import json
 import os
 import platform
@@ -12,7 +13,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup")
 
 
 def modules():
@@ -22,10 +23,48 @@ def modules():
     return [(name, (ROOT / "schema" / name).read_bytes()) for name in names]
 
 
+def specification_name(name):
+    return "spec_study.yaml" if name == "schema-inheritance" else "spec.yaml"
+
+
+def inheritance_callbacks(case):
+    state = {"reads": [], "resolutions": []}
+
+    def canonicalize(declaring, written):
+        state["resolutions"].append(written)
+        candidate = Path(declaring).parent / written
+        if not candidate.is_file():
+            return None
+        return str(candidate.resolve()), str(candidate)
+
+    def capture(identity, display_path, maximum):
+        state["reads"].append(Path(identity).name)
+        with Path(identity).open("rb") as stream:
+            content = stream.read(maximum + 1)
+        assert len(content) <= maximum
+        return content
+
+    def rebase(layer, entry, written, maximum):
+        if Path(written).is_absolute() or Path(layer).parent == Path(entry).parent:
+            return written
+        target = os.path.normpath(os.path.join(Path(layer).parent, written))
+        return Path(os.path.relpath(target, Path(entry).parent)).as_posix()
+
+    return [canonicalize, capture, rebase], state
+
+
 def prepare(name):
-    return yamaa_native._prepare_specification(
-        modules(), 0, "spec.yaml", (ROOT / "cases" / name / "spec.yaml").read_bytes()
-    )
+    case = ROOT / "cases" / name
+    path = case / specification_name(name)
+    if name == "schema-inheritance":
+        callbacks, state = inheritance_callbacks(case)
+        prepared = yamaa_native._prepare_inherited_specification(
+            modules(), 0, str(path.resolve()), path.read_bytes(), *callbacks
+        )
+        assert state["reads"] == ["spec_organization.yaml", "spec_compound.yaml"]
+        assert state["resolutions"] == ["spec_organization.yaml", "spec_compound.yaml", "spec_organization.yaml"]
+        return prepared
+    return yamaa_native._prepare_specification(modules(), 0, path.name, path.read_bytes())
 
 
 class OriginalSpecifications(unittest.TestCase):
@@ -40,6 +79,82 @@ class OriginalSpecifications(unittest.TestCase):
         guard = patch("builtins.__import__", side_effect=reject)
         guard.start()
         self.addCleanup(guard.stop)
+
+    def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
+        with (ROOT / "inheritance-replay.tsv").open(newline="", encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        names = list(dict.fromkeys(record["case"] for record in records))
+        self.assertEqual(len(names), 7)
+        for name in names:
+            with self.subTest(case=name):
+                case = [row for row in records if row["case"] == name]
+                expected = [row for row in case if row["operation"]]
+                calls = []
+
+                def event(operation):
+                    self.assertLess(len(calls), len(expected))
+                    row = expected[len(calls)]
+                    self.assertEqual(operation, row["operation"])
+                    calls.append(row)
+                    return row
+
+                def canonicalize(declaring, written):
+                    row = event("canonicalize")
+                    self.assertEqual((declaring, written), (row["declaring"], row["written"]))
+                    return (row["identity"], row["display_path"]) if row["identity"] else None
+
+                def capture(identity, display_path, maximum):
+                    row = event("read")
+                    self.assertEqual((identity, display_path), (row["identity"], row["display_path"]))
+                    content = row["source_yaml"].encode()
+                    self.assertLessEqual(len(content), maximum)
+                    return content or None
+
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_inherited_specification(
+                        modules(), 0, case[0]["entry"], case[0]["entry_yaml"].encode(),
+                        canonicalize, capture, lambda *_: self.fail("failed traversal reached rebasing")
+                    )
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(case[0]["expected"]))
+                self.assertEqual(calls, expected)
+
+    def test_inherited_callbacks_preserve_original_failures(self):
+        case = ROOT / "cases/schema-inheritance"
+        path = case / "spec_study.yaml"
+        for operation in range(3):
+            for kind in (RuntimeError, KeyboardInterrupt, SystemExit):
+                with self.subTest(operation=operation, kind=kind):
+                    callbacks, _ = inheritance_callbacks(case)
+                    failure = kind("original inherited callback failure")
+                    failure.marker = object()
+                    calls = []
+
+                    def fail(*args):
+                        calls.append(args)
+                        raise failure
+
+                    callbacks[operation] = fail
+                    with self.assertRaises(kind) as caught:
+                        yamaa_native._prepare_inherited_specification(
+                            modules(), 0, str(path.resolve()), path.read_bytes(), *callbacks
+                        )
+                    self.assertIs(caught.exception, failure)
+                    self.assertEqual(len(calls), 1)
+
+    def test_inherited_missing_parent_and_cycle_keep_shared_diagnostics(self):
+        case = ROOT / "cases/schema-inheritance"
+        path = case / "spec_study.yaml"
+        identity = str(path.resolve())
+        for cycle, condition, requirement in [(False, "parent_not_found", "REQ-0654"), (True, "inheritance_cycle", "REQ-0655")]:
+            callbacks, state = inheritance_callbacks(case)
+            callbacks[0] = lambda *_: (identity, identity) if cycle else None
+            with self.assertRaises(ValueError) as caught:
+                yamaa_native._prepare_inherited_specification(modules(), 0, identity, path.read_bytes(), *callbacks)
+            outcome = json.loads(str(caught.exception))["outcome"]
+            self.assertEqual(outcome["status"], "invalid")
+            self.assertEqual(outcome["diagnostics"][0]["condition"], condition)
+            self.assertEqual(outcome["diagnostics"][0]["requirement"], requirement)
+            self.assertEqual(state["reads"], [])
 
     def test_complete_original_reports_and_cached_capture(self):
         for name in CASES:
@@ -64,7 +179,7 @@ class OriginalSpecifications(unittest.TestCase):
                     platform.python_version(),
                     yamaa_native.engine_info()["core_version"],
                     name,
-                    "spec.yaml",
+                    specification_name(name),
                     ".",
                 )
                 expected = json.loads(
@@ -79,8 +194,8 @@ class OriginalSpecifications(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory:
 
                     def publish(path, content, *, name=name, published=published):
-                        self.assertIn(name, ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup"))
-                        self.assertEqual(path, {"schema-lookup":"adsl.csv", "schema-window-functions":"advs.csv", "adam-adlb-ordered-sum":"adlb.csv"}[name])
+                        self.assertIn(name, ("adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup"))
+                        self.assertEqual(path, {"schema-lookup":"adsl.csv", "schema-window-functions":"advs.csv", "adam-adlb-ordered-sum":"adlb.csv", "schema-inheritance":"adlb.csv"}[name])
                         self.assertEqual(
                             content,
                             (ROOT / "cases" / name / "expected" / path).read_bytes(),
@@ -98,7 +213,7 @@ class OriginalSpecifications(unittest.TestCase):
                         )
                         self.assertEqual(actual, expected)
                 self.assertEqual(
-                    len(published), 2 if name in ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup") else 0
+                    len(published), 2 if name in ("adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup") else 0
                 )
                 self.assertEqual(state["requests"], list(sources.items()) * 2)
                 self.assertEqual(state["reads"], len(sources))

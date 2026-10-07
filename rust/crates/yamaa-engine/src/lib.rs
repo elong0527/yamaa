@@ -10,6 +10,7 @@ pub mod dataset_predicate;
 mod dataset_verification;
 pub mod function_invocation;
 pub mod inheritance;
+pub mod inheritance_preparation;
 pub mod numeric_lifecycle;
 pub mod table_grouping;
 

@@ -24,7 +24,7 @@ impl Drop for Handle {
         });
     }
 }
-fn boundary(run: impl FnOnce() -> std::result::Result<Robj, String>) -> List {
+pub(super) fn boundary(run: impl FnOnce() -> std::result::Result<Robj, String>) -> List {
     match catch_unwind(AssertUnwindSafe(run)) {
         Ok(Ok(value)) => list!(value = value, error = NULL),
         Ok(Err(error)) => list!(value = NULL, error = error),
@@ -61,67 +61,86 @@ fn prepare_specification(
     source: Raw,
 ) -> List {
     boundary(|| {
-        let limits = Limits::default();
-        if names.len() != modules.len()
-            || names.len() > limits.bundle.modules
-            || entry < 0
-            || identity.len() > limits.identity_bytes
-            || source.len() > limits.captured_bytes
-        {
-            return Err("invalid or over-limit specification sources".into());
-        }
-        let mut bytes = 0usize;
-        let mut name_bytes = 0usize;
-        let mut sources = Vec::new();
-        // Aggregate admission precedes owned byte copies.
-        let buffers = names
-            .iter()
-            .zip(modules.iter())
-            .map(|((_, name), (_, module))| {
-                let name = name.as_raw().ok_or("schema names must be raw UTF-8")?;
-                let module = module.as_raw().ok_or("schema modules must be raw YAML")?;
-                bytes = bytes
-                    .checked_add(module.len())
-                    .filter(|&n| n <= limits.captured_bytes)
-                    .ok_or("captured byte limit")?;
-                name_bytes = name_bytes
-                    .checked_add(name.len())
-                    .filter(|&n| n <= limits.identity_bytes)
-                    .ok_or("identity byte limit")?;
-                Ok((name, module))
-            })
-            .collect::<std::result::Result<Vec<_>, String>>()?;
-        for (name, module) in buffers {
-            sources.push(Source {
-                identity: std::str::from_utf8(name.as_slice())
-                    .map_err(|_| "invalid UTF-8 schema identity")?
-                    .into(),
-                bytes: module.as_slice().to_vec(),
-            });
-        }
-        let identity = std::str::from_utf8(identity.as_slice())
-            .map_err(|_| "invalid UTF-8 specification identity")?;
-        let schema = CapturedSchema::admit(sources, entry as usize, limits)
-            .map_err(|e| capture_failure(&e))?;
+        let (schema, source) = capture_inputs(&names, &modules, entry, &identity, &source)?;
         let document = schema
-            .prepare_standalone(Source {
-                identity: identity.into(),
-                bytes: source.as_slice().to_vec(),
-            })
+            .prepare_standalone(source)
             .map_err(|e| capture_failure(&e))?;
-        let run = Arc::new(PreparedRun::prepare(document).map_err(|e| failure(&e, None))?);
-        let handle = ExternalPtr::new(Handle {
-            run,
-            identity: Cell::new(0),
-        });
-        let id = address(handle.as_robj())?;
-        handle.identity.set(id);
-        HANDLES.with(|handles| {
-            handles.borrow_mut().insert(id, Arc::downgrade(&handle.run));
-        });
-        Ok(handle.into_robj())
+        store_document(document)
     })
 }
+pub(super) fn capture_inputs(
+    names: &List,
+    modules: &List,
+    entry: i32,
+    identity: &Raw,
+    source: &Raw,
+) -> std::result::Result<(Arc<CapturedSchema>, Source), String> {
+    let limits = Limits::default();
+    if names.len() != modules.len()
+        || names.len() > limits.bundle.modules
+        || entry < 0
+        || identity.len() > limits.identity_bytes
+        || source.len() > limits.captured_bytes
+    {
+        return Err("invalid or over-limit specification sources".into());
+    }
+    let mut bytes = 0usize;
+    let mut name_bytes = 0usize;
+    let mut sources = Vec::new();
+    // Aggregate admission precedes owned byte copies.
+    let buffers = names
+        .iter()
+        .zip(modules.iter())
+        .map(|((_, name), (_, module))| {
+            let name = name.as_raw().ok_or("schema names must be raw UTF-8")?;
+            let module = module.as_raw().ok_or("schema modules must be raw YAML")?;
+            bytes = bytes
+                .checked_add(module.len())
+                .filter(|&n| n <= limits.captured_bytes)
+                .ok_or("captured byte limit")?;
+            name_bytes = name_bytes
+                .checked_add(name.len())
+                .filter(|&n| n <= limits.identity_bytes)
+                .ok_or("identity byte limit")?;
+            Ok((name, module))
+        })
+        .collect::<std::result::Result<Vec<_>, String>>()?;
+    for (name, module) in buffers {
+        sources.push(Source {
+            identity: std::str::from_utf8(name.as_slice())
+                .map_err(|_| "invalid UTF-8 schema identity")?
+                .into(),
+            bytes: module.as_slice().to_vec(),
+        });
+    }
+    let identity = std::str::from_utf8(identity.as_slice())
+        .map_err(|_| "invalid UTF-8 specification identity")?;
+    let schema =
+        CapturedSchema::admit(sources, entry as usize, limits).map_err(|e| capture_failure(&e))?;
+    Ok((
+        schema,
+        Source {
+            identity: identity.into(),
+            bytes: source.as_slice().to_vec(),
+        },
+    ))
+}
+pub(super) fn store_document(
+    document: yamaa_adapters::specification_source::PreparedDocument,
+) -> std::result::Result<Robj, String> {
+    let run = Arc::new(PreparedRun::prepare(document).map_err(|e| failure(&e, None))?);
+    let handle = ExternalPtr::new(Handle {
+        run,
+        identity: Cell::new(0),
+    });
+    let id = address(handle.as_robj())?;
+    handle.identity.set(id);
+    HANDLES.with(|handles| {
+        handles.borrow_mut().insert(id, Arc::downgrade(&handle.run));
+    });
+    Ok(handle.into_robj())
+}
+
 #[extendr]
 fn specification_source(handle: Robj) -> List {
     boundary(|| {

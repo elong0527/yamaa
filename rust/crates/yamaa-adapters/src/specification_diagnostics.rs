@@ -353,3 +353,7 @@ pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
         DateTime => "datetime",
     }
 }
+
+#[path = "specification_inheritance_diagnostics.rs"]
+mod inherited;
+pub use inherited::failure as inheritance_failure;

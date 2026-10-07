@@ -26,7 +26,9 @@ declaration-order source observations, all four output rows, the five inherited
 handler-count records and the successful unique check. Source ordering uses
 stored text; the selected `DTHDY` value is converted to an integer afterward.
 
-These reports cover five fixtures, not the complete six-case #1739 cohort.
+These authored reports cover the six original fixtures. Installed Python and R
+prototypes compare all six; the existing conformance frontend still needs routing
+through that path before benchmark inventory promotion.
 Original YAML/schema/CSV files are staged from the repository, not duplicated here.
 
 `lookup-failures.json` contains twelve authored diagnostic expectations for
@@ -48,3 +50,10 @@ required/forbidden ordering, unknown source/group/order/filter fields, predicate
 grammar and baseline ties. The baseline case changes a copied source date and
 checks the original partition identity in its failure report; committed source
 and expected benchmark files remain unchanged.
+
+The `schema-inheritance` expectation uses the two committed input/output rows,
+explicit input types, and literal study metadata. It names `spec_study.yaml`,
+contains only the surviving LB source, and retains the successful unique check.
+The reference independently validates the entire authored report. A native adapter
+integration compares that report and the unchanged CSV, including a cached repeat;
+installed Python and R prototypes also compare the entire report and artifact.

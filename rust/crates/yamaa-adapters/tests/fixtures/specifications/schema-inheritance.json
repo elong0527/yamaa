@@ -1,0 +1,183 @@
+{
+  "artifacts": [
+    {
+      "byte_length": 57,
+      "columns": [
+        "USUBJID",
+        "PARAMCD",
+        "AVAL",
+        "AVALU"
+      ],
+      "content": "USUBJID,PARAMCD,AVAL,AVALU\n01,ALT,12.5,U/L\n02,ALT,21,U/L\n",
+      "name": "adlb",
+      "profile": "csv",
+      "records": [
+        "USUBJID,PARAMCD,AVAL,AVALU",
+        "01,ALT,12.5,U/L",
+        "02,ALT,21,U/L"
+      ],
+      "row_count": 2,
+      "types": [
+        "str",
+        "str",
+        "float",
+        "str"
+      ]
+    }
+  ],
+  "backend": "rust",
+  "callbacks": [],
+  "diagnostics": [],
+  "engine_version": "fixture-engine",
+  "error": null,
+  "example": "schema-inheritance",
+  "handler_counts": [],
+  "nodes": [
+    {
+      "diagnostics": [],
+      "handler_counts": [],
+      "outcome": "success",
+      "specification": "spec_study.yaml",
+      "unsupported": []
+    }
+  ],
+  "outcome": "success",
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "runtime_version": "fixture-runtime",
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "condition": null,
+      "outcome": "captured",
+      "path": "input/lb.csv",
+      "snapshots_created": 1
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        "USUBJID",
+        "LBTESTCD",
+        "LBSTRESN",
+        "LBSTRESU"
+      ],
+      "name": "LB",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "float",
+            "value": "4029000000000000"
+          },
+          {
+            "type": "str",
+            "value": "U/L"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "float",
+            "value": "4035000000000000"
+          },
+          {
+            "type": "str",
+            "value": "U/L"
+          }
+        ]
+      ],
+      "specification": "spec_study.yaml",
+      "stage": "source",
+      "types": [
+        "str",
+        "str",
+        "float",
+        "str"
+      ]
+    },
+    {
+      "columns": [
+        "USUBJID",
+        "PARAMCD",
+        "AVAL",
+        "AVALU"
+      ],
+      "name": "output",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "float",
+            "value": "4029000000000000"
+          },
+          {
+            "type": "str",
+            "value": "U/L"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "float",
+            "value": "4035000000000000"
+          },
+          {
+            "type": "str",
+            "value": "U/L"
+          }
+        ]
+      ],
+      "specification": "spec_study.yaml",
+      "stage": "derived",
+      "types": [
+        "str",
+        "str",
+        "float",
+        "str"
+      ]
+    }
+  ],
+  "unsupported": [],
+  "verifications": [
+    {
+      "check": "unique",
+      "evaluated_count": 2,
+      "failure": null,
+      "requirement": "REQ-0381",
+      "severity": "error",
+      "spec_path": "verifications[0].unique",
+      "specification": "spec_study.yaml",
+      "target": null,
+      "verification_id": null
+    }
+  ]
+}

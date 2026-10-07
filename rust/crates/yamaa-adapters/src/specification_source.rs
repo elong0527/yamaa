@@ -7,6 +7,9 @@ use yamaa_core::schema::{
     SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaStructure, SpecificationDocument,
     ValidationError, WindowReference,
 };
+#[path = "specification_inheritance.rs"]
+mod inheritance;
+pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
 
 /// The host's retained identity and byte snapshot. Names are not content digests.
 #[derive(Clone, Debug)]
@@ -149,9 +152,12 @@ impl CapturedSchema {
             schema: Arc::clone(self),
             source,
             raw,
-            model,
-            origins,
-            windows: expanded.references,
+            content: PreparedContent::Standalone {
+                model,
+                origins,
+                windows: expanded.references,
+            },
+            parents: Vec::new(),
         })
     }
 }
@@ -163,9 +169,17 @@ pub struct PreparedDocument {
     schema: Arc<CapturedSchema>,
     source: Source,
     raw: DecodedYaml,
-    model: SpecificationDocument,
-    origins: Vec<SchemaOrigin>,
-    windows: Vec<WindowReference>,
+    content: PreparedContent,
+    parents: Vec<CapturedParent>,
+}
+#[derive(Debug)]
+enum PreparedContent {
+    Standalone {
+        model: SpecificationDocument,
+        origins: Vec<SchemaOrigin>,
+        windows: Vec<WindowReference>,
+    },
+    Inherited(Box<yamaa_engine::inheritance_preparation::PreparedInheritance>),
 }
 impl PreparedDocument {
     pub fn schema(&self) -> &CapturedSchema {
@@ -178,12 +192,40 @@ impl PreparedDocument {
         &self.raw
     }
     pub fn model(&self) -> &SpecificationDocument {
-        &self.model
+        match &self.content {
+            PreparedContent::Standalone { model, .. } => model,
+            PreparedContent::Inherited(prepared) => prepared.model(),
+        }
     }
     pub fn origins(&self) -> &[SchemaOrigin] {
-        &self.origins
+        match &self.content {
+            PreparedContent::Standalone { origins, .. } => origins,
+            PreparedContent::Inherited(prepared) => prepared.origins(),
+        }
     }
     pub fn windows(&self) -> &[WindowReference] {
-        &self.windows
+        match &self.content {
+            PreparedContent::Standalone { windows, .. } => windows,
+            PreparedContent::Inherited(prepared) => prepared.windows(),
+        }
+    }
+    /// Input occurrences in final origins address this retained document.
+    pub fn normalization_input(&self) -> &yamaa_core::schema::Document {
+        match &self.content {
+            PreparedContent::Standalone { .. } => &self.raw.document,
+            PreparedContent::Inherited(prepared) => prepared.normalization_input(),
+        }
+    }
+    pub fn inheritance(
+        &self,
+    ) -> Option<&yamaa_engine::inheritance_preparation::PreparedInheritance> {
+        match &self.content {
+            PreparedContent::Standalone { .. } => None,
+            PreparedContent::Inherited(prepared) => Some(prepared),
+        }
+    }
+    /// Raw parent snapshots remain in first-capture order, separately from postorder layers.
+    pub fn parents(&self) -> &[CapturedParent] {
+        &self.parents
     }
 }

@@ -44,8 +44,9 @@ class StagingTests(unittest.TestCase):
                 "adam-adlb-ordered-sum",
                 "schema-lookup",
                 "schema-window-functions",
+                "schema-inheritance",
             ):
-                files = ("spec.yaml", "input/dm.csv", "input/ae.csv", "input/meddict.csv", "expected/adsl.csv") if name == "schema-lookup" else ("spec.yaml", "input/vs.csv", "expected/advs.csv") if name == "schema-window-functions" else (
+                files = ("spec_study.yaml", "spec_organization.yaml", "spec_compound.yaml", "input/lb.csv", "expected/adlb.csv") if name == "schema-inheritance" else ("spec.yaml", "input/dm.csv", "input/ae.csv", "input/meddict.csv", "expected/adsl.csv") if name == "schema-lookup" else ("spec.yaml", "input/vs.csv", "expected/advs.csv") if name == "schema-window-functions" else (
                     "spec.yaml", "input/lb.csv", "expected/adlb.csv" if name == "adam-adlb-ordered-sum" else "expected/error.yaml"
                 )
                 for relative in files:
