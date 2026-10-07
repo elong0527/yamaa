@@ -683,6 +683,11 @@ def test_adlb_lowering_matches_independent_bound_plan(specification):
             ROOT / "rust/crates/yamaa-adapters/tests/fixtures/datasets/adlb-plan.json"
         ).read_text()
     )
+    # The legacy typed request remains unchanged; current lowering additionally
+    # retains the authored operand for runtime reduction-type diagnostics.
+    expected["templates"][1]["assignments"][2]["expression"]["reduce"]["identifier"] = (
+        "LB.LBSTRESN"
+    )
     assert lower(plan, sources["LB"].table) == (expected, None)
 
 

@@ -1077,3 +1077,41 @@ fn authored_contains_consumer_observations() {
         }
     }
 }
+
+#[test]
+fn reduction_type_diagnostics_retain_authored_operand_or_legacy_field_name() {
+    let mut request = json!({
+        "protocol":"dataset/1",
+        "source":[{"name":"id","kind":"int"},{"name":"x","kind":"str"}],
+        "output":[{"name":"id","kind":"int"},{"name":"total","kind":"float"}],
+        "templates":[{"mode":{"groups":[0]},"assignments":[
+            {"column":0,"path":"rows[0].derivations.id.source","expression":{"source":0}},
+            {"column":1,"path":"rows[0].derivations.total.aggregate","expression":{"reduce":{"column":1,"reducer":"SUM","text":"SUM(SRC.x)"}}}
+        ]}],"columns":[],"keys":[0],"verifications":[]
+    });
+    for identifier in [None, Some("SRC.x")] {
+        if let Some(identifier) = identifier {
+            request["templates"][0]["assignments"][1]["expression"]["reduce"]["identifier"] =
+                json!(identifier);
+        }
+        let (table, result) = outcome(
+            &request,
+            &source(vec![Some(1), Some(1)], vec![None, Some("2")]),
+        );
+        assert!(table.is_none());
+        assert_eq!(
+            result,
+            json!({"status":"condition","identity":null,"diagnostic":{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[0].derivations.total.aggregate"],"context":{"expr":{"str":"SUM(SRC.x)"},"reducer":{"str":"SUM"},"source":{"str":identifier.unwrap_or("x")},"expected":{"str":"numeric"},"actual":{"str":"str"}}}})
+        );
+        let (table, result) = outcome(&request, &source(vec![Some(1), Some(1)], vec![None, None]));
+        assert_eq!(result, json!({"status":"success","verifications":[]}));
+        let snapshot: Value =
+            serde_json::from_str(&table_snapshot(&table.unwrap()).unwrap()).unwrap();
+        assert_eq!(snapshot["rows"], json!([[{"int":"1"},{"missing":null}]]));
+    }
+    request["templates"][0]["assignments"][1]["expression"]["reduce"]["identifier"] = json!("");
+    assert_eq!(
+        execute_dataset(&request.to_string(), b"invalid IPC").err(),
+        Some(Error::InvalidRequest)
+    );
+}

@@ -386,6 +386,7 @@ enum Reducer {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Reduction {
+    identifier: Option<String>,
     column: usize,
     reducer: Reducer,
     text: String,
@@ -883,8 +884,11 @@ fn assignments(
                 }
                 Expression::Reduce(reduction) => {
                     path(&reduction.text)?;
+                    if let Some(identifier) = &reduction.identifier {
+                        path(identifier)?;
+                    }
                     dataset::Expression::Reduce {
-                        identifier: None,
+                        identifier: reduction.identifier,
                         column: reduction.column,
                         reducer: match reduction.reducer {
                             Reducer::Sum => NumericReducer::Sum,
