@@ -263,5 +263,45 @@ for(invalid in list(NULL,1L,new("externalptr"))) {
 }
 cat("retained host errors/interruptions and invalid/expired handles passed\n")
 
+# A container-only variation preserves original values and native observations.
+# R builds and saves with no Python runtime or host Parquet library available.
+parquet_case <- file.path(root,"cases","adam-adlb-ordered-sum")
+parquet_source <- sub("path: adlb.csv","path: adlb.parquet",
+                      rawToChar(rawfile(file.path(parquet_case,"spec.yaml"))),fixed=TRUE)
+stopifnot(grepl("path: adlb.parquet",parquet_source,fixed=TRUE))
+parquet_handle <- prepare_entry("spec.yaml",charToRaw(parquet_source),no_port,no_port,no_port)
+parquet_requests <- character()
+parquet_capture <- function(name,path,maximum) {
+  parquet_requests <<- c(parquet_requests,path)
+  bytes <- rawfile(file.path(parquet_case,path))
+  stopifnot(length(bytes)<=maximum)
+  list(bytes,TRUE)
+}
+parquet_result <- build(parquet_handle,parquet_capture,"adam-adlb-ordered-sum","spec.yaml")
+parquet_expected <- rawToChar(rawfile(file.path(root,"expected","adam-adlb-ordered-sum.json")))
+parquet_expected <- sub('"runtime":"python"','"runtime":"r"',parquet_expected,fixed=TRUE)
+parquet_expected <- sub("fixture-runtime",as.character(getRversion()),parquet_expected,fixed=TRUE)
+parquet_expected <- sub("fixture-engine",engine_info()$core_version,parquet_expected,fixed=TRUE)
+parquet_unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',parquet_expected)
+stopifnot(identical(build_observations(parquet_result),parquet_unsaved))
+parquet_saved <- list()
+parquet_publish <- function(path,bytes) {
+  stopifnot(path=="adlb.parquet",identical(bytes[1:4],charToRaw("PAR1")),
+            identical(tail(bytes,4L),charToRaw("PAR1")))
+  parquet_saved[[length(parquet_saved)+1L]] <<- bytes
+  TRUE
+}
+for(i in seq_len(2L)) {
+  parquet_report <- build_save(parquet_result,parquet_publish)
+  stopifnot(grepl('"profile":"parquet"',parquet_report,fixed=TRUE),
+            grepl('"content":""',parquet_report,fixed=TRUE),
+            identical(sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',parquet_report),parquet_unsaved))
+}
+stopifnot(identical(parquet_requests,"input/lb.csv"),length(parquet_saved)==2L,
+          identical(parquet_saved[[1L]],parquet_saved[[2L]]),
+          identical(build_observations(parquet_result),parquet_unsaved),
+          !is.null(build_output(parquet_result)))
+cat("native Parquet output construction and explicit save passed\n")
+
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

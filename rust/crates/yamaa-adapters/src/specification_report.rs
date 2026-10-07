@@ -337,7 +337,7 @@ pub fn build_result<E>(
             id,
             value: None,
         },
-        &mut CsvEncoder,
+        &mut Encoder(run.compiled().output_profile()),
     )
     .map_err(|error| match error {
         E::Report(e) | E::Encode(e) => e,
@@ -502,7 +502,7 @@ pub fn complete<E, P: ArtifactPort>(
             id,
             value: None,
         },
-        &mut CsvEncoder,
+        &mut Encoder(run.compiled().output_profile()),
         publisher,
     )
     .map_err(|error| match error {
@@ -513,8 +513,8 @@ pub fn complete<E, P: ArtifactPort>(
     })
 }
 
-struct CsvEncoder;
-impl yamaa_engine::specification_output::ArtifactEncoder for CsvEncoder {
+struct Encoder(Option<&'static str>);
+impl yamaa_engine::specification_output::ArtifactEncoder for Encoder {
     type Error = Error;
     fn encode(
         &mut self,
@@ -522,10 +522,31 @@ impl yamaa_engine::specification_output::ArtifactEncoder for CsvEncoder {
         projection: &[usize],
         byte_limit: usize,
     ) -> Result<Vec<u8>, Error> {
-        crate::csv_artifact::render(dataset, projection, byte_limit).map_err(|error| match error {
-            crate::csv_artifact::Error::Limit => Error::OutputLimit,
-            _ => Error::InvalidObservation,
-        })
+        match self.0 {
+            Some("csv") => {
+                crate::csv_artifact::render(dataset, projection, byte_limit).map_err(|error| {
+                    match error {
+                        crate::csv_artifact::Error::Limit => Error::OutputLimit,
+                        _ => Error::InvalidObservation,
+                    }
+                })
+            }
+            Some("parquet") => crate::parquet_artifact::render(
+                dataset,
+                projection,
+                crate::parquet_artifact::Limits {
+                    output_bytes: byte_limit,
+                    staged_bytes: 8 * 1024 * 1024,
+                    cells: 1_048_576,
+                    columns: 4096,
+                },
+            )
+            .map_err(|error| match error {
+                crate::parquet_artifact::Error::Limit => Error::OutputLimit,
+                _ => Error::InvalidObservation,
+            }),
+            _ => Err(Error::InvalidObservation),
+        }
     }
 }
 
@@ -575,9 +596,29 @@ impl<E> yamaa_engine::specification_output::OutputReport for Report<'_, '_, E> {
     ) -> Result<Value, Error> {
         let run = self.run;
         let table = &execution.dataset;
-        let content = std::str::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
+        let profile = run
+            .compiled()
+            .output_profile()
+            .ok_or(Error::InvalidObservation)?;
+        let (content, records) = if profile == "csv" {
+            let content = std::str::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
+            let records = content
+                .strip_suffix('\n')
+                .ok_or(Error::InvalidObservation)?
+                .split('\n')
+                .map(String::from)
+                .collect::<Vec<_>>();
+            (content, records)
+        } else {
+            let records = crate::parquet_artifact::records(table, projection, 8 * 1024 * 1024)
+                .map_err(|error| match error {
+                    crate::parquet_artifact::Error::Limit => Error::OutputLimit,
+                    _ => Error::InvalidObservation,
+                })?;
+            ("", records)
+        };
         let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
-        report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":"csv","columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":content.strip_suffix('\n').ok_or(Error::InvalidObservation)?.split('\n').collect::<Vec<_>>(),"byte_length":bytes.len(),"content":content}]);
+        report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
         report["tables"]
             .as_array_mut()
             .ok_or(Error::InvalidObservation)?

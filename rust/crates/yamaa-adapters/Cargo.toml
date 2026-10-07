@@ -21,3 +21,4 @@ arrow-schema = { version = "=60.0.0", default-features = false }
 arrow-buffer = { version = "=60.0.0", default-features = false }
 arrow-ipc = { version = "=60.0.0", default-features = false }
 flatbuffers = { version = "=25.12.19", default-features = false }
+parquet = { version = "=60.0.0", default-features = false }
