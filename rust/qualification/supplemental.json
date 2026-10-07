@@ -499,6 +499,15 @@
         "rust/tests/installed_original_specifications.py",
         "python/tests/native/test_original_specification_truth.py"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-inheritance.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "python/tests/native/test_original_specification_truth.py",
+        "rust/crates/yamaa-adapters/tests/specification_run.rs"
+      ]
     }
   ],
   "suites": [

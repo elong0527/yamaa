@@ -74,6 +74,8 @@ explicit host ports. The retained result owns normalized contributions, written
 layer provenance, expansion history and the document addressed by final origins.
 A direct integration test prepares the unchanged `spec_study.yaml`, reads its
 shared parent once, prunes the unused input and column, and produces the exact
-committed CSV. This is not yet installed-host or complete-report qualification.
+committed CSV. The adapter retains raw parent bytes and locations and compares
+the complete report against independent reference-checked truth. Installed-host
+qualification remains pending.
 Non-governed descriptive metadata can reach compilation; reserved metadata keys
 remain explicitly unsupported pending submission validation integration.

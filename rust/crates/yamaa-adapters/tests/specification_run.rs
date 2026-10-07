@@ -2345,6 +2345,35 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             Ok(written.into())
         }
     }
+    impl yamaa_adapters::specification_source::InheritancePort for Host {
+        type Error = &'static str;
+        fn canonicalize(
+            &mut self,
+            declaring: &str,
+            written: &str,
+        ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
+            graph::SourcePort::canonicalize(self, declaring, written)
+        }
+        fn capture(
+            &mut self,
+            source: &graph::Source,
+            maximum: usize,
+        ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
+            self.reads.push(source.identity.clone());
+            let bytes = std::fs::read(self.root.join(&source.identity)).unwrap();
+            assert!(bytes.len() <= maximum);
+            Ok(bytes)
+        }
+        fn rebase(
+            &mut self,
+            layer: &graph::Source,
+            entry: &graph::Source,
+            written: &str,
+            maximum: usize,
+        ) -> Result<String, Self::Error> {
+            lifecycle::PathPort::rebase(self, layer, entry, written, maximum)
+        }
+    }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let case = root.join("benchmarks/schema-inheritance");
     let schema = schema(&root.join("yaml"));
@@ -2488,6 +2517,89 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             matches!(error,yamaa_core::specification::PrepareError::Unsupported(ref items) if items.iter().any(|item|item.operation == "reserved_metadata_key" && item.path == path))
         );
     }
+    host.reads.clear();
+    let captured = schema
+        .prepare_inherited(
+            Source {
+                identity: "spec_study.yaml".into(),
+                bytes: std::fs::read(case.join("spec_study.yaml")).unwrap(),
+            },
+            "spec_study.yaml".into(),
+            &mut host,
+        )
+        .unwrap();
+    assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
+    assert_eq!(captured.parents().len(), 2);
+    for parent in captured.parents() {
+        assert_eq!(
+            parent.source().bytes,
+            std::fs::read(case.join(&parent.source().identity)).unwrap()
+        );
+        assert!(!parent.raw().locations.is_empty());
+    }
+    assert!(captured.inheritance().is_some());
+    let run = yamaa_adapters::specification_run::PreparedRun::prepare(captured).unwrap();
+    struct Data {
+        bytes: Arc<[u8]>,
+        reads: usize,
+        published: Vec<Vec<u8>>,
+    }
+    impl yamaa_adapters::specification_run::SourcePort for Data {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(
+            &mut self,
+            source: &yamaa_core::specification::SourceDeclaration,
+            maximum: usize,
+        ) -> Result<Arc<[u8]>, ()> {
+            assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
+            assert!(self.bytes.len() <= maximum);
+            self.reads = 1;
+            Ok(self.bytes.clone())
+        }
+    }
+    impl yamaa_adapters::specification_report::ArtifactPort for Data {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert_eq!(path, "adlb.csv");
+            self.published.push(bytes.to_vec());
+            Ok(())
+        }
+    }
+    let mut data = Data {
+        bytes: Arc::from(std::fs::read(case.join("input/lb.csv")).unwrap()),
+        reads: 0,
+        published: vec![],
+    };
+    for created in [1, 0] {
+        let attempt = run.execute_with_port(&mut data);
+        let report = yamaa_adapters::specification_report::complete(
+            &run,
+            &attempt,
+            yamaa_adapters::specification_report::Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: "schema-inheritance",
+                specification: "spec_study.yaml",
+                base_directory: ".",
+            },
+            &mut data,
+        )
+        .unwrap();
+        let mut expected: serde_json::Value = serde_json::from_str(include_str!(
+            "fixtures/specifications/schema-inheritance.json"
+        ))
+        .unwrap();
+        expected["source_reads"][0]["snapshots_created"] = serde_json::json!(created);
+        assert_eq!(report, expected);
+    }
+    assert_eq!(
+        data.published,
+        vec![std::fs::read(case.join("expected/adlb.csv")).unwrap(); 2]
+    );
     for fail_path in [false, true] {
         host.fail_path = fail_path;
         let error = lifecycle::prepare(

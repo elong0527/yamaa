@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[3]
         "adam-adlb-ordered-sum",
         "schema-lookup",
         "schema-window-functions",
+        "schema-inheritance",
     ],
 )
 def test_authored_reports_match_reference_without_native_execution(name, tmp_path):
