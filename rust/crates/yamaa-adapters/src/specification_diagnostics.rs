@@ -32,52 +32,11 @@ fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> 
     Some(diagnostics)
 }
 fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
-    Some(match error {
-        BindFinding::Window(finding) => {
-            use yamaa_core::specification::WindowFinding;
-            let (path, context) = match finding {
-                WindowFinding::ZeroOffset { path } => (path, json!({"offset":0})),
-                WindowFinding::Order {
-                    path, operation, ..
-                } => (path, json!({"operation":operation})),
-            };
-            let definition = finding.definition();
-            vec![diagnostic(
-                definition.phase,
-                definition.condition,
-                definition.requirement,
-                vec![path.clone()],
-                context,
-            )]
-        }
-        BindFinding::Lookup(finding) => {
-            let context = finding
-                .context
-                .iter()
-                .map(|(name, value)| {
-                    let value = match value {
-                        yamaa_core::value::Value::Str(value) => json!(value),
-                        yamaa_core::value::Value::Int(value) => json!(value),
-                        _ => return None,
-                    };
-                    Some((name.clone(), value))
-                })
-                .collect::<Option<serde_json::Map<_, _>>>()?;
-            let definition = finding.definition;
-            vec![diagnostic(
-                definition.phase,
-                definition.condition,
-                definition.requirement,
-                vec![finding.path.clone()],
-                context.into(),
-            )]
-        }
-        _ => error
-            .diagnostics(source)?
-            .into_iter()
-            .map(portable_diagnostic)
-            .collect::<Option<_>>()?,
-    })
+    error
+        .diagnostics(source)?
+        .into_iter()
+        .map(portable_diagnostic)
+        .collect()
 }
 /// Represent the core-owned finding without assigning semantic vocabulary here.
 fn preparing(error: &PreflightFinding) -> Option<Value> {

@@ -695,6 +695,26 @@ fn core_csv_profile_matches_independent_complete_failed_reports() {
     );
 }
 
+#[test]
+fn core_window_findings_match_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/window_diagnostics.tsv"),
+        "window",
+        (3, 3),
+        b"ID,V\n1,2\n",
+    );
+}
+
+#[test]
+fn core_predicate_matches_independent_complete_failed_report() {
+    independent_failed_reports(
+        include_str!("fixtures/predicate_diagnostics.tsv"),
+        "predicate",
+        (1, 1),
+        b"ID,V\n1,2\n",
+    );
+}
+
 fn independent_failed_reports(
     fixture: &str,
     prefix: &str,
@@ -1020,7 +1040,13 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
-    for name in ["negative-zero-division", "negative-integer-overflow"] {
+    for name in [
+        "negative-zero-division",
+        "negative-integer-overflow",
+        "negative-formula-flag",
+        "negative-row-aggregate",
+        "negative-row-no-prior",
+    ] {
         let case = root.join("benchmarks").join(name);
         let run = PreparedRun::prepare(prepare(
             &schema,

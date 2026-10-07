@@ -23,6 +23,7 @@ mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
 pub use lookup_diagnostics::LookupFinding;
+use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
 mod output_diagnostics;
 #[path = "specification_preflight_diagnostics.rs"]
@@ -1145,7 +1146,11 @@ impl PreparedSpecification {
                                 .position(|c| c.name == field);
                             if column.is_none() {
                                 findings.push(BindFinding::Lookup(LookupFinding::reference(
-                                    path, name, None, "REQ-0125", None,
+                                    path,
+                                    name,
+                                    None,
+                                    ReferenceCause::Value,
+                                    None,
                                 )));
                             }
                             column.map(|column| Expression::Intermediate { index, column })

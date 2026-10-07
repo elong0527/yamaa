@@ -34,15 +34,14 @@ impl GrammarFailure {
     /// The committed predicate grammar reports rejected temporal literals here too.
     /// REQ-0192's broader temporal diagnostic wording remains a recorded contract gap.
     pub fn condition(&self) -> &'static str {
-        "invalid_predicate"
+        self.diagnostic_code().definition().condition
     }
     /// Keep regex and ESCAPE ownership separate from ordinary syntax errors.
     pub fn requirement(&self) -> &'static str {
-        match self {
-            Self::InvalidRegex { .. } => "REQ-1244",
-            Self::InvalidEscape => "REQ-0191",
-            Self::InvalidExpression | Self::InvalidTemporal { .. } => "REQ-0188",
-        }
+        self.diagnostic_code()
+            .definition()
+            .requirement
+            .expect("predicate grammar requirement")
     }
 }
 

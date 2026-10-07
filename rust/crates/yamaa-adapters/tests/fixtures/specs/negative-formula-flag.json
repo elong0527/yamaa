@@ -1,0 +1,127 @@
+{
+  "artifacts": [],
+  "backend": "rust",
+  "callbacks": [],
+  "diagnostics": [
+    {
+      "condition": "prohibited_construct",
+      "context": {
+        "construct": "comparison",
+        "expr": "AVAL > ANRHI"
+      },
+      "phase": "validation",
+      "requirement": "REQ-0441",
+      "spec_paths": [
+        "columns.HIFL.derivation.compute.expr"
+      ]
+    }
+  ],
+  "engine_version": "fixture-engine",
+  "error": null,
+  "example": "negative-formula-flag",
+  "handler_counts": [],
+  "nodes": [
+    {
+      "diagnostics": [
+        {
+          "condition": "prohibited_construct",
+          "context": {
+            "construct": "comparison",
+            "expr": "AVAL > ANRHI"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0441",
+          "spec_paths": [
+            "columns.HIFL.derivation.compute.expr"
+          ]
+        }
+      ],
+      "handler_counts": [],
+      "outcome": "failure",
+      "specification": "spec.yaml",
+      "unsupported": []
+    }
+  ],
+  "outcome": "failure",
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "runtime_version": "fixture-runtime",
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "condition": null,
+      "outcome": "captured",
+      "path": "input/lb.csv",
+      "snapshots_created": 1
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "LBTESTCD",
+        "LBSTRESN",
+        "LBSTNRHI"
+      ],
+      "name": "LB",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "str",
+            "value": "42"
+          },
+          {
+            "type": "str",
+            "value": "35"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "str",
+            "value": "20"
+          },
+          {
+            "type": "str",
+            "value": "35"
+          }
+        ]
+      ],
+      "specification": "spec.yaml",
+      "stage": "source",
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str",
+        "str"
+      ]
+    }
+  ],
+  "unsupported": [],
+  "verifications": []
+}

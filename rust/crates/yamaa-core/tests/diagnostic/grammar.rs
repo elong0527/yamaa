@@ -121,3 +121,51 @@ fn caller_supplied_function_span_cannot_slice_a_different_expression() {
     };
     assert!(failure.diagnostic("columns.VALUE", "").is_none());
 }
+
+pub(super) fn predicate_reached(
+) -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode> {
+    use yamaa_core::{
+        diagnostic::{ConditionCode as C, ContextValue as V},
+        predicate_parser::{parse_predicate, ParseError},
+        value::Value,
+    };
+    let mut reached = std::collections::BTreeSet::new();
+    for (text, code, requirement) in [
+        ("A >", C::PredicateInvalidExpression, "REQ-0188"),
+        (
+            "A LIKE 'a' ESCAPE 'ab'",
+            C::PredicateInvalidEscape,
+            "REQ-0191",
+        ),
+        ("STR_CONTAINS(A, '(')", C::PredicateInvalidRegex, "REQ-1244"),
+        (
+            "A = DATE '2026-02-30'",
+            C::PredicateInvalidExpression,
+            "REQ-0188",
+        ),
+    ] {
+        let Err(ParseError::Grammar {
+            position, failure, ..
+        }) = parse_predicate(text, Default::default())
+        else {
+            panic!("predicate must fail")
+        };
+        let d = failure.diagnostic("columns.VALUE.window.filter", text, position.character);
+        assert_eq!(d.code, code);
+        assert_eq!(d.definition().phase, "validation");
+        assert_eq!(d.definition().condition, "invalid_predicate");
+        assert_eq!(d.definition().requirement, Some(requirement));
+        assert_eq!(failure.condition(), "invalid_predicate");
+        assert_eq!(failure.requirement(), requirement);
+        assert_eq!(d.spec_paths, ["columns.VALUE.window.filter"]);
+        assert_eq!(d.context["predicate"], V::Scalar(Value::Str(text.into())));
+        assert_eq!(
+            d.context["position"],
+            V::Integer(position.character.to_string())
+        );
+        assert_eq!(d.source_span, None);
+        assert_eq!(d.operand_route, None);
+        reached.insert(d.code);
+    }
+    reached
+}
