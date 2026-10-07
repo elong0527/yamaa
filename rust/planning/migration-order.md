@@ -47,6 +47,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1786 | Core original-document preflight and output-declaration diagnostics, with complete retained failed reports. |
 | #1788 | Core numeric/aggregate grammar diagnostics and independent original-document failure timing. |
 | #1789 | Portable schema kinds, core binding/dependency findings and pure core CSV profile admission. |
+| #1790 | Original scalar column literals and column/row conversion recovery wrappers. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -69,15 +70,25 @@ forms with 31 original-document and four schema methods, plus both strict R sour
 packages with all 17 scripts. The reference R check passed an isolated retry after
 setup timed out before tests. Its 58-contract/39-suite catalog and unchanged
 945-row assisted inventory are qualified private-route evidence.
-The next serial candidate compiles ordinary scalar columns and column/row
-conversion wrappers through the existing core expression and recovery service.
-Four literal, five column-handler and eight row-handler complete independent
-reports pin exact successful CSV, failed reports, authored paths, effective-default
-counter ordering, retained ownership and repeated save gates. Local qualification
-passes 658 Rust tests, strict Clippy, 44 tooling tests, both Python forms with
-34 original-document methods and strict R Status: OK with all 17 scripts. The
-61-contract/39-suite catalog remains candidate evidence pending final-head hosted
-qualification and full review; the benchmark inventory stays unchanged.
+#1790 merged as `6ac27ce75f6758a68275eabf0753702234a29f8d` after all 13
+checks, full final-head review and downloaded installed-artifact auditing. Six
+Python forms pass 22 supplemental suites, 34 original-document methods and four
+schema methods each; both R source forms pass all 17 scripts with strict Status:
+OK. All native artifacts are from attempt 1. The 61-contract/39-suite catalog and
+unchanged 945-row assisted inventory retain private-route evidence.
+
+The next serial candidate moves eleven window, named-selection and predicate
+grammar causes into the common core diagnostic. Three independent window reports,
+one malformed predicate report and three additional unchanged negative corpus
+documents retain complete observations, actual ingestion timing and failed save
+gates. Local qualification passes 660 Rust tests, strict Clippy, 44 tooling tests,
+both Python forms (36 original-document and three schema methods), and strict R
+Status: OK with all 17 scripts. Twenty changed Rust/source/fixture and twenty-one
+R archive members match directly. The 66-contract/39-suite catalog awaits its
+main-based PR, final-head hosted qualification and full review. Three separately
+observed predicate requirement/context gaps remain unqualified and documented in
+`predicate_diagnostics.md`; existing locked truth and assisted inventory remain
+unchanged.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance

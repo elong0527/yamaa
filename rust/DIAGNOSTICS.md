@@ -2,7 +2,8 @@
 
 The #1753 slices move numeric evaluation, arithmetic/reduction, completed-result
 conversion, classified resource, original-document preflight, output-declaration
-and numeric/aggregate grammar diagnostics into
+numeric/aggregate grammar, binding/dependency, CSV profile, window and
+named-selection/predicate grammar diagnostics into
 `yamaa-core::diagnostic`. The
 original-specification runner and existing dataset/numeric transports consume
 those core diagnostics. Adapters encode runtime values and source offsets but
@@ -87,9 +88,8 @@ The existing canonical rules validator separately checks definition uniqueness
 and historical IDs. The guard does not infer requirements from documentation
 citations or count component tests as complete-run qualification.
 
-This does not complete #1753. Other parser/schema,
-binding, predicate, function, verification and ingestion diagnostics still need
-conversion; some remain constructed in adapters. Inherited source/entry/parent
+This does not complete #1753. Schema, function, verification and remaining
+ingestion diagnostics still need conversion; some remain constructed in adapters. Inherited source/entry/parent
 provenance, additional structured context and unified serialization across all
 protocols must migrate with those families. Existing per-protocol wire wrappers
 remain temporarily for unmigrated errors. No registry completeness, public API
@@ -99,5 +99,23 @@ Original output-window validation now projects through the common core diagnosti
 The canonical registry owns zero offset, required order and forbidden order;
 `WindowFinding::definition` and its typed context use that same mapping. Three
 independent complete failed reports retain authored paths, source reads, source
-tables and save rejection. Window predicate and named-selection findings remain
-separately represented until their next service migration.
+tables and save rejection. Named-selection reference/key-type and predicate
+parser findings now retain the same shared diagnostic, preserving typed context,
+original spellings and character positions without narrowing through runtime i64.
+All original binding findings with normative projections use the common adapter
+serializer. Resource policies and inconsistent metadata retain separate failures.
+
+The unchanged lookup reports and predicate syntax fixtures pin existing mappings
+and richer parser context. One independently captured malformed window predicate
+also matches a complete original failed report. Three additional independently
+observed original predicate reports have existing parity gaps: invalid ESCAPE uses
+a different reference requirement; regex and temporal failures have additional
+native context. `tests/fixtures/predicate_diagnostics.md` records those observations.
+Those forms are not newly qualified, and locked truth is not regenerated to hide
+the gaps. REQ-0192's temporal grammar wording remains a separate reconciliation.
+
+Nine unchanged original corpus documents now replay through the private route.
+Three negative window/row documents retain actual reference capture/ingestion
+before binding failure, including repeated results and failed save gates. These
+complete-report observations do not promote assisted inventory records or remove
+the five assisted-route timing gaps.
