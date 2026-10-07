@@ -44,6 +44,9 @@ The adapter pins Parquet/Arrow 60.0.0, bytes 1.12.1, base64 0.23.1, brotli 9.0.0
 flate2 1.1.10, lz4_flex 0.14.0, zstd 0.14.0 and snap 1.1.2. Compression dependencies
 and Parquet's Arrow feature remain confined to adapters. Zstd introduces its native
 build dependencies; transitive Cargo reproducibility is still tracked in #1742.
+The R source build supplies macOS target 11.0 for its Rust/static C archive when
+no target is explicitly provided, preventing the SDK default from exceeding R's
+link target. R's C/link configuration is unchanged; this is not a platform promise.
 The dependency guard checks the new direct edges. No lockfile or provenance digest
 is added by this slice.
 
