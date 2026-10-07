@@ -8,6 +8,7 @@ from yamaa.io.polars import frame_from_values
 from yamaa.models import TypedColumn
 from yamaa.specification import load_specification
 from yamaa.submission.verification import check_terminology
+from yamaa.verification import DeclarationError
 
 ROOT = Path(__file__).parents[3]
 
@@ -120,3 +121,33 @@ def test_row_override_replaces_shared_codelist_and_reports_only_its_rows():
     assert failure.context["codelist"] == "CL_GLUCOSE"
     assert failure.context["keys"][0]["LBSEQ"] == 1
     assert sum(record.evaluated_count for record in records) == 3
+
+
+def test_missing_discriminator_column_fails_governed():
+    # Row-level codelist overrides hang on the <DOMAIN>TESTCD discriminator
+    # (REQ-1163); a table missing it must fail with the governed
+    # DeclarationError, not an unhandled polars ColumnNotFoundError.
+    spec = load_specification(
+        ROOT / "benchmarks/sdtm-lb-metadata/spec.yaml", ROOT / "yaml"
+    ).specification
+    column = next(column for column in spec.columns if column.name == "LBORRESU")
+    columns = tuple(
+        TypedColumn(name=name, type=kind)
+        for name, kind in [
+            ("STUDYID", "str"),
+            ("USUBJID", "str"),
+            ("LBSEQ", "int"),
+            ("LBORRESU", "str"),
+        ]
+    )
+    table = frame_from_values(columns, [["S", "1", 1, "g/L"]])
+    document = {
+        "codelists": [
+            {"id": "CL_LBORRESU", "items": [{"value": "g/L"}]},
+            {"id": "CL_GLUCOSE", "items": [{"value": "mg/dL"}]},
+            {"id": "CL_CREATININE", "items": [{"value": "mg/dL"}]},
+        ]
+    }
+    with pytest.raises(DeclarationError) as caught:
+        check_terminology(table, column, spec.keys, document, spec)
+    assert "unknown column 'LBTESTCD'" in str(caught.value)
