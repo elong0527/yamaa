@@ -66,7 +66,17 @@ API test. Windows R, macOS x86_64, Linux arm64, musl, other Python implementatio
 R binary distributions and untested versions have no release promise yet. They
 are **undecided/unqualified**, not silently approved exclusions.
 
-The current native R job runs build/install and scripts, not `R CMD check`.
+The current native R CI job runs build/install and scripts, not `R CMD check`.
+A local follow-up checked the downloaded macOS source archive from
+[run 37609435827](https://github.com/elong0527/yamaa/actions/runs/37609435827),
+the final #1772 qualification run. `R CMD check --no-manual` on R 4.6.1, macOS
+26.6.2 arm64 completed with zero errors, zero warnings and all 17 scripts passing.
+It reported one portability NOTE: the packaged Rust fixture paths ending in
+`specifications/negative-integer-overflow.json` and
+`specifications/schema-window-functions.json` exceed 100 archive-path bytes.
+This local result does not qualify other systems, a PDF manual or the final API,
+and the path note has no approved waiver. B15 remains open for CI checks across
+the chosen matrix and an explicit disposition of packaging findings.
 Release scope must either add the appropriate checks or record an explicit
 approved exclusion. Package versions in the audited evidence are Python host
 0.2.0, native Python/R 0.1.0 and core 0.1.0; none constitutes the final combined
