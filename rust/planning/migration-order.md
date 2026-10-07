@@ -90,7 +90,7 @@ the non-transcendental cohort:
   release. The old per-run selectable policy proposal is not the target public
   API. Record the maintainer's numerical choice before changing production
   behavior, then qualify it in both hosts and every affected compute context.
-- **#1742:** establish the finite blocker register and API/support matrix now,
+- **#1742:** maintain the [release blocker register and declared API inventory](release-readiness.md),
   using the API replacement in #1751 rather than assuming legacy API preservation.
   Reproducible Cargo dependencies, Windows R scope and numeric performance budgets
   remain explicit decisions. Measure representative shared workloads once their

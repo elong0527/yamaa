@@ -1,0 +1,752 @@
+{
+  "version": 1,
+  "scope": "Explicit Python __all__, native stub symbols/members, and R namespace exports/S3 registrations. This is a migration checklist, not a promise of supported APIs; undocumented submodule members still need release review.",
+  "sources": {
+    "python/src/yamaa/__init__.py": {
+      "names": [
+        "DomainRun",
+        "DomainRunError",
+        "__version__",
+        "generate_study_document",
+        "yamaa_domain"
+      ],
+      "disposition": "replace",
+      "issue": "#1751",
+      "rationale": "Replace legacy domain/result entry points with domain/check and the specified result contract; migrate generate_study_document to define under #1758.",
+      "overrides": {
+        "__version__": {
+          "disposition": "retain_candidate",
+          "rationale": "Retain installed package version metadata; release API inventory still needs explicit sign-off."
+        }
+      }
+    },
+    "python/src/yamaa/domain.py": {
+      "names": [
+        "DomainRun",
+        "DomainRunError",
+        "yamaa_domain"
+      ],
+      "disposition": "replace",
+      "issue": "#1751",
+      "rationale": "Replace legacy domain/result entry points with domain/check and the specified result contract; migrate generate_study_document to define under #1758.",
+      "overrides": {}
+    },
+    "python/src/yamaa/expressions/__init__.py": {
+      "names": [
+        "AbsentValue",
+        "AggregateAst",
+        "AggregateError",
+        "CORE_EXPRESSION_HANDLERS",
+        "DEFAULT_EXPRESSION_OPERATIONS",
+        "ExpressionDispatcher",
+        "ExpressionHandler",
+        "ExpressionInput",
+        "FUNCTION_ARITIES",
+        "FailedResolution",
+        "MappingResolver",
+        "NestedDispatcher",
+        "NumericAst",
+        "NumericError",
+        "PROHIBITED_KEYWORDS",
+        "Partition",
+        "PredicateAst",
+        "PredicateError",
+        "PredicateResult",
+        "PredicateValue",
+        "REDUCERS",
+        "RelationalResolver",
+        "Resolution",
+        "ResolvedValue",
+        "Resolver",
+        "SelectedSourceResolver",
+        "TemplateError",
+        "TemplatePart",
+        "TruthValue",
+        "WINDOW_OPERATIONS",
+        "aggregate_handlers",
+        "aggregate_identifiers",
+        "aggregate_star_datasets",
+        "ascii_lower",
+        "ascii_sentence",
+        "ascii_title",
+        "ascii_upper",
+        "build_expression_handlers",
+        "collected_datetime_precision",
+        "collected_precision",
+        "date_handlers",
+        "evaluate_aggregate",
+        "evaluate_expression",
+        "evaluate_nested",
+        "evaluate_numeric",
+        "evaluate_predicate",
+        "evaluate_window",
+        "expression_condition",
+        "handler_value",
+        "is_single_reduction",
+        "numeric_identifiers",
+        "parse_aggregate",
+        "parse_aggregate_cached",
+        "parse_numeric",
+        "parse_numeric_cached",
+        "parse_predicate",
+        "parse_predicate_cached",
+        "parse_template",
+        "parse_template_cached",
+        "predicate_identifiers",
+        "relational_handler",
+        "resolve_operand",
+        "source_operand",
+        "template_identifiers",
+        "ungrouped_identifiers",
+        "whole_units",
+        "window_handlers",
+        "window_spec"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/__init__.py": {
+      "names": [
+        "ACTIVATION_CACHE",
+        "ActivatedEnvironment",
+        "ActivationCache",
+        "ArtifactResolver",
+        "ArtifactUnavailable",
+        "BoundFunction",
+        "ConformanceCase",
+        "ConformanceDocument",
+        "ENVIRONMENT_NAME",
+        "FUNCTION_OPERATION",
+        "FunctionActivationError",
+        "FunctionBinding",
+        "FunctionCall",
+        "FunctionContract",
+        "FunctionFailure",
+        "FunctionParameter",
+        "LoadedArtifact",
+        "LoadedEnvironment",
+        "MappedArtifacts",
+        "ProjectArtifactDirectory",
+        "ProjectEnvironment",
+        "ProjectRuntime",
+        "RUNNER_LANGUAGE",
+        "RuntimeArtifact",
+        "activate",
+        "activate_project_functions",
+        "artifact_files",
+        "contract_fingerprint",
+        "environment_schema",
+        "execute_with_project_functions",
+        "function_calls",
+        "function_dispatcher",
+        "function_handlers",
+        "load_environment",
+        "resolve_artifact",
+        "results_match",
+        "run_with_project_functions",
+        "select_project_root",
+        "validate_calls"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/activation.py": {
+      "names": [
+        "ACTIVATION_CACHE",
+        "ActivatedEnvironment",
+        "ActivationCache",
+        "activate",
+        "resolve_bindings"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/artifact.py": {
+      "names": [
+        "ArtifactResolver",
+        "ArtifactUnavailable",
+        "LoadedArtifact",
+        "MappedArtifacts",
+        "ProjectArtifactDirectory",
+        "artifact_files",
+        "resolve_artifact"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/calls.py": {
+      "names": [
+        "FunctionCall",
+        "function_calls",
+        "validate_calls"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/environment.py": {
+      "names": [
+        "ENVIRONMENT_NAME",
+        "RUNNER_LANGUAGE",
+        "check_runner_language",
+        "environment_schema",
+        "load_environment",
+        "select_project_root"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/errors.py": {
+      "names": [
+        "FunctionActivationError",
+        "FunctionFailure",
+        "SPECIFICATION_ROOT"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/evaluator.py": {
+      "names": [
+        "FUNCTION_OPERATION",
+        "function_dispatcher",
+        "function_handlers"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/execution.py": {
+      "names": [
+        "activate_project_functions",
+        "activate_workflow_functions",
+        "execute_with_project_functions"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/fingerprint.py": {
+      "names": [
+        "ContractValueError",
+        "canonical_function_value",
+        "contract_fingerprint",
+        "function_value_type"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/invocation.py": {
+      "names": [
+        "AuthoredValueError",
+        "BoundFunction",
+        "results_match",
+        "runtime_value",
+        "value_type"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/models.py": {
+      "names": [
+        "ConformanceCase",
+        "ConformanceDocument",
+        "FunctionBinding",
+        "FunctionContract",
+        "FunctionParamType",
+        "FunctionParameter",
+        "LoadedEnvironment",
+        "ProjectEnvironment",
+        "ProjectRuntime",
+        "RuntimeArtifact",
+        "RuntimeLanguage",
+        "SharedFunctionContract",
+        "binding_arguments"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/functions/runner.py": {
+      "names": [
+        "run_with_project_functions"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1757",
+      "rationale": "Replace artifact/contract/cache function interfaces with locked-environment definitions and shared engine ports; no compatibility alias promised.",
+      "overrides": {}
+    },
+    "python/src/yamaa/io/__init__.py": {
+      "names": [
+        "ApprovedRoots",
+        "Artifact",
+        "ArtifactDiagnostic",
+        "ArtifactError",
+        "ArtifactProfile",
+        "ArtifactTarget",
+        "LoadedDataset",
+        "PROJECT_CONFIGURATION_NAME",
+        "ProducerContract",
+        "ProducerField",
+        "ProducerSchemaUnresolved",
+        "ProjectConfigurationError",
+        "ProjectResources",
+        "ResourceFailure",
+        "SourceDiagnostic",
+        "SourceError",
+        "approve_roots",
+        "artifact_profile",
+        "build_artifact",
+        "find_project_configuration",
+        "load_source_table",
+        "load_source_tables",
+        "parquet_schema",
+        "profile_of",
+        "publish_artifact",
+        "read_parquet",
+        "render_artifact",
+        "render_csv",
+        "render_parquet"
+      ],
+      "disposition": "decision_required",
+      "issue": "#1742",
+      "rationale": "Decide retained standalone IO/ODM/authoring helpers individually; #1751 does not establish an exact compatibility mapping for this whole module.",
+      "overrides": {}
+    },
+    "python/src/yamaa/io/_descriptors.py": {
+      "names": [
+        "ensure_available",
+        "is_link",
+        "open_directory",
+        "open_file",
+        "stat_child"
+      ],
+      "disposition": "internal",
+      "issue": "#1742",
+      "rationale": "Private resource implementation; no public compatibility promise. Retire or replace only with tested native resource behavior.",
+      "overrides": {}
+    },
+    "python/src/yamaa/models/__init__.py": {
+      "names": [
+        "ColumnType",
+        "ConditionPhase",
+        "ConditionResult",
+        "DateTimeValue",
+        "DateValue",
+        "EvaluationResult",
+        "HandlerName",
+        "HandlerObservation",
+        "INT64_MAX",
+        "INT64_MIN",
+        "MISSING",
+        "MissingValue",
+        "RuntimeCondition",
+        "RuntimeValue",
+        "TypedColumn",
+        "TypedTable",
+        "UnsupportedResult",
+        "ValueResult",
+        "compare_values",
+        "convert_value",
+        "normalize_runtime_value",
+        "ordering_key",
+        "runtime_type_name",
+        "values_comparable"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/odm/__init__.py": {
+      "names": [
+        "BindingFailure",
+        "BindingIndex",
+        "BindingPlan",
+        "BindingResult",
+        "BoundReference",
+        "ClinicalItemRow",
+        "DatasetBinding",
+        "MultipleMatchSelection",
+        "ODM_ITEM_SCHEMA",
+        "ParquetWriteResult",
+        "RuntimeContext",
+        "build_binding_plan",
+        "iter_odm_records",
+        "read_odm",
+        "write_odm_parquet"
+      ],
+      "disposition": "decision_required",
+      "issue": "#1742",
+      "rationale": "Decide retained standalone IO/ODM/authoring helpers individually; #1751 does not establish an exact compatibility mapping for this whole module.",
+      "overrides": {
+        "read_odm": {
+          "disposition": "retain_candidate",
+          "rationale": "Named future helpers in #1751; exact Python/R mapping and installed qualification remain open."
+        },
+        "write_odm_parquet": {
+          "disposition": "retain_candidate",
+          "rationale": "Named future helpers in #1751; exact Python/R mapping and installed qualification remain open."
+        }
+      }
+    },
+    "python/src/yamaa/odm/items.py": {
+      "names": [
+        "FieldBinding",
+        "ODM_HIERARCHY_FIELDS",
+        "ODM_IDENTIFYING_FIELDS",
+        "ODM_REQUIRED_VALUES",
+        "ODM_SCHEMA_FIELDS",
+        "OdmRead",
+        "OdmReadSite",
+        "bind_fields",
+        "fold_name",
+        "iter_odm_payloads",
+        "odm_inputs",
+        "odm_read_sites",
+        "parse_odm_read",
+        "schema_field"
+      ],
+      "disposition": "decision_required",
+      "issue": "#1742",
+      "rationale": "Decide retained standalone IO/ODM/authoring helpers individually; #1751 does not establish an exact compatibility mapping for this whole module.",
+      "overrides": {}
+    },
+    "python/src/yamaa/planning/__init__.py": {
+      "names": [
+        "ExecutionDiagnostic",
+        "ExecutionPlan",
+        "ExecutionPlanningError",
+        "ImplicitJoin",
+        "MatchValueExpression",
+        "PlannedDerivation",
+        "PlannedIntermediate",
+        "PlannedIntermediateUnique",
+        "PlannedRow",
+        "ProducerLink",
+        "ProducerWorkflow",
+        "ResolvedJoin",
+        "UnsupportedFeature",
+        "UnsupportedPlanningError",
+        "WorkflowExecution",
+        "WorkflowNode",
+        "execute_workflow",
+        "expression_path",
+        "plan_execution",
+        "plan_workflow",
+        "preflight_execution"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/runtime/__init__.py": {
+      "names": [
+        "CandidateRow",
+        "ExecutionFailure",
+        "ExecutionHooks",
+        "ExecutionResult",
+        "ExecutionSuccess",
+        "ExecutionUnsupported",
+        "HandlerCount",
+        "IndexedRecord",
+        "IntermediateOutcome",
+        "IntermediateSelector",
+        "OrderError",
+        "RelationIndex",
+        "RelationalContext",
+        "RowResolver",
+        "SourceProvider",
+        "applicable_keys",
+        "build_relation_indexes",
+        "compare_values",
+        "driver_groups",
+        "eligible_records",
+        "evaluate_intermediate",
+        "execute_specification",
+        "execute_with_source_provider",
+        "group_candidates",
+        "join_scalar",
+        "order_records",
+        "partition_key",
+        "partition_records",
+        "select_record",
+        "types_comparable"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/runtime/intermediates.py": {
+      "names": [
+        "IntermediateOutcome",
+        "IntermediateSelector",
+        "absent_value",
+        "evaluate_intermediate",
+        "types_comparable"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/schema/__init__.py": {
+      "names": [
+        "ResolvedSpecification",
+        "SourceOrigin",
+        "resolve_specification"
+      ],
+      "disposition": "decision_required",
+      "issue": "#1742",
+      "rationale": "Decide custom-schema and resolved-provenance compatibility explicitly; package-owned schema selection does not settle this entire surface.",
+      "overrides": {}
+    },
+    "python/src/yamaa/specification/__init__.py": {
+      "names": [
+        "LoadedSpecification",
+        "Specification",
+        "SpecificationError",
+        "ValidationDiagnostic",
+        "load_specification"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/specification/submission.py": {
+      "names": [
+        "validate_submission_metadata"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/specification/terminology.py": {
+      "names": [
+        "LoadedStudyDocument",
+        "load_study_document",
+        "validate_define_codelists",
+        "validate_spec_codelist_bindings",
+        "validate_study_terminology"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "python/src/yamaa/style/__init__.py": {
+      "names": [
+        "FINDINGS",
+        "LINE_WIDTH",
+        "StyleFinding",
+        "check_file",
+        "discover_schema_root",
+        "field_orders",
+        "fix_file",
+        "is_specification",
+        "specification_files"
+      ],
+      "disposition": "decision_required",
+      "issue": "#1742",
+      "rationale": "Decide retained standalone IO/ODM/authoring helpers individually; #1751 does not establish an exact compatibility mapping for this whole module.",
+      "overrides": {}
+    },
+    "python/src/yamaa/submission/__init__.py": {
+      "names": [
+        "ComposedStudy",
+        "compose_study",
+        "generate_study_document",
+        "load_study_document",
+        "render_define_xml",
+        "validate_define_xml"
+      ],
+      "disposition": "replace",
+      "issue": "#1758",
+      "rationale": "Replace public study-document and rendering helpers with define after the three submission benchmarks and exact artifact contracts qualify.",
+      "overrides": {}
+    },
+    "python/src/yamaa/verification/__init__.py": {
+      "names": [
+        "DeclarationError",
+        "VERIFICATION_LOG_COLUMNS",
+        "VERIFICATION_LOG_NAMES",
+        "VERIFICATION_LOG_VERSION",
+        "VerificationError",
+        "VerificationFailure",
+        "VerificationRecord",
+        "VerificationSeverity",
+        "WARNING_LOG_COLUMNS",
+        "WARNING_LOG_NAMES",
+        "WARNING_LOG_VERSION",
+        "build_verification_log",
+        "build_warning_log",
+        "check_column",
+        "check_dataset",
+        "check_keys",
+        "verify_completed_table"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
+      "overrides": {}
+    },
+    "rust/crates/yamaa-python/yamaa_native.pyi": {
+      "names": [
+        "_BuildResult",
+        "_BuildResult.observations",
+        "_BuildResult.output",
+        "_BuildResult.save",
+        "_ReferenceCatalog",
+        "_ReferenceCatalog.analyze",
+        "_Schema",
+        "_Schema.analyze",
+        "_Schema.traverse_inheritance",
+        "_Specification",
+        "_Specification.build",
+        "_Specification.execute_csv",
+        "_Specification.failure_report",
+        "_Specification.report",
+        "_Specification.source",
+        "_compile_reference_catalog",
+        "_compile_schema",
+        "_prepare_document",
+        "_prepare_inherited_specification",
+        "_prepare_specification",
+        "_profile_dataset_functions",
+        "_temporal_result",
+        "analyze_aggregate",
+        "analyze_column_dependencies",
+        "analyze_dependencies",
+        "analyze_numeric",
+        "analyze_predicate",
+        "analyze_references",
+        "dataset_capabilities",
+        "decode_yaml",
+        "engine_info",
+        "evaluate_numeric",
+        "evaluate_regex",
+        "execute_dataset",
+        "execute_dataset_functions",
+        "execute_dataset_sources",
+        "interpret_schema",
+        "invoke_function",
+        "reference_capabilities",
+        "scalar_round_trip",
+        "table_round_trip",
+        "table_snapshot",
+        "traverse_inheritance"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
+      "overrides": {}
+    },
+    "R/cdiscbuilder/NAMESPACE": {
+      "names": [
+        "add_days",
+        "add_seq",
+        "build_adam_dataset",
+        "calc_rfendtc",
+        "calculate_study_day",
+        "check_submission_column",
+        "create_sdtm_datasets",
+        "epoch_of",
+        "extract_metadata_summary",
+        "extract_value",
+        "get_bmi",
+        "get_earliest_informed_consent_date",
+        "get_first_dose_date",
+        "get_last_dose_date",
+        "get_last_participation_date",
+        "join_visit",
+        "load_study_document",
+        "parse_odm_to_long_df",
+        "process_domain",
+        "topological_sort",
+        "validate_study_terminology",
+        "validate_submission_metadata"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Replace legacy R package with yamaa; #1751 explicitly does not require backward compatibility. Removal requires replacement fixture/API qualification, not an alias of legacy semantics.",
+      "overrides": {
+        "parse_odm_to_long_df": {
+          "disposition": "decision_required",
+          "rationale": "Record whether the legacy ODM helper is removed or translated to a retained helper; equivalence to read_odm is not established."
+        }
+      }
+    },
+    "R/yamaanative/NAMESPACE": {
+      "names": [
+        "S3:Ops.yamaa_int64",
+        "S3:Ops.yamaa_utf8",
+        "S3:as.character.yamaa_int64",
+        "S3:as.character.yamaa_utf8",
+        "S3:as.double.yamaa_int64",
+        "S3:as.integer.yamaa_int64",
+        "S3:format.yamaa_int64",
+        "S3:format.yamaa_utf8",
+        "S3:is.na.yamaa_int64",
+        "S3:is.na.yamaa_utf8",
+        "S3:length.yamaa_utf8",
+        "S3:print.yamaa_int64",
+        "S3:print.yamaa_utf8",
+        "analyze_aggregate",
+        "analyze_column_dependencies",
+        "analyze_dependencies",
+        "analyze_numeric",
+        "analyze_predicate",
+        "analyze_references",
+        "dataset_capabilities",
+        "decode_yaml",
+        "engine_info",
+        "evaluate_numeric",
+        "evaluate_regex",
+        "execute_dataset",
+        "execute_dataset_functions",
+        "execute_dataset_sources",
+        "int64",
+        "interpret_schema",
+        "invoke_function",
+        "prepare_specification",
+        "reference_capabilities",
+        "scalar_round_trip",
+        "specification_failure_report",
+        "specification_report",
+        "specification_source",
+        "table_round_trip",
+        "table_snapshot",
+        "traverse_inheritance",
+        "utf8_bytes",
+        "utf8_scalar"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
+      "overrides": {}
+    }
+  }
+}
