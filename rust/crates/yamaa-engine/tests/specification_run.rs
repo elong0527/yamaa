@@ -834,3 +834,97 @@ mod source_collection {
         assert!(attempt.sources[1].snapshot.is_some() && attempt.sources[1].table.is_none());
     }
 }
+
+mod domain_usecase {
+    use super::*;
+    use yamaa_core::specification::PrepareError;
+    use yamaa_engine::domain;
+
+    #[test]
+    fn rejected_vocabulary_precedes_every_study_effect() {
+        let (mut port, mut decoder) = fixtures();
+        let document = document("ID + 1", "input.parquet");
+        let Err(PrepareError::Unsupported(check_findings)) = domain::check(&document) else {
+            panic!("check must reject unsupported source format");
+        };
+        let Err(PrepareError::Unsupported(build_findings)) =
+            domain::build(&document, &mut port, &mut decoder, limits())
+        else {
+            panic!("build must reject unsupported source format");
+        };
+        assert_eq!(check_findings, build_findings);
+        assert_eq!(check_findings.len(), 1);
+        assert_eq!(check_findings[0].operation, "source_format");
+        assert_eq!(check_findings[0].path, "input.SRC.path");
+        assert!(port.trace.borrow().is_empty());
+        assert_eq!((port.requests, port.reads), (0, 0));
+    }
+
+    #[test]
+    fn check_does_not_evaluate_and_reused_builds_have_fresh_attempts() {
+        let checked = domain::check(&document("ID + 1", "input.csv")).unwrap();
+        let (mut port, mut decoder) = fixtures();
+        let mut attempt = CapturedAttempt::new(checked.compiled().source());
+        for created in [1, 0] {
+            port.trace.borrow_mut().clear();
+            checked.build_into(&mut port, &mut decoder, limits(), &mut attempt);
+            assert_eq!(attempt.sources.len(), 1);
+            assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
+            assert_eq!(
+                attempt
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .dataset
+                    .rows(),
+                [vec![Value::Int(7), Value::Int(8)]]
+            );
+            assert_eq!(&port.trace.borrow()[..3], ["capture", "decode", "schema"]);
+        }
+        assert_eq!((port.requests, port.reads), (2, 1));
+        // An admitted arithmetic expression is not evaluated by check.
+        let zero = document("ID / 0", "input.csv");
+        domain::check(&zero).unwrap();
+        let attempt = domain::build(&zero, &mut port, &mut decoder, limits()).unwrap();
+        assert!(attempt.result.unwrap().result.is_err());
+    }
+
+    #[test]
+    fn one_shot_build_preserves_opaque_errors_without_retry() {
+        let (mut port, mut decoder) = fixtures();
+        port.fail = true;
+        let attempt = domain::build(
+            &document("ID + 1", "input.csv"),
+            &mut port,
+            &mut decoder,
+            limits(),
+        )
+        .unwrap();
+        let Err(PortError::Capture(Payload(payload))) = attempt.result else {
+            panic!("original capture failure");
+        };
+        assert!(Rc::ptr_eq(&payload, &port.payload));
+        assert_eq!(*port.trace.borrow(), ["capture"]);
+        assert_eq!(port.requests, 1);
+        assert!(!attempt.sources[0].read.captured);
+    }
+
+    #[test]
+    fn checked_build_keeps_partial_evidence_across_the_host_panic_fence() {
+        let checked = domain::check(&document("ID + 1", "input.csv")).unwrap();
+        let (mut port, mut decoder) = fixtures();
+        decoder.panic_cell = true;
+        let mut attempt = CapturedAttempt::new(checked.compiled().source());
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            checked.build_into(&mut port, &mut decoder, limits(), &mut attempt);
+        }));
+        assert!(panic.is_err());
+        assert!(matches!(attempt.result, Err(PortError::Incomplete)));
+        assert!(attempt.sources[0].snapshot.is_some());
+        assert!(attempt.sources[0].table.is_some());
+        assert_eq!(port.requests, 1);
+    }
+}
