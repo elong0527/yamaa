@@ -23,17 +23,43 @@ pub enum DocumentNode {
     Mapping(Vec<(usize, usize)>),
 }
 
-impl DocumentNode {
-    /// Preserve the public schema diagnostic vocabulary, including bool versus int.
-    pub fn type_name(&self) -> &'static str {
+/// Decoded kinds are independent of host classes and authored schema type expressions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocumentKind {
+    Null,
+    Boolean,
+    Integer,
+    Float,
+    Text,
+    Sequence,
+    Mapping,
+}
+
+impl DocumentKind {
+    pub fn name(self) -> &'static str {
         match self {
             Self::Null => "null",
-            Self::Boolean(_) => "bool",
-            Self::Integer(_) => "int",
-            Self::Float(_) => "float",
-            Self::Text(_) => "str",
-            Self::Sequence(_) => "sequence",
-            Self::Mapping(_) => "mapping",
+            Self::Boolean => "boolean",
+            Self::Integer => "integer",
+            Self::Float => "float",
+            Self::Text => "text",
+            Self::Sequence => "sequence",
+            Self::Mapping => "mapping",
+        }
+    }
+}
+
+impl DocumentNode {
+    /// Identify the decoded kind without a host-language spelling.
+    pub fn kind(&self) -> DocumentKind {
+        match self {
+            Self::Null => DocumentKind::Null,
+            Self::Boolean(_) => DocumentKind::Boolean,
+            Self::Integer(_) => DocumentKind::Integer,
+            Self::Float(_) => DocumentKind::Float,
+            Self::Text(_) => DocumentKind::Text,
+            Self::Sequence(_) => DocumentKind::Sequence,
+            Self::Mapping(_) => DocumentKind::Mapping,
         }
     }
 

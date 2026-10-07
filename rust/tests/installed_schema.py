@@ -31,7 +31,7 @@ class SchemaService(unittest.TestCase):
                 len(cases),
                 8
                 if name == "schema_model.tsv"
-                else (7 if name == "schema_layer_admission.tsv" else 6),
+                else (8 if name == "schema_layer_admission.tsv" else 6),
             )
             rows.extend(cases)
         return rows

@@ -1,7 +1,8 @@
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, NormalizationBudget,
-    NormalizationError, NormalizationLimits, NormalizationResource, SchemaContext as C,
-    SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure, ValidationError,
+    BundleLimits, Document, DocumentKind as K, DocumentLimits, DocumentNode as N,
+    NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
+    SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
+    ValidationError,
 };
 
 #[derive(Clone)]
@@ -213,11 +214,17 @@ fn collects_all_field_errors_in_schema_order_before_normalization() {
     );
     assert_eq!(
         findings[0].context,
-        vec![("expected", text("column_type")), ("actual", text("int"))]
+        vec![
+            ("expected", text("column_type")),
+            ("actual", C::ValueKind(K::Integer))
+        ]
     );
     assert_eq!(
         findings[1].context,
-        vec![("expected", text("str")), ("actual", text("int"))]
+        vec![
+            ("expected", text("str")),
+            ("actual", C::ValueKind(K::Integer))
+        ]
     );
 }
 
@@ -266,27 +273,27 @@ fn version_unknown_identity_and_duplicate_errors_keep_phase_order() {
 }
 
 #[test]
-fn layer_shape_errors_use_python_type_labels() {
+fn layer_shape_errors_retain_portable_kinds_and_named_classes() {
     for (input, path, expected, actual) in [
-        (document(Map(vec![])), "$", "root_class", "dict"),
-        (document(Null), "$", "root_class", "NoneType"),
+        (document(Map(vec![])), "$", text("root_class"), K::Mapping),
+        (document(Null), "$", text("root_class"), K::Null),
         (
             layer(vec![("input", List(vec![]))]),
             "input",
-            "dict",
-            "list",
+            C::LayerKind(K::Mapping),
+            K::Sequence,
         ),
         (
             layer(vec![("columns", Map(vec![]))]),
             "columns",
-            "list",
-            "dict",
+            C::LayerKind(K::Sequence),
+            K::Mapping,
         ),
         (
             layer(vec![("columns", List(vec![Int("7")]))]),
             "columns[0]",
-            "column_class",
-            "int",
+            text("column_class"),
+            K::Integer,
         ),
     ] {
         assert_eq!(
@@ -295,7 +302,7 @@ fn layer_shape_errors_use_python_type_labels() {
                 path,
                 "invalid_field_type",
                 "REQ-0658",
-                vec![("expected", text(expected)), ("actual", text(actual))]
+                vec![("expected", expected), ("actual", C::LayerKind(actual))]
             )]
         );
     }

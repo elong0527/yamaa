@@ -47,6 +47,8 @@ fn context(
 ) -> Result<Value, Error> {
     Ok(match value {
         C::Text(text) => budget.text(text)?,
+        C::ValueKind(_) | C::LayerKind(_) => budget
+            .text(crate::schema_diagnostic_kinds::label(value).ok_or(Error::InvalidContext)?)?,
         C::Count(value) => {
             budget.charge(20)?;
             json!(value)

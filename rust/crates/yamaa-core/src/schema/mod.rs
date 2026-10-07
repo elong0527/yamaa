@@ -30,7 +30,8 @@ pub use descriptor::{
     DescriptorReport, DescriptorResource, DescriptorUsage,
 };
 pub use document::{
-    Document, DocumentError, DocumentLimits, DocumentNode, DocumentResource, ScalarKey,
+    Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode, DocumentResource,
+    ScalarKey,
 };
 pub use inheritance_dependencies::{InheritanceDependencyError, InheritanceDependencyIssue};
 pub use inheritance_references::{
