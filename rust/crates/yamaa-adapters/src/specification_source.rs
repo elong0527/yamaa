@@ -304,4 +304,38 @@ impl PreparedDocument {
     pub fn parents(&self) -> &[CapturedParent] {
         &self.parents
     }
+
+    /// Resolve an input's authored path against held source provenance. Composition
+    /// may have rebased the executable path; diagnostics must not disclose that
+    /// spelling instead of the value written by the contributing layer.
+    pub fn written_source_path(&self, dataset: &str) -> Option<&str> {
+        use yamaa_core::schema::DocumentNode;
+        let raw = if let Some(inherited) = self.inheritance() {
+            let path = format!("input.{dataset}.path");
+            let origin = inherited.provenance().iter().find(|p| p.path == path)?;
+            let identity = &inherited.layers().get(origin.layer)?.source.identity;
+            if identity == &self.source.identity {
+                &self.raw.document
+            } else {
+                &self
+                    .parents
+                    .iter()
+                    .find(|p| &p.source().identity == identity)?
+                    .raw()
+                    .document
+            }
+        } else {
+            &self.raw.document
+        };
+        let input = raw.field(raw.root(), "input")?;
+        let source = raw.field(input, dataset)?;
+        let node = match raw.nodes().get(source)? {
+            DocumentNode::Text(_) => source,
+            _ => raw.field(source, "path")?,
+        };
+        match raw.nodes().get(node)? {
+            DocumentNode::Text(path) => Some(path),
+            _ => None,
+        }
+    }
 }

@@ -25,6 +25,7 @@ pub mod predicate_compiler;
 pub mod predicate_parser;
 pub mod reference_binding;
 pub mod reference_scope;
+pub mod resource;
 pub mod schema;
 pub mod specification;
 pub mod temporal;

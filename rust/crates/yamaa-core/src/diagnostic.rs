@@ -1,8 +1,8 @@
 //! Portable semantic diagnostics. Serialization and host exceptions stay outside core.
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
-//! `conversion_failed` for several requirements. This first migrated family covers
-//! numeric evaluation and completed-result conversion; other families retain their
+//! `conversion_failed` for several requirements. Migrated causes cover numeric
+//! evaluation, completed-result conversion and classified resource failures; other families retain their
 //! existing error types until their semantics and provenance migrate here.
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
@@ -54,6 +54,8 @@ conditions! {
     ConversionInput => ("convert", "conversion_failed", "REQ-0013"),
     ConversionInteger => ("convert", "conversion_failed", "REQ-0021"),
     ConversionTemporal => ("convert", "conversion_failed", "REQ-0601"),
+    ResourceMissing => ("validation", "resource_path_missing", "REQ-0785"),
+    ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", "REQ-0785"),
 }
 
 /// Diagnostic integers can exceed runtime i64; their canonical decimal text must

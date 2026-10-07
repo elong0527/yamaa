@@ -3,6 +3,7 @@
 use crate::dataset::{self, DatasetExecution, ExecutionAttempt};
 use alloc::{sync::Arc, vec, vec::Vec};
 use yamaa_core::{
+    resource::ResourceFailure,
     specification::{BindError, PreparedSpecification, SourceDeclaration},
     table::TableAccess,
 };
@@ -11,6 +12,11 @@ use yamaa_core::{
 /// hold immutable bytes and compare cached snapshots on bytes, never a digest.
 pub trait SourcePort {
     type Error;
+    /// Opt in only for known resource causes. Opaque host errors retain their
+    /// identity and are not converted by inspecting their text or class name.
+    fn resource_failure(&self, _error: &Self::Error) -> Option<ResourceFailure> {
+        None
+    }
     fn capture_reads(&self) -> usize;
     fn capture(
         &mut self,
@@ -56,6 +62,7 @@ pub enum RunError<E> {
 pub struct SourceRead {
     pub source: SourceDeclaration,
     pub captured: bool,
+    pub failure: Option<ResourceFailure>,
     /// A regressing counter is a boundary failure, never an invented zero.
     pub snapshots_created: Option<usize>,
 }
@@ -82,6 +89,7 @@ impl<T> CapturedSource<T> {
             read: SourceRead {
                 source: source.clone(),
                 captured: false,
+                failure: None,
                 snapshots_created: None,
             },
             snapshot: None,
@@ -177,6 +185,7 @@ pub fn execute_with_port_into<P: SourcePort, D: SourceDecoder>(
         match captured {
             Ok(bytes) => observed.snapshot = Some(bytes),
             Err(error) => {
+                observed.read.failure = port.resource_failure(&error);
                 attempt.result = Err(if observed.read.snapshots_created.is_none() {
                     PortError::CaptureAccounting
                 } else {
