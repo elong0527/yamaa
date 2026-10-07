@@ -705,6 +705,16 @@ fn core_window_findings_match_independent_complete_failed_reports() {
     );
 }
 
+#[test]
+fn core_predicate_matches_independent_complete_failed_report() {
+    independent_failed_reports(
+        include_str!("fixtures/predicate_diagnostics.tsv"),
+        "predicate",
+        (1, 1),
+        b"ID,V\n1,2\n",
+    );
+}
+
 fn independent_failed_reports(
     fixture: &str,
     prefix: &str,

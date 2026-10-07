@@ -432,3 +432,162 @@ pub(super) fn window_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+fn lookup_compile(
+    value: &str,
+    donor: &str,
+    target: &str,
+    filter: Option<&str>,
+) -> PreparedSpecification {
+    let mut selection = vec![
+        ("id", Text("SEL")),
+        ("dataset", Text("DONOR")),
+        ("key", Map(vec![(donor, Text(target))])),
+    ];
+    if let Some(filter) = filter {
+        selection.push(("filter", Text(filter)));
+    }
+    let tree = Map(vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        ("base", Text("SRC")),
+        (
+            "input",
+            Map(vec![
+                ("SRC", Map(vec![("path", Text("source.csv"))])),
+                ("DONOR", Map(vec![("path", Text("donor.csv"))])),
+            ]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        (
+            "columns",
+            List(vec![
+                column("ID", Some(op("source", "variable", "SRC.ID"))),
+                column("VALUE", Some(op("source", "variable", value))),
+            ]),
+        ),
+        ("intermediates", List(vec![Map(selection)])),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID"), Text("VALUE")])),
+            ]),
+        ),
+    ]);
+    let mut nodes = vec![];
+    let root = tree.append(&mut nodes);
+    let model = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    PreparedSpecification::prepare(&model).unwrap()
+}
+
+pub(super) fn lookup_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    let source = TableSchema::new(vec![Column {
+        name: "ID".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    for (value, donor, target, filter, kind, requirement, path, fields) in [
+        (
+            "SEL.V",
+            "DID",
+            "ID",
+            Some("V > 0"),
+            ColumnType::Int,
+            "REQ-0120",
+            "intermediates[0].filter",
+            vec![
+                ("identifier", text("V")),
+                ("intermediate", text("SEL")),
+                ("suggestion", text("DONOR.V")),
+            ],
+        ),
+        (
+            "SEL.V",
+            "BAD",
+            "ID",
+            None,
+            ColumnType::Int,
+            "REQ-0116",
+            "intermediates[0].key",
+            vec![
+                ("identifier", text("DONOR.BAD")),
+                ("intermediate", text("SEL")),
+            ],
+        ),
+        (
+            "SEL.V",
+            "DID",
+            "BAD",
+            None,
+            ColumnType::Int,
+            "REQ-0117",
+            "intermediates[0].key",
+            vec![("identifier", text("BAD")), ("intermediate", text("SEL"))],
+        ),
+        (
+            "SEL.BAD",
+            "DID",
+            "ID",
+            None,
+            ColumnType::Int,
+            "REQ-0125",
+            "columns.VALUE.derivation.source",
+            vec![("identifier", text("SEL.BAD"))],
+        ),
+        (
+            "SEL.V",
+            "DID",
+            "ID",
+            None,
+            ColumnType::Str,
+            "REQ-0323",
+            "intermediates[0].key",
+            vec![
+                ("intermediate", text("SEL")),
+                ("source", text("ID")),
+                ("expected", text("int")),
+                ("actual", text("str")),
+            ],
+        ),
+    ] {
+        let prepared = lookup_compile(value, donor, target, filter);
+        let secondary = TableSchema::new(vec![
+            Column {
+                name: "DID".into(),
+                kind,
+            },
+            Column {
+                name: "V".into(),
+                kind: ColumnType::Int,
+            },
+        ])
+        .unwrap();
+        let Err(BindError::Invalid(found)) = prepared.bind_sources(&[&source, &secondary]) else {
+            panic!("named selection must fail")
+        };
+        let projected = found
+            .iter()
+            .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
+            .find(|d| d.definition().requirement == Some(requirement))
+            .unwrap();
+        reached.insert(check(
+            projected,
+            if requirement == "REQ-0323" {
+                "incompatible_input_type"
+            } else {
+                "unknown_field"
+            },
+            Some(requirement),
+            &[path],
+            fields,
+        ));
+    }
+    reached
+}

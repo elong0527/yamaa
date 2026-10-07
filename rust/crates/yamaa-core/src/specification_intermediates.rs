@@ -238,7 +238,7 @@ impl Declarations {
                         path,
                         name,
                         Some(&item.name),
-                        "REQ-0120",
+                        ReferenceCause::Selection,
                         suggestion,
                     )));
                 }
@@ -282,7 +282,7 @@ impl Declarations {
                         &format!("{}.key", item.path),
                         &format!("{source_name}.{field}"),
                         Some(&item.name),
-                        "REQ-0116",
+                        ReferenceCause::DonorKey,
                         None,
                     )));
                     failed = true;
@@ -294,7 +294,7 @@ impl Declarations {
                         &format!("{}.key", item.path),
                         name,
                         Some(&item.name),
-                        "REQ-0117",
+                        ReferenceCause::OutputKey,
                         None,
                     )));
                     failed = true;

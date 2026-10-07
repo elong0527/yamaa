@@ -108,6 +108,14 @@ conditions! {
     WindowZeroOffset => ("validation", "zero_offset", Some("REQ-0328")),
     WindowOrderRequired => ("validation", "window_order_by_required", Some("REQ-0340")),
     WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("REQ-0341")),
+    LookupSelectionReference => ("validation", "unknown_field", Some("REQ-0120")),
+    LookupDonorKeyReference => ("validation", "unknown_field", Some("REQ-0116")),
+    LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
+    LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
+    LookupKeyType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
+    PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
+    PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
 }
 
 /// Owned context retains scalar kinds and ordered sequences. Diagnostic integers

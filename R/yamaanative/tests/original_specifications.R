@@ -483,6 +483,8 @@ failed_report_truth("binding-diagnostics.tsv","binding",10L,charToRaw("ID,V\n1,2
 cat("core binding complete independent failed reports and retained save gates passed\n")
 failed_report_truth("window-diagnostics.tsv","window",3L,charToRaw("ID,V\n1,2\n"))
 cat("core window complete independent failed reports and retained save gates passed\n")
+failed_report_truth("predicate-diagnostics.tsv","predicate",1L,charToRaw("ID,V\n1,2\n"))
+cat("core predicate complete independent failed report and retained save gates passed\n")
 
 failed_report_truth("csv-profile-diagnostics.tsv","csv",13L)
 cat("core CSV profile complete independent failed reports and retained save gates passed\n")

@@ -1,46 +1,66 @@
-//! Core-owned vocabulary and context for named-selection compilation failures.
+//! Typed canonical causes for named-selection binding and predicate findings.
 use super::*;
-use crate::{diagnostic::Definition, predicate_parser::GrammarFailure, value::Value};
+use crate::{
+    diagnostic::{ConditionCode as C, ContextValue, Diagnostic},
+    predicate_parser::GrammarFailure,
+    value::Value,
+};
 
-#[derive(Debug)]
-pub struct LookupFinding {
-    pub definition: Definition,
-    pub path: String,
-    pub context: BTreeMap<String, Value>,
+#[derive(Clone, Copy, Debug)]
+pub(super) enum ReferenceCause {
+    Selection,
+    DonorKey,
+    OutputKey,
+    Value,
+}
+impl ReferenceCause {
+    fn code(self) -> C {
+        match self {
+            Self::Selection => C::LookupSelectionReference,
+            Self::DonorKey => C::LookupDonorKeyReference,
+            Self::OutputKey => C::LookupOutputKeyReference,
+            Self::Value => C::LookupValueReference,
+        }
+    }
 }
 
+#[derive(Debug)]
+pub struct LookupFinding(Diagnostic);
 impl LookupFinding {
-    fn new(path: &str, condition: &'static str, requirement: &'static str) -> Self {
-        Self {
-            definition: Definition {
-                phase: "validation",
-                condition,
-                requirement: Some(requirement),
-            },
-            path: path.into(),
+    fn new(path: &str, code: C) -> Self {
+        Self(Diagnostic {
+            code,
+            spec_paths: vec![path.into()],
             context: BTreeMap::new(),
-        }
+            source_span: None,
+            operand_route: None,
+        })
+    }
+    fn text(&mut self, key: &str, value: &str) {
+        self.0
+            .context
+            .insert(key.into(), ContextValue::Scalar(Value::Str(value.into())));
+    }
+    pub fn diagnostic(&self) -> Diagnostic {
+        self.0.clone()
+    }
+    pub fn definition(&self) -> crate::diagnostic::Definition {
+        self.0.definition()
     }
     pub(super) fn reference(
         path: &str,
         name: &str,
         intermediate: Option<&str>,
-        requirement: &'static str,
+        cause: ReferenceCause,
         suggestion: Option<String>,
     ) -> Self {
-        let mut finding = Self::new(path, "unknown_field", requirement);
-        finding
-            .context
-            .insert("identifier".into(), Value::Str(name.into()));
+        let mut finding = Self::new(path, cause.code());
+        finding.text("identifier", name);
         if let Some(name) = intermediate {
-            finding
-                .context
-                .insert("intermediate".into(), Value::Str(name.into()));
+            finding.text("intermediate", name);
         }
         if let Some(name) = suggestion {
-            finding
-                .context
-                .insert("suggestion".into(), Value::Str(name));
+            finding.text("suggestion", &name);
         }
         finding
     }
@@ -51,7 +71,7 @@ impl LookupFinding {
         expected: ColumnType,
         actual: ColumnType,
     ) -> Self {
-        let mut finding = Self::new(path, "incompatible_input_type", "REQ-0323");
+        let mut finding = Self::new(path, C::LookupKeyType);
         let name = |kind| match kind {
             ColumnType::Str => "str",
             ColumnType::Int => "int",
@@ -65,53 +85,11 @@ impl LookupFinding {
             ("expected", name(expected)),
             ("actual", name(actual)),
         ] {
-            finding.context.insert(key.into(), Value::Str(value.into()));
+            finding.text(key, value);
         }
         finding
     }
     pub(super) fn grammar(path: &str, text: &str, position: usize, error: &GrammarFailure) -> Self {
-        let mut finding = Self::new(path, error.condition(), error.requirement());
-        finding
-            .context
-            .insert("predicate".into(), Value::Str(text.into()));
-        finding
-            .context
-            .insert("position".into(), Value::Int(position as i64));
-        match error {
-            GrammarFailure::InvalidExpression | GrammarFailure::InvalidEscape => {}
-            GrammarFailure::InvalidRegex { byte, reason } => {
-                finding
-                    .context
-                    .insert("pattern_byte".into(), Value::Int(*byte as i64));
-                finding
-                    .context
-                    .insert("reason".into(), Value::Str((*reason).into()));
-            }
-            GrammarFailure::InvalidTemporal { kind, error } => {
-                use crate::{predicate_parser::TemporalKind, temporal::TemporalError};
-                finding.context.insert(
-                    "literal_type".into(),
-                    Value::Str(
-                        match kind {
-                            TemporalKind::Date => "date",
-                            TemporalKind::DateTime => "datetime",
-                        }
-                        .into(),
-                    ),
-                );
-                finding.context.insert(
-                    "temporal_error".into(),
-                    Value::Str(
-                        match error {
-                            TemporalError::InvalidForm => "invalid_form",
-                            TemporalError::InvalidDate => "invalid_date",
-                            TemporalError::InvalidTime => "invalid_time",
-                        }
-                        .into(),
-                    ),
-                );
-            }
-        }
-        finding
+        Self(error.diagnostic(path, text, position))
     }
 }
