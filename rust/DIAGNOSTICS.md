@@ -1,7 +1,8 @@
 # Portable diagnostic foundation
 
 The #1753 slices move numeric evaluation, arithmetic/reduction, completed-result
-conversion, classified resource, original-document preflight and output-declaration diagnostics into
+conversion, classified resource, original-document preflight, output-declaration
+and numeric/aggregate grammar diagnostics into
 `yamaa-core::diagnostic`. The
 original-specification runner and existing dataset/numeric transports consume
 those core diagnostics. Adapters encode runtime values and source offsets but
@@ -70,6 +71,15 @@ accounting, then require repeated save attempts to fail without publication or
 recapture after the compiled handle is released. Output declaration checks still
 follow derivation, key checks and verification.
 
+Seven authored grammar documents in `tests/fixtures/grammar_diagnostics.tsv`
+pin complete independent failed reports after ingestion and binding. Numeric
+and aggregate parser findings own their context in core and delegate existing
+condition/requirement accessors to the registry. Written function case, optional
+argument count, prohibited construct and nested reducer names survive projection.
+They retain distinct numeric and aggregate requirement mappings even when their
+public condition strings match. Inconsistent caller-supplied function spans
+produce no semantic projection; parser policy limits remain separate failures.
+
 `tools/check_diagnostics.py` checks literal requirement IDs across every Rust
 crate's source against current normative rule definitions, including mappings
 outside the migrated registry. Native CI runs this guard and its mutation tests.
@@ -77,7 +87,7 @@ The existing canonical rules validator separately checks definition uniqueness
 and historical IDs. The guard does not infer requirements from documentation
 citations or count component tests as complete-run qualification.
 
-This does not complete #1753. Parser/schema,
+This does not complete #1753. Other parser/schema,
 binding, predicate, function, verification and ingestion diagnostics still need
 conversion; some remain constructed in adapters. Inherited source/entry/parent
 provenance, additional structured context and unified serialization across all

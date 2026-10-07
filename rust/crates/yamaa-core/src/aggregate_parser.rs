@@ -63,21 +63,14 @@ pub enum GrammarFailure {
 impl GrammarFailure {
     /// Stable language condition, independent of diagnostic rendering.
     pub fn condition(&self) -> &'static str {
-        match self {
-            Self::InvalidExpression => "invalid_aggregate_expression",
-            Self::ProhibitedConstruct { .. } => "prohibited_construct",
-            Self::ProhibitedFunction { .. } => "prohibited_function",
-            Self::NestedReduction { .. } => "nested_reduction",
-        }
+        self.code().definition().condition
     }
     /// R013 owns aggregate diagnostics even for imported numeric productions.
     pub fn requirement(&self) -> &'static str {
-        match self {
-            Self::InvalidExpression => "REQ-0499",
-            Self::ProhibitedConstruct { .. } => "REQ-0512",
-            Self::ProhibitedFunction { .. } => "REQ-0500",
-            Self::NestedReduction { .. } => "REQ-0502",
-        }
+        self.code()
+            .definition()
+            .requirement
+            .expect("aggregate grammar requirement")
     }
 }
 
