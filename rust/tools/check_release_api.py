@@ -8,6 +8,28 @@ import re
 from pathlib import Path
 
 
+def stub_names(nodes: list[ast.stmt], prefix: str = '') -> list[str]:
+    """Include declared constants, attributes and nested classes, not imports."""
+    names = []
+    for node in nodes:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            name = prefix + node.name
+            names.append(name)
+            if isinstance(node, ast.ClassDef):
+                names.extend(stub_names(node.body, name + '.'))
+        elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.TypeAlias)):
+            targets = node.targets if isinstance(node, ast.Assign) else [
+                node.name if isinstance(node, ast.TypeAlias) else node.target
+            ]
+            for target in targets:
+                if not isinstance(target, ast.Name):
+                    raise ValueError('unsupported stub declaration target')
+                names.append(prefix + target.id)
+        elif isinstance(node, (ast.If, ast.Try, ast.For, ast.While, ast.With)):
+            raise ValueError('conditional stub declarations need explicit inventory support')
+    return names
+
+
 def discover(root: Path) -> dict[str, list[str]]:
     sources = {}
     for path in sorted((root / 'python/src/yamaa').rglob('*.py')):
@@ -36,14 +58,8 @@ def discover(root: Path) -> dict[str, list[str]]:
             sources[path.relative_to(root).as_posix()] = sorted(declarations)
     path = root / 'rust/crates/yamaa-python/yamaa_native.pyi'
     if path.is_file():
-        declarations = []
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                declarations.append(node.name)
-                if isinstance(node, ast.ClassDef):
-                    declarations.extend(node.name + '.' + member.name for member in node.body if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)))
-        sources[path.relative_to(root).as_posix()] = sorted(declarations)
+        sources[path.relative_to(root).as_posix()] = sorted(stub_names(tree.body))
     for path in sorted((root / 'R').glob('*/NAMESPACE')):
         declarations = []
         for line in path.read_text(encoding='utf-8').splitlines():
