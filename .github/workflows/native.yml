@@ -37,9 +37,10 @@ jobs:
   python:
     name: native-python (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    # The preceding Windows qualification took 19m47s, including an isolated
-    # source rebuild. Retain every check while allowing compilation headroom.
-    timeout-minutes: 30
+    # Windows run 37574252721 reached the source-installed specification suite
+    # at the 30-minute limit after passing wheel qualification. Keep every check
+    # and allow headroom for cold compilation and both installed package forms.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +87,7 @@ jobs:
           uv run --project ../python --locked python tools/check_regex.py
           uv run --project ../python --locked python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
           python tools/check_dependencies.py
+          python tools/check_diagnostics.py
           python -m unittest discover -s tests -p 'test_*.py'
       - name: Preserve Python 3.12 numerical assessment coverage
         working-directory: rust

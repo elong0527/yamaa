@@ -106,44 +106,17 @@ pub enum NumericCondition {
 impl NumericCondition {
     /// Distinguish invalid bindings from arithmetic failures during derivation.
     pub fn phase(&self) -> &'static str {
-        match self {
-            Self::UnknownField { .. }
-            | Self::IncompatibleInput { .. }
-            | Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => "validation",
-            Self::Arithmetic(_) | Self::LiteralOverflow { .. } => "derivation",
-        }
+        self.diagnostic_code().definition().phase
     }
 
     /// Return the same condition vocabulary entry as the Python reference.
     pub fn condition(&self) -> &'static str {
-        match self {
-            Self::UnknownField { .. } => "unknown_field",
-            Self::IncompatibleInput { .. }
-            | Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => {
-                "incompatible_input_type"
-            }
-            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
-            | Self::LiteralOverflow { .. } => "integer_overflow",
-            Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "division_by_zero",
-            Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "sqrt_of_negative",
-            Self::Arithmetic(ArithmeticErrorKind::LnOfNonpositive) => "ln_of_nonpositive",
-            Self::Arithmetic(ArithmeticErrorKind::InvalidPower { .. }) => "invalid_power",
-        }
+        self.diagnostic_code().definition().condition
     }
 
     /// Identify the requirement owning the failure, without applying a handler.
     pub fn requirement(&self) -> &'static str {
-        match self {
-            Self::UnknownField { .. } => "REQ-0443",
-            Self::IncompatibleInput { .. } => "REQ-0444",
-            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { .. })
-            | Self::LiteralOverflow { .. } => "REQ-0434",
-            Self::Arithmetic(ArithmeticErrorKind::DivisionByZero) => "REQ-0430",
-            Self::Arithmetic(ArithmeticErrorKind::SqrtOfNegative) => "REQ-0431",
-            Self::Arithmetic(ArithmeticErrorKind::LnOfNonpositive) => "REQ-0432",
-            Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => "REQ-0418",
-            Self::Arithmetic(ArithmeticErrorKind::InvalidPower { .. }) => "REQ-0433",
-        }
+        self.diagnostic_code().definition().requirement
     }
 }
 

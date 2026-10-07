@@ -9,6 +9,7 @@ pub mod column_dependencies;
 pub mod conversion;
 mod decimal_rounding;
 pub mod dependency_analysis;
+pub mod diagnostic;
 pub mod evaluation;
 pub mod intermediate_reference;
 pub mod key_relation;

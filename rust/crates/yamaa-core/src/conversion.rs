@@ -32,12 +32,12 @@ pub struct ConversionError {
 impl ConversionError {
     /// Return the conversion phase, distinct from arithmetic derivation errors.
     pub fn phase(&self) -> &'static str {
-        "convert"
+        self.diagnostic_code().definition().phase
     }
 
     /// Return the closed portable condition vocabulary entry.
     pub fn condition(&self) -> &'static str {
-        "conversion_failed"
+        self.diagnostic_code().definition().condition
     }
 
     /// Name the eligible handler without firing it or changing handler counts.
@@ -47,11 +47,7 @@ impl ConversionError {
 
     /// Return the requirement that owns this conversion failure.
     pub fn requirement(&self) -> &'static str {
-        match self.reason {
-            ConversionReason::IncompatibleOrInvalidText => "REQ-0013",
-            ConversionReason::IntegerRangeOrFraction => "REQ-0021",
-            ConversionReason::InvalidTemporalText => "REQ-0601",
-        }
+        self.diagnostic_code().definition().requirement
     }
 
     /// Preserve the parsed numeric source type used by the Python reference.
