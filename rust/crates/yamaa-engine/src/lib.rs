@@ -8,6 +8,7 @@ pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;
 mod dataset_verification;
+pub mod domain;
 pub mod function_invocation;
 pub mod inheritance;
 pub mod inheritance_preparation;

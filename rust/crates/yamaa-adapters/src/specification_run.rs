@@ -7,6 +7,7 @@ use crate::{
     specification_source::PreparedDocument,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use yamaa_engine::domain::{self, CheckedSpecification};
 use yamaa_engine::specification::{
     BindError, PrepareError, PreparedSpecification, SourceDeclaration,
 };
@@ -39,35 +40,35 @@ pub struct CapturedAttempt<E> {
 #[derive(Debug)]
 pub struct PreparedRun {
     document: PreparedDocument,
-    prepared: PreparedSpecification,
+    checked: CheckedSpecification,
 }
 impl PreparedRun {
     /// Entire vocabulary admission precedes obtaining a study-data snapshot.
     pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
-        let prepared = PreparedSpecification::prepare(document.model()).map_err(Error::Prepare)?;
-        Ok(Self { document, prepared })
+        let checked = domain::check(document.model()).map_err(Error::Prepare)?;
+        Ok(Self { document, checked })
     }
     pub fn document(&self) -> &PreparedDocument {
         &self.document
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
-        self.prepared.key_names()
+        self.compiled().key_names()
     }
     pub fn compiled(&self) -> &PreparedSpecification {
-        &self.prepared
+        self.checked.compiled()
     }
     pub fn source(&self) -> &SourceDeclaration {
-        self.prepared.source()
+        self.compiled().source()
     }
     /// The shared application service decodes, binds and executes held bytes.
     pub fn execute_csv(&self, bytes: &[u8]) -> Result<DatasetResponse, Error> {
         let attempt = catch_unwind(AssertUnwindSafe(|| {
-            application::execute_bytes(&self.prepared, bytes, &mut CsvDecoder, limits())
+            application::execute_bytes(self.compiled(), bytes, &mut CsvDecoder, limits())
         }))
         .map_err(|_| Error::Execution(DatasetTransportError::Internal))?;
         let execution = attempt
             .result
-            .map_err(|error| run_error(error, &self.prepared))?;
+            .map_err(|error| run_error(error, self.compiled()))?;
         response(execution)
     }
 
@@ -76,13 +77,8 @@ impl PreparedRun {
     pub fn execute_with_port<P: SourcePort>(&self, port: &mut P) -> CapturedAttempt<P::Error> {
         let mut attempt = application::CapturedAttempt::new(self.source());
         let guarded = catch_unwind(AssertUnwindSafe(|| {
-            application::execute_with_port_into(
-                &self.prepared,
-                port,
-                &mut CsvDecoder,
-                limits(),
-                &mut attempt,
-            );
+            self.checked
+                .build_into(port, &mut CsvDecoder, limits(), &mut attempt);
         }));
         let result = if guarded.is_err() {
             Err(PortError::Run(Error::Execution(
@@ -96,7 +92,7 @@ impl PreparedRun {
                 ))),
                 Err(application::PortError::Capture(error)) => Err(PortError::Capture(error)),
                 Err(application::PortError::Run(error)) => {
-                    Err(PortError::Run(run_error(error, &self.prepared)))
+                    Err(PortError::Run(run_error(error, self.compiled())))
                 }
                 Err(application::PortError::CaptureAccounting) => Err(PortError::CaptureAccounting),
             }

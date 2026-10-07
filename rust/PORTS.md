@@ -19,6 +19,22 @@ and codec interfaces are native traits; adapters translate values and errors.
 
 ## Current lifecycle
 
+The bounded `yamaa-engine::domain` use case now owns executable preflight.
+`check` consumes an already admitted normalized model and returns an immutable
+`CheckedSpecification`; it has no study-data, function or publication port.
+`build` performs that same check before invoking source authority. Both installed
+host adapters retain the checked capability and call its `build_into` operation
+inside their existing panic boundary, so partial source observations survive.
+Native fake-port tests pin unsupported-before-capture behavior, cached repeated
+builds, opaque error identity and incomplete attempts after a host panic.
+
+This internal check is vocabulary admission, not the complete public `check`
+contract in #1751. Binding findings that depend on source schemas, and existing
+deferred formula diagnostics, still occur after ingestion. Raw file capture,
+bundled schema selection, environment/lock/function-test gates and host issue
+tables are not provided by this use case yet. It does not expose resolved YAML
+or choose either host's public result representation.
+
 Core preparation admits the supported vocabulary before a source request can be
 made. An engine attempt requests immutable byte snapshots in input declaration
 order, measures each actual snapshot counter, and decodes owned tables. After
