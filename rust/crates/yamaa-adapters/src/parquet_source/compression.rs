@@ -16,11 +16,11 @@ pub(super) struct Limits {
     pub window_log: u32,
 }
 
-fn exact_stream(mut reader: impl Read, expected: usize) -> Result<(), Error> {
-    let mut count = 0usize;
+fn exact_stream(mut reader: impl Read, expected: usize) -> Result<Vec<u8>, Error> {
+    let mut result = Vec::with_capacity(expected);
     let mut buffer = [0u8; 8192];
     loop {
-        let remaining = expected - count;
+        let remaining = expected - result.len();
         // One extra byte detects a lying length; memory does not grow with the
         // stream. The framing budget has already admitted `expected`.
         let length = buffer.len().min(remaining.saturating_add(1));
@@ -28,8 +28,8 @@ fn exact_stream(mut reader: impl Read, expected: usize) -> Result<(), Error> {
             .read(&mut buffer[..length])
             .map_err(|_| Error::Malformed)?;
         if read == 0 {
-            return if count == expected {
-                Ok(())
+            return if result.len() == expected {
+                Ok(result)
             } else {
                 Err(Error::Malformed)
             };
@@ -37,11 +37,11 @@ fn exact_stream(mut reader: impl Read, expected: usize) -> Result<(), Error> {
         if read > remaining {
             return Err(Error::Malformed);
         }
-        count += read;
+        result.extend_from_slice(&buffer[..read]);
     }
 }
 
-fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<(), Error> {
+fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
     let mut output = vec![0; expected];
     let written = match codec {
         1 => snap::raw::Decoder::new()
@@ -73,7 +73,7 @@ fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<(), Erro
         _ => return Err(Error::Malformed),
     };
     if written == expected {
-        Ok(())
+        Ok(output)
     } else {
         Err(Error::Malformed)
     }
@@ -113,7 +113,7 @@ fn brotli_window(input: &[u8], maximum: u32) -> Result<(), Error> {
     }
 }
 
-fn zstd(input: &[u8], expected: usize, maximum_window: u32) -> Result<(), Error> {
+fn zstd(input: &[u8], expected: usize, maximum_window: u32) -> Result<Vec<u8>, Error> {
     use zstd::zstd_safe::{DCtx, DParameter, InBuffer, OutBuffer};
     let mut decoder = DCtx::try_create().ok_or(Error::Limit)?;
     decoder
@@ -121,9 +121,9 @@ fn zstd(input: &[u8], expected: usize, maximum_window: u32) -> Result<(), Error>
         .map_err(|_| Error::Limit)?;
     let mut input = InBuffer { src: input, pos: 0 };
     let mut scratch = [0u8; 8192];
-    let mut count = 0usize;
+    let mut result = Vec::with_capacity(expected);
     loop {
-        let remaining = expected - count;
+        let remaining = expected - result.len();
         let length = scratch.len().min(remaining.saturating_add(1));
         let before = input.pos;
         let mut output = OutBuffer::around(&mut scratch[..length]);
@@ -145,10 +145,10 @@ fn zstd(input: &[u8], expected: usize, maximum_window: u32) -> Result<(), Error>
         if written > remaining {
             return Err(Error::Malformed);
         }
-        count += written;
+        result.extend_from_slice(&scratch[..written]);
         if hint == 0 && input.pos == input.src.len() {
-            return if count == expected {
-                Ok(())
+            return if result.len() == expected {
+                Ok(result)
             } else {
                 Err(Error::Malformed)
             };
@@ -162,7 +162,13 @@ fn zstd(input: &[u8], expected: usize, maximum_window: u32) -> Result<(), Error>
 /// Validate every actual byte of expansion using the same immutable page body.
 /// Legacy LZ4 retains the library's Hadoop → framed → raw compatibility order.
 /// A recognized codec without an implementation stays explicit, not malformed.
-pub(super) fn verify(page: &Page<'_>, limits: Limits) -> Result<(), Error> {
+#[cfg(test)]
+fn verify(page: &Page<'_>, limits: Limits) -> Result<(), Error> {
+    decode(page, limits).map(|_| ())
+}
+
+/// Retain the bounded expansion for subsequent encoded-value admission.
+pub(super) fn decode(page: &Page<'_>, limits: Limits) -> Result<Vec<u8>, Error> {
     if page.decoded_bytes > limits.page_bytes
         || page.body.len() > limits.page_bytes
         || !(10..=24).contains(&limits.window_log)
@@ -175,14 +181,14 @@ pub(super) fn verify(page: &Page<'_>, limits: Limits) -> Result<(), Error> {
     }
     if !page.compressed || page.codec == 0 {
         return if page.body.len() == page.decoded_bytes {
-            Ok(())
+            Ok(page.body.to_vec())
         } else {
             Err(Error::Malformed)
         };
     }
     let input = &page.body[prefix..];
     let expected = page.decoded_bytes - prefix;
-    match page.codec {
+    let mut decoded = match page.codec {
         1 => fixed_codec(1, input, expected),
         2 => exact_stream(flate2::read::MultiGzDecoder::new(input), expected),
         3 => Err(Error::Unavailable(3)),
@@ -196,7 +202,14 @@ pub(super) fn verify(page: &Page<'_>, limits: Limits) -> Result<(), Error> {
         6 => zstd(input, expected, limits.window_log),
         7 => fixed_codec(7, input, expected),
         _ => Err(Error::Malformed),
+    }?;
+    if prefix != 0 {
+        let mut with_prefix = Vec::with_capacity(page.decoded_bytes);
+        with_prefix.extend_from_slice(&page.body[..prefix]);
+        with_prefix.append(&mut decoded);
+        return Ok(with_prefix);
     }
+    Ok(decoded)
 }
 
 #[cfg(test)]
@@ -216,6 +229,8 @@ mod tests {
             decoded_bytes,
             uncompressed_prefix: 0,
             compressed: true,
+            column: 0,
+            payload: Default::default(),
         }
     }
     #[test]
@@ -243,6 +258,12 @@ mod tests {
         let zstd = zstd::stream::encode_all(&plain[..], 1).unwrap();
         assert_eq!(verify(&page(&zstd, 6, plain.len()), limits()), Ok(()));
         assert_eq!(verify(&page(&zstd, 6, 1), limits()), Err(Error::Malformed));
+        for (bytes, codec) in [(&gzip, 2), (&brotli, 4), (&zstd, 6)] {
+            assert_eq!(
+                decode(&page(bytes, codec, plain.len()), limits()).unwrap(),
+                plain
+            );
+        }
     }
     #[test]
     fn window_policy_is_checked_before_history_allocation() {
@@ -275,6 +296,10 @@ mod tests {
         for (bytes, id) in [(snappy, 1), (hadoop, 5), (raw, 7)] {
             assert_eq!(verify(&page(&bytes, id, plain.len()), limits()), Ok(()));
             assert_eq!(
+                decode(&page(&bytes, id, plain.len()), limits()).unwrap(),
+                plain
+            );
+            assert_eq!(
                 verify(&page(&bytes, id, 1), limits()),
                 Err(Error::Malformed)
             );
@@ -283,9 +308,17 @@ mod tests {
         frame.write_all(plain).unwrap();
         let frame = frame.finish().unwrap();
         assert_eq!(verify(&page(&frame, 5, plain.len()), limits()), Ok(()));
+        assert_eq!(
+            decode(&page(&frame, 5, plain.len()), limits()).unwrap(),
+            plain
+        );
         assert_eq!(verify(&page(&frame, 5, 1), limits()), Err(Error::Malformed));
         let raw = lz4_flex::block::compress(plain);
         assert_eq!(verify(&page(&raw, 5, plain.len()), limits()), Ok(()));
+        assert_eq!(
+            decode(&page(&raw, 5, plain.len()), limits()).unwrap(),
+            plain
+        );
     }
     #[test]
     fn v2_levels_stay_outside_compressed_bytes_and_size_policy_is_explicit() {
@@ -298,6 +331,7 @@ mod tests {
         let mut data = page(&bytes, 2, 7);
         data.uncompressed_prefix = 3;
         assert_eq!(verify(&data, limits()), Ok(()));
+        assert_eq!(decode(&data, limits()).unwrap(), b"\x01\x02\x03body");
         data.uncompressed_prefix = 8;
         assert_eq!(verify(&data, limits()), Err(Error::Malformed));
         assert_eq!(

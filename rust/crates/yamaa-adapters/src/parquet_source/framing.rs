@@ -25,6 +25,28 @@ pub(super) struct Page<'a> {
     pub decoded_bytes: usize,
     pub uncompressed_prefix: usize,
     pub compressed: bool,
+    pub column: usize,
+    pub payload: Payload,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) enum Payload {
+    #[default]
+    Index,
+    Dictionary {
+        encoding: i64,
+        values: usize,
+    },
+    DataV1 {
+        encoding: i64,
+        values: usize,
+        definition_encoding: i64,
+        repetition_encoding: i64,
+    },
+    DataV2 {
+        encoding: i64,
+        values: usize,
+    },
 }
 
 #[derive(Debug)]
@@ -65,6 +87,44 @@ fn bound(value: usize, limit: usize) -> Result<(), Error> {
     }
 }
 
+// A compact list's length bounds its own allocation, but not allocations made
+// later from integer fields within each SchemaElement. The general reader
+// reserves num_children slots before discovering a truncated schema tree.
+fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
+    bound(schema.len().saturating_sub(1), limits.columns)?;
+    let mut remaining_children = Vec::new();
+    for (index, element) in schema.iter().enumerate() {
+        while remaining_children.last() == Some(&0) {
+            remaining_children.pop();
+        }
+        if let Some(remaining) = remaining_children.last_mut() {
+            *remaining -= 1;
+        }
+        // Flat Thrift metadata can describe a deeply recursive schema tree.
+        // Admit its depth independently of the compact parser's own depth.
+        bound(remaining_children.len() + 1, 64)?;
+        if let Some(value) = element.field(5) {
+            let children = count(Some(value))?;
+            if children > schema.len() - index - 1 {
+                return Err(Error::Malformed);
+            }
+            if children != 0 {
+                remaining_children.push(children);
+            }
+        }
+        if let Some(value) = element.field(2) {
+            let length = integer(Some(value))?;
+            if length > 0 {
+                bound(
+                    usize::try_from(length).map_err(|_| Error::Limit)?,
+                    limits.page_bytes,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Collect bounded borrowed page bodies from every stored column chunk, in
 /// row-group/column/page order. Unknown metadata is still included in node/work
 /// admission. The downstream codec remains responsible for format semantics.
@@ -95,7 +155,7 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
     // Include the root schema element in metadata-node accounting. Leaf/field
     // matching and the closed type contract are checked by the actual decoder.
     let schema = sequence(root.field(2))?;
-    bound(schema.len().saturating_sub(1), limits.columns)?;
+    admit_schema(schema, limits)?;
     let mut result = Framing {
         metadata,
         pages: Vec::new(),
@@ -104,6 +164,8 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
     let mut cells = 0;
     let mut decoded = 0;
     let mut header_nodes = 0;
+    let mut data_values = 0;
+    let mut dictionary_values = 0;
     for group in groups {
         let count_rows = count(group.field(3))?;
         charge(&mut rows, count_rows, limits.rows)?;
@@ -114,7 +176,7 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
             count_rows.checked_mul(columns.len()).ok_or(Error::Limit)?,
             limits.cells,
         )?;
-        for chunk in columns {
+        for (column, chunk) in columns.iter().enumerate() {
             let meta = chunk.field(3).ok_or(Error::Malformed)?;
             let codec = integer(meta.field(4))?;
             bound(count(meta.field(5))?, limits.cells)?;
@@ -157,7 +219,50 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                         bound(count(detail.field(1))?, limits.cells)?;
                     }
                 }
-                let (prefix, should_decompress) = match header.field(8) {
+                let payload = match integer(header.field(1))? {
+                    0 => {
+                        let detail = header.field(5).ok_or(Error::Malformed)?;
+                        Payload::DataV1 {
+                            encoding: integer(detail.field(2))?,
+                            values: count(detail.field(1))?,
+                            definition_encoding: integer(detail.field(3))?,
+                            repetition_encoding: integer(detail.field(4))?,
+                        }
+                    }
+                    1 => Payload::Index,
+                    2 => {
+                        let detail = header.field(7).ok_or(Error::Malformed)?;
+                        Payload::Dictionary {
+                            encoding: integer(detail.field(2))?,
+                            values: count(detail.field(1))?,
+                        }
+                    }
+                    3 => {
+                        let detail = header.field(8).ok_or(Error::Malformed)?;
+                        bound(count(detail.field(2))?, limits.cells)?;
+                        bound(count(detail.field(3))?, limits.rows)?;
+                        Payload::DataV2 {
+                            encoding: integer(detail.field(4))?,
+                            values: count(detail.field(1))?,
+                        }
+                    }
+                    _ => return Err(Error::Malformed),
+                };
+                match payload {
+                    Payload::DataV1 { values, .. } | Payload::DataV2 { values, .. } => {
+                        charge(&mut data_values, values, limits.cells)?
+                    }
+                    Payload::Dictionary { values, .. } => {
+                        charge(&mut dictionary_values, values, limits.cells)?
+                    }
+                    Payload::Index => {}
+                }
+                let v2 = if matches!(payload, Payload::DataV2 { .. }) {
+                    header.field(8)
+                } else {
+                    None
+                };
+                let (prefix, should_decompress) = match v2 {
                     Some(v2) => {
                         let prefix = count(v2.field(5))?
                             .checked_add(count(v2.field(6))?)
@@ -185,6 +290,8 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                     decoded_bytes: uncompressed,
                     uncompressed_prefix: prefix,
                     compressed: should_decompress,
+                    column,
+                    payload,
                 });
             }
         }
@@ -255,6 +362,37 @@ mod tests {
         vec![
             0x15, 0, 0x15, 8, 0x15, 8, 0x2c, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 6, 0, 0, 0, 0, 0, 0,
         ]
+    }
+    #[test]
+    fn schema_integer_claims_and_flattened_tree_depth_are_admitted_before_allocation() {
+        let element = |children| Value::Struct(vec![(5, Value::Integer(children))]);
+        assert!(matches!(
+            admit_schema(&[element(i32::MAX.into())], limits()),
+            Err(Error::Malformed)
+        ));
+        assert!(matches!(
+            admit_schema(&[element(-1)], limits()),
+            Err(Error::Malformed)
+        ));
+        let fixed = |length| Value::Struct(vec![(2, Value::Integer(length))]);
+        admit_schema(&[element(1), fixed(64)], limits()).unwrap();
+        assert!(matches!(
+            admit_schema(&[element(1), fixed(65)], limits()),
+            Err(Error::Limit)
+        ));
+        let mut nested: Vec<_> = (0..63).map(|_| element(1)).collect();
+        nested.push(element(0));
+        let generous = Limits {
+            columns: 128,
+            ..limits()
+        };
+        admit_schema(&nested, generous).unwrap();
+        nested.insert(0, element(1));
+        assert!(matches!(admit_schema(&nested, generous), Err(Error::Limit)));
+        // Siblings exhaust their parent rather than incrementing tree depth.
+        let mut flat = vec![element(100)];
+        flat.extend((0..100).map(|_| element(0)));
+        admit_schema(&flat, generous).unwrap();
     }
     #[test]
     fn borrowed_page_ranges_and_aggregate_limits_are_checked_before_codec_use() {
@@ -368,5 +506,22 @@ mod tests {
         let admitted = admit(&bytes, limits()).unwrap();
         assert_eq!(admitted.pages[0].uncompressed_prefix, 3);
         assert!(!admitted.pages[0].compressed);
+    }
+    #[test]
+    fn actual_page_value_work_is_bounded_even_if_footer_row_counts_are_small() {
+        let mut pages = page();
+        pages.extend(page());
+        let bytes = container(&pages);
+        assert_eq!(admit(&bytes, limits()).unwrap().pages.len(), 2);
+        assert!(matches!(
+            admit(
+                &bytes,
+                Limits {
+                    cells: 1,
+                    ..limits()
+                }
+            ),
+            Err(Error::Limit)
+        ));
     }
 }
