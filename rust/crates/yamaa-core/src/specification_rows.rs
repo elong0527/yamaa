@@ -24,6 +24,7 @@ enum RowOperation {
 }
 #[derive(Debug)]
 struct RowDeclaration {
+    handler: Option<crate::conversion::LiteralHandler>,
     column: usize,
     path: String,
     operation: RowOperation,
@@ -66,7 +67,8 @@ fn declaration(
     prefix: String,
     grouped: bool,
 ) -> Result<RowDeclaration, PrepareError> {
-    closed_fields(d, id, &["value"], &prefix)?;
+    closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
+    let handler = literal_handler(d, id, &prefix)?;
     let &[(op, payload)] = mapping(d, field(d, id, "value")?)? else {
         return Err(PrepareError::Internal);
     };
@@ -89,6 +91,7 @@ fn declaration(
                 Ok(parsed) => parsed,
                 Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
                     return Ok(RowDeclaration {
+                        handler,
                         column,
                         path,
                         operation: RowOperation::InvalidAggregate {
@@ -121,6 +124,7 @@ fn declaration(
         _ => return Err(unsupported(op, &path)),
     };
     Ok(RowDeclaration {
+        handler,
         column,
         path,
         operation,
@@ -446,6 +450,27 @@ impl Rows {
             keys.to_vec(),
             verifications.to_vec(),
         )
+        .and_then(|plan| {
+            // Repeated defaults in several templates share one declaration and
+            // one counter. Only effective row declarations register handlers.
+            let mut seen = alloc::collections::BTreeSet::new();
+            let handlers = self
+                .templates
+                .iter()
+                .flat_map(|template| &template.declarations)
+                .chain(&self.columns)
+                .filter_map(|declaration| {
+                    declaration.handler.as_ref().and_then(|handler| {
+                        seen.insert(&declaration.path)
+                            .then(|| crate::dataset::ConversionHandler {
+                                assignment_path: declaration.path.clone(),
+                                handler: handler.clone(),
+                            })
+                    })
+                })
+                .collect();
+            plan.with_conversion_handlers(handlers)
+        })
         .map_err(BindError::InvalidPlan)
     }
 }

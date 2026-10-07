@@ -250,6 +250,23 @@ pub struct PreparedSpecification {
     verifications: verifications::Verifications,
 }
 
+/// Preserve omitted versus explicit-null recovery at every declaration.
+fn literal_handler(
+    d: &Document,
+    id: usize,
+    prefix: &str,
+) -> Result<Option<crate::conversion::LiteralHandler>, PrepareError> {
+    d.field(id, "unconvertible")
+        .map(|id| {
+            let spec_path = format!("{prefix}.unconvertible");
+            Ok(crate::conversion::LiteralHandler {
+                value: literal(d, id, &spec_path)?,
+                spec_path,
+            })
+        })
+        .transpose()
+}
+
 /// Read an admitted scalar leaf once; rows and columns share the same boundary.
 fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, PrepareError> {
     use crate::value::Value;
@@ -846,16 +863,7 @@ impl PreparedSpecification {
                 .field(id, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .ok_or(PrepareError::Internal)?;
-            let handler = d
-                .field(derivation, "unconvertible")
-                .map(|id| {
-                    let spec_path = format!("{prefix}.derivation.unconvertible");
-                    Ok(crate::conversion::LiteralHandler {
-                        value: literal(d, id, &spec_path)?,
-                        spec_path,
-                    })
-                })
-                .transpose()?;
+            let handler = literal_handler(d, derivation, &format!("{prefix}.derivation"))?;
             let ops = mapping(d, field(d, derivation, "value")?)?;
             let &[(op, payload)] = ops else {
                 return Err(PrepareError::Internal);

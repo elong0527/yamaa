@@ -3101,6 +3101,15 @@ fn original_conversion_handlers_match_complete_reference_reports_and_csv() {
     );
 }
 
+#[test]
+fn original_row_conversion_handlers_match_complete_reference_reports_and_csv() {
+    independent_scalar_reports(
+        include_str!("fixtures/original_row_conversion_handlers.tsv"),
+        "row-handler",
+        8,
+    );
+}
+
 fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize) {
     use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},

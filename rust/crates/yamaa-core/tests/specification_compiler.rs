@@ -58,6 +58,15 @@ fn operation_document_with_handler(
     input_path: &str,
     handler: Option<N>,
 ) -> SpecificationDocument {
+    operation_document_with_rows(operation, payload, input_path, handler, None)
+}
+fn operation_document_with_rows(
+    operation: &str,
+    payload: Tree<'_>,
+    input_path: &str,
+    handler: Option<N>,
+    rows: Option<Tree<'_>>,
+) -> SpecificationDocument {
     use Tree::*;
     let column = |name, op, field, value| {
         Map(vec![
@@ -76,7 +85,7 @@ fn operation_document_with_handler(
     if let Some(value) = handler {
         wrapper.push(("unconvertible", Scalar(value)));
     }
-    let tree = Map(vec![
+    let mut fields = vec![
         ("schema_version", Text("1.0")),
         ("domain", Text("TEST")),
         (
@@ -102,7 +111,11 @@ fn operation_document_with_handler(
                 ("columns", List(vec![Text("ID"), Text("VALUE")])),
             ]),
         ),
-    ]);
+    ];
+    if let Some(rows) = rows {
+        fields.push(("rows", rows));
+    }
+    let tree = Map(fields);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
     let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
@@ -482,4 +495,82 @@ fn wide_recovery_literal_remains_unsupported_before_source_binding() {
     assert_eq!(features.len(), 1);
     assert_eq!(features[0].operation, "wide_integer_literal");
     assert_eq!(features[0].path, "columns.VALUE.derivation.unconvertible");
+}
+
+fn recovery_rows(value: N, count: usize) -> Tree<'static> {
+    use Tree::*;
+    let mut rows = vec![Map(vec![
+        ("id", Text("override")),
+        (
+            "derivations",
+            Map(vec![(
+                "VALUE",
+                Map(vec![
+                    ("value", Map(vec![("literal", Scalar(N::Boolean(true)))])),
+                    ("unconvertible", Scalar(value)),
+                ]),
+            )]),
+        ),
+    ])];
+    for id in ["default-one", "default-two"].into_iter().take(count - 1) {
+        rows.push(Map(vec![("id", Text(id)), ("derivations", Map(vec![]))]));
+    }
+    List(rows)
+}
+
+#[test]
+fn row_recovery_binds_only_effective_handlers_in_row_order_and_shares_defaults() {
+    use yamaa_core::value::Value;
+    for count in [1, 3] {
+        let document = operation_document_with_rows(
+            "literal",
+            Tree::Scalar(N::Boolean(true)),
+            "input.csv",
+            Some(N::Null),
+            Some(recovery_rows(N::Integer("7".into()), count)),
+        );
+        let plan = PreparedSpecification::prepare(&document)
+            .unwrap()
+            .bind(&source())
+            .unwrap();
+        let handlers = plan.conversion_handlers();
+        assert_eq!(handlers.len(), if count == 1 { 1 } else { 2 });
+        assert_eq!(
+            handlers[0].assignment_path,
+            "rows[0].derivations.VALUE.literal"
+        );
+        assert_eq!(
+            handlers[0].handler.spec_path,
+            "rows[0].derivations.VALUE.unconvertible"
+        );
+        assert_eq!(handlers[0].handler.value, Value::Int(7));
+        if count == 3 {
+            assert_eq!(handlers[1].handler.value, Value::Missing);
+            assert_eq!(
+                handlers[1].handler.spec_path,
+                "columns.VALUE.derivation.unconvertible"
+            );
+            assert_eq!(
+                plan.templates()[1].assignments[0].path,
+                plan.templates()[2].assignments[0].path
+            );
+        }
+    }
+}
+
+#[test]
+fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
+    let document = operation_document_with_rows(
+        "literal",
+        Tree::Scalar(N::Boolean(true)),
+        "input.csv",
+        None,
+        Some(recovery_rows(N::Integer("9223372036854775808".into()), 1)),
+    );
+    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document) else {
+        panic!("wide row handler must not narrow")
+    };
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0].operation, "wide_integer_literal");
+    assert_eq!(features[0].path, "rows[0].derivations.VALUE.unconvertible");
 }

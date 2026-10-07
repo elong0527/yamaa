@@ -1,0 +1,5 @@
+# Original row conversion handler truth
+
+Eight independently authored original documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete reports and exact CSV pin row recovery, explicit null, unused invalid replacement, missing input, failed replacement, a default shared by two templates, an override alongside its default and a completely overridden default. The latter has no counter entry; repeated effective defaults share one entry with combined firings. Counter order follows effective row declarations before ordinary columns.
+
+This extends existing conversion recovery without changing engine evaluation. Rust and both installed hosts drop the prepared specification, retain complete reports and repeat explicit saves without recapture; failures cannot publish. R replay stays inside its no-Python PATH block. No existing fixture is regenerated. Nested expressions and other handler families remain Unsupported.

@@ -524,6 +524,8 @@ scalar_report_truth("column-literals.tsv","literal",4L)
 cat("original column literals complete independent reports and exact CSV passed\n")
 scalar_report_truth("original-conversion-handlers.tsv","handler",5L)
 cat("original conversion handlers complete independent reports and exact CSV passed\n")
+scalar_report_truth("original-row-conversion-handlers.tsv","row-handler",8L)
+cat("original row conversion handlers complete independent reports and exact CSV passed\n")
 
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

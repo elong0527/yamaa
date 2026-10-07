@@ -97,3 +97,9 @@ and handler paths. Existing engine recovery owns triggering, replacement
 conversion and positive/zero ledger counts. Explicit null is retained as a
 present handler; an omitted handler remains absent. No host assembles these plans
 or selects recovery behavior.
+
+Row wrappers use the same scalar-handler admission as ordinary columns. The row
+compiler binds only effective declarations, in row order before ordinary columns;
+repeated inherited defaults share a single handler and counter. Completely
+overridden defaults are admitted structurally but do not register unused handlers.
+Eight independent complete-report cases pin those rules without engine changes.

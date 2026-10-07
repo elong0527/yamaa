@@ -287,6 +287,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_conversion_handlers_preserve_reference_reports_and_exact_csv(self):
         self._assert_independent_scalar_reports("original-conversion-handlers.tsv", "handler", 5)
 
+    def test_original_row_conversion_handlers_complete_reports_and_exact_csv(self):
+        self._assert_independent_scalar_reports("original-row-conversion-handlers.tsv", "row-handler", 8)
+
     def _assert_independent_scalar_reports(self, fixture, prefix, cases):
         def no_parent(*_):
             self.fail("standalone literal document reached inheritance authority")
