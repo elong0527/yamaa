@@ -477,8 +477,8 @@ cat("core grammar complete independent failed reports and retained save gates pa
 failed_report_truth("binding-diagnostics.tsv","binding",10L,charToRaw("ID,V\n1,2\n"))
 cat("core binding complete independent failed reports and retained save gates passed\n")
 
-Sys.setenv(PATH=original_path)
-unlink(runtime_path,recursive=TRUE)
-
 failed_report_truth("csv-profile-diagnostics.tsv","csv",13L)
 cat("core CSV profile complete independent failed reports and retained save gates passed\n")
+
+Sys.setenv(PATH=original_path)
+unlink(runtime_path,recursive=TRUE)
