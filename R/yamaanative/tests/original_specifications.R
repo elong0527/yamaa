@@ -218,6 +218,11 @@ for(cycle in c(FALSE,TRUE)) {
   stopifnot(inherits(actual,"error"),grepl(if(cycle) '"condition":"inheritance_cycle"' else '"condition":"parent_not_found"',conditionMessage(actual),fixed=TRUE),grepl(if(cycle) 'REQ-0655' else 'REQ-0654',conditionMessage(actual),fixed=TRUE))
 }
 cat("inherited preparation callback errors, interrupts and shared diagnostics passed\n")
+# The following boundary probes use an explicit successful lookup fixture,
+# independent of the preceding corpus loop order.
+case_name <- "schema-lookup"
+case <- file.path(root,"cases",case_name)
+handle <- prepare_entry("spec.yaml",rawfile(file.path(case,"spec.yaml")),no_port,no_port,no_port)
 # The registered prototype single-buffer routine is not a public R wrapper.
 # Its error envelope must still distinguish missing secondary inputs.
 source_count <- .Call(get("wrap__execute_specification_csv",envir=asNamespace("yamaanative")),handle,rawfile(file.path(case,"input/dm.csv")))
@@ -256,7 +261,7 @@ for(rejected in list(FALSE,NULL,NA,logical(),c(TRUE,FALSE),1L,"TRUE")) {
   stopifnot(identical(conditionMessage(actual),"publication callback rejected output"))
 }
 cat("rejected and malformed publication results passed\n")
-# The last original case succeeds until the host publication boundary.
+# The selected lookup fixture succeeds until the host publication boundary.
 for(kind in c("error","interrupt")) {
   failure <- structure(list(message="retained publication condition",call=NULL,payload=new.env()),class=c("publication_test_condition",kind,"condition"))
   calls <- 0L
