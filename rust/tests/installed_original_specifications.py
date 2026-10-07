@@ -707,6 +707,10 @@ class ParquetOriginalOutput(unittest.TestCase):
             ("utf8-time", "source_field_value_invalid", "REQ-1041", {"field":"OTHER","row":1,"value":1}),
             ("empty-name", "source_field_name_empty", "REQ-1039", {"field":1}),
             ("duplicate", "source_field_name_duplicate", "REQ-1039", {"field":"I"}),
+            ("mixed-struct", "source_field_type_unsupported", "REQ-1040", {"field":"S", "stored_type":"struct<left: int64, right: string>"}),
+            ("mixed-map", "source_field_type_unsupported", "REQ-1040", {"field":"M", "stored_type":"map<string, int64 ('M')>"}),
+            ("mixed-empty", "source_field_name_empty", "REQ-1039", {"field":1}),
+            ("mixed-duplicate", "source_field_name_duplicate", "REQ-1039", {"field":"I"}),
             *(("unsupported-" + name, "source_field_type_unsupported", "REQ-1040",
                {"field": "FIELD", "stored_type": stored}) for name, stored in (
                 ("int32", "int32"), ("uint64", "uint64"), ("float32", "float"), ("binary", "binary"),

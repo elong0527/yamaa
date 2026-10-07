@@ -66,12 +66,13 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
         field: field.name().clone(),
         stored_type: super::type_name::field_type(field),
     };
-    if stored.num_columns() != arrow.fields().len() {
-        return Err(unsupported(&arrow.fields()[0]));
+    if stored.root_schema().get_fields().len() != arrow.fields().len() {
+        return Err(Error::Invalid);
     }
     let mut names = BTreeSet::new();
     let mut columns = Vec::with_capacity(arrow.fields().len());
-    for (index, (field, stored)) in arrow.fields().iter().zip(stored.columns()).enumerate() {
+    let mut leaf = 0;
+    for (index, field) in arrow.fields().iter().enumerate() {
         if field.name().is_empty() {
             return Err(Error::EmptyName { field: index + 1 });
         }
@@ -80,12 +81,17 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
                 field: field.name().clone(),
             });
         }
-        let kind = if stored.max_rep_level() == 0 && stored.path().string() == *field.name() {
-            column_type(stored, field.data_type())
-        } else {
-            None
+        let first = leaf;
+        while leaf < stored.num_columns() && stored.get_column_root_idx(leaf) == index {
+            leaf += 1;
         }
-        .ok_or_else(|| unsupported(field))?;
+        // A nested root can own several leaves. Admission belongs to its own
+        // top-level field, never an earlier supported field or a later leaf.
+        let kind = (leaf - first == 1)
+            .then(|| stored.column(first))
+            .filter(|column| column.max_rep_level() == 0 && column.path().string() == *field.name())
+            .and_then(|column| column_type(&column, field.data_type()))
+            .ok_or_else(|| unsupported(field))?;
         columns.push(Column {
             name: field.name().clone(),
             kind,
@@ -259,9 +265,7 @@ mod tests {
             Field::new("", DataType::Int64, true),
             Field::new("Y", DataType::Int64, true),
         ]);
-        assert!(
-            matches!(columns(&arrow,&stored),Err(Error::Unsupported {field,..}) if field.is_empty())
-        );
+        assert_eq!(columns(&arrow, &stored), Err(Error::Invalid));
         let same = stored.root_schema().get_fields()[0].clone();
         let duplicate = SchemaDescriptor::new(Arc::new(
             Type::group_type_builder("schema")

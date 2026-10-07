@@ -350,7 +350,11 @@ cases <- list(
   c("utf8-bool","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"OTHER","path":"input.parquet","stored_type":"bool"'),
   c("utf8-time","source_field_value_invalid","REQ-1041",'"dataset":"SRC","field":"OTHER","path":"input.parquet","row":1,"value":1'),
   c("empty-name","source_field_name_empty","REQ-1039",'"dataset":"SRC","field":1,"path":"input.parquet"'),
-  c("duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"')
+  c("duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"'),
+  c("mixed-struct","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"S","path":"input.parquet","stored_type":"struct<left: int64, right: string>"'),
+  c("mixed-map","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"M","path":"input.parquet","stored_type":"map<string, int64 (\'M\')>"'),
+  c("mixed-empty","source_field_name_empty","REQ-1039",'"dataset":"SRC","field":1,"path":"input.parquet"'),
+  c("mixed-duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"')
 )
 unsupported_types <- c(int32="int32",uint64="uint64",float32="float",binary="binary",
   milliseconds="timestamp[ms]",timezone="timestamp[us, tz=UTC]",list="list<element: int64>",

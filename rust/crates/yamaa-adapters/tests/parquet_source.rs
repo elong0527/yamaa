@@ -166,6 +166,28 @@ fn unsupported_stored_types_retain_independent_arrow_type_spelling() {
 }
 
 #[test]
+fn nested_roots_name_their_own_field_after_flat_columns_and_preserve_name_precedence() {
+    for (name, field, stored_type) in [
+        ("mixed-struct", "S", "struct<left: int64, right: string>"),
+        ("mixed-map", "M", "map<string, int64 ('M')>"),
+    ] {
+        assert!(
+            matches!(parse(&content(name), limits(), table_limits()),
+            Err(Error::Unsupported { field: actual, stored_type: actual_type })
+            if actual == field && actual_type == stored_type),
+            "{name}"
+        );
+    }
+    assert!(matches!(
+        parse(&content("mixed-empty"), limits(), table_limits()),
+        Err(Error::EmptyName { field: 1 })
+    ));
+    assert!(
+        matches!(parse(&content("mixed-duplicate"),limits(),table_limits()),Err(Error::DuplicateName{field}) if field=="I")
+    );
+}
+
+#[test]
 fn field_and_temporal_diagnostics_precede_invalid_text() {
     for name in ["boolean", "utf8-bool"] {
         assert!(

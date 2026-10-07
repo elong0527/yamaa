@@ -13,6 +13,8 @@ The three `utf8*` containers have one deliberately corrupted string payload.
 Ten unsupported-type containers pin full type names independently read by
 PyArrow, including nested and fixed-size-list shapes, timestamp units/timezones
 and decimal precision. `date64` pins the writer's physical DATE normalization.
+Four mixed flat/nested inputs pin each nested root's own field diagnostic and
+the earlier empty/duplicate-name precedence, including maps and two-child structs.
 
 `ordered-sum` changes only the original ordered-sum source's storage container.
 Its field declarations are explicit in the generator, and its build continues to

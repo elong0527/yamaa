@@ -61,6 +61,16 @@ def build(destination: Path):
     ):
         write(destination, "unsupported-" + name, pa.table({"FIELD": pa.array(values, type=kind)}), compression="ZSTD")
     write(destination, "date64", pa.table({"D": pa.array([0], type=pa.date64())}), compression="NONE")
+    integer = pa.array([1], type=pa.int64())
+    nested = pa.array([[('key', 2)]], type=pa.map_(pa.string(), pa.int64()))
+    structure = pa.array([{"left": 2, "right": "text"}], type=pa.struct([("left", pa.int64()), ("right", pa.string())]))
+    for name, arrays, names in (
+        ("mixed-struct", [integer, structure, integer], ["I", "S", "AFTER"]),
+        ("mixed-map", [integer, nested, integer], ["I", "M", "AFTER"]),
+        ("mixed-empty", [integer, nested], ["", "M"]),
+        ("mixed-duplicate", [integer, integer, nested], ["I", "I", "M"]),
+    ):
+        write(destination, name, pa.Table.from_arrays(arrays, names=names), compression="ZSTD")
     for name, other in (("utf8", None), ("utf8-bool", pa.array([True])),
                         ("utf8-time", pa.array([1], type=pa.timestamp("us")))):
         arrays = [pa.array(["ok"])] if other is None else [other, pa.array(["ok"])]

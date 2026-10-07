@@ -1167,6 +1167,22 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/zstd-2-1.parquet",
       "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-duplicate.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-empty.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-map.parquet",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-struct.parquet",
+      "role": "input"
     }
   ]
 }
