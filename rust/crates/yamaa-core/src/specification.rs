@@ -667,7 +667,11 @@ impl PreparedSpecification {
                     .field(id, "types")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 {
-                    for &(field_name, kind) in mapping(d, types)? {
+                    let fields = mapping(d, types)?;
+                    if fields.len() > limits.source_fields {
+                        return Err(PrepareError::Limit("source_fields"));
+                    }
+                    for &(field_name, kind) in fields {
                         let kind = match text(d, kind)? {
                             "str" => ColumnType::Str,
                             "int" => ColumnType::Int,
