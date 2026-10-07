@@ -1,9 +1,9 @@
 //! Ordered decoded-value validation and post-resolution default validation.
 
 use super::{
-    ConstraintBudget, ConstraintError, ConstraintViolation, Document, DocumentNode as N,
-    SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression,
-    TypeLimits, TypeNode,
+    ConstraintBudget, ConstraintError, ConstraintViolation, Document, DocumentKind,
+    DocumentNode as N, SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError,
+    TypeExpression, TypeLimits, TypeNode,
 };
 use crate::regex::MatchLimits;
 use alloc::{
@@ -17,6 +17,10 @@ use alloc::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaContext {
     Text(String),
+    /// A decoded value rejected by a schema descriptor or value constraint.
+    ValueKind(DocumentKind),
+    /// A decoded collection or member rejected by inheritance layer admission.
+    LayerKind(DocumentKind),
     Count(usize),
     Null,
     InputValue(usize),
@@ -140,6 +144,8 @@ impl ValidationBudget {
                 total.checked_add(key.len()).and_then(|n| {
                     n.checked_add(match value {
                         SchemaContext::Text(s) => s.len(),
+                        // Reserve the largest portable kind name for typed contexts.
+                        SchemaContext::ValueKind(_) | SchemaContext::LayerKind(_) => 8,
                         _ => 0,
                     })
                 })
@@ -268,7 +274,7 @@ impl Run<'_, '_> {
                 ("expected", Self::text(expected)),
                 (
                     "actual",
-                    Self::text(self.input.nodes()[site.value].type_name()),
+                    SchemaContext::ValueKind(self.input.nodes()[site.value].kind()),
                 ),
             ],
         )?])
@@ -576,7 +582,7 @@ impl Run<'_, '_> {
                         && !diagnostics.is_empty()
                         && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
                     {
-                        return Ok(vec![self.diagnostic(site,"bare_derivation_scalar",Some("REQ-0320"),vec![("actual",Self::text(self.input.nodes()[site.value].type_name())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])?]);
+                        return Ok(vec![self.diagnostic(site,"bare_derivation_scalar",Some("REQ-0320"),vec![("actual",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])?]);
                     }
                     if !diagnostics.is_empty() {
                         let mut matching = false;
@@ -828,9 +834,10 @@ impl SchemaStructure {
             match version {
                 None => context.push(("actual", SchemaContext::Null)),
                 Some(id) => match &input.nodes()[id] {
-                    N::Mapping(_) | N::Sequence(_) => {
-                        context.push(("actual_type", Run::text(input.nodes()[id].type_name())))
-                    }
+                    N::Mapping(_) | N::Sequence(_) => context.push((
+                        "actual_type",
+                        SchemaContext::ValueKind(input.nodes()[id].kind()),
+                    )),
                     _ => context.push(("actual", SchemaContext::InputValue(id))),
                 },
             };

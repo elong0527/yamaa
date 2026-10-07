@@ -9,6 +9,10 @@ use yamaa_core::{
 };
 
 struct Bindings;
+#[path = "diagnostic/binding.rs"]
+mod binding;
+#[path = "diagnostic/csv.rs"]
+mod csv;
 #[path = "diagnostic/grammar.rs"]
 mod grammar;
 #[path = "diagnostic/preflight.rs"]
@@ -137,6 +141,8 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(preflight::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());
+    reached.extend(binding::reached());
+    reached.extend(csv::reached());
     assert_eq!(reached, CONDITIONS.iter().copied().collect());
     assert_eq!(
         CONDITIONS.len(),

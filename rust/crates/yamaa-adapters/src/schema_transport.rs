@@ -571,6 +571,7 @@ fn diagnostics(findings: &[SchemaDiagnostic]) -> Vec<Value> {
     findings.iter().map(|finding| json!({"path":finding.path,"condition":finding.condition,"requirement":finding.requirement,
         "context":finding.context.iter().map(|(name,value)| json!({"name":name,"value":match value {
             SchemaContext::Text(value) => json!({"kind":"text","value":value}),
+            SchemaContext::ValueKind(_) | SchemaContext::LayerKind(_) => json!({"kind":"text","value":crate::schema_diagnostic_kinds::label(value).expect("typed schema kind")}),
             SchemaContext::Count(value) => json!({"kind":"count","value":value}),
             SchemaContext::Null => json!({"kind":"null"}),
             SchemaContext::InputValue(node) => json!({"kind":"input_value","node":node}),

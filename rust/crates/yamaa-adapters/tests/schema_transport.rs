@@ -49,7 +49,7 @@ fn installed_hosts_share_independent_inheritance_dependency_truth() {
 #[test]
 fn installed_hosts_share_independent_layer_admission_truth() {
     let fixture = include_str!("fixtures/schema_layer_admission.tsv");
-    assert_eq!(fixture.lines().count(), 8);
+    assert_eq!(fixture.lines().count(), 9);
     for line in fixture.lines().skip(1) {
         let fields: Vec<_> = line.split('\t').collect();
         assert_eq!(fields.len(), 3);

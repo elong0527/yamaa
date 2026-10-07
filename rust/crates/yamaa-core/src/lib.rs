@@ -8,6 +8,7 @@ pub mod aggregate_parser;
 pub mod bound_expression;
 pub mod column_dependencies;
 pub mod conversion;
+pub mod csv_source;
 pub mod dataset;
 mod decimal_rounding;
 pub mod dependency_analysis;

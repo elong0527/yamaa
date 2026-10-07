@@ -4,7 +4,7 @@ truth <- do.call(rbind, lapply(c("schema_model.tsv", "schema_transport.tsv", "sc
   cases <- read.delim(system.file(name, package = "yamaanative"),
     sep = "\t", quote = "", comment.char = "", colClasses = "character",
     fileEncoding = "UTF-8", check.names = FALSE)
-  expected_rows <- if (name == "schema_model.tsv") 8L else if (name == "schema_layer_admission.tsv") 7L else 6L
+  expected_rows <- if (name %in% c("schema_model.tsv", "schema_layer_admission.tsv")) 8L else 6L
   stopifnot(nrow(cases) == expected_rows)
   cases
 }))

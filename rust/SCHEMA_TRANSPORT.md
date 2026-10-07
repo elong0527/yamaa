@@ -83,7 +83,7 @@ selection is exposed here (explicit base, otherwise the sole source). The Python
 loader still constructs its model; replacing that acceptance gate and consuming
 effective defaults in the shared compiler remain #1739 work.
 
-Eight independently authored wire groups cover 36 cases in Rust and both installed
+Six independent fixture files cover 40 cases in Rust and both installed
 hosts. Installed Python additionally compares mutations of every field across all
 19 non-expression model classes against its reference facade. The independent
 wire replay blocks Python interpreter imports; R needs no Python to run it.
@@ -183,8 +183,8 @@ Validation work, attempted diagnostic allocations and normalization storage
 accumulate across queries; unsuccessful union attempts do not refund them.
 These are logical policies, not a process-memory or cancellation guarantee.
 
-Twenty-five complete wire fixtures (six each for schema, windows and composition,
-plus seven for layer admission) are authored
+Forty complete wire cases across six fixture files (eight each for model and
+layer admission, six each for the other four) are authored
 independently and replayed through
 Rust and the installed Python/R packages. Core tests cover recursive aliases,
 version and diagnostic priority, constraints, fragments, union selection,

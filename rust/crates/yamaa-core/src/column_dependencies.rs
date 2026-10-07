@@ -23,20 +23,15 @@ pub enum Diagnostic {
 impl Diagnostic {
     /// Name the language condition independently of host diagnostic representations.
     pub fn condition(&self) -> &'static str {
-        match self {
-            Self::Cycle { .. } => "dependency_cycle",
-            Self::ForwardReference { .. } => "forward_reference",
-            Self::MissingKeyDerivation { .. } | Self::KeyDependency { .. } => "key_dependency",
-        }
+        self.diagnostic_code().definition().condition
     }
 
     /// Retain the governing language requirement for each dependency rule.
     pub fn requirement(&self) -> &'static str {
-        match self {
-            Self::Cycle { .. } => "REQ-0072",
-            Self::ForwardReference { .. } => "REQ-0071",
-            Self::MissingKeyDerivation { .. } | Self::KeyDependency { .. } => "REQ-0074",
-        }
+        self.diagnostic_code()
+            .definition()
+            .requirement
+            .expect("dependency cause has a normative requirement")
     }
 
     /// Select the authored path kind without constructing host-specific path strings.

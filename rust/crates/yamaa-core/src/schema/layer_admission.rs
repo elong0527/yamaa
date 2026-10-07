@@ -1,9 +1,9 @@
 //! Admission of one inheritance contribution, before parent traversal or composition.
 
 use super::{
-    scalar_diagnostic_label, Document, DocumentNode as N, NormalizationBudget, NormalizationError,
-    NormalizationResource, NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaField,
-    SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
+    scalar_diagnostic_label, Document, DocumentKind, DocumentNode as N, NormalizationBudget,
+    NormalizationError, NormalizationResource, NormalizedDocument, SchemaContext as C,
+    SchemaDiagnostic, SchemaField, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
@@ -129,30 +129,13 @@ impl Run<'_, '_> {
         Ok(())
     }
 
-    fn bad_type(
-        &mut self,
-        node: usize,
-        expected: &str,
-        path: &str,
-    ) -> Result<(), NormalizationError> {
-        // Layer-shape errors retain Python type names, unlike R006 value diagnostics.
-        let actual = match self.input.nodes()[node] {
-            N::Null => "NoneType",
-            N::Boolean(_) => "bool",
-            N::Integer(_) => "int",
-            N::Float(_) => "float",
-            N::Text(_) => "str",
-            N::Sequence(_) => "list",
-            N::Mapping(_) => "dict",
-        };
+    fn bad_type(&mut self, node: usize, expected: C, path: &str) -> Result<(), NormalizationError> {
+        let actual = self.input.nodes()[node].kind();
         self.finding(
             path,
             "invalid_field_type",
             "REQ-0658",
-            vec![
-                ("expected", C::Text(expected.into())),
-                ("actual", C::Text(actual.into())),
-            ],
+            vec![("expected", expected), ("actual", C::LayerKind(actual))],
         )
     }
 
@@ -236,7 +219,7 @@ impl Run<'_, '_> {
     ) -> Result<(), NormalizationError> {
         self.depth(2)?;
         if !matches!(self.input.nodes()[node], N::Mapping(_)) {
-            return self.bad_type(node, kind.class, path);
+            return self.bad_type(node, C::Text(kind.class.into()), path);
         }
         let fields = &self
             .schema
@@ -292,7 +275,7 @@ impl Run<'_, '_> {
         self.depth(1)?;
         if let Some(identity) = kind.identity {
             let N::Sequence(items) = &self.input.nodes()[node] else {
-                return self.bad_type(node, "list", path);
+                return self.bad_type(node, C::LayerKind(DocumentKind::Sequence), path);
             };
             // Retained input occurrences avoid uncharged identity-string copies.
             let mut seen: Vec<usize> = Vec::new();
@@ -337,7 +320,7 @@ impl Run<'_, '_> {
             }
         } else {
             let N::Mapping(entries) = &self.input.nodes()[node] else {
-                return self.bad_type(node, "dict", path);
+                return self.bad_type(node, C::LayerKind(DocumentKind::Mapping), path);
             };
             for &(key, member) in entries {
                 let label = self.label(key)?;
@@ -358,7 +341,7 @@ impl Run<'_, '_> {
         self.depth(0)?;
         let root = self.input.root();
         if !matches!(&self.input.nodes()[root], N::Mapping(entries) if !entries.is_empty()) {
-            return self.bad_type(root, "root_class", "$");
+            return self.bad_type(root, C::Text("root_class".into()), "$");
         }
         if self.field(root, "schema_version")?.is_none() {
             self.finding(

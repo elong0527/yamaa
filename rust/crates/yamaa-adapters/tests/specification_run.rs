@@ -661,6 +661,7 @@ fn core_output_declarations_match_independent_complete_failed_reports() {
         include_str!("fixtures/output_declarations.tsv"),
         "output",
         (5, 8),
+        b"ID\n1\n",
     );
 }
 
@@ -670,17 +671,43 @@ fn core_grammar_matches_independent_complete_failed_reports() {
         include_str!("fixtures/grammar_diagnostics.tsv"),
         "grammar",
         (7, 7),
+        b"ID\n1\n",
     );
 }
 
-fn independent_failed_reports(fixture: &str, prefix: &str, expected_counts: (usize, usize)) {
+#[test]
+fn core_binding_matches_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/binding_diagnostics.tsv"),
+        "binding",
+        (10, 11),
+        b"ID,V\n1,2\n",
+    );
+}
+
+#[test]
+fn core_csv_profile_matches_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/csv_profile_diagnostics.tsv"),
+        "csv",
+        (13, 13),
+        b"",
+    );
+}
+
+fn independent_failed_reports(
+    fixture: &str,
+    prefix: &str,
+    expected_counts: (usize, usize),
+    content: &[u8],
+) {
     use serde_json::Value;
     use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
     };
     use yamaa_core::specification::SourceDeclaration;
-    struct Port(usize);
+    struct Port(usize, Arc<[u8]>);
     impl SourcePort for Port {
         type Error = ();
         fn capture_reads(&self) -> usize {
@@ -688,9 +715,9 @@ fn independent_failed_reports(fixture: &str, prefix: &str, expected_counts: (usi
         }
         fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
             assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
-            assert!(maximum >= 5);
+            assert!(maximum >= self.1.len());
             self.0 += 1;
-            Ok(Arc::from(&b"ID\n1\n"[..]))
+            Ok(Arc::clone(&self.1))
         }
     }
     impl ArtifactPort for Port {
@@ -704,9 +731,19 @@ fn independent_failed_reports(fixture: &str, prefix: &str, expected_counts: (usi
     let mut findings = 0;
     for row in fixture.lines().skip(1) {
         let fields = row.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
+        assert!(matches!(fields.len(), 3 | 4));
         let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
-        let mut port = Port(0);
+        let owned;
+        let content = if fields.len() == 4 {
+            owned = (0..fields[3].len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&fields[3][i..i + 2], 16).unwrap())
+                .collect::<Vec<_>>();
+            owned.as_slice()
+        } else {
+            content
+        };
+        let mut port = Port(0, Arc::from(content));
         let attempt = run.execute_with_port(&mut port);
         let example = format!("{prefix}-{}", fields[0]);
         let result = specification_report::build_result(
@@ -734,7 +771,7 @@ fn independent_failed_reports(fixture: &str, prefix: &str, expected_counts: (usi
             ));
             assert_eq!(result.observations(), expected);
         }
-        assert_eq!(port.0, 1);
+        assert_eq!(port.0, expected["source_reads"].as_array().unwrap().len());
         findings += expected["diagnostics"].as_array().unwrap().len();
         cases += 1;
     }

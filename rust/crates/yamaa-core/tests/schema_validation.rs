@@ -1,5 +1,5 @@
 use yamaa_core::schema::{
-    BundleLimits, ConstraintError, Document, DocumentLimits, DocumentNode as N,
+    BundleLimits, ConstraintError, Document, DocumentKind, DocumentLimits, DocumentNode as N,
     NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
     NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource,
     SchemaStructure, ValidationBudget, ValidationError, ValidationLimits,
@@ -147,6 +147,49 @@ fn findings(diagnostics: &[SchemaDiagnostic]) -> Vec<(&str, &str)> {
 }
 
 #[test]
+fn incompatible_decoded_values_keep_all_portable_kinds_under_the_shared_text_budget() {
+    let schema = bundle(vec![field("value", "int"), field("text", "str")], vec![]);
+    for (value, kind, name, field) in [
+        (Null, DocumentKind::Null, "null", "value"),
+        (Bool(true), DocumentKind::Boolean, "boolean", "value"),
+        (Int("7"), DocumentKind::Integer, "integer", "text"),
+        (Float(1.5), DocumentKind::Float, "float", "value"),
+        (Text("x"), DocumentKind::Text, "text", "value"),
+        (List(vec![]), DocumentKind::Sequence, "sequence", "value"),
+        (Map(vec![]), DocumentKind::Mapping, "mapping", "value"),
+    ] {
+        let result = validate(&schema, field, value, false);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].context[1], ("actual", C::ValueKind(kind)));
+        assert_eq!(kind.name(), name);
+    }
+    let input = document(Null);
+    let descriptor = schema.root_class().fields[1].descriptor;
+    for limit in [29, 30] {
+        let mut budget = ValidationBudget::new(ValidationLimits {
+            diagnostic_text_bytes: limit,
+            ..ValidationLimits::default()
+        });
+        let result = schema.validate_descriptor(
+            descriptor,
+            &input,
+            input.root(),
+            "value",
+            false,
+            &mut budget,
+        );
+        if limit == 29 {
+            assert_eq!(result, Err(ValidationError::DiagnosticText { limit }));
+        } else {
+            assert_eq!(
+                result.unwrap()[0].context[1],
+                ("actual", C::ValueKind(DocumentKind::Null))
+            );
+        }
+    }
+}
+
+#[test]
 fn version_precedes_field_findings_and_classes_keep_schema_then_input_order() {
     let schema = bundle(
         vec![
@@ -187,7 +230,7 @@ fn version_precedes_field_findings_and_classes_keep_schema_then_input_order() {
         result[1].context,
         [
             ("expected", C::Text("int".into())),
-            ("actual", C::Text("bool".into()))
+            ("actual", C::ValueKind(DocumentKind::Boolean))
         ]
     );
     for value in [Null, List(vec![]), Map(vec![])] {
@@ -1092,7 +1135,7 @@ fn malformed_compound_names_and_ids_remain_ordered_validation_findings() {
         result[0].context,
         [
             ("expected", C::Text("str".into())),
-            ("actual", C::Text("sequence".into()))
+            ("actual", C::ValueKind(DocumentKind::Sequence))
         ]
     );
 }

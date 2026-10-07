@@ -102,7 +102,7 @@ fn profile_failure_precedes_unknown_fields_and_nonfinite_spellings_normalize() {
     assert!(matches!(
         error,
         Error::Csv(csv_source::Error::Profile {
-            condition: "source_quote_unterminated",
+            cause: csv_source::ProfileCause::QuoteUnterminated,
             ..
         })
     ));
