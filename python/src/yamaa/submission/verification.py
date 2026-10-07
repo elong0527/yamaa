@@ -8,7 +8,13 @@ from typing import Any
 from yamaa.models import MISSING, TypedTable
 from yamaa.specification.models import Column, Specification
 from yamaa.verification import VerificationFailure, VerificationRecord, check_column
-from yamaa.verification.checks import _failure, _json, _key_maps, _values
+from yamaa.verification.checks import (
+    _failure,
+    _json,
+    _key_maps,
+    _require_columns,
+    _values,
+)
 
 
 def check_terminology(
@@ -47,6 +53,12 @@ def check_terminology(
     if default is None and not overrides and not inventory:
         return ()
     values = _values(table, column.name)
+    if overrides:
+        # REQ-1163 pins row-level codelist overrides to the domain's
+        # <DOMAIN>TESTCD discriminator; reading it without the guard lets a
+        # table missing the column escape the verification boundary with an
+        # ungoverned polars ColumnNotFoundError instead of a DeclarationError.
+        _require_columns(table, [discriminator], f"columns.{column.name}", "REQ-0405")
     codes = _values(table, discriminator) if overrides else [None] * len(values)
     key_maps = _key_maps(table, keys)
     failures: list[VerificationFailure] = []
