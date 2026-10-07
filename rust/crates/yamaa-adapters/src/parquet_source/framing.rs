@@ -3,7 +3,7 @@
 use super::compact::{self, Error, Value};
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Limits {
+pub struct Limits {
     pub source_bytes: usize,
     pub metadata_bytes: usize,
     pub metadata_nodes: usize,

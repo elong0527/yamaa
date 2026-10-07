@@ -14,7 +14,7 @@ use std::sync::Arc;
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Limits {
+pub struct Limits {
     pub framing: framing::Limits,
     pub compression: compression::Limits,
     pub metadata: metadata::Limits,

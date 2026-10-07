@@ -1,10 +1,10 @@
 //! Bound the embedded Arrow schema before the generic Parquet schema conversion.
 use super::compact::Error;
-use base64::{Engine, prelude::BASE64_STANDARD};
+use base64::{prelude::BASE64_STANDARD, Engine};
 use parquet::file::metadata::KeyValue;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Limits {
+pub struct Limits {
     pub bytes: usize,
     pub tables: usize,
     pub depth: usize,

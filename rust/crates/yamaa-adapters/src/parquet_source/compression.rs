@@ -11,7 +11,7 @@ pub(super) enum Error {
     Unavailable(i64),
 }
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Limits {
+pub struct Limits {
     pub page_bytes: usize,
     pub window_log: u32,
 }

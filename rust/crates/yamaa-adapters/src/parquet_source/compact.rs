@@ -309,16 +309,14 @@ mod tests {
     #[test]
     fn policy_limits_are_distinct_and_include_unknown_nested_fields() {
         let data = [0x19, 0x3c, 0, 0, 0, 0]; // Three empty structs in a list.
-        assert!(
-            parse(
-                &data,
-                Limits {
-                    nodes: 5,
-                    ..limits()
-                }
-            )
-            .is_ok()
-        );
+        assert!(parse(
+            &data,
+            Limits {
+                nodes: 5,
+                ..limits()
+            }
+        )
+        .is_ok());
         assert_eq!(
             parse(
                 &data,
@@ -329,16 +327,14 @@ mod tests {
             ),
             Err(Error::Limit)
         );
-        assert!(
-            parse(
-                &data,
-                Limits {
-                    bytes: 6,
-                    ..limits()
-                }
-            )
-            .is_ok()
-        );
+        assert!(parse(
+            &data,
+            Limits {
+                bytes: 6,
+                ..limits()
+            }
+        )
+        .is_ok());
         assert_eq!(
             parse(
                 &data,
@@ -349,16 +345,14 @@ mod tests {
             ),
             Err(Error::Limit)
         );
-        assert!(
-            parse(
-                &data,
-                Limits {
-                    depth: 2,
-                    ..limits()
-                }
-            )
-            .is_ok()
-        );
+        assert!(parse(
+            &data,
+            Limits {
+                depth: 2,
+                ..limits()
+            }
+        )
+        .is_ok());
         assert_eq!(
             parse(
                 &data,

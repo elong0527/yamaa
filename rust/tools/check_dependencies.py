@@ -21,6 +21,13 @@ ALLOWED = {
         "arrow-ipc",
         "flatbuffers",
         "parquet",
+        "bytes",
+        "base64",
+        "brotli",
+        "flate2",
+        "lz4_flex",
+        "zstd",
+        "snap",
     },
     "yamaa-python": {
         "yamaa-core",

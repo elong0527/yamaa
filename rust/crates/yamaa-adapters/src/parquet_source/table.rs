@@ -2,7 +2,7 @@
 use super::reader::Decoded;
 use crate::{
     arrow_table::{
-        ArrowTable, TableError, TableLimits, date_array, datetime_array, physical_schema,
+        date_array, datetime_array, physical_schema, ArrowTable, TableError, TableLimits,
     },
     arrow_temporal::{date_from_days, datetime_from_seconds},
 };
