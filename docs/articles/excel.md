@@ -333,10 +333,11 @@ keys: [STUDYID, USUBJID, AESEQ]
   - name: TRTEMFL
     type: str
     derivation:
-      case:
-        - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL
-                 AND ASTDTM >= TRTSDTM"
-          then: {literal: Y}
+      flag: "ASTDTM >= TRTSDTM"     # <- Y when true; a comparison with a
+                                    #    missing moment is unknown, never true
+    verifications:
+      allowed_values:
+        values: [Y]
 ```
 
 What changed:
@@ -346,8 +347,10 @@ What changed:
   exist on the right side. So "merge by STUDYID USUBJID" is not written: it is
   a consequence of `keys`. Multiple matches fail by default; relaxing it
   requires explicit `order_by` and `keep`.
-- `case` has one branch and no `otherwise`, so the result is missing. "else
-  blank" needs no statement.
+- `flag` derives `Y` when the predicate holds and leaves the flag empty
+  otherwise. A comparison with a missing moment is unknown, never true -- so
+  "else blank" needs no statement, and the `allowed_values` check pins the
+  flag to the one value it may carry.
 
 ### More examples
 
