@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `a57839f9dfa01a84f26b40c6f7b95be25b083e72`
+Reconciled 2026-10-07 against main `4a240ae8e43102633445e25770afe91beda02d7b`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -44,6 +44,8 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1777 | Bounded Parquet output and explicit retained save. |
 | #1783 | Reference Parquet invalid-UTF-8 ingestion classification. |
 | #1785 | Held Parquet ingestion through shared source ports, qualified on all prototype package forms. |
+| #1786 | Core original-document preflight and output-declaration diagnostics, with complete retained failed reports. |
+| #1788 | Core numeric/aggregate grammar diagnostics and independent original-document failure timing. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -55,9 +57,16 @@ The held Parquet input implementation in #1785 merged after final-revision
 installed qualification and review, including all 52 independent containers and
 nineteen complete negative reports. It qualifies the private codec/build/save
 route, while actual filesystem ports and inventory promotion remain open.
-Original-document preflight and output-declaration findings now originate as
-core diagnostics; other error families and cross-protocol serialization still
+Original-document preflight, output-declaration and numeric/aggregate grammar
+findings now originate as core diagnostics; other error families and cross-protocol serialization still
 need conversion. Their common projection preserves the existing complete truth.
+#1788 passed all 13 checks and its final installed-artifact audit, including six
+Python forms with 29 original-document methods and both strict R source checks.
+The Ubuntu R job passed an isolated retry after dependency-mirror delays.
+The next candidate combines typed schema kinds, core binding/dependency findings
+and pure core CSV profile admission. Its 58-contract/39-suite catalog and local
+31-method original-document replay are candidate evidence until final-revision
+hosted packages and full review pass; the benchmark inventory stays unchanged.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
