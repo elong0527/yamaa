@@ -108,6 +108,31 @@ class OriginalSpecifications(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_inherited_pass_failures_resolve_shared_context_and_provenance(self):
+        with (ROOT / "inheritance-preparation.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 3)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                counts = [0, 0, 0]
+                def canonicalize(declaring, written):
+                    self.assertEqual((declaring, written), ("entry.yaml", "parent.yaml"))
+                    counts[0] += 1
+                    return "parent.yaml", "parent.yaml"
+                def capture(identity, display, maximum):
+                    self.assertEqual((identity, display), ("parent.yaml", "parent.yaml"))
+                    counts[1] += 1
+                    raw = record["parent_yaml"].encode()
+                    self.assertLessEqual(len(raw), maximum)
+                    return raw
+                def rebase(layer, entry, written, maximum):
+                    counts[2] += 1
+                    return written
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("entry.yaml", record["entry_yaml"].encode(), canonicalize, capture, rebase)
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(record["expected"]))
+                self.assertEqual(counts, [1, 1, int(record["rebases"])])
+
     def test_original_source_failures_match_independent_decoder_truth(self):
         def no_port(*_):
             self.fail("source decoding failure reached a host port")

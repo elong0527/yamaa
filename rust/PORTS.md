@@ -155,6 +155,14 @@ duplicate keys, forbidden constructs, invalid Unicode and non-ASCII source
 positions retain their independent diagnostic truth. Non-ASCII diagnostics
 include the captured source identity. Complete encoded capture replies are
 bounded before returning to a host; a partial JSON prefix is never published.
-Capture IO failures, inherited-loader report integration, and the public
-issues-table frontend still have separate integration gates. This does not qualify a public frontend or promote
+Inherited preparation retains the admitted schema with failures. Layer errors
+resolve against their original input; later normalization/dependency failures
+retain the exact failed pass arena only when semantic context needs it.
+Composition retains its own context document. The shared adapter resolves
+findings and source/entry/parent provenance into the same portable issue records
+as standalone preparation. Opaque host errors and interruptions retain their
+original payloads; resource/transport outcomes remain separate. Independent
+traversal truth and authored failed-pass vectors cover these paths in both hosts.
+Capture IO failures, whole-run report assembly, and the public issues-table
+frontend still have separate integration gates. This does not qualify a public frontend or promote
 any benchmark inventory row.

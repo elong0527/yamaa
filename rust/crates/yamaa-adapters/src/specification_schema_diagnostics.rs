@@ -1,7 +1,9 @@
 //! Resolve schema findings against held pass inputs, without reparsing source YAML.
 use crate::specification_source::CapturedFindings;
 use serde_json::{json, Map, Number, Value};
-use yamaa_core::schema::{DocumentNode as N, SchemaContext as C};
+use yamaa_core::schema::{
+    Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaStructure,
+};
 
 const MAX_BYTES: usize = 16_777_216;
 #[derive(Debug)]
@@ -37,7 +39,12 @@ impl Budget {
         ))
     }
 }
-fn context(captured: &CapturedFindings, value: &C, budget: &mut Budget) -> Result<Value, Error> {
+fn context(
+    schema: &SchemaStructure,
+    document: Option<&Document>,
+    value: &C,
+    budget: &mut Budget,
+) -> Result<Value, Error> {
     Ok(match value {
         C::Text(text) => budget.text(text)?,
         C::Count(value) => {
@@ -49,8 +56,7 @@ fn context(captured: &CapturedFindings, value: &C, budget: &mut Budget) -> Resul
             Value::Null
         }
         C::InputValue(node) => {
-            let node = captured
-                .document()
+            let node = document
                 .and_then(|d| d.nodes().get(*node))
                 .ok_or(Error::InvalidContext)?;
             match node {
@@ -76,9 +82,7 @@ fn context(captured: &CapturedFindings, value: &C, budget: &mut Budget) -> Resul
         | C::DescriptorPattern(id)
         | C::DescriptorMinimum(id)
         | C::DescriptorSize(id) => {
-            let descriptor = &captured
-                .schema()
-                .structure()
+            let descriptor = &schema
                 .descriptors()
                 .get(*id)
                 .ok_or(Error::InvalidContext)?
@@ -109,8 +113,21 @@ fn context(captured: &CapturedFindings, value: &C, budget: &mut Budget) -> Resul
     })
 }
 pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Value>, Error> {
+    schema_findings(
+        captured.schema().structure(),
+        captured.document(),
+        captured.findings(),
+        &[],
+    )
+}
+pub(super) fn schema_findings(
+    schema: &SchemaStructure,
+    document: Option<&Document>,
+    findings: &[SchemaDiagnostic],
+    source_context: &[(&str, &str)],
+) -> Result<Vec<Value>, Error> {
     let mut budget = Budget(128);
-    captured.findings().iter().map(|finding| {
+    findings.iter().map(|finding| {
         budget.charge(128)?;
         let path = budget.text(&finding.path)?;
         let condition = budget.text(finding.condition)?;
@@ -119,9 +136,85 @@ pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Value>, Error>
         for (name, value) in &finding.context {
             budget.text(name)?;
             budget.charge(2)?;
-            let value = context(captured, value, &mut budget)?;
+            let value = context(schema, document, value, &mut budget)?;
+            if resolved.insert((*name).into(), value).is_some() { return Err(Error::InvalidContext); }
+        }
+        for (name, value) in source_context {
+            budget.text(name)?;
+            let value = budget.text(value)?;
             if resolved.insert((*name).into(), value).is_some() { return Err(Error::InvalidContext); }
         }
         Ok(json!({"phase":"validation", "condition":condition,"requirement":requirement,"spec_paths":[path],"context":resolved}))
     }).collect()
+}
+
+/// Convert already-rendered traversal/dependency findings with literal context.
+/// Schema-node/descriptor references must use schema_findings with their held arena.
+pub(super) fn literal_outcome(mut outcome: Value) -> Result<Value, Error> {
+    if outcome["status"] != "invalid" {
+        return Ok(outcome);
+    }
+    let mut budget = Budget(128);
+    let Value::Array(findings) = outcome["diagnostics"].take() else {
+        return Err(Error::InvalidContext);
+    };
+    let mut records = Vec::new();
+    for mut finding in findings {
+        budget.charge(128)?;
+        let condition = budget.text(finding["condition"].as_str().ok_or(Error::InvalidContext)?)?;
+        let path = budget.text(finding["path"].as_str().ok_or(Error::InvalidContext)?)?;
+        let requirement = match &finding["requirement"] {
+            Value::Null => Value::Null,
+            Value::String(text) => budget.text(text)?,
+            _ => return Err(Error::InvalidContext),
+        };
+        let Value::Array(context) = finding["context"].take() else {
+            return Err(Error::InvalidContext);
+        };
+        let mut resolved = Map::new();
+        for item in context {
+            let name = item["name"].as_str().ok_or(Error::InvalidContext)?;
+            budget.text(name)?;
+            let reference = &item["value"];
+            let value = match reference["kind"].as_str() {
+                Some("text") => {
+                    budget.text(reference["value"].as_str().ok_or(Error::InvalidContext)?)?
+                }
+                Some("count") => {
+                    budget.charge(20)?;
+                    json!(reference["value"].as_u64().ok_or(Error::InvalidContext)?)
+                }
+                Some("null") => Value::Null,
+                Some("text_list") => {
+                    let values = reference["value"].as_array().ok_or(Error::InvalidContext)?;
+                    budget.charge(values.len().saturating_add(2))?;
+                    Value::Array(
+                        values
+                            .iter()
+                            .map(|v| budget.text(v.as_str().ok_or(Error::InvalidContext)?))
+                            .collect::<Result<_, _>>()?,
+                    )
+                }
+                _ => return Err(Error::InvalidContext),
+            };
+            if resolved.insert(name.into(), value).is_some() {
+                return Err(Error::InvalidContext);
+            }
+        }
+        for name in ["source", "entry", "parent"] {
+            if let Some(value) = outcome.get(name) {
+                budget.text(name)?;
+                let value = match value {
+                    Value::Null => Value::Null,
+                    Value::String(text) => budget.text(text)?,
+                    _ => return Err(Error::InvalidContext),
+                };
+                if resolved.insert(name.into(), value).is_some() {
+                    return Err(Error::InvalidContext);
+                }
+            }
+        }
+        records.push(json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":[path],"context":resolved}));
+    }
+    Ok(json!({"status":"invalid","diagnostics":records}))
 }

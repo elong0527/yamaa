@@ -46,6 +46,7 @@ pub enum SourceFailure<E> {
 pub enum InheritanceError<E> {
     Entry(Error),
     Preparation {
+        schema: Arc<CapturedSchema>,
         error: Box<lifecycle::Error<SourceFailure<E>>>,
         captured_parents: Vec<CapturedParent>,
     },
@@ -181,6 +182,7 @@ impl CapturedSchema {
                 parents: decoder.parents,
             }),
             Err(error) => Err(InheritanceError::Preparation {
+                schema: Arc::clone(self),
                 error: Box::new(error),
                 captured_parents: decoder.parents,
             }),

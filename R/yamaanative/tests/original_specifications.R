@@ -165,6 +165,30 @@ for(name in unique(replay$case)) {
   stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),rows$expected[[1L]]),calls==nrow(expected_calls))
 }
 cat("seven raw inherited-loader failure contracts and complete traces passed\n")
+preparation_truth <- read.delim(file.path(root,"inheritance-preparation.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(preparation_truth)==3L)
+for(i in seq_len(nrow(preparation_truth))) {
+  counts <- c(0L,0L,0L)
+  canonicalize <- function(declaring,written) {
+    stopifnot(identical(declaring,"entry.yaml"),identical(written,"parent.yaml"))
+    counts[[1L]] <<- counts[[1L]]+1L
+    c("parent.yaml","parent.yaml")
+  }
+  parent_capture <- function(identity,display_path,maximum) {
+    stopifnot(identical(identity,"parent.yaml"),identical(display_path,"parent.yaml"))
+    counts[[2L]] <<- counts[[2L]]+1L
+    bytes <- charToRaw(preparation_truth$parent_yaml[[i]])
+    stopifnot(length(bytes)<=maximum)
+    bytes
+  }
+  rebase <- function(layer,entry,written,maximum) {
+    counts[[3L]] <<- counts[[3L]]+1L
+    written
+  }
+  failure <- tryCatch(inherited_prepare("entry.yaml",charToRaw(preparation_truth$entry_yaml[[i]]),canonicalize,parent_capture,rebase),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),preparation_truth$expected[[i]]),identical(counts,c(1L,1L,as.integer(preparation_truth$rebases[[i]]))))
+}
+cat("inherited layer, composition and dependency issue records passed\n")
 # The inherited preparation callbacks retain exact R errors and interrupts.
 inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
 inherit_case <- file.path(root,"cases","schema-inheritance")

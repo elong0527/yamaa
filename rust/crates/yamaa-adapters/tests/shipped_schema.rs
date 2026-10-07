@@ -232,3 +232,96 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
     }
     assert_eq!(count, 8);
 }
+
+struct ParentSource {
+    raw: Vec<u8>,
+    reads: usize,
+}
+impl InheritancePort for ParentSource {
+    type Error = ();
+    fn canonicalize(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Identity, SourceError<()>> {
+        assert_eq!((declaring, written), ("entry.yaml", "parent.yaml"));
+        Ok(Identity {
+            identity: "parent.yaml".into(),
+            display_path: "parent.yaml".into(),
+        })
+    }
+    fn capture(&mut self, _: &Identity, maximum: usize) -> Result<Vec<u8>, SourceError<()>> {
+        assert!(self.raw.len() <= maximum);
+        self.reads += 1;
+        Ok(self.raw.clone())
+    }
+    fn rebase(
+        &mut self,
+        _: &Identity,
+        _: &Identity,
+        written: &str,
+        _: usize,
+    ) -> Result<String, ()> {
+        Ok(written.into())
+    }
+}
+fn inherited_error(entry: &str, parent: &str) -> InheritanceError<()> {
+    let mut port = ParentSource {
+        raw: parent.as_bytes().to_vec(),
+        reads: 0,
+    };
+    let error = shipped_schema::prepare(
+        Source {
+            identity: "entry.yaml".into(),
+            bytes: entry.as_bytes().to_vec(),
+        },
+        "entry.yaml".into(),
+        &mut port,
+    )
+    .unwrap_err();
+    if port.reads != 1 {
+        panic!(
+            "unexpected early failure: {}",
+            yamaa_adapters::specification_diagnostics::inheritance_failure(error).unwrap()
+        );
+    }
+    error
+}
+#[test]
+fn inherited_layer_and_composed_findings_resolve_without_exposing_context_arenas() {
+    use serde_json::{json, Value};
+    use yamaa_adapters::specification_diagnostics::inheritance_failure;
+    let entry = format!("{VALID}parents: parent.yaml\n");
+    let invalid_parent = "schema_version: '1.0'\ndomain: bad-name\n";
+    let outcome: Value = serde_json::from_str(
+        &inheritance_failure(inherited_error(&entry, invalid_parent)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        outcome["outcome"],
+        json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":"parent.yaml","entry":"entry.yaml"}}]})
+    );
+    let empty_parent = "schema_version: '1.0'\n";
+    let missing = inherited_error(&entry.replace("domain: TEST\n", ""), empty_parent);
+    let InheritanceError::Preparation { error, .. } = &missing else {
+        panic!("expected lifecycle failure");
+    };
+    let yamaa_engine::inheritance_preparation::Error::Normalize(context) = error.as_ref() else {
+        panic!("expected normalization failure");
+    };
+    assert!(context.input.is_some());
+    let outcome: Value = serde_json::from_str(&inheritance_failure(missing).unwrap()).unwrap();
+    assert_eq!(
+        outcome["outcome"],
+        json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":null,"spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]})
+    );
+    let unknown = inherited_error(
+        &entry.replace("source: SRC.ID", "compute: {expr: UNKNOWN}"),
+        empty_parent,
+    );
+    let outcome: Value = serde_json::from_str(&inheritance_failure(unknown).unwrap()).unwrap();
+    assert_eq!(
+        outcome["outcome"],
+        json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"unknown_reference","requirement":"REQ-0070","spec_paths":["columns.ID.derivation"],"context":{"column":"ID","dependency":"UNKNOWN"}}]})
+    );
+}
