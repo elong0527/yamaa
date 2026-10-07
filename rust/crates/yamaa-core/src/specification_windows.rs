@@ -46,20 +46,40 @@ pub enum WindowFinding {
     },
 }
 impl WindowFinding {
-    pub fn definition(&self) -> crate::diagnostic::Definition {
-        let (condition, requirement) = match self {
-            Self::ZeroOffset { .. } => ("zero_offset", "REQ-0328"),
+    pub fn diagnostic_code(&self) -> crate::diagnostic::ConditionCode {
+        use crate::diagnostic::ConditionCode as C;
+        match self {
+            Self::ZeroOffset { .. } => C::WindowZeroOffset,
             Self::Order {
                 forbidden: false, ..
-            } => ("window_order_by_required", "REQ-0340"),
+            } => C::WindowOrderRequired,
             Self::Order {
                 forbidden: true, ..
-            } => ("window_order_by_forbidden", "REQ-0341"),
+            } => C::WindowOrderForbidden,
+        }
+    }
+    pub fn definition(&self) -> crate::diagnostic::Definition {
+        self.diagnostic_code().definition()
+    }
+    /// Retain the authored failure without consulting a host or source table.
+    pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
+        use crate::diagnostic::{ContextValue, Diagnostic};
+        let (path, name, value) = match self {
+            Self::ZeroOffset { path } => (path, "offset", crate::value::Value::Int(0)),
+            Self::Order {
+                path, operation, ..
+            } => (
+                path,
+                "operation",
+                crate::value::Value::Str(operation.clone()),
+            ),
         };
-        crate::diagnostic::Definition {
-            phase: "validation",
-            condition,
-            requirement: Some(requirement),
+        Diagnostic {
+            code: self.diagnostic_code(),
+            spec_paths: vec![path.clone()],
+            context: [(name.into(), ContextValue::Scalar(value))].into(),
+            source_span: None,
+            operand_route: None,
         }
     }
 }

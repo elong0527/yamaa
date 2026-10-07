@@ -105,6 +105,9 @@ conditions! {
     ColumnForwardReference => ("validation", "forward_reference", Some("REQ-0071")),
     ColumnMissingKeyDerivation => ("validation", "key_dependency", Some("REQ-0074")),
     ColumnKeyDependency => ("validation", "key_dependency", Some("REQ-0074")),
+    WindowZeroOffset => ("validation", "zero_offset", Some("REQ-0328")),
+    WindowOrderRequired => ("validation", "window_order_by_required", Some("REQ-0340")),
+    WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("REQ-0341")),
 }
 
 /// Owned context retains scalar kinds and ordered sequences. Diagnostic integers

@@ -51,6 +51,7 @@ fn source() -> SourceDeclaration {
 }
 
 enum T<'a> {
+    Scalar(N),
     Text(&'a str),
     Map(Vec<(&'a str, T<'a>)>),
     List(Vec<T<'a>>),
@@ -59,6 +60,7 @@ use T::*;
 impl T<'_> {
     fn append(self, nodes: &mut Vec<N>) -> usize {
         let node = match self {
+            T::Scalar(node) => node,
             Text(v) => N::Text(v.into()),
             Map(fields) => N::Mapping(
                 fields
@@ -371,4 +373,62 @@ fn malformed_dependency_metadata_has_no_projection_or_panic() {
     for finding in analysis.diagnostics {
         assert!(finding.specification_diagnostic(&[], &[]).is_none());
     }
+}
+
+pub(super) fn window_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    let source = source();
+    for (operation, payload, condition, requirement, suffix, values) in [
+        (
+            "row_value",
+            Map(vec![
+                ("source", Text("ID")),
+                ("offset", T::Scalar(N::Integer("0".into()))),
+                ("window", Map(vec![("order_by", List(vec![Text("ID")]))])),
+            ]),
+            "zero_offset",
+            "REQ-0328",
+            ".offset",
+            vec![("offset", V::Scalar(Value::Int(0)))],
+        ),
+        (
+            "rank",
+            Map(vec![]),
+            "window_order_by_required",
+            "REQ-0340",
+            ".window",
+            vec![("operation", text("rank"))],
+        ),
+        (
+            "baseline_flag",
+            Map(vec![
+                ("date", Text("ID")),
+                ("reference_date", Text("ID")),
+                ("window", Map(vec![("order_by", List(vec![Text("ID")]))])),
+            ]),
+            "window_order_by_forbidden",
+            "REQ-0341",
+            ".window.order_by",
+            vec![("operation", text("baseline_flag"))],
+        ),
+    ] {
+        let prepared = compile(Map(vec![("value", Map(vec![(operation, payload)]))]), None);
+        let found = failures(&prepared);
+        assert_eq!(found.len(), 1);
+        let BindFinding::Window(window) = &found[0] else {
+            panic!("window binder must produce the finding")
+        };
+        assert_eq!(window.definition(), window.diagnostic().definition());
+        let mut projected = found[0].diagnostics(&source).unwrap();
+        assert_eq!(projected.len(), 1);
+        let path = format!("columns.VALUE.derivation.{operation}{suffix}");
+        reached.insert(check(
+            projected.remove(0),
+            condition,
+            Some(requirement),
+            &[&path],
+            values,
+        ));
+    }
+    reached
 }

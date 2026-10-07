@@ -695,6 +695,16 @@ fn core_csv_profile_matches_independent_complete_failed_reports() {
     );
 }
 
+#[test]
+fn core_window_findings_match_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/window_diagnostics.tsv"),
+        "window",
+        (3, 3),
+        b"ID,V\n1,2\n",
+    );
+}
+
 fn independent_failed_reports(
     fixture: &str,
     prefix: &str,

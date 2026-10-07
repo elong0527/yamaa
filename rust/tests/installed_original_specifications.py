@@ -281,6 +281,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_core_csv_profile_preserves_independent_complete_failed_reports(self):
         self._assert_independent_failed_reports("csv-profile-diagnostics.tsv", "csv", 13, 13)
 
+    def test_core_window_findings_preserve_independent_complete_failed_reports(self):
+        self._assert_independent_failed_reports("window-diagnostics.tsv", "window", 3, 3, b"ID,V\n1,2\n")
+
     def test_original_column_literals_preserve_reference_reports_and_exact_csv(self):
         self._assert_independent_scalar_reports("column-literals.tsv", "literal", 4)
 
