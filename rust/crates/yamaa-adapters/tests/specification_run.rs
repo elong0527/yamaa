@@ -685,6 +685,16 @@ fn core_binding_matches_independent_complete_failed_reports() {
     );
 }
 
+#[test]
+fn core_csv_profile_matches_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/csv_profile_diagnostics.tsv"),
+        "csv",
+        (13, 13),
+        b"",
+    );
+}
+
 fn independent_failed_reports(
     fixture: &str,
     prefix: &str,
@@ -721,8 +731,18 @@ fn independent_failed_reports(
     let mut findings = 0;
     for row in fixture.lines().skip(1) {
         let fields = row.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
+        assert!(matches!(fields.len(), 3 | 4));
         let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
+        let owned;
+        let content = if fields.len() == 4 {
+            owned = (0..fields[3].len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&fields[3][i..i + 2], 16).unwrap())
+                .collect::<Vec<_>>();
+            owned.as_slice()
+        } else {
+            content
+        };
         let mut port = Port(0, Arc::from(content));
         let attempt = run.execute_with_port(&mut port);
         let example = format!("{prefix}-{}", fields[0]);

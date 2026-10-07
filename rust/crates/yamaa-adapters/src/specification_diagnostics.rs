@@ -193,25 +193,11 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
             )])
         }
 
-        Error::Source(TextTableError::Csv(
-            error @ csv_source::Error::Profile {
-                condition,
-                record,
-                field,
-            },
-        )) => {
+        Error::Source(TextTableError::Csv(error)) => {
             let source = source?;
-            let field = match field {
-                csv_source::Field::Index(index) => json!(index),
-                csv_source::Field::Name(name) => json!(name),
-            };
-            Some(vec![diagnostic(
-                "ingest",
-                condition,
-                error.requirement(),
-                vec![format!("input.{}.path", source.name)],
-                json!({"dataset":source.name,"path":source.path,"record":record,"field":field}),
-            )])
+            Some(vec![portable_diagnostic(
+                error.diagnostic(&source.name, &source.path)?,
+            )?])
         }
         _ => None,
     }

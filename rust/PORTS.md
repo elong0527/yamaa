@@ -70,8 +70,9 @@ in place so an outer panic boundary can preserve completed observations without
 reopening or reparsing input. An interrupted attempt remains explicitly
 incomplete until the adapter maps its boundary failure.
 
-The CSV adapter retains its existing profile, type conversion and capacity
-settings. The held Parquet decoder uses the compiler's declared profile and
+Core owns pure CSV profile admission, its closed failure causes and diagnostic
+context. The CSV adapter retains physical Arrow representation and declared type
+conversion; existing profile behavior and capacity settings are preserved. The held Parquet decoder uses the compiler's declared profile and
 empty-string policy, with bounded physical decoding and ordered semantic
 findings described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
 The adapter serializes the engine result through the existing response

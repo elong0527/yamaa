@@ -444,12 +444,17 @@ failed_report_truth <- function(fixture,prefix,cases,content=charToRaw("ID\n1\n"
   truth <- read.delim(file.path(root,fixture),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
   stopifnot(nrow(truth)==cases)
   for(i in seq_len(nrow(truth))) {
+    held <- content
+    if("source_hex" %in% names(truth)) {
+      hex <- truth$source_hex[[i]]
+      held <- if(nzchar(hex)) as.raw(strtoi(substring(hex,seq.int(1L,nchar(hex),2L),seq.int(2L,nchar(hex),2L)),16L)) else raw()
+    }
     handle <- prepare_entry("spec.yaml",charToRaw(truth$source[[i]]),no_port,no_port,no_port)
     reads <- character()
     capture <- function(dataset,path,maximum) {
-      stopifnot(dataset=="SRC",path=="source.csv",maximum>=length(content))
+      stopifnot(dataset=="SRC",path=="source.csv",maximum>=length(held))
       reads <<- c(reads,path)
-      list(content,TRUE)
+      list(held,TRUE)
     }
     result <- build(handle,capture,paste0(prefix,"-",truth$case[[i]]),"spec.yaml")
     rm(handle); gc()
@@ -474,3 +479,6 @@ cat("core binding complete independent failed reports and retained save gates pa
 
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
+
+failed_report_truth("csv-profile-diagnostics.tsv","csv",13L)
+cat("core CSV profile complete independent failed reports and retained save gates passed\n")

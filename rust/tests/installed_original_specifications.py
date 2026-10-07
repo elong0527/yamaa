@@ -278,6 +278,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_core_binding_preserves_independent_complete_failed_reports(self):
         self._assert_independent_failed_reports("binding-diagnostics.tsv", "binding", 10, 11, b"ID,V\n1,2\n")
 
+    def test_core_csv_profile_preserves_independent_complete_failed_reports(self):
+        self._assert_independent_failed_reports("csv-profile-diagnostics.tsv", "csv", 13, 13)
+
     def _assert_independent_failed_reports(self, fixture, prefix, cases, findings, content=b"ID\n1\n"):
         def no_parent(*_):
             self.fail("standalone document reached an inheritance port")
@@ -287,12 +290,13 @@ class OriginalSpecifications(unittest.TestCase):
         self.assertEqual(sum(len(json.loads(r["expected"])["diagnostics"]) for r in records), findings)
         for record in records:
             with self.subTest(case=record["case"]):
+                held = bytes.fromhex(record["source_hex"]) if "source_hex" in record else content
                 reads = []
                 def capture(dataset, path, maximum):
                     self.assertEqual((dataset, path), ("SRC", "source.csv"))
-                    self.assertGreaterEqual(maximum, len(content))
+                    self.assertGreaterEqual(maximum, len(held))
                     reads.append(path)
-                    return content, True
+                    return held, True
                 spec = yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_parent, no_parent, no_parent)
                 result = spec.build(capture, ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", "."))
                 del spec
