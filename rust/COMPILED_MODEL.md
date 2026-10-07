@@ -66,3 +66,14 @@ complete CSV through installed hosts. Field-specific validation and baseline
 ambiguity reports retain their observed source tables and partition identity.
 Qualified window reads, row-template windows and broader baseline type failures
 remain outside this bounded compiler slice; they are not full-language coverage.
+
+An inherited-document preparation service now sequences the existing traversal,
+composition, named-window expansion, reachability pruning and final admission
+operations in the engine. Canonicalization, reads and lexical path rebasing use
+explicit host ports. The retained result owns normalized contributions, written
+layer provenance, expansion history and the document addressed by final origins.
+A direct integration test prepares the unchanged `spec_study.yaml`, reads its
+shared parent once, prunes the unused input and column, and produces the exact
+committed CSV. This is not yet installed-host or complete-report qualification.
+Non-governed descriptive metadata can reach compilation; reserved metadata keys
+remain explicitly unsupported pending submission validation integration.

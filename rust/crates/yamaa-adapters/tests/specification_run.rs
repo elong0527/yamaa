@@ -293,7 +293,10 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
             raw.replace("input/lb.csv", "{path: input/lb.csv, ordinal: RECNO}"),
             "ordinal",
         ),
-        (format!("{raw}\nmetadata:\n  note: preserved\n"), "metadata"),
+        (
+            format!("{raw}\nmetadata:\n  label: reserved\n"),
+            "reserved_metadata_key",
+        ),
     ] {
         let captured = prepare(&schema, written.as_bytes());
         let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
@@ -2287,5 +2290,228 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
         }
         assert_eq!(actual, expected, "{}", variant["name"]);
         assert_eq!(host.requests, ["VS"]);
+    }
+}
+
+#[test]
+fn inherited_original_preparation_prunes_before_source_binding() {
+    use yamaa_core::schema::{NormalizationBudget, SchemaSource};
+    use yamaa_engine::{inheritance as graph, inheritance_preparation as lifecycle};
+    struct Host {
+        root: std::path::PathBuf,
+        reads: Vec<String>,
+        resolutions: Vec<String>,
+        paths: Vec<String>,
+        fail_path: bool,
+    }
+    impl graph::SourcePort for Host {
+        type Error = &'static str;
+        fn canonicalize(
+            &mut self,
+            _: &str,
+            written: &str,
+        ) -> Result<graph::Source, graph::SourceError<&'static str>> {
+            self.resolutions.push(written.into());
+            Ok(graph::Source {
+                identity: written.into(),
+                display_path: written.into(),
+            })
+        }
+        fn read(
+            &mut self,
+            source: &graph::Source,
+        ) -> Result<Document, graph::SourceError<&'static str>> {
+            self.reads.push(source.identity.clone());
+            Ok(decode_yaml(
+                &std::fs::read(self.root.join(&source.identity)).unwrap(),
+                Default::default(),
+            )
+            .unwrap()
+            .document)
+        }
+    }
+    impl lifecycle::PathPort for Host {
+        fn rebase(
+            &mut self,
+            _: &graph::Source,
+            _: &graph::Source,
+            written: &str,
+            _: usize,
+        ) -> Result<String, &'static str> {
+            if self.fail_path {
+                return Err("original path failure");
+            }
+            self.paths.push(written.into());
+            Ok(written.into())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-inheritance");
+    let schema = schema(&root.join("yaml"));
+    let raw = decode_yaml(
+        &std::fs::read(case.join("spec_study.yaml")).unwrap(),
+        Default::default(),
+    )
+    .unwrap()
+    .document;
+    let mut host = Host {
+        root: case.clone(),
+        reads: vec![],
+        resolutions: vec![],
+        paths: vec![],
+        fail_path: false,
+    };
+    let prepared = lifecycle::prepare(
+        schema.structure(),
+        graph::Source {
+            identity: "spec_study.yaml".into(),
+            display_path: "spec_study.yaml".into(),
+        },
+        raw.clone(),
+        &mut host,
+        &mut NormalizationBudget::new(Default::default()),
+        Default::default(),
+    )
+    .unwrap();
+    assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
+    assert_eq!(
+        host.resolutions,
+        [
+            "spec_organization.yaml",
+            "spec_compound.yaml",
+            "spec_organization.yaml"
+        ]
+    );
+    assert_eq!(
+        prepared
+            .layers()
+            .iter()
+            .map(|layer| layer.source.identity.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "spec_organization.yaml",
+            "spec_compound.yaml",
+            "spec_study.yaml"
+        ]
+    );
+    let d = prepared.model().document();
+    let columns = sequence(d, d.field(d.root(), "columns").unwrap());
+    assert_eq!(
+        columns
+            .iter()
+            .map(|&column| text(d, d.field(column, "name").unwrap()))
+            .collect::<Vec<_>>(),
+        ["USUBJID", "PARAMCD", "AVAL", "AVALU"]
+    );
+    assert_eq!(
+        text(d, d.field(columns[2], "label").unwrap()),
+        "Analysis Value"
+    );
+    assert_eq!(
+        text(d, d.field(columns[3], "label").unwrap()),
+        "Standardized Analysis Unit"
+    );
+    let compiled =
+        yamaa_core::specification::PreparedSpecification::prepare(prepared.model()).unwrap();
+    assert_eq!(compiled.sources().len(), 1);
+    assert_eq!(
+        (&*compiled.source().name, &*compiled.source().path),
+        ("LB", "input/lb.csv")
+    );
+    assert_eq!(prepared.origins().len(), d.nodes().len());
+    for origin in prepared.origins() {
+        if origin.source == SchemaSource::Input {
+            assert!(origin.node < prepared.normalization_input().nodes().len());
+        }
+    }
+    assert!(prepared
+        .provenance()
+        .iter()
+        .any(|origin| origin.path == "columns.AVAL.label" && origin.layer == 2));
+
+    let table = yamaa_adapters::typed_csv::parse(
+        &std::fs::read(case.join("input/lb.csv")).unwrap(),
+        &compiled.source().types,
+        Default::default(),
+        TableLimits {
+            max_rows: 100,
+            max_columns: 64,
+            max_batches: 1,
+            max_cells: 6400,
+        },
+    )
+    .unwrap();
+    let plan = compiled.bind(table.schema()).unwrap();
+    let execution = plan.execute_observed(&table, limits()).result.unwrap();
+    assert_eq!(
+        execution.dataset.rows(),
+        &[
+            vec![
+                Value::Str("01".into()),
+                Value::Str("ALT".into()),
+                Value::float(12.5),
+                Value::Str("U/L".into())
+            ],
+            vec![
+                Value::Str("02".into()),
+                Value::Str("ALT".into()),
+                Value::float(21.0),
+                Value::Str("U/L".into())
+            ],
+        ]
+    );
+    assert_eq!(execution.verifications.len(), 1);
+    assert_eq!(execution.verifications[0].failed_count, 0);
+    assert_eq!(
+        yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], 1024).unwrap(),
+        std::fs::read(case.join("expected/adlb.csv")).unwrap()
+    );
+    for (original, reserved, path) in [
+        ("scope", "label", "metadata.label"),
+        ("analysis_role", "origin", "columns.AVAL.metadata.origin"),
+    ] {
+        let mut nodes = d.nodes().to_vec();
+        let key = nodes
+            .iter()
+            .position(|n| matches!(n,N::Text(value) if value == original))
+            .unwrap();
+        nodes[key] = N::Text(reserved.into());
+        let changed = SpecificationDocument::admit(
+            Document::new(nodes, d.root(), Default::default()).unwrap(),
+            &mut yamaa_core::schema::ValidationBudget::new(Default::default()),
+        )
+        .unwrap()
+        .unwrap();
+        let error =
+            yamaa_core::specification::PreparedSpecification::prepare(&changed).unwrap_err();
+        assert!(
+            matches!(error,yamaa_core::specification::PrepareError::Unsupported(ref items) if items.iter().any(|item|item.operation == "reserved_metadata_key" && item.path == path))
+        );
+    }
+    for fail_path in [false, true] {
+        host.fail_path = fail_path;
+        let error = lifecycle::prepare(
+            schema.structure(),
+            graph::Source {
+                identity: "spec_study.yaml".into(),
+                display_path: "spec_study.yaml".into(),
+            },
+            raw.clone(),
+            &mut host,
+            &mut NormalizationBudget::new(Default::default()),
+            lifecycle::Limits {
+                rebased_bytes: 0,
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        if fail_path {
+            assert!(matches!(
+                error,
+                lifecycle::Error::Path("original path failure")
+            ));
+        } else {
+            assert!(matches!(error, lifecycle::Error::PathBytes));
+        }
     }
 }
