@@ -2,9 +2,9 @@
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
-//! evaluation, completed-result conversion, classified resource failures and original-document
-//! preflight; other families retain their
-//! existing error types until their semantics and provenance migrate here.
+//! evaluation, completed-result conversion, classified resource failures and
+//! original-document preflight. Other families retain their existing error types
+//! until their semantics and provenance migrate here.
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
@@ -73,8 +73,9 @@ conditions! {
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
 }
 
-/// Diagnostic integers can exceed runtime i64; their canonical decimal text must
-/// not be narrowed by a host or mistaken for a successful scalar result.
+/// Owned context retains scalar kinds and ordered sequences. Diagnostic integers
+/// can exceed runtime i64; their canonical decimal text must not be narrowed by a
+/// host or mistaken for a successful scalar result.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextValue {
     Scalar(Value),

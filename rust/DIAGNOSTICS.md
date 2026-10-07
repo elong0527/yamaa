@@ -1,12 +1,13 @@
 # Portable diagnostic foundation
 
-The first #1753 slice moves numeric evaluation, arithmetic/reduction and
-completed-result conversion diagnostics into `yamaa-core::diagnostic`. The
+The #1753 slices move numeric evaluation, arithmetic/reduction, completed-result
+conversion, classified resource and original-document preflight diagnostics into
+`yamaa-core::diagnostic`. The
 original-specification runner and existing dataset/numeric transports consume
 those core diagnostics. Adapters encode runtime values and source offsets but
 do not reconstruct these families' semantic context or choose their requirements.
 
-`Diagnostic` owns its typed context, ordered specification paths, optional UTF-8
+`Diagnostic` owns scalar and ordered sequence context, ordered specification paths, optional UTF-8
 source span and optional operand route. Diagnostic integers outside runtime i64
 remain canonical decimal text with a distinct type. Absent source geometry stays
 absent. Original opaque resolver errors have no normative projection: the caller
@@ -15,7 +16,7 @@ retains the error and its identity rather than manufacturing `unknown_field`.
 ## Registry identity and compatibility
 
 Each `ConditionCode` names one semantic cause and maps to one phase, public
-condition and requirement in the registry. A public condition string is not a
+condition and optional requirement in the registry. A public condition string is not a
 unique registry key in the existing language:
 
 | Semantic cause | Public condition | Requirement |
@@ -32,15 +33,32 @@ changing public condition names. The existing `phase`, `condition` and
 `requirement` methods delegate to the same registry as the diagnostic projection.
 Registry identity has no serialization or content-hash role.
 
+Original preflight findings for undeclared row columns and unavailable drivers
+retain their existing null requirement. Assigning a requirement merely to make
+the registry non-null would change independent truth. The core projection also
+preserves authored row indexes, column names, ordered multi-path conflicts,
+missing driver values and empty/repeated row or group lists. The report adapter
+represents these typed findings as the existing JSON shape. Resource failures
+use that same projection without a tagged-scalar encode/decode round trip.
+
 ## Evidence and remaining work
 
-The core integration test reaches every registered cause through real evaluation
-or conversion and compares independently stated public vocabulary. It also checks
+The core integration test reaches every registered cause through evaluation,
+conversion, resource classification or actual original-document compilation and
+compares independently stated public vocabulary and preflight context. It also checks
 nested source location, literal/arithmetic integer overflow, a 5,000-digit failed
 conversion and an opaque non-Clone host error whose identity and first-failure
 order survive diagnostic inspection. Adding a registry entry without a reached
 test fails that coverage assertion. The unchanged shared transport/lifecycle and
 original-document fixtures continue to pin exact complete outcomes.
+
+Five authored preflight documents carry sixteen complete ordered findings from
+the independent reference implementation in `tests/fixtures/preflight.tsv`. Rust
+and both installed hosts compare those complete envelopes before any source
+authority is reached. The existing installed original-document suite separately
+checks the Parquet redundant-type preflight finding; the core test exercises all
+five declared type spellings. These are preparation and retained-run contracts,
+not public API or whole-inventory qualification.
 
 `tools/check_diagnostics.py` checks literal requirement IDs across every Rust
 crate's source against current normative rule definitions, including mappings
@@ -49,10 +67,10 @@ The existing canonical rules validator separately checks definition uniqueness
 and historical IDs. The guard does not infer requirements from documentation
 citations or count component tests as complete-run qualification.
 
-This is the first exercised family, not completion of #1753. Parser/schema,
+This does not complete #1753. Parser/schema,
 binding, predicate, function, verification and ingestion diagnostics still need
 conversion; some remain constructed in adapters. Inherited source/entry/parent
-provenance, richer structured context and unified serialization across all
+provenance, additional structured context and unified serialization across all
 protocols must migrate with those families. Existing per-protocol wire wrappers
 remain temporarily for unmigrated errors. No registry completeness, public API
 cutover, new numerical policy or benchmark inventory promotion is claimed.
