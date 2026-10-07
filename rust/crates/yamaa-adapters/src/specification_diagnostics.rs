@@ -5,10 +5,6 @@ use crate::{
     specification_run::Error,
 };
 use serde_json::{json, Value};
-use yamaa_core::{
-    column_dependencies, numeric_compiler::CompileError, numeric_parser::ParseError,
-    reference_binding,
-};
 use yamaa_engine::specification::{
     BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
 };
@@ -25,12 +21,6 @@ fn diagnostic(
 fn validation(condition: &str, requirement: Option<&str>, path: String, context: Value) -> Value {
     diagnostic("validation", condition, requirement, vec![path], context)
 }
-fn numeric(path: &str, expression: &str, error: &CompileError) -> Option<Value> {
-    let CompileError::Parse(ParseError::Grammar { failure, .. }) = error else {
-        return None;
-    };
-    portable_diagnostic(failure.diagnostic(path, expression)?)
-}
 fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
         return None;
@@ -45,68 +35,48 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
     Some(match error {
         BindFinding::Window(finding) => {
             use yamaa_core::specification::WindowFinding;
-            let (path,context) = match finding {
-                WindowFinding::ZeroOffset {path} => (path,json!({"offset":0})),
-                WindowFinding::Order {path,operation,..} => (path,json!({"operation":operation})),
+            let (path, context) = match finding {
+                WindowFinding::ZeroOffset { path } => (path, json!({"offset":0})),
+                WindowFinding::Order {
+                    path, operation, ..
+                } => (path, json!({"operation":operation})),
             };
             let definition = finding.definition();
-            vec![diagnostic(definition.phase,definition.condition,definition.requirement,vec![path.clone()],context)]
-        },
+            vec![diagnostic(
+                definition.phase,
+                definition.condition,
+                definition.requirement,
+                vec![path.clone()],
+                context,
+            )]
+        }
         BindFinding::Lookup(finding) => {
-            let context = finding.context.iter().map(|(name, value)| {
-                let value = match value {
-                    yamaa_core::value::Value::Str(value) => json!(value),
-                    yamaa_core::value::Value::Int(value) => json!(value),
-                    _ => return None,
-                };
-                Some((name.clone(), value))
-            }).collect::<Option<serde_json::Map<_, _>>>()?;
+            let context = finding
+                .context
+                .iter()
+                .map(|(name, value)| {
+                    let value = match value {
+                        yamaa_core::value::Value::Str(value) => json!(value),
+                        yamaa_core::value::Value::Int(value) => json!(value),
+                        _ => return None,
+                    };
+                    Some((name.clone(), value))
+                })
+                .collect::<Option<serde_json::Map<_, _>>>()?;
             let definition = finding.definition;
-            vec![diagnostic(definition.phase, definition.condition, definition.requirement, vec![finding.path.clone()], context.into())]
-        },
-        BindFinding::QualifiedReference {path,name,row,finding} => {
-            use yamaa_core::reference_scope::Finding as F;
-            let (condition,requirement,context)=match finding {
-                F::RowGroup => ("ungrouped_driver_field",Some("REQ-0067"),json!({"identifier":name,"row":row,"dataset":source.name})),
-                F::ColumnGroup => ("ungrouped_driver_field",Some("REQ-0107"),json!({"identifier":name,"dataset":source.name})),
-                _ => return None,
-            };
-            vec![validation(condition,requirement,path.clone(),context)]
-        },
-        BindFinding::Aggregate{path,expression,error}=>vec![portable_diagnostic(error.diagnostic(path,expression)?)?],
-        BindFinding::AggregateScope{path,expression,relation}=> {
-            let reason = match relation {
-                None => "a grouped row aggregate reads its row driver".into(),
-                Some(relation) => {
-                    let mut budget = yamaa_core::schema::ValidationBudget::new(Default::default());
-                    let driver = yamaa_core::schema::quoted_diagnostic_text(&source.name, &mut budget).ok()?;
-                    let relation = yamaa_core::schema::quoted_diagnostic_text(relation, &mut budget).ok()?;
-                    format!("a grouped row aggregate reads {driver}, not {relation}")
-                },
-            };
-            vec![validation("invalid_aggregate_context",Some("REQ-0329"),path.clone(),json!({"expr":expression,"reason":reason}))]
-        },
-        BindFinding::Numeric{path,expression,error}=>vec![numeric(path,expression,error)?],
-        BindFinding::QualifiedNumericReference{path,expression,identifier}=>vec![validation("qualified_identifier",Some("REQ-0442"),path.clone(),json!({"expr":expression,"identifier":identifier}))],
-        BindFinding::UnknownReference{path,name}=>vec![validation("unknown_field",Some("REQ-0103"),path.clone(),json!({"identifier":name}))],
-        BindFinding::OutputReference{path,name,finding}=>{
-            let (condition,context)=match finding {
-                reference_binding::Diagnostic::UnknownField=>("unknown_field",json!({"identifier":name})),
-                reference_binding::Diagnostic::UnresolvableName{dataset:0}=>("unresolvable_name",json!({"identifier":name,"suggestion":format!("{}.{name}",source.name)})),
-                _=>return None,
-            };vec![validation(condition,None,path.clone(),context)]
-        },
-        BindFinding::Dependencies{columns,paths,diagnostics}=>diagnostics.iter().map(|finding|{
-            let (site,context)=match finding {
-                column_dependencies::Diagnostic::Cycle{columns:members}=>{
-                    let site=members[..members.len()-1].iter().map(|&id|paths[id].clone()).collect();
-                    (site,json!({"cycle":members.iter().map(|&id|&columns[id]).collect::<Vec<_>>()}))
-                },
-                column_dependencies::Diagnostic::ForwardReference{column,dependency}=>(vec![paths[*column].clone()],json!({"column":columns[*column],"dependency":columns[*dependency]})),
-                column_dependencies::Diagnostic::MissingKeyDerivation{column}=>(vec![format!("columns.{}.derivation",columns[*column])],json!({"column":columns[*column]})),
-                column_dependencies::Diagnostic::KeyDependency{column,dependency}=>(vec![paths[*column].rsplit_once('.').expect("compiler operation path").0.into()],json!({"column":columns[*column],"dependency":columns[*dependency]})),
-            };diagnostic("validation",finding.condition(),Some(finding.requirement()),site,context)
-        }).collect(),
+            vec![diagnostic(
+                definition.phase,
+                definition.condition,
+                definition.requirement,
+                vec![finding.path.clone()],
+                context.into(),
+            )]
+        }
+        _ => error
+            .diagnostics(source)?
+            .into_iter()
+            .map(portable_diagnostic)
+            .collect::<Option<_>>()?,
     })
 }
 /// Represent the core-owned finding without assigning semantic vocabulary here.

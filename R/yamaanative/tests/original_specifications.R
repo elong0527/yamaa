@@ -440,16 +440,16 @@ failure <- tryCatch(build_save(result,no_port),error=identity)
 stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"))
 cat("native Parquet source failure collection and complete report passed\n")
 
-failed_report_truth <- function(fixture,prefix,cases) {
+failed_report_truth <- function(fixture,prefix,cases,content=charToRaw("ID\n1\n")) {
   truth <- read.delim(file.path(root,fixture),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
   stopifnot(nrow(truth)==cases)
   for(i in seq_len(nrow(truth))) {
     handle <- prepare_entry("spec.yaml",charToRaw(truth$source[[i]]),no_port,no_port,no_port)
     reads <- character()
     capture <- function(dataset,path,maximum) {
-      stopifnot(dataset=="SRC",path=="source.csv",maximum>=5L)
+      stopifnot(dataset=="SRC",path=="source.csv",maximum>=length(content))
       reads <<- c(reads,path)
-      list(charToRaw("ID\n1\n"),TRUE)
+      list(content,TRUE)
     }
     result <- build(handle,capture,paste0(prefix,"-",truth$case[[i]]),"spec.yaml")
     rm(handle); gc()
@@ -469,6 +469,8 @@ failed_report_truth("output-declarations.tsv","output",5L)
 cat("core output declarations complete independent failed reports and retained save gates passed\n")
 failed_report_truth("grammar-diagnostics.tsv","grammar",7L)
 cat("core grammar complete independent failed reports and retained save gates passed\n")
+failed_report_truth("binding-diagnostics.tsv","binding",10L,charToRaw("ID,V\n1,2\n"))
+cat("core binding complete independent failed reports and retained save gates passed\n")
 
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
